@@ -58,7 +58,7 @@ async function tool_search_papers(args, env) {
     slug: m.metadata?.slug || null,
     title: m.metadata?.title || null,
     score: m.score,
-    chunk: m.metadata?.chunk || m.metadata?.chunk_idx ?? null,
+    chunk: m.metadata?.chunk ?? m.metadata?.chunk_idx ?? null,
   }));
   return { content: [{ type: "text", text: JSON.stringify({ count: results.length, results }) }] };
 }
