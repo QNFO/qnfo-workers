@@ -1,0 +1,20 @@
+name = "qnfo-paper-indexer"
+main = "worker.js"
+compatibility_date = "2026-08-10"
+workers_dev = true
+usage_model = "standard"
+
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[vectorize]]
+binding = "PAPER_VZ"
+index_name = "qwav-research-v2"
+
+[[ai]]
+binding = "AI"
+
+[vars]
+INDEX_TOKEN = "chnx-idx-v1-k9m2n4p7r5t8"
