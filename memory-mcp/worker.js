@@ -6,7 +6,7 @@
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_NAME = "qnfo-memory-mcp";
-const SERVER_VERSION = "2.0.0";
+const SERVER_VERSION = "2.0.1";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 
 const TOOLS = [
@@ -53,13 +53,24 @@ async function tool_search_papers(args, env) {
   const vec = await embed(env, query);
   const res = await env.PAPER_VZ.query(vec, { topK: limit * 3, returnMetadata: "all", returnValues: false });
   const matches = (res.matches || []).filter(m => !m.id.startsWith("mem:"));
-  const results = matches.slice(0, limit).map(m => ({
-    id: m.id,
-    slug: m.metadata?.slug || null,
-    title: m.metadata?.title || null,
-    score: m.score,
-    chunk: m.metadata?.chunk ?? m.metadata?.chunk_idx ?? null,
-  }));
+  const results = [];
+  for (const m of matches.slice(0, limit)) {
+    const slug = m.metadata?.slug || null;
+    let title = m.metadata?.title || null;
+    if (slug && !title) {
+      const paper = await env.LIVING_PAPER.prepare(
+        "SELECT title FROM papers WHERE slug = ?1 LIMIT 1"
+      ).bind(slug).first().catch(() => null);
+      title = paper?.title || null;
+    }
+    results.push({
+      id: m.id,
+      slug,
+      title,
+      score: m.score,
+      chunk: m.metadata?.chunk ?? m.metadata?.chunk_idx ?? null,
+    });
+  }
   return { content: [{ type: "text", text: JSON.stringify({ count: results.length, results }) }] };
 }
 
@@ -225,9 +236,13 @@ async function tool_query_graph(args, env) {
       case "neighbors": {
         const id = sanitize(params.id);
         if (!id) return { content: [{ type: "text", text: JSON.stringify({ error: "id required" }) }], isError: true };
+        // Match both node id conventions: "paper:<slug>" (KG sync) and "paper-<slug>" (D1 identifier)
+        const bare = id.replace(/^paper[:|-]/, "");
+        const alt1 = "paper:" + bare;
+        const alt2 = "paper-" + bare;
         const rows = await env.GRAPH_DB.prepare(
-          "SELECT e.source_id, e.target_id, e.relationship_type, n.id, n.label, n.name FROM edges e LEFT JOIN nodes n ON (n.id = e.source_id OR n.id = e.target_id) WHERE e.source_id = ?1 OR e.target_id = ?1 LIMIT 100"
-        ).bind(id).all();
+          "SELECT e.source_id, e.target_id, e.relationship_type, n.id, n.label, n.name FROM edges e LEFT JOIN nodes n ON (n.id = e.source_id OR n.id = e.target_id) WHERE e.source_id IN (?1, ?2, ?3) OR e.target_id IN (?1, ?2, ?3) LIMIT 100"
+        ).bind(id, alt1, alt2).all();
         const neighbors = (rows.results || []).map(r => ({
           source_id: r.source_id, target_id: r.target_id, relationship: r.relationship_type,
           neighbor_id: r.id, label: r.label, name: r.name,
