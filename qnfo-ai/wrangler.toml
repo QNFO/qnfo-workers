@@ -6,5 +6,7 @@ workers_dev = true
 # CRITICAL FIX (v4.3.0): v4.2.0 was deployed WITHOUT this binding ->
 # env.AI undefined -> all tier-0 Workers AI free models returned
 # "All models failed." while DeepSeek API (secret) worked.
-[[ai]]
+# NOTE: wrangler 4.118.0 validates the ai field as a SINGLE table object
+# ("should be an object but got [array]") — [ai] not [[ai]].
+[ai]
 binding = "AI"
