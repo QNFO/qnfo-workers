@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.4';
+const VERSION = '4.3.5';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -16,14 +16,14 @@ const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3c
 // tier 3 = Anthropic/OpenAI via AI Gateway compat (CF_API_TOKEN secret)
 const MODELS = {
   // Workers AI free — original three
-  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false },
-  'deepseek-r1-qwen-32b':     { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', reasoning: true },
-  'qwen3-30b':                { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen3-30b-a3b-fp8',                  reasoning: false },
+  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false, maxOut: 8192 },
+  'deepseek-r1-qwen-32b':     { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', reasoning: true,  maxOut: 8192 },
+  'qwen3-30b':                { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen3-30b-a3b-fp8',                  reasoning: false, maxOut: 8192 },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
-  'qwen2.5-coder-32b':        { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen2.5-coder-32b-instruct',         reasoning: false },
-  'llama-3.2-1b':             { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-1b-instruct',              reasoning: false },
-  'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false },
-  'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false },
+  'qwen2.5-coder-32b':        { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen2.5-coder-32b-instruct',         reasoning: false, maxOut: 8192 },
+  'llama-3.2-1b':             { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-1b-instruct',              reasoning: false, maxOut: 4096 },
+  'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false, maxOut: 4096 },
+  'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096 },
   // DeepSeek API
   'deepseek-v4-flash':        { tier: 1, family: 'deepseek', api: 'deepseek-chat' },
   'deepseek-v4-flash-thinking': { tier: 1, family: 'deepseek', api: 'deepseek-reasoner' },
@@ -34,6 +34,30 @@ const MODELS = {
   'claude-fable-5':           { tier: 3, family: 'anthropic', gateway: true, model: 'claude-fable-5' },
   'gpt-5-2':                  { tier: 3, family: 'openai',    gateway: true, model: 'gpt-5-2' },
 };
+
+// Per-model output token caps (v4.3.5 — Bad Gateway fix, 2026-08-12).
+// Workers AI models reject max_tokens above their max_total_tokens (e.g. llama-3.3-70b
+// rejects 32000 with 400 -> router previously mapped that upstream 4xx to 502 Bad Gateway).
+// Every call path clamps the requested max_tokens to the routed model's cap so an
+// oversized client max_tokens can never surface as a router 502.
+const MAX_OUT = {
+  // Workers AI (tier-0) — safe caps well under observed max_total_tokens=24000 (llama-3.3-70b)
+  '@cf/meta/llama-3.3-70b-instruct-fp8-fast': 8192,
+  '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b': 8192,
+  '@cf/qwen/qwen3-30b-a3b-fp8': 8192,
+  '@cf/qwen/qwen2.5-coder-32b-instruct': 8192,
+  '@cf/meta/llama-3.2-1b-instruct': 4096,
+  '@cf/google/gemma-2b-it-lora': 4096,
+  '@cf/ibm-granite/granite-4.0-h-micro': 4096,
+};
+const DEFAULT_MAX_OUT = 8192;
+
+// Clamp max_tokens to a model cap. maxTokens may be 0/undefined -> default 4096.
+function clampTokens(maxTokens, cap) {
+  const c = cap || DEFAULT_MAX_OUT;
+  const t = Number.isFinite(maxTokens) && maxTokens > 0 ? Math.floor(maxTokens) : 4096;
+  return Math.min(t, c);
+}
 
 // Ensemble member config — the directive: coder primary, small validator, reviewer
 // All Workers AI FREE. qwen2.5-coder = primary coder (DeepSeek-Coder 1.3B substitute),
@@ -81,9 +105,9 @@ function autoRoute(cls) {
 async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
   const out = await env.AI.run(modelId, {
     messages,
-    // Reasoning models (qwen3-30b) consume tokens on thinking before answering;
-    // 4096 default gives them room so content isn't null/truncated.
-    max_tokens: maxTokens || 4096,
+    // v4.3.5: clamp to the model's output cap so an oversized client max_tokens
+    // (e.g. 32000 on a 24000-max model) cannot surface as an upstream 400 -> router 502.
+    max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
     stream: stream || false,
   });
   return out;
@@ -115,7 +139,7 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream) {
   const resp = await fetch(DEEPSEEK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.DEEPSEEK_API_KEY}` },
-    body: JSON.stringify({ model: apiModel, messages, max_tokens: maxTokens || 4096, stream: stream || false }),
+    body: JSON.stringify({ model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false }),
   });
   if (!resp.ok) throw new Error(`deepseek ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   if (stream) return resp;
@@ -126,7 +150,7 @@ async function callGateway(env, model, messages, maxTokens, stream) {
   const resp = await fetch(GW_COMPAT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.CF_API_TOKEN}` },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens || 4096, stream: stream || false }),
+    body: JSON.stringify({ model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false }),
   });
   if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   if (stream) return resp;
@@ -240,7 +264,8 @@ async function handleChat(env, body, authHeader) {
   // ---- ENSEMBLE ----
   if (isEnsemble) {
     try {
-      const ens = await runEnsemble(env, messages, max_tokens || 2048);
+      // v4.3.5: clamp ensemble primary/reviewer max_tokens to the primary model's cap
+      const ens = await runEnsemble(env, messages, clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]));
       const respBody = {
         id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
         object: 'chat.completion',
@@ -267,10 +292,10 @@ async function handleChat(env, body, authHeader) {
   if (isStream) {
     try {
       if (effSpec.wa) {
-        // Workers AI streaming
+        // Workers AI streaming — v4.3.5 clamp so oversized max_tokens can't 502
         const aiResp = await env.AI.run(effSpec.wa, {
           messages,
-          max_tokens: max_tokens || 2048,
+          max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
           stream: true,
         });
         const encoder = new TextEncoder();
