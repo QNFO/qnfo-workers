@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.5';
+const VERSION = '4.3.6';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -57,6 +57,40 @@ function clampTokens(maxTokens, cap) {
   const c = cap || DEFAULT_MAX_OUT;
   const t = Number.isFinite(maxTokens) && maxTokens > 0 ? Math.floor(maxTokens) : 4096;
   return Math.min(t, c);
+}
+
+// v4.3.6 — Context-window-aware routing (Bad Gateway fix #2, 2026-08-12).
+// Workers AI tier-0 models cap at max_total_tokens=24000 (observed llama-3.3-70b 5021:
+// "input and maximum output tokens exceeded this model context window limit (24000)").
+// Real DeepChat sessions carry a ~56KB system prompt + accumulated history that routinely
+// exceed 24k total tokens, so auto->llama-3.3-70b 502s even with max_tokens clamped.
+// Estimate input tokens (~4 chars/token, matches the upstream estimator's ~3.97) and
+// re-route tier-0-bound requests that would overflow the 24k window to DeepSeek API
+// (tier-1, 1M context) — correctness over free-first.
+const TIER0_TOTAL_CAP = 24000;
+const TIER0_SAFE_TOTAL = 20000; // headroom below the hard 24k cap
+
+function estimateInputTokens(messages) {
+  let chars = 0;
+  for (const m of messages || []) {
+    const c = m && m.content;
+    if (typeof c === 'string') chars += c.length;
+    else if (Array.isArray(c)) for (const p of c) if (p && typeof p.text === 'string') chars += p.text.length;
+  }
+  return Math.ceil(chars / 4);
+}
+
+// If the routed target is tier-0 (Workers AI) and the estimated context won't fit the
+// 24k-token window, fall back to DeepSeek (tier-1, 1M context). Explicit model requests
+// are honored as-is — this guard applies to auto-routing only.
+function contextAwareTarget(cls, target, estInput, maxOut) {
+  const spec = MODELS[target];
+  if (!spec || spec.tier !== 0) return target;
+  const out = clampTokens(maxOut, MAX_OUT[spec.wa] || DEFAULT_MAX_OUT);
+  if (estInput + out > TIER0_SAFE_TOTAL) {
+    return cls.domain === 'science' ? 'deepseek-v4-flash-thinking' : 'deepseek-v4-flash';
+  }
+  return target;
 }
 
 // Ensemble member config — the directive: coder primary, small validator, reviewer
@@ -253,7 +287,10 @@ async function handleChat(env, body, authHeader) {
   const reqModel = body.model;
   const isAuto = reqModel === 'auto';
   const isEnsemble = reqModel === 'ensemble';
-  const target = isAuto ? autoRoute(cls) : reqModel;
+  // v4.3.6: context-window guard for auto-routing — tier-0 (Workers AI 24k cap) targets
+  // that can't hold input+output fall back to DeepSeek (1M context) before any upstream call.
+  const estInputTokens = estimateInputTokens(messages);
+  const target = isAuto ? contextAwareTarget(cls, autoRoute(cls), estInputTokens, max_tokens) : reqModel;
   const spec = MODELS[target];
 
   // Unknown model -> fallback to default (deepseek-v4-flash), matching v4.2.0 observed behavior
@@ -264,6 +301,25 @@ async function handleChat(env, body, authHeader) {
   // ---- ENSEMBLE ----
   if (isEnsemble) {
     try {
+      // v4.3.6: ensemble primary is tier-0 (qwen2.5-coder-32b, 24k cap) — if the context
+      // won't fit, run a single DeepSeek call instead (correctness over free-tier ensemble).
+      if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > TIER0_SAFE_TOTAL) {
+        const fb = await callDeepSeek(env, MODELS['deepseek-v4-flash'].api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
+        const fbContent = fb?.choices?.[0]?.message?.content ?? '';
+        return json({
+          id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: 'ensemble',
+          choices: [{ index: 0, message: { role: 'assistant', content: fbContent }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+          _router: mkRouter('deepseek-v4-flash', 'ensemble-context-fallback', {
+            ensemble_members: ['fallback-deepseek'],
+            verification_result: 'context_fallback',
+            estimated_input_tokens: estInputTokens,
+          }),
+        });
+      }
       // v4.3.5: clamp ensemble primary/reviewer max_tokens to the primary model's cap
       const ens = await runEnsemble(env, messages, clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]));
       const respBody = {
