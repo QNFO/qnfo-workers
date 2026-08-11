@@ -418,6 +418,20 @@ export default {
       return handleChat(env, chatBody, auth);
     }
 
+    // /v1/debug/ai?model=... — RAW Workers AI binding output dump (auth-gated, diagnostic)
+    if (path === '/v1/debug/ai' && method === 'GET') {
+      const auth = request.headers.get('Authorization') || '';
+      const expected = env.ROUTER_AUTH_KEY;
+      if (!auth || auth !== `Bearer ${expected}`) return json({ error: 'Unauthorized' }, 401);
+      const model = url.searchParams.get('model') || '@cf/qwen/qwen3-30b-a3b-fp8';
+      try {
+        const out = await env.AI.run(model, { messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 20 });
+        return json({ model, raw: out, type: typeof out, keys: out && typeof out === 'object' ? Object.keys(out) : null });
+      } catch (e) {
+        return json({ model, error: String(e), name: e?.name, message: e?.message }, 500);
+      }
+    }
+
     // /v1/search — internal RAG (graceful if no Vectorize binding)
     if (path === '/v1/search' && method === 'GET') {
       return json({ error: 'internal RAG requires Vectorize binding — not configured in this deployment' }, 501);
