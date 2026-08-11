@@ -80,18 +80,18 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
 
 // Workers AI non-stream returns different shapes per model/provider:
 //   binding: { response: "text" } | { result: { response: "text" } } | { choices:[...] }
-//   REST:    { result: { choices:[...] } }
-function extractWAContent(result) {
+//   REST:    { result: { choices:[...] } } | { result: { result: { response } } } (nested)
+// Recursive, shape-agnostic, depth-capped.
+function extractWAContent(result, depth = 0) {
   if (typeof result === 'string') return result;
-  let r = result;
-  // unwrap { result: ... } wrapper (binding vs REST differ)
-  if (r && r.result && typeof r.result === 'object' && r.result !== r) r = r.result;
-  if (r && typeof r.response === 'string') return r.response;
-  if (r && r.result && typeof r.result === 'string') return r.result;
-  if (r && Array.isArray(r.choices) && r.choices[0]) {
-    if (r.choices[0].message && typeof r.choices[0].message.content === 'string') return r.choices[0].message.content;
-    if (typeof r.choices[0].text === 'string') return r.choices[0].text;
+  if (!result || typeof result !== 'object' || depth > 4) return '';
+  if (typeof result.response === 'string') return result.response;
+  if (typeof result.result === 'string') return result.result;
+  if (Array.isArray(result.choices) && result.choices[0]) {
+    if (result.choices[0].message && typeof result.choices[0].message.content === 'string') return result.choices[0].message.content;
+    if (typeof result.choices[0].text === 'string') return result.choices[0].text;
   }
+  if (result.result && typeof result.result === 'object') return extractWAContent(result.result, depth + 1);
   return '';
 }
 
@@ -137,12 +137,13 @@ async function runEnsemble(env, messages, maxTokens) {
       { role: 'assistant', content: primaryText },
     ];
     const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 100, false);
-    const vText = extractWAContent(vOut);
-    const pass = /^pass/i.test(vText.trim());
+    const vText = extractWAContent(vOut).trim();
+    const pass = /^pass/i.test(vText);
     agreementRate = pass ? 1 : 0;
 
     if (!pass) {
       // Reviewer refines
+      verificationResult = 'reviewed';  // set BEFORE refine so empty-refine still reports accurately
       const rMsg = [
         { role: 'system', content: 'You are a senior reviewer. Improve the assistant response to fully satisfy the user request. Output only the improved response.' },
         ...messages,
