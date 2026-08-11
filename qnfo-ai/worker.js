@@ -72,7 +72,9 @@ function autoRoute(cls) {
 async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
   const out = await env.AI.run(modelId, {
     messages,
-    max_tokens: maxTokens || 2048,
+    // Reasoning models (qwen3-30b) consume tokens on thinking before answering;
+    // 4096 default gives them room so content isn't null/truncated.
+    max_tokens: maxTokens || 4096,
     stream: stream || false,
   });
   return out;
@@ -88,8 +90,13 @@ function extractWAContent(result, depth = 0) {
   if (typeof result.response === 'string') return result.response;
   if (typeof result.result === 'string') return result.result;
   if (Array.isArray(result.choices) && result.choices[0]) {
-    if (result.choices[0].message && typeof result.choices[0].message.content === 'string') return result.choices[0].message.content;
-    if (typeof result.choices[0].text === 'string') return result.choices[0].text;
+    const c = result.choices[0];
+    if (c.message && typeof c.message.content === 'string') return c.message.content;
+    // Reasoning models (qwen3-30b): content can be null when tokens exhausted on
+    // thinking — surface reasoning_content so the response isn't "All models failed."
+    if (c.message && typeof c.message.reasoning_content === 'string') return c.message.reasoning_content;
+    if (c.message && typeof c.message.reasoning === 'string') return c.message.reasoning;
+    if (typeof c.text === 'string') return c.text;
   }
   if (result.result && typeof result.result === 'object') return extractWAContent(result.result, depth + 1);
   return '';
