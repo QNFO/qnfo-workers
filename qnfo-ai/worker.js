@@ -78,12 +78,20 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
   return out;
 }
 
-// Workers AI non-stream returns { response: "text" } for some models, or chat completion shape
+// Workers AI non-stream returns different shapes per model/provider:
+//   binding: { response: "text" } | { result: { response: "text" } } | { choices:[...] }
+//   REST:    { result: { choices:[...] } }
 function extractWAContent(result) {
   if (typeof result === 'string') return result;
-  if (result && typeof result.response === 'string') return result.response;
-  if (result && result.choices && result.choices[0] && result.choices[0].message) return result.choices[0].message.content;
-  if (result && result.result && typeof result.result === 'string') return result.result;
+  let r = result;
+  // unwrap { result: ... } wrapper (binding vs REST differ)
+  if (r && r.result && typeof r.result === 'object' && r.result !== r) r = r.result;
+  if (r && typeof r.response === 'string') return r.response;
+  if (r && r.result && typeof r.result === 'string') return r.result;
+  if (r && Array.isArray(r.choices) && r.choices[0]) {
+    if (r.choices[0].message && typeof r.choices[0].message.content === 'string') return r.choices[0].message.content;
+    if (typeof r.choices[0].text === 'string') return r.choices[0].text;
+  }
   return '';
 }
 
