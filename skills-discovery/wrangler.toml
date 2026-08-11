@@ -1,0 +1,8 @@
+name = "qnfo-skills-discovery"
+main = "worker.js"
+compatibility_date = "2026-08-11"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "SKILLS_BUCKET"
+bucket_name = "qnfo-skills"
