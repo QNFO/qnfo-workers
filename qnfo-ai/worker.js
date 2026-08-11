@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.0';
+const VERSION = '4.3.4';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -48,6 +48,15 @@ const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
   headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' },
 });
+
+// Constant-time comparison of two ArrayBuffers (sha-256 digests)
+function timingSafeEqual(a, b) {
+  if (a.byteLength !== b.byteLength) return false;
+  const av = new Uint8Array(a), bv = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < av.length; i++) diff |= av[i] ^ bv[i];
+  return diff === 0;
+}
 
 // 5D classification — complexity, domain, uncertainty, divergence, verifiability
 function classify(prompt) {
@@ -180,9 +189,16 @@ async function runEnsemble(env, messages, maxTokens) {
 
 // ---------------- Request handler ----------------
 async function handleChat(env, body, authHeader) {
-  // Auth gate
+  // Auth gate — constant-time compare (workers-best-practices: no string === for secrets)
   const expected = env.ROUTER_AUTH_KEY;
-  if (!authHeader || authHeader !== `Bearer ${expected}`) {
+  if (!authHeader || !authHeader.startsWith('Bearer ') || !expected) {
+    return json({ error: 'Unauthorized' }, 401);
+  }
+  const provided = authHeader.slice('Bearer '.length);
+  const enc = new TextEncoder();
+  const a = await crypto.subtle.digest('SHA-256', enc.encode(provided));
+  const b = await crypto.subtle.digest('SHA-256', enc.encode(expected));
+  if (!timingSafeEqual(a, b)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -416,20 +432,6 @@ export default {
       if (!body.model || !body.input) return json({ error: 'model and input required' }, 400);
       const chatBody = { model: body.model, messages: Array.isArray(body.input) ? body.input : [{ role: 'user', content: String(body.input) }], max_tokens: body.max_output_tokens, stream: body.stream };
       return handleChat(env, chatBody, auth);
-    }
-
-    // /v1/debug/ai?model=... — RAW Workers AI binding output dump (auth-gated, diagnostic)
-    if (path === '/v1/debug/ai' && method === 'GET') {
-      const auth = request.headers.get('Authorization') || '';
-      const expected = env.ROUTER_AUTH_KEY;
-      if (!auth || auth !== `Bearer ${expected}`) return json({ error: 'Unauthorized' }, 401);
-      const model = url.searchParams.get('model') || '@cf/qwen/qwen3-30b-a3b-fp8';
-      try {
-        const out = await env.AI.run(model, { messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 20 });
-        return json({ model, raw: out, type: typeof out, keys: out && typeof out === 'object' ? Object.keys(out) : null });
-      } catch (e) {
-        return json({ model, error: String(e), name: e?.name, message: e?.message }, 500);
-      }
     }
 
     // /v1/search — internal RAG (graceful if no Vectorize binding)
