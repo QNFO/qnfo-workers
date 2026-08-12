@@ -108,9 +108,12 @@ const DEEPSEEK_MAX_CONTEXT = 1048576;
 function truncateMessagesToFit(messages, maxInputTokens) {
   const arr = Array.isArray(messages) ? messages : [];
   if (arr.length === 0) return arr;
-  // v4.3.7: budget in chars using the conservative /3 token estimate, plus a 5% safety
-  // margin so a single oversized message that gets clipped still lands under the token cap.
-  const charBudget = Math.floor(maxInputTokens * 2.8);
+  // v4.3.7b: budget in chars using a WORST-CASE ~2 chars/token (DeepSeek tokenizer can
+  // tokenize dense/repeated content at ~2 chars/token — /3 prose estimate alone would
+  // still under-count that, letting an over-limit payload 502). 1.9x leaves a 5% safety
+  // margin below the hard 1,048,576-token cap; real prose (~4 chars/token) keeps ~500k
+  // tokens of recent context, which matches the app's own auto-compaction semantics.
+  const charBudget = Math.floor(maxInputTokens * 1.9);
   let used = 0;
   let system = null;
   // keep the leading system message unconditionally
