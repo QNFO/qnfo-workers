@@ -10,3 +10,7 @@ workers_dev = true
 # ("should be an object but got [array]") — [ai] not [[ai]].
 [ai]
 binding = "AI"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
