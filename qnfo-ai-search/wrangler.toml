@@ -1,0 +1,13 @@
+name = "qnfo-ai-search"
+main = "worker.js"
+compatibility_date = "2026-07-09"
+workers_dev = true
+
+[[ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
