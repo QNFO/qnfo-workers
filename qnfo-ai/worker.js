@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.7';
+const VERSION = '4.3.8';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -140,6 +140,71 @@ function truncateMessagesToFit(messages, maxInputTokens) {
     used += cost;
   }
   return system ? [system, ...tail] : tail;
+}
+
+// v4.3.8 — Normalize OpenAI Responses API input into chat-completions messages.
+// DeepChat calls /v1/responses with ResponseItem input:
+//   {type:"message", role, content:[{type:"input_text", text}]}  (user/system/assistant)
+//   {type:"function_call", name, arguments, call_id}
+//   {type:"function_call_output", call_id, output}
+// Content parts use "input_text"/"output_text"; Workers AI / DeepSeek only accept
+// {type:"text"}. This converter makes the router speak BOTH APIs.
+function normalizeResponsesInput(body) {
+  const messages = [];
+  if (body.instructions) {
+    messages.push({ role: 'system', content: body.instructions });
+  }
+  const input = body.input;
+  if (typeof input === 'string') {
+    messages.push({ role: 'user', content: input });
+    return messages;
+  }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (!item || typeof item !== 'object') continue;
+      if (item.type === 'message' || item.role) {
+        const role = item.role === 'system' ? 'system' : item.role === 'assistant' ? 'assistant' : 'user';
+        messages.push({ role, content: normalizeResponsesContent(item.content) });
+      } else if (item.type === 'function_call') {
+        messages.push({
+          role: 'assistant',
+          content: '',
+          tool_calls: [{
+            id: item.call_id || `call_${Math.random().toString(16).slice(2, 10)}`,
+            type: 'function',
+            function: { name: item.name || '', arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments || {}) },
+          }],
+        });
+      } else if (item.type === 'function_call_output') {
+        messages.push({
+          role: 'tool',
+          tool_call_id: item.call_id || `call_${Math.random().toString(16).slice(2, 10)}`,
+          content: typeof item.output === 'string' ? item.output : JSON.stringify(item.output ?? ''),
+        });
+      }
+    }
+  }
+  return messages;
+}
+
+function normalizeResponsesContent(content) {
+  if (content == null) return '';
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const parts = [];
+    for (const p of content) {
+      if (!p || typeof p !== 'object') continue;
+      if (typeof p.text === 'string') {
+        parts.push({ type: 'text', text: p.text }); // input_text / output_text / text
+      } else if (p.type === 'input_image' && p.image_url) {
+        parts.push({ type: 'image_url', image_url: typeof p.image_url === 'string' ? { url: p.image_url } : p.image_url });
+      } else if (typeof p.refusal === 'string') {
+        parts.push({ type: 'text', text: p.refusal });
+      }
+    }
+    return parts;
+  }
+  return String(content);
 }
 
 // Ensemble member config — the directive: coder primary, small validator, reviewer
