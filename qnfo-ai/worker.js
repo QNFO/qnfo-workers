@@ -692,6 +692,8 @@ export default {
           deepseek_key: !!env.DEEPSEEK_API_KEY,
           cf_token: !!env.CF_API_TOKEN,
           auth: !!env.ROUTER_AUTH_KEY,
+          paper_vz: !!env.PAPER_VZ,
+          query_db: !!env.QNFO_AUDIT,
         },
       });
     }
@@ -789,14 +791,51 @@ export default {
       return json(respObj);
     }
 
-    // /v1/search — internal RAG (graceful if no Vectorize binding)
+    // /v1/search — internal RAG over qwav-research-v2 (PAPER_VZ binding)
     if (path === '/v1/search' && method === 'GET') {
-      return json({ error: 'internal RAG requires Vectorize binding — not configured in this deployment' }, 501);
+      const q = (url.searchParams.get('q') || url.searchParams.get('query') || '').trim();
+      const k = parseInt(url.searchParams.get('k') || '5', 10);
+      if (!q) return json({ error: 'Missing q parameter' }, 400);
+      const vz = env.PAPER_VZ;
+      if (!vz) return json({ error: 'internal RAG requires Vectorize binding — not configured in this deployment' }, 501);
+      if (!env.AI) return json({ error: 'AI binding not configured' }, 503);
+      try {
+        const embed = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [q] });
+        const vec = embed?.data?.[0] || (Array.isArray(embed) ? embed[0] : null);
+        if (!vec) return json({ error: 'embedding generation failed' }, 502);
+        const matches = await vz.query(vec, { topK: Math.min(Math.max(k, 1), 20), returnMetadata: 'all' });
+        const results = (matches.matches || []).map(m => ({
+          id: m.id,
+          score: Math.round((m.score || 0) * 10000) / 10000,
+          metadata: m.metadata || {},
+        }));
+        return json({ index: 'qwav-research-v2', query: q, count: results.length, results });
+      } catch (e) {
+        return json({ error: e.message }, 500);
+      }
     }
 
-    // /v1/history — query log (graceful if no D1 binding)
+    // /v1/history — query log from D1 qnfo-audit.ai_queries (QNFO_AUDIT binding)
     if (path === '/v1/history' && method === 'GET') {
-      return json({ error: 'query logging requires D1 binding — not configured in this deployment' }, 501);
+      const db = env.QNFO_AUDIT;
+      if (!db) return json({ error: 'query logging requires D1 binding — not configured in this deployment' }, 501);
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 1), 100);
+      const model = (url.searchParams.get('model') || '').trim();
+      try {
+        let rows;
+        if (model) {
+          rows = await db.prepare(
+            'SELECT id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed FROM ai_queries WHERE model = ?1 ORDER BY ts DESC LIMIT ?2'
+          ).bind(model, limit).all();
+        } else {
+          rows = await db.prepare(
+            'SELECT id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed FROM ai_queries ORDER BY ts DESC LIMIT ?1'
+          ).bind(limit).all();
+        }
+        return json({ count: rows.results.length, queries: rows.results });
+      } catch (e) {
+        return json({ error: e.message }, 500);
+      }
     }
 
     return json({ error: 'Not found' }, 404);

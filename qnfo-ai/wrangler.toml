@@ -14,3 +14,16 @@ binding = "AI"
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+
+# v4.4.0 — internal RAG (/v1/search) + query history (/v1/history)
+# PAPER_VZ -> qwav-research-v2 (768-dim, bge-base-en-v1.5) — same index qnfo-archive uses
+[[vectorize]]
+binding = "PAPER_VZ"
+index_name = "qwav-research-v2"
+
+# QNFO_AUDIT -> qnfo-audit D1 (ai_queries table) for /v1/history
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
