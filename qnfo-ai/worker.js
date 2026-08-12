@@ -634,14 +634,59 @@ export default {
       return handleChat(env, body, auth);
     }
 
-    // /v1/responses — DeepChat compat (passthrough to chat)
+    // /v1/responses — DeepChat compat (normalize Responses API input -> chat)
     if (path === '/v1/responses' && method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'invalid JSON' }, 400); }
       const auth = request.headers.get('Authorization') || '';
       if (!body.model || !body.input) return json({ error: 'model and input required' }, 400);
-      const chatBody = { model: body.model, messages: Array.isArray(body.input) ? body.input : [{ role: 'user', content: String(body.input) }], max_tokens: body.max_output_tokens, stream: body.stream };
-      return handleChat(env, chatBody, auth);
+      // v4.3.8: the app calls via the OpenAI RESPONSES API with ResponseItem input
+      // ({type:'message', role, content:[{type:'input_text', text}]}). Passing that array
+      // straight through as chat messages made Workers AI/DeepSeek reject the input_text
+      // part ("unknown variant input_text") -> router 502 -> app "Bad Gateway". Normalize
+      // into chat messages, run the normal pipeline, re-emit a Responses-shaped response.
+      const chatBody = {
+        model: body.model,
+        messages: normalizeResponsesInput(body),
+        max_tokens: body.max_output_tokens ?? body.max_tokens,
+        stream: false,
+        temperature: body.temperature,
+      };
+      const chatResp = await handleChat(env, chatBody, auth);
+      if (!chatResp.ok) return chatResp;
+      const chatData = await chatResp.json();
+      const text = chatData?.choices?.[0]?.message?.content ?? '';
+      const respObj = {
+        id: 'resp_' + Math.random().toString(16).slice(2, 10),
+        object: 'response',
+        created_at: Math.floor(Date.now() / 1000),
+        status: 'completed',
+        model: chatData.model || body.model,
+        output: [{
+          type: 'message',
+          id: 'msg_' + Math.random().toString(16).slice(2, 10),
+          role: 'assistant',
+          content: [{ type: 'output_text', text }],
+        }],
+        usage: chatData.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        ...(chatData._router ? { _router: chatData._router } : {}),
+      };
+      if (body.stream) {
+        const encoder = new TextEncoder();
+        const enc = (obj) => encoder.encode('data: ' + JSON.stringify(obj) + '\n\n');
+        const stream = new ReadableStream({
+          start(controller) {
+            if (text) {
+              controller.enqueue(enc({ type: 'response.output_text.delta', delta: text, item_id: respObj.output[0].id, output_index: 0, content_index: 0 }));
+            }
+            controller.enqueue(enc({ type: 'response.completed', response: respObj }));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        });
+        return new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+      }
+      return json(respObj);
     }
 
     // /v1/search — internal RAG (graceful if no Vectorize binding)
