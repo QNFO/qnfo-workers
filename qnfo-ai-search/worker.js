@@ -14,7 +14,7 @@
 // Cost: FREE during open beta; Workers AI (embeddings/LLM) billed separately —
 // stay inside the 10,000 free Neurons/day budget.
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const DEFAULT_INSTANCE = 'qnfo-corpus';
 
 export default {
@@ -74,8 +74,11 @@ export default {
         const content = body.content || '';
         if (!content) return json({ error: 'content required' }, 400);
         const instance = env.AI_SEARCH.get(name);
-        const item = await instance.items.uploadAndPoll(docId + '.md', content, { metadata: body.metadata || {} });
-        return json({ ok: true, instance: name, id: docId, indexed: true, item: item || null });
+        // uploadAndPoll() blocks until the full index completes -> request timeout on
+        // first/large ingest. Use fire-and-forget upload(); indexing finishes in seconds
+        // and /search will return the doc once indexed.
+        await instance.items.upload(docId + '.md', content, { metadata: body.metadata || {} });
+        return json({ ok: true, instance: name, id: docId, indexed: 'async', note: 'indexing in progress' });
       } catch (e) {
         return json({ error: e?.message || String(e) }, 500);
       }
