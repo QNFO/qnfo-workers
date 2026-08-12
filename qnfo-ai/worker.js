@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.8';
+const VERSION = '4.3.9';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -251,6 +251,35 @@ function autoRoute(cls) {
 }
 
 async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
+  // v4.3.9 AI-COST-GATE-1: route tier-0 Workers AI through the AI Gateway
+  // (spend-limit firewall rule 6f5c29f8 + rate limit + cache). Fall back to the
+  // direct Workers AI binding only when the gateway is unreachable/unconfigured
+  // (resilience: a dead gateway must not take down the router).
+  if (env.CF_API_TOKEN && modelId.startsWith('@cf/')) {
+    try {
+      const gwResp = await fetch(GW_COMPAT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'cf-aig-authorization': 'Bearer ' + env.CF_API_TOKEN,
+        },
+        body: JSON.stringify({
+          model: 'workers-ai/' + modelId,
+          messages,
+          max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
+          stream: stream || false,
+        }),
+      });
+      if (gwResp.ok) {
+        if (stream) return gwResp; // SSE passthrough (caller consumes body)
+        return await gwResp.json(); // OpenAI-shaped; extractWAContent handles choices[]
+      }
+      // non-2xx: fall through to direct binding (e.g. gateway 429 -> serve anyway;
+      // cost control is best-effort here, availability wins)
+    } catch (e) {
+      // network error: fall through to direct binding
+    }
+  }
   const out = await env.AI.run(modelId, {
     messages,
     // v4.3.5: clamp to the model's output cap so an oversized client max_tokens
@@ -476,6 +505,77 @@ async function handleChat(env, body, authHeader) {
   if (isStream) {
     try {
       if (effSpec.wa) {
+        // v4.3.9 AI-COST-GATE-1: route tier-0 streaming through the AI Gateway first.
+        // Gateway returns OpenAI SSE "data: {choices:[{delta:{content}}]}\\n\\n" — re-emit the
+        // same chunk shape the direct path produces. Fall back to direct on any failure.
+        if (env.CF_API_TOKEN) {
+          try {
+            const gwResp = await fetch(GW_COMPAT, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'cf-aig-authorization': 'Bearer ' + env.CF_API_TOKEN,
+              },
+              body: JSON.stringify({
+                model: 'workers-ai/' + effSpec.wa,
+                messages,
+                max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
+                stream: true,
+              }),
+            });
+            if (gwResp.ok) {
+              const reader = gwResp.body.getReader();
+              const decoder = new TextDecoder();
+              let buf = '';
+              const enc = new TextEncoder();
+              const stream = new ReadableStream({
+                async start(controller) {
+                  try {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buf += decoder.decode(value, { stream: true });
+                      const lines = buf.split('\n');
+                      buf = lines.pop();
+                      for (const line of lines) {
+                        const t = line.trim();
+                        if (!t.startsWith('data:')) continue;
+                        const data = t.slice(5).trim();
+                        if (data === '[DONE]') continue;
+                        let parsed;
+                        try { parsed = JSON.parse(data); } catch { continue; }
+                        const delta = parsed.choices?.[0]?.delta?.content ?? '';
+                        if (!delta) continue;
+                        const payload = {
+                          id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
+                          object: 'chat.completion.chunk',
+                          created: Math.floor(Date.now() / 1000),
+                          model: routedModel,
+                          choices: [{ index: 0, delta: { role: 'assistant', content: delta }, finish_reason: null }],
+                        };
+                        controller.enqueue(enc.encode('data: ' + JSON.stringify(payload) + '\n\n'));
+                      }
+                    }
+                    const donePayload = {
+                      id: 'chatcmpl-done', object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000),
+                      model: routedModel,
+                      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+                      _router: mkRouter(routedModel, 'single'),
+                    };
+                    controller.enqueue(enc.encode('data: ' + JSON.stringify(donePayload) + '\n\n'));
+                    controller.enqueue(enc.encode('data: [DONE]\n\n'));
+                    controller.close();
+                  } catch (e) { controller.error(e); }
+                },
+              });
+              return new Response(stream, {
+                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' },
+              });
+            }
+          } catch (e) {
+            // fall through to direct Workers AI streaming
+          }
+        }
         // Workers AI streaming — v4.3.5 clamp so oversized max_tokens can't 502
         const aiResp = await env.AI.run(effSpec.wa, {
           messages,
