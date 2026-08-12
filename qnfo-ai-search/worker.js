@@ -14,7 +14,7 @@
 // Cost: FREE during open beta; Workers AI (embeddings/LLM) billed separately —
 // stay inside the 10,000 free Neurons/day budget.
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const DEFAULT_INSTANCE = 'qnfo-corpus';
 
 export default {
@@ -98,7 +98,7 @@ export default {
           limit,
           returnMetadata: body.returnMetadata !== false,
         });
-        return json({ ok: true, instance: name, count: results?.results?.length || results?.count || 0, results });
+        return json({ ok: true, instance: name, count: results?.chunks?.length || results?.results?.length || results?.count || 0, results });
       } catch (e) {
         return json({ error: e?.message || String(e) }, 500);
       }
