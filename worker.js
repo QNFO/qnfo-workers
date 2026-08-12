@@ -1,5 +1,8 @@
-// qnfo-paper-indexer v2.0 — DEDUP-AWARE rewrite
+// qnfo-paper-indexer v2.1 — DEDUP-AWARE + AI Gateway routing (gateway: default)
 // Reconstructed from spec 2026-08-10 after thin-client violation remediation.
+// v2.1 (2026-08-12): env.AI.run now routes through AI Gateway 'default' so the
+// gateway spend limit (cost $90/30d sliding) binds on this worker — prevents the
+// 08-02→08-10 bge-base-en-v1.5 runaway class (~$40/mo burn) from recurring.
 // Auth: X-Index-Token header required on /webhook and /index.
 // Dedup: SHA-256 content hash per slug — unchanged papers skipped.
 
@@ -70,7 +73,7 @@ async function handleWebhook(env, slug) {
   const vectors = [];
   for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
     const batch = chunks.slice(i, i + EMBED_BATCH);
-    const result = await env.AI.run(EMBED_MODEL, { text: batch });
+    const result = await env.AI.run(EMBED_MODEL, { text: batch }, { gateway: { id: "default" } });
     for (let j = 0; j < batch.length; j++) {
       const idx = i + j;
       vectors.push({
@@ -126,7 +129,7 @@ async function handleIndex(env, url) {
       const chunks = chunkText(row.body_md);
       for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
         const batch = chunks.slice(i, i + EMBED_BATCH);
-        const result = await env.AI.run(EMBED_MODEL, { text: batch });
+        const result = await env.AI.run(EMBED_MODEL, { text: batch }, { gateway: { id: "default" } });
         for (let j = 0; j < batch.length; j++) {
           const idx = i + j;
           allVectors.push({
@@ -188,7 +191,7 @@ export default {
       switch (path) {
         case "/health":
           return json({
-            status: "ok", worker: "qnfo-paper-indexer", version: "2.0-dedup-aware",
+            status: "ok", worker: "qnfo-paper-indexer", version: "2.1-gateway-routed",
             features: ["on-demand-webhook", "on-demand-batch"],
             bindings: { ai: !!env.AI, d1: !!env.LIVING_PAPER, vz: !!env.PAPER_VZ }
           });

@@ -13,7 +13,9 @@ database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
-[[ai]]
+# v2.1 (2026-08-12): [ai] single-table OBJECT form per cloudflare skill v3.47 —
+# [[ai]] array form fails wrangler >= 4.118 validation ("field ai should be an object")
+[ai]
 binding = "AI"
 
 [vars]
