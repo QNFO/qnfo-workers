@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.6';
+const VERSION = '4.3.7';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -28,11 +28,11 @@ const MODELS = {
   'deepseek-v4-flash':        { tier: 1, family: 'deepseek', api: 'deepseek-chat' },
   'deepseek-v4-flash-thinking': { tier: 1, family: 'deepseek', api: 'deepseek-reasoner' },
   'deepseek-v4-pro':          { tier: 2, family: 'deepseek', api: 'deepseek-chat' },
-  // Tier-3 via AI Gateway
-  'claude-sonnet-5':          { tier: 3, family: 'anthropic', gateway: true, model: 'claude-sonnet-5' },
-  'claude-opus-5':            { tier: 3, family: 'anthropic', gateway: true, model: 'claude-opus-5' },
-  'claude-fable-5':           { tier: 3, family: 'anthropic', gateway: true, model: 'claude-fable-5' },
-  'gpt-5-2':                  { tier: 3, family: 'openai',    gateway: true, model: 'gpt-5-2' },
+  // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
+  // "Chat completion bad format" (2019) for every one of them, surfacing as router
+  // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
+  // is worse than not advertising them. Explicit requests for unknown models fall
+  // back to deepseek-v4-flash (existing behavior).
 };
 
 // Per-model output token caps (v4.3.5 — Bad Gateway fix, 2026-08-12).
@@ -91,6 +91,37 @@ function contextAwareTarget(cls, target, estInput, maxOut) {
     return cls.domain === 'science' ? 'deepseek-v4-flash-thinking' : 'deepseek-v4-flash';
   }
   return target;
+}
+
+// v4.3.7 — Hard context-window guard (Bad Gateway fix #3, 2026-08-12).
+// DeepSeek API enforces a REAL maximum context of 1,048,576 tokens (upstream 400:
+// "This model's maximum context length is 1048576 tokens"). DeepChat sessions
+// accumulate system prompt + history; long agent sessions routinely exceed 1M tokens,
+// which surfaced as router 502 -> app "Bad Gateway". Instead of 502ing, truncate the
+// message history to fit the routed model's window: ALWAYS keep the system prompt and
+// the most RECENT messages; drop the oldest history until the budget fits.
+const DEEPSEEK_MAX_CONTEXT = 1048576;
+
+function truncateMessagesToFit(messages, maxInputTokens) {
+  const arr = Array.isArray(messages) ? messages : [];
+  if (arr.length === 0) return arr;
+  let budget = maxInputTokens;
+  let system = null;
+  // keep the leading system message unconditionally
+  if (arr[0] && arr[0].role === 'system') {
+    system = arr[0];
+    budget -= estimateInputTokens([system]);
+    if (budget < 0) budget = 0;
+  }
+  const tail = [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] === system) continue;
+    const cost = estimateInputTokens([arr[i]]);
+    if (budget - cost < 0) break;
+    tail.unshift(arr[i]);
+    budget -= cost;
+  }
+  return system ? [system, ...tail] : tail;
 }
 
 // Ensemble member config — the directive: coder primary, small validator, reviewer
@@ -260,7 +291,8 @@ async function handleChat(env, body, authHeader) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
-  const { model, messages, max_tokens, stream, temperature } = body || {};
+  const { model, messages: rawMessages, max_tokens, stream, temperature } = body || {};
+  let messages = rawMessages;
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: 'model and messages required' }, 400);
   }
@@ -289,9 +321,22 @@ async function handleChat(env, body, authHeader) {
   const isEnsemble = reqModel === 'ensemble';
   // v4.3.6: context-window guard for auto-routing — tier-0 (Workers AI 24k cap) targets
   // that can't hold input+output fall back to DeepSeek (1M context) before any upstream call.
-  const estInputTokens = estimateInputTokens(messages);
-  const target = isAuto ? contextAwareTarget(cls, autoRoute(cls), estInputTokens, max_tokens) : reqModel;
+  let estInputTokens = estimateInputTokens(messages);
+  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls), estInputTokens, max_tokens) : reqModel;
   const spec = MODELS[target];
+
+  // v4.3.7: hard context guard — DeepSeek enforces 1,048,576-token max context. If the
+  // session history exceeds the routed model's window, truncate (keep system + recent).
+  // Works for both auto and explicit targets; never forward an over-limit payload.
+  const effMaxOut = clampTokens(max_tokens, DEFAULT_MAX_OUT);
+  const ctxBudget = (spec?.tier === 0 ? TIER0_TOTAL_CAP : DEEPSEEK_MAX_CONTEXT) - effMaxOut;
+  let truncation = null;
+  if (estInputTokens > ctxBudget) {
+    const before = messages.length;
+    messages = truncateMessagesToFit(messages, ctxBudget);
+    estInputTokens = estimateInputTokens(messages);
+    truncation = { truncated: true, messages_before: before, messages_after: messages.length, budget_tokens: ctxBudget };
+  }
 
   // Unknown model -> fallback to default (deepseek-v4-flash), matching v4.2.0 observed behavior
   const effective = spec ? target : 'deepseek-v4-flash';
@@ -434,6 +479,7 @@ async function handleChat(env, body, authHeader) {
         deepseek_profile: effSpec.api || 'workers-ai',
         estimated_cost_usd: effSpec.tier === 0 ? 0 : undefined,
         neurons_remaining: 8000,
+        ...(truncation ? { truncation } : {}),
       }),
     };
     return json(respBody);
