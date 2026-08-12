@@ -77,7 +77,10 @@ function estimateInputTokens(messages) {
     if (typeof c === 'string') chars += c.length;
     else if (Array.isArray(c)) for (const p of c) if (p && typeof p.text === 'string') chars += p.text.length;
   }
-  return Math.ceil(chars / 4);
+  // v4.3.7: conservative /3 (DeepSeek tokenizer can be ~2-4 chars/token; under-estimating
+  // lets over-limit payloads through -> upstream 400 -> router 502). /3 over-estimates
+  // slightly for prose, which only makes the truncation guard trigger a bit earlier (safe).
+  return Math.ceil(chars / 3);
 }
 
 // If the routed target is tier-0 (Workers AI) and the estimated context won't fit the
@@ -105,21 +108,33 @@ const DEEPSEEK_MAX_CONTEXT = 1048576;
 function truncateMessagesToFit(messages, maxInputTokens) {
   const arr = Array.isArray(messages) ? messages : [];
   if (arr.length === 0) return arr;
-  let budget = maxInputTokens;
+  // v4.3.7: budget in chars using the conservative /3 token estimate, plus a 5% safety
+  // margin so a single oversized message that gets clipped still lands under the token cap.
+  const charBudget = Math.floor(maxInputTokens * 2.8);
+  let used = 0;
   let system = null;
   // keep the leading system message unconditionally
   if (arr[0] && arr[0].role === 'system') {
     system = arr[0];
-    budget -= estimateInputTokens([system]);
-    if (budget < 0) budget = 0;
+    used = Math.ceil(String(system.content || '').length);
   }
   const tail = [];
   for (let i = arr.length - 1; i >= 0; i--) {
     if (arr[i] === system) continue;
-    const cost = estimateInputTokens([arr[i]]);
-    if (budget - cost < 0) break;
+    const cost = Math.ceil(String(arr[i].content || '').length);
+    if (used + cost > charBudget) {
+      if (tail.length === 0) {
+        // newest message alone overflows: clip its content to the remaining budget so the
+        // request still carries the current user turn instead of 502ing.
+        const remain = Math.max(0, charBudget - used);
+        const clipped = { ...arr[i], content: String(arr[i].content || '').slice(0, remain) };
+        tail.unshift(clipped);
+        used += remain;
+      }
+      break;
+    }
     tail.unshift(arr[i]);
-    budget -= cost;
+    used += cost;
   }
   return system ? [system, ...tail] : tail;
 }
