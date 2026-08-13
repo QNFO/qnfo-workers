@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.10';
+const VERSION = '4.3.11';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -212,7 +212,7 @@ function normalizeResponsesContent(content) {
 // llama-3.2-1b = validator (Gemma 3 1B substitute), qwen3-30b = reviewer (Granite substitute).
 const ENSEMBLE = {
   primary:   { wa: '@cf/qwen/qwen2.5-coder-32b-instruct' },
-  validator: { wa: '@cf/meta/llama-3.2-1b-instruct' },
+  validator: { wa: '@cf/google/gemma-2b-it-lora' },
   reviewer:  { wa: '@cf/qwen/qwen3-30b-a3b-fp8' },
 };
 
@@ -247,7 +247,11 @@ function autoRoute(cls) {
   if (cls.domain === 'code') return 'qwen2.5-coder-32b';
   if (cls.domain === 'science') return 'deepseek-v4-flash-thinking';
   if (cls.complexity === 'high') return 'deepseek-v4-flash';
-  return 'llama-3.3-70b';
+  // v4.3.11 QNFO-MODEL-POLICY-1: general default -> qwen3-30b.
+  // Meta/Llama models are conversational-chatbot class only; the user
+  // mandate excludes them from scientific/technical research routing.
+  // llama-3.3-70b remains available for EXPLICIT requests only.
+  return 'qwen3-30b';
 }
 
 async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
