@@ -3,7 +3,7 @@ title: "QNFO Funding Strategy — Verified Funder Landscape & Shortlist"
 author: "Quni-Gudzinas, Rowan Brad"
 date: "2026-08-13"
 license: "cc-by-nc-sa-4.0"
-doi: "10.5281/zenodo.XXXXXXX"
+doi: "10.5281/zenodo.21922589"
 status: "published"
 ---
 
