@@ -14,8 +14,6 @@ This paper presents a verified funder landscape and fit-score shortlist for sust
 ## Keywords
 
 funding strategy; decentralized science; AI-assisted research; open knowledge infrastructure; grant landscape; Web3
-
----
 - **Date:** 2026-08-13
 - **Source note:** `QNFO research note (2026-08-12), included in this deposit as source-note-2026-08-12.md` (funding manifesto)
 - **Method:** All funder facts below were verified by live HTTP fetch on 2026-08-13 (26 pages, status + title + keyword extraction). Anything not verified live is flagged `[VERIFY]`.
@@ -27,7 +25,7 @@ funding strategy; decentralized science; AI-assisted research; open knowledge in
 
 ## 1. The Ask (One Paragraph)
 
-QNFO is a two-year-old, solo-run, AI-assisted research platform that has produced an open corpus of ~1,000 method papers, organized across seven program areas (ultrametric physics, laws of form, information physics, paradigm engineering, consilience, platform, demos), with a documented audit discipline (citation audits, post-publication adversarial review, ignorance auditing) and an existing decentralized deployment history (IPFS). Monthly operating costs run in the hundreds of dollars, paid from personal savings. The ask: \$10k–\$60k/year-scale support to (a) sustain the platform, (b) open-source and decentralize the knowledge infrastructure (IPFS/Filecoin mirroring, open protocols), and (c) productize the audit methodology (Universal Ignorance Audit, AI-generation detection) as public goods. Primary funder categories: fast micro-grants (Emergent Ventures), open-internet infrastructure funds (NLnet NGI Zero), AI-epistemics grants (Foresight), and decentralized-storage grants (Filecoin).
+QNFO is a two-year-old, solo-run, AI-assisted research platform that has produced an open corpus of ~1,000 method papers, organized across seven program areas (ultrametric physics, laws of form, information physics, paradigm engineering, consilience, platform, demos), with a documented audit discipline (citation audits, post-publication adversarial review, ignorance auditing) and an existing decentralized deployment history (IPFS). Actual spend is \$400–600/month for the DeepChat AI stack alone (a Claude evaluation PoC cost \$400 in under a week), with an optimized Cloudflare AI-infrastructure target of \$100–200/month — an optimistic cost-cutting projection, not the current total. All costs are paid from personal savings, which is not sustainable long-term as research velocity increases. The ask: \$25k–\$60k/year-scale support to (a) sustain the platform at current velocity, (b) open-source and decentralize the knowledge infrastructure (IPFS/Filecoin mirroring, open protocols), and (c) productize the audit methodology (Universal Ignorance Audit, AI-generation detection) as public goods. Primary funder categories: fast micro-grants (Emergent Ventures), open-internet infrastructure funds (NLnet NGI Zero), AI-epistemics grants (Foresight), and decentralized-storage grants (Filecoin).
 
 ## 2. Applicant Assets (citable evidence)
 
@@ -39,7 +37,7 @@ QNFO is a two-year-old, solo-run, AI-assisted research platform that has produce
 | Audit methodology | Universal Ignorance Audit (15 questions, 5 phases); citation-audit and paper-claim-audit procedures | Foresight (epistemics) pitch core |
 | GitHub org | QNFO (QWAV strategy paper repo, tagged releases) | FOSS funders will check |
 | Public reach | ~96-account social registry across 4 platforms (QNFO-aligned) | Broader-impact evidence |
-| Budget discipline | Documented cost gates (\$90/30d AI spend limit; monthly automated cost audit) | Trust signal for funders |
+| Budget discipline | Documented cost gates (\$90/30d Cloudflare AI-gateway spend limit; monthly automated cost audit; Cloudflare budget target \$100/mo, hard cap \$200/mo; DeepChat stack actual spend \$400–600/mo; Claude PoC spike \$400/week) | Trust signal for funders |
 
 ## 3. Application-Readiness Gaps (Phase-0 Ignorance Audit — what we do NOT know)
 
@@ -49,7 +47,7 @@ These are unknown or unverified facts that materially affect eligibility. They d
 2. **Residency/citizenship** — unknown. Affects Sovereign Tech Fellowship (German employment contract) and tax treatment of grants.
 3. **Tax position** — grants are taxable income in most jurisdictions; crypto-denominated grants (Filecoin FIL, Gitcoin crypto checkout) need accounting. *Action: flag to accountant before first payout.*
 4. **Public identity** — some funders publish winners. Decide whether the QNFO founder name is public.
-5. **Budget floor** — the source note says "hundreds of dollars a month" but no exact figure. Applications need a defensible annual run-rate number.
+5. **Budget floor — RESOLVED (2026-08-13)** — actual spend is **\$400–600/month for the DeepChat AI stack alone**, with a **\$400-in-under-a-week Claude evaluation PoC** spike; the **\$100–200/month figure is an optimistic cost-cutting projection for optimized Cloudflare AI infrastructure only**, not the current total. Annual run-rate baseline: **~\$6–8k (DeepChat) + Cloudflare + PoC spikes** — applications must budget for the real run-rate, not the optimistic projection.
 6. **Willingness to meet crypto-payment requirements** — Gitcoin GG24 requires multi-chain checkout for donations; Filecoin pays in FIL.
 
 ## 4. Verified Funder Landscape
