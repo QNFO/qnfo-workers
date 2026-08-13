@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.11';
+const VERSION = '4.4.0';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -23,7 +23,11 @@ const MODELS = {
   'qwen2.5-coder-32b':        { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen2.5-coder-32b-instruct',         reasoning: false, maxOut: 8192 },
   'llama-3.2-1b':             { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-1b-instruct',              reasoning: false, maxOut: 4096 },
   'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false, maxOut: 4096 },
-  'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096 },
+  'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096 },'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096 },
+  // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
+  'glm-5.2':                  { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.2',              reasoning: true,  maxOut: 8192 },
+  'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192 },
+  'qwq-32b':                  { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwq-32b',                   reasoning: true,  maxOut: 8192 },
   // DeepSeek API
   'deepseek-v4-flash':        { tier: 1, family: 'deepseek', api: 'deepseek-chat' },
   'deepseek-v4-flash-thinking': { tier: 1, family: 'deepseek', api: 'deepseek-reasoner' },
@@ -48,7 +52,10 @@ const MAX_OUT = {
   '@cf/qwen/qwen2.5-coder-32b-instruct': 8192,
   '@cf/meta/llama-3.2-1b-instruct': 4096,
   '@cf/google/gemma-2b-it-lora': 4096,
-  '@cf/ibm-granite/granite-4.0-h-micro': 4096,
+  '@cf/ibm-granite/granite-4.0-h-micro': 4096,'@cf/ibm-granite/granite-4.0-h-micro': 4096,
+  '@cf/zai-org/glm-5.2': 8192,
+  '@cf/moonshotai/kimi-k2.6': 8192,
+  '@cf/qwen/qwq-32b': 8192,
 };
 const DEFAULT_MAX_OUT = 8192;
 
@@ -251,7 +258,7 @@ function autoRoute(cls) {
   // Meta/Llama models are conversational-chatbot class only; the user
   // mandate excludes them from scientific/technical research routing.
   // llama-3.3-70b remains available for EXPLICIT requests only.
-  return 'qwen3-30b';
+  return 'glm-5.2'; // v4.4.0: audit 2026-08-13 — GLM-5.2 default (LiveBench math 89.8, free tier-0)
 }
 
 async function runWorkersAI(env, modelId, messages, maxTokens, stream) {

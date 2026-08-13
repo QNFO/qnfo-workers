@@ -1,0 +1,760 @@
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// worker.js
+var VERSION = "4.3.11";
+var ROUTES = ["/health", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history"];
+var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
+var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
+var MODELS = {
+  // Workers AI free — original three
+  "llama-3.3-70b": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", reasoning: false, maxOut: 8192 },
+  "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 8192 },
+  "qwen3-30b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen3-30b-a3b-fp8", reasoning: false, maxOut: 8192 },
+  // Workers AI free — directive substitutes (small coder/validator/reviewer class)
+  "qwen2.5-coder-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen2.5-coder-32b-instruct", reasoning: false, maxOut: 8192 },
+  "llama-3.2-1b": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-1b-instruct", reasoning: false, maxOut: 4096 },
+  "gemma-2b": { tier: 0, family: "google", wa: "@cf/google/gemma-2b-it-lora", reasoning: false, maxOut: 4096 },
+  "granite-h-micro": { tier: 0, family: "ibm", wa: "@cf/ibm-granite/granite-4.0-h-micro", reasoning: false, maxOut: 4096 },
+  // DeepSeek API
+  "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat" },
+  "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner" },
+  "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat" }
+  // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
+  // "Chat completion bad format" (2019) for every one of them, surfacing as router
+  // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
+  // is worse than not advertising them. Explicit requests for unknown models fall
+  // back to deepseek-v4-flash (existing behavior).
+};
+var MAX_OUT = {
+  // Workers AI (tier-0) — safe caps well under observed max_total_tokens=24000 (llama-3.3-70b)
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast": 8192,
+  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": 8192,
+  "@cf/qwen/qwen3-30b-a3b-fp8": 8192,
+  "@cf/qwen/qwen2.5-coder-32b-instruct": 8192,
+  "@cf/meta/llama-3.2-1b-instruct": 4096,
+  "@cf/google/gemma-2b-it-lora": 4096,
+  "@cf/ibm-granite/granite-4.0-h-micro": 4096
+};
+var DEFAULT_MAX_OUT = 8192;
+function clampTokens(maxTokens, cap) {
+  const c = cap || DEFAULT_MAX_OUT;
+  const t = Number.isFinite(maxTokens) && maxTokens > 0 ? Math.floor(maxTokens) : 4096;
+  return Math.min(t, c);
+}
+__name(clampTokens, "clampTokens");
+var TIER0_TOTAL_CAP = 24e3;
+var TIER0_SAFE_TOTAL = 2e4;
+function estimateInputTokens(messages) {
+  let chars = 0;
+  for (const m of messages || []) {
+    const c = m && m.content;
+    if (typeof c === "string") chars += c.length;
+    else if (Array.isArray(c)) {
+      for (const p of c) if (p && typeof p.text === "string") chars += p.text.length;
+    }
+  }
+  return Math.ceil(chars / 3);
+}
+__name(estimateInputTokens, "estimateInputTokens");
+function contextAwareTarget(cls, target, estInput, maxOut) {
+  const spec = MODELS[target];
+  if (!spec || spec.tier !== 0) return target;
+  const out = clampTokens(maxOut, MAX_OUT[spec.wa] || DEFAULT_MAX_OUT);
+  if (estInput + out > TIER0_SAFE_TOTAL) {
+    return cls.domain === "science" ? "deepseek-v4-flash-thinking" : "deepseek-v4-flash";
+  }
+  return target;
+}
+__name(contextAwareTarget, "contextAwareTarget");
+var DEEPSEEK_MAX_CONTEXT = 1048576;
+function truncateMessagesToFit(messages, maxInputTokens) {
+  const arr = Array.isArray(messages) ? messages : [];
+  if (arr.length === 0) return arr;
+  const charBudget = Math.floor(maxInputTokens * 1.9);
+  let used = 0;
+  let system = null;
+  if (arr[0] && arr[0].role === "system") {
+    system = arr[0];
+    used = Math.ceil(String(system.content || "").length);
+  }
+  const tail = [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] === system) continue;
+    const cost = Math.ceil(String(arr[i].content || "").length);
+    if (used + cost > charBudget) {
+      if (tail.length === 0) {
+        const remain = Math.max(0, charBudget - used);
+        const clipped = { ...arr[i], content: String(arr[i].content || "").slice(0, remain) };
+        tail.unshift(clipped);
+        used += remain;
+      }
+      break;
+    }
+    tail.unshift(arr[i]);
+    used += cost;
+  }
+  return system ? [system, ...tail] : tail;
+}
+__name(truncateMessagesToFit, "truncateMessagesToFit");
+function normalizeResponsesInput(body) {
+  const messages = [];
+  if (body.instructions) {
+    messages.push({ role: "system", content: body.instructions });
+  }
+  const input = body.input;
+  if (typeof input === "string") {
+    messages.push({ role: "user", content: input });
+    return messages;
+  }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (!item || typeof item !== "object") continue;
+      if (item.type === "message" || item.role) {
+        const role = item.role === "system" ? "system" : item.role === "assistant" ? "assistant" : "user";
+        messages.push({ role, content: normalizeResponsesContent(item.content) });
+      } else if (item.type === "function_call") {
+        messages.push({
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: item.call_id || `call_${Math.random().toString(16).slice(2, 10)}`,
+            type: "function",
+            function: { name: item.name || "", arguments: typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments || {}) }
+          }]
+        });
+      } else if (item.type === "function_call_output") {
+        messages.push({
+          role: "tool",
+          tool_call_id: item.call_id || `call_${Math.random().toString(16).slice(2, 10)}`,
+          content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? "")
+        });
+      }
+    }
+  }
+  return messages;
+}
+__name(normalizeResponsesInput, "normalizeResponsesInput");
+function normalizeResponsesContent(content) {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts = [];
+    for (const p of content) {
+      if (!p || typeof p !== "object") continue;
+      if (typeof p.text === "string") {
+        parts.push({ type: "text", text: p.text });
+      } else if (p.type === "input_image" && p.image_url) {
+        parts.push({ type: "image_url", image_url: typeof p.image_url === "string" ? { url: p.image_url } : p.image_url });
+      } else if (typeof p.refusal === "string") {
+        parts.push({ type: "text", text: p.refusal });
+      }
+    }
+    return parts;
+  }
+  return String(content);
+}
+__name(normalizeResponsesContent, "normalizeResponsesContent");
+var ENSEMBLE = {
+  primary: { wa: "@cf/qwen/qwen2.5-coder-32b-instruct" },
+  validator: { wa: "@cf/google/gemma-2b-it-lora" },
+  reviewer: { wa: "@cf/qwen/qwen3-30b-a3b-fp8" }
+};
+var json = /* @__PURE__ */ __name((obj, status = 200) => new Response(JSON.stringify(obj), {
+  status,
+  headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS" }
+}), "json");
+function timingSafeEqual(a, b) {
+  if (a.byteLength !== b.byteLength) return false;
+  const av = new Uint8Array(a), bv = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < av.length; i++) diff |= av[i] ^ bv[i];
+  return diff === 0;
+}
+__name(timingSafeEqual, "timingSafeEqual");
+function classify(prompt) {
+  const p = (prompt || "").toLowerCase();
+  let complexity = "medium", domain = "general", uncertainty = "low", divergence = "high", verifiability = "unverifiable";
+  if (/\b(code|javascript|python|typescript|function|api|bug|debug|compile|sql|regex)\b/.test(p)) {
+    domain = "code";
+    complexity = "high";
+    verifiability = "self";
+  } else if (/\b(prove|theorem|proof|math|physics|quantum|paper|research|cite|arxiv)\b/.test(p)) {
+    domain = "science";
+    complexity = "high";
+    divergence = "low";
+    verifiability = "external";
+  } else if (/\b(legal|contract|law|clause|regulation|compliance)\b/.test(p)) {
+    domain = "legal";
+    complexity = "high";
+    divergence = "low";
+    verifiability = "external";
+  } else if (/\b(poem|story|write|creative|essay|metaphor|style)\b/.test(p)) {
+    domain = "creative";
+    complexity = "medium";
+    divergence = "high";
+    uncertainty = "medium";
+  }
+  if (/\b(uncertain|unclear|unknown|estimate|approximate|maybe|perhaps)\b/.test(p)) uncertainty = "medium";
+  return { complexity, domain, uncertainty, divergence, verifiability };
+}
+__name(classify, "classify");
+function autoRoute(cls) {
+  if (cls.domain === "code") return "qwen2.5-coder-32b";
+  if (cls.domain === "science") return "deepseek-v4-flash-thinking";
+  if (cls.complexity === "high") return "deepseek-v4-flash";
+  return "qwen3-30b";
+}
+__name(autoRoute, "autoRoute");
+async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
+  if (env.CF_API_TOKEN && modelId.startsWith("@cf/")) {
+    try {
+      const gwResp = await fetch(GW_COMPAT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN
+        },
+        body: JSON.stringify({
+          model: "workers-ai/" + modelId,
+          messages,
+          max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
+          stream: stream || false
+        })
+      });
+      if (gwResp.ok) {
+        if (stream) return gwResp;
+        return await gwResp.json();
+      }
+    } catch (e) {
+    }
+  }
+  const out = await env.AI.run(modelId, {
+    messages,
+    // v4.3.5: clamp to the model's output cap so an oversized client max_tokens
+    // (e.g. 32000 on a 24000-max model) cannot surface as an upstream 400 -> router 502.
+    max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
+    stream: stream || false
+  });
+  return out;
+}
+__name(runWorkersAI, "runWorkersAI");
+function extractWAContent(result, depth = 0) {
+  if (typeof result === "string") return result;
+  if (!result || typeof result !== "object" || depth > 4) return "";
+  if (typeof result.response === "string") return result.response;
+  if (typeof result.result === "string") return result.result;
+  if (Array.isArray(result.choices) && result.choices[0]) {
+    const c = result.choices[0];
+    if (c.message && typeof c.message.content === "string") return c.message.content;
+    if (c.message && typeof c.message.reasoning_content === "string") return c.message.reasoning_content;
+    if (c.message && typeof c.message.reasoning === "string") return c.message.reasoning;
+    if (typeof c.text === "string") return c.text;
+  }
+  if (result.result && typeof result.result === "object") return extractWAContent(result.result, depth + 1);
+  return "";
+}
+__name(extractWAContent, "extractWAContent");
+async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools) {
+  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false };
+  if (tools && tools.length) {
+    body.tools = tools;
+    body.tool_choice = "auto";
+  }
+  const resp = await fetch(DEEPSEEK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.DEEPSEEK_API_KEY}` },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(`deepseek ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  if (stream) return resp;
+  return resp.json();
+}
+__name(callDeepSeek, "callDeepSeek");
+async function callGateway(env, model, messages, maxTokens, stream) {
+  const resp = await fetch(GW_COMPAT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.CF_API_TOKEN}` },
+    body: JSON.stringify({ model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
+  });
+  if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  if (stream) return resp;
+  return resp.json();
+}
+__name(callGateway, "callGateway");
+async function runEnsemble(env, messages, maxTokens) {
+  const t0 = Date.now();
+  const primary = await runWorkersAI(env, ENSEMBLE.primary.wa, messages, maxTokens, false);
+  const primaryText = extractWAContent(primary);
+  let verificationResult = "passed";
+  let agreementRate = 0;
+  let verifiedBy = ENSEMBLE.validator.wa;
+  let finalText = primaryText;
+  try {
+    const vMsg = [
+      { role: "system", content: 'You are a strict validator. Reply ONLY with "PASS" if the assistant response fully satisfies the user request, or "FAIL" followed by one sentence why.' },
+      ...messages,
+      { role: "assistant", content: primaryText }
+    ];
+    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 100, false);
+    const vText = extractWAContent(vOut).trim();
+    const pass = /^pass/i.test(vText);
+    agreementRate = pass ? 1 : 0;
+    if (!pass) {
+      verificationResult = "reviewed";
+      const rMsg = [
+        { role: "system", content: "You are a senior reviewer. Improve the assistant response to fully satisfy the user request. Output only the improved response." },
+        ...messages,
+        { role: "assistant", content: primaryText }
+      ];
+      const rOut = await runWorkersAI(env, ENSEMBLE.reviewer.wa, rMsg, maxTokens, false);
+      const rText = extractWAContent(rOut);
+      if (rText.trim()) {
+        finalText = rText;
+        verificationResult = "refined";
+        verifiedBy = ENSEMBLE.reviewer.wa;
+      }
+    }
+  } catch (e) {
+    verificationResult = "skipped";
+  }
+  return {
+    text: finalText,
+    members: ["primary", "validator", "reviewer"],
+    verified_by: verifiedBy,
+    verification_result: verificationResult,
+    agreement_rate: agreementRate,
+    latency_ms: Date.now() - t0
+  };
+}
+__name(runEnsemble, "runEnsemble");
+async function handleChat(env, body, authHeader) {
+  const expected = env.ROUTER_AUTH_KEY;
+  if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+  const provided = authHeader.slice("Bearer ".length);
+  const enc = new TextEncoder();
+  const a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
+  const b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
+  if (!timingSafeEqual(a, b)) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+  const { model, messages: rawMessages, max_tokens, stream, temperature, tools } = body || {};
+  let messages = rawMessages;
+  if (!model || !Array.isArray(messages) || messages.length === 0) {
+    return json({ error: "model and messages required" }, 400);
+  }
+  const t0 = Date.now();
+  const cls = classify((messages[messages.length - 1]?.content || "").toString());
+  const isStream = !!stream;
+  const mkRouter = /* @__PURE__ */ __name((routed, strategy, extra = {}) => ({
+    routed_model: routed,
+    tier: MODELS[routed]?.tier ?? 0,
+    complexity: cls.complexity,
+    domain: cls.domain,
+    uncertainty: cls.uncertainty,
+    divergence: cls.divergence,
+    verifiability: cls.verifiability,
+    strategy,
+    provider: MODELS[routed]?.family || "unknown",
+    family: MODELS[routed]?.family || "unknown",
+    classification_ms: 0,
+    total_latency_ms: Date.now() - t0,
+    ...extra
+  }), "mkRouter");
+  const reqModel = body.model;
+  const isAuto = reqModel === "auto";
+  const isEnsemble = reqModel === "ensemble";
+  let estInputTokens = estimateInputTokens(messages);
+  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls), estInputTokens, max_tokens) : reqModel;
+  const spec = MODELS[target];
+  const effMaxOut = clampTokens(max_tokens, DEFAULT_MAX_OUT);
+  const ctxBudget = (spec?.tier === 0 ? TIER0_TOTAL_CAP : DEEPSEEK_MAX_CONTEXT) - effMaxOut;
+  let truncation = null;
+  if (estInputTokens > ctxBudget) {
+    const before = messages.length;
+    messages = truncateMessagesToFit(messages, ctxBudget);
+    estInputTokens = estimateInputTokens(messages);
+    truncation = { truncated: true, messages_before: before, messages_after: messages.length, budget_tokens: ctxBudget };
+  }
+  const effective = spec ? target : "deepseek-v4-flash";
+  const effSpec = spec ? spec : MODELS["deepseek-v4-flash"];
+  const routedModel = effective;
+  if (isEnsemble) {
+    try {
+      if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > TIER0_SAFE_TOTAL) {
+        const fb = await callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
+        const fbContent = fb?.choices?.[0]?.message?.content ?? "";
+        return json({
+          id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
+          object: "chat.completion",
+          created: Math.floor(Date.now() / 1e3),
+          model: "ensemble",
+          choices: [{ index: 0, message: { role: "assistant", content: fbContent }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+          _router: mkRouter("deepseek-v4-flash", "ensemble-context-fallback", {
+            ensemble_members: ["fallback-deepseek"],
+            verification_result: "context_fallback",
+            estimated_input_tokens: estInputTokens
+          })
+        });
+      }
+      const ens = await runEnsemble(env, messages, clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]));
+      const respBody = {
+        id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1e3),
+        model: "ensemble",
+        choices: [{ index: 0, message: { role: "assistant", content: ens.text }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        _router: mkRouter("ensemble", "ensemble", {
+          ensemble_members: ens.members,
+          verified_by: ens.verified_by,
+          verification_result: ens.verification_result,
+          agreement_rate: ens.agreement_rate,
+          estimated_cost_usd: 0,
+          neurons_remaining: 8e3
+        })
+      };
+      return json(respBody);
+    } catch (e) {
+      return json({ error: "ensemble failed: " + e.message }, 502);
+    }
+  }
+  if (isStream) {
+    try {
+      if (effSpec.wa) {
+        if (env.CF_API_TOKEN) {
+          try {
+            const gwResp = await fetch(GW_COMPAT, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN
+              },
+              body: JSON.stringify({
+                model: "workers-ai/" + effSpec.wa,
+                messages,
+                max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
+                stream: true
+              })
+            });
+            if (gwResp.ok) {
+              const reader = gwResp.body.getReader();
+              const decoder = new TextDecoder();
+              let buf = "";
+              const enc2 = new TextEncoder();
+              const stream3 = new ReadableStream({
+                async start(controller) {
+                  try {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buf += decoder.decode(value, { stream: true });
+                      const lines = buf.split("\n");
+                      buf = lines.pop();
+                      for (const line of lines) {
+                        const t = line.trim();
+                        if (!t.startsWith("data:")) continue;
+                        const data = t.slice(5).trim();
+                        if (data === "[DONE]") continue;
+                        let parsed;
+                        try {
+                          parsed = JSON.parse(data);
+                        } catch {
+                          continue;
+                        }
+                        const delta = parsed.choices?.[0]?.delta?.content ?? "";
+                        if (!delta) continue;
+                        const payload = {
+                          id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
+                          object: "chat.completion.chunk",
+                          created: Math.floor(Date.now() / 1e3),
+                          model: routedModel,
+                          choices: [{ index: 0, delta: { role: "assistant", content: delta }, finish_reason: null }]
+                        };
+                        controller.enqueue(enc2.encode("data: " + JSON.stringify(payload) + "\n\n"));
+                      }
+                    }
+                    const donePayload = {
+                      id: "chatcmpl-done",
+                      object: "chat.completion.chunk",
+                      created: Math.floor(Date.now() / 1e3),
+                      model: routedModel,
+                      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+                      _router: mkRouter(routedModel, "single")
+                    };
+                    controller.enqueue(enc2.encode("data: " + JSON.stringify(donePayload) + "\n\n"));
+                    controller.enqueue(enc2.encode("data: [DONE]\n\n"));
+                    controller.close();
+                  } catch (e) {
+                    controller.error(e);
+                  }
+                }
+              });
+              return new Response(stream3, {
+                headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" }
+              });
+            }
+          } catch (e) {
+          }
+        }
+        const aiResp = await env.AI.run(effSpec.wa, {
+          messages,
+          max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
+          stream: true
+        });
+        const encoder = new TextEncoder();
+        const stream2 = new ReadableStream({
+          async start(controller) {
+            try {
+              const reader = aiResp.getReader();
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = new TextDecoder().decode(value);
+                let parsed;
+                try {
+                  parsed = JSON.parse(chunk);
+                } catch {
+                  parsed = { response: chunk };
+                }
+                const delta = parsed.response ?? parsed.delta?.content ?? chunk;
+                const payload = {
+                  id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
+                  object: "chat.completion.chunk",
+                  created: Math.floor(Date.now() / 1e3),
+                  model: routedModel,
+                  choices: [{ index: 0, delta: { role: "assistant", content: delta }, finish_reason: null }]
+                };
+                controller.enqueue(encoder.encode("data: " + JSON.stringify(payload) + "\n\n"));
+              }
+              const donePayload = {
+                id: "chatcmpl-done",
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1e3),
+                model: routedModel,
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+                _router: mkRouter(routedModel, "single")
+              };
+              controller.enqueue(encoder.encode("data: " + JSON.stringify(donePayload) + "\n\n"));
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              controller.close();
+            } catch (e) {
+              controller.error(e);
+            }
+          }
+        });
+        return new Response(stream2, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      if (effSpec.api) {
+        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools);
+        return new Response(upstream.body, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      if (effSpec.gateway) {
+        const upstream = await callGateway(env, effSpec.model, messages, max_tokens, true);
+        return new Response(upstream.body, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      return json({ error: "no stream path for model" }, 400);
+    } catch (e) {
+      return json({ error: "stream failed: " + e.message }, 502);
+    }
+  }
+  try {
+    let content = "", toolCalls = null, provider = effSpec.family || "unknown";
+    if (effSpec.wa) {
+      const out = await runWorkersAI(env, effSpec.wa, messages, max_tokens, false);
+      content = extractWAContent(out);
+      provider = "workers-ai";
+    } else if (effSpec.api) {
+      const out = await callDeepSeek(env, effSpec.api, messages, max_tokens, false, tools);
+      content = out?.choices?.[0]?.message?.content ?? "";
+      toolCalls = out?.choices?.[0]?.message?.tool_calls ?? null;
+      provider = "deepseek";
+    } else if (effSpec.gateway) {
+      const out = await callGateway(env, effSpec.model, messages, max_tokens, false);
+      content = out?.choices?.[0]?.message?.content ?? "";
+      provider = effSpec.family;
+    }
+    if (!content) content = "All models failed.";
+    const respBody = {
+      id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1e3),
+      model: routedModel,
+      choices: [{ index: 0, message: { role: "assistant", content, ...toolCalls ? { tool_calls: toolCalls } : {} }, finish_reason: toolCalls ? "tool_calls" : "stop" }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      _router: mkRouter(routedModel, isAuto ? "auto" : "single", {
+        deepseek_profile: effSpec.api || "workers-ai",
+        estimated_cost_usd: effSpec.tier === 0 ? 0 : void 0,
+        neurons_remaining: 8e3,
+        ...truncation ? { truncation } : {}
+      })
+    };
+    return json(respBody);
+  } catch (e) {
+    return json({ error: e.message }, 502);
+  }
+}
+__name(handleChat, "handleChat");
+var worker_default = {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const method = request.method;
+    if (method === "OPTIONS") return json({ ok: true });
+    if (path === "/health" && method === "GET") {
+      return json({
+        status: "ok",
+        worker: "qnfo-ai",
+        version: VERSION,
+        capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search"],
+        routes: ROUTES,
+        bindings: {
+          ai: !!env.AI,
+          deepseek_key: !!env.DEEPSEEK_API_KEY,
+          cf_token: !!env.CF_API_TOKEN,
+          auth: !!env.ROUTER_AUTH_KEY,
+          paper_vz: !!env.PAPER_VZ,
+          query_db: !!env.QNFO_AUDIT
+        }
+      });
+    }
+    if (path === "/v1/models" && method === "GET") {
+      const data = Object.entries(MODELS).map(([id, m]) => ({
+        id,
+        object: "model",
+        created: 171e7,
+        owned_by: m.tier === 0 ? "workers-ai" : m.family,
+        _router: {
+          tier: m.tier,
+          family: m.family,
+          reasoning: !!m.reasoning,
+          costPer1MInput: m.tier === 0 ? 0 : m.tier === 1 ? 0.14 : m.tier === 2 ? 2.19 : null,
+          costPer1MOutput: m.tier === 0 ? 0 : m.tier === 1 ? 0.28 : m.tier === 2 ? 2.19 : null,
+          availability: m.tier === 0 ? "always" : m.tier <= 2 ? "key-required" : "billing-required"
+        }
+      }));
+      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      return json({ object: "list", data });
+    }
+    if (path.startsWith("/v1/models/") && method === "GET") {
+      const id = path.split("/").pop();
+      const m = MODELS[id];
+      if (!m) return json({ error: "model not found" }, 404);
+      return json({ id, object: "model", created: 171e7, owned_by: m.tier === 0 ? "workers-ai" : m.family });
+    }
+    if ((path === "/v1/chat/completions" || path === "/chat/completions") && method === "POST") {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: "invalid JSON" }, 400);
+      }
+      const auth = request.headers.get("Authorization") || "";
+      return handleChat(env, body, auth);
+    }
+    if (path === "/v1/responses" && method === "POST") {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: "invalid JSON" }, 400);
+      }
+      const auth = request.headers.get("Authorization") || "";
+      if (!body.model || !body.input) return json({ error: "model and input required" }, 400);
+      const chatBody = {
+        model: body.model,
+        messages: normalizeResponsesInput(body),
+        max_tokens: body.max_output_tokens ?? body.max_tokens,
+        stream: false,
+        temperature: body.temperature
+      };
+      const chatResp = await handleChat(env, chatBody, auth);
+      if (!chatResp.ok) return chatResp;
+      const chatData = await chatResp.json();
+      const text = chatData?.choices?.[0]?.message?.content ?? "";
+      const respObj = {
+        id: "resp_" + Math.random().toString(16).slice(2, 10),
+        object: "response",
+        created_at: Math.floor(Date.now() / 1e3),
+        status: "completed",
+        model: chatData.model || body.model,
+        output: [{
+          type: "message",
+          id: "msg_" + Math.random().toString(16).slice(2, 10),
+          role: "assistant",
+          content: [{ type: "output_text", text }]
+        }],
+        usage: chatData.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        ...chatData._router ? { _router: chatData._router } : {}
+      };
+      if (body.stream) {
+        const encoder = new TextEncoder();
+        const enc = /* @__PURE__ */ __name((obj) => encoder.encode("data: " + JSON.stringify(obj) + "\n\n"), "enc");
+        const stream = new ReadableStream({
+          start(controller) {
+            if (text) {
+              controller.enqueue(enc({ type: "response.output_text.delta", delta: text, item_id: respObj.output[0].id, output_index: 0, content_index: 0 }));
+            }
+            controller.enqueue(enc({ type: "response.completed", response: respObj }));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          }
+        });
+        return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      return json(respObj);
+    }
+    if (path === "/v1/search" && method === "GET") {
+      const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+      const k = parseInt(url.searchParams.get("k") || "5", 10);
+      if (!q) return json({ error: "Missing q parameter" }, 400);
+      const vz = env.PAPER_VZ;
+      if (!vz) return json({ error: "internal RAG requires Vectorize binding \u2014 not configured in this deployment" }, 501);
+      if (!env.AI) return json({ error: "AI binding not configured" }, 503);
+      try {
+        const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [q] });
+        const vec = embed?.data?.[0] || (Array.isArray(embed) ? embed[0] : null);
+        if (!vec) return json({ error: "embedding generation failed" }, 502);
+        const matches = await vz.query(vec, { topK: Math.min(Math.max(k, 1), 20), returnMetadata: "all" });
+        const results = (matches.matches || []).map((m) => ({
+          id: m.id,
+          score: Math.round((m.score || 0) * 1e4) / 1e4,
+          metadata: m.metadata || {}
+        }));
+        return json({ index: "qwav-research-v2", query: q, count: results.length, results });
+      } catch (e) {
+        return json({ error: e.message }, 500);
+      }
+    }
+    if (path === "/v1/history" && method === "GET") {
+      const db = env.QNFO_AUDIT;
+      if (!db) return json({ error: "query logging requires D1 binding \u2014 not configured in this deployment" }, 501);
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 1), 100);
+      const model = (url.searchParams.get("model") || "").trim();
+      try {
+        let rows;
+        if (model) {
+          rows = await db.prepare(
+            "SELECT id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed FROM ai_queries WHERE model = ?1 ORDER BY ts DESC LIMIT ?2"
+          ).bind(model, limit).all();
+        } else {
+          rows = await db.prepare(
+            "SELECT id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed FROM ai_queries ORDER BY ts DESC LIMIT ?1"
+          ).bind(limit).all();
+        }
+        return json({ count: rows.results.length, queries: rows.results });
+      } catch (e) {
+        return json({ error: e.message }, 500);
+      }
+    }
+    return json({ error: "Not found" }, 404);
+  }
+};
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map
