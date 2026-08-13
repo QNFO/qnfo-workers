@@ -15,7 +15,7 @@
 
 **Problem:** High-volume AI-assisted research is scaling faster than the trust and persistence infrastructure of the web. QNFO (a two-year, solo-run, open research platform) has produced a DOI-registered corpus of ~1,000 method papers across seven program areas with a published audit discipline — yet the pipeline that produces them is closed-source and the corpus lives on centralized infrastructure. When knowledge production is AI-assisted at scale, openness of the *method* (audit tools, generation-detection, ignorance auditing) and *content addressing* of the corpus (CID-per-paper, verifiable citations) are what make the output trustworthy public goods rather than platform-dependent artifacts.
 
-**Why NLnet/NGI Zero:** The deliverables are exactly the NGI Commons mandate — libre-licensed software and content that reclaim the public nature of knowledge. Individuals and organisations of any type are eligible; the request fits the €5k–50k micro-grant band.
+**Why NLnet/NGI Zero:** The deliverables are exactly the NGI Commons mandate — libre-licensed software and content that reclaim the public nature of knowledge. Individuals and organisations of any type are eligible (verified 2026-08-13 on nlnet.nl/NGI0/: "individuals and organisations of any type… rolling open calls with a deadline every two months"); the request fits the €5k–50k micro-grant band.
 
 ## What will be built (deliverables, all libre-licensed)
 
