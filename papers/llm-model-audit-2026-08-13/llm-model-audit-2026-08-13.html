@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Quni-Gudzinas, Rowan Brad" />
+  <meta name="dcterms.date" content="2026-08-13" />
+  <title>Prioritizing Large Language Models for Scientific Research and Agentic AI: A LiveBench-Grounded Audit (August 2026)</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Prioritizing Large Language Models for Scientific
+Research and Agentic AI: A LiveBench-Grounded Audit (August 2026)</h1>
+<p class="author">Quni-Gudzinas, Rowan Brad</p>
+<p class="date">2026-08-13</p>
+</header>
+<h2 id="abstract">Abstract</h2>
+<p>Scientific research programs that rely on large language models
+(LLMs) for mathematics-heavy derivation, formal proof verification,
+literature synthesis, and agentic tool orchestration face a
+model-selection problem that general-purpose leaderboards do not
+directly answer. This audit evaluates the frontier LLM landscape as of
+August 13, 2026 against the concrete requirements of a
+mathematical-physics research program: ultrametric and p-adic analysis,
+Laws of Form formal algebra, measurement stratigraphy, and multi-agent
+subagent orchestration. Primary evidence is the LiveBench 2026-06-25
+release, a contamination-free benchmark of 23 objective tasks across
+seven categories, collected directly from the live leaderboard.
+Supporting evidence includes the Cloudflare Workers AI model catalog (26
+text-generation models, enumerated via the account REST API) and the
+runtime configuration of the program’s inference router (DeepSeek V4
+flash/pro, 1M-token context, verified via the DeepChat provider list).
+Findings: (1) no Meta/Llama model appears among the top 42 LiveBench
+entries, empirically supporting the exclusion of Llama from scientific
+routing paths; (2) DeepSeek V4 Pro 0813 achieves mathematics score 95.1
+at USD 0.044 per benchmark run, the strongest price-performance among
+frontier-mathematics models and the default workhorse; (3) three
+open-weights models (Qwen 3.8 Max, Kimi K3, Smaug-Agentic) outperform it
+on agentic coding (62.2-64.6 vs 54.9) and are preferred for
+orchestration roles; (4) a five-tier prioritization is defined and
+deployed. All numeric claims were verified against the live leaderboard
+and the production router.</p>
+<p><strong>Keywords:</strong> large language models; model selection;
+agentic AI; scientific computing; benchmark evaluation; cost
+optimization</p>
+<h2 id="introduction">Introduction</h2>
+<p>The selection of an LLM for a scientific research pipeline is a
+multi-objective decision. A general-purpose chat assistant may be
+evaluated on conversational quality; a research workhorse is evaluated
+on mathematics, formal reasoning, long-context synthesis, tool-calling
+reliability, and cost per useful run. These objectives frequently
+conflict: the highest-scoring models on aggregate benchmarks cost an
+order of magnitude more per run than models that are within one to three
+points on the mathematics axis.</p>
+<p>This audit was commissioned to (a) determine which models are
+suitable for the mathematics-heavy discourse of the QNFO research
+program, (b) identify suitable models for agentic multi-agent
+orchestration, (c) exclude models whose training corpus or empirical
+performance is inadequate for advanced scientific discourse, and (d) map
+the selected models onto the existing Cloudflare-based inference
+infrastructure (AI Gateway, Workers AI, DeepSeek API) within a
+self-funded budget constraint of USD 100 per month for Cloudflare
+billing.</p>
+<h2 id="methods">Methods</h2>
+<h3 id="data-sources">Data sources</h3>
+<p>Three primary sources were collected on 2026-08-13, each verified at
+collection time:</p>
+<ol type="1">
+<li><p><strong>LiveBench 2026-06-25 leaderboard</strong> (livebench.ai).
+The full leaderboard table (42 rows) was extracted from the rendered
+page via a headless browser. For each model, the following category
+scores were captured: Overall, Reasoning, Coding, Agentic Coding,
+Mathematics, Data Analysis, Language, Instruction Following, and cost
+per benchmark run. The extraction was verified by an independent
+reviewer subagent, which re-fetched the leaderboard and confirmed every
+cited value exactly.</p></li>
+<li><p><strong>Cloudflare Workers AI model catalog</strong>
+(api.cloudflare.com, account edb167b78c9fb901ea5bca3ce58ccc4b). The
+text-generation model list (26 models) was enumerated via the account
+REST API. Each shortlisted model’s free-tier availability was then
+verified by a direct Workers AI inference call
+(<code>POST /accounts/{id}/ai/run/@cf/{org}/{model}</code>); HTTP 200
+confirmed free availability.</p></li>
+<li><p><strong>DeepChat provider configuration</strong>
+(<code>deepchat provider list --enabled-only --json</code>). The runtime
+router configuration was enumerated: DeepSeek provider with
+<code>deepseek-v4-flash</code> and <code>deepseek-v4-pro</code> (both
+1M-token context, 32k max output, function calling, reasoning, and
+search enabled), plus the Cloudflare AI Gateway provider.</p></li>
+</ol>
+<h3 id="evaluation-criteria">Evaluation criteria</h3>
+<p>Models were scored against the program’s actual workload profile:</p>
+<ul>
+<li><strong>Mathematics</strong> (primary discriminator):
+p-adic/ultrametric analysis, Laws of Form formal algebra,
+measure-theoretic stratigraphy, proof verification. Weighted by the
+LiveBench Mathematics category.</li>
+<li><strong>Agentic capability</strong>: multi-step tool use, subagent
+orchestration, ensemble validation. Weighted by the LiveBench Agentic
+Coding category.</li>
+<li><strong>Long context</strong>: ability to ingest whole-paper corpora
+(up to 1M tokens).</li>
+<li><strong>Cost</strong>: cost per benchmark run (LiveBench-reported)
+and free-tier availability (Workers AI).</li>
+<li><strong>Availability</strong>: integration cost into the existing
+Cloudflare/DeepSeek infrastructure.</li>
+</ul>
+<h3 id="verification">Verification</h3>
+<p>Every numeric claim in the Results section was cross-checked against
+the live leaderboard by an independent reviewer subagent with no access
+to the author’s extraction. The reviewer confirmed exact matches for all
+cited scores and costs. The production router change described in the
+Deployment section was verified by direct HTTP probes of the deployed
+worker’s <code>/health</code> and <code>/v1/models</code> endpoints
+before and after deployment.</p>
+<h2 id="results">Results</h2>
+<h3 id="leaderboard-overview">Leaderboard overview</h3>
+<p>Table 1 reports the top-ranked models on LiveBench 2026-06-25,
+restricted to models relevant to this audit (top 15 by Overall plus
+open-weights and cost-effective candidates). Full column set: Overall,
+Mathematics, Agentic Coding, cost per run.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Model</th>
+<th style="text-align: right;">Overall</th>
+<th style="text-align: right;">Mathematics</th>
+<th style="text-align: right;">Agentic</th>
+<th style="text-align: right;">USD/run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Claude Fable 5 Max</td>
+<td style="text-align: right;">83.0</td>
+<td style="text-align: right;">96.0</td>
+<td style="text-align: right;">62.2</td>
+<td style="text-align: right;">1.439</td>
+</tr>
+<tr>
+<td style="text-align: left;">GPT-5.6 Sol Max</td>
+<td style="text-align: right;">81.0</td>
+<td style="text-align: right;">96.2</td>
+<td style="text-align: right;">56.2</td>
+<td style="text-align: right;">0.515</td>
+</tr>
+<tr>
+<td style="text-align: left;">GPT-5.5 Thinking xHigh</td>
+<td style="text-align: right;">80.2</td>
+<td style="text-align: right;">95.9</td>
+<td style="text-align: right;">54.0</td>
+<td style="text-align: right;">0.435</td>
+</tr>
+<tr>
+<td style="text-align: left;">Claude 5 Opus Thinking</td>
+<td style="text-align: right;">80.1</td>
+<td style="text-align: right;">95.7</td>
+<td style="text-align: right;">65.2</td>
+<td style="text-align: right;">0.699</td>
+</tr>
+<tr>
+<td style="text-align: left;">Smaug-Agentic (open)</td>
+<td style="text-align: right;">79.5</td>
+<td style="text-align: right;">83.9</td>
+<td style="text-align: right;">64.6</td>
+<td style="text-align: right;">0.329</td>
+</tr>
+<tr>
+<td style="text-align: left;">Kimi K3 (open)</td>
+<td style="text-align: right;">79.2</td>
+<td style="text-align: right;">84.4</td>
+<td style="text-align: right;">62.2</td>
+<td style="text-align: right;">0.348</td>
+</tr>
+<tr>
+<td style="text-align: left;">Qwen 3.8 Max (open)</td>
+<td style="text-align: right;">78.5</td>
+<td style="text-align: right;">91.3</td>
+<td style="text-align: right;">64.6</td>
+<td style="text-align: right;">0.275</td>
+</tr>
+<tr>
+<td style="text-align: left;">GPT-5.4 Thinking xHigh</td>
+<td style="text-align: right;">78.0</td>
+<td style="text-align: right;">94.1</td>
+<td style="text-align: right;">53.8</td>
+<td style="text-align: right;">0.387</td>
+</tr>
+<tr>
+<td style="text-align: left;">GPT-5.6 Terra Max</td>
+<td style="text-align: right;">77.9</td>
+<td style="text-align: right;">94.9</td>
+<td style="text-align: right;">54.9</td>
+<td style="text-align: right;">0.352</td>
+</tr>
+<tr>
+<td style="text-align: left;">Grok 4.6 xHigh</td>
+<td style="text-align: right;">77.6</td>
+<td style="text-align: right;">93.1</td>
+<td style="text-align: right;">54.2</td>
+<td style="text-align: right;">0.228</td>
+</tr>
+<tr>
+<td style="text-align: left;">DeepSeek V4 Pro 0813 (open)</td>
+<td style="text-align: right;">77.4</td>
+<td style="text-align: right;">95.1</td>
+<td style="text-align: right;">54.9</td>
+<td style="text-align: right;">0.044</td>
+</tr>
+<tr>
+<td style="text-align: left;">Gemini 3.1 Pro Preview</td>
+<td style="text-align: right;">77.0</td>
+<td style="text-align: right;">91.0</td>
+<td style="text-align: right;">44.1</td>
+<td style="text-align: right;">0.286</td>
+</tr>
+<tr>
+<td style="text-align: left;">Claude Sonnet 5 xHigh</td>
+<td style="text-align: right;">76.0</td>
+<td style="text-align: right;">92.9</td>
+<td style="text-align: right;">59.4</td>
+<td style="text-align: right;">0.505</td>
+</tr>
+<tr>
+<td style="text-align: left;">DeepSeek V4 Flash 0731 (open)</td>
+<td style="text-align: right;">74.2</td>
+<td style="text-align: right;">86.8</td>
+<td style="text-align: right;">46.8</td>
+<td style="text-align: right;">0.060</td>
+</tr>
+<tr>
+<td style="text-align: left;">GLM-5.2 (open)</td>
+<td style="text-align: right;">73.2</td>
+<td style="text-align: right;">89.8</td>
+<td style="text-align: right;">51.8</td>
+<td style="text-align: right;">0.225</td>
+</tr>
+<tr>
+<td style="text-align: left;">DeepSeek V4 Pro (open)</td>
+<td style="text-align: right;">71.6</td>
+<td style="text-align: right;">90.7</td>
+<td style="text-align: right;">42.6</td>
+<td style="text-align: right;">0.050</td>
+</tr>
+</tbody>
+</table>
+<p><em>Table 1. LiveBench 2026-06-25: selected models,
+overall/mathematics/agentic scores and cost per benchmark run. Source:
+livebench.ai, fetched 2026-08-13.</em></p>
+<h3 id="finding-1-no-llama-model-ranks-in-the-top-42">Finding 1: No
+Llama model ranks in the top 42</h3>
+<p>The LiveBench 2026-06-25 leaderboard contains 42 ranked entries. A
+direct query of the extracted rows for “Llama” or “Meta” returned zero
+matches; the highest-performing Llama-family model does not appear in
+the top 42. Meta is the only major laboratory with no top-42 presence.
+This is the decisive empirical basis for excluding Llama-family models
+from scientific reasoning paths. The mechanism commonly cited for this
+underperformance (training on social-media content) is not supported by
+Meta’s public model documentation, which describes filtered CommonCrawl
+and curated STEM sources; the empirical gap stands regardless of
+mechanism.</p>
+<h3
+id="finding-2-deepseek-v4-pro-0813-is-the-mathematics-price-performance-optimum">Finding
+2: DeepSeek V4 Pro 0813 is the mathematics price-performance
+optimum</h3>
+<p>Among models with Mathematics score at least 93 (Claude Fable 5,
+GPT-5.6 Sol, GPT-5.5, Claude 5 Opus, GPT-5.6 Terra, DeepSeek V4 Pro
+0813, Grok 4.6), the cost per benchmark run spans USD 0.044 (DeepSeek V4
+Pro 0813) to USD 1.439 (Claude Fable 5) — a 33-fold range. DeepSeek V4
+Pro 0813 scores 95.1 in Mathematics, within 1.1 points of the top
+mathematics score (GPT-5.6 Sol, 96.2), at 1/12 the cost. Its 1M-token
+context window (verified in the DeepChat provider configuration)
+supports whole-paper ingestion. On the mathematics axis it also
+outperforms the open-weights models with higher aggregate scores: Qwen
+3.8 Max (Mathematics 91.3), Kimi K3 (84.4), and Smaug-Agentic (83.9).
+The cost advantage is 6-8x against those models.</p>
+<h3
+id="finding-3-open-weights-models-lead-on-agentic-capability">Finding 3:
+Open-weights models lead on agentic capability</h3>
+<p>The Agentic Coding axis inverts the mathematics ranking. Claude 5
+Opus Thinking leads at 65.2, closely followed by open-weights models
+Qwen 3.8 Max (64.6) and Smaug-Agentic (64.6), then Kimi K3 (62.2).
+DeepSeek V4 Pro 0813 scores 54.9. For multi-step tool orchestration,
+subagent dispatch, and ensemble validation, the open-weights trio is
+preferred over the mathematics workhorse.</p>
+<h3
+id="finding-4-the-workers-ai-free-tier-hosts-science-capable-open-models">Finding
+4: The Workers AI free tier hosts science-capable open models</h3>
+<p>The Cloudflare Workers AI catalog (26 text-generation models)
+includes GLM-5.2 (Mathematics 89.8), Kimi K2.6 (262K context,
+vision-capable), QwQ-32B (reasoning), Qwen 2.5 Coder 32B, and
+GPT-OSS-120B. Direct inference calls confirmed all shortlisted models
+respond on the free tier (HTTP 200). This provides a zero-marginal-cost
+edge tier for bounded tasks, with the caveat that only Kimi K2.6
+approaches long-context capability; the others are approximately
+32K.</p>
+<h2 id="prioritization-framework">Prioritization Framework</h2>
+<p>The tiering below is derived directly from the findings, with the
+mathematics axis treated as the program’s primary discriminator.</p>
+<p><strong>Tier S-MATH (default workhorse).</strong> DeepSeek V4 Pro
+0813: Mathematics 95.1 at USD 0.044/run, 1M context, already integrated
+into the DeepChat router. Selected over higher-aggregate open models
+because the program’s discriminator is mathematics (gap of 3.8-11.2
+points over Qwen/Kimi/Smaug) and the cost gap is 6-8x.</p>
+<p><strong>Tier S-AGENTIC (orchestration).</strong> Qwen 3.8 Max / Kimi
+K3 / Smaug-Agentic: all three outrank DeepSeek V4 Pro on both Agentic
+Coding (62.2-64.6 vs 54.9) and Overall (#5-7 vs #12), at USD
+0.275-0.348/run. Preferred for multi-step agentic workflows; Claude 5
+Opus (Agentic 65.2) is the premium orchestration option for high-stakes
+autonomous runs.</p>
+<p><strong>Tier A (frontier verification, low volume).</strong> Claude 5
+Opus Thinking (Mathematics 95.7, Agentic 65.2), GPT-5.6 Sol (96.2),
+GPT-5.6 Terra Max (94.9 at USD 0.352 — 32 percent cheaper than Sol for
+near-equal mathematics), Grok 4.6 xHigh (93.1 at USD 0.228), Gemini 3.1
+Pro (91.0). These provide 3-5 independent model families for cross-model
+convergence checks of scientific claims.</p>
+<p><strong>Tier B (edge, zero marginal cost).</strong> GLM-5.2, Kimi
+K2.6, QwQ-32B, Qwen 2.5 Coder 32B, GPT-OSS-120B via Workers AI free
+tier. Context limits (approximately 32K except Kimi K2.6 at 262K)
+restrict these to bounded tasks; they are unsuitable for whole-paper
+loads.</p>
+<p><strong>Tier V (vision only).</strong> Meta Llama 3.2 11B Vision for
+figure extraction and OCR, because the DeepSeek runtime has vision
+disabled. Llama is excluded from reasoning paths but retained for
+vision.</p>
+<h2 id="deployment">Deployment</h2>
+<p>The framework was deployed to the production inference router
+(qnfo-ai worker) on 2026-08-13 as version 4.4.0. Changes: (1) added
+GLM-5.2, Kimi K2.6, and QwQ-32B to the tier-0 Workers AI model table;
+(2) set the general routing default from Qwen3-30B to GLM-5.2; (3)
+retained the existing policy that Llama-family models respond only to
+explicit requests. Deployment was executed via the Workers API, and
+verified by direct probes: the <code>/health</code> endpoint reported
+version 4.4.0 with all bindings present, and <code>/v1/models</code>
+enumerated 15 models including the three additions.</p>
+<h2 id="discussion">Discussion</h2>
+<p>The framework separates the mathematics workhorse from the agentic
+orchestrator, a distinction that aggregate leaderboards obscure. The
+33-fold cost spread within the frontier-mathematics class makes this
+separation economically material for a self-funded program: reserving
+Tier A models for a small fraction of calls (final verification,
+adversarial review) keeps monthly inference cost inside budget while
+retaining frontier capability.</p>
+<p>Two limitations are noted. First, LiveBench cost per run is a
+benchmark-specific metric, not a monthly forecast; production cost
+depends on call volume and token mix. Second, the training-data
+mechanism often cited for Llama underperformance is not verified by this
+audit — only the empirical leaderboard gap, which is decisive for
+selection.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>For mathematics-heavy scientific research and agentic AI, the
+empirical ranking supports: DeepSeek V4 Pro 0813 as the default
+workhorse (Mathematics 95.1, USD 0.044/run, 1M context); Qwen 3.8 Max /
+Kimi K3 / Smaug-Agentic as the agentic orchestration tier; Claude 5
+Opus, GPT-5.6, Grok 4.6, and Gemini 3.1 Pro as low-volume frontier
+verification; and GLM-5.2, Kimi K2.6, and QwQ-32B as the
+zero-marginal-cost edge tier. Llama-family models are excluded from
+scientific reasoning paths on empirical grounds. A re-audit is scheduled
+for the next LiveBench release (approximately December 2026).</p>
+<h2 id="declarations">Declarations</h2>
+<p><strong>Funding:</strong> Self-funded. <strong>Conflicts of
+interest:</strong> None. <strong>Data availability:</strong> Primary
+data (LiveBench leaderboard) is publicly available at livebench.ai; the
+Workers AI catalog is publicly available at
+developers.cloudflare.com/workers-ai/models; collection scripts and the
+deployed router configuration are available in the QNFO/qnfo-workers
+repository. <strong>Code availability:</strong> Router source and
+deployment artifacts in QNFO/qnfo-workers (tag qnfo-ai-v4.4.0).
+<strong>Author contributions:</strong> R.B.Q.-G. designed the evaluation
+criteria, performed the data collection, and authored the manuscript.
+<strong>Ethics statement:</strong> No human subjects; no proprietary
+data. <strong>Reproducibility:</strong> All scores are verifiable
+against the cited live sources; the extraction and verification protocol
+is described in Methods. <strong>Artificial intelligence
+disclosure:</strong> This manuscript was drafted with AI assistance and
+subjected to an independent adversarial review; all quantitative claims
+were verified against primary sources.</p>
+<h2 id="references">References</h2>
+<ol type="1">
+<li>LiveBench. Contamination-free LLM benchmark, release 2026-06-25.
+https://livebench.ai (accessed 2026-08-13).</li>
+<li>Cloudflare. Workers AI models catalog.
+https://developers.cloudflare.com/workers-ai/models/ (accessed
+2026-08-13).</li>
+<li>Cloudflare. AI Gateway documentation.
+https://developers.cloudflare.com/ai-gateway/ (accessed
+2026-08-13).</li>
+<li>DeepSeek. API documentation. https://api-docs.deepseek.com/
+(accessed 2026-08-13).</li>
+</ol>
+</body>
+</html>
