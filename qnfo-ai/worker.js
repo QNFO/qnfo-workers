@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.3.9';
+const VERSION = '4.3.10';
 const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -312,11 +312,14 @@ function extractWAContent(result, depth = 0) {
   return '';
 }
 
-async function callDeepSeek(env, apiModel, messages, maxTokens, stream) {
+async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools) {
+  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false };
+  // v4.3.10: forward OpenAI-format function tools to DeepSeek (Code Mode agent support)
+  if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
   const resp = await fetch(DEEPSEEK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.DEEPSEEK_API_KEY}` },
-    body: JSON.stringify({ model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) throw new Error(`deepseek ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   if (stream) return resp;
@@ -403,7 +406,7 @@ async function handleChat(env, body, authHeader) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
-  const { model, messages: rawMessages, max_tokens, stream, temperature } = body || {};
+  const { model, messages: rawMessages, max_tokens, stream, temperature, tools } = body || {};
   let messages = rawMessages;
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: 'model and messages required' }, 400);
@@ -620,7 +623,7 @@ async function handleChat(env, body, authHeader) {
         return new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
       }
       if (effSpec.api) {
-        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true);
+        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools);
         return new Response(upstream.body, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
       }
       if (effSpec.gateway) {
@@ -635,14 +638,15 @@ async function handleChat(env, body, authHeader) {
 
   // ---- NON-STREAM ----
   try {
-    let content = '', provider = effSpec.family || 'unknown';
+    let content = '', toolCalls = null, provider = effSpec.family || 'unknown';
     if (effSpec.wa) {
       const out = await runWorkersAI(env, effSpec.wa, messages, max_tokens, false);
       content = extractWAContent(out);
       provider = 'workers-ai';
     } else if (effSpec.api) {
-      const out = await callDeepSeek(env, effSpec.api, messages, max_tokens, false);
+      const out = await callDeepSeek(env, effSpec.api, messages, max_tokens, false, tools);
       content = out?.choices?.[0]?.message?.content ?? '';
+      toolCalls = out?.choices?.[0]?.message?.tool_calls ?? null;
       provider = 'deepseek';
     } else if (effSpec.gateway) {
       const out = await callGateway(env, effSpec.model, messages, max_tokens, false);
@@ -656,7 +660,7 @@ async function handleChat(env, body, authHeader) {
       object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
       model: routedModel,
-      choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
+      choices: [{ index: 0, message: { role: 'assistant', content, ...(toolCalls ? { tool_calls: toolCalls } : {}) }, finish_reason: toolCalls ? 'tool_calls' : 'stop' }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       _router: mkRouter(routedModel, isAuto ? 'auto' : 'single', {
         deepseek_profile: effSpec.api || 'workers-ai',
