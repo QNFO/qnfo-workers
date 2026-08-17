@@ -18,5 +18,5 @@ database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
-[[ai]]
+[ai]
 binding = "AI"
