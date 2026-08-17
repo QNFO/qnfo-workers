@@ -6,7 +6,7 @@
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_NAME = "qnfo-memory-mcp";
-const SERVER_VERSION = "2.0.1";
+const SERVER_VERSION = "2.0.2";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 
 const TOOLS = [
@@ -51,7 +51,7 @@ async function tool_search_papers(args, env) {
   const limit = Math.min(parseInt(args.limit) || 10, 20);
   if (!query) return { content: [{ type: "text", text: JSON.stringify({ error: "query required" }) }], isError: true };
   const vec = await embed(env, query);
-  const res = await env.PAPER_VZ.query(vec, { topK: limit * 3, returnMetadata: "all", returnValues: false });
+  const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 3, 50), returnMetadata: "all", returnValues: false });
   const matches = (res.matches || []).filter(m => !m.id.startsWith("mem:"));
   const results = [];
   for (const m of matches.slice(0, limit)) {
@@ -81,7 +81,7 @@ async function tool_search_papers_enriched(args, env) {
   const bodyLimit = Math.min(parseInt(args.bodyLimitChars) || 3000, 50000);
   if (!query) return { content: [{ type: "text", text: JSON.stringify({ error: "query required" }) }], isError: true };
   const vec = await embed(env, query);
-  const res = await env.PAPER_VZ.query(vec, { topK: limit * 3, returnMetadata: "all", returnValues: false });
+  const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 3, 50), returnMetadata: "all", returnValues: false });
   const matches = (res.matches || []).filter(m => !m.id.startsWith("mem:"));
   const results = [];
   for (const m of matches.slice(0, limit)) {
@@ -136,7 +136,7 @@ async function tool_search_memories(args, env) {
   const category = sanitize(args.category);
   if (!query) return { content: [{ type: "text", text: JSON.stringify({ error: "query required" }) }], isError: true };
   const vec = await embed(env, query);
-  const res = await env.PAPER_VZ.query(vec, { topK: limit * 5, returnMetadata: "all", returnValues: false });
+  const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 5, 50), returnMetadata: "all", returnValues: false });
   let matches = (res.matches || []).filter(m => m.id.startsWith("mem:"));
   if (category) matches = matches.filter(m => m.id.startsWith("mem:" + category + ":"));
   const results = [];
@@ -358,8 +358,12 @@ export default {
       if (method === "notifications/initialized") return new Response(null, { status: 200, headers: corsHeaders() });
       if (method === "tools/list") return json({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
       if (method === "tools/call") {
-        const toolResult = await callTool(params.name, params.arguments || {}, env);
-        return json({ jsonrpc: "2.0", id, result: toolResult });
+        try {
+          const toolResult = await callTool(params.name, params.arguments || {}, env);
+          return json({ jsonrpc: "2.0", id, result: toolResult });
+        } catch (e) {
+          return json({ jsonrpc: "2.0", id: id || null, error: { code: -32603, message: "Tool error: " + (e && e.message ? e.message : String(e)) } });
+        }
       }
       if (method === "resources/list") return json({ jsonrpc: "2.0", id, result: { resources: [] } });
       return json({ jsonrpc: "2.0", id: id || null, error: { code: -32601, message: "Method not found: " + method } });
