@@ -3,9 +3,9 @@
 // ROOT-CAUSE FIX: v4.2.0 had NO [[ai]] binding -> env.AI undefined -> tier-0 free models
 // returned "All models failed." while DeepSeek API (secret) worked. v4.3.0 declares the
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
-// Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
+// Ensemble directive: frontier coder + reasoning validator + 1M-ctx reviewer (best models).
 
-const VERSION = '5.4.0';
+const VERSION = '5.5.0';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -32,18 +32,18 @@ const MODELS = {
   'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false, maxOut: 4096,  ctx: 8192,   temp: 0.7, topP: 0.9,  tools: false, vision: false },
   'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096,  ctx: 128000, temp: 0.7, topP: 0.9,  tools: true,  vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
-  'glm-5.2':                  { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.2',              reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
-  'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  'glm-5.2':                  { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.2',              reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: true,  vision: false },
+  'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192,  ctx: 262144, temp: 0.6, topP: 0.95, tools: true,  vision: true  },
   'qwq-32b':                  { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwq-32b',                   reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.95, tools: false, vision: false },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
   // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
-  'glm-4.7-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-4.7-flash',             reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.06/M — cheap general default
+  'glm-4.7-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-4.7-flash',             reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.06/M — cheap general default (131k ctx, reasoning)
   'gemma-4-26b':               { tier: 0, family: 'google',   wa: '@cf/google/gemma-4-26b-a4b-it',         reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.10/M
-  'glm-5.3-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3-flash',             reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: true  },   // $0.15/M natively multimodal (non-Llama vision)
+  'glm-5.3-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3-flash',             reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: true  },   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
   'gpt-oss-120b':              { tier: 0, family: 'openai',   wa: '@cf/openai/gpt-oss-120b',              reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $0.35/M reasoning/agentic
-  'deepseek-v4-flash-wa':      { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-flash-0731', reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.44/M official DeepSeek V4 Flash
+  'deepseek-v4-flash-wa':      { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-flash-0731', reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.44/M official DeepSeek V4 Flash (1M ctx, reasoning)
   'deepseek-v4-pro-wa':        { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-pro-0813',   reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.32/M 1M-ctx reasoning
-  'kimi-k2.7-code':            { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.7-code',          reasoning: false, maxOut: 8192,  ctx: 262144, temp: 0.2, topP: 0.95, tools: true,  vision: false },   // $0.95/M 262k-ctx coding
+  'kimi-k2.7-code':            { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.7-code',          reasoning: true,  maxOut: 8192,  ctx: 262144, temp: 0.2, topP: 0.95, tools: true,  vision: true  },   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
   'glm-5.3':                   { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3',                   reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.40/M 1M-ctx agentic coding
   // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
@@ -92,7 +92,7 @@ const DEFAULT_MAX_OUT = 8192;
 
 // v5.0.0 — default system prompt, injected only when the client sends no leading
 // system message. A client-supplied system prompt (e.g. DeepChat's) is always honored.
-const DEFAULT_SYSTEM_PROMPT = 'You are a QNFO/QWAV research assistant. Be direct and evidence-first: state the answer, then the reasoning. Verify quantitative claims computationally where possible; flag uncertainty explicitly. Plain scholarly prose — no filler, no self-praise, no meta-commentary. For code, write correct, runnable code. For research, prefer primary sources and cite by slug/DOI when known.';
+const DEFAULT_SYSTEM_PROMPT = 'You are the QNFO/QWAV research assistant (QNFO = research arm, QWAV = commercial arm, founded by Rowan Brad Quni-Gudzinas). Mission: the energy-efficiency benchmark for quantum computing — "what does a correct quantum answer cost in energy?" (JPCUB, joules-per-solution). Answer directly and substantively: lead with the answer, then the reasoning. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly. For code, write correct, runnable code. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists. Plain scholarly prose — no filler, no self-praise, no meta-commentary about your own process.';
 
 // v5.0.0 — safety margin reserved inside every context window (output + headroom).
 // The truncation guard computes budget = ctx - margin so a near-limit payload never
@@ -387,13 +387,13 @@ async function searchQnfoIndexes(env, q, k) {
   return { sources, total };
 }
 
-// Ensemble member config — the directive: coder primary, small validator, reviewer
-// All Workers AI FREE. qwen2.5-coder = primary coder, gemma-2b = validator,
-// qwen3-30b = reviewer. (No Llama/Meta — user directive 2026-08-28.)
+// Ensemble member config — the directive: frontier coder primary, reasoning validator, 1M-ctx reviewer.
+// v5.5.0: upgraded to the BEST available models (user directive "best of all models combined"):
+// kimi-k2.7-code (frontier coder), gpt-oss-120b (reasoning validator), deepseek-v4-pro (1M-ctx reviewer).
 const ENSEMBLE = {
-  primary:   { wa: '@cf/qwen/qwen2.5-coder-32b-instruct' },
-  validator: { wa: '@cf/google/gemma-2b-it-lora' },
-  reviewer:  { wa: '@cf/qwen/qwen3-30b-a3b-fp8' },
+  primary:   { wa: '@cf/moonshotai/kimi-k2.7-code', ctx: 262144 },   // frontier coder (262k ctx, reasoning + vision, $0.95/M)
+  validator: { wa: '@cf/openai/gpt-oss-120b' },                      // independent reasoning check ($0.35/M)
+  reviewer:  { wa: '@cf/deepseek-ai/deepseek-v4-pro-0813' },         // 1M-ctx reasoning refinement ($1.32/M)
 };
 
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
@@ -653,26 +653,26 @@ async function runEnsemble(env, messages, maxTokens) {
   let finalText = primaryText;
 
   try {
-    // Validator: does the primary output satisfy the user request?
+    // Validator: judge the primary output for correctness, completeness, and nuance.
     const vMsg = [
-      { role: 'system', content: 'You are a strict validator. Reply ONLY with "PASS" if the assistant response fully satisfies the user request, or "FAIL" followed by one sentence why.' },
+      { role: 'system', content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced — or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
       ...messages,
       { role: 'assistant', content: primaryText },
     ];
-    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 100, false);
+    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 256, false);
     const vText = extractWAContent(vOut).trim();
     const pass = /^pass/i.test(vText);
     agreementRate = pass ? 1 : 0;
 
     if (!pass) {
-      // Reviewer refines
+      // Reviewer refines for depth and nuance
       verificationResult = 'reviewed';  // set BEFORE refine so empty-refine still reports accurately
       const rMsg = [
-        { role: 'system', content: 'You are a senior reviewer. Improve the assistant response to fully satisfy the user request. Output only the improved response.' },
+        { role: 'system', content: 'You are a senior research reviewer. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response.' },
         ...messages,
         { role: 'assistant', content: primaryText },
       ];
-      const rOut = await runWorkersAI(env, ENSEMBLE.reviewer.wa, rMsg, maxTokens, false);
+      const rOut = await runWorkersAI(env, ENSEMBLE.reviewer.wa, rMsg, Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false);
       const rText = extractWAContent(rOut);
       if (rText.trim()) {
         finalText = rText;
@@ -883,7 +883,7 @@ async function handleChat(env, body, authHeader, ctx) {
         }
         return json(body);
       };
-      if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > TIER0_SAFE_TOTAL) {
+      if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > ENSEMBLE.primary.ctx - CTX_SAFETY_MARGIN) {
         const fb = await callDeepSeek(env, MODELS['deepseek-v4-flash'].api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
         const fbContent = (fb?.choices?.[0]?.message?.content) ?? '';
         const fbText = fbContent || 'All models failed.';
