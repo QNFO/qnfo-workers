@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.7.1';
+const VERSION = '5.0.0';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -14,24 +14,37 @@ const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3c
 // tier 0 = Workers AI FREE (no key, edge GPU)
 // tier 1/2 = DeepSeek API (DEEPSEEK_API_KEY secret)
 // tier 3 = Anthropic/OpenAI via AI Gateway compat (CF_API_TOKEN secret)
+// v5.0.0 — enriched registry. Per-model metadata drives every routing decision:
+//   ctx   = context window in tokens (Workers AI documented value). The truncation guard
+//           reserves output + a safety margin, so over-limit payloads are trimmed to the
+//           largest window the model actually supports BEFORE any upstream call (no 400/502).
+//   temp / topP = per-model sampling defaults; a client-supplied temperature/top_p overrides.
+//   vision = accepts image_url parts (image-to-text / OCR). tools = supports function calling.
+//   maxOut = output token cap (clamped from client max_tokens to avoid upstream 400).
 const MODELS = {
   // Workers AI free — original three
-  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false, maxOut: 8192 },
-  'deepseek-r1-qwen-32b':     { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', reasoning: true,  maxOut: 8192 },
-  'qwen3-30b':                { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen3-30b-a3b-fp8',                  reasoning: false, maxOut: 8192 },
+  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },
+  'deepseek-r1-qwen-32b':     { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', reasoning: true,  maxOut: 8192,  ctx: 32768,  temp: 0.6, topP: 0.95, tools: false, vision: false },
+  'qwen3-30b':                { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen3-30b-a3b-fp8',                  reasoning: false, maxOut: 8192,  ctx: 32768,  temp: 0.7, topP: 0.9,  tools: true,  vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
-  'qwen2.5-coder-32b':        { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen2.5-coder-32b-instruct',         reasoning: false, maxOut: 8192 },
-  'llama-3.2-1b':             { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-1b-instruct',              reasoning: false, maxOut: 4096 },
-  'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false, maxOut: 4096 },
-  'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096 },'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096 },
+  'qwen2.5-coder-32b':        { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen2.5-coder-32b-instruct',         reasoning: false, maxOut: 8192,  ctx: 32768,  temp: 0.2, topP: 0.95, tools: false, vision: false },
+  'llama-3.2-1b':             { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-1b-instruct',              reasoning: false, maxOut: 4096,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },
+  'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false, maxOut: 4096,  ctx: 8192,   temp: 0.7, topP: 0.9,  tools: false, vision: false },
+  'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096,  ctx: 128000, temp: 0.7, topP: 0.9,  tools: true,  vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
-  'glm-5.2':                  { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.2',              reasoning: true,  maxOut: 8192 },
-  'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192 },
-  'qwq-32b':                  { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwq-32b',                   reasoning: true,  maxOut: 8192 },
-  // DeepSeek API
-  'deepseek-v4-flash':        { tier: 1, family: 'deepseek', api: 'deepseek-chat' },
-  'deepseek-v4-flash-thinking': { tier: 1, family: 'deepseek', api: 'deepseek-reasoner' },
-  'deepseek-v4-pro':          { tier: 2, family: 'deepseek', api: 'deepseek-chat' },
+  'glm-5.2':                  { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.2',              reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  'qwq-32b':                  { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwq-32b',                   reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
+  // message carries an image_url part; selectable explicitly. NOTE: Workers AI gates this
+  // model behind a one-time Community License "agree" (submit prompt 'agree' once) whose
+  // terms include an EU-domicile representation — the router does NOT auto-accept; the
+  // account owner must accept it once in the dash or the first vision call returns 5016.
+  'llama-3.2-11b-vision':     { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-11b-vision-instruct',     reasoning: false, maxOut: 2048,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: false, vision: true  },
+  // DeepSeek API (1M context)
+  'deepseek-v4-flash':        { tier: 1, family: 'deepseek', api: 'deepseek-chat',     maxOut: 8192, ctx: 1048576, temp: 0.7, topP: 0.9,  tools: true, vision: false },
+  'deepseek-v4-flash-thinking': { tier: 1, family: 'deepseek', api: 'deepseek-reasoner', maxOut: 8192, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
+  'deepseek-v4-pro':          { tier: 2, family: 'deepseek', api: 'deepseek-chat',     maxOut: 8192, ctx: 1048576, temp: 0.4, topP: 0.9,  tools: true, vision: false },
   // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
   // "Chat completion bad format" (2019) for every one of them, surfacing as router
   // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
@@ -45,19 +58,31 @@ const MODELS = {
 // Every call path clamps the requested max_tokens to the routed model's cap so an
 // oversized client max_tokens can never surface as a router 502.
 const MAX_OUT = {
-  // Workers AI (tier-0) — safe caps well under observed max_total_tokens=24000 (llama-3.3-70b)
+  // Workers AI (tier-0) — output token caps, keyed by Workers AI model id.
+  // Kept well under each model's max_total_tokens so an oversized client max_tokens
+  // can never surface as an upstream 400 -> router 502.
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast': 8192,
   '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b': 8192,
   '@cf/qwen/qwen3-30b-a3b-fp8': 8192,
   '@cf/qwen/qwen2.5-coder-32b-instruct': 8192,
   '@cf/meta/llama-3.2-1b-instruct': 4096,
   '@cf/google/gemma-2b-it-lora': 4096,
-  '@cf/ibm-granite/granite-4.0-h-micro': 4096,'@cf/ibm-granite/granite-4.0-h-micro': 4096,
+  '@cf/ibm-granite/granite-4.0-h-micro': 4096,
   '@cf/zai-org/glm-5.2': 8192,
   '@cf/moonshotai/kimi-k2.6': 8192,
   '@cf/qwen/qwq-32b': 8192,
+  '@cf/meta/llama-3.2-11b-vision-instruct': 2048,
 };
 const DEFAULT_MAX_OUT = 8192;
+
+// v5.0.0 — default system prompt, injected only when the client sends no leading
+// system message. A client-supplied system prompt (e.g. DeepChat's) is always honored.
+const DEFAULT_SYSTEM_PROMPT = 'You are a QNFO/QWAV research assistant. Be direct and evidence-first: state the answer, then the reasoning. Verify quantitative claims computationally where possible; flag uncertainty explicitly. Plain scholarly prose — no filler, no self-praise, no meta-commentary. For code, write correct, runnable code. For research, prefer primary sources and cite by slug/DOI when known.';
+
+// v5.0.0 — safety margin reserved inside every context window (output + headroom).
+// The truncation guard computes budget = ctx - margin so a near-limit payload never
+// pushes input+output over the model's hard limit.
+const CTX_SAFETY_MARGIN = 512;
 
 // Clamp max_tokens to a model cap. maxTokens may be 0/undefined -> default 4096.
 function clampTokens(maxTokens, cap) {
@@ -80,9 +105,7 @@ const TIER0_SAFE_TOTAL = 20000; // headroom below the hard 24k cap
 function estimateInputTokens(messages) {
   let chars = 0;
   for (const m of messages || []) {
-    const c = m && m.content;
-    if (typeof c === 'string') chars += c.length;
-    else if (Array.isArray(c)) for (const p of c) if (p && typeof p.text === 'string') chars += p.text.length;
+    chars += contentCharLen(m && m.content);
   }
   // v4.3.7: conservative /3 (DeepSeek tokenizer can be ~2-4 chars/token; under-estimating
   // lets over-limit payloads through -> upstream 400 -> router 502). /3 over-estimates
@@ -90,17 +113,27 @@ function estimateInputTokens(messages) {
   return Math.ceil(chars / 3);
 }
 
-// If the routed target is tier-0 (Workers AI) and the estimated context won't fit the
-// 24k-token window, fall back to DeepSeek (tier-1, 1M context). Explicit model requests
-// are honored as-is — this guard applies to auto-routing only.
+// v5.0.0 — per-model context window. Workers AI documented values live in MODELS[].ctx;
+// DeepSeek API enforces 1,048,576. Fall back to the legacy blanket caps when absent.
+function modelCtx(spec) {
+  if (!spec) return DEEPSEEK_MAX_CONTEXT;
+  if (spec.ctx) return spec.ctx;
+  return spec.tier === 0 ? TIER0_TOTAL_CAP : DEEPSEEK_MAX_CONTEXT;
+}
+
+// If the routed target can't hold estimated input + output, escalate: prefer the largest
+// free model first (llama-3.3-70b, 128k), then DeepSeek (1M context). Explicit model
+// requests are honored as-is — the truncation guard below still protects them.
 function contextAwareTarget(cls, target, estInput, maxOut) {
   const spec = MODELS[target];
   if (!spec || spec.tier !== 0) return target;
   const out = clampTokens(maxOut, MAX_OUT[spec.wa] || DEFAULT_MAX_OUT);
-  if (estInput + out > TIER0_SAFE_TOTAL) {
-    return cls.domain === 'science' ? 'deepseek-v4-flash-thinking' : 'deepseek-v4-flash';
+  if (estInput + out <= modelCtx(spec) - CTX_SAFETY_MARGIN) return target;
+  const big = MODELS['llama-3.3-70b'];
+  if (big && spec.wa !== big.wa && estInput + out <= modelCtx(big) - CTX_SAFETY_MARGIN) {
+    return 'llama-3.3-70b';
   }
-  return target;
+  return cls.domain === 'science' ? 'deepseek-v4-flash-thinking' : 'deepseek-v4-flash';
 }
 
 // v4.3.7 — Hard context-window guard (Bad Gateway fix #3, 2026-08-12).
@@ -118,26 +151,27 @@ function truncateMessagesToFit(messages, maxInputTokens) {
   // v4.3.7b: budget in chars using a WORST-CASE ~2 chars/token (DeepSeek tokenizer can
   // tokenize dense/repeated content at ~2 chars/token — /3 prose estimate alone would
   // still under-count that, letting an over-limit payload 502). 1.9x leaves a 5% safety
-  // margin below the hard 1,048,576-token cap; real prose (~4 chars/token) keeps ~500k
-  // tokens of recent context, which matches the app's own auto-compaction semantics.
+  // margin below the hard cap; real prose (~4 chars/token) keeps ~half the window of
+  // recent context, which matches the app's own auto-compaction semantics.
   const charBudget = Math.floor(maxInputTokens * 1.9);
   let used = 0;
   let system = null;
   // keep the leading system message unconditionally
   if (arr[0] && arr[0].role === 'system') {
     system = arr[0];
-    used = Math.ceil(String(system.content || '').length);
+    used = contentCharLen(system.content);
   }
   const tail = [];
   for (let i = arr.length - 1; i >= 0; i--) {
     if (arr[i] === system) continue;
-    const cost = Math.ceil(String(arr[i].content || '').length);
+    const cost = contentCharLen(arr[i].content);
     if (used + cost > charBudget) {
       if (tail.length === 0) {
         // newest message alone overflows: clip its content to the remaining budget so the
         // request still carries the current user turn instead of 502ing.
         const remain = Math.max(0, charBudget - used);
-        const clipped = { ...arr[i], content: String(arr[i].content || '').slice(0, remain) };
+        const raw = typeof arr[i].content === 'string' ? arr[i].content : flattenContentToString(arr[i].content);
+        const clipped = { ...arr[i], content: raw.slice(0, remain) };
         tail.unshift(clipped);
         used += remain;
       }
@@ -247,6 +281,65 @@ function normalizeMessagesContent(messages) {
   });
 }
 
+// v5.0.0 — approximate char count of a message content (text + image base64), used by
+// the context estimator and the truncation guard so vision payloads count their bytes.
+function contentCharLen(content) {
+  if (typeof content === 'string') return content.length;
+  if (Array.isArray(content)) {
+    let n = 0;
+    for (const p of content) {
+      if (!p || typeof p !== 'object') continue;
+      if (typeof p.text === 'string') n += p.text.length;
+      else if (p.image_url) {
+        const u = typeof p.image_url === 'string' ? p.image_url : (p.image_url && p.image_url.url);
+        if (typeof u === 'string') n += u.length;
+      }
+    }
+    return n;
+  }
+  return String(content ?? '').length;
+}
+
+// v5.0.0 — true when any message carries an image part (image_url / input_image / image).
+function hasImageParts(messages) {
+  if (!Array.isArray(messages)) return false;
+  for (const m of messages) {
+    const c = m && m.content;
+    if (Array.isArray(c)) {
+      for (const p of c) {
+        if (p && typeof p === 'object' && (p.type === 'image_url' || p.type === 'input_image' || p.type === 'image')) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// v5.0.0 — normalize messages for a VISION model: keep text + image_url parts in the
+// Workers AI multimodal array format; strip unsupported part types. Text-only messages
+// (string content) pass through untouched.
+function normalizeForVision(messages) {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map((m) => {
+    if (!m || typeof m !== 'object') return m;
+    const c = m.content;
+    if (typeof c === 'string' || c == null) return m;
+    if (Array.isArray(c)) {
+      const parts = c.map((p) => {
+        if (!p || typeof p !== 'object') return null;
+        if (typeof p.text === 'string') return { type: 'text', text: p.text };
+        if (p.type === 'image_url' || p.type === 'input_image' || p.type === 'image') {
+          let url = p.image_url;
+          if (url && typeof url === 'object' && typeof url.url === 'string') url = url.url;
+          if (typeof url === 'string' && url) return { type: 'image_url', image_url: url };
+        }
+        return null;
+      }).filter(Boolean);
+      return { ...m, content: parts.length ? parts : flattenContentToString(c) };
+    }
+    return m;
+  });
+}
+
 // Ensemble member config — the directive: coder primary, small validator, reviewer
 // All Workers AI FREE. qwen2.5-coder = primary coder (DeepSeek-Coder 1.3B substitute),
 // llama-3.2-1b = validator (Gemma 3 1B substitute), qwen3-30b = reviewer (Granite substitute).
@@ -294,25 +387,29 @@ function autoRoute(cls) {
   return 'glm-5.2'; // v4.4.0: audit 2026-08-13 — GLM-5.2 default (LiveBench math 89.8, free tier-0)
 }
 
-async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
-  // v4.3.9 AI-COST-GATE-1: route tier-0 Workers AI through the AI Gateway
-  // (spend-limit firewall rule 6f5c29f8 + rate limit + cache). Fall back to the
-  // direct Workers AI binding only when the gateway is unreachable/unconfigured
-  // (resilience: a dead gateway must not take down the router).
-  if (env.CF_API_TOKEN && modelId.startsWith('@cf/')) {
+async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
+  const { temperature, top_p, tools } = opts;
+  // v5.0.0: function calling goes DIRECT to the Workers AI binding — the AI Gateway
+  // compat endpoint is a chat-completions pass-through and does not forward `tools` /
+  // `tool_choice`. Cost gating is best-effort; correctness wins.
+  const directOnly = !!(tools && tools.length);
+  if (!directOnly && env.CF_API_TOKEN && modelId.startsWith('@cf/')) {
     try {
+      const body = {
+        model: 'workers-ai/' + modelId,
+        messages,
+        max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
+        stream: stream || false,
+      };
+      if (Number.isFinite(temperature)) body.temperature = temperature;
+      if (Number.isFinite(top_p)) body.top_p = top_p;
       const gwResp = await fetch(GW_COMPAT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'cf-aig-authorization': 'Bearer ' + env.CF_API_TOKEN,
         },
-        body: JSON.stringify({
-          model: 'workers-ai/' + modelId,
-          messages,
-          max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
-          stream: stream || false,
-        }),
+        body: JSON.stringify(body),
       });
       if (gwResp.ok) {
         if (stream) return gwResp; // SSE passthrough (caller consumes body)
@@ -324,14 +421,40 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream) {
       // network error: fall through to direct binding
     }
   }
-  const out = await env.AI.run(modelId, {
+  const aiBody = {
     messages,
     // v4.3.5: clamp to the model's output cap so an oversized client max_tokens
     // (e.g. 32000 on a 24000-max model) cannot surface as an upstream 400 -> router 502.
     max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
     stream: stream || false,
-  });
+  };
+  if (Number.isFinite(temperature)) aiBody.temperature = temperature;
+  if (Number.isFinite(top_p)) aiBody.top_p = top_p;
+  if (tools && tools.length) {
+    aiBody.tools = tools;
+    aiBody.tool_choice = 'auto';
+  }
+  const out = await env.AI.run(modelId, aiBody);
   return out;
+}
+
+// v5.0.0 — extract function-call tool_calls from any Workers AI response shape and
+// normalize to the OpenAI `{id, type:"function", function:{name, arguments}}` form.
+function extractWAToolCalls(result, depth = 0) {
+  if (!result || typeof result !== 'object' || depth > 4) return null;
+  const raw = result.tool_calls
+    || result.result?.tool_calls
+    || result.choices?.[0]?.message?.tool_calls
+    || (result.result && typeof result.result === 'object' ? result.result.choices?.[0]?.message?.tool_calls : null)
+    || null;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  return raw.map((tc, i) => {
+    const fn = tc.function || (tc.name ? tc : null);
+    if (!fn) return null;
+    const name = fn.name;
+    const args = typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments ?? {});
+    return { id: tc.id || `call_${Math.random().toString(16).slice(2, 10)}`, type: 'function', function: { name, arguments: args } };
+  }).filter(Boolean);
 }
 
 // Workers AI non-stream returns different shapes per model/provider:
@@ -356,10 +479,15 @@ function extractWAContent(result, depth = 0) {
   return '';
 }
 
-async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools) {
+async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
+  const { temperature, top_p } = opts;
   const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false };
   // v4.3.10: forward OpenAI-format function tools to DeepSeek (Code Mode agent support)
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
+  // v5.0.0: forward sampling params when the client supplies them (per-model defaults
+  // are resolved by the caller and passed through as explicit numbers).
+  if (Number.isFinite(temperature)) body.temperature = temperature;
+  if (Number.isFinite(top_p)) body.top_p = top_p;
   const resp = await fetch(DEEPSEEK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.DEEPSEEK_API_KEY}` },
@@ -450,17 +578,20 @@ async function handleChat(env, body, authHeader, ctx) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
-  const { model, messages: rawMessages, max_tokens, stream, temperature, tools } = body || {};
+  const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools } = body || {};
   let messages = rawMessages;
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: 'model and messages required' }, 400);
   }
-  // v4.7.1: normalize OpenAI multimodal content arrays to plain strings so Workers AI
-  // text-generation models don't 400 on `content: [{type:"text",...}]`.
-  messages = normalizeMessagesContent(messages);
+  // v5.0.0: detect image payloads BEFORE normalization (vision routing) and inject a
+  // default system prompt only when the client sent none (client prompts are honored).
+  const hasImage = hasImageParts(messages);
+  if (!messages.some((m) => m && m.role === 'system')) {
+    messages = [{ role: 'system', content: DEFAULT_SYSTEM_PROMPT }, ...messages];
+  }
 
   const t0 = Date.now();
-  const cls = classify((messages[messages.length - 1]?.content || '').toString());
+  const cls = classify(lastUserText(messages));
   const isStream = !!stream;
   // ---- v4.6.0: optional web grounding (body.web = true) ----
   let webSources = null;
@@ -540,17 +671,46 @@ async function handleChat(env, body, authHeader, ctx) {
   const reqModel = body.model;
   const isAuto = reqModel === 'auto';
   const isEnsemble = reqModel === 'ensemble';
-  // v4.3.6: context-window guard for auto-routing — tier-0 (Workers AI 24k cap) targets
-  // that can't hold input+output fall back to DeepSeek (1M context) before any upstream call.
+  // v5.0.0: context-window-aware routing — a tier-0 target that can't hold input+output
+  // escalates to a larger free model first, then DeepSeek (1M context).
   let estInputTokens = estimateInputTokens(messages);
   let target = isAuto ? contextAwareTarget(cls, autoRoute(cls), estInputTokens, max_tokens) : reqModel;
-  const spec = MODELS[target];
+  let spec = MODELS[target];
 
-  // v4.3.7: hard context guard — DeepSeek enforces 1,048,576-token max context. If the
-  // session history exceeds the routed model's window, truncate (keep system + recent).
-  // Works for both auto and explicit targets; never forward an over-limit payload.
-  const effMaxOut = clampTokens(max_tokens, DEFAULT_MAX_OUT);
-  const ctxBudget = (spec?.tier === 0 ? TIER0_TOTAL_CAP : DEEPSEEK_MAX_CONTEXT) - effMaxOut;
+  // v5.0.0 — vision routing: any image payload forces the vision model unless the client
+  // already chose a vision-capable model. (Vision models don't do function calling, so a
+  // combined image+tool request serves vision and drops tools.)
+  if (hasImage && !isEnsemble) {
+    const v = MODELS['llama-3.2-11b-vision'];
+    if (v && (!spec || !spec.vision)) { target = 'llama-3.2-11b-vision'; spec = v; }
+  }
+
+  // v5.0.0 — tool routing: a function-calling request routes to a tool-capable model
+  // (free llama-3.3-70b first, then DeepSeek) so the tool request works instead of being
+  // silently ignored by a non-tool-capable target.
+  if (tools && tools.length && !isEnsemble && !hasImage && (!spec || !spec.tools)) {
+    if (MODELS['llama-3.3-70b']?.tools) { target = 'llama-3.3-70b'; spec = MODELS['llama-3.3-70b']; }
+    else { target = 'deepseek-v4-flash'; spec = MODELS['deepseek-v4-flash']; }
+  }
+
+  // Unknown model -> fallback to default (deepseek-v4-flash), matching v4.2.0 observed behavior
+  const effective = spec ? target : 'deepseek-v4-flash';
+  const effSpec = spec ? spec : MODELS['deepseek-v4-flash'];
+  const routedModel = effective;
+
+  // v5.0.0 — model-aware content normalization: vision models keep image_url parts, every
+  // other model gets plain-string content (Workers AI text-generation rejects arrays).
+  messages = effSpec.vision ? normalizeForVision(messages) : normalizeMessagesContent(messages);
+
+  // v5.0.0 — resolve sampling params: client-supplied values win, else per-model defaults.
+  const effTemp = Number.isFinite(temperature) ? temperature : (Number.isFinite(effSpec.temp) ? effSpec.temp : 0.7);
+  const effTopP = Number.isFinite(top_p) ? top_p : (Number.isFinite(effSpec.topP) ? effSpec.topP : 0.9);
+
+  // v5.0.0 — hard context guard: per-model window (modelCtx). If the session history
+  // exceeds the routed model's window, truncate (keep system + recent). Never forward an
+  // over-limit payload.
+  const effMaxOut = clampTokens(max_tokens, MAX_OUT[effSpec.wa] || DEFAULT_MAX_OUT);
+  const ctxBudget = modelCtx(effSpec) - effMaxOut - CTX_SAFETY_MARGIN;
   let truncation = null;
   if (estInputTokens > ctxBudget) {
     const before = messages.length;
@@ -558,11 +718,6 @@ async function handleChat(env, body, authHeader, ctx) {
     estInputTokens = estimateInputTokens(messages);
     truncation = { truncated: true, messages_before: before, messages_after: messages.length, budget_tokens: ctxBudget };
   }
-
-  // Unknown model -> fallback to default (deepseek-v4-flash), matching v4.2.0 observed behavior
-  const effective = spec ? target : 'deepseek-v4-flash';
-  const effSpec = spec ? spec : MODELS['deepseek-v4-flash'];
-  const routedModel = effective;
 
   // ---- ENSEMBLE ----
   if (isEnsemble) {
@@ -646,6 +801,8 @@ async function handleChat(env, body, authHeader, ctx) {
                 messages,
                 max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
                 stream: true,
+                temperature: effTemp,
+                top_p: effTopP,
               }),
             });
             if (gwResp.ok) {
@@ -706,6 +863,8 @@ async function handleChat(env, body, authHeader, ctx) {
           messages,
           max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
           stream: true,
+          temperature: effTemp,
+          top_p: effTopP,
         });
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
@@ -745,7 +904,7 @@ async function handleChat(env, body, authHeader, ctx) {
         return streamWithLog(new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } }), env, ctx, mkLogRec());
       }
       if (effSpec.api) {
-        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools);
+        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP });
         return streamWithLog(upstream, env, ctx, mkLogRec());
       }
       if (effSpec.gateway) {
@@ -762,11 +921,12 @@ async function handleChat(env, body, authHeader, ctx) {
   try {
     let content = '', toolCalls = null, provider = effSpec.family || 'unknown';
     if (effSpec.wa) {
-      const out = await runWorkersAI(env, effSpec.wa, messages, max_tokens, false);
+      const out = await runWorkersAI(env, effSpec.wa, messages, max_tokens, false, { temperature: effTemp, top_p: effTopP, tools: (effSpec.tools ? tools : undefined) });
       content = extractWAContent(out);
+      toolCalls = extractWAToolCalls(out);
       provider = 'workers-ai';
     } else if (effSpec.api) {
-      const out = await callDeepSeek(env, effSpec.api, messages, max_tokens, false, tools);
+      const out = await callDeepSeek(env, effSpec.api, messages, max_tokens, false, tools, { temperature: effTemp, top_p: effTopP });
       content = out?.choices?.[0]?.message?.content ?? '';
       toolCalls = out?.choices?.[0]?.message?.tool_calls ?? null;
       provider = 'deepseek';
@@ -775,7 +935,7 @@ async function handleChat(env, body, authHeader, ctx) {
       content = out?.choices?.[0]?.message?.content ?? '';
       provider = effSpec.family;
     }
-    if (!content) content = 'All models failed.';
+    if (!content && !toolCalls) content = 'All models failed.';
 
     const respBody = {
       id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
@@ -788,6 +948,10 @@ async function handleChat(env, body, authHeader, ctx) {
         deepseek_profile: effSpec.api || 'workers-ai',
         estimated_cost_usd: effSpec.tier === 0 ? 0 : undefined,
         neurons_remaining: 8000,
+        temperature: effTemp,
+        top_p: effTopP,
+        ...(hasImage ? { vision: true } : {}),
+        ...(tools && tools.length ? { tools: true } : {}),
         ...(truncation ? { truncation } : {}),
       }),
       ...(webSources ? { _web: { query: lastUserText(messages).slice(0, 300), sources: webSources } } : {}),
@@ -1088,7 +1252,7 @@ export default {
         status: 'ok',
         worker: 'qnfo-ai',
         version: VERSION,
-        capabilities: ['model-router', 'ai-inference', 'streaming', 'ensemble', 'pinned-models', 'internal-rag', 'query-logging', 'history-search'],
+        capabilities: ['model-router', 'ai-inference', 'streaming', 'ensemble', 'pinned-models', 'internal-rag', 'query-logging', 'history-search', 'vision', 'function-calling', 'context-aware-routing'],
         routes: ROUTES,
         bindings: {
           ai: !!env.AI,
@@ -1113,6 +1277,11 @@ export default {
           tier: m.tier,
           family: m.family,
           reasoning: !!m.reasoning,
+          ctx: m.ctx || null,
+          temperature: m.temp ?? null,
+          top_p: m.topP ?? null,
+          vision: !!m.vision,
+          tools: !!m.tools,
           costPer1MInput: m.tier === 0 ? 0 : (m.tier === 1 ? 0.14 : m.tier === 2 ? 2.19 : null),
           costPer1MOutput: m.tier === 0 ? 0 : (m.tier === 1 ? 0.28 : m.tier === 2 ? 2.19 : null),
           availability: m.tier === 0 ? 'always' : m.tier <= 2 ? 'key-required' : 'billing-required',
