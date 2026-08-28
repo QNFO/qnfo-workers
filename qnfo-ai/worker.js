@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '5.2.0';
+const VERSION = '5.2.1';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -814,7 +814,9 @@ async function handleChat(env, body, authHeader, ctx) {
 
   // v5.1.0 — auto-ensemble at system discretion: ambiguous or complex non-science/legal
   // queries (no images/tools) get the coder->validator->reviewer pipeline for free.
-  const autoEnsemble = isAuto && !hasImage && (!tools || !tools.length) && shouldEnsemble(cls);
+  // v5.2.1: exclude wantsCode so a run_code request is never hijacked by ensemble — the
+  // code-execution loop must take precedence over auto-ensemble.
+  const autoEnsemble = isAuto && !hasImage && !wantsCode && (!tools || !tools.length) && shouldEnsemble(cls);
 
   // Unknown model -> fallback to default (deepseek-v4-flash), matching v4.2.0 observed behavior
   const effective = spec ? target : 'deepseek-v4-flash';
@@ -1500,7 +1502,10 @@ export default {
     // /v1/search — unified QNFO RAG: search ALL bound QNFO Vectorize indexes directly
     // (papers, notes, tasks, handoffs, log, ipatent, infra, cloud-ops). Personal data
     // lives on the personal-api endpoint, never here (separation mandate).
+    // v5.2.1: auth-gated — the unified search now surfaces past query/response content.
     if (path === '/v1/search' && method === 'GET') {
+      const authH = request.headers.get('Authorization') || '';
+      if (!await authOk(authH, env)) return json({ error: 'Unauthorized' }, 401);
       const q = (url.searchParams.get('q') || url.searchParams.get('query') || '').trim();
       const k = Math.min(Math.max(parseInt(url.searchParams.get('k') || '5', 10) || 5, 1), 20);
       if (!q) return json({ error: 'Missing q parameter' }, 400);
@@ -1520,7 +1525,10 @@ export default {
     }
 
     // /v1/history — query log from D1 qnfo-audit.ai_queries (QNFO_AUDIT binding)
+    // v5.2.1: auth-gated — exposes past user prompts + responses.
     if (path === '/v1/history' && method === 'GET') {
+      const authH = request.headers.get('Authorization') || '';
+      if (!await authOk(authH, env)) return json({ error: 'Unauthorized' }, 401);
       const q = (url.searchParams.get('q') || '').trim();
       if (q) {
         if (!env.LOG_VZ || !env.AI) return json({ error: 'semantic history requires Vectorize qnfo-ai-log + AI bindings' }, 501);
