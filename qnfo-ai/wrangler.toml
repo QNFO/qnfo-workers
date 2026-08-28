@@ -22,6 +22,11 @@ head_sampling_rate = 1
 binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
+# v4.5.0 — restore zero-latency query logging -> qnfo-ai-log (semantic recall of past queries)
+[[vectorize]]
+binding = "LOG_VZ"
+index_name = "qnfo-ai-log"
+
 # QNFO_AUDIT -> qnfo-audit D1 (ai_queries table) for /v1/history
 [[d1_databases]]
 binding = "QNFO_AUDIT"

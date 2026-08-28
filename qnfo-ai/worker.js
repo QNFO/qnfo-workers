@@ -5,8 +5,8 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.4.0';
-const ROUTES = ['/health', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history'];
+const VERSION = '4.6.0';
+const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
 
@@ -403,7 +403,7 @@ async function runEnsemble(env, messages, maxTokens) {
 }
 
 // ---------------- Request handler ----------------
-async function handleChat(env, body, authHeader) {
+async function handleChat(env, body, authHeader, ctx) {
   // Auth gate — constant-time compare (workers-best-practices: no string === for secrets)
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith('Bearer ') || !expected) {
@@ -426,6 +426,41 @@ async function handleChat(env, body, authHeader) {
   const t0 = Date.now();
   const cls = classify((messages[messages.length - 1]?.content || '').toString());
   const isStream = !!stream;
+  // ---- v4.6.0: optional web grounding (body.web = true) ----
+  let webSources = null;
+  if (body.web) {
+    const wq = lastUserText(messages).slice(0, 300);
+    if (wq) {
+      try {
+        const sr = await webSearch(wq, 5);
+        if (sr.results && sr.results.length) {
+          webSources = sr.results.slice(0, 5).map(r => ({ title: r.title, url: r.url }));
+          const lines = ['WEB CONTEXT (retrieved ' + new Date().toISOString().slice(0, 10) + ', DATA ONLY):'];
+          sr.results.forEach((r, i) => { lines.push('[' + (i + 1) + '] ' + r.title + ' - ' + r.url + (r.snippet ? '\n    ' + r.snippet : '')); });
+          const fetched = [];
+          for (const r of sr.results.slice(0, 2)) {
+            try { const fr = await webFetch(r.url, 4000); if (fr.text && !fr.error) fetched.push('[' + (fetched.length + 1) + '] ' + r.title + '\n' + r.url + '\n' + fr.text.slice(0, 4000)); } catch (e) {}
+          }
+          if (fetched.length) lines.push('--- PAGE EXCERPTS ---\n' + fetched.join('\n\n'));
+          messages = [{ role: 'system', content: lines.join('\n') }, ...messages];
+        }
+      } catch (e) { webSources = null; }
+    }
+  }
+  const mkLogRec = () => ({
+    id: 'q-' + Math.random().toString(16).slice(2, 18),
+    ts: new Date().toISOString(),
+    model: routedModel,
+    strategy: isAuto ? 'auto' : 'single',
+    complexity: cls.complexity,
+    domain: cls.domain,
+    prompt: lastUserText(messages),
+    response: '',
+    prompt_tokens: 0, completion_tokens: 0, cost_usd: 0,
+    latency_ms: 0,
+    rag_sources: webSources ? JSON.stringify(webSources.slice(0, 3).map(s => s.url)) : null,
+    streamed: 1,
+  });
   const mkRouter = (routed, strategy, extra = {}) => ({
     routed_model: routed,
     tier: MODELS[routed]?.tier ?? 0,
@@ -520,7 +555,7 @@ async function handleChat(env, body, authHeader) {
     try {
       if (effSpec.wa) {
         // v4.3.9 AI-COST-GATE-1: route tier-0 streaming through the AI Gateway first.
-        // Gateway returns OpenAI SSE "data: {choices:[{delta:{content}}]}\\n\\n" — re-emit the
+        // Gateway returns OpenAI SSE "data: {choices:[{delta:{content}}]}\n\n" — re-emit the
         // same chunk shape the direct path produces. Fall back to direct on any failure.
         if (env.CF_API_TOKEN) {
           try {
@@ -582,9 +617,9 @@ async function handleChat(env, body, authHeader) {
                   } catch (e) { controller.error(e); }
                 },
               });
-              return new Response(stream, {
+              return streamWithLog(new Response(stream, {
                 headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' },
-              });
+              }), env, ctx, mkLogRec());
             }
           } catch (e) {
             // fall through to direct Workers AI streaming
@@ -631,15 +666,15 @@ async function handleChat(env, body, authHeader) {
             }
           },
         });
-        return new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+        return streamWithLog(new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } }), env, ctx, mkLogRec());
       }
       if (effSpec.api) {
         const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools);
-        return new Response(upstream.body, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+        return streamWithLog(upstream, env, ctx, mkLogRec());
       }
       if (effSpec.gateway) {
         const upstream = await callGateway(env, effSpec.model, messages, max_tokens, true);
-        return new Response(upstream.body, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+        return streamWithLog(upstream, env, ctx, mkLogRec());
       }
       return json({ error: 'no stream path for model' }, 400);
     } catch (e) {
@@ -679,15 +714,200 @@ async function handleChat(env, body, authHeader) {
         neurons_remaining: 8000,
         ...(truncation ? { truncation } : {}),
       }),
+      ...(webSources ? { _web: { query: lastUserText(messages).slice(0, 300), sources: webSources } } : {}),
     };
+    const logRec = { ...mkLogRec(), streamed: 0, response: content.slice(0, 4000), latency_ms: Date.now() - t0 };
+    if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
     return json({ error: e.message }, 502);
   }
 }
 
+
+// ---------------- v4.5.0: query logging (restored from v4.1, dropped in v4.2-v4.4) ----------------
+function lastUserText(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m && m.role === 'user') {
+      const c = m.content;
+      if (typeof c === 'string') return c.slice(0, 2000);
+      if (Array.isArray(c)) return c.filter(p => p && typeof p.text === 'string').map(p => p.text).join(' ').slice(0, 2000);
+      return '';
+    }
+  }
+  return '';
+}
+async function logQuery(env, record) {
+  try {
+    if (env.QNFO_AUDIT) {
+      await env.QNFO_AUDIT.prepare(
+        'INSERT INTO ai_queries (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)'
+      ).bind(record.id, record.ts, record.model, record.strategy, record.complexity, record.domain, record.prompt, record.response, record.prompt_tokens, record.completion_tokens, record.cost_usd, record.latency_ms, record.rag_sources, record.streamed).run();
+    }
+  } catch (e) { console.log('ai_queries insert failed:', e && e.message || e); }
+  try {
+    if (env.LOG_VZ && env.AI) {
+      const text = [record.prompt.slice(0, 2000), record.response.slice(0, 2000)].filter(Boolean);
+      if (text.length) {
+        const embed = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text });
+        const vecs = (embed?.data || []).filter(v => Array.isArray(v) && v.length === 768);
+        if (vecs.length) {
+          const day = String(record.ts || '').slice(0, 10) || 'unknown';
+          const vectors = [];
+          if (vecs[0] && record.prompt) vectors.push({ id: 'c:' + record.id, values: vecs[0], metadata: { doc: 'chat', kind: 'prompt', path: 'chat/' + day + '/prompt-' + record.id + '.md', model: record.model, domain: record.domain, strategy: record.strategy, text: record.prompt.slice(0, 800) } });
+          if (vecs[1] && record.response) vectors.push({ id: 'r:' + record.id, values: vecs[1], metadata: { doc: 'chat', kind: 'response', path: 'chat/' + day + '/response-' + record.id + '.md', model: record.model, domain: record.domain, strategy: record.strategy, text: record.response.slice(0, 800) } });
+          if (vectors.length) await env.LOG_VZ.upsert(vectors);
+        }
+      }
+    }
+  } catch (e) { console.log('qnfo-ai-log upsert failed:', e && e.message || e); }
+}
+function streamWithLog(upstream, env, ctx, rec) {
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buf = '', acc = '';
+  let markDone;
+  const done = new Promise(res => { markDone = res; });
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            const t = line.trim();
+            if (t.startsWith('data:')) {
+              const data = t.slice(5).trim();
+              if (data === '[DONE]') continue;
+              try {
+                const p = JSON.parse(data);
+                const d = p?.choices?.[0]?.delta?.content;
+                if (typeof d === 'string') acc += d;
+              } catch {}
+            }
+            controller.enqueue(encoder.encode(line + '\n'));
+          }
+        }
+        if (buf) controller.enqueue(encoder.encode(buf));
+        controller.close();
+        markDone && markDone();
+      } catch (e) { controller.error(e); }
+    },
+  });
+  ctx.waitUntil(done.then(() => logQuery(env, { ...rec, response: acc.slice(0, 4000), streamed: 1 })).catch(() => {}));
+  return new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+}
+
+
+// ---------------- v4.6.0: web layer (DuckDuckGo HTML + safe page fetch) ----------------
+function cleanText(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'").replace(/&#x26;/g, '&').replace(/&#039;/g, "'")
+    .replace(/\s+/g, ' ').trim();
+}
+function isPrivateHost(host) {
+  const h = String(host || '').toLowerCase().replace(/\.$/, '');
+  if (h === 'localhost' || h === '::1' || h === '[::1]') return true;
+  if (/^(10\.|127\.|0\.|192\.168\.|169\.254\.)/.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+  return false;
+}
+function parseDdg(html, isLite, k) {
+  const results = [];
+  if (!isLite) {
+    const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    const re2 = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+    const snips = [];
+    let m;
+    while ((m = re2.exec(html)) && snips.length < 20) snips.push(cleanText(m[1]));
+    let i = 0;
+    while ((m = re.exec(html)) && results.length < k) {
+      let href = m[1];
+      try { const u = new URL(href, 'https://duckduckgo.com'); const tgt = u.searchParams.get('uddg'); if (tgt) href = tgt; } catch (e) {}
+      if (/^https?:/i.test(href) && href.indexOf('y.js') === -1 && href.indexOf('ad_domain') === -1) {
+        results.push({ title: cleanText(m[2]).slice(0, 200), url: href.slice(0, 500), snippet: (snips[i] || '').slice(0, 400) });
+      }
+      i++;
+    }
+  } else {
+    const re = /<a[^>]+rel="nofollow"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    const re2 = /<td class='result-snippet'>(.*?)<\/td>/gi;
+    const snips = [];
+    let m;
+    while ((m = re2.exec(html)) && snips.length < 20) snips.push(cleanText(m[1]));
+    let i = 0;
+    while ((m = re.exec(html)) && results.length < k) {
+      let href = m[1];
+      try { const u = new URL(href, 'https://duckduckgo.com'); const tgt = u.searchParams.get('uddg'); if (tgt) href = tgt; } catch (e) {}
+      if (/^https?:/i.test(href) && href.indexOf('duckduckgo.com') === -1 && href.indexOf('y.js') === -1 && href.indexOf('ad_domain') === -1) {
+        results.push({ title: cleanText(m[2]).slice(0, 200), url: href.slice(0, 500), snippet: (snips[i] || '').slice(0, 400) });
+      }
+      i++;
+    }
+  }
+  if (results.length === 0) {
+    const z = /<div[^>]*class="[^"]*zci[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(html);
+    if (z && cleanText(z[1])) results.push({ title: 'Zero-click info', url: '', snippet: cleanText(z[1]).slice(0, 500) });
+  }
+  return results;
+}
+async function webSearch(q, k) {
+  const qq = encodeURIComponent(q);
+  const ua = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept': 'text/html' };
+  const urls = [
+    'https://html.duckduckgo.com/html/?q=',
+    'https://html.duckduckgo.com/html/?q=',
+    'https://lite.duckduckgo.com/lite/?q=',
+  ];
+  for (let attempt = 0; attempt < urls.length; attempt++) {
+    try {
+      const resp = await fetch(urls[attempt] + qq, { headers: ua });
+      if (!resp.ok) continue;
+      const html = await resp.text();
+      const isLite = urls[attempt].indexOf('lite') !== -1;
+      const parsed = parseDdg(html, isLite, k);
+      if (parsed.length) return { engine: isLite ? 'duckduckgo-lite' : 'duckduckgo', results: parsed };
+    } catch (e) {}
+  }
+  return { error: 'search engine unreachable' };
+}
+async function webFetch(url, maxChars) {
+  const u = new URL(url);
+  if (!/^https?:$/i.test(u.protocol)) return { error: 'only http(s) URLs' };
+  if (isPrivateHost(u.hostname)) return { error: 'private/loopback hosts blocked' };
+  const resp = await fetch(u.toString(), {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept': 'text/html,text/plain,application/json;q=0.9,*/*;q=0.5' }
+  });
+  if (!resp.ok) return { error: 'HTTP ' + resp.status, url: u.toString() };
+  const ct = resp.headers.get('content-type') || '';
+  const isHtml = /text\/html/i.test(ct);
+  const raw = await resp.text();
+  const text = isHtml ? cleanText(raw) : raw;
+  const cap = Math.max(Number(maxChars) || 6000, 500);
+  return { url: u.toString(), text: text.slice(0, cap), truncated: text.length > cap };
+}
+async function authOk(header, env) {
+  const expected = env.ROUTER_AUTH_KEY;
+  if (!header || !header.startsWith('Bearer ') || !expected) return false;
+  const provided = header.slice('Bearer '.length);
+  const enc = new TextEncoder();
+  const a = await crypto.subtle.digest('SHA-256', enc.encode(provided));
+  const b = await crypto.subtle.digest('SHA-256', enc.encode(expected));
+  return timingSafeEqual(a, b);
+}
+const PLAYGROUND_HTML = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>__TITLE__</title><style>body{font-family:Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1a1a1a}header h1{font-size:1.25rem;margin:0 0 4px}header p{color:#666;margin:0 0 12px;font-size:.85rem}label{font-size:.8rem;color:#444;display:block;margin:8px 0 2px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:6px 8px;font-size:.9rem;border:1px solid #ccc;border-radius:6px}input[type=text]{flex:1;min-width:200px}button{background:#0b57d0;color:#fff;border:none;cursor:pointer}button:disabled{opacity:.6}#msgs{margin-top:14px;border-top:1px solid #eee;padding-top:12px}.msg{margin:10px 0;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font-size:.92rem}.user{background:#eef4ff}.assistant{background:#f6f6f6}.err{color:#b3261e;font-size:.85rem;margin:8px 0}.meta{color:#888;font-size:.78rem;margin-top:6px}</style></head><body><header><h1>__TITLE__</h1><p>OpenAI-compatible chat over Cloudflare. Key: __KEY_HINT__</p></header><div class="row"><input type="password" id="key" placeholder="API key (Bearer)"><input type="text" id="thread" placeholder="thread_id (optional)"></div><div class="row"><select id="model"></select><label><input type="checkbox" id="web"> web search</label><span style="flex:1"></span></div><div id="msgs"></div><div class="row"><input type="text" id="inp" placeholder="Jot a thought, ask a question..." style="flex:1"><button id="send">Send</button></div><script>const $=s=>document.querySelector(s);let msgs=[];async function loadModels(){try{const r=await fetch("/v1/models");const d=await r.json();(d.data||[]).forEach(m=>{const o=document.createElement("option");o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=" (reasoning)";$("#model").appendChild(o);});}catch(e){}}loadModels();function add(role,content){msgs.push({role,content});const d=document.createElement("div");d.className="msg "+role;d.textContent=content;$("#msgs").appendChild(d);}$("#send").onclick=async()=>{const txt=$("#inp").value.trim();if(!txt)return;const key=$("#key").value.trim();if(!key){add("err","API key required");return;}add("user",txt);$("#inp").value="";const btn=$("#send");btn.disabled=true;const body={model:$("#model").value||"glm-5.2",messages:msgs.slice(-12)};const th=$("#thread").value.trim();if(th)body.thread_id=th;if($("#web").checked)body.web=true;try{const r=await fetch("/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||j.error||("HTTP "+r.status));const c=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||"";add("assistant",c);if(j._web){const m=document.createElement("div");m.className="meta";m.textContent="sources: "+(j._web.sources||[]).map(s=>s.url).join(" | ");$("#msgs").appendChild(m);}if(j._router){const m=document.createElement("div");m.className="meta";m.textContent="router: "+(j._router.routed_model||j.model)+" | tier "+(j._router.tier!=null?j._router.tier:"?")+" | $"+(j._router.estimated_cost_usd!=null?j._router.estimated_cost_usd:0);$("#msgs").appendChild(m);}}catch(e){add("err",String(e.message||e));}btn.disabled=false;};$("#inp").addEventListener("keydown",e=>{if(e.key==="Enter")$("#send").click();});</script></body></html>';
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -708,6 +928,7 @@ export default {
           cf_token: !!env.CF_API_TOKEN,
           auth: !!env.ROUTER_AUTH_KEY,
           paper_vz: !!env.PAPER_VZ,
+          log_vz: !!env.LOG_VZ,
           query_db: !!env.QNFO_AUDIT,
         },
       });
@@ -748,7 +969,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'invalid JSON' }, 400); }
       const auth = request.headers.get('Authorization') || '';
-      return handleChat(env, body, auth);
+      return handleChat(env, body, auth, ctx);
     }
 
     // /v1/responses — DeepChat compat (normalize Responses API input -> chat)
@@ -769,7 +990,7 @@ export default {
         stream: false,
         temperature: body.temperature,
       };
-      const chatResp = await handleChat(env, chatBody, auth);
+      const chatResp = await handleChat(env, chatBody, auth, ctx);
       if (!chatResp.ok) return chatResp;
       const chatData = await chatResp.json();
       const text = chatData?.choices?.[0]?.message?.content ?? '';
@@ -832,6 +1053,19 @@ export default {
 
     // /v1/history — query log from D1 qnfo-audit.ai_queries (QNFO_AUDIT binding)
     if (path === '/v1/history' && method === 'GET') {
+      const q = (url.searchParams.get('q') || '').trim();
+      if (q) {
+        if (!env.LOG_VZ || !env.AI) return json({ error: 'semantic history requires Vectorize qnfo-ai-log + AI bindings' }, 501);
+        try {
+          const embed = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [q] });
+          const vec = embed?.data?.[0] || (Array.isArray(embed) ? embed[0] : null);
+          if (!vec) return json({ error: 'embedding generation failed' }, 502);
+          const matches = await env.LOG_VZ.query(vec, { topK: Math.min(Math.max(parseInt(url.searchParams.get('k') || '10', 10), 1), 20), returnMetadata: 'all' });
+          return json({ index: 'qnfo-ai-log', query: q, count: (matches.matches || []).length, results: (matches.matches || []).map(m => ({ id: m.id, score: Math.round((m.score || 0) * 10000) / 10000, metadata: m.metadata || {} })) });
+        } catch (e) {
+          return json({ error: e.message }, 500);
+        }
+      }
       const db = env.QNFO_AUDIT;
       if (!db) return json({ error: 'query logging requires D1 binding — not configured in this deployment' }, 501);
       const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 1), 100);
@@ -853,6 +1087,35 @@ export default {
       }
     }
 
+    // ---- v4.6.0: web browsing ----
+    if (path === '/' && method === 'GET') {
+      return new Response(PLAYGROUND_HTML.replace('__TITLE__', 'QNFO Notes - research chat (qnfo-ai router)').replace('__KEY_HINT__', 'tokens/qnfo-ai'), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+    }
+    if (path === '/v1/web/search' && method === 'GET') {
+      const authH = request.headers.get('Authorization') || '';
+      if (!(await authOk(authH, env))) return json({ error: 'Unauthorized' }, 401);
+      const q = (url.searchParams.get('q') || '').trim();
+      const k = Math.min(Math.max(parseInt(url.searchParams.get('k') || '5', 10), 1), 10);
+      if (!q) return json({ error: 'q required' }, 400);
+      try {
+        const r = await webSearch(q, k);
+        if (r.error) return json({ error: r.error }, 502);
+        if (env.QNFO_AUDIT) ctx.waitUntil(logQuery(env, { id: 'q-' + Math.random().toString(16).slice(2, 18), ts: new Date().toISOString(), model: 'web-search', strategy: 'web', complexity: 'medium', domain: 'web', prompt: q.slice(0, 2000), response: '', prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, latency_ms: 0, rag_sources: JSON.stringify(r.results.slice(0, 5).map(x => x.url)), streamed: 0 }).catch(() => {}));
+        return json({ query: q, engine: 'duckduckgo', count: r.results.length, results: r.results });
+      } catch (e) { return json({ error: e.message }, 500); }
+    }
+    if (path === '/v1/web/fetch' && method === 'GET') {
+      const authH = request.headers.get('Authorization') || '';
+      if (!(await authOk(authH, env))) return json({ error: 'Unauthorized' }, 401);
+      const u = (url.searchParams.get('url') || '').trim();
+      const max = Math.min(Math.max(parseInt(url.searchParams.get('max') || '6000', 10), 500), 20000);
+      if (!u) return json({ error: 'url required' }, 400);
+      try {
+        const r = await webFetch(u, max);
+        if (r.error) return json({ error: r.error }, 502);
+        return json(r);
+      } catch (e) { return json({ error: e.message }, 500); }
+    }
     return json({ error: 'Not found' }, 404);
   },
 };
