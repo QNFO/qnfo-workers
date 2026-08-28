@@ -6,7 +6,7 @@
 //   30 8 * * 1-5     briefing      — daily decision-item digest (D1 emails + intents + tasks)
 //   0 10 * * 1-5     research-scan — arXiv scan on QNFO topics -> digest + D1 log
 //   0 17 * * 5       weekly        — 7-day aggregate digest (email stats, queries, records)
-//   0 6 * * 0        weekly-ops    — Cloudflare cost/analytics audit digest (COST-AUDIT-MISS-AI-1)
+//   0 6 * * 7        weekly-ops    — Cloudflare cost/analytics audit digest (COST-AUDIT-MISS-AI-1)
 //   0 8 * * 1        portfolio-sync — portfolio-state snapshot digest
 // Every job: fetch -> build text digest -> send via Cloudflare Email Sending (SEND_EMAIL)
 // -> log to D1 qnfo-audit.audit_sessions. No local component in the loop.
@@ -206,7 +206,7 @@ async function jobWeeklyOps(env) {
 async function jobPortfolioSync(env) {
   const L = ['QNFO portfolio snapshot — ' + new Date().toISOString().slice(0, 10), ''];
   try {
-    const r = await env.AUDIT.prepare("SELECT wbs_code, name, phase, status, zenodo_doi FROM programs ORDER BY wbs_order LIMIT 25").all();
+    const r = await env.PORTFOLIO.prepare("SELECT wbs_code, name, phase, status, zenodo_doi FROM program_registry ORDER BY wbs_order LIMIT 25").all();
     if (r.results && r.results.length) {
       L.push('Programs:');
       for (const p of r.results) L.push('- ' + (p.wbs_code || '') + ' ' + (p.name || '').slice(0, 60) + ' [phase ' + (p.phase || '?') + ', ' + (p.status || '') + ']');
@@ -235,7 +235,7 @@ export default {
     else if (cron === '30 8 * * 1-5') job = 'briefing';
     else if (cron === '0 10 * * 1-5') job = 'research-scan';
     else if (cron === '0 17 * * 5') job = 'weekly';
-    else if (cron === '0 6 * * 0') job = 'weekly-ops';
+    else if (cron === '0 6 * * 7') job = 'weekly-ops';
     else if (cron === '0 8 * * 1') job = 'portfolio-sync';
     if (!job || !JOBS[job]) { console.log('no job for cron', cron); return; }
     try {
@@ -253,7 +253,7 @@ export default {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (path === '/health' && request.method === 'GET') {
-      return new Response(JSON.stringify({ ok: true, worker: 'qnfo-cloud-ops', version: VERSION, jobs: Object.keys(JOBS), crons: ['0 8,14 * * 1-5 email-triage', '30 8 * * 1-5 briefing', '0 10 * * 1-5 research-scan', '0 17 * * 5 weekly', '0 6 * * 0 weekly-ops', '0 8 * * 1 portfolio-sync'], bindings: { audit: !!env.AUDIT, email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, qnfo_infra: !!env.QNFO_INFRA, send_email: !!env.SEND_EMAIL } }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: 'qnfo-cloud-ops', version: VERSION, jobs: Object.keys(JOBS), crons: ['0 8,14 * * 1-5 email-triage', '30 8 * * 1-5 briefing', '0 10 * * 1-5 research-scan', '0 17 * * 5 weekly', '0 6 * * 7 weekly-ops', '0 8 * * 1 portfolio-sync'], bindings: { audit: !!env.AUDIT, portfolio: !!env.PORTFOLIO, email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, qnfo_infra: !!env.QNFO_INFRA, send_email: !!env.SEND_EMAIL } }), { headers: { 'Content-Type': 'application/json', ...cors } });
     }
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     if (!auth(token, env)) return new Response('unauthorized', { status: 401, headers: cors });

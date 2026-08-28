@@ -36,21 +36,31 @@ Authorization: Bearer <INFRA_TOKEN>
 
 ## Migration matrix (local scheduled tasks → cloud)
 
-| Local job | Cloud replacement | Status |
-|---|---|---|
-| qnfo-email-inbox-check + outreach (3851f539) | email-triage cron | ✅ local paused 2026-08-28 |
-| Daily Briefing PDB (a82062c7) | briefing cron | ✅ local paused 2026-08-28 |
-| Research Scan GTD extractor (fdf1403c) | research-scan cron | ✅ local paused 2026-08-28 |
-| Weekly Ops merged audits (8eb69c12) | weekly-ops cron | ✅ local paused 2026-08-28 |
-| Zenodo Stats Delta (384c5299) | weekly-ops (cost) + manual zenodo script | ✅ local paused 2026-08-28 |
-| Weekly Review GTD (382376cd) | weekly digest (cloud); Obsidian review local | ⏳ local remains (Obsidian-bound) |
-| Portfolio Public Sync (ec43131a) | portfolio-sync digest (cloud) | ⏳ local remains for GitHub PR |
-| Research Weekly (a3c0c2b4) | research-scan + weekly | ⏳ local remains (Obsidian-bound) |
-| Outlook calendar sync (78136b24) | — | ⏳ local (Outlook COM; Graph API path pending) |
-| Outlook GTD triage (754b49ce) | — | ⏳ local (Outlook COM; Graph API path pending) |
-| Personal Twin sweep (b1abb235) | personal-life indexers | ⏳ local (browser/IMAP; cloud path pending) |
-| DeepChat DB maintenance / settings backup (e6783983/d0cb2031) | — | ⏳ local (DeepChat app DB — inherently local) |
+The cloud worker provides a **digest layer** (email-triage, briefing, research-scan,
+weekly, weekly-ops, portfolio-sync). It does NOT (yet) replicate the deep grounding
+functions — proactive outreach drafting, GTD register maintenance, contact-ledger
+extraction, Zenodo ADR-014/SEO audits, Zenodo stats upserts. Those functions remain
+on the local scheduled tasks until their data sources (contact-ledger, GTD register,
+Zenodo scripts) move cloud-side.
 
-Obsidian-bound jobs (weekly review, research weekly) and DeepChat-internal
-maintenance cannot run at the edge until the Obsidian vault / GTD register and
-DeepChat app DB themselves move to cloud stores — tracked as follow-up work.
+| Local job | Cloud covers | Still local (deep grounding) | Status |
+|---|---|---|---|
+| qnfo-email-inbox-check + outreach (3851f539) | inbox check + triage digest | **proactive outreach** (contact-ledger dedup, arXiv verification, LLM drafting, 3-5/day cap) | ✅ RESUMED — outreach must not be dropped |
+| Daily Briefing PDB (a82062c7) | D1 emails+intents digest | **GTD register + outreach-log** (primary sources) | ✅ RESUMED |
+| Research Scan GTD extractor (fdf1403c) | arXiv scan digest | **GTD extraction → contact-ledger queue + GTD register** | ✅ RESUMED |
+| Weekly Ops merged audits (8eb69c12) | cost audit (weekly-ops) | Zenodo ADR-014/SEO/D4-D5/kaizen/retrospective | ✅ RESUMED |
+| Zenodo Stats Delta (384c5299) | — | full zenodo_stats delta upsert | ✅ RESUMED |
+| Weekly Review GTD (382376cd) | weekly digest | Obsidian review | ⏳ local (Obsidian-bound) |
+| Portfolio Public Sync (ec43131a) | portfolio-sync digest | GitHub PR sync | ⏳ local |
+| Research Weekly (a3c0c2b4) | research-scan + weekly | Obsidian intelligence note | ⏳ local (Obsidian-bound) |
+| Outlook calendar sync (78136b24) | — | — | ⏳ local (Outlook COM; Graph API path pending) |
+| Outlook GTD triage (754b49ce) | — | — | ⏳ local (Outlook COM; Graph API path pending) |
+| Personal Twin sweep (b1abb235) | — | — | ⏳ local (browser/IMAP; cloud path pending) |
+| DeepChat DB maintenance / settings backup | — | — | ⏳ local (DeepChat app DB — inherently local) |
+
+**2026-08-28 red-team correction:** the initial migration paused 5 local jobs,
+but the cloud worker only replaced the digest surface — pausing dropped proactive
+outreach, GTD grounding, and Zenodo audits (3 HARD findings). Those 5 jobs were
+RESUMED and the matrix corrected. Full cloud-only operation requires moving the
+contact-ledger, GTD register, and Zenodo/Outlook scripts to cloud stores first —
+tracked as follow-up work.
