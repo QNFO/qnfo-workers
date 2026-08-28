@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '5.2.1';
+const VERSION = '5.2.2';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -36,10 +36,9 @@ const MODELS = {
   'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
   'qwq-32b':                  { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwq-32b',                   reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.95, tools: false, vision: false },
   // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
-  // message carries an image_url part; selectable explicitly. NOTE: Workers AI gates this
-  // model behind a one-time Community License "agree" (submit prompt 'agree' once) whose
-  // terms include an EU-domicile representation — the router does NOT auto-accept; the
-  // account owner must accept it once in the dash or the first vision call returns 5016.
+  // message carries an image_url part; selectable explicitly. License: Workers AI gates
+  // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
+  // account owner's behalf (explicit user directive "accept all terms").
   'llama-3.2-11b-vision':     { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-11b-vision-instruct',     reasoning: false, maxOut: 2048,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: false, vision: true  },
   // DeepSeek API (1M context)
   'deepseek-v4-flash':        { tier: 1, family: 'deepseek', api: 'deepseek-chat',     maxOut: 8192, ctx: 1048576, temp: 0.7, topP: 0.9,  tools: true, vision: false },
@@ -92,15 +91,12 @@ function clampTokens(maxTokens, cap) {
 }
 
 // v4.3.6 — Context-window-aware routing (Bad Gateway fix #2, 2026-08-12).
-// Workers AI tier-0 models cap at max_total_tokens=24000 (observed llama-3.3-70b 5021:
-// "input and maximum output tokens exceeded this model context window limit (24000)").
-// Real DeepChat sessions carry a ~56KB system prompt + accumulated history that routinely
-// exceed 24k total tokens, so auto->llama-3.3-70b 502s even with max_tokens clamped.
-// Estimate input tokens (~4 chars/token, matches the upstream estimator's ~3.97) and
-// re-route tier-0-bound requests that would overflow the 24k window to DeepSeek API
-// (tier-1, 1M context) — correctness over free-first.
+// LEGACY FALLBACK ONLY (v5.0.0+): per-model ctx in MODELS[] is authoritative via modelCtx().
+// The 24000 figure was an early 2026-08-12 observation on llama-3.3-70b via the gateway;
+// live re-verified 2026-08-28 that llama-3.3-70b accepts 30k+ tokens, so ctx=131072 holds.
+// TIER0_TOTAL_CAP / TIER0_SAFE_TOTAL remain only as a fallback when a spec lacks ctx.
 const TIER0_TOTAL_CAP = 24000;
-const TIER0_SAFE_TOTAL = 20000; // headroom below the hard 24k cap
+const TIER0_SAFE_TOTAL = 20000;
 
 function estimateInputTokens(messages) {
   let chars = 0;
@@ -1047,7 +1043,11 @@ async function handleChat(env, body, authHeader, ctx) {
     // v5.1.0 — server-side code execution: execute run_code tool_calls in-worker and
     // re-call the model once with the results (bounded single iteration).
     let modelTools = (Array.isArray(tools) && tools.length) ? tools : null;
-    if (wantsCode) modelTools = [...(modelTools || []), RUN_CODE_TOOL];
+    if (wantsCode) {
+      // v5.2.2: dedup — don't append a second run_code if the client already supplied one.
+      const hasRunCode = modelTools && modelTools.some((t) => t && t.function && t.function.name === 'run_code');
+      modelTools = [...(modelTools || []), ...(hasRunCode ? [] : [RUN_CODE_TOOL])];
+    }
 
     let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP);
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
@@ -1565,7 +1565,10 @@ export default {
 
     // ---- v4.6.0: web browsing ----
     // ---- v4.7.0: QNFO records passthrough (any client can fetch oracle context) ----
+    // v5.2.2: auth-gated — exposes federated QNFO records (papers, KG, notes, tasks, emails).
     if (path === '/v1/records' && method === 'GET') {
+      const authH = request.headers.get('Authorization') || '';
+      if (!await authOk(authH, env)) return json({ error: 'Unauthorized' }, 401);
       const q = (url.searchParams.get('q') || '').trim();
       const scope = (url.searchParams.get('scope') || 'research').toLowerCase();
       // SEPARATION MANDATE (2026-08-04 + 2026-08-28): the research gateway only
@@ -1582,7 +1585,10 @@ export default {
         return json(rr.ok ? rj : { error: rj.error || ('HTTP ' + rr.status) }, rr.ok ? 200 : 502);
       } catch (e) { return json({ error: e.message }, 500); }
     }
+    // v5.2.2: auth-gated — exposes rendered QNFO context (papers, KG, notes, tasks, emails).
     if (path === '/v1/context' && method === 'GET') {
+      const authH = request.headers.get('Authorization') || '';
+      if (!await authOk(authH, env)) return json({ error: 'Unauthorized' }, 401);
       const q = (url.searchParams.get('q') || '').trim();
       const scope = (url.searchParams.get('scope') || 'research').toLowerCase();
       // SEPARATION MANDATE: personal scope blocked on the research gateway.
