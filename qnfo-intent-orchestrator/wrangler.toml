@@ -1,0 +1,19 @@
+name = "qnfo-intent-orchestrator"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Secrets:
+#   INTENT_TOKEN - Bearer token for all endpoints
+#   RT           - qnfo-ai router key (outbound classification via service binding)
+#   CF_TOKEN     - Cloudflare API token (Email Sending)
+#   CF_ACCOUNT   - account id
+#   DIGEST_TO    - digest recipient (rowan.quni@outlook.com)
+#   DIGEST_FROM  - sending address (agent@qnfo.org)
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[triggers]
+crons = ["0 6 * * *"]

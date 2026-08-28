@@ -930,7 +930,7 @@ const PLAYGROUND_HTML = `<!DOCTYPE html>
 <div class="row"><input type="password" id="key" placeholder="API key (Bearer)"><input type="text" id="thread" placeholder="thread_id (optional)"></div>
 <div class="row"><select id="model"></select><label><input type="checkbox" id="web"> web search</label><button id="new">New chat</button><span style="flex:1"></span></div>
 <div id="msgs"></div>
-<div class="row"><input type="text" id="inp" placeholder="Jot a thought, ask a question..." style="flex:1"><button id="send">Send</button></div>
+<div class="row"><input type="text" id="inp" placeholder="Jot a thought, ask a question..." style="flex:1"><button id="send">Send</button></div><div class="row"><input type="text" id="expr" placeholder="Express a desire to the orchestrator (e.g. remind me tomorrow to X)" style="flex:1"><button id="sendIntent">Express</button></div><div id="intentResult" class="meta"></div>
 <script>
 var ENABLE_STREAM = __STREAM__;
 var $=function(s){return document.querySelector(s);};
@@ -999,6 +999,7 @@ $('#send').onclick=async function(){
   btn.disabled=false;
 };
 $('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').click();});
+$('#sendIntent').onclick=function(){var txt=$('#expr').value.trim();if(!txt)return;var key=$('#key').value.trim();if(!key){$('#intentResult').textContent='API key required';return;}var btn=$('#sendIntent');btn.disabled=true;$('#intentResult').textContent='Expressing...';fetch('https://qnfo-intent-orchestrator.q08.workers.dev/intent?source=pwa&device=windows',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({desire:txt,source:'pwa'})}).then(function(r){return r.json();}).then(function(j){if(j.error){$('#intentResult').textContent='ERROR: '+j.error;return;}$('#intentResult').textContent='['+j.type+' | '+j.domain+'] '+j.summary+(j.status==='done'?' - stored in Vectorize':' - queued'+(j.due?' (due '+j.due+')':''));$('#expr').value='';}).catch(function(e){$('#intentResult').textContent='ERROR: '+String(e.message||e);}).finally(function(){btn.disabled=false;});};
 $('#key').addEventListener('input',function(){save(msgs);loadModels();});
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
 </script></body></html>`;

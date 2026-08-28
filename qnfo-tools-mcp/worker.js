@@ -12,6 +12,8 @@ const TOOLS = [
   { name: 'papers_search', description: 'Semantic search over the QNFO research corpus (Vectorize qwav-research-v2).', inputSchema: { type: 'object', properties: { q: { type: 'string' }, k: { type: 'number' } }, required: ['q'] } },
   { name: 'history_recall', description: 'Semantic recall of past QNFO research notes and queries (qnfo-ai-log).', inputSchema: { type: 'object', properties: { q: { type: 'string' }, k: { type: 'number' } }, required: ['q'] } },
   { name: 'personal_search', description: 'Search the personal-life index: notes, files, chat threads.', inputSchema: { type: 'object', properties: { q: { type: 'string' }, topK: { type: 'number' } }, required: ['q'] } },
+  { name: 'express_desire', description: 'Express a desire to the QNFO intent orchestrator. It classifies and routes automatically: notes are stored in Vectorize, tasks/events/emails/reminders are queued with due dates, and they appear in the daily digest.', inputSchema: { type: 'object', properties: { desire: { type: 'string', description: 'what you want done' }, source: { type: 'string', description: 'where it comes from (optional)' } }, required: ['desire'] } },
+  { name: 'intents_list', description: 'List intents in the orchestrator queue (tasks/events/emails/reminders).', inputSchema: { type: 'object', properties: { status: { type: 'string', description: 'filter: pending/done' }, limit: { type: 'number' } } } },
 ];
 
 function authToken(token, env) {
@@ -54,6 +56,25 @@ async function callTool(env, name, args) {
     const j = await r.json();
     if (!r.ok) return { error: j.error || ('HTTP ' + r.status) };
     return { count: j.count || 0, results: (j.results || []).map(x => ({ score: x.score, model: x.metadata && x.metadata.model, text: x.metadata && x.metadata.text })) };
+  }
+  if (name === 'express_desire') {
+    const r = await env.QNFO_INTENT.fetch('https://qnfo-intent-orchestrator.q08.workers.dev/intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.INTENT_TOKEN },
+      body: JSON.stringify({ desire: String(args.desire || '').slice(0, 4000), source: String(args.source || 'mcp') })
+    });
+    const j = await r.json();
+    if (!r.ok) return { error: j.error || ('HTTP ' + r.status) };
+    return j;
+  }
+  if (name === 'intents_list') {
+    const q = '?limit=' + Math.min(parseInt(args.limit || 20, 10) || 20, 100) + (args.status ? '&status=' + encodeURIComponent(String(args.status)) : '');
+    const r = await env.QNFO_INTENT.fetch('https://qnfo-intent-orchestrator.q08.workers.dev/intents' + q, {
+      headers: { 'Authorization': 'Bearer ' + env.INTENT_TOKEN }
+    });
+    const j = await r.json();
+    if (!r.ok) return { error: j.error || ('HTTP ' + r.status) };
+    return { count: j.count || 0, intents: (j.intents || []).map(x => ({ id: x.id, type: x.type, domain: x.domain, summary: x.summary || x.desire.slice(0, 100), due: x.due, status: x.status, created_at: x.created_at })) };
   }
   if (name === 'personal_search') {
     const r = await env.PL_SEARCH.fetch(PL_SEARCH + '/search?q=' + encodeURIComponent(String(args.q || '').slice(0, 300)) + '&topK=' + k);
