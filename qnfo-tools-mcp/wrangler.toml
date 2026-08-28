@@ -1,0 +1,13 @@
+name = "qnfo-tools-mcp"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Secrets:
+#   MCP_TOKEN - Bearer token clients must present (?token= or Authorization header)
+#   RT        - qnfo-ai router key used for outbound web_search/history_recall calls
+# Both are set to the same value (tokens/qnfo-ai) for simplicity.
+
+[observability]
+enabled = true
+head_sampling_rate = 1
