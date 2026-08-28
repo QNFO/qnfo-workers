@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '5.2.3';
+const VERSION = '5.3.0';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -23,12 +23,10 @@ const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3c
 //   maxOut = output token cap (clamped from client max_tokens to avoid upstream 400).
 const MODELS = {
   // Workers AI free — original three
-  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false, maxOut: 8192,  ctx: 24000, temp: 0.6, topP: 0.9,  tools: true,  vision: false },  // -fp8-fast variant = 24k ctx (live-verified 2026-08-28, NOT 128k)
   'deepseek-r1-qwen-32b':     { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', reasoning: true,  maxOut: 8192,  ctx: 32768,  temp: 0.6, topP: 0.95, tools: false, vision: false },
   'qwen3-30b':                { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen3-30b-a3b-fp8',                  reasoning: false, maxOut: 8192,  ctx: 32768,  temp: 0.7, topP: 0.9,  tools: true,  vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
   'qwen2.5-coder-32b':        { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen2.5-coder-32b-instruct',         reasoning: false, maxOut: 8192,  ctx: 32768,  temp: 0.2, topP: 0.95, tools: false, vision: false },
-  'llama-3.2-1b':             { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.2-1b-instruct',              reasoning: false, maxOut: 4096,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },
   'gemma-2b':                 { tier: 0, family: 'google',   wa: '@cf/google/gemma-2b-it-lora',                 reasoning: false, maxOut: 4096,  ctx: 8192,   temp: 0.7, topP: 0.9,  tools: false, vision: false },
   'granite-h-micro':          { tier: 0, family: 'ibm',      wa: '@cf/ibm-granite/granite-4.0-h-micro',         reasoning: false, maxOut: 4096,  ctx: 128000, temp: 0.7, topP: 0.9,  tools: true,  vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
@@ -52,19 +50,17 @@ const MODELS = {
 };
 
 // Per-model output token caps (v4.3.5 — Bad Gateway fix, 2026-08-12).
-// Workers AI models reject max_tokens above their max_total_tokens (e.g. llama-3.3-70b
-// rejects 32000 with 400 -> router previously mapped that upstream 4xx to 502 Bad Gateway).
+// Workers AI models reject max_tokens above their max_total_tokens (an oversized
+// max_tokens surfaces as an upstream 400 -> router 502 Bad Gateway).
 // Every call path clamps the requested max_tokens to the routed model's cap so an
 // oversized client max_tokens can never surface as a router 502.
 const MAX_OUT = {
   // Workers AI (tier-0) — output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
-  '@cf/meta/llama-3.3-70b-instruct-fp8-fast': 8192,
   '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b': 8192,
   '@cf/qwen/qwen3-30b-a3b-fp8': 8192,
   '@cf/qwen/qwen2.5-coder-32b-instruct': 8192,
-  '@cf/meta/llama-3.2-1b-instruct': 4096,
   '@cf/google/gemma-2b-it-lora': 4096,
   '@cf/ibm-granite/granite-4.0-h-micro': 4096,
   '@cf/zai-org/glm-5.2': 8192,
@@ -92,8 +88,6 @@ function clampTokens(maxTokens, cap) {
 
 // v4.3.6 — Context-window-aware routing (Bad Gateway fix #2, 2026-08-12).
 // LEGACY FALLBACK ONLY (v5.0.0+): per-model ctx in MODELS[] is authoritative via modelCtx().
-// The 24000 figure was an early 2026-08-12 observation on llama-3.3-70b via the gateway;
-// live re-verified 2026-08-28 that llama-3.3-70b accepts 30k+ tokens, so ctx=131072 holds.
 // TIER0_TOTAL_CAP / TIER0_SAFE_TOTAL remain only as a fallback when a spec lacks ctx.
 const TIER0_TOTAL_CAP = 24000;
 const TIER0_SAFE_TOTAL = 20000;
@@ -118,16 +112,16 @@ function modelCtx(spec) {
 }
 
 // If the routed target can't hold estimated input + output, escalate: prefer the largest
-// free model first (llama-3.3-70b, 128k), then DeepSeek (1M context). Explicit model
+// free NON-Llama model first (qwq-32b, 131k), then DeepSeek (1M context). Explicit model
 // requests are honored as-is — the truncation guard below still protects them.
 function contextAwareTarget(cls, target, estInput, maxOut) {
   const spec = MODELS[target];
   if (!spec || spec.tier !== 0) return target;
   const out = clampTokens(maxOut, MAX_OUT[spec.wa] || DEFAULT_MAX_OUT);
   if (estInput + out <= modelCtx(spec) - CTX_SAFETY_MARGIN) return target;
-  const big = MODELS['llama-3.3-70b'];
+  const big = MODELS['qwq-32b'];
   if (big && spec.wa !== big.wa && estInput + out <= modelCtx(big) - CTX_SAFETY_MARGIN) {
-    return 'llama-3.3-70b';
+    return 'qwq-32b';
   }
   return cls.domain === 'science' ? 'deepseek-v4-flash-thinking' : 'deepseek-v4-flash';
 }
@@ -374,8 +368,8 @@ async function searchQnfoIndexes(env, q, k) {
 }
 
 // Ensemble member config — the directive: coder primary, small validator, reviewer
-// All Workers AI FREE. qwen2.5-coder = primary coder (DeepSeek-Coder 1.3B substitute),
-// llama-3.2-1b = validator (Gemma 3 1B substitute), qwen3-30b = reviewer (Granite substitute).
+// All Workers AI FREE. qwen2.5-coder = primary coder, gemma-2b = validator,
+// qwen3-30b = reviewer. (No Llama/Meta — user directive 2026-08-28.)
 const ENSEMBLE = {
   primary:   { wa: '@cf/qwen/qwen2.5-coder-32b-instruct' },
   validator: { wa: '@cf/google/gemma-2b-it-lora' },
@@ -413,11 +407,12 @@ function autoRoute(cls) {
   if (cls.domain === 'code') return 'qwen2.5-coder-32b';
   if (cls.domain === 'science') return 'deepseek-v4-flash-thinking';
   if (cls.complexity === 'high') return 'deepseek-v4-flash';
-  // v4.3.11 QNFO-MODEL-POLICY-1: general default -> qwen3-30b.
-  // Meta/Llama models are conversational-chatbot class only; the user
-  // mandate excludes them from scientific/technical research routing.
-  // llama-3.3-70b remains available for EXPLICIT requests only.
-  return 'glm-5.2'; // v4.4.0: audit 2026-08-13 — GLM-5.2 default (LiveBench math 89.8, free tier-0)
+  // v4.3.11 QNFO-MODEL-POLICY-1 + v5.3.0 user directive: NO Llama/Meta models in
+  // chat/completion/text routing. Llama is trained on Facebook data and is unfit for
+  // scientific/scholarly research (QNFO/QWAV); it is retained ONLY for the vision model
+  // (OCR/image). Free non-Llama roster: DeepSeek API (deepseek-chat/reasoner), Qwen
+  // (qwen3-30b, qwen2.5-coder-32b, qwq-32b), GLM-5.2, Kimi-k2.6, Granite-h-micro, Gemma-2b.
+  return 'glm-5.2'; // GLM-5.2 default (LiveBench math 89.8, free tier-0)
 }
 
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
@@ -803,10 +798,10 @@ async function handleChat(env, body, authHeader, ctx) {
   }
 
   // v5.0.0 — tool routing: a function-calling request routes to a tool-capable model
-  // (free llama-3.3-70b first, then DeepSeek) so the tool request works instead of being
+  // (free Qwen3-30b first, then DeepSeek) so the tool request works instead of being
   // silently ignored by a non-tool-capable target.
   if ((wantsCode || (tools && tools.length)) && !isEnsemble && !hasImage && (!spec || !spec.tools)) {
-    if (MODELS['llama-3.3-70b']?.tools) { target = 'llama-3.3-70b'; spec = MODELS['llama-3.3-70b']; }
+    if (MODELS['qwen3-30b']?.tools) { target = 'qwen3-30b'; spec = MODELS['qwen3-30b']; }
     else { target = 'deepseek-v4-flash'; spec = MODELS['deepseek-v4-flash']; }
   }
 
