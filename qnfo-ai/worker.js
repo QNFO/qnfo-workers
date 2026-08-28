@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.6.3';
+const VERSION = '4.6.4';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -795,15 +795,19 @@ function streamWithLog(upstream, env, ctx, rec) {
           buf += decoder.decode(value, { stream: true });
           const lines = buf.split('\n');
           buf = lines.pop();
-          for (const line of lines) {
+          for (let line of lines) {
             const t = line.trim();
             if (t.startsWith('data:')) {
               const data = t.slice(5).trim();
               if (data === '[DONE]') continue;
               try {
                 const p = JSON.parse(data);
-                const d = p?.choices?.[0]?.delta?.content;
+                if (p && p.choices && p.choices[0] && p.choices[0].delta && p.choices[0].delta.reasoning_content) {
+                  delete p.choices[0].delta.reasoning_content;
+                }
+                const d = p && p.choices && p.choices[0] && p.choices[0].delta ? p.choices[0].delta.content : undefined;
                 if (typeof d === 'string') acc += d;
+                line = 'data: ' + JSON.stringify(p);
               } catch {}
             }
             controller.enqueue(encoder.encode(line + '\n'));
