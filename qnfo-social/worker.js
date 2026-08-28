@@ -70,8 +70,61 @@ function extractText(ai) {
   return '';
 }
 
+async function autoScan(env) {
+  try {
+    const q = 'metadata.creators.person_or_org.name:"Quni-Gudzinas"';
+    const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=15', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' }
+    });
+    if (!r.ok) { console.error('auto-scan zenodo fetch failed', r.status); return; }
+    const d = await r.json();
+    const hits = (d.hits && d.hits.hits) || [];
+    const st = await env.DB.prepare("SELECT value FROM scan_state WHERE key='last_scanned'").first();
+    const lastScanned = (st && st.value) || '2000-01-01T00:00:00.000000+00:00';
+    let newest = lastScanned;
+    let drafted = 0;
+    for (const h of hits) {
+      const created = h.created || '';
+      if (created <= lastScanned) continue;
+      const md = h.metadata || {};
+      const title = String(md.title || '').slice(0, 300);
+      const abstract = String(md.description || '').replace(/<[^>]+>/g, '').slice(0, 4000);
+      const doi = String(h.doi || '');
+      if (!title || !abstract || !doi) continue;
+      const dup = await env.DB.prepare("SELECT id FROM social_threads WHERE doi=?").bind(doi).first();
+      if (dup) continue;
+      const prompt = [
+        "You are a promotion writer for QNFO, an open-science research org. Write a 5-post Bluesky thread that amplifies a research paper accurately.",
+        "Rules:",
+        "1. Post 1: a hook stating the core claim or a provocative question (why a reader should care).",
+        "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
+        "3. Post 3: why/how it matters, in accessible terms.",
+        "4. Post 4: how a reader can check it (falsifiability / open access) - invite scrutiny.",
+        "5. Post 5: the DOI link then an open discussion question.",
+        "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
+        "Output ONLY the 5 posts, one per line, no numbering, no markdown.",
+        "DOI: " + doi,
+        "Title: " + title,
+        "Abstract: " + abstract
+      ].join(String.fromCharCode(10));
+      const ai = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
+      const posts = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
+      if (posts.length < 3) continue;
+      const slug = 'scan-' + (doi.split('/').pop() || Date.now().toString(36));
+      await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status) VALUES (?,?,?,?, 'draft')").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6))).run();
+      drafted++;
+      if (created > newest) newest = created;
+    }
+    await env.DB.prepare("INSERT INTO scan_state (key, value) VALUES ('last_scanned', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(newest).run();
+    console.log('auto-scan: drafted', drafted, 'draft threads; last_scanned', newest);
+  } catch (e) {
+    console.error('auto-scan failed', String(e));
+  }
+}
+
 export default {
   async scheduled(event, env) {
+    if (event.cron === '0 6 * * *') { await autoScan(env); return; }
     const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
     if (!row) return;
     try {
@@ -164,6 +217,11 @@ export default {
         const uris = await postThread(s, posts);
         await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/scan' && m === 'POST') {
+        await autoScan(env);
+        const drafts = await env.DB.prepare("SELECT id, slug, title, doi FROM social_threads WHERE status='draft' ORDER BY id DESC LIMIT 10").all();
+        return new Response(JSON.stringify({ ok: true, drafted: (drafts.results || []).length, drafts: drafts.results || [] }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       return new Response('not found', { status: 404, headers: cors });
     } catch (e) {
