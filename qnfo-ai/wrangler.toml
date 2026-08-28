@@ -32,3 +32,12 @@ index_name = "qnfo-ai-log"
 binding = "QNFO_AUDIT"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# v4.7.0 — QNFO RECORDS RAG: service binding to the qnfo-infra retrieval oracle
+# (papers, KG, programs, notes, tasks, emails, past queries) + INFRA_TOKEN secret
+# (same value as qnfo-infra's INFRA_TOKEN) for authenticated oracle calls.
+[[services]]
+binding = "QNFO_INFRA"
+service = "qnfo-infra"
+environment = "production"
+

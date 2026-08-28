@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.6.4';
+const VERSION = '4.7.0';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -445,6 +445,30 @@ async function handleChat(env, body, authHeader, ctx) {
           messages = [{ role: 'system', content: lines.join('\n') }, ...messages];
         }
       } catch (e) { webSources = null; }
+    }
+  }
+  // ---- v4.7.0: QNFO RECORDS RAG (body.rag / auto on science) ----
+  // Pulls the same records DeepChat reaches locally (papers, KG, programs, notes,
+  // tasks, emails, past queries) through the qnfo-infra retrieval oracle, so any
+  // LLM app (Chatbox, PWA, mobile) answers with full QNFO context.
+  let ragSources = null;
+  const ragForce = body.rag === true || body.rag === 'true';
+  const ragOff = body.rag === false || body.rag === 'false';
+  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && (ragForce || cls.domain === 'science')) {
+    const rq = lastUserText(messages).slice(0, 300);
+    if (rq) {
+      try {
+        const rr = await env.QNFO_INFRA.fetch('https://qnfo-infra.internal/context?q=' + encodeURIComponent(rq) + '&scope=research&k=4', {
+          headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN }
+        });
+        const rj = await rr.json();
+        if (rr.ok && rj.ok && rj.context) {
+          ragSources = rj.context;
+          messages = [{ role: 'system', content: rj.context }, ...messages];
+        } else {
+          ragSources = 'RAG unavailable: ' + (rj.error || ('HTTP ' + rr.status));
+        }
+      } catch (e) { ragSources = 'RAG error: ' + e.message; }
     }
   }
   const mkLogRec = () => ({
@@ -1196,6 +1220,40 @@ export default {
     }
 
     // ---- v4.6.0: web browsing ----
+    // ---- v4.7.0: QNFO records passthrough (any client can fetch oracle context) ----
+    if (path === '/v1/records' && method === 'GET') {
+      const q = (url.searchParams.get('q') || '').trim();
+      const scope = (url.searchParams.get('scope') || 'research').toLowerCase();
+      // SEPARATION MANDATE (2026-08-04 + 2026-08-28): the research gateway only
+      // serves research/infra records. Personal scope is served by the Personal
+      // Twin provider (personal-api); it is BLOCKED here by policy.
+      if (scope !== 'research' && scope !== 'infra') return json({ error: 'scope must be research or infra (personal scope is served by the Personal Twin — separation mandate)' }, 400);
+      if (!env.QNFO_INFRA || !env.INFRA_TOKEN) return json({ error: 'QNFO_INFRA binding/INFRA_TOKEN not configured' }, 501);
+      if (!q) return json({ error: 'q required' }, 400);
+      try {
+        const rr = await env.QNFO_INFRA.fetch('https://qnfo-infra.internal/retrieve?q=' + encodeURIComponent(q) + '&scope=' + encodeURIComponent(scope) + '&k=' + (url.searchParams.get('k') || '4'), {
+          headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN }
+        });
+        const rj = await rr.json();
+        return json(rr.ok ? rj : { error: rj.error || ('HTTP ' + rr.status) }, rr.ok ? 200 : 502);
+      } catch (e) { return json({ error: e.message }, 500); }
+    }
+    if (path === '/v1/context' && method === 'GET') {
+      const q = (url.searchParams.get('q') || '').trim();
+      const scope = (url.searchParams.get('scope') || 'research').toLowerCase();
+      // SEPARATION MANDATE: personal scope blocked on the research gateway.
+      if (scope !== 'research' && scope !== 'infra') return json({ error: 'scope must be research or infra (personal scope is served by the Personal Twin — separation mandate)' }, 400);
+      if (!env.QNFO_INFRA || !env.INFRA_TOKEN) return json({ error: 'QNFO_INFRA binding/INFRA_TOKEN not configured' }, 501);
+      if (!q) return json({ error: 'q required' }, 400);
+      try {
+        const rr = await env.QNFO_INFRA.fetch('https://qnfo-infra.internal/context?q=' + encodeURIComponent(q) + '&scope=' + encodeURIComponent(scope) + '&k=' + (url.searchParams.get('k') || '4'), {
+          headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN }
+        });
+        const rj = await rr.json();
+        return json(rj.ok ? rj : { error: rj.error || ('HTTP ' + rr.status) }, rr.ok ? 200 : 502);
+      } catch (e) { return json({ error: e.message }, 500); }
+    }
+
     if (path === '/' && method === 'GET') {
       return new Response(PLAYGROUND_HTML.replace('__TITLE__', 'QNFO Notes - research chat (qnfo-ai router)').replace('__KEY_HINT__', 'tokens/qnfo-ai').replace('__DEFAULT_MODEL__', 'glm-5.2').replace('__STREAM__', 'true'), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
     }
