@@ -96,6 +96,12 @@ async function handleJsonRpc(msg, env) {
   if (m === 'tools/call') {
     try {
       const out = await callTool(env, String((msg.params && msg.params.name) || ''), (msg.params && msg.params.arguments) || {});
+      try {
+        if (env.AUDIT) {
+          await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS mcp_log (id TEXT PRIMARY KEY, ts TEXT, tool TEXT, args TEXT, result TEXT, session TEXT)').run();
+          await env.AUDIT.prepare('INSERT INTO mcp_log (id, ts, tool, args, result, session) VALUES (?1,?2,?3,?4,?5,?6)').bind('mcp-' + Date.now().toString(36), new Date().toISOString(), String((msg.params && msg.params.name) || ''), JSON.stringify((msg.params && msg.params.arguments) || {}).slice(0, 2000), JSON.stringify(out).slice(0, 4000), '').run();
+        }
+      } catch (e2) {}
       return ok(msg.id, { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }] });
     } catch (e) {
       return ok(msg.id, { content: [{ type: 'text', text: 'ERROR: ' + (e && e.message || String(e)) }], isError: true });

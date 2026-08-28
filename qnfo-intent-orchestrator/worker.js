@@ -28,7 +28,8 @@ function classifyRules(desire) {
   let type = 'note', domain = 'general', priority = 'medium', due = null;
   if (/(\d{4}-\d{2}-\d{2})/.test(desire)) due = RegExp.$1;
   else if (/tomorrow/.test(t)) due = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
-  if (/(remind|reminder|don't forget|do not forget)/.test(t)) type = 'reminder';
+  if (/(went to|attended|visited|took part|completed)/.test(t)) type = 'activity';
+  else if (/(remind|reminder|don't forget|do not forget)/.test(t)) type = 'reminder';
   else if (/(meeting|appointment|schedule|calendar|event|call with|call on|book |reserve)/.test(t)) type = 'event';
   else if (/(email|draft|send .*mail|reply to)/.test(t)) type = 'email';
   else if (/(task|todo|to-do|need to|must |should |prepare|finish|complete|write up)/.test(t)) type = 'task';
@@ -49,7 +50,7 @@ async function classifyAI(env, desire) {
       body: JSON.stringify({
         model: 'glm-5.2',
         messages: [
-          { role: 'system', content: 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only.' },
+          { role: 'system', content: 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only.' },
           { role: 'user', content: clamp(desire, 1000) }
         ],
         max_tokens: 200
@@ -88,7 +89,7 @@ async function handleIntent(env, body, source, device) {
   const cls = ai || classifyRules(desire);
   const id = 'int-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
   const now = new Date().toISOString();
-  const type = (['note', 'task', 'event', 'email', 'reminder', 'research', 'unknown'].includes(cls.type) ? cls.type : 'note');
+  const type = (['note', 'task', 'event', 'email', 'reminder', 'research', 'activity', 'unknown'].includes(cls.type) ? cls.type : 'note');
   const domain = (['research', 'personal', 'qwav', 'general'].includes(cls.domain) ? cls.domain : 'general');
   const status = type === 'note' ? 'done' : 'pending';
   await env.D1.prepare(
@@ -99,6 +100,19 @@ async function handleIntent(env, body, source, device) {
     await storeNote(env, intent);
     await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
     intent.status = 'done';
+  }
+  if (type === 'activity') {
+    try {
+      const when = cls.due || now.slice(0, 10);
+      await env.PLS.fetch('https://personal-life-search.q08.workers.dev/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Index-Token': env.INDEX_TOKEN },
+        body: JSON.stringify({ items: [{ doc: 'activity', date: when, title: (cls.summary || desire.slice(0, 120)), category: domain === 'research' ? 'research' : 'other', venue: '', notes: desire.slice(0, 500) }] })
+      });
+      status = 'done';
+      intent.status = 'done';
+      await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
+    } catch (e) {}
   }
   return intent;
 }
