@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.7.0';
+const VERSION = '4.7.1';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -212,6 +212,39 @@ function normalizeResponsesContent(content) {
     return parts;
   }
   return String(content);
+}
+
+// Flatten a single message content value to a plain string. Workers AI
+// text-generation models (qwen2.5-coder-32b-instruct, deepseek-r1-distill-qwen-32b,
+// etc.) reject OpenAI multimodal `content: [{type:"text",text:"..."}]` arrays with
+// 400 "required properties at '/' are 'prompt'" / "Type mismatch of '/messages/N/content',
+// 'string' not in 'array'". DeepChat (and other OpenAI clients) send array content, so
+// the router must normalize to strings before forwarding to Workers AI.
+function flattenContentToString(content) {
+  if (content == null) return '';
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const texts = [];
+    for (const p of content) {
+      if (typeof p === 'string') { texts.push(p); continue; }
+      if (p && typeof p === 'object' && typeof p.text === 'string') texts.push(p.text);
+      // image_url / audio / file parts dropped: every tier-0 Workers AI model is text-only
+    }
+    return texts.join('\n');
+  }
+  return String(content);
+}
+
+// Normalize a full messages array to string content (see flattenContentToString).
+// DeepSeek API accepts both string and array content; string is always safe, so this
+// is applied uniformly to every downstream path (Workers AI + DeepSeek).
+function normalizeMessagesContent(messages) {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map((m) => {
+    if (!m || typeof m !== 'object') return m;
+    if (typeof m.content === 'string' || m.content == null) return m;
+    return { ...m, content: flattenContentToString(m.content) };
+  });
 }
 
 // Ensemble member config — the directive: coder primary, small validator, reviewer
@@ -422,6 +455,9 @@ async function handleChat(env, body, authHeader, ctx) {
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: 'model and messages required' }, 400);
   }
+  // v4.7.1: normalize OpenAI multimodal content arrays to plain strings so Workers AI
+  // text-generation models don't 400 on `content: [{type:"text",...}]`.
+  messages = normalizeMessagesContent(messages);
 
   const t0 = Date.now();
   const cls = classify((messages[messages.length - 1]?.content || '').toString());
