@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.6.2';
+const VERSION = '4.6.3';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -507,33 +507,52 @@ async function handleChat(env, body, authHeader, ctx) {
   // ---- ENSEMBLE ----
   if (isEnsemble) {
     try {
-      // v4.3.6: ensemble primary is tier-0 (qwen2.5-coder-32b, 24k cap) — if the context
-      // won't fit, run a single DeepSeek call instead (correctness over free-tier ensemble).
+      const ensResp = (content, body) => {
+        const logRec = { ...mkLogRec(), model: 'ensemble', streamed: isStream ? 1 : 0, response: String(content).slice(0, 4000), latency_ms: Date.now() - t0 };
+        if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
+        if (isStream) {
+          const enc8 = new TextEncoder();
+          const nlnl = String.fromCharCode(10, 10);
+          const chunk = (delta, finish) => enc8.encode('data: ' + JSON.stringify({ id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10), object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'ensemble', choices: [{ index: 0, delta: delta, finish_reason: finish }] }) + nlnl);
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(chunk({ role: 'assistant', content: content }, null));
+              controller.enqueue(chunk({}, 'stop'));
+              controller.enqueue(enc8.encode('data: [DONE]' + nlnl));
+              controller.close();
+            }
+          });
+          return new Response(stream, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+        }
+        return json(body);
+      };
       if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > TIER0_SAFE_TOTAL) {
         const fb = await callDeepSeek(env, MODELS['deepseek-v4-flash'].api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
-        const fbContent = fb?.choices?.[0]?.message?.content ?? '';
-        return json({
+        const fbContent = (fb?.choices?.[0]?.message?.content) ?? '';
+        const fbText = fbContent || 'All models failed.';
+        const fbBody = {
           id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
           object: 'chat.completion',
           created: Math.floor(Date.now() / 1000),
           model: 'ensemble',
-          choices: [{ index: 0, message: { role: 'assistant', content: fbContent }, finish_reason: 'stop' }],
+          choices: [{ index: 0, message: { role: 'assistant', content: fbText }, finish_reason: 'stop' }],
           usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
           _router: mkRouter('deepseek-v4-flash', 'ensemble-context-fallback', {
             ensemble_members: ['fallback-deepseek'],
             verification_result: 'context_fallback',
-            estimated_input_tokens: estInputTokens,
-          }),
-        });
+            estimated_input_tokens: estInputTokens
+          })
+        };
+        return ensResp(fbText, fbBody);
       }
-      // v4.3.5: clamp ensemble primary/reviewer max_tokens to the primary model's cap
       const ens = await runEnsemble(env, messages, clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]));
+      const ensText = (ens.text || '').trim() || 'All models failed.';
       const respBody = {
         id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
         model: 'ensemble',
-        choices: [{ index: 0, message: { role: 'assistant', content: ens.text }, finish_reason: 'stop' }],
+        choices: [{ index: 0, message: { role: 'assistant', content: ensText }, finish_reason: 'stop' }],
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
         _router: mkRouter('ensemble', 'ensemble', {
           ensemble_members: ens.members,
@@ -541,17 +560,14 @@ async function handleChat(env, body, authHeader, ctx) {
           verification_result: ens.verification_result,
           agreement_rate: ens.agreement_rate,
           estimated_cost_usd: 0,
-          neurons_remaining: 8000,
-        }),
+          neurons_remaining: 8000
+        })
       };
-      return json(respBody);
+      return ensResp(ensText, respBody);
     } catch (e) {
       return json({ error: 'ensemble failed: ' + e.message }, 502);
     }
-  }
-
-  // ---- STREAMING (single model) ----
-  if (isStream) {
+  }  if (isStream) {
     try {
       if (effSpec.wa) {
         // v4.3.9 AI-COST-GATE-1: route tier-0 streaming through the AI Gateway first.
