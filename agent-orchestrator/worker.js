@@ -156,6 +156,25 @@ var AgentTask = class extends DurableObject {
           }
         );
         const rawToolCalls = aiResponse.tool_calls || [];
+    // qwen2.5-coder quirk: tool call may arrive as an OBJECT (or JSON string) in `response`
+    const respVal = aiResponse.response;
+    if (rawToolCalls.length === 0 && respVal) {
+      let candidate = null;
+      if (typeof respVal === "object" && respVal.name && respVal.arguments) {
+        candidate = respVal;
+      } else if (typeof respVal === "string") {
+        let jsonStr = respVal.trim();
+        const m = jsonStr.match(/<(?:tools|tool_response)>([\s\S]*?)<\/(?:tools|tool_response)>/);
+        if (m) jsonStr = m[1].trim();
+        if (jsonStr.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.name && parsed.arguments) candidate = parsed;
+          } catch (e) {}
+        }
+      }
+      if (candidate) rawToolCalls.push(candidate);
+    }
         const toolCalls = rawToolCalls.map((tc) => {
           let fnName, fnArgs;
           if (tc.function) {
@@ -186,11 +205,8 @@ var AgentTask = class extends DurableObject {
           );
           return;
         }
-        messages.push({
-          role: "assistant",
-          content: aiResponse.response || "",
-          tool_calls: toolCalls
-        });
+        // qwen2.5-coder Workers AI rejects assistant-with-tool_calls messages;
+        // push only the tool results; the model answers from [system, user, tool...]
         for (const tc of toolCalls) {
           let result;
           try {
