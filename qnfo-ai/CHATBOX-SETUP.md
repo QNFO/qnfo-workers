@@ -26,6 +26,12 @@ and the QNFO prompt library. Everything below runs off Cloudflare — Chatbox is
 
 Both support streaming (v4.6.3+ / v1.3.0+), so the model test will pass and answers stream.
 
+
+**Models field is REQUIRED.** Chatbox does NOT auto-populate the model list for custom
+OpenAI-compatible providers. Paste exactly (comma-separated) into the Models field:
+
+- QNFO Router: `glm-5.2, deepseek-v4-flash, deepseek-v4-flash-thinking, deepseek-r1-qwen-32b, qwq-32b, kimi-k2.6, auto, ensemble`
+- Personal Twin: `personal-twin-chat`
 ## 2. MCP servers (Settings -> MCP Servers -> Add)
 
 Two Cloudflare-hosted MCP servers give Chatbox the agentic tools.
