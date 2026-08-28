@@ -114,3 +114,9 @@ curl -s https://qnfo-tools-mcp.q08.workers.dev/health
 curl -s "https://qnfo-memory-mcp.q08.workers.dev/health"
 python <repo>/qnfo-ai/scripts/verify-runtime.py   # 10/10 provider + logging proof
 ```
+
+## 7. Disaster recovery (private repo)
+
+Fresh-machine / reinstall kit with keys, settings, and an automated bootstrap script lives in the
+**PRIVATE** repo `QNFO/qnfo-setup-bootstrap` (download -> run bootstrap.ps1 -> follow BOOTSTRAP-CARD.txt).
+Cloudflare-side rebuild order: `dr/cloudflare-recovery.md` in that repo.
