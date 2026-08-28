@@ -27,10 +27,31 @@ index_name = "qwav-research-v2"
 binding = "LOG_VZ"
 index_name = "qnfo-ai-log"
 
-# v5.1.0 — personal-life Vectorize (STRICTLY separate from QNFO/QWAV — separation mandate)
+# v5.2.0 — QNFO Vectorize indexes (QNFO endpoint ONLY — separation mandate: personal
+# lives on the personal-api endpoint, never here).
 [[vectorize]]
-binding = "PERSONAL_VZ"
-index_name = "personal-life"
+binding = "NOTES_VZ"
+index_name = "qnfo-notes"
+
+[[vectorize]]
+binding = "TASKS_VZ"
+index_name = "qnfo-tasks"
+
+[[vectorize]]
+binding = "HANDOFFS_VZ"
+index_name = "qnfo-handoffs"
+
+[[vectorize]]
+binding = "INFRA_VZ"
+index_name = "qnfo-infra"
+
+[[vectorize]]
+binding = "CLOUD_OPS_VZ"
+index_name = "qnfo-cloud-ops"
+
+[[vectorize]]
+binding = "IPATENT_VZ"
+index_name = "ipatent-corpus"
 
 # QNFO_AUDIT -> qnfo-audit D1 (ai_queries table) for /v1/history
 [[d1_databases]]
