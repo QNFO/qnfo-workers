@@ -32,6 +32,27 @@ OpenAI-compatible providers. Paste exactly (comma-separated) into the Models fie
 
 - QNFO Router: `glm-5.2, deepseek-v4-flash, deepseek-v4-flash-thinking, deepseek-r1-qwen-32b, qwq-32b, kimi-k2.6, auto, ensemble`
 - Personal Twin: `personal-twin-chat`
+## SEPARATION POLICY (HARD — 2026-08-04 + 2026-08-28)
+
+**The Personal Digital Twin and QNFO Research are SEPARATE.** The two Chatbox
+providers are domain-gated:
+
+1. **QNFO Router (research)** — serves QNFO research records ONLY. Auto-RAG
+   (v4.7.0+): science-domain prompts inject retrieved corpus context (papers
+   with DOIs, KG, programs, notes, tasks, past queries) via the qnfo-infra
+   oracle. Direct endpoints: `/v1/records?q=&scope=research|infra` and
+   `/v1/context?q=&scope=research|infra`. `scope=personal` is BLOCKED at the
+   gateway (400 "separation mandate") — personal data is never served here.
+2. **Personal Twin (personal)** — answers from PERSONAL data only
+   (personal-life D1/VZ: profile, events, activity, email index, files, chat).
+   It never calls the QNFO records oracle and never injects QNFO research
+   records. Infra questions reach HIS OWN Cloudflare account via CF_TOKEN
+   (v1.4.7+); research questions belong to the QNFO Router provider.
+
+Ask research questions to QNFO Router; ask personal questions to Personal
+Twin. The data stores (qnfo-audit/living-paper/qnfo-graph/qnfo-notes/tasks vs
+personal-life) remain physically separate.
+
 ## 2. MCP servers (Settings -> MCP Servers -> Add)
 
 Two Cloudflare-hosted MCP servers give Chatbox the agentic tools.
