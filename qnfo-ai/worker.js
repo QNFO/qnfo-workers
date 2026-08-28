@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '5.2.2';
+const VERSION = '5.2.3';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -23,7 +23,7 @@ const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3c
 //   maxOut = output token cap (clamped from client max_tokens to avoid upstream 400).
 const MODELS = {
   // Workers AI free — original three
-  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },
+  'llama-3.3-70b':            { tier: 0, family: 'meta',     wa: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',   reasoning: false, maxOut: 8192,  ctx: 24000, temp: 0.6, topP: 0.9,  tools: true,  vision: false },  // -fp8-fast variant = 24k ctx (live-verified 2026-08-28, NOT 128k)
   'deepseek-r1-qwen-32b':     { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', reasoning: true,  maxOut: 8192,  ctx: 32768,  temp: 0.6, topP: 0.95, tools: false, vision: false },
   'qwen3-30b':                { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwen3-30b-a3b-fp8',                  reasoning: false, maxOut: 8192,  ctx: 32768,  temp: 0.7, topP: 0.9,  tools: true,  vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
@@ -707,7 +707,9 @@ async function handleChat(env, body, authHeader, ctx) {
 
   const t0 = Date.now();
   const cls = classify(lastUserText(messages));
-  const isStream = !!stream;
+  // v5.2.3: code execution (run_code) requires the non-stream loop; force non-stream so a
+  // run_code request is not silently dropped by the streaming branch (which can't execute code).
+  const isStream = !!stream && !wantsCode;
   // ---- v4.6.0: optional web grounding (body.web = true) ----
   let webSources = null;
   if (body.web) {
