@@ -146,7 +146,7 @@ var AgentTask = class extends DurableObject {
         state.step = i + 1;
         await this.ctx.storage.put("state", state);
         const aiResponse = await this.env.AI.run(
-          "@cf/qwen/qwen2.5-coder-32b-instruct",
+          "@cf/deepseek-ai/deepseek-v4-flash-0731",
           {
             messages,
             tools: TOOLS,
@@ -155,9 +155,10 @@ var AgentTask = class extends DurableObject {
             temperature: 0.3
           }
         );
-        const rawToolCalls = aiResponse.tool_calls || [];
-    // qwen2.5-coder quirk: tool call may arrive as an OBJECT (or JSON string) in `response`
-    const respVal = aiResponse.response;
+        const msg = (aiResponse.choices && aiResponse.choices[0] && aiResponse.choices[0].message) ? aiResponse.choices[0].message : aiResponse;
+    const respVal = msg.content !== undefined ? msg.content : aiResponse.response;
+    const rawToolCalls = msg.tool_calls || aiResponse.tool_calls || [];
+    // fallback: some models wrap tool calls in response text
     if (rawToolCalls.length === 0 && respVal) {
       let candidate = null;
       if (typeof respVal === "object" && respVal.name && respVal.arguments) {
@@ -194,7 +195,7 @@ var AgentTask = class extends DurableObject {
         }).filter(Boolean);
         if (toolCalls.length === 0) {
           state.status = "completed";
-          state.result = aiResponse.response || aiResponse.content || JSON.stringify(aiResponse);
+          state.result = respVal || aiResponse.content || JSON.stringify(aiResponse);
           state.completedAt = Date.now();
           state.messages = messages;
           await this.ctx.storage.put("state", state);
@@ -205,8 +206,12 @@ var AgentTask = class extends DurableObject {
           );
           return;
         }
-        // qwen2.5-coder Workers AI rejects assistant-with-tool_calls messages;
-        // push only the tool results; the model answers from [system, user, tool...]
+        // Standard OpenAI flow: echo the assistant tool_calls message, then append tool results
+        messages.push({
+          role: "assistant",
+          content: typeof respVal === "string" ? respVal : "",
+          tool_calls: toolCalls
+        });
         for (const tc of toolCalls) {
           let result;
           try {
@@ -227,11 +232,12 @@ var AgentTask = class extends DurableObject {
         content: "You have reached the maximum number of steps. Provide your final answer now based on the information gathered. Do NOT make additional tool calls."
       });
       const finalResponse = await this.env.AI.run(
-        "@cf/qwen/qwen2.5-coder-32b-instruct",
+        "@cf/deepseek-ai/deepseek-v4-flash-0731",
         { messages, max_tokens: 4096, temperature: 0.3 }
       );
       state.status = "completed";
-      state.result = finalResponse.response || finalResponse.content || "No result produced";
+      const fmsg = (finalResponse.choices && finalResponse.choices[0] && finalResponse.choices[0].message) ? finalResponse.choices[0].message : finalResponse;
+      state.result = fmsg.content !== undefined ? fmsg.content : (finalResponse.response || finalResponse.content || "No result produced");
       state.completedAt = Date.now();
       state.messages = messages;
       await this.ctx.storage.put("state", state);
