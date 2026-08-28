@@ -15,7 +15,7 @@
 //   This makes ALL Cloudflare infrastructure data/records available to any AI agent
 //   (qnfo-ai router, personal-api twin, Chatbox, MCP) with a single authenticated call.
 const NL = String.fromCharCode(10);
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const ACCT = null;
 
 function auth(token, env) {
@@ -232,11 +232,14 @@ async function store(env, kind, data) {
 
 function scopeIndexes(scope, env) {
   // Map a scope to the Vectorize bindings to query.
+  // SEPARATION MANDATE (2026-08-04 + 2026-08-28): the QNFO oracle serves
+  // research/infra ONLY. personal-life content is served exclusively by the
+  // Personal Twin (personal-api). PL_VZ is NOT bound and scope=personal is
+  // rejected below — personal data cannot be retrieved through this layer.
   const map = {
     research: ['PAPER_VZ', 'NOTES_VZ', 'TASKS_VZ', 'LOG_VZ', 'HANDOFFS_VZ', 'IPATENT_VZ'],
-    personal: ['PL_VZ'],
     infra: ['VZ'],
-    all: ['PAPER_VZ', 'NOTES_VZ', 'TASKS_VZ', 'LOG_VZ', 'HANDOFFS_VZ', 'IPATENT_VZ', 'PL_VZ', 'VZ'],
+    all: ['PAPER_VZ', 'NOTES_VZ', 'TASKS_VZ', 'LOG_VZ', 'HANDOFFS_VZ', 'IPATENT_VZ', 'VZ'],
   };
   return (map[scope] || map.all).filter(b => env[b]);
 }
@@ -273,7 +276,6 @@ function metaLine(doc, m) {
   if (doc === 'HANDOFFS_VZ') return (pick(['summary']) || pick(['title'])) + (pick(['category']) ? ' [' + pick(['category']) + ']' : '') + (pick(['session_id']) ? ' (session ' + pick(['session_id']) + ')' : '');
   if (doc === 'NOTES_VZ') return pick(['path']) + (pick(['title']) && pick(['title']) !== pick(['path']) ? ' — ' + pick(['title']) : '');
   if (doc === 'VZ') return (pick(['kind']) || 'snapshot') + ' @ ' + (pick(['ts']) || '') + ' — ' + pick(['text']);
-  if (doc === 'PL_VZ') return pick(['path']) + ' — ' + pick(['text']).slice(0, 300);
   return (pick(['path']) || pick(['id']) || doc) + ' — ' + pick(['text']).slice(0, 300);
 }
 
@@ -343,16 +345,8 @@ async function retrieveRecords(env, q, scope, k) {
       if (rows.results && rows.results.length) out.sources.emails = rows.results;
     }
   } catch (e) { out.sources.emails = [{ error: e.message }]; }
-  try {
-    if (env.PERSONAL && (scope === 'personal' || scope === 'all')) {
-      const like = '%' + String(q).slice(0, 80).replace(/%/g, '') + '%';
-      const ev = await env.PERSONAL.prepare("SELECT id, category, title, venue, city, start_date, energy, energy_label FROM events WHERE title LIKE ?1 OR venue LIKE ?1 ORDER BY start_date DESC LIMIT ?2").bind(like, K).all();
-      if (ev.results && ev.results.length) out.sources.personal_events = ev.results;
-      const ac = await env.PERSONAL.prepare("SELECT id, date, title, category, venue, notes FROM activity WHERE title LIKE ?1 OR venue LIKE ?1 OR notes LIKE ?1 ORDER BY date DESC LIMIT ?2").bind(like, K).all();
-      if (ac.results && ac.results.length) out.sources.personal_activity = ac.results;
-    }
-  } catch (e) { out.sources.personal = [{ error: e.message }]; }
-
+  // SEPARATION MANDATE: personal-life D1 content (events/activity) is NOT
+  // queried here — the Personal Twin owns that domain exclusively.
   return out;
 }
 
@@ -367,14 +361,11 @@ function renderContext(retrieved) {
     LOG_VZ: 'PAST QUERIES',
     HANDOFFS_VZ: 'HANDOFFS',
     IPATENT_VZ: 'IPATENT CORPUS',
-    PL_VZ: 'PERSONAL (events/activity/files)',
     VZ: 'INFRA SNAPSHOTS',
     living_papers: 'LIVING-PAPER REGISTRY',
     kg_nodes: 'KNOWLEDGE GRAPH',
     programs: 'PROGRAM REGISTRY',
     emails: 'EMAIL RECORDS',
-    personal_events: 'PERSONAL EVENTS',
-    personal_activity: 'PERSONAL ACTIVITY'
   };
   for (const [src, items] of Object.entries(retrieved.sources || {})) {
     if (!Array.isArray(items) || !items.length || items[0].error) continue;
@@ -414,7 +405,7 @@ export default {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (path === '/health' && method === 'GET') {
-      return new Response(JSON.stringify({ ok: true, worker: 'qnfo-infra', version: VERSION, oracle: { retrieve: 'GET /retrieve?q=&scope=&k=', context: 'GET /context?q=&scope=&k=' }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, pl_vz: !!env.PL_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: 'qnfo-infra', version: VERSION, oracle: { retrieve: 'GET /retrieve?q=&scope=&k=', context: 'GET /context?q=&scope=&k=' }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { 'Content-Type': 'application/json', ...cors } });
     }
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     if (!auth(token, env)) return new Response('unauthorized', { status: 401, headers: cors });
@@ -440,6 +431,7 @@ export default {
     if (path === '/retrieve' && method === 'GET') {
       const q = (url.searchParams.get('q') || '').trim();
       const scope = (url.searchParams.get('scope') || 'all').toLowerCase();
+      if (scope === 'personal') return new Response(JSON.stringify({ error: 'scope=personal is served by the Personal Twin only (separation mandate)' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
       if (!q) return new Response(JSON.stringify({ error: 'q required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
       const data = await retrieveRecords(env, q, scope, url.searchParams.get('k'));
       return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', ...cors } });
@@ -447,6 +439,7 @@ export default {
     if (path === '/context' && method === 'GET') {
       const q = (url.searchParams.get('q') || '').trim();
       const scope = (url.searchParams.get('scope') || 'all').toLowerCase();
+      if (scope === 'personal') return new Response(JSON.stringify({ error: 'scope=personal is served by the Personal Twin only (separation mandate)' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
       if (!q) return new Response(JSON.stringify({ error: 'q required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
       const data = await retrieveRecords(env, q, scope, url.searchParams.get('k'));
       return new Response(JSON.stringify({ ok: true, scope, context: renderContext(data) }), { headers: { 'Content-Type': 'application/json', ...cors } });

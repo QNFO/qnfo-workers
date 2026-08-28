@@ -73,6 +73,3 @@ index_name = "qnfo-handoffs"
 binding = "IPATENT_VZ"
 index_name = "ipatent-corpus"
 
-[[vectorize]]
-binding = "PL_VZ"
-index_name = "personal-life"
