@@ -5,14 +5,14 @@ web browsing, and automatic thread logging to Vectorize for future synthesis.
 
 | | Research (QNFO) | Personal |
 |---|---|---|
-| Base URL | `https://qnfo-ai.q08.workers.dev` (v4.6.0) | `https://personal-api.q08.workers.dev` (v1.2.0) |
+| Base URL | `https://qnfo-ai.q08.workers.dev` (v4.6.1) | `https://personal-api.q08.workers.dev` (v1.2.1) |
 | Auth | `Authorization: Bearer <key>` — `C:/Users/LENOVO/tokens/qnfo-ai` | `Authorization: Bearer <key>` — `C:/Users/LENOVO/tokens/personal-api` |
 | Models | 10 free Workers AI + deepseek-v4-flash/-thinking/-pro | `personal-twin-chat` (free) |
 | RAG | `/v1/search` over qwav-research-v2 (papers) | auto over personal-life (profile/events/email/browse/files) |
 | Web | `web:true` in chat, `/v1/web/search`, `/v1/web/fetch` | same |
 | Logging | D1 `qnfo-audit.ai_queries` + Vectorize `qnfo-ai-log` | D1 `personal-life.chat` + Vectorize `personal-life` (doc=chat) |
 | Recall | `GET /v1/history?q=...` | `personal-life-search.q08.workers.dev/search?q=...` |
-| Playground | `https://qnfo-ai.q08.workers.dev/` | `https://personal-api.q08.workers.dev/` |
+| Playground (PWA) | `https://qnfo-ai.q08.workers.dev/` | `https://personal-api.q08.workers.dev/` |
 
 ## 1. Five-minute start
 
@@ -56,14 +56,16 @@ curl -s "https://personal-life-search.q08.workers.dev/search?q=<topic>&topK=5"
 - `GET /v1/web/search?q=&k=` — DuckDuckGo search (html -> retry -> lite fallback, ad links filtered).
 - `GET /v1/web/fetch?url=&max=` — page text extraction (SSRF-guarded: http(s) only, private hosts blocked).
 - `GET /v1/history?limit=&model=` — recent logged queries; `?q=<topic>&k=` — semantic recall over qnfo-ai-log.
-- `GET /` — chat playground. `GET /health` — version + binding truth (log_vz, query_db, paper_vz).
+- `GET /manifest.webmanifest`, `/sw.js`, `/icon.svg` — PWA install assets.
+- `GET /` — chat playground (installable PWA). `GET /health` — version + binding truth (log_vz, query_db, paper_vz).
 
 ### personal-api (personal)
 - `POST /v1/chat/completions` — `personal-twin-chat`, RAG over personal-life always on; optional `web:true`, `thread_id`.
 - `POST /v1/embeddings` — bge-base-en-v1.5 (768-dim), max 32 texts, 2000 chars each.
 - `GET /v1/retrieve?q=&topK=` — raw RAG retrieval.
 - `GET /v1/web/search`, `GET /v1/web/fetch` — same as research side.
-- `GET /` — playground. `GET /health` — version.
+- `GET /manifest.webmanifest`, `/sw.js`, `/icon.svg` — PWA install assets.
+- `GET /` — playground (installable PWA). `GET /health` — version.
 
 ### personal-life-search (personal, public read)
 `/search?q=`, `/recommend?q=&scope=`, `/profile`, `/events`, `/browse`, `/stats`.
@@ -98,14 +100,46 @@ Segregation is structural: separate workers, keys, D1 databases, Vectorize index
 research side reads personal-life, and vice versa. The `personal-life` index is explicitly declared
 "STRICTLY separate from QNFO/QWAV".
 
-## 6. DeepChat integration
+## 6. Android usage (no third-party app required)
 
-Providers already registered in DeepChat (agent.db): **QNFO Router** (base
-`https://qnfo-ai.q08.workers.dev/v1`, 7 models) and **Personal Twin** (base
-`https://personal-api.q08.workers.dev/v1`, `personal-twin-chat`). Restart DeepChat to see them.
-Both support streaming. If the model check (5 s) times out on a cold Workers-AI start, pin
-`deepseek-v4-flash` or `llama-3.3-70b` in the model picker; free reasoning models may take ~10 s on
-first call. If a provider row is ever wiped, re-add with the keys in `tokens/` (see deploy notes).
+The playground pages are installable PWAs (manifest + service worker + icon served by the workers
+themselves — zero extra infrastructure):
+
+1. On the phone, open `https://qnfo-ai.q08.workers.dev/` (research) or
+   `https://personal-api.q08.workers.dev/` (personal) in Chrome.
+2. Chrome menu (three dots) -> "Add to Home screen" / "Install app". The app icon appears
+   on the home screen with its own window (standalone).
+3. Open the app, paste the key (`tokens/qnfo-ai` for research, `tokens/personal-api` for personal —
+   the browser keeps it in localStorage), pick a model, tick "web search" when you want live
+   sources. All chat is logged server-side automatically.
+
+### Third-party OpenAI-compatible clients (Chatbox / SannaBot / Genie)
+
+Any app that accepts a custom OpenAI-compatible base URL works — the API is standard.
+
+Chatbox (recommended: actively maintained, open source, Android/iOS/desktop):
+1. Install Chatbox from Google Play.
+2. Settings -> Add Custom Provider -> OpenAI API compatible.
+3. Name: "QNFO Notes" (or "Personal Twin"). Base URL: `https://qnfo-ai.q08.workers.dev/v1`
+   (personal: `https://personal-api.q08.workers.dev/v1`). API key: the Bearer key from `tokens/`.
+4. Model: `glm-5.2` (free, reasoning) or `deepseek-v4-flash` for research; `personal-twin-chat`
+   for personal. Save, chat. Streaming works.
+
+SannaBot (works, but development has slowed — fine for basic use):
+1. Install SannaBot from Google Play.
+2. Settings -> API settings -> add API: URL `https://qnfo-ai.q08.workers.dev/v1`, key, model.
+   "Needs specific API keys" just means you supply the provider key — the `tokens/qnfo-ai` key is
+   the one for this API. It does not ship its own keys.
+
+OpenClaw: it is a server-side agent gateway (Node), not an Android app — it would run on a PC/VPS
+and is unnecessary here: the Cloudflare workers already perform its role (routing, logging, web,
+RAG) and are reachable directly from the phone. It also cannot run on Cloudflare Workers alone.
+If you still want it later, run it on any Node host and point its provider config at these
+endpoints (`qnfo-router/auto` was already referenced in its config template).
+
+Note on custom fields: Chatbox/SannaBot send standard OpenAI fields, so `web:true` and `thread_id`
+are only available in the PWA playground (or any HTTP client). Everything else — models, streaming,
+RAG, logging — works from any OpenAI-compatible client.
 
 ## 7. Verification (run this to prove it works)
 
@@ -130,6 +164,7 @@ matches the committed source.
 | `401 Unauthorized` | Key mismatch. Keys live in `C:/Users/LENOVO/tokens/` (`qnfo-ai`, `personal-api`). After any ROUTER_AUTH_KEY rotation, update DeepChat `providers.api_key` + `provider_json.apiKey` in the SAME session (PROVIDER-KEY-SYNC-1). |
 | `web:true` answers without sources | DDG anomaly page (HTTP 200, 0 results) or 522. Retry; the fallback chain covers it. Check `/v1/web/search` alone. |
 | Model check timeout in DeepChat UI | Pin `deepseek-v4-flash` or `llama-3.3-70b` (fast); free reasoning models cold-start ~10 s. |
+| PWA "Add to Home screen" greyed out | The manifest needs a moment after first load; reload once. On desktop Chrome use "Install page as app". |
 | Stream appears stuck | Long reasoning models stream slowly; first token can take 5-15 s. |
 | Logging stopped (counts frozen) | Run `scripts/verify-runtime.py`. Verify deployed bundle == committed source (the v4.2-v4.4 regression shipped uncommitted code with no write path). |
 | `search engine HTTP 522` | Transient DDG egress issue; retry — the fallback chain retries html then lite automatically. |
@@ -147,8 +182,9 @@ matches the committed source.
 
 ## 10. Source and deploy
 
-- Router: `QNFO/qnfo-workers/qnfo-ai/` — `worker.js` (v4.6.0), `wrangler.toml` (bindings: AI,
-  PAPER_VZ -> qwav-research-v2, LOG_VZ -> qnfo-ai-log, QNFO_AUDIT -> qnfo-audit), `scripts/verify-runtime.py`.
+- Router: `QNFO/qnfo-workers/qnfo-ai/` — `worker.js` (v4.6.1), `wrangler.toml` (bindings: AI,
+  PAPER_VZ -> qwav-research-v2, LOG_VZ -> qnfo-ai-log, QNFO_AUDIT -> qnfo-audit),
+  `scripts/verify-runtime.py`, this file.
 - Personal: `QNFO/personal-life-workers/` — `personal-api/`, `personal-life-indexer/`,
   `personal-life-search/` (each with worker.js + wrangler.toml + README).
 - Deploy (API, preserves secrets): multipart PUT

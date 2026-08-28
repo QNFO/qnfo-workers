@@ -82,8 +82,8 @@ def main():
     ap = argparse.ArgumentParser(description="QNFO notes-API runtime verification")
     ap.add_argument("--router-key", default=None)
     ap.add_argument("--personal-key", default=None)
-    ap.add_argument("--expect-router-version", default="4.6.0")
-    ap.add_argument("--expect-personal-version", default="v1.2.0")
+    ap.add_argument("--expect-router-version", default="4.6.1")
+    ap.add_argument("--expect-personal-version", default="v1.2.1")
     args = ap.parse_args()
 
     rk = args.router_key or tok("qnfo-ai")
