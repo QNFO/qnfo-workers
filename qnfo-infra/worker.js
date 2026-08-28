@@ -5,7 +5,7 @@
 // Stored in D1 qnfo-audit.infra_state + embedded into Vectorize qnfo-infra (doc=infra)
 // so any agent (twin RAG, MCP tools) can answer infra/analytics/cost questions.
 const NL = String.fromCharCode(10);
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const ACCT = null;
 
 function auth(token, env) {
@@ -180,6 +180,19 @@ async function collectRecords(env) {
   return out;
 }
 
+async function collectReadership(env) {
+  const out = { ts: new Date().toISOString() };
+  try {
+    const agg = await env.AUDIT.prepare('SELECT COUNT(*) AS n, SUM(views) AS total_views, SUM(downloads) AS total_downloads, SUM(unique_views) AS total_unique_views FROM zenodo_stats').first();
+    out.summary = { records: (agg && agg.n) || 0, total_views: (agg && agg.total_views) || 0, total_downloads: (agg && agg.total_downloads) || 0, total_unique_views: (agg && agg.total_unique_views) || 0 };
+  } catch (e) { out.summary = { error: String(e) }; }
+  try {
+    const rows = await env.AUDIT.prepare('SELECT doi, title, views, downloads, unique_views FROM zenodo_stats ORDER BY views DESC LIMIT 20').all();
+    out.papers = rows.results || [];
+  } catch (e) { out.papers = []; }
+  return out;
+}
+
 function summarize(kind, data) {
   const L = [];
   if (kind === 'snapshot') {
@@ -200,6 +213,11 @@ function summarize(kind, data) {
     L.push('QNFO records fleet at ' + data.ts);
     L.push('Papers in living-paper: ' + data.papers + '; knowledge graph: ' + data.kg.nodes + ' nodes, ' + data.kg.edges + ' edges');
     L.push('Logged AI queries: ' + data.queries_logged + '; intents: ' + data.intents + '; personal chat rows: ' + data.personal_chat_rows + '; personal events: ' + data.personal_events + '; activity entries: ' + data.personal_activity);
+  } else if (kind === 'readership') {
+    L.push('QNFO paper readership (Zenodo views/downloads) at ' + data.ts);
+    if (data.summary && !data.summary.error) L.push('Total: ' + data.summary.records + ' records, ' + data.summary.total_views + ' views, ' + data.summary.total_downloads + ' downloads, ' + data.summary.total_unique_views + ' unique views');
+    const tops = (data.papers || []).slice(0, 15);
+    if (tops.length) L.push('Top papers by views: ' + tops.map(p => p.title + ' (' + p.views + ' views / ' + p.downloads + ' downloads)').join('; '));
   }
   return L.join(NL);
 }
@@ -227,6 +245,8 @@ export default {
       await store(env, 'analytics', a);
       const r = await collectRecords(env);
       await store(env, 'records', r);
+      const rd = await collectReadership(env);
+      await store(env, 'readership', rd);
     }
   },
   async fetch(request, env) {
@@ -244,7 +264,8 @@ export default {
       const s = await collectState(env);
       const a = await collectAnalytics(env);
       const r = await collectRecords(env);
-      const ids = [await store(env, 'snapshot', s), await store(env, 'analytics', a), await store(env, 'records', r)];
+      const rd = await collectReadership(env);
+      const ids = [await store(env, 'snapshot', s), await store(env, 'analytics', a), await store(env, 'records', r), await store(env, 'readership', rd)];
       return new Response(JSON.stringify({ ok: true, ids: ids }), { headers: { 'Content-Type': 'application/json', ...cors } });
     }
     if (path === '/state' && method === 'GET') {
@@ -258,6 +279,10 @@ export default {
     if (path === '/records' && method === 'GET') {
       const row = await env.AUDIT.prepare("SELECT data FROM infra_state WHERE kind='records' ORDER BY ts DESC LIMIT 1").first();
       return new Response(JSON.stringify(row ? JSON.parse(row.data) : { error: 'no records yet' }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    }
+    if (path === '/readership' && method === 'GET') {
+      const row = await env.AUDIT.prepare("SELECT data FROM infra_state WHERE kind='readership' ORDER BY ts DESC LIMIT 1").first();
+      return new Response(JSON.stringify(row ? JSON.parse(row.data) : { error: 'no readership yet' }), { headers: { 'Content-Type': 'application/json', ...cors } });
     }
     return new Response('not found', { status: 404, headers: cors });
   }
