@@ -1,0 +1,16 @@
+name = "qnfo-infra"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Secrets:
+#   INFRA_TOKEN - Bearer token for all endpoints
+#   CF_TOKEN    - Cloudflare API token (account read + GraphQL analytics)
+#   CF_ACCOUNT  - account id
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[triggers]
+crons = ["30 6 * * *", "0 18 * * *"]

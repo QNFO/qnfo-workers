@@ -14,6 +14,9 @@ const TOOLS = [
   { name: 'personal_search', description: 'Search the personal-life index: notes, files, chat threads.', inputSchema: { type: 'object', properties: { q: { type: 'string' }, topK: { type: 'number' } }, required: ['q'] } },
   { name: 'express_desire', description: 'Express a desire to the QNFO intent orchestrator. It classifies and routes automatically: notes are stored in Vectorize, tasks/events/emails/reminders are queued with due dates, and they appear in the daily digest.', inputSchema: { type: 'object', properties: { desire: { type: 'string', description: 'what you want done' }, source: { type: 'string', description: 'where it comes from (optional)' } }, required: ['desire'] } },
   { name: 'intents_list', description: 'List intents in the orchestrator queue (tasks/events/emails/reminders).', inputSchema: { type: 'object', properties: { status: { type: 'string', description: 'filter: pending/done' }, limit: { type: 'number' } } } },
+  { name: 'infra_status', description: 'Cloudflare infrastructure state snapshot (workers, D1, Vectorize, R2, KV, Web Analytics sites, AI Gateway config, gateway logs + cost).', inputSchema: { type: 'object', properties: {} } },
+  { name: 'infra_analytics', description: 'Cloudflare analytics over the last 30 days: Workers AI neurons + estimated cost by model, worker invocations by worker.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'infra_records', description: 'QNFO records fleet: papers count, knowledge graph nodes/edges, logged queries, intents, personal store counts.', inputSchema: { type: 'object', properties: {} } },
 ];
 
 function authToken(token, env) {
@@ -63,6 +66,13 @@ async function callTool(env, name, args) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.INTENT_TOKEN },
       body: JSON.stringify({ desire: String(args.desire || '').slice(0, 4000), source: String(args.source || 'mcp') })
     });
+    const j = await r.json();
+    if (!r.ok) return { error: j.error || ('HTTP ' + r.status) };
+    return j;
+  }
+  if (name === 'infra_status' || name === 'infra_analytics' || name === 'infra_records') {
+    const p = name === 'infra_status' ? '/state' : (name === 'infra_analytics' ? '/analytics' : '/records');
+    const r = await env.QNFO_INFRA.fetch('https://qnfo-infra.q08.workers.dev' + p, { headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN } });
     const j = await r.json();
     if (!r.ok) return { error: j.error || ('HTTP ' + r.status) };
     return j;
