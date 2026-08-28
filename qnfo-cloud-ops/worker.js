@@ -1,273 +1,1371 @@
-// qnfo-cloud-ops — SCHEDULED CLOUD OPERATIONS (no local scheduler, no local scripts, no user input)
-// User directive 2026-08-28: ALL QNFO operations run entirely cloud-based.
-// Cron triggers (Cloudflare edge, Amsterdam wall-clock):
-//   0 8,14 * * 1-5   email-triage  — check all qnfo.org inboxes via qnfo-email worker,
-//                                    classify, mark, send digest to DIGEST_TO
-//   30 8 * * 1-5     briefing      — daily decision-item digest (D1 emails + intents + tasks)
-//   0 10 * * 1-5     research-scan — arXiv scan on QNFO topics -> digest + D1 log
-//   0 17 * * 5       weekly        — 7-day aggregate digest (email stats, queries, records)
-//   0 6 * * 7        weekly-ops    — Cloudflare cost/analytics audit digest (COST-AUDIT-MISS-AI-1)
-//   0 8 * * 1        portfolio-sync — portfolio-state snapshot digest
-// Every job: fetch -> build text digest -> send via Cloudflare Email Sending (SEND_EMAIL)
-// -> log to D1 qnfo-audit.audit_sessions. No local component in the loop.
-const NL = String.fromCharCode(10);
-const VERSION = '1.0.0';
-const EMAIL_BASE = 'https://qnfo-email.internal';
+import { connect } from "cloudflare:sockets";
+// qnfo-cloud-ops v1.4.0 — Cloud scheduler (Workers Cron Triggers)
+// Replaces the local DeepChat scheduled-task fleet with cloud-only execution.
+// Jobs dispatched by cron string (UTC; Amsterdam wall-clock preserved via DST sync).
+// v1.4.0: zenodo-stats carries the ADR-014 attribution audit (creators + related_identifiers
+// captured per record; creator violations flagged; sole-author mandate held) and weekly-ops
+// carries SEO discoverability health (papers/qnfo/qwav/qwav.tech: status + title + JSON-LD).
+// v1.2.0+: vectorized event store (OPS_VZ, doc=cloud-ops) + SILENCE POLICY — no
+// automated email to personal inboxes except: briefing with decision items,
+// job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
+// Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
+const VERSION = "1.5.0";
+const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
+const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
+const WORKER_NAME = "qnfo-cloud-ops";
+const EMAIL_BASE = "https://qnfo-email.internal";
+const NL = String.fromCharCode(10);
+
+// ---------- auth ----------
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
-  if (!exp || !token) return false;
-  const a = new TextEncoder().encode(token);
-  const b = new TextEncoder().encode(exp);
-  if (a.byteLength !== b.byteLength) return false;
-  let d = 0;
-  for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i];
-  return d === 0;
+  const adm = env.OPS_ADMIN_TOKEN;
+  if (!token) return false;
+  const ok = (k) => { const a = new TextEncoder().encode(token); const b = new TextEncoder().encode(k || ""); if (a.byteLength !== b.byteLength) return false; let d = 0; for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i]; return d === 0; };
+  return ok(exp) || ok(adm);
 }
 
-async function cfEmail(env, path, opts = {}) {
-  const url = new URL(EMAIL_BASE + path);
-  const headers = { Authorization: 'Bearer ' + (env.EMAIL_API_KEY || '') };
-  if (opts.body) headers['Content-Type'] = 'application/json';
-  const resp = await env.EMAIL.fetch(url.toString(), {
-    method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  let j = null; try { j = await resp.json(); } catch (e) { j = null; }
-  if (!resp.ok) return { error: (j && j.error) || ('email svc HTTP ' + resp.status) };
-  return j;
-}
-
+// ---------- audit log ----------
 async function logRun(env, job, status, notes) {
   try {
     await env.AUDIT.prepare(
-      'INSERT INTO audit_sessions (session_id, agent, start_time, end_time, tasks_completed, tasks_total, notes) VALUES (?1,?2,?3,?4,?5,?6,?7)'
-    ).bind('cloud-ops-' + job + '-' + Date.now().toString(36), 'qnfo-cloud-ops',
-      new Date().toISOString(), new Date().toISOString(), status === 'ok' ? 1 : 0, 1,
-      JSON.stringify({ job, status, ...notes }).slice(0, 500)).run();
+      "INSERT INTO audit_sessions (session_id, agent, start_time, end_time, tasks_completed, tasks_total, notes) VALUES (?1,?2,?3,?4,?5,?6,?7)"
+    ).bind(
+      "cloud-ops-" + job + "-" + Date.now().toString(36),
+      "qnfo-cloud-ops",
+      new Date().toISOString(),
+      new Date().toISOString(),
+      status === "ok" ? 1 : 0,
+      1,
+      JSON.stringify({ job, status, ...notes }).slice(0, 500)
+    ).run();
+  } catch (e) { /* audit write is best-effort */ }
+}
+
+// ---------- scheduler state (D1 qnfo-audit.scheduler_state) ----------
+async function stateGet(env, key, fallback) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT value FROM scheduler_state WHERE key = ?1").bind(key).first();
+    return (r && r.value !== null && r.value !== undefined) ? r.value : fallback;
+  } catch (e) { return fallback; }
+}
+async function stateSet(env, key, value) {
+  try {
+    await env.AUDIT.prepare(
+      "INSERT INTO scheduler_state (key, value, updated_at) VALUES (?1,?2, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')"
+    ).bind(key, String(value)).run();
+  } catch (e) { /* best-effort */ }
+}
+
+// ---------- email digest ----------
+async function sendDigest(env, subject, text, toOverride) {
+  if (!env.SEND_EMAIL) return { error: "SEND_EMAIL binding missing" };
+  const to = toOverride || env.DIGEST_TO || "rwnquni@outlook.com";
+  try {
+    const r = await env.SEND_EMAIL.send({ to, from: { email: "alerts@qnfo.org", name: "QNFO Ops" }, subject, text });
+    return { ok: true, messageId: r && r.messageId, to };
+  } catch (e) {
+    return { error: String(e && e.message || e), to };
+  }
+}
+
+// ---------- vectorized event store (OPS_VZ) + silent digest ----------
+async function embedText(env, text) {
+  try {
+    const resp = await env.AI.run(EMBED_MODEL, { text: [String(text).slice(0, 1800)] }, { gateway: { id: "default" } });
+    const v = (resp && resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
+    return v || null;
+  } catch (e) { return null; }
+}
+
+async function recordEvent(env, kind, id, text, meta) {
+  const m = Object.assign({}, meta || {});
+  try {
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+      .bind(id, new Date().toISOString(), kind, String(text).slice(0, 2000), JSON.stringify(m).slice(0, 1500), m.job || null, m.status || null).run();
   } catch (e) {}
+  try {
+    if (env.OPS_VZ) {
+      const v = await embedText(env, kind + ": " + text);
+      if (v) {
+        await env.OPS_VZ.upsert([{ id, values: v, metadata: { doc: "cloud-ops", kind, ts: new Date().toISOString(), text: String(text).slice(0, 1500), ...m } }]);
+      }
+    }
+  } catch (e) {}
+  return { stored: true, id };
 }
 
-async function sendDigest(env, subject, text) {
-  if (!env.SEND_EMAIL) return { error: 'SEND_EMAIL binding missing' };
-  const to = env.DIGEST_TO || 'rwnquni@outlook.com';
-  const r = await env.SEND_EMAIL.send({
-    to,
-    from: { email: 'alerts@qnfo.org', name: 'QNFO Ops' },
-    subject,
-    text,
+async function storeDigest(env, job, subject, text) {
+  return recordEvent(env, "digest", "dg-" + job + "-" + Date.now().toString(36), subject + NL + text, { job });
+}
+
+// ---------- qnfo-email service ----------
+async function cfEmail(env, path, opts = {}) {
+  const url = new URL(EMAIL_BASE + path);
+  const headers = { Authorization: "Bearer " + (env.EMAIL_API_KEY || "") };
+  if (opts.body) headers["Content-Type"] = "application/json";
+  const resp = await env.EMAIL.fetch(url.toString(), { method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  let j = null;
+  try { j = await resp.json(); } catch (e) { j = null; }
+  if (!resp.ok) return { error: (j && j.error) || "email svc HTTP " + resp.status };
+  return j;
+}
+
+// ---------- GitHub helpers ----------
+function ghHeaders(env, extra) { return { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, Accept: "application/vnd.github+json", ...(extra || {}) }; }
+async function ghGet(env, path) {
+  const r = await fetch("https://api.github.com" + path, { headers: ghHeaders(env) });
+  const txt = await r.text().catch(() => "");
+  let j = null;
+  try { j = JSON.parse(txt); } catch (e) { j = null; }
+  return { status: r.status, body: j, raw: txt.slice(0, 200) };
+}
+async function ghPost(env, path, body) {
+  const r = await fetch("https://api.github.com" + path, { method: "POST", headers: ghHeaders(env), body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => null);
+  return { status: r.status, body: j };
+}
+async function ghPut(env, path, body) {
+  const r = await fetch("https://api.github.com" + path, { method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => null);
+  return { status: r.status, body: j };
+}
+
+// ---------- Cloudflare API (for DST schedule rebuild) ----------
+async function cfApi(env, path, method, body) {
+  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + path, {
+    method: method || "GET",
+    headers: { Authorization: "Bearer " + (env.CF_TOKEN || ""), "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-cloud-ops)" },
+    body: body ? JSON.stringify(body) : undefined
   });
-  return { ok: true, messageId: r && r.messageId, to };
+  const j = await r.json().catch(() => null);
+  return { status: r.status, body: j };
 }
 
-// ── email-triage: check inboxes, classify, mark, digest ─────────────────────
+// ---------- Amsterdam schedule model (canonical wall-clock times) ----------
+const AMS_SCHEDULE = {
+  "release-check":  { times: ["06:15"], days: "*",   fixed: null },
+  "email-triage":   { times: ["08:00", "14:00"], days: "1-5", fixed: null },
+  "briefing":       { times: ["08:30"], days: "1-5", fixed: null },
+  "gmail-triage":   { times: ["09:00", "15:00"], days: "1-5", fixed: null },
+  "research-scan":  { times: ["10:00"], days: "1-5", fixed: null },
+  "weekly":         { times: ["17:00"], days: "5",   fixed: null },
+  "weekly-ops":     { times: ["06:00"], days: "7",   fixed: null },
+  "portfolio-sync": { times: ["08:00"], days: "1",   fixed: null },
+  "zenodo-stats":   { times: ["09:00"], days: "7",   fixed: null },
+  "board-sync":     { times: ["08:00"], days: "6",   fixed: null },
+  "outreach":       { times: ["11:00"], days: "1-5", fixed: null },
+  "nlnet":          { times: ["11:00"], days: null,  fixed: { dom: 3, mon: 9 } },
+};
+
+// Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
+function buildCrons(offset) {
+  const crons = [];
+  for (const [job, s] of Object.entries(AMS_SCHEDULE)) {
+    if (s.fixed) {
+      const [hh, mm] = s.times[0].split(":").map(Number);
+      let u = hh - offset; if (u < 0) u += 24;
+      crons.push({ job, cron: mm + " " + u + " " + s.fixed.dom + " " + s.fixed.mon + " *" });
+    } else {
+      const byMinute = {};
+      for (const t of s.times) {
+        const [hh, mm] = t.split(":").map(Number);
+        let u = hh - offset; if (u < 0) u += 24;
+        (byMinute[mm] = byMinute[mm] || []).push(u);
+      }
+      for (const [mm, hours] of Object.entries(byMinute)) {
+        const hs = [...new Set(hours)].sort((a, b) => a - b).join(",");
+        crons.push({ job, cron: mm + " " + hs + " * * " + s.days });
+      }
+    }
+  }
+  return crons;
+}
+
+// Current Europe/Amsterdam UTC offset in hours for a given instant.
+function amsOffset(instant) {
+  try {
+    const dtf = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Amsterdam", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const parts = dtf.formatToParts(instant || new Date());
+    const m = {}; for (const p of parts) m[p.type] = p.value;
+    const asUTC = Date.UTC(Number(m.year), Number(m.month) - 1, Number(m.day), Number(m.hour), Number(m.minute), Number(m.second));
+    const t = (instant || new Date()).getTime();
+    const raw = (asUTC - t) / 3600000;
+    return Math.round(raw * 2) / 2; // Amsterdam offsets are whole hours; round away ms-truncation noise
+  } catch (e) { return 2; }
+}
+
+// Rebuild all cron triggers to preserve Amsterdam firing instants at the current offset.
+async function syncSchedules(env, force) {
+  const off = amsOffset(new Date());
+  const stored = await stateGet(env, "cron_offset", String(off));
+  if (!force && String(off) === String(stored)) return { changed: false, offset: off };
+  const crons = buildCrons(off);
+  const r = await cfApi(env, "/workers/scripts/" + WORKER_NAME + "/schedules", "PUT", crons.map((c) => ({ cron: c.cron })));
+  const ok = r.status === 200 && r.body && r.body.success;
+  if (ok) await stateSet(env, "cron_offset", String(off));
+  return { changed: true, ok, offset: off, crons: crons.map((c) => c.cron), status: r.status };
+}
+
+// ================= PART 2: IMAP client + Gmail GTD triage + email triage =================
+
+// ---------- minimal IMAP client over Workers TCP (TLS) ----------
+function decodeHeader(s) {
+  // RFC 2047 =?charset?B?base64?= / =?charset?Q?quoted?=
+  let out = String(s || "");
+  out = out.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (m, cs, enc, data) => {
+    try {
+      if (/b/i.test(enc)) {
+        return decodeURIComponent(escape(atob(data.replace(/\s/g, ""))));
+      }
+      return decodeURIComponent(data.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (mm, hx) => String.fromCharCode(parseInt(hx, 16))));
+    } catch (e) { return data; }
+  });
+  return out.trim();
+}
+
+async function imapOpen(env) {
+  const host = "imap.gmail.com", port = 993;
+  const socket = connect({ hostname: host, port }, { secureTransport: "on", allowHalfOpen: false });
+  const watchdog = setTimeout(() => { try { socket.close(); } catch (e) {} }, 90000);
+  const reader = socket.readable.getReader();
+  const writer = socket.writable.getWriter();
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+  let buf = "";
+  let tagSeq = 0;
+
+  async function readLine() {
+    while (true) {
+      const idx = buf.indexOf("\r\n");
+      if (idx >= 0) { const line = buf.slice(0, idx); buf = buf.slice(idx + 2); return line; }
+      const { value, done } = await reader.read();
+      if (done) return null;
+      buf += dec.decode(value, { stream: true });
+    }
+  }
+  async function readLiteral(n) {
+    while (buf.length < n) {
+      const { value, done } = await reader.read();
+      if (done) return null;
+      buf += dec.decode(value, { stream: true });
+    }
+    const lit = buf.slice(0, n);
+    buf = buf.slice(n); // do NOT consume the 2 framing bytes; the continuation is part of the stream
+    return lit;
+  }
+  async function cmd(command) {
+    const tag = "a" + (++tagSeq);
+    await writer.write(enc.encode(tag + " " + command + "\r\n"));
+    const lines = [];
+    let ok = false;
+    while (true) {
+      const line = await readLine();
+      if (line === null) throw new Error("imap eof during " + command);
+      if (line.startsWith(tag + " ")) {
+        lines.push(line);
+        ok = /^a\d+ OK/i.test(line);
+        return { ok, lines };
+      }
+      lines.push(line);
+      const m = line.match(/\{(\d+)\}$/);
+      if (m) {
+        const lit = await readLiteral(parseInt(m[1], 10));
+        if (lit === null) throw new Error("imap literal eof");
+        lines.push(lit);
+      }
+    }
+  }
+  async function close() {
+    try { clearTimeout(watchdog); } catch (e) {}
+    try { await writer.write(enc.encode("aZ LOGOUT\r\n")); } catch (e) {}
+    try { writer.close(); reader.cancel(); socket.close(); } catch (e) {}
+  }
+  return { cmd, close };
+}
+
+// Classification: faithful port of gmail-gtd-triage.py classify() (QNFO 2026-08).
+const BULK_DOMAINS = new Set("github.com gitlab.com bitbucket.org cloudflare.com vercel.com netlify.com twitter.com x.com linkedin.com facebook.com instagram.com youtube.com reddit.com quora.com medium.com substack.com wordpress.com tumblr.com spotify.com netflix.com disneyplus.com hulu.com twitch.tv discord.com telegram.org whatsapp.com tiktok.com pinterest.com snapchat.com booking.com airbnb.com expedia.com tripadvisor.com skyscanner.net ebay.com etsy.com aliexpress.com temu.com shein.com wish.com shopify.com mailchimp.com sendinblue.com brevo.com hubspot.com salesforce.com klaviyo.com constantcontact.com campaignmonitor.com mailerlite.com convertkit.com beehiiv.com adobe.com dropbox.com notion.so slack.com zoom.us godaddy.com namecheap.com wix.com squarespace.com hostinger.com google.com googlemail.com microsoft.com apple.com amazon.com amazonaws.com npmjs.com pypi.org crates.io docker.com stackoverflow.com arxiv.org researchgate.net academia.edu orcid.org paypal.com stripe.com klarna.com afterpay.com revolut.com".split(" "));
+const FINANCIAL_DOMAINS = new Set("chase.com bankofamerica.com wellsfargo.com citibank.com citi.com capitalone.com americanexpress.com amex.com discover.com usbank.com ally.com sofi.com chime.com ing.com rabobank.nl abnamro.nl ing.nl bunq.com n26.com wise.com transferwise.com payoneer.com vanguard.com fidelity.com schwab.com etrade.com traderepublic.com degiro.nl ibkr.com interactivebrokers.com".split(" "));
+const HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
+const QNFO_DOMAINS = new Set(["qnfo.org", "qwav.org", "qwav.tech", "qnfo.io"]);
+const WITHDRAWN_CONTEXTS = { "cwi.nl": ["summer school", "poster", "slides", "practical information"] };
+
+const RX = {
+  receipt: /receipt|invoice|statement|payment (received|confirmed)|order confirmation|confirmation of order|your order|shipping confirmation|tracking (number|#)|delivery (update|confirm)|tax (receipt|statement)|transaction (receipt|confirm)|payment method|practical information|bevestiging|bestelling|factuur|betaling|purchase (confirmed|confirmation)/i,
+  waiting: /application (received|submitted|is under)|received your (submission|paper)|submission received|your submission|we (received|got) your|ticket[ #]?\d|case[ #]?\d|support (request|ticket)|under review|in review|we'll (get back|follow)|will (get back|follow up)|status update|awaiting|aanvraag/i,
+  sysnotice: /profile activat|account activat|welcome to|your (account|profile) is (now )?(active|ready)|getting started/i,
+  someday: /invitation|you're invited|save the date|call for (papers|proposals)|cfp|register now|webinar|meetup|event announcement|opportunity|nominations? (open|now)/i,
+  action: /^re:|^aw:|^sv:|deadline|action required|response required|please respond|rsvp|decision needed|approval needed|urgent|reminder|herinnering/i,
+  code: /verification code|login code|security code|one-time (password|code)|otp|confirm your email|email verification/i,
+  newsletter: /newsletter|weekly (digest|roundup)|daily digest|top stories|this week|unsubscribe|nieuwsbrief/i,
+  marketing: /sale|discount|promo|offer|limited time|deal of|% off|free shipping|don't miss|act now|final hours|survey|feedback|rate your|tell us about your|share your (opinion|experience|mening)|deel je mening|mening delen|hear about your/i,
+  security: /security alert|fraud alert|unusual activity|sign-in (alert|attempt)|new device|password (reset|changed)|2fa|two-factor/i,
+  jobalert: /job (alert|opening)|vacature|are hiring|are looking for|great companies/i,
+  volunteer: /vrijwilliger|volunteer/i,
+};
+
+function domIn(dom, set) { if (!dom) return false; if (set.has(dom)) return true; for (const b of set) if (dom.endsWith("." + b)) return true; return false; }
+
+function classify(sender, subject, ageDays) {
+  const dom = (sender || "").trim().toLowerCase().split("@").pop() || "";
+  if (domIn(dom, FINANCIAL_DOMAINS)) {
+    if (RX.receipt.test(subject)) return "REFERENCE";
+    if (RX.security.test(subject)) return "ACTION";
+    return "ACTION";
+  }
+  for (const [base, kws] of Object.entries(WITHDRAWN_CONTEXTS)) {
+    if (dom === base || dom.endsWith("." + base)) {
+      const sl = (subject || "").toLowerCase();
+      if (kws.some((k) => sl.includes(k))) return "NOISE";
+    }
+  }
+  if (domIn(dom, QNFO_DOMAINS)) return "NOISE";
+  if (domIn(dom, HUMAN_DOMAINS)) {
+    if (RX.receipt.test(subject)) return "REFERENCE";
+    if (RX.waiting.test(subject)) return "WAITING";
+    if (RX.newsletter.test(subject)) return "SOMEDAY";
+    return "ACTION";
+  }
+  if (domIn(dom, BULK_DOMAINS)) {
+    if (RX.security.test(subject)) return (domIn(dom, new Set(["cloudflare.com", "microsoft.com", "google.com"]))) ? "ACTION" : "WAITING";
+    if (RX.receipt.test(subject)) return "REFERENCE";
+    if (RX.waiting.test(subject)) return "WAITING";
+    if (RX.sysnotice.test(subject)) return "NOISE";
+    if (RX.action.test(subject)) return "ACTION";
+    if (RX.someday.test(subject)) return "SOMEDAY";
+    if (RX.code.test(subject)) return (ageDays < 1) ? "REFERENCE" : "NOISE";
+    if (RX.newsletter.test(subject) || RX.marketing.test(subject)) return "NOISE";
+    return "NOISE";
+  }
+  if (RX.receipt.test(subject)) return "REFERENCE";
+  if (RX.waiting.test(subject)) return "WAITING";
+  if (RX.volunteer.test(subject)) return "REFERENCE";
+  if (RX.jobalert.test(subject)) return "NOISE";
+  if (RX.sysnotice.test(subject)) return "NOISE";
+  if (RX.someday.test(subject)) return "SOMEDAY";
+  if (RX.newsletter.test(subject)) return "SOMEDAY";
+  if (RX.marketing.test(subject)) return "NOISE";
+  if (RX.action.test(subject)) return "ACTION";
+  if ((sender || "").toLowerCase().startsWith("noreply") || (sender || "").toLowerCase().startsWith("no-reply")) return "NOISE";
+  return "ACTION";
+}
+
+const F_WAITING = "GTD-Waiting For", F_SOMEDAY = "GTD-Someday Maybe", F_REF = "GTD-Reference";
+
+async function jobGmailTriage(env) {
+  if (!env.GMAIL_PASS) return { status: "error", notes: { error: "GMAIL_PASS secret missing" } };
+  const out = { checked: 0, counts: { ACTION: 0, WAITING: 0, SOMEDAY: 0, REFERENCE: 0, NOISE: 0 }, moved: 0, actions: [], waiting: [] };
+  let imap;
+  try {
+    imap = await imapOpen(env);
+    const login = await imap.cmd('LOGIN "rwnquni@gmail.com" "' + env.GMAIL_PASS.replace(/"/g, "") + '"');
+    if (!login.ok) throw new Error("gmail login failed");
+    const sel = await imap.cmd('SELECT "INBOX"');
+    if (!sel.ok) throw new Error("gmail SELECT INBOX failed");
+    const search = await imap.cmd("UID SEARCH ALL");
+    const searchLine = search.lines.find((l) => l.startsWith("* SEARCH"));
+    const uids = searchLine ? searchLine.replace("* SEARCH", "").trim().split(/\s+/).filter(Boolean).slice(0, 200) : [];
+    out.checked = uids.length;
+    // create labels (idempotent; NO on exists is fine)
+    for (const l of [F_WAITING, F_SOMEDAY, F_REF]) { try { await imap.cmd('CREATE "' + l + '"'); } catch (e) {} }
+    const now = Date.now();
+    const plan = [];
+    for (let i = 0; i < uids.length; i += 25) {
+      const batch = uids.slice(i, i + 25);
+      const fet = await imap.cmd("UID FETCH " + batch.join(",") + " (UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])");
+      // parse: attribute lines "* N FETCH (UID u ..." followed by literal header bytes
+      let cur = null;
+      for (const ln of fet.lines) {
+        const mm = ln.match(/^\* \d+ FETCH \(UID (\d+) /);
+        if (mm) { cur = mm[1]; continue; }
+        if (ln.startsWith("* ") && / FETCH /.test(ln)) { continue; }
+        if (cur !== null) {
+          const hdr = ln;
+          const fromM = hdr.match(/^From:\s*(.+)$/mi);
+          const subjM = hdr.match(/^Subject:\s*(.+)$/mi);
+          const dateM = hdr.match(/^Date:\s*(.+)$/mi);
+          const sender = (fromM ? fromM[1] : "").replace(/<[^>]*>/g, "").trim() || ((fromM && fromM[1].match(/<([^>]+)>/) || [])[1] || "");
+          const subject = decodeHeader(subjM ? subjM[1] : "");
+          let ageDays = 0;
+          if (dateM) { const d = new Date(dateM[1]); if (!isNaN(d)) ageDays = Math.floor((now - d.getTime()) / 86400000); }
+          const cls = classify(sender, subject, ageDays);
+          out.counts[cls] = (out.counts[cls] || 0) + 1;
+          const rec = { uid: cur, cls, sender: sender.slice(0, 60), subject: subject.slice(0, 90) };
+          if (cls === "ACTION") out.actions.push(rec);
+          if (cls === "WAITING") out.waiting.push(rec);
+          plan.push(rec);
+          cur = null;
+        }
+      }
+    }
+    for (const p of plan) {
+      try {
+        if (p.cls === "ACTION") {
+          await imap.cmd("UID STORE " + p.uid + " +FLAGS (\\Flagged)");
+          await imap.cmd("UID STORE " + p.uid + " -FLAGS (\\Seen)");
+          continue;
+        }
+        const label = p.cls === "WAITING" ? F_WAITING : p.cls === "SOMEDAY" ? F_SOMEDAY : F_REF;
+        await imap.cmd('UID COPY ' + p.uid + ' "' + label + '"');
+        await imap.cmd("UID STORE " + p.uid + " +FLAGS (\\Deleted)");
+        out.moved++;
+      } catch (e) { /* per-message failures tolerated */ }
+    }
+    if (out.moved > 0) { try { await imap.cmd("EXPUNGE"); } catch (e) {} }
+    await imap.close();
+  } catch (e) {
+    if (imap) { try { await imap.close(); } catch (e2) {} }
+    return { status: "error", notes: { error: String(e && e.message || e), ...out } };
+  }
+  // persist state for PDB + Friday review
+  await stateSet(env, "gmail_triage_state", JSON.stringify({ ts: new Date().toISOString(), counts: out.counts, actions: out.actions.slice(0, 20), waiting: out.waiting.slice(0, 20) }));
+  const L = ["QNFO Gmail GTD triage \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  L.push("INBOX " + out.checked + " msgs: " + JSON.stringify(out.counts) + " moved=" + out.moved + ".");
+  if (out.actions.length) { L.push("", "ACTION (stay in INBOX):"); for (const a of out.actions.slice(0, 10)) L.push("- " + a.sender + " | " + a.subject); }
+  if (out.waiting.length) { L.push("", "WAITING:"); for (const w of out.waiting.slice(0, 5)) L.push("- " + w.sender + " | " + w.subject); }
+  if (!out.actions.length && !out.waiting.length) L.push("", "No actionable inbox mail.");
+  const d = await storeDigest(env, "gmail-triage", "QNFO Gmail GTD triage \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  return { status: "ok", notes: { ...out, digest: d } };
+}
+
 async function jobEmailTriage(env) {
-  const recent = await cfEmail(env, '/emails/recent?limit=30&status=processed');
-  if (recent.error) return { status: 'error', notes: { error: recent.error } };
+  const recent = await cfEmail(env, "/emails/recent?limit=30&status=processed");
+  if (recent.error) return { status: "error", notes: { error: recent.error } };
   const emails = recent.emails || [];
   const action = [], noise = [];
-  const SPAM_SENDERS = ['glintopenaccess', 'paperworkspot', 'mdpi', 'webofproceedings'];
+  const SPAM_SENDERS = ["glintopenaccess", "paperworkspot", "mdpi", "webofproceedings"];
   const SYS_PAT = /dmarc|srs0|bounce|cf-bounce|noreply|no-reply|mailer-daemon|rspamd/i;
   for (const e of emails) {
-    const s = String(e.sender || '');
-    const subj = String(e.subject || '');
-    if (SPAM_SENDERS.some(x => s.includes(x))) { noise.push(e); continue; }
+    const s = String(e.sender || "");
+    const subj = String(e.subject || "");
+    if (SPAM_SENDERS.some((x) => s.includes(x))) { noise.push(e); continue; }
     if (SYS_PAT.test(s)) { noise.push(e); continue; }
     if (/^srs/i.test(s)) { noise.push(e); continue; }
     action.push(e);
   }
   for (const e of noise) {
-    try { await cfEmail(env, '/emails/status', { method: 'PATCH', body: { id: e.id, status: 'spam' } }); } catch (err) {}
+    try { await cfEmail(env, "/emails/status", { method: "PATCH", body: { id: e.id, status: "spam" } }); } catch (err) {}
   }
-  const L = ['QNFO email triage — ' + new Date().toISOString().slice(0, 10), ''];
-  L.push('Checked ' + emails.length + ' processed emails: ' + action.length + ' actionable, ' + noise.length + ' noise (marked spam).');
+  // ---- outreach reply detection (v1.3.1): an inbound email from a contacted address
+  // marks that outreach_log row 'replied' so follow-ups skip it. Deterministic, idempotent.
+  try {
+    const contacted = await env.AUDIT.prepare("SELECT DISTINCT lower(email) AS em FROM outreach_log WHERE status IN ('sent','followup')").all();
+    const set = new Set((contacted.results || []).map((r) => r.em).filter(Boolean));
+    if (set.size) {
+      const inbound = await env.AUDIT.prepare("SELECT id, sender FROM emails WHERE status IN ('processed','read') AND received_at > datetime('now','-30 days')").all();
+      for (const row of inbound.results || []) {
+        const s = String(row.sender || "").toLowerCase();
+        const m = s.match(/<([^>]+)>/);
+        const addr = m ? m[1] : s.trim();
+        if (addr && set.has(addr)) {
+          await env.AUDIT.prepare("UPDATE outreach_log SET status='replied' WHERE lower(email)=?1 AND status IN ('sent','followup')").bind(addr).run();
+        }
+      }
+    }
+  } catch (e) {}
+  const L = ["QNFO email triage \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  L.push("Checked " + emails.length + " processed emails: " + action.length + " actionable, " + noise.length + " noise (marked spam).");
   if (action.length) {
-    L.push('', 'ACTIONABLE:');
+    L.push("", "ACTIONABLE:");
     for (const e of action.slice(0, 12)) {
-      L.push('- id ' + e.id + ' | ' + (e.recipient || '') + ' <- ' + e.sender + ' | ' + String(e.subject || '').slice(0, 90));
+      L.push("- id " + e.id + " | " + (e.recipient || "") + " <- " + e.sender + " | " + String(e.subject || "").slice(0, 90));
     }
   } else {
-    L.push('', 'No actionable inbound email.');
+    L.push("", "No actionable inbound email.");
   }
-  const d = await sendDigest(env, 'QNFO email triage — ' + new Date().toISOString().slice(0, 10), L.join(NL));
-  return { status: 'ok', notes: { checked: emails.length, actionable: action.length, noise: noise.length, digest: d } };
+  const d = await storeDigest(env, "email-triage", "QNFO email triage \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  return { status: "ok", notes: { checked: emails.length, actionable: action.length, noise: noise.length, digest: d } };
 }
 
-// ── briefing: daily decision-item digest from D1 ────────────────────────────
-async function jobBriefing(env) {
-  const L = ['QNFO briefing — ' + new Date().toISOString().slice(0, 10), ''];
-  let items = 0;
+// ================= PART 3: research-scan (AI GTD extract) + briefing + release-check + weekly =================
+
+const REGISTER_R2_KEY = "obsidian/notes/v1/_personal-gtd.md";
+const CLOUD_APPEND_R2_KEY = "obsidian/notes/v1/_gtd-cloud-append.md";
+const AI_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+
+async function r2GetText(env, key) {
   try {
-    const rows = await env.AUDIT.prepare(
-      "SELECT id, sender, recipient, subject, status FROM emails WHERE status IN ('processed','read') AND received_at > datetime('now','-24 hours') ORDER BY id DESC LIMIT 15"
-    ).all();
-    const real = (rows.results || []).filter(e => !/dmarc|srs0|bounce|cf-bounce|rspamd/i.test(String(e.sender || '')));
-    if (real.length) {
-      items += real.length;
-      L.push('Emails needing attention (' + real.length + '):');
-      for (const e of real.slice(0, 10)) L.push('- id ' + e.id + ' | ' + e.sender + ' | ' + String(e.subject || '').slice(0, 80));
-    }
-  } catch (e) { L.push('email query error: ' + e.message); }
-  try {
-    const r = await env.AUDIT.prepare("SELECT id, type, summary, due, status FROM intents WHERE status='pending' ORDER BY created_at DESC LIMIT 10").all();
-    if (r.results && r.results.length) {
-      items += r.results.length;
-      L.push('', 'Pending intents (' + r.results.length + '):');
-      for (const i of r.results) L.push('- [' + i.type + '] ' + String(i.summary || '').slice(0, 80) + (i.due ? ' (due ' + i.due + ')' : ''));
-    }
-  } catch (e) { L.push('intent query error: ' + e.message); }
-  if (!items) L.push('No decision items.');
-  const d = await sendDigest(env, 'QNFO briefing — ' + new Date().toISOString().slice(0, 10), L.join(NL));
-  return { status: 'ok', notes: { items, digest: d } };
+    const obj = await env.VAULT.get(key);
+    if (!obj) return null;
+    return await obj.text();
+  } catch (e) { return null; }
+}
+async function r2PutText(env, key, text) {
+  try { await env.VAULT.put(key, text); return true; } catch (e) { return false; }
 }
 
-// ── research-scan: arXiv scan on QNFO topics ────────────────────────────────
+// ---------- research scan: arXiv query -> archive D1 -> AI GTD extraction -> D1 register + R2 append ----------
 async function jobResearchScan(env) {
-  const q = encodeURIComponent('(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" AND (cat:quant-ph OR cat:math-ph OR cat:hep-th))');
+  const q = encodeURIComponent('(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" OR all:"ZBW" OR all:"quantum thermodynamics") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)');
   let hits = [];
   try {
-    const r = await fetch('https://export.arxiv.org/api/query?search_query=' + q + '&start=0&max_results=8&sortBy=submittedDate&sortOrder=descending', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (QNFO cloud ops)' },
+    const r = await fetch("https://export.arxiv.org/api/query?search_query=" + q + "&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending", {
+      headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" }
     });
     const txt = await r.text();
-    const entries = txt.split('<entry>').slice(1);
+    const entries = txt.split("<entry>").slice(1);
     for (const en of entries) {
-      const t = (en.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '';
-      const id = (en.match(/<id>[\s\S]*?arxiv\.org\/abs\/([^<]+)<\/id>/) || [])[1] || '';
-      const pub = (en.match(/<published>([^<]+)<\/published>/) || [])[1] || '';
-      if (t) hits.push({ id: id.trim(), title: t.replace(/\s+/g, ' ').trim().slice(0, 160), published: pub.slice(0, 10) });
+      const t = (en.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "";
+      const id = (en.match(/<id>[\s\S]*?arxiv\.org\/abs\/([^<]+)<\/id>/) || [])[1] || "";
+      const pub = (en.match(/<published>([^<]+)<\/published>/) || [])[1] || "";
+      const authors = [];
+      const am = en.match(/<name>([\s\S]*?)<\/name>/g) || [];
+      for (const a of am) authors.push(a.replace(/<\/?name>/g, "").trim());
+      if (t) hits.push({ id: id.trim(), title: t.replace(/\s+/g, " ").trim().slice(0, 200), published: pub.slice(0, 10), authors: authors.slice(0, 6) });
     }
-  } catch (e) { hits = [{ error: e.message }]; }
-  const L = ['QNFO research scan — ' + new Date().toISOString().slice(0, 10), ''];
-  L.push('Recent arXiv matches: ' + (hits.length || 0));
-  for (const h of hits.slice(0, 8)) {
-    if (h.error) { L.push('- error: ' + h.error); continue; }
-    L.push('- ' + h.published + ' | ' + (h.id || '') + ' | ' + h.title);
+  } catch (e) {
+    hits = [{ error: e.message }];
   }
+
+  // archive to D1 (machine-only)
   try {
-    await env.AUDIT.prepare(
-      'CREATE TABLE IF NOT EXISTS research_scan_log (id TEXT PRIMARY KEY, ts TEXT, job TEXT, payload TEXT)'
-    ).run();
-    await env.AUDIT.prepare('INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1,?2,?3,?4)')
-      .bind('scan-' + Date.now().toString(36), new Date().toISOString(), 'research-scan', JSON.stringify(hits).slice(0, 2000)).run();
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS research_scan_log (id TEXT PRIMARY KEY, ts TEXT, job TEXT, payload TEXT)").run();
+    await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1,?2,?3,?4)").bind("scan-" + Date.now().toString(36), new Date().toISOString(), "research-scan", JSON.stringify(hits).slice(0, 3000)).run();
   } catch (e) {}
-  const d = await sendDigest(env, 'QNFO research scan — ' + new Date().toISOString().slice(0, 10), L.join(NL));
-  return { status: 'ok', notes: { hits: hits.length, digest: d } };
+
+  // AI GTD extraction: papers are never shown to the user; only actionable items surface
+  let extracted = { gtd_lines: [], outreach: [], must_read: [] };
+  const real = hits.filter((h) => !h.error);
+  if (real.length && env.AI) {
+    try {
+      const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" +
+        real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") +
+        "\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates — a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads — papers directly relevant to JPCUB/joules-per-solution or ultrametric physics that Rowan should read; (3) dated register lines — anything with a deadline or action date.\nReply with STRICT JSON only: {\"gtd_lines\":[{\"date\":\"YYYY-MM-DD\",\"text\":\"one short action line\"}],\"outreach\":[{\"paper_id\":\"\",\"reason\":\"one line\"}],\"must_read\":[{\"paper_id\":\"\",\"reason\":\"one line\"}]}. Empty arrays are fine. No prose.";
+      const resp = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
+      const content = (resp && (resp.response || (resp.result && resp.result.response))) || "";
+      const m = content.match(/\{[\s\S]*\}/);
+      if (m) {
+        const p = JSON.parse(m[0]);
+        if (p && Array.isArray(p.gtd_lines)) extracted = p;
+      }
+    } catch (e) {
+      extracted = { gtd_lines: [], outreach: [], must_read: [], error: String(e && e.message || e) };
+    }
+  }
+
+  // persist: D1 gtd_register + outreach_queue; R2 cloud-append file
+  const addedLines = [];
+  for (const gl of (extracted.gtd_lines || []).slice(0, 5)) {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(gl.date || "") ? gl.date : new Date().toISOString().slice(0, 10);
+    const text = String(gl.text || "").slice(0, 300);
+    if (!text) continue;
+    try {
+      await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("NEXT STEPS", text, date, "research-scan").run();
+      addedLines.push({ date, text });
+      await recordEvent(env, "gtd-line", "gtd-" + date + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), date + " \u2014 " + text, { job: "research-scan" });
+    } catch (e) {}
+  }
+  for (const oc of (extracted.outreach || []).slice(0, 4)) {
+    try {
+      await env.AUDIT.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,NULL,?4,'pending', datetime('now'))").bind("oq-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), String(oc.paper_id || "").slice(0, 40), "", String(oc.reason || "").slice(0, 300)).run();
+      await recordEvent(env, "outreach", "oq-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), String(oc.paper_id || "") + " \u2014 " + String(oc.reason || "").slice(0, 300), { job: "research-scan" });
+    } catch (e) {}
+  }
+  for (const mr of (extracted.must_read || []).slice(0, 3)) {
+    try {
+      await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("NEXT STEPS", "Read " + String(mr.paper_id || "").slice(0, 40) + " \u2014 " + String(mr.reason || "").slice(0, 200), new Date().toISOString().slice(0, 10), "research-scan").run();
+    } catch (e) {}
+  }
+  if (addedLines.length) {
+    const block = "\n<!-- cloud-scan " + new Date().toISOString() + " -->\n" + addedLines.map((l) => "- [ ] " + l.date + " \u2014 " + l.text + " (via research scan)").join("\n") + "\n";
+    const existing = (await r2GetText(env, CLOUD_APPEND_R2_KEY)) || "";
+    await r2PutText(env, CLOUD_APPEND_R2_KEY, (existing + block).slice(-20000));
+  }
+
+  // digest: counts only (papers never listed)
+  const L = ["QNFO research scan \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  L.push("arXiv matches: " + real.length + " (archived to D1).");
+  L.push("GTD actions extracted: " + addedLines.length + " register lines, " + (extracted.outreach || []).length + " outreach candidates, " + (extracted.must_read || []).length + " must-reads.");
+  if (extracted.error) L.push("AI extraction: " + extracted.error);
+  if (!addedLines.length && !(extracted.outreach || []).length && !(extracted.must_read || []).length) L.push("No actionable items today.");
+  const d = await storeDigest(env, "research-scan", "QNFO research scan \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  return { status: "ok", notes: { hits: real.length, added_lines: addedLines.length, outreach: (extracted.outreach || []).length, must_read: (extracted.must_read || []).length, digest: d } };
 }
 
-// ── weekly: 7-day aggregate digest ──────────────────────────────────────────
+// ---------- briefing (President's Daily Briefing, cloud) ----------
+async function jobBriefing(env) {
+  const L = ["QNFO briefing \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  let items = 0;
+
+  // 1. GTD register open next-actions (local mirror + cloud canonical)
+  try {
+    const regText = await r2GetText(env, REGISTER_R2_KEY);
+    if (regText) {
+      const now = new Date();
+      const due = [];
+      const re = /^- \[ \] (\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?.*? — (.+)$/gm;
+      let m;
+      while ((m = re.exec(regText)) !== null) {
+        const d = new Date(m[1] + "T00:00:00Z");
+        const days = Math.floor((d.getTime() - now.getTime()) / 86400000);
+        if (days <= 14) due.push({ date: m[1], days, text: m[2].slice(0, 110) });
+      }
+      due.sort((a, b) => (a.date < b.date ? -1 : 1));
+      if (due.length) {
+        items += due.length;
+        L.push("Open next-actions due <=14d (" + due.length + "):");
+        for (const x of due.slice(0, 12)) L.push("- " + x.date + (x.days < 0 ? " (overdue)" : " (in " + x.days + "d)") + " \u2014 " + x.text);
+      }
+    }
+  } catch (e) { L.push("register read error: " + e.message); }
+
+  // 2. cloud-added register lines (D1)
+  try {
+    const rows = await env.AUDIT.prepare("SELECT line, line_date FROM gtd_register WHERE done=0 ORDER BY line_date ASC LIMIT 10").all();
+    if (rows.results && rows.results.length) {
+      const fresh = rows.results.filter((r) => { const d = new Date((r.line_date || "").slice(0, 10) + "T00:00:00Z"); return !isNaN(d); });
+      if (fresh.length) {
+        items += fresh.length;
+        L.push("", "Cloud-registered actions (" + fresh.length + "):");
+        for (const r of fresh.slice(0, 8)) L.push("- " + (r.line_date || "").slice(0, 10) + " \u2014 " + String(r.line || "").slice(0, 100));
+      }
+    }
+  } catch (e) {}
+
+  // 3. qnfo.org emails needing attention
+  try {
+    const rows = await env.AUDIT.prepare("SELECT id, sender, recipient, subject, status FROM emails WHERE status IN ('processed','read') AND received_at > datetime('now','-24 hours') ORDER BY id DESC LIMIT 15").all();
+    const real = (rows.results || []).filter((e) => !/dmarc|srs0|bounce|cf-bounce|rspamd/i.test(String(e.sender || "")));
+    if (real.length) {
+      items += real.length;
+      L.push("", "Email needing attention (" + real.length + "):");
+      for (const e of real.slice(0, 8)) L.push("- id " + e.id + " | " + e.sender + " | " + String(e.subject || "").slice(0, 80));
+    }
+  } catch (e) { L.push("email query error: " + e.message); }
+
+  // 4. pending intents
+  try {
+    const r = await env.AUDIT.prepare("SELECT id, type, summary, due, status FROM intents WHERE status='pending' ORDER BY created_at DESC LIMIT 8").all();
+    if (r.results && r.results.length) {
+      items += r.results.length;
+      L.push("", "Pending intents (" + r.results.length + "):");
+      for (const i of r.results) L.push("- [" + i.type + "] " + String(i.summary || "").slice(0, 80) + (i.due ? " (due " + i.due + ")" : ""));
+    }
+  } catch (e) {}
+
+  // 5. outreach follow-ups awaiting reply >14d
+  try {
+    const r = await env.AUDIT.prepare("SELECT email, subject, sent_at FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') ORDER BY sent_at ASC LIMIT 5").all();
+    if (r.results && r.results.length) {
+      items += r.results.length;
+      L.push("", "Outreach awaiting reply >14d (" + r.results.length + "):");
+      for (const o of r.results) L.push("- " + o.email + " | " + String(o.subject || "").slice(0, 60) + " | " + (o.sent_at || "").slice(0, 10));
+    }
+  } catch (e) {}
+
+  if (!items) L.push("No decision items.");
+  const subject = "QNFO briefing \u2014 " + new Date().toISOString().slice(0, 10);
+  const text = L.join(NL);
+  // SILENCE POLICY: the personal inbox gets the briefing ONLY when there are decision items.
+  // A briefing with items requires clear-and-present attention (user directive 2026-08-28),
+  // so it overrides DIGEST_TO (alerts@qnfo.org) to the personal inbox; everything else stays archived.
+  const d = items > 0 ? await sendDigest(env, subject, text, "rwnquni@outlook.com") : await storeDigest(env, "briefing", subject, text);
+  return { status: "ok", notes: { items, digest: d } };
+}
+
+// ---------- DeepChat release check (user mandate 2026-08-19) ----------
+async function jobReleaseCheck(env) {
+  // /releases/latest always returns the newest NON-prerelease release
+  const r = await ghGet(env, "/repos/ThinkInAIXYZ/deepchat/releases/latest");
+  const latest = r.body && r.body.tag_name ? r.body : null;
+  const stored = await stateGet(env, "deepchat_stable", "");
+  if (!latest) {
+    return { status: "error", notes: { error: "github releases fetch failed: " + r.status, body_preview: r.raw } };
+  }
+  const tag = latest.tag_name;
+  const L = [];
+  let action = false;
+  if (stored !== tag) {
+    if (stored) {
+      action = true;
+      L.push("NEW DeepChat stable release: " + tag + " (installed baseline was " + stored + ").");
+      L.push("Action: update DeepChat via the app, then verify DEEPCHAT-RELEASE-TRACK-1 checklist.");
+      L.push((latest.body || "").slice(0, 400));
+    }
+    await stateSet(env, "deepchat_stable", tag);
+  }
+  if (!action) return { status: "ok", notes: { latest: tag, changed: false } };
+  const d = await sendDigest(env, "DeepChat release \u2014 " + tag, L.join(NL));
+  return { status: "ok", notes: { latest: tag, changed: true, digest: d } };
+}
+
+// ---------- weekly (Friday 17:00 Amsterdam) ----------
 async function jobWeekly(env) {
-  const L = ['QNFO weekly summary — ' + new Date().toISOString().slice(0, 10), ''];
+  const L = ["QNFO weekly summary \u2014 " + new Date().toISOString().slice(0, 10), ""];
   try {
     const e = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM emails WHERE received_at > datetime('now','-7 days')").first();
-    L.push('Emails (7d): ' + (e && e.n || 0));
+    L.push("Emails (7d): " + (e && e.n || 0));
   } catch (err) {}
   try {
     const q = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_queries WHERE ts > datetime('now','-7 days')").first();
-    L.push('AI queries (7d): ' + (q && q.n || 0));
+    L.push("AI queries (7d): " + (q && q.n || 0));
   } catch (err) {}
   try {
     const i = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM intents WHERE created_at > datetime('now','-7 days')").first();
-    L.push('Intents (7d): ' + (i && i.n || 0));
+    L.push("Intents (7d): " + (i && i.n || 0));
+  } catch (err) {}
+  try {
+    const g = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM gtd_register WHERE done=0").first();
+    L.push("Open GTD register items (cloud): " + (g && g.n || 0));
   } catch (err) {}
   try {
     if (env.QNFO_INFRA) {
-      const r = await env.QNFO_INFRA.fetch('https://qnfo-infra.internal/records', { headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN } });
+      const r = await env.QNFO_INFRA.fetch("https://qnfo-infra.internal/records", { headers: { Authorization: "Bearer " + env.INFRA_TOKEN } });
       const j = await r.json();
-      if (j && j.papers != null) L.push('Records: papers ' + j.papers + ', KG ' + ((j.kg && j.kg.nodes) || '?') + ' nodes');
+      if (j && j.papers != null) L.push("Records: papers " + j.papers + ", KG " + (j.kg && j.kg.nodes || "?") + " nodes");
     }
   } catch (err) {}
-  const d = await sendDigest(env, 'QNFO weekly summary — ' + new Date().toISOString().slice(0, 10), L.join(NL));
-  return { status: 'ok', notes: { digest: d } };
+  // ---- P9.1 weekly review (v1.5.0): vault delta + register sweep + portfolio triage.
+  // Cloud-able surface of local cronjob 382376cd (full LLM fold-in + ignorance audit = v2).
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const review = { vault_delta: [], register_open: 0, triage: { closeout: [], stale: [], skip: [] }, published: null };
+  // 1. vault delta: R2 mirror (d-drive obsidian/) notes newer than 7 days ago
+  try {
+    const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+    const prefix = "obsidian/notes/v1/" + since.slice(0, 4) + "/" + since.slice(5, 7) + "/";
+    let cursor;
+    let seen = 0;
+    do {
+      const page = await env.VAULT.list({ prefix, cursor, limit: 1000 });
+      for (const o of page.objects || []) {
+        if (!o.key.endsWith(".md")) continue;
+        const m = o.key.match(/obsidian\/notes\/v1\/(\d{4})\/(\d{2})\/(\d{2})\/(?:.*\/)?([^/]+\.md)$/);
+        if (m) {
+          const d = m[1] + "-" + m[2] + "-" + m[3];
+          if (d >= since) { review.vault_delta.push({ date: d, note: m[4] }); seen++; }
+        }
+      }
+      cursor = page.truncated ? page.cursor : null;
+    } while (cursor && seen < 500);
+  } catch (e) { L.push("vault delta error: " + (e && e.message)); }
+  // 2. register sweep (open items)
+  try {
+    const r = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM gtd_register WHERE done=0").first();
+    review.register_open = (r && r.n) || 0;
+  } catch (e) {}
+  // 3. portfolio triage heuristics (deterministic; SELECT * for column resilience)
+  try {
+    const rows = await env.PORTFOLIO.prepare("SELECT * FROM program_registry ORDER BY wbs_order").all();
+    for (const p of rows.results || []) {
+      const ph = String(p.phase || p.current_phase || "").replace(/^P/i, "");
+      const st = String(p.status || "");
+      const upd = new Date(String(p.updated_at || "").replace(" ", "T") + "Z").getTime();
+      const ageDays = isNaN(upd) ? 0 : Math.floor((Date.now() - upd) / 864e5);
+      const code = String(p.wbs_code || p.code || "");
+      const name = String(p.name || p.title || "").slice(0, 50);
+      if (/complete|closed|archiv/i.test(st) || ph === "8" || ph === "9") review.triage.closeout.push((code || "?") + " " + name + " [phase " + ph + "]");
+      else if (ageDays > 90 && !/completed/i.test(st)) review.triage.stale.push((code || "?") + " " + name + " [" + ageDays + "d]");
+      else review.triage.skip.push((code || "?") + " " + name);
+    }
+  } catch (e) { L.push("triage error: " + (e && e.message)); }
+  // 4. publish review note to R2 (GTD-visible record) + D1 register line + vectorize
+  const noteKey = "obsidian/notes/v1/_weekly-review-" + today + ".md";
+  const lines = ["# Weekly Review \u2014 " + today, "", "Auto-generated by qnfo-cloud-ops (Workers cron). Vault-delta + register + portfolio triage.", ""];
+  lines.push("Vault notes (7d): " + review.vault_delta.length);
+  for (const n of review.vault_delta.slice(0, 30)) lines.push("- " + n.date + " " + n.note);
+  lines.push("", "Open GTD register items: " + review.register_open);
+  lines.push("", "Portfolio triage \u2014 closeout-archive candidates (" + review.triage.closeout.length + "):");
+  for (const c of review.triage.closeout.slice(0, 20)) lines.push("- " + c);
+  lines.push("", "Stale / review candidates (" + review.triage.stale.length + "):");
+  for (const s of review.triage.stale.slice(0, 20)) lines.push("- " + s);
+  lines.push("", "Active / current (" + review.triage.skip.length + "):");
+  for (const s of review.triage.skip.slice(0, 10)) lines.push("- " + s);
+  lines.push("", "Decisions: PDB surfaces actionable items; this note is the GTD-visible record.");
+  try { await r2PutText(env, noteKey, lines.join(NL)); review.published = noteKey; } catch (e) { L.push("publish error: " + (e && e.message)); }
+  try {
+    await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))")
+      .bind("WEEKLY REVIEW", "Review weekly-review-" + today + " triage (closeout " + review.triage.closeout.length + ", stale " + review.triage.stale.length + ")", today, "weekly-review").run();
+  } catch (e) {}
+  await recordEvent(env, "weekly-review", "wr-" + today.replace(/-/g, ""), "Weekly review " + today + ": vault " + review.vault_delta.length + ", register " + review.register_open + ", closeout " + review.triage.closeout.length + ", stale " + review.triage.stale.length, { job: "weekly", date: today });
+  await stateSet(env, "weekly_review_last", today);
+  L.push("Vault notes (7d): " + review.vault_delta.length + " | closeout candidates: " + review.triage.closeout.length + " | stale: " + review.triage.stale.length);
+  const d = await storeDigest(env, "weekly", "QNFO weekly summary \u2014 " + today, L.join(NL));
+  return { status: "ok", notes: { digest: d, review: { vault_delta: review.vault_delta.length, register_open: review.register_open, closeout: review.triage.closeout.length, stale: review.triage.stale.length, published: review.published } } };
 }
 
-// ── weekly-ops: Cloudflare cost/analytics audit (COST-AUDIT-MISS-AI-1) ─────
+// ================= PART 4: weekly-ops (DST sync) + portfolio-sync + zenodo-stats + board-sync + nlnet =================
+
 async function jobWeeklyOps(env) {
-  const L = ['QNFO cloud ops audit — ' + new Date().toISOString().slice(0, 10), ''];
+  const L = ["QNFO cloud ops audit \u2014 " + new Date().toISOString().slice(0, 10), ""];
   let cost = 0;
+
+  // DST self-adjust: rebuild cron triggers when the Amsterdam offset changes
+  const dst = await syncSchedules(env, false);
+  if (dst.changed) {
+    L.push("DST re-sync: offset=" + dst.offset + ", schedules " + (dst.ok ? "updated" : "UPDATE FAILED (status " + dst.status + ")"));
+  } else {
+    L.push("Schedules: 11 cron triggers, Amsterdam offset +" + dst.offset + ".");
+  }
+
   try {
     if (env.QNFO_INFRA) {
-      const an = await env.QNFO_INFRA.fetch('https://qnfo-infra.internal/analytics', { headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN } }).then(r => r.json());
-      const st = await env.QNFO_INFRA.fetch('https://qnfo-infra.internal/state', { headers: { Authorization: 'Bearer ' + env.INFRA_TOKEN } }).then(r => r.json());
+      const an = await env.QNFO_INFRA.fetch("https://qnfo-infra.internal/analytics", { headers: { Authorization: "Bearer " + env.INFRA_TOKEN } }).then((r) => r.json());
+      const st = await env.QNFO_INFRA.fetch("https://qnfo-infra.internal/state", { headers: { Authorization: "Bearer " + env.INFRA_TOKEN } }).then((r) => r.json());
+      const rc = await env.QNFO_INFRA.fetch("https://qnfo-infra.internal/records", { headers: { Authorization: "Bearer " + env.INFRA_TOKEN } }).then((r) => r.json());
       if (an && an.ai_30d && !an.ai_30d.error) {
         cost = an.ai_30d.est_cost_usd || 0;
-        L.push('Workers AI (30d): ' + Math.round(an.ai_30d.neurons) + ' neurons, est. $' + cost);
+        L.push("Workers AI (30d): " + Math.round(an.ai_30d.neurons) + " neurons, est. $" + cost);
       }
-      if (an && an.workers_30d && !an.workers_30d.error) L.push('Worker invocations (30d): ' + an.workers_30d.requests);
-      if (st && st.workers) L.push('Workers ' + st.workers.count + ', D1 ' + st.d1.count + ', R2 ' + (st.r2 && st.r2.count || 0) + ', Vectorize ' + (st.vectorize && st.vectorize.count || 0));
-      if (st && st.gateway_logs && !st.gateway_logs.error) L.push('AI Gateway (last window): $' + st.gateway_logs.cost_usd);
+      if (an && an.workers_30d && !an.workers_30d.error) L.push("Worker invocations (30d): " + an.workers_30d.requests);
+      if (st && st.workers) L.push("Fleet: workers " + st.workers.count + ", D1 " + st.d1.count + ", R2 " + (st.r2 && st.r2.count || 0) + ", Vectorize " + (st.vectorize && st.vectorize.count || 0));
+      if (st && st.gateway_logs && !st.gateway_logs.error) L.push("AI Gateway (last window): $" + st.gateway_logs.cost_usd);
+      if (rc && rc.papers != null) L.push("Records: papers " + rc.papers + ", KG " + (rc.kg && rc.kg.nodes || "?") + " nodes");
     }
-  } catch (e) { L.push('infra query error: ' + e.message); }
-  if (cost > 90) L.push('', '⚠ COST ALERT: est. 30d Workers AI cost $' + cost + ' exceeds $90/30d spend-limit gate (rule 6f5c29f8).');
-  const d = await sendDigest(env, 'QNFO cloud ops audit — ' + new Date().toISOString().slice(0, 10), L.join(NL));
-  return { status: 'ok', notes: { est_cost_30d: cost, digest: d } };
+  } catch (e) {
+    L.push("infra query error: " + e.message);
+  }
+  try {
+    const z = await env.AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw FROM zenodo_stats").first();
+    if (z) L.push("Zenodo stats table: " + z.n + " DOIs, " + z.dl + " downloads, " + z.vw + " views (cumulative).");
+  } catch (e) {}
+  // ---- SEO discoverability health (v1.4.0): status + title + JSON-LD on the public surfaces
+  try {
+    const seo = [];
+    const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
+    for (const [name, url] of [["papers", "https://papers.qnfo.org/"], ["qnfo", "https://qnfo.org/"], ["qwav", "https://qwav.org/"], ["qwav-tech", "https://qwav.tech/"]]) {
+      try {
+        const r = await fetch(url, { headers: ua });
+        const html = await r.text();
+        const title = (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "";
+        const ld = html.includes("application/ld+json");
+        const ok = r.status === 200 && !!title.trim() && ld;
+        seo.push({ name, status: r.status, title: !!title.trim(), jsonld: ld, ok });
+      } catch (e) { seo.push({ name, error: String(e && e.message || e), ok: false }); }
+    }
+    const bad = seo.filter((s) => !s.ok);
+    L.push("SEO health: " + seo.map((s) => s.name + "=" + (s.ok ? "OK" : (s.status || "ERR"))).join(", "));
+    if (bad.length) {
+      L.push("SEO FAIL: " + bad.map((s) => s.name + " (" + (s.status || s.error) + (s.title === false ? " no-title" : "") + (s.jsonld === false ? " no-jsonld" : "") + ")").join("; "));
+      await recordEvent(env, "seo-fail", "seo-" + Date.now().toString(36), "SEO health failure: " + JSON.stringify(bad), { job: "weekly-ops" });
+    }
+  } catch (e) { L.push("SEO check error: " + (e && e.message)); }
+  if (cost > 90) L.push("", "\u26A0 COST ALERT: est. 30d Workers AI cost $" + cost + " exceeds $90/30d spend-limit gate (rule 6f5c29f8).");
+  const subject = "QNFO cloud ops audit \u2014 " + new Date().toISOString().slice(0, 10);
+  const text = L.join(NL);
+  const alert = cost > 90 || (dst.changed && !dst.ok);
+  // SILENCE POLICY: email only on cost alert or a failed DST schedule rebuild.
+  const d = alert ? await sendDigest(env, subject, text) : await storeDigest(env, "weekly-ops", subject, text);
+  return { status: "ok", notes: { est_cost_30d: cost, dst: dst.changed, digest: d } };
 }
 
-// ── portfolio-sync: portfolio-state snapshot digest ─────────────────────────
+// ---------- portfolio sync: real PORTFOLIO-STATUS.md regeneration + GitHub PR ----------
 async function jobPortfolioSync(env) {
-  const L = ['QNFO portfolio snapshot — ' + new Date().toISOString().slice(0, 10), ''];
+  const out = {};
+  try { out.papers = ((await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers").first()) || {}).n || 0; } catch (e) { out.papers = -1; }
+  try { out.published = ((await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN ('published','distributed')").first()) || {}).n || 0; } catch (e) {}
   try {
-    const r = await env.PORTFOLIO.prepare("SELECT wbs_code, name, phase, status, zenodo_doi FROM program_registry ORDER BY wbs_order LIMIT 25").all();
-    if (r.results && r.results.length) {
-      L.push('Programs:');
-      for (const p of r.results) L.push('- ' + (p.wbs_code || '') + ' ' + (p.name || '').slice(0, 60) + ' [phase ' + (p.phase || '?') + ', ' + (p.status || '') + ']');
-    } else {
-      L.push('(no program rows in qnfo-audit.programs)');
-    }
-  } catch (e) { L.push('portfolio query error: ' + e.message); }
-  const d = await sendDigest(env, 'QNFO portfolio snapshot — ' + new Date().toISOString().slice(0, 10), L.join(NL));
-  return { status: 'ok', notes: { digest: d } };
+    const r = await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE updated_at > datetime('now','-7 days')").first();
+    out.recent7 = (r && r.n) || 0;
+  } catch (e) {}
+  try { out.programs = ((await env.PORTFOLIO.prepare("SELECT COUNT(*) AS n FROM program_registry").first()) || {}).n || 0; } catch (e) { out.programs = -1; }
+  try {
+    const g = await env.GRAPH.prepare("SELECT COUNT(*) AS n FROM nodes").first();
+    const e2 = await env.GRAPH.prepare("SELECT COUNT(*) AS n FROM edges").first();
+    out.kgNodes = (g && g.n) || 0; out.kgEdges = (e2 && e2.n) || 0;
+  } catch (e) { out.kgNodes = -1; }
+  try {
+    const r = await ghGet(env, "/search/repositories?q=org:QNFO");
+    out.repos = (r.body && r.body.total_count) || 0;
+  } catch (e) { out.repos = -1; }
+  try { out.zenodoDOIs = ((await env.LIVING.prepare("SELECT COUNT(DISTINCT zenodo_doi) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != ''").first()) || {}).n || 0; } catch (e) {}
+
+  const now = new Date().toISOString();
+  const md = [
+    "# QNFO Portfolio Status",
+    "",
+    "Auto-generated by qnfo-cloud-ops (Workers cron). Cloud-canonical sources; regenerated weekly.",
+    "",
+    "> Generated: " + now,
+    "",
+    "## Records",
+    "",
+    "- Papers in living-paper: " + out.papers,
+    "- Published/distributed (Zenodo DOI): " + out.published,
+    "- Updated in last 7 days: " + out.recent7,
+    "- Distinct Zenodo DOIs: " + out.zenodoDOIs,
+    "",
+    "## Knowledge graph",
+    "",
+    "- Nodes: " + out.kgNodes,
+    "- Edges: " + out.kgEdges,
+    "",
+    "## Programs",
+    "",
+    "- Registered programs (portfolio-state): " + out.programs,
+    "",
+    "## Public surface",
+    "",
+    "- Public GitHub repos (QNFO org): " + out.repos,
+    "",
+    "## Schedule",
+    "",
+    "All scheduled tasks run cloud-based via Cloudflare Cron Triggers (qnfo-cloud-ops worker). No local processing.",
+    "",
+  ].join("\n");
+
+  // drift check + branch/PR/merge
+  const branch = "portfolio-status-" + now.slice(0, 10).replace(/-/g, "");
+  const cur = await ghGet(env, "/repos/QNFO/.github/contents/PORTFOLIO-STATUS.md");
+  let curText = "";
+  if (cur.status === 200 && cur.body && cur.body.content) {
+    try { curText = atob(cur.body.content.replace(/\s/g, "")); } catch (e) { curText = ""; }
+  }
+  if (curText === md) {
+    await storeDigest(env, "portfolio-sync", "QNFO portfolio sync \u2014 " + now.slice(0, 10), "No drift \u2014 skipped PR (silent).");
+    return { status: "ok", notes: { drift: false, ...out, digest: { stored: true } } };
+  }
+  // main sha
+  const mainRef = await ghGet(env, "/repos/QNFO/.github/git/ref/heads/main");
+  const sha = mainRef.body && mainRef.body.object && mainRef.body.object.sha;
+  if (!sha) return { status: "error", notes: { error: "cannot resolve main sha", ...out } };
+  const refR = await ghPost(env, "/repos/QNFO/.github/git/refs", { ref: "refs/heads/" + branch, sha });
+  if (refR.status !== 201 && refR.status !== 422) return { status: "error", notes: { error: "branch create failed " + refR.status, ...out } };
+  const putR = await ghPut(env, "/repos/QNFO/.github/contents/PORTFOLIO-STATUS.md", {
+    message: "Portfolio status " + now.slice(0, 10),
+    content: btoa(md),
+    branch,
+  });
+  if (putR.status !== 200 && putR.status !== 201) return { status: "error", notes: { error: "file put failed " + putR.status, ...out } };
+  const prR = await ghPost(env, "/repos/QNFO/.github/pulls", { title: "Portfolio status " + now.slice(0, 10), head: branch, base: "main", body: "Auto-generated by qnfo-cloud-ops." });
+  let prNum = null;
+  if (prR.status === 201 || prR.status === 422) prNum = prR.body && prR.body.number;
+  if (prNum) {
+    const mg = await ghPut(env, "/repos/QNFO/.github/pulls/" + prNum + "/merge", { merge_method: "squash" });
+    if (mg.status !== 200) return { status: "error", notes: { error: "merge failed " + mg.status, pr: prNum, ...out } };
+  }
+  await storeDigest(env, "portfolio-sync", "QNFO portfolio sync \u2014 " + now.slice(0, 10), "Drift applied via PR #" + (prNum || "?") + ". " + JSON.stringify(out));
+  return { status: "ok", notes: { drift: true, pr: prNum, ...out } };
 }
+
+// ---------- zenodo stats delta ----------
+async function jobZenodoStats(env) {
+  const corpus = await env.LIVING.prepare("SELECT zenodo_doi, slug FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != '' AND status IN ('published','distributed')").all();
+  const byDoi = {};
+  for (const row of corpus.results || []) {
+    const d = String(row.zenodo_doi || "").trim();
+    if (d && d !== "pending" && !byDoi[d]) byDoi[d] = row;
+  }
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const freshRows = await env.AUDIT.prepare("SELECT doi FROM zenodo_stats WHERE fetched_at LIKE ?1 || '%'").bind(today).all();
+  const fresh = new Set((freshRows.results || []).map((r) => r.doi));
+  const prevRows = await env.AUDIT.prepare("SELECT doi, downloads, views FROM zenodo_stats").all();
+  const prevMap = {}; let prevDl = 0, prevVw = 0;
+  for (const r of prevRows.results || []) {
+    prevMap[r.doi] = r;
+    prevDl += Number(r.downloads || 0); prevVw += Number(r.views || 0);
+  }
+  const todo = Object.keys(byDoi).filter((d) => !fresh.has(d));
+  let fetched = 0, errors = 0;
+  const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
+  const movers = [];
+  const auditViolations = [];
+  for (const doi of todo) {
+    const rid = doi.split(".").pop();
+    try {
+      const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
+      if (!r.ok) { errors++; continue; }
+      const d = await r.json();
+      const st = d.stats || {};
+      const rec = {
+        doi: d.doi || doi,
+        conceptdoi: d.conceptdoi || null,
+        title: String((d.metadata && d.metadata.title) || "").slice(0, 200),
+        slug: (byDoi[doi] && byDoi[doi].slug) || null,
+        downloads: Number(st.downloads || 0),
+        unique_downloads: Number(st.unique_downloads || 0),
+        views: Number(st.views || 0),
+        unique_views: Number(st.unique_views || 0),
+        version_downloads: Number(st.version_downloads || 0),
+      };
+      const prev = prevMap[doi] || {};
+      await env.AUDIT.prepare(
+        "INSERT INTO zenodo_stats (doi, conceptdoi, title, slug, downloads, unique_downloads, views, unique_views, version_downloads, prev_downloads, prev_views, fetched_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12, datetime('now')) ON CONFLICT(doi) DO UPDATE SET prev_downloads=zenodo_stats.downloads, prev_views=zenodo_stats.views, downloads=excluded.downloads, unique_downloads=excluded.unique_downloads, views=excluded.views, unique_views=excluded.unique_views, version_downloads=excluded.version_downloads, title=excluded.title, slug=excluded.slug, conceptdoi=excluded.conceptdoi, fetched_at=excluded.fetched_at, updated_at=datetime('now')"
+      ).bind(rec.doi, rec.conceptdoi, rec.title, rec.slug, rec.downloads, rec.unique_downloads, rec.views, rec.unique_views, rec.version_downloads, Number(prev.downloads || 0), Number(prev.views || 0), today).run();
+      fetched++;
+      const growth = rec.downloads - Number(prev.downloads || 0);
+      if (growth > 0) movers.push({ doi, title: rec.title, g: growth });
+      // ---- ADR-014 attribution audit (v1.4.0): capture creators + related_identifiers,
+      // flag creator violations (sole human author = Rowan Brad Quni-Gudzinas; organizational
+      // bylines prohibited per ADR-014). obsoleted_ok is informational, not a violation.
+      try {
+        const creators = ((d.metadata || {}).creators || []).map((c) => String(c.name || "")).filter(Boolean);
+        const rels = ((d.metadata || {}).related_identifiers || []).map((r) => String((r.relation_type && (r.relation_type.id || r.relation_type)) || "").toLowerCase() + ":" + String(r.identifier || "")).join(",");
+        const creatorOk = creators.length > 0 && creators.some((n) => /Quni-Gudzinas/i.test(n));
+        const hasObsoleted = /isobsoletedby|issupersededby/i.test(rels);
+        await env.AUDIT.prepare(
+          "INSERT INTO zenodo_attribution_audit (doi, creators, related, creator_ok, obsoleted_ok, audited_at) VALUES (?1,?2,?3,?4,?5, datetime('now')) ON CONFLICT(doi) DO UPDATE SET creators=excluded.creators, related=excluded.related, creator_ok=excluded.creator_ok, obsoleted_ok=excluded.obsoleted_ok, audited_at=datetime('now')"
+        ).bind(rec.doi, creators.join("; ").slice(0, 500), rels.slice(0, 1500), creatorOk ? 1 : 0, hasObsoleted ? 1 : 0).run();
+        if (!creatorOk) auditViolations.push({ doi: rec.doi, why: "creator", creators: creators.join("; ").slice(0, 120) });
+      } catch (e) {}
+    } catch (e) {
+      errors++;
+    }
+    if (fetched % 40 === 0) await new Promise((res) => setTimeout(res, 200));
+  }
+  const tot = await env.AUDIT.prepare("SELECT COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw, COUNT(*) AS n FROM zenodo_stats").first();
+  movers.sort((a, b) => b.g - a.g);
+  const L = ["QNFO Zenodo stats delta \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + ".");
+  L.push("downloads: " + prevDl + " -> " + (tot.dl || 0) + " (+" + ((tot.dl || 0) - prevDl) + ")");
+  L.push("views:     " + prevVw + " -> " + (tot.vw || 0) + " (+" + ((tot.vw || 0) - prevVw) + ")");
+  if (movers.length) {
+    L.push("", "top movers (downloads):");
+    for (const m of movers.slice(0, 8)) L.push("- +" + m.g + "  " + m.title.slice(0, 50) + "  " + m.doi);
+  }
+  if (auditViolations.length) {
+    L.push("", "ADR-014 attribution violations (" + auditViolations.length + "):");
+    for (const v of auditViolations.slice(0, 8)) L.push("- " + v.doi + " [" + v.why + "] " + v.creators);
+  } else {
+    L.push("", "ADR-014 attribution audit: 0 creator violations (sole-author mandate holds).");
+  }
+  const d = await storeDigest(env, "zenodo-stats", "QNFO Zenodo stats delta \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  return { status: fetched > 0 || errors === 0 ? "ok" : "error", notes: { fetched, errors, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d } };
+}
+
+// ---------- GitHub board sync (drift report; mutations v2) ----------
+async function jobBoardSync(env) {
+  const out = { programs: 0, kgProjects: 0, boardItems: 0, missing: [] };
+  try { out.programs = ((await env.PORTFOLIO.prepare("SELECT COUNT(*) AS n FROM program_registry").first()) || {}).n || 0; } catch (e) {}
+  try { out.kgProjects = ((await env.GRAPH.prepare("SELECT COUNT(*) AS n FROM nodes WHERE label IN ('Program','Project','Task')").first()) || {}).n || 0; } catch (e) {}
+  let boardItems = null, gqlError = null;
+  try {
+    const q = { query: '{ organization(login: "QNFO") { projectV2(number: 7) { title items(first: 100) { totalCount } } } }' };
+    const r = await fetch("https://api.github.com/graphql", { method: "POST", headers: { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops", "Content-Type": "application/json" }, body: JSON.stringify(q) });
+    const j = await r.json();
+    const p = j && j.data && j.data.organization && j.data.organization.projectV2;
+    if (p) boardItems = p.items && p.items.totalCount;
+    else gqlError = (j.errors && j.errors[0] && j.errors[0].message) || "board not visible";
+  } catch (e) { gqlError = String(e && e.message || e); }
+  out.boardItems = boardItems;
+  const L = ["QNFO GitHub board sync \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  L.push("Canonical: " + out.programs + " registry rows, " + out.kgProjects + " KG program/project/task nodes.");
+  L.push("Public board #7 items: " + (boardItems === null ? "unknown" : boardItems) + (gqlError ? " (GraphQL: " + gqlError + ")" : "") + ".");
+  L.push("Drift mutations: v2 (report-only today; idempotent upsert by WBS code is the v2 path).");
+  const d = await storeDigest(env, "board-sync", "QNFO GitHub board sync \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  return { status: "ok", notes: { ...out, gqlError, digest: d } };
+}
+
+// ---------- NLnet NGI Zero submission (Sep 3 11:00 Amsterdam) ----------
+async function jobNlnet(env) {
+  const L = ["QNFO NLnet NGI Zero submission \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  let proposal = null, dossier = null;
+  const p = await ghGet(env, "/repos/QNFO/qnfo-workers/contents/funding/NLNET_PROPOSAL.md");
+  if (p.status === 200 && p.body && p.body.content) { try { proposal = atob(p.body.content.replace(/\s/g, "")); } catch (e) {} }
+  const dd = await ghGet(env, "/repos/QNFO/qnfo-workers/contents/funding/DOSSIER.md");
+  if (dd.status === 200 && dd.body && dd.body.content) { try { dossier = atob(dd.body.content.replace(/\s/g, "")); } catch (e) {} }
+  L.push("Bundle: proposal " + (proposal ? proposal.length + " chars" : "FETCH FAILED") + ", dossier " + (dossier ? dossier.length + " chars" : "FETCH FAILED") + ".");
+  // NLnet uses an interactive form (captcha-gated). Attempt only a plain form POST if one exists; otherwise notify.
+  let formResult = "not attempted";
+  try {
+    const page = await fetch("https://nlnet.nl/propose/", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    const html = await page.text();
+    if (/hcaptcha|recaptcha|cf-turnstile/i.test(html)) {
+      formResult = "form captcha-gated \u2014 no autonomous submission path (per OUTREACH-FORM-GATE-1: never circumvent anti-bot controls)";
+    } else {
+      formResult = "no captcha detected but NLnet submission requires the interactive form; autonomous browser submission deferred";
+    }
+  } catch (e) { formResult = "page fetch error: " + e.message; }
+  L.push("Submission: " + formResult + ".");
+  L.push("Next step: user-submitted form at https://nlnet.nl/propose/ with the prepared bundle (deadline Nov 3 2026 12:00 CEST).");
+  await storeDigest(env, "nlnet", "QNFO NLnet NGI Zero submission \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  // one-shot: this single email IS an action item (user must submit the form).
+  const d = await sendDigest(env, "QNFO NLnet NGI Zero submission \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  return { status: "ok", notes: { formResult, digest: d } };
+}
+
+// ---------- backfill: embed existing D1 rows into OPS_VZ (one-off; run via /run?job=backfill) ----------
+async function jobBackfill(env) {
+  const out = { contacts: 0, gtd: 0, outreach: 0 };
+  try {
+    const c = await env.AUDIT.prepare("SELECT email, name FROM contact_ledger LIMIT 500").all();
+    for (const r of c.results || []) {
+      await recordEvent(env, "contact", "ct-" + String(r.email).replace(/[^a-z0-9.@_-]/gi, ""), (r.name || "?") + " <" + r.email + ">", { job: "backfill" });
+      out.contacts++;
+    }
+  } catch (e) { out.contacts = -1; }
+  try {
+    const g = await env.AUDIT.prepare("SELECT id, line, line_date FROM gtd_register LIMIT 500").all();
+    for (const r of g.results || []) {
+      await recordEvent(env, "gtd-line", "gtd-bf-" + r.id, (r.line_date || "") + " \u2014 " + r.line, { job: "backfill" });
+      out.gtd++;
+    }
+  } catch (e) { out.gtd = -1; }
+  try {
+    const o = await env.AUDIT.prepare("SELECT id, paper_id, reason, status FROM outreach_queue LIMIT 200").all();
+    for (const r of o.results || []) {
+      await recordEvent(env, "outreach", "oq-bf-" + r.id, (r.paper_id || "") + " \u2014 " + (r.reason || "") + " [" + (r.status || "") + "]", { job: "backfill" });
+      out.outreach++;
+    }
+  } catch (e) { out.outreach = -1; }
+  await recordEvent(env, "job-run", "jr-backfill-" + Date.now().toString(36), "backfill completed: " + JSON.stringify(out), { job: "backfill", status: "ok" });
+  return { status: "ok", notes: out };
+}
+
+// ---------- outreach engine v1: queue -> verify (arXiv tarball) -> dedup -> send -> log ----------
+const OUTREACH_FROM = { email: "rowan.quni@qnfo.org", name: "Rowan Brad Quni-Gudzinas" };
+
+async function verifyArxivEmail(env, paperId) {
+  const id = String(paperId || "").trim().replace(/^arXiv:/i, "").replace(/v\d+$/, "");
+  if (!/^\d{4}\.\d{4,5}$/.test(id)) return null;
+  try {
+    const r = await fetch("https://export.arxiv.org/e-print/" + id, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    if (!r.ok) return null;
+    const buf = await r.arrayBuffer();
+    let text = "";
+    try {
+      const ds = new DecompressionStream("gzip");
+      const stream = new Blob([buf]).stream().pipeThrough(ds);
+      const reader = stream.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        text += new TextDecoder().decode(value);
+        if (text.length > 5000000) break; // arXiv sources can be large; emails live in the .tex (anywhere in the tar)
+      }
+    } catch (e) { text = new TextDecoder().decode(buf); }
+    const m = text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+    const junk = /noreply|no-reply|example|\.png|\.jpg|\.gif|arxiv|elsevier|springer|overleaf|latex|biblatex|hyperref/i;
+    for (const em of m) if (!junk.test(em) && em.length < 80) return em;
+    return null;
+  } catch (e) { return null; }
+}
+
+async function jobOutreach(env) {
+  const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, errors: [] };
+  if (!env.SEND_EMAIL) return { status: "error", notes: { error: "SEND_EMAIL binding missing" } };
+  const today = new Date().toISOString().slice(0, 10);
+  const sentKey = "outreach_sent_" + today;
+  let sentToday = Number(await stateGet(env, sentKey, "0")) || 0;
+  const CAP = 3;
+  let rows;
+  try {
+    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status='pending' ORDER BY created_at ASC LIMIT 10").all();
+  } catch (e) { return { status: "error", notes: { error: String(e && e.message || e) } }; }
+  const pending = (rows.results || []).filter((r) => r.email || r.paper_id);
+  out.pending = pending.length;
+  for (const r of pending) {
+    if (sentToday >= CAP) { out.errors.push({ id: r.id, error: "daily cap reached" }); break; }
+    let email = r.email || null;
+    try {
+      if (!email) {
+        email = await verifyArxivEmail(env, r.paper_id);
+        if (!email) { out.skipped_no_email++; continue; }
+        await env.AUDIT.prepare("UPDATE outreach_queue SET email=?1 WHERE id=?2").bind(email, r.id).run();
+      }
+      const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
+      if (dup) { out.skipped_dupe++; continue; }
+      const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
+      const body = [
+        "Hello,",
+        "",
+        "I am Rowan Brad Quni-Gudzinas, founder of QNFO, a research collective working on an open, reproducible, energy-first standard for quantum computing: the JPCub benchmark \u2014 \u201cwhat does a correct quantum answer cost in energy?\u201d (grounded in Landauer, Margolus\u2013Levitin, and Bremermann limits).",
+        "",
+        r.paper_id ? "I came across your recent work (arXiv " + r.paper_id + (r.reason ? " \u2014 " + r.reason : "") + ") and it looks directly relevant to this program." : "I came across your recent work and it looks directly relevant to this program.",
+        "",
+        "Would you be open to a brief exchange on how your results relate to energy accounting for quantum computation? Happy to share our working papers and benchmark definitions.",
+        "",
+        "Best regards,",
+        "Rowan Brad Quni-Gudzinas",
+        "QNFO",
+      ].join("\n");
+      const res = await env.SEND_EMAIL.send({ to: email, from: OUTREACH_FROM, subject, text: body });
+      await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'sent')").bind(email, subject, (res && res.messageId) || "").run();
+      await env.AUDIT.prepare("INSERT INTO contact_ledger (email, name, first_contact, last_contact, contact_count, status) VALUES (?1,?2,?3,?3,1,'outreach') ON CONFLICT(email) DO UPDATE SET last_contact=excluded.last_contact, contact_count=contact_count+1").bind(email, r.author || null, today).run();
+      await env.AUDIT.prepare("UPDATE outreach_queue SET status='sent', sent_at=datetime('now') WHERE id=?1").bind(r.id).run();
+      await recordEvent(env, "outreach", "oq-sent-" + Date.now().toString(36), "outreach sent to " + email + " re " + (r.paper_id || ""), { job: "outreach", email });
+      sentToday++;
+      await stateSet(env, sentKey, String(sentToday));
+      out.sent++;
+    } catch (e) {
+      out.errors.push({ id: r.id, error: String(e && e.message || e) });
+    }
+  }
+  // ---- follow-up pass (v1.3.1): one follow-up, 14+ days after a send with no reply,
+  // never a second follow-up, shared daily cap.
+  if (sentToday < CAP) {
+    try {
+      const fu = await env.AUDIT.prepare(
+        "SELECT email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') " +
+        "AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) " +
+        "ORDER BY sent_at ASC LIMIT 3"
+      ).all();
+      for (const f of fu.results || []) {
+        if (sentToday >= CAP) break;
+        try {
+          const subject = "Re: " + String(f.subject || "").replace(/^Re:\s*/i, "");
+          const body = [
+            "Hello,",
+            "",
+            "Following up on my earlier note about the energy-efficiency benchmark for quantum computing \u2014 I would still welcome a brief exchange if you are open to it.",
+            "",
+            "Best regards,",
+            "Rowan Brad Quni-Gudzinas",
+            "QNFO",
+          ].join("\n");
+          const res = await env.SEND_EMAIL.send({ to: f.email, from: OUTREACH_FROM, subject, text: body });
+          await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'followup')").bind(f.email, subject, (res && res.messageId) || "").run();
+          sentToday++;
+          await stateSet(env, sentKey, String(sentToday));
+          out.followups++;
+        } catch (e) {
+          out.errors.push({ id: "fu-" + f.email, error: String(e && e.message || e) });
+        }
+      }
+    } catch (e) {}
+  }
+  await recordEvent(env, "job-run", "jr-outreach-" + Date.now().toString(36), "outreach run: " + JSON.stringify(out), { job: "outreach", status: out.errors.length ? "partial" : "ok" });
+  return { status: out.errors.length ? "error" : "ok", notes: out };
+}
+
+// ================= PART 5: registry + dispatch + handlers =================
 
 const JOBS = {
-  'email-triage': jobEmailTriage,
-  'briefing': jobBriefing,
-  'research-scan': jobResearchScan,
-  'weekly': jobWeekly,
-  'weekly-ops': jobWeeklyOps,
-  'portfolio-sync': jobPortfolioSync,
+  "email-triage": jobEmailTriage,
+  "gmail-triage": jobGmailTriage,
+  "briefing": jobBriefing,
+  "research-scan": jobResearchScan,
+  "weekly": jobWeekly,
+  "weekly-ops": jobWeeklyOps,
+  "portfolio-sync": jobPortfolioSync,
+  "zenodo-stats": jobZenodoStats,
+  "board-sync": jobBoardSync,
+  "release-check": jobReleaseCheck,
+  "nlnet": jobNlnet,
+  "outreach": jobOutreach,
+  "backfill": jobBackfill,
+};
+
+// cron -> job dispatch map for a given Amsterdam offset
+function dispatchMap(offset) {
+  const map = {};
+  for (const c of buildCrons(offset)) map[c.cron] = c.job;
+  return map;
+}
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 export default {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
-    let job = null;
-    if (cron === '0 8,14 * * 1-5') job = 'email-triage';
-    else if (cron === '30 8 * * 1-5') job = 'briefing';
-    else if (cron === '0 10 * * 1-5') job = 'research-scan';
-    else if (cron === '0 17 * * 5') job = 'weekly';
-    else if (cron === '0 6 * * 7') job = 'weekly-ops';
-    else if (cron === '0 8 * * 1') job = 'portfolio-sync';
-    if (!job || !JOBS[job]) { console.log('no job for cron', cron); return; }
+    const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
+    const map = dispatchMap(off);
+    const job = map[cron];
+    if (!job || !JOBS[job]) {
+      console.log("no job for cron", cron, "offset", off);
+      return;
+    }
     try {
       const out = await JOBS[job](env);
       await logRun(env, job, out.status, out.notes || {});
-      console.log('cloud-ops', job, out.status, JSON.stringify(out.notes || {}).slice(0, 200));
+      await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), { job, status: out.status });
+      console.log("cloud-ops", job, out.status, JSON.stringify(out.notes || {}).slice(0, 200));
     } catch (e) {
-      await logRun(env, job, 'error', { error: e.message });
-      console.error('cloud-ops', job, 'error', e.message);
+      await logRun(env, job, "error", { error: String(e && e.message || e) });
+      await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), { job, status: "error" });
+      console.error("cloud-ops", job, "error", String(e && e.message || e));
+      try {
+        await sendDigest(env, "QNFO cloud job failure \u2014 " + job, "Job " + job + " failed: " + String(e && e.message || e));
+      } catch (e2) {}
     }
   },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (path === '/health' && request.method === 'GET') {
-      return new Response(JSON.stringify({ ok: true, worker: 'qnfo-cloud-ops', version: VERSION, jobs: Object.keys(JOBS), crons: ['0 8,14 * * 1-5 email-triage', '30 8 * * 1-5 briefing', '0 10 * * 1-5 research-scan', '0 17 * * 5 weekly', '0 6 * * 7 weekly-ops', '0 8 * * 1 portfolio-sync'], bindings: { audit: !!env.AUDIT, portfolio: !!env.PORTFOLIO, email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, qnfo_infra: !!env.QNFO_INFRA, send_email: !!env.SEND_EMAIL } }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+    if (path === "/health" && request.method === "GET") {
+      const off = amsOffset(new Date());
+      const crons = buildCrons(off).map((c) => c.cron + " -> " + c.job);
+      return new Response(JSON.stringify({
+        ok: true, worker: WORKER_NAME, version: VERSION,
+        jobs: Object.keys(JOBS),
+        ams_offset: off,
+        crons,
+        bindings: {
+          audit: !!env.AUDIT, portfolio: !!env.PORTFOLIO, living: !!env.LIVING, graph: !!env.GRAPH,
+          email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, qnfo_infra: !!env.QNFO_INFRA,
+          send_email: !!env.SEND_EMAIL, vault: !!env.VAULT, ai: !!env.AI, ops_vz: !!env.OPS_VZ,
+          secrets: { gh: !!env.GH_TOKEN, gmail: !!env.GMAIL_PASS, cf: !!env.CF_TOKEN, admin: !!env.OPS_ADMIN_TOKEN, infra_token: !!env.INFRA_TOKEN }
+        }
+      }), { headers: { "Content-Type": "application/json", ...CORS } });
     }
-    const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    if (!auth(token, env)) return new Response('unauthorized', { status: 401, headers: cors });
-    if (path === '/run' && request.method === 'POST') {
-      const job = (url.searchParams.get('job') || '').trim();
-      if (!job || !JOBS[job]) return new Response(JSON.stringify({ error: 'unknown job: ' + job + ' (valid: ' + Object.keys(JOBS).join(',') + ')' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+
+    const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: CORS });
+
+    if (path === "/run" && request.method === "POST") {
+      const job = (url.searchParams.get("job") || "").trim();
+      if (!job || !JOBS[job]) return new Response(JSON.stringify({ error: "unknown job: " + job + " (valid: " + Object.keys(JOBS).join(",") + ")" }), { status: 400, headers: { "Content-Type": "application/json", ...CORS } });
       try {
         const out = await JOBS[job](env);
         await logRun(env, job, out.status, out.notes || {});
-        return new Response(JSON.stringify({ ok: true, job, ...out }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), { job, status: out.status });
+        return new Response(JSON.stringify({ ok: true, job, ...out }), { headers: { "Content-Type": "application/json", ...CORS } });
       } catch (e) {
-        return new Response(JSON.stringify({ ok: false, job, error: e.message }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
+        return new Response(JSON.stringify({ ok: false, job, error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...CORS } });
       }
     }
-    return new Response('not found', { status: 404, headers: cors });
+
+    if (path === "/search" && request.method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim();
+      if (!q) return new Response(JSON.stringify({ error: "q required" }), { status: 400, headers: { "Content-Type": "application/json", ...CORS } });
+      const vec = await embedText(env, q);
+      if (!vec) return new Response(JSON.stringify({ error: "embedding failed" }), { status: 502, headers: { "Content-Type": "application/json", ...CORS } });
+      const k = Math.min(Math.max(parseInt(url.searchParams.get("k") || "8", 10) || 8, 1), 20);
+      try {
+        const r = await env.OPS_VZ.query(vec, { topK: k, returnValues: false, returnMetadata: "all" });
+        const hits = (r.matches || []).map((m) => {
+          const md = m.metadata || {};
+          return { id: m.id, score: Math.round((m.score || 0) * 1e4) / 1e4, kind: md.kind, ts: md.ts, job: md.job, status: md.status, text: md.text || "" };
+        });
+        return new Response(JSON.stringify({ ok: true, query: q, count: hits.length, hits }), { headers: { "Content-Type": "application/json", ...CORS } });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "search failed: " + String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...CORS } });
+      }
+    }
+
+    if (path === "/cron-rebuild" && request.method === "POST") {
+      const r = await syncSchedules(env, true);
+      return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json", ...CORS } });
+    }
+
+    if (path === "/register" && request.method === "GET") {
+      const mode = url.searchParams.get("mode") || "d1";
+      let out = {};
+      if (mode === "r2") {
+        out.register = await r2GetText(env, REGISTER_R2_KEY);
+        out.cloud_append = await r2GetText(env, CLOUD_APPEND_R2_KEY);
+      } else {
+        const rows = await env.AUDIT.prepare("SELECT id, section, line, done, line_date, source FROM gtd_register ORDER BY id DESC LIMIT 50").all();
+        out.rows = rows.results || [];
+      }
+      return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...CORS } });
+    }
+
+    if (path === "/auth/graph" && request.method === "GET") {
+      const step = url.searchParams.get("step") || "";
+      const info = {
+        status: env.MS_CLIENT_ID ? "configured" : "not-configured",
+        steps: [
+          "One-time bootstrap (user action, ~3 min):",
+          "1. https://entra.microsoft.com -> App registrations -> New registration (name: qnfo-cloud-scheduler; accounts: personal Microsoft accounts only).",
+          "2. API permissions: Microsoft Graph delegated -> Mail.ReadWrite, Calendars.ReadWrite, Tasks.ReadWrite, offline_access.",
+          "3. Authentication -> Mobile and desktop applications -> enable https://login.microsoftonline.com/common/oauth2/nativeclient.",
+          "4. Put the Application (client) ID into the worker secret MS_CLIENT_ID via PUT /accounts/{acct}/workers/scripts/qnfo-cloud-ops/secrets/MS_CLIENT_ID.",
+          "5. GET /auth/graph?step=device on this worker to start the device-code flow; the code is emailed to the digest address for one-time consent.",
+        ],
+        device: step === "device" && env.MS_CLIENT_ID ? { note: "device flow starts once MS_CLIENT_ID is set" } : null
+      };
+      return new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", ...CORS } });
+    }
+
+    return new Response("not found", { status: 404, headers: CORS });
   }
 };

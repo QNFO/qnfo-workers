@@ -1,52 +1,54 @@
 name = "qnfo-cloud-ops"
 main = "worker.js"
 compatibility_date = "2026-08-01"
-workers_dev = true
+compatibility_flags = ["nodejs_compat"]
 
-# Secrets:
-#   EMAIL_API_KEY - qnfo-email Worker API key (same value as qnfo-email's API_KEY)
-#   INFRA_TOKEN   - qnfo-infra token (same value as qnfo-infra's INFRA_TOKEN)
-#   DIGEST_TO     - digest recipient (default rwnquni@outlook.com)
+[ai]
+binding = "AI"
 
-[observability]
-enabled = true
-head_sampling_rate = 1
-
-# Scheduled cloud operations — all QNFO jobs run at the edge, no local scheduler
-[triggers]
-crons = [
-  "0 8,14 * * 1-5",   # email-triage (Mon-Fri 08:00 + 14:00 Amsterdam)
-  "30 8 * * 1-5",     # briefing      (Mon-Fri 08:30 Amsterdam)
-  "0 10 * * 1-5",     # research-scan (Mon-Fri 10:00 Amsterdam)
-  "0 17 * * 5",       # weekly        (Fri 17:00 Amsterdam)
-  "0 6 * * 7",        # weekly-ops    (Sun 06:00 Amsterdam)
-  "0 8 * * 1",        # portfolio-sync (Mon 08:00 Amsterdam)
-]
-
-# qnfo-audit D1 (audit_sessions log, emails, intents, programs)
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
-# portfolio-state D1 (program_registry: wbs_code/name/phase/status/zenodo_doi/wbs_order)
+# secret (set via wrangler secret put): CF_TOKEN
+# secret (set via wrangler secret put): DIGEST_TO
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+
+# secret (set via wrangler secret put): EMAIL_API_KEY
+# secret (set via wrangler secret put): GH_TOKEN
+# secret (set via wrangler secret put): GMAIL_PASS
+[[d1_databases]]
+binding = "GRAPH"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+# secret (set via wrangler secret put): INFRA_TOKEN
+[[d1_databases]]
+binding = "LIVING"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+# secret (set via wrangler secret put): OPS_ADMIN_TOKEN
+[[vectorize]]
+binding = "OPS_VZ"
+index_name = "qnfo-cloud-ops"
+
 [[d1_databases]]
 binding = "PORTFOLIO"
 database_name = "portfolio-state"
 database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
 
-# qnfo-email service (inbox check + status updates)
-[[services]]
-binding = "EMAIL"
-service = "qnfo-email"
-environment = "production"
-
-# qnfo-infra service (records + analytics + state)
 [[services]]
 binding = "QNFO_INFRA"
 service = "qnfo-infra"
-environment = "production"
 
-# Cloudflare Email Sending (digest delivery)
 [[send_email]]
+binding = "SEND_EMAIL"
 name = "SEND_EMAIL"
+
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "d-drive"
