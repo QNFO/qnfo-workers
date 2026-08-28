@@ -5,7 +5,7 @@ web browsing, and automatic thread logging to Vectorize for future synthesis.
 
 | | Research (QNFO) | Personal |
 |---|---|---|
-| Base URL | `https://qnfo-ai.q08.workers.dev` (v4.6.1) | `https://personal-api.q08.workers.dev` (v1.2.1) |
+| Base URL | `https://qnfo-ai.q08.workers.dev` (v4.6.3) | `https://personal-api.q08.workers.dev` (v1.3.0) |
 | Auth | `Authorization: Bearer <key>` — `C:/Users/LENOVO/tokens/qnfo-ai` | `Authorization: Bearer <key>` — `C:/Users/LENOVO/tokens/personal-api` |
 | Models | 10 free Workers AI + deepseek-v4-flash/-thinking/-pro | `personal-twin-chat` (free) |
 | RAG | `/v1/search` over qwav-research-v2 (papers) | auto over personal-life (profile/events/email/browse/files) |
@@ -60,7 +60,7 @@ curl -s "https://personal-life-search.q08.workers.dev/search?q=<topic>&topK=5"
 - `GET /` — chat playground (installable PWA). `GET /health` — version + binding truth (log_vz, query_db, paper_vz).
 
 ### personal-api (personal)
-- `POST /v1/chat/completions` — `personal-twin-chat`, RAG over personal-life always on; optional `web:true`, `thread_id`.
+- `POST /v1/chat/completions` — `personal-twin-chat`, RAG over personal-life always on; `stream:true` supported (v1.3.0+); optional `web:true`, `thread_id`.
 - `POST /v1/embeddings` — bge-base-en-v1.5 (768-dim), max 32 texts, 2000 chars each.
 - `GET /v1/retrieve?q=&topK=` — raw RAG retrieval.
 - `GET /v1/web/search`, `GET /v1/web/fetch` — same as research side.
@@ -182,7 +182,7 @@ matches the committed source.
 
 ## 10. Source and deploy
 
-- Router: `QNFO/qnfo-workers/qnfo-ai/` — `worker.js` (v4.6.1), `wrangler.toml` (bindings: AI,
+- Router: `QNFO/qnfo-workers/qnfo-ai/` — `worker.js` (v4.6.3), `wrangler.toml` (bindings: AI,
   PAPER_VZ -> qwav-research-v2, LOG_VZ -> qnfo-ai-log, QNFO_AUDIT -> qnfo-audit),
   `scripts/verify-runtime.py`, this file.
 - Personal: `QNFO/personal-life-workers/` — `personal-api/`, `personal-life-indexer/`,
