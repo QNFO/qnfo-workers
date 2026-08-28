@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: frontier coder + reasoning validator + 1M-ctx reviewer (best models).
 
-const VERSION = '5.5.0';
+const VERSION = '5.5.1';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -93,6 +93,9 @@ const DEFAULT_MAX_OUT = 8192;
 // v5.0.0 — default system prompt, injected only when the client sends no leading
 // system message. A client-supplied system prompt (e.g. DeepChat's) is always honored.
 const DEFAULT_SYSTEM_PROMPT = 'You are the QNFO/QWAV research assistant (QNFO = research arm, QWAV = commercial arm, founded by Rowan Brad Quni-Gudzinas). Mission: the energy-efficiency benchmark for quantum computing — "what does a correct quantum answer cost in energy?" (JPCUB, joules-per-solution). Answer directly and substantively: lead with the answer, then the reasoning. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly. For code, write correct, runnable code. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists. Plain scholarly prose — no filler, no self-praise, no meta-commentary about your own process.';
+
+// v5.5.1 — substantive fallback instead of a cryptic 'All models failed.' when a model returns empty.
+const FALLBACK_TEXT = 'QNFO research assistant (online). QNFO is not an acronym and does not stand for anything; QNFO is the research organization with QWAV as its commercial/industry arm. Mission: the energy-efficiency benchmark for quantum computing — what a correct quantum answer costs in energy (JPCUB, joules-per-solution), grounded in Landauer, Margolus-Levitin, and Bremermann limits with anti-gaming discipline. Active programs: Ultrametric Physics, Laws of Form, Infomatics, CFPE, Consilience Research, QWAV Platform, QWAV Demos. The routed model returned no output for this prompt; please rephrase or retry.';
 
 // v5.0.0 — safety margin reserved inside every context window (output + headroom).
 // The truncation guard computes budget = ctx - margin so a near-limit payload never
@@ -723,6 +726,24 @@ async function handleChat(env, body, authHeader, ctx) {
   if (!messages.some((m) => m && m.role === 'system')) {
     messages = [{ role: 'system', content: DEFAULT_SYSTEM_PROMPT }, ...messages];
   }
+  // v5.5.1 — a bare continuation (CONTINUE / WHAT'S NEXT? / YOU TELL ME...) with a single
+  // user message injects the recent logged activity from D1 ai_queries as system context, so
+  // "CONTINUE" returns real recent-work status instead of filler or a static mission statement.
+  const _contWords = ['continue', 'whats next', "what's next", 'what next', 'you tell me', 'go on', 'resume', 'proceed', 'keep going', 'and then', 'next', 'next step'];
+  const _cp0 = lastUserText(messages).trim().toLowerCase().replace(/[.!?]+$/g, '').trim();
+  if (_contWords.includes(_cp0) && messages.filter((_m) => _m && _m.role === 'user').length === 1 && env.QNFO_AUDIT) {
+    try {
+      const _rec = await env.QNFO_AUDIT.prepare('SELECT prompt, response, model, ts FROM ai_queries ORDER BY ts DESC LIMIT 20').all();
+      const _rows = (_rec.results || []).filter((_r) => _r.prompt && !_contWords.includes(String(_r.prompt).trim().toLowerCase().replace(/[.!?]+$/g, '').trim()));
+      if (_rows.length) {
+        const _lines = ['RECENT QNFO ACTIVITY (most recent first, from the shared query log):'];
+        _rows.slice(0, 8).forEach((_r, _i) => {
+          _lines.push('[' + (_i + 1) + '] ' + String(_r.prompt).slice(0, 200) + (_r.response ? ' -> ' + String(_r.response).slice(0, 150) : ''));
+        });
+        messages = [{ role: 'system', content: _lines.join(String.fromCharCode(10)) }, ...messages];
+      }
+    } catch (_e) {}
+  }
 
   const t0 = Date.now();
   const cls = classify(lastUserText(messages));
@@ -886,7 +907,7 @@ async function handleChat(env, body, authHeader, ctx) {
       if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > ENSEMBLE.primary.ctx - CTX_SAFETY_MARGIN) {
         const fb = await callDeepSeek(env, MODELS['deepseek-v4-flash'].api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
         const fbContent = (fb?.choices?.[0]?.message?.content) ?? '';
-        const fbText = fbContent || 'All models failed.';
+        const fbText = fbContent || FALLBACK_TEXT;
         const fbBody = {
           id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
           object: 'chat.completion',
@@ -903,7 +924,7 @@ async function handleChat(env, body, authHeader, ctx) {
         return ensResp(fbText, fbBody);
       }
       const ens = await runEnsemble(env, messages, clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]));
-      const ensText = (ens.text || '').trim() || 'All models failed.';
+      const ensText = (ens.text || '').trim() || FALLBACK_TEXT;
       const respBody = {
         id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
         object: 'chat.completion',
@@ -1084,7 +1105,7 @@ async function handleChat(env, body, authHeader, ctx) {
       }
     }
 
-    if (!content && !toolCalls) content = 'All models failed.';
+    if (!content && !toolCalls) content = FALLBACK_TEXT;
 
     const respBody = {
       id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
