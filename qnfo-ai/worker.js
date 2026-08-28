@@ -5,15 +5,17 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '5.3.0';
+const VERSION = '5.4.0';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
 
 // ---------------- Model Registry ----------------
-// tier 0 = Workers AI FREE (no key, edge GPU)
+// tier 0 = Workers AI (postpaid — the catalog SHIFTED on 2026-08-28: the former "free"
+//          tier-0 models are now billed per-token. Only gemma-2b / mistral-7b / gemma-7b
+//          remain free. Input $/M noted inline per model for best-value routing.)
 // tier 1/2 = DeepSeek API (DEEPSEEK_API_KEY secret)
-// tier 3 = Anthropic/OpenAI via AI Gateway compat (CF_API_TOKEN secret)
+// tier 3 = (reserved — no tier-3 models currently; was "Anthropic/OpenAI via AI Gateway")
 // v5.0.0 — enriched registry. Per-model metadata drives every routing decision:
 //   ctx   = context window in tokens (Workers AI documented value). The truncation guard
 //           reserves output + a safety margin, so over-limit payloads are trimmed to the
@@ -33,6 +35,16 @@ const MODELS = {
   'glm-5.2':                  { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.2',              reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
   'kimi-k2.6':                { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.6',           reasoning: true,  maxOut: 8192,  ctx: 128000, temp: 0.6, topP: 0.95, tools: false, vision: false },
   'qwq-32b':                  { tier: 0, family: 'qwen',     wa: '@cf/qwen/qwq-32b',                   reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
+  // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
+  'glm-4.7-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-4.7-flash',             reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.06/M — cheap general default
+  'gemma-4-26b':               { tier: 0, family: 'google',   wa: '@cf/google/gemma-4-26b-a4b-it',         reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.10/M
+  'glm-5.3-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3-flash',             reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: true  },   // $0.15/M natively multimodal (non-Llama vision)
+  'gpt-oss-120b':              { tier: 0, family: 'openai',   wa: '@cf/openai/gpt-oss-120b',              reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $0.35/M reasoning/agentic
+  'deepseek-v4-flash-wa':      { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-flash-0731', reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.44/M official DeepSeek V4 Flash
+  'deepseek-v4-pro-wa':        { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-pro-0813',   reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.32/M 1M-ctx reasoning
+  'kimi-k2.7-code':            { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.7-code',          reasoning: false, maxOut: 8192,  ctx: 262144, temp: 0.2, topP: 0.95, tools: true,  vision: false },   // $0.95/M 262k-ctx coding
+  'glm-5.3':                   { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3',                   reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.40/M 1M-ctx agentic coding
   // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
   // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
@@ -67,6 +79,14 @@ const MAX_OUT = {
   '@cf/moonshotai/kimi-k2.6': 8192,
   '@cf/qwen/qwq-32b': 8192,
   '@cf/meta/llama-3.2-11b-vision-instruct': 2048,
+  '@cf/zai-org/glm-4.7-flash': 8192,
+  '@cf/google/gemma-4-26b-a4b-it': 8192,
+  '@cf/zai-org/glm-5.3-flash': 8192,
+  '@cf/openai/gpt-oss-120b': 8192,
+  '@cf/deepseek-ai/deepseek-v4-flash-0731': 8192,
+  '@cf/deepseek-ai/deepseek-v4-pro-0813': 8192,
+  '@cf/moonshotai/kimi-k2.7-code': 8192,
+  '@cf/zai-org/glm-5.3': 8192,
 };
 const DEFAULT_MAX_OUT = 8192;
 
@@ -410,9 +430,9 @@ function autoRoute(cls) {
   // v4.3.11 QNFO-MODEL-POLICY-1 + v5.3.0 user directive: NO Llama/Meta models in
   // chat/completion/text routing. Llama is trained on Facebook data and is unfit for
   // scientific/scholarly research (QNFO/QWAV); it is retained ONLY for the vision model
-  // (OCR/image). Free non-Llama roster: DeepSeek API (deepseek-chat/reasoner), Qwen
-  // (qwen3-30b, qwen2.5-coder-32b, qwq-32b), GLM-5.2, Kimi-k2.6, Granite-h-micro, Gemma-2b.
-  return 'glm-5.2'; // GLM-5.2 default (LiveBench math 89.8, free tier-0)
+  // (OCR/image). Non-Llama roster: DeepSeek API (deepseek-chat/reasoner), Qwen, GLM, Kimi,
+  // Granite, Gemma, GPT-OSS, plus the v5.4.0 best-value paid tier. (All postpaid now.)
+  return 'glm-4.7-flash'; // v5.4.0: glm-4.7-flash ($0.06/M) general default — 23x cheaper than glm-5.2 ($1.4/M)
 }
 
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
@@ -571,16 +591,20 @@ async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, e
 function extractWAContent(result, depth = 0) {
   if (typeof result === 'string') return result;
   if (!result || typeof result !== 'object' || depth > 4) return '';
-  if (typeof result.response === 'string') return result.response;
-  if (typeof result.result === 'string') return result.result;
+  if (typeof result.response === 'string' && result.response.trim()) return result.response;
+  if (typeof result.result === 'string' && result.result.trim()) return result.result;
   if (Array.isArray(result.choices) && result.choices[0]) {
     const c = result.choices[0];
-    if (c.message && typeof c.message.content === 'string') return c.message.content;
-    // Reasoning models (qwen3-30b): content can be null when tokens exhausted on
-    // thinking — surface reasoning_content so the response isn't "All models failed."
-    if (c.message && typeof c.message.reasoning_content === 'string') return c.message.reasoning_content;
-    if (c.message && typeof c.message.reasoning === 'string') return c.message.reasoning;
-    if (typeof c.text === 'string') return c.text;
+    const msg = c.message;
+    if (msg) {
+      if (typeof msg.content === 'string' && msg.content.trim()) return msg.content;
+      // Reasoning models (qwen3-30b, glm-5.3, deepseek-v4, kimi-k2.7, gemma-4): content is
+      // EMPTY/null when output tokens are exhausted on thinking — surface reasoning_content
+      // so the response isn't "All models failed." (v5.4.0).
+      if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) return msg.reasoning_content;
+      if (typeof msg.reasoning === 'string' && msg.reasoning.trim()) return msg.reasoning;
+    }
+    if (typeof c.text === 'string' && c.text.trim()) return c.text;
   }
   if (result.result && typeof result.result === 'object') return extractWAContent(result.result, depth + 1);
   return '';
