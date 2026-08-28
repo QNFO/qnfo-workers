@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: primary coder + validator + reviewer, all Workers AI free models.
 
-const VERSION = '4.6.1';
+const VERSION = '4.6.2';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -904,7 +904,88 @@ async function authOk(header, env) {
   const b = await crypto.subtle.digest('SHA-256', enc.encode(expected));
   return timingSafeEqual(a, b);
 }
-const PLAYGROUND_HTML = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b57d0"><title>__TITLE__</title><style>body{font-family:Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1a1a1a}header h1{font-size:1.25rem;margin:0 0 4px}header p{color:#666;margin:0 0 12px;font-size:.85rem}label{font-size:.8rem;color:#444;display:block;margin:8px 0 2px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:6px 8px;font-size:.9rem;border:1px solid #ccc;border-radius:6px}input[type=text]{flex:1;min-width:200px}button{background:#0b57d0;color:#fff;border:none;cursor:pointer}button:disabled{opacity:.6}#msgs{margin-top:14px;border-top:1px solid #eee;padding-top:12px}.msg{margin:10px 0;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font-size:.92rem}.user{background:#eef4ff}.assistant{background:#f6f6f6}.err{color:#b3261e;font-size:.85rem;margin:8px 0}.meta{color:#888;font-size:.78rem;margin-top:6px}</style></head><body><header><h1>__TITLE__</h1><p>OpenAI-compatible chat over Cloudflare. Key: __KEY_HINT__</p></header><div class="row"><input type="password" id="key" placeholder="API key (Bearer)"><input type="text" id="thread" placeholder="thread_id (optional)"></div><div class="row"><select id="model"></select><label><input type="checkbox" id="web"> web search</label><span style="flex:1"></span></div><div id="msgs"></div><div class="row"><input type="text" id="inp" placeholder="Jot a thought, ask a question..." style="flex:1"><button id="send">Send</button></div><script>const $=s=>document.querySelector(s);let msgs=[];async function loadModels(){try{const r=await fetch("/v1/models");const d=await r.json();(d.data||[]).forEach(m=>{const o=document.createElement("option");o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=" (reasoning)";$("#model").appendChild(o);});}catch(e){}}loadModels();if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(function(){})}function add(role,content){msgs.push({role,content});const d=document.createElement("div");d.className="msg "+role;d.textContent=content;$("#msgs").appendChild(d);}$("#send").onclick=async()=>{const txt=$("#inp").value.trim();if(!txt)return;const key=$("#key").value.trim();if(!key){add("err","API key required");return;}add("user",txt);$("#inp").value="";const btn=$("#send");btn.disabled=true;const body={model:$("#model").value||"glm-5.2",messages:msgs.slice(-12)};const th=$("#thread").value.trim();if(th)body.thread_id=th;if($("#web").checked)body.web=true;try{const r=await fetch("/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||j.error||("HTTP "+r.status));const c=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||"";add("assistant",c);if(j._web){const m=document.createElement("div");m.className="meta";m.textContent="sources: "+(j._web.sources||[]).map(s=>s.url).join(" | ");$("#msgs").appendChild(m);}if(j._router){const m=document.createElement("div");m.className="meta";m.textContent="router: "+(j._router.routed_model||j.model)+" | tier "+(j._router.tier!=null?j._router.tier:"?")+" | $"+(j._router.estimated_cost_usd!=null?j._router.estimated_cost_usd:0);$("#msgs").appendChild(m);}}catch(e){add("err",String(e.message||e));}btn.disabled=false;};$("#inp").addEventListener("keydown",e=>{if(e.key==="Enter")$("#send").click();});</script></body></html>';
+const PLAYGROUND_HTML = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b57d0">
+<title>__TITLE__</title>
+<style>body{font-family:Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1a1a1a}header h1{font-size:1.25rem;margin:0 0 4px}header p{color:#666;margin:0 0 12px;font-size:.85rem}label{font-size:.8rem;color:#444;display:block;margin:8px 0 2px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:6px 8px;font-size:.9rem;border:1px solid #ccc;border-radius:6px}input[type=text]{flex:1;min-width:200px}input[type=password]{flex:1;min-width:200px}button{background:#0b57d0;color:#fff;border:none;cursor:pointer}button:disabled{opacity:.6}button#new{background:#fff;color:#0b57d0;border:1px solid #ccc}#msgs{margin-top:14px;border-top:1px solid #eee;padding-top:12px}.msg{margin:10px 0;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font-size:.92rem;word-break:break-word}.user{background:#eef4ff}.assistant{background:#f6f6f6}.err{color:#b3261e;font-size:.85rem;margin:8px 0}.meta{color:#888;font-size:.78rem;margin-top:6px}pre{background:#e9e9e9;padding:8px;border-radius:6px;overflow-x:auto;font-size:.85em}code{background:#e9e9e9;padding:1px 4px;border-radius:4px;font-size:.88em}pre code{background:none;padding:0}a{color:#0b57d0}</style></head>
+<body><header><h1>__TITLE__</h1><p>OpenAI-compatible chat over Cloudflare. Key: __KEY_HINT__</p></header>
+<div class="row"><input type="password" id="key" placeholder="API key (Bearer)"><input type="text" id="thread" placeholder="thread_id (optional)"></div>
+<div class="row"><select id="model"></select><label><input type="checkbox" id="web"> web search</label><button id="new">New chat</button><span style="flex:1"></span></div>
+<div id="msgs"></div>
+<div class="row"><input type="text" id="inp" placeholder="Jot a thought, ask a question..." style="flex:1"><button id="send">Send</button></div>
+<script>
+var ENABLE_STREAM = __STREAM__;
+var $=function(s){return document.querySelector(s);};
+var NL=String.fromCharCode(10);
+var savedModel='';
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function md(s){
+  var out=[];var blocks=String(s||'').split('```');
+  for(var i=0;i<blocks.length;i++){
+    var b=blocks[i];
+    if(i%2===1){out.push('<pre>'+esc(b)+'</pre>');}
+    else{
+      var p=b.split('**');var mid=[];
+      for(var j=0;j<p.length;j++){mid.push(j%2===1?'<b>'+esc(p[j])+'</b>':esc(p[j]));}
+      var t=mid.join('');
+      var c=t.split('`');var fin=[];
+      for(var k=0;k<c.length;k++){fin.push(k%2===1?'<code>'+c[k]+'</code>':c[k]);}
+      out.push(fin.join('').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').split(NL).join('<br>'));
+    }
+  }
+  return out.join('');
+}
+function restore(){try{var d=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');$('#key').value=d.key||'';$('#thread').value=d.thread||'';savedModel=d.model||'';return d.msgs||[];}catch(e){return [];}}
+function save(msgs){try{localStorage.setItem('qnfo-chat',JSON.stringify({key:$('#key').value,thread:$('#thread').value,model:savedModel||$('#model').value,msgs:msgs.slice(-60)}));}catch(e){}}
+var msgs=restore();
+function renderMsgs(){var el=$('#msgs');el.innerHTML='';for(var i=0;i<msgs.length;i++){var d=document.createElement('div');d.className='msg '+(msgs[i].role==='user'?'user':'assistant');d.innerHTML=md(msgs[i].content);el.appendChild(d);}el.scrollTop=1e9;}
+renderMsgs();
+function loadModels(){var key=$('#key').value.trim();var h={};if(key)h.Authorization='Bearer '+key;fetch('/v1/models',{headers:h}).then(function(r){return r.json();}).then(function(j){var sel=$('#model');sel.innerHTML='';var def='__DEFAULT_MODEL__';(j.data||[]).forEach(function(m){var o=document.createElement('option');o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=' (reasoning)';if(m.id===def||m.id===savedModel)o.selected=true;sel.appendChild(o);});if(!sel.value)sel.value=def;}).catch(function(){});}
+loadModels();
+function addMsg(role,html){var d=document.createElement('div');d.className='msg '+role;d.innerHTML=html;$('#msgs').appendChild(d);$('#msgs').scrollTop=1e9;return d;}
+$('#new').onclick=function(){msgs=[];renderMsgs();save(msgs);};
+$('#send').onclick=async function(){
+  var txt=$('#inp').value.trim();if(!txt)return;
+  var key=$('#key').value.trim();if(!key){addMsg('err','API key required');return;}
+  msgs.push({role:'user',content:txt});renderMsgs();save(msgs);$('#inp').value='';
+  var btn=$('#send');btn.disabled=true;
+  var body={model:$('#model').value||'__DEFAULT_MODEL__',messages:msgs.slice(-12)};
+  var th=$('#thread').value.trim();if(th)body.thread_id=th;
+  if($('#web').checked)body.web=true;
+  var doStream=ENABLE_STREAM;
+  if(doStream)body.stream=true;
+  try{
+    var r=await fetch('/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)});
+    if(doStream&&r.ok&&r.body){
+      var reader=r.body.getReader();var dec=new TextDecoder();var buf='';var acc='';
+      var el=addMsg('assistant','');
+      while(true){var x=await reader.read();if(x.done)break;
+        buf+=dec.decode(x.value,{stream:true});
+        var lines=buf.split(NL);buf=lines.pop();
+        for(var li=0;li<lines.length;li++){var t=lines[li].trim();
+          if(t.indexOf('data:')!==0)continue;
+          var data=t.slice(5).trim();if(data==='[DONE]')continue;
+          try{var p=JSON.parse(data);var d=(p.choices&&p.choices[0]&&p.choices[0].delta&&p.choices[0].delta.content)||'';if(d){acc+=d;el.textContent=acc;el.scrollTop=1e9;}}catch(e){}
+        }
+      }
+      msgs.push({role:'assistant',content:acc});renderMsgs();save(msgs);
+    }else{
+      var j=await r.json();
+      if(!r.ok)throw new Error((j.error&&j.error.message)||j.error||('HTTP '+r.status));
+      var c=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'';
+      msgs.push({role:'assistant',content:c});renderMsgs();save(msgs);
+      if(j._web){var m=document.createElement('div');m.className='meta';m.textContent='sources: '+(j._web.sources||[]).map(function(s){return s.url;}).join(' | ');$('#msgs').appendChild(m);}
+      if(j._router){var m2=document.createElement('div');m2.className='meta';m2.textContent='router: '+(j._router.routed_model||j.model)+' | tier '+(j._router.tier!=null?j._router.tier:'?')+' | $'+(j._router.estimated_cost_usd!=null?j._router.estimated_cost_usd:0);$('#msgs').appendChild(m2);}
+    }
+  }catch(e){addMsg('err',String(e.message||e));}
+  btn.disabled=false;
+};
+$('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').click();});
+$('#key').addEventListener('input',function(){save(msgs);loadModels();});
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
+</script></body></html>`;
 
 const TITLE = 'QNFO Notes - research chat (qnfo-ai router)';
 const SHORT = 'QNFO Notes';
@@ -1095,7 +1176,7 @@ export default {
 
     // ---- v4.6.0: web browsing ----
     if (path === '/' && method === 'GET') {
-      return new Response(PLAYGROUND_HTML.replace('__TITLE__', 'QNFO Notes - research chat (qnfo-ai router)').replace('__KEY_HINT__', 'tokens/qnfo-ai'), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
+      return new Response(PLAYGROUND_HTML.replace('__TITLE__', 'QNFO Notes - research chat (qnfo-ai router)').replace('__KEY_HINT__', 'tokens/qnfo-ai').replace('__DEFAULT_MODEL__', 'glm-5.2').replace('__STREAM__', 'true'), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' } });
     }
     if (path === '/v1/web/search' && method === 'GET') {
       const authH = request.headers.get('Authorization') || '';
