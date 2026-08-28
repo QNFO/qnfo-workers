@@ -27,6 +27,11 @@ index_name = "qwav-research-v2"
 binding = "LOG_VZ"
 index_name = "qnfo-ai-log"
 
+# v5.1.0 — personal-life Vectorize (STRICTLY separate from QNFO/QWAV — separation mandate)
+[[vectorize]]
+binding = "PERSONAL_VZ"
+index_name = "personal-life"
+
 # QNFO_AUDIT -> qnfo-audit D1 (ai_queries table) for /v1/history
 [[d1_databases]]
 binding = "QNFO_AUDIT"
