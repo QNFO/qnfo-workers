@@ -922,7 +922,7 @@ var NL=String.fromCharCode(10);
 var savedModel='';
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function md(s){
-  var out=[];var blocks=String(s||'').split('```');
+  var out=[];var tb=String.fromCharCode(96).repeat(3);var blocks=String(s||'').split(tb);
   for(var i=0;i<blocks.length;i++){
     var b=blocks[i];
     if(i%2===1){out.push('<pre>'+esc(b)+'</pre>');}
@@ -930,7 +930,7 @@ function md(s){
       var p=b.split('**');var mid=[];
       for(var j=0;j<p.length;j++){mid.push(j%2===1?'<b>'+esc(p[j])+'</b>':esc(p[j]));}
       var t=mid.join('');
-      var c=t.split('`');var fin=[];
+      var c=t.split(String.fromCharCode(96));var fin=[];
       for(var k=0;k<c.length;k++){fin.push(k%2===1?'<code>'+c[k]+'</code>':c[k]);}
       out.push(fin.join('').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').split(NL).join('<br>'));
     }
