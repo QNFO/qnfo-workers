@@ -1,0 +1,46 @@
+name = "qnfo-cloud-ops"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Secrets:
+#   EMAIL_API_KEY - qnfo-email Worker API key (same value as qnfo-email's API_KEY)
+#   INFRA_TOKEN   - qnfo-infra token (same value as qnfo-infra's INFRA_TOKEN)
+#   DIGEST_TO     - digest recipient (default rwnquni@outlook.com)
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Scheduled cloud operations — all QNFO jobs run at the edge, no local scheduler
+[triggers]
+crons = [
+  "0 8,14 * * 1-5",   # email-triage (Mon-Fri 08:00 + 14:00 Amsterdam)
+  "30 8 * * 1-5",     # briefing      (Mon-Fri 08:30 Amsterdam)
+  "0 10 * * 1-5",     # research-scan (Mon-Fri 10:00 Amsterdam)
+  "0 17 * * 5",       # weekly        (Fri 17:00 Amsterdam)
+  "0 6 * * 7",        # weekly-ops    (Sun 06:00 Amsterdam)
+  "0 8 * * 1",        # portfolio-sync (Mon 08:00 Amsterdam)
+]
+
+# qnfo-audit D1 (audit_sessions log, emails, intents, programs)
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# qnfo-email service (inbox check + status updates)
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+# qnfo-infra service (records + analytics + state)
+[[services]]
+binding = "QNFO_INFRA"
+service = "qnfo-infra"
+environment = "production"
+
+# Cloudflare Email Sending (digest delivery)
+[[send_email]]
+name = "SEND_EMAIL"
