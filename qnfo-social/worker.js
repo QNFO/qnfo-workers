@@ -1,7 +1,14 @@
-// qnfo-social - cloud-based Bluesky posting (AT Protocol).
-// Replaces local bluesky_post.py. Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN.
-// D1 binding: DB (qnfo-audit.social_threads). Cron posts the oldest queued thread.
+// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose.
+// Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN. D1: DB (qnfo-audit.social_threads). AI: env.AI.
+// Cron posts oldest queued thread. /compose drafts a thread from title+abstract (draft -> approve -> queued).
 const BSKY = 'https://bsky.social/xrpc';
+const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
+
+function truncate(text, max) {
+  const pts = Array.from(String(text || ''));
+  if (pts.length <= max) return String(text || '');
+  return pts.slice(0, max).join('');
+}
 
 function auth(req, env) {
   const exp = env.SOCIAL_TOKEN;
@@ -23,7 +30,7 @@ async function session(env) {
 }
 
 async function postText(s, text, reply) {
-  const record = { text: text, createdAt: new Date().toISOString() };
+  const record = { text: truncate(text, 290), createdAt: new Date().toISOString() };
   if (reply) record.reply = reply;
   const r = await fetch(BSKY + '/com.atproto.repo.createRecord', {
     method: 'POST',
@@ -47,17 +54,38 @@ async function postThread(s, posts) {
   return uris;
 }
 
+function sanitizePosts(raw) {
+  return (raw || []).map(function(x){ return truncate(String(x), 290); }).filter(function(x){ return x.trim(); });
+}
+
+function extractText(ai) {
+  if (!ai) return '';
+  if (typeof ai === 'string') return ai;
+  if (typeof ai.response === 'string' && ai.response) return ai.response;
+  var ch = (ai.choices && ai.choices[0]) || (ai.result && ai.result.choices && ai.result.choices[0]);
+  if (ch) {
+    if (ch.message && typeof ch.message.content === 'string') return ch.message.content;
+    if (typeof ch.text === 'string') return ch.text;
+  }
+  return '';
+}
+
 export default {
   async scheduled(event, env) {
     const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
     if (!row) return;
     try {
+      await env.DB.prepare("UPDATE social_threads SET status='posting' WHERE id=? AND status='queued'").bind(row.id).run();
       const posts = JSON.parse(row.posts);
+      if (!Array.isArray(posts) || !posts.length) throw new Error('bad posts payload');
       const s = await session(env);
       const uris = await postThread(s, posts);
-      await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now') WHERE id=?").bind(row.id).run();
+      await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
       console.log('cron posted thread', row.slug, uris[0]);
-    } catch (e) { console.error('cron post failed', row.slug, String(e)); }
+    } catch (e) {
+      await env.DB.prepare("UPDATE social_threads SET status='failed', error=?, retry_count=retry_count+1 WHERE id=?").bind(String(e).slice(0, 300), row.id).run();
+      console.error('cron post failed', row.slug, String(e));
+    }
   },
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -70,34 +98,71 @@ export default {
       if (p === '/post' && m === 'POST') {
         const b = await request.json();
         const s = await session(env);
-        const r = await postText(s, String(b.text || '').slice(0, 290));
+        const r = await postText(s, String(b.text || ''));
         return new Response(JSON.stringify({ ok: true, uri: r.uri }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/thread' && m === 'POST') {
         const b = await request.json();
-        const posts = (b.posts || []).map(function(x){ return String(x).slice(0, 290); }).filter(function(x){ return x.trim(); });
+        const posts = sanitizePosts(b.posts);
         if (!posts.length) return new Response(JSON.stringify({ error: 'no posts' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
         const s = await session(env);
         const uris = await postThread(s, posts);
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/threads' && m === 'GET') {
-        const rows = await env.DB.prepare("SELECT id, slug, title, status, posted_at, created_at FROM social_threads ORDER BY id DESC LIMIT 50").all();
+        const rows = await env.DB.prepare("SELECT id, slug, title, status, error, retry_count, posted_at, created_at FROM social_threads ORDER BY id DESC LIMIT 50").all();
         return new Response(JSON.stringify(rows.results || []), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/queue' && m === 'POST') {
         const b = await request.json();
-        await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, posts) VALUES (?,?,?)").bind(String(b.slug), String(b.title || ''), JSON.stringify(b.posts || [])).run();
+        const posts = sanitizePosts(b.posts);
+        await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'queued')").bind(String(b.slug), String(b.title || ''), JSON.stringify(posts)).run();
         return new Response(JSON.stringify({ ok: true, slug: b.slug }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/compose' && m === 'POST') {
+        const b = await request.json();
+        const title = String(b.title || '').slice(0, 300);
+        const abstract = String(b.abstract || '').slice(0, 4000);
+        const doi = String(b.doi || '');
+        if (!title || !abstract) return new Response(JSON.stringify({ error: 'title and abstract required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+        const prompt = [
+          "You are a promotion writer for QNFO, an open-science research org. Write a 5-post Bluesky thread that amplifies a research paper accurately.",
+          "Rules:",
+          "1. Post 1: a hook stating the core claim or a provocative question (why a reader should care).",
+          "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
+          "3. Post 3: why/how it matters, in accessible terms.",
+          "4. Post 4: how a reader can check it (falsifiability / open access) - invite scrutiny.",
+          "5. Post 5: the DOI link then an open discussion question.",
+          "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
+          "Output ONLY the 5 posts, one per line, no numbering, no markdown.",
+          "DOI: " + (doi || '(none provided)'),
+          "Title: " + title,
+          "Abstract: " + abstract
+        ].join("\n");
+        const ai = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
+        const text = extractText(ai);
+        const posts = sanitizePosts(text.split("\n"));
+        if (posts.length < 3) return new Response(JSON.stringify({ error: 'compose produced too few posts', raw: text.slice(0, 500) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
+        const slug = String(b.slug || ('draft-' + Date.now().toString(36)));
+        await env.DB.prepare("INSERT INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'draft')").bind(slug, title, JSON.stringify(posts.slice(0, 6))).run();
+        return new Response(JSON.stringify({ ok: true, slug: slug, status: 'draft', posts: posts.slice(0, 6) }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/approve' && m === 'POST') {
+        const b = await request.json();
+        const row = await env.DB.prepare("SELECT * FROM social_threads WHERE slug=?").bind(String(b.slug)).first();
+        if (!row) return new Response(JSON.stringify({ error: 'thread not found' }), { status: 404, headers: { 'Content-Type': 'application/json', ...cors } });
+        await env.DB.prepare("UPDATE social_threads SET status='queued' WHERE slug=? AND status='draft'").bind(String(b.slug)).run();
+        return new Response(JSON.stringify({ ok: true, slug: b.slug, status: 'queued' }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/broadcast' && m === 'POST') {
         const b = await request.json();
         const row = await env.DB.prepare("SELECT * FROM social_threads WHERE slug=?").bind(String(b.slug)).first();
         if (!row) return new Response(JSON.stringify({ error: 'thread not found' }), { status: 404, headers: { 'Content-Type': 'application/json', ...cors } });
-        const posts = JSON.parse(row.posts);
+        if (row.status === 'posted') return new Response(JSON.stringify({ error: 'already posted', status: row.status }), { status: 409, headers: { 'Content-Type': 'application/json', ...cors } });
+        const posts = sanitizePosts(JSON.parse(row.posts));
         const s = await session(env);
         const uris = await postThread(s, posts);
-        await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now') WHERE id=?").bind(row.id).run();
+        await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       return new Response('not found', { status: 404, headers: cors });
