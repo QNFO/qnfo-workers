@@ -21,6 +21,7 @@ ACCT = os.environ.get("CF_ACCOUNT", "edb167b78c9fb901ea5bca3ce58ccc4b")
 D1_AUDIT = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 D1_PERSONAL = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 TOKENS_DIR = os.environ.get("QNFO_TOKENS", "C:/Users/LENOVO/tokens")
+CF_TOKEN_OVERRIDE = None
 
 
 def tok(name):
@@ -49,7 +50,7 @@ def req(url, data=None, headers=None, timeout=60):
 
 
 def cf(path, sql=None):
-    token = tok("cloudflare")
+    token = CF_TOKEN_OVERRIDE or tok("cloudflare")
     if not token:
         return None, "no cf token"
     url = "https://api.cloudflare.com/client/v4" + path
@@ -82,9 +83,15 @@ def main():
     ap = argparse.ArgumentParser(description="QNFO notes-API runtime verification")
     ap.add_argument("--router-key", default=None)
     ap.add_argument("--personal-key", default=None)
+    ap.add_argument("--cf-token", default=None)
+    ap.add_argument("--cf-account", default=None)
     ap.add_argument("--expect-router-version", default="4.6.3")
     ap.add_argument("--expect-personal-version", default="v1.3.0")
     args = ap.parse_args()
+    global CF_TOKEN_OVERRIDE, ACCT
+    CF_TOKEN_OVERRIDE = args.cf_token or tok("cloudflare")
+    if args.cf_account:
+        ACCT = args.cf_account
 
     rk = args.router_key or tok("qnfo-ai")
     pk = args.personal_key or tok("personal-api")

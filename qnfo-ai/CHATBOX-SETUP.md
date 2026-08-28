@@ -5,7 +5,7 @@ This page wires it to the Cloudflare stack: two OpenAI-compatible providers, two
 and the QNFO prompt library. Everything below runs off Cloudflare — Chatbox is only the UI
 (its local app data holds UI config and chat history, nothing project-critical).
 
-## 1. Providers (Settings -> Settings -> Model Providers -> Add)
+## 1. Providers (Settings -> Model Providers -> Add)
 
 ### QNFO Router (research)
 - Provider type: **OpenAI API compatible**

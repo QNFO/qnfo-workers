@@ -68,7 +68,7 @@ curl -s "https://personal-life-search.q08.workers.dev/search?q=<topic>&topK=5"
 - `GET /` — playground (installable PWA). `GET /health` — version.
 
 ### personal-life-search (personal, public read)
-`/search?q=`, `/recommend?q=&scope=`, `/profile`, `/events`, `/browse`, `/stats`.
+`/search?q=`, `/recommend?q=&scope=`, `/profile`, `/events`, `/browse`, `/stats`, `/health`.
 
 ## 3. Models and cost
 
@@ -77,6 +77,7 @@ Tier 0 = Workers AI free ($0): `glm-5.2` (reasoning), `kimi-k2.6` (reasoning), `
 `llama-3.2-1b`, `gemma-2b`, `granite-h-micro`.
 Tier 1 = DeepSeek API: `deepseek-v4-flash` ($0.14/$0.28 per 1M), `deepseek-v4-flash-thinking` (reasoning).
 Tier 2 = `deepseek-v4-pro` ($2.19 per 1M).
+Virtual models: `auto` (free-first routing) and `ensemble` (verified multi-model chain) - both $0.
 Embeddings (bge-base-en-v1.5) and DDG search: $0. Typical casual note-taking: $0/month.
 
 ## 4. How the web layer works
