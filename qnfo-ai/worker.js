@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: frontier coder + reasoning validator + 1M-ctx reviewer (best models).
 
-const VERSION = '5.5.2';
+const VERSION = '5.5.3';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -401,8 +401,8 @@ async function searchQnfoIndexes(env, q, k) {
 // kimi-k2.7-code (frontier coder), gpt-oss-120b (reasoning validator), deepseek-v4-pro (1M-ctx reviewer).
 const ENSEMBLE = {
   primary:   { wa: '@cf/moonshotai/kimi-k2.7-code', ctx: 262144 },   // frontier coder (262k ctx, reasoning + vision, $0.95/M)
-  validator: { wa: '@cf/openai/gpt-oss-120b' },                      // independent reasoning check ($0.35/M)
-  reviewer:  { wa: '@cf/deepseek-ai/deepseek-v4-pro-0813' },         // 1M-ctx reasoning refinement ($1.32/M)
+  validator: { wa: '@cf/openai/gpt-oss-120b', ctx: 131072 },         // independent reasoning check ($0.35/M)
+  reviewer:  { wa: '@cf/deepseek-ai/deepseek-v4-pro-0813', ctx: 1048576 }, // 1M-ctx reasoning refinement ($1.32/M)
 };
 
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
@@ -687,7 +687,10 @@ async function runEnsemble(env, messages, maxTokens) {
     // verdict was never emitted (extractWAContent surfaced the truncated reasoning instead) and
     // every answer was spuriously FAILed -> reviewer always re-ran. Raise the budget and match
     // the verdict anywhere in the output (after any thinking), not only at the start.
-    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 1024, false);
+    // v5.5.3: fit the validator input to its own ctx (131k) — the primary holds 262k, so inputs
+    // in [131k, 261k] previously overflowed the validator -> 400 -> caught -> 'skipped' (silent
+    // no-validation). Truncate so validation actually runs.
+    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false);
     const vText = extractWAContent(vOut).trim();
     const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
     agreementRate = pass ? 1 : 0;
@@ -700,7 +703,7 @@ async function runEnsemble(env, messages, maxTokens) {
         ...messages,
         { role: 'assistant', content: primaryText },
       ];
-      const rOut = await runWorkersAI(env, ENSEMBLE.reviewer.wa, rMsg, Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false);
+      const rOut = await runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false);
       const rText = extractWAContent(rOut);
       if (rText.trim()) {
         finalText = rText;
@@ -1002,7 +1005,7 @@ async function handleChat(env, body, authHeader, ctx) {
             if (gwResp.ok) {
               const reader = gwResp.body.getReader();
               const decoder = new TextDecoder();
-              let buf = '';
+              let buf = '', acc = '';
               const enc = new TextEncoder();
               const stream = new ReadableStream({
                 async start(controller) {
@@ -1022,6 +1025,7 @@ async function handleChat(env, body, authHeader, ctx) {
                         try { parsed = JSON.parse(data); } catch { continue; }
                         const delta = parsed.choices?.[0]?.delta?.content ?? '';
                         if (!delta) continue;
+                        acc += delta;
                         const payload = {
                           id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
                           object: 'chat.completion.chunk',
@@ -1035,7 +1039,7 @@ async function handleChat(env, body, authHeader, ctx) {
                     const donePayload = {
                       id: 'chatcmpl-done', object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000),
                       model: routedModel,
-                      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+                      choices: [{ index: 0, delta: {}, finish_reason: estimateOutputTokens(acc) >= clampTokens(max_tokens, MAX_OUT[effSpec.wa]) ? 'length' : 'stop' }],
                       _router: mkRouter(routedModel, 'single'),
                     };
                     controller.enqueue(enc.encode('data: ' + JSON.stringify(donePayload) + '\n\n'));
@@ -1064,6 +1068,7 @@ async function handleChat(env, body, authHeader, ctx) {
         const stream = new ReadableStream({
           async start(controller) {
             try {
+              let acc = '';
               const reader = aiResp.getReader();
               while (true) {
                 const { done, value } = await reader.read();
@@ -1072,6 +1077,7 @@ async function handleChat(env, body, authHeader, ctx) {
                 let parsed;
                 try { parsed = JSON.parse(chunk); } catch { parsed = { response: chunk }; }
                 const delta = parsed.response ?? parsed.delta?.content ?? chunk;
+                acc += delta;
                 const payload = {
                   id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
                   object: 'chat.completion.chunk',
@@ -1084,7 +1090,7 @@ async function handleChat(env, body, authHeader, ctx) {
               const donePayload = {
                 id: 'chatcmpl-done', object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000),
                 model: routedModel,
-                choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+                choices: [{ index: 0, delta: {}, finish_reason: estimateOutputTokens(acc) >= clampTokens(max_tokens, MAX_OUT[effSpec.wa]) ? 'length' : 'stop' }],
                 _router: mkRouter(routedModel, 'single'),
               };
               controller.enqueue(encoder.encode('data: ' + JSON.stringify(donePayload) + '\n\n'));
@@ -1138,13 +1144,18 @@ async function handleChat(env, body, authHeader, ctx) {
 
     if (!content && !toolCalls) content = FALLBACK_TEXT;
 
+    // v5.5.3: finish_reason 'length' + real token usage for the single-model non-stream path.
+    const singleCap = clampTokens(max_tokens, effSpec.wa ? MAX_OUT[effSpec.wa] : DEFAULT_MAX_OUT);
+    const singleOutTokens = estimateOutputTokens(content);
+    const contentTruncated = (content || '').trim().length > 0 && singleOutTokens >= singleCap;
+
     const respBody = {
       id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
       object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
       model: routedModel,
-      choices: [{ index: 0, message: { role: 'assistant', content, ...(toolCalls ? { tool_calls: toolCalls } : {}) }, finish_reason: toolCalls ? 'tool_calls' : 'stop' }],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      choices: [{ index: 0, message: { role: 'assistant', content, ...(toolCalls ? { tool_calls: toolCalls } : {}) }, finish_reason: toolCalls ? 'tool_calls' : (contentTruncated ? 'length' : 'stop') }],
+      usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: singleOutTokens, total_tokens: estimateInputTokens(messages) + singleOutTokens },
       _router: mkRouter(routedModel, isAuto ? 'auto' : 'single', {
         deepseek_profile: effSpec.api || 'workers-ai',
         estimated_cost_usd: effSpec.tier === 0 ? 0 : undefined,
