@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: frontier coder + reasoning validator + 1M-ctx reviewer (best models).
 
-const VERSION = '5.5.1';
+const VERSION = '5.5.2';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -40,10 +40,10 @@ const MODELS = {
   'glm-4.7-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-4.7-flash',             reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.06/M — cheap general default (131k ctx, reasoning)
   'gemma-4-26b':               { tier: 0, family: 'google',   wa: '@cf/google/gemma-4-26b-a4b-it',         reasoning: false, maxOut: 8192,  ctx: 131072, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.10/M
   'glm-5.3-flash':             { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3-flash',             reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: true  },   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
-  'gpt-oss-120b':              { tier: 0, family: 'openai',   wa: '@cf/openai/gpt-oss-120b',              reasoning: true,  maxOut: 8192,  ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $0.35/M reasoning/agentic
+  'gpt-oss-120b':              { tier: 0, family: 'openai',   wa: '@cf/openai/gpt-oss-120b',              reasoning: true,  maxOut: 32768, ctx: 131072, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $0.35/M reasoning/agentic
   'deepseek-v4-flash-wa':      { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-flash-0731', reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.7, topP: 0.9,  tools: true,  vision: false },   // $0.44/M official DeepSeek V4 Flash (1M ctx, reasoning)
-  'deepseek-v4-pro-wa':        { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-pro-0813',   reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.32/M 1M-ctx reasoning
-  'kimi-k2.7-code':            { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.7-code',          reasoning: true,  maxOut: 8192,  ctx: 262144, temp: 0.2, topP: 0.95, tools: true,  vision: true  },   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
+  'deepseek-v4-pro-wa':        { tier: 0, family: 'deepseek', wa: '@cf/deepseek-ai/deepseek-v4-pro-0813',   reasoning: true,  maxOut: 32768, ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.32/M 1M-ctx reasoning
+  'kimi-k2.7-code':            { tier: 0, family: 'moonshot', wa: '@cf/moonshotai/kimi-k2.7-code',          reasoning: true,  maxOut: 32768, ctx: 262144, temp: 0.2, topP: 0.95, tools: true,  vision: true  },   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
   'glm-5.3':                   { tier: 0, family: 'zai',      wa: '@cf/zai-org/glm-5.3',                   reasoning: true,  maxOut: 8192,  ctx: 1048576, temp: 0.6, topP: 0.9,  tools: true,  vision: false },   // $1.40/M 1M-ctx agentic coding
   // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
@@ -82,10 +82,10 @@ const MAX_OUT = {
   '@cf/zai-org/glm-4.7-flash': 8192,
   '@cf/google/gemma-4-26b-a4b-it': 8192,
   '@cf/zai-org/glm-5.3-flash': 8192,
-  '@cf/openai/gpt-oss-120b': 8192,
+  '@cf/openai/gpt-oss-120b': 32768,
   '@cf/deepseek-ai/deepseek-v4-flash-0731': 8192,
-  '@cf/deepseek-ai/deepseek-v4-pro-0813': 8192,
-  '@cf/moonshotai/kimi-k2.7-code': 8192,
+  '@cf/deepseek-ai/deepseek-v4-pro-0813': 32768,
+  '@cf/moonshotai/kimi-k2.7-code': 32768,
   '@cf/zai-org/glm-5.3': 8192,
 };
 const DEFAULT_MAX_OUT = 8192;
@@ -102,10 +102,10 @@ const FALLBACK_TEXT = 'QNFO research assistant (online). QNFO is not an acronym 
 // pushes input+output over the model's hard limit.
 const CTX_SAFETY_MARGIN = 512;
 
-// Clamp max_tokens to a model cap. maxTokens may be 0/undefined -> default 4096.
+// Clamp max_tokens to a model cap. maxTokens may be 0/undefined -> default DEFAULT_MAX_OUT.
 function clampTokens(maxTokens, cap) {
   const c = cap || DEFAULT_MAX_OUT;
-  const t = Number.isFinite(maxTokens) && maxTokens > 0 ? Math.floor(maxTokens) : 4096;
+  const t = Number.isFinite(maxTokens) && maxTokens > 0 ? Math.floor(maxTokens) : DEFAULT_MAX_OUT;
   return Math.min(t, c);
 }
 
@@ -124,6 +124,12 @@ function estimateInputTokens(messages) {
   // lets over-limit payloads through -> upstream 400 -> router 502). /3 over-estimates
   // slightly for prose, which only makes the truncation guard trigger a bit earlier (safe).
   return Math.ceil(chars / 3);
+}
+
+// v5.5.2: output-token estimate (mirrors the /3 input heuristic); used for finish_reason
+// truncation detection and completion_tokens telemetry (replaces the hardcoded 0).
+function estimateOutputTokens(text) {
+  return Math.ceil(String(text || '').length / 3);
 }
 
 // v5.0.0 — per-model context window. Workers AI documented values live in MODELS[].ctx;
@@ -486,8 +492,23 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
     aiBody.tools = tools;
     aiBody.tool_choice = 'auto';
   }
-  const out = await env.AI.run(modelId, aiBody);
-  return out;
+  // v5.5.2: self-correcting output cap — if a model rejects an oversized max_tokens
+  // (upstream 400), retry with a halved cap so a raised MAX_OUT can never surface as a
+  // router 502 (Bad-Gateway hardening; BLAME-EXTERNAL-1 class).
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await env.AI.run(modelId, aiBody);
+    } catch (e) {
+      const msg = String((e && e.message) || e || '');
+      const isCapErr = /max_tokens|max output|context window|too (many|long)|token limit|max_new_tokens/i.test(msg);
+      const cur = aiBody.max_tokens;
+      if (isCapErr && attempt < 3 && Number.isFinite(cur) && cur > 1024) {
+        aiBody.max_tokens = Math.max(1024, Math.floor(cur / 2));
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 // v5.0.0 — extract function-call tool_calls from any Workers AI response shape and
@@ -662,9 +683,13 @@ async function runEnsemble(env, messages, maxTokens) {
       ...messages,
       { role: 'assistant', content: primaryText },
     ];
-    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 256, false);
+    // v5.5.2: 256 tokens starved the reasoning validator's chain-of-thought, so the PASS/FAIL
+    // verdict was never emitted (extractWAContent surfaced the truncated reasoning instead) and
+    // every answer was spuriously FAILed -> reviewer always re-ran. Raise the budget and match
+    // the verdict anywhere in the output (after any thinking), not only at the start.
+    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, vMsg, 1024, false);
     const vText = extractWAContent(vOut).trim();
-    const pass = /^pass/i.test(vText);
+    const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
     agreementRate = pass ? 1 : 0;
 
     if (!pass) {
@@ -886,7 +911,7 @@ async function handleChat(env, body, authHeader, ctx) {
   if (isEnsemble || autoEnsemble) {
     try {
       const ensResp = (content, body) => {
-        const logRec = { ...mkLogRec(), model: 'ensemble', streamed: isStream ? 1 : 0, response: String(content).slice(0, 4000), latency_ms: Date.now() - t0 };
+        const logRec = { ...mkLogRec(), model: 'ensemble', streamed: isStream ? 1 : 0, response: String(content).slice(0, 4000), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
         if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
         if (isStream) {
           const enc8 = new TextEncoder();
@@ -905,16 +930,19 @@ async function handleChat(env, body, authHeader, ctx) {
         return json(body);
       };
       if (estInputTokens + clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]) > ENSEMBLE.primary.ctx - CTX_SAFETY_MARGIN) {
-        const fb = await callDeepSeek(env, MODELS['deepseek-v4-flash'].api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
+        const fbCap = clampTokens(max_tokens, DEFAULT_MAX_OUT);
+        const fb = await callDeepSeek(env, MODELS['deepseek-v4-flash'].api, messages, fbCap, false);
         const fbContent = (fb?.choices?.[0]?.message?.content) ?? '';
         const fbText = fbContent || FALLBACK_TEXT;
+        const fbOutTokens = estimateOutputTokens(fbText);
+        const fbTruncated = (fbContent || '').trim().length > 0 && fbOutTokens >= fbCap;
         const fbBody = {
           id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
           object: 'chat.completion',
           created: Math.floor(Date.now() / 1000),
           model: 'ensemble',
-          choices: [{ index: 0, message: { role: 'assistant', content: fbText }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+          choices: [{ index: 0, message: { role: 'assistant', content: fbText }, finish_reason: fbTruncated ? 'length' : 'stop' }],
+          usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: fbOutTokens, total_tokens: estimateInputTokens(messages) + fbOutTokens },
           _router: mkRouter('deepseek-v4-flash', 'ensemble-context-fallback', {
             ensemble_members: ['fallback-deepseek'],
             verification_result: 'context_fallback',
@@ -923,15 +951,18 @@ async function handleChat(env, body, authHeader, ctx) {
         };
         return ensResp(fbText, fbBody);
       }
-      const ens = await runEnsemble(env, messages, clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]));
+      const ensCap = clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]);
+      const ens = await runEnsemble(env, messages, ensCap);
       const ensText = (ens.text || '').trim() || FALLBACK_TEXT;
+      const ensOutTokens = estimateOutputTokens(ensText);
+      const ensTruncated = (ens.text || '').trim().length > 0 && ensOutTokens >= ensCap;
       const respBody = {
         id: 'chatcmpl-' + Math.random().toString(16).slice(2, 10),
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
         model: 'ensemble',
-        choices: [{ index: 0, message: { role: 'assistant', content: ensText }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        choices: [{ index: 0, message: { role: 'assistant', content: ensText }, finish_reason: ensTruncated ? 'length' : 'stop' }],
+        usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: ensOutTokens, total_tokens: estimateInputTokens(messages) + ensOutTokens },
         _router: mkRouter('ensemble', autoEnsemble ? 'auto' : 'ensemble', {
           ensemble_members: ens.members,
           verified_by: ens.verified_by,
@@ -1127,7 +1158,7 @@ async function handleChat(env, body, authHeader, ctx) {
       }),
       ...(webSources ? { _web: { query: lastUserText(messages).slice(0, 300), sources: webSources } } : {}),
     };
-    const logRec = { ...mkLogRec(), streamed: 0, response: content.slice(0, 4000), latency_ms: Date.now() - t0 };
+    const logRec = { ...mkLogRec(), streamed: 0, response: content.slice(0, 4000), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
