@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.0.0", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.1.0", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -101,6 +101,16 @@ function isInternalThread(title) {
   return INTERNAL_MARKERS.some((m) => t.indexOf(m.toLowerCase()) >= 0);
 }
 __name(isInternalThread, "isInternalThread");
+var JUNK_MARKERS = ["say ok", "say okay", "test", "testing", "first turn", "second turn", "third turn", "auto-express", "block the response", "opening turn", "capital of", "what is the capital", "who is", "who are you", "what is your name", "tell me a joke", "write a poem", "write me a", "make me a", "create me", "explain simply", "explain everything", "explain like i", "3 sentences", "5 years old", "five years old", "good morning", "good night", "thank you", "thanks", "you're welcome", "are you sure", "can you", "please", "what can you tell me about", "what do you know about", "what is love", "the meaning of life", "continue", "repeat", "again", "rotation verification", "you decide how a newly extracted memory", "you synthesize a few durable", "probe does", "probe: does", "does auto-express", "what is the capital of", "say the word", "just say"];
+function isJunkThread(title) {
+  const raw = String(title || "").trim();
+  if (!raw) return true;
+  if (raw.length < 12) return true;
+  const t = raw.toLowerCase();
+  return JUNK_MARKERS.some((m) => t.indexOf(m) >= 0);
+}
+__name(isJunkThread, "isJunkThread");
+
 
 // ---- Live + archive thread sources ----
 async function liveThreads(env) {
@@ -110,7 +120,7 @@ async function liveThreads(env) {
       "SELECT c.thread AS id, COUNT(*) AS n, MIN(c.ts) AS first_ts, MAX(c.ts) AS last_ts, " +
       "(SELECT content FROM chat c2 WHERE c2.thread = c.thread AND c2.role = 'user' ORDER BY c2.ts ASC, c2.id ASC LIMIT 1) AS title, " +
       "(SELECT model FROM chat c2 WHERE c2.thread = c.thread ORDER BY c2.ts DESC LIMIT 1) AS model " +
-      "FROM chat c GROUP BY c.thread ORDER BY last_ts DESC LIMIT 300"
+      "FROM chat c GROUP BY c.thread ORDER BY last_ts DESC LIMIT 20"
     ).all();
     const items = [];
     for (const t of res.results || []) {
@@ -119,6 +129,7 @@ async function liveThreads(env) {
       if (!firstTs && !lastTs) continue;
       const rawTitle = String(t.title || "(untitled)");
       if (isInternalThread(rawTitle)) continue;
+      if (isJunkThread(rawTitle)) continue;
       items.push({
         id: t.id,
         kind: "thread",
@@ -172,16 +183,9 @@ async function archiveThreads(env) {
 }
 __name(archiveThreads, "archiveThreads");
 async function allThreads(env) {
-  const [live, arch] = await Promise.all([liveThreads(env), archiveThreads(env)]);
-  const seen = {};
-  const merged = [];
-  for (const it of live.concat(arch)) {
-    if (seen[it.id]) continue;
-    seen[it.id] = 1;
-    merged.push(it);
-  }
-  merged.sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")));
-  return merged;
+  const live = await liveThreads(env);
+  live.sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")));
+  return live;
 }
 __name(allThreads, "allThreads");
 async function searchThreadIds(env, q) {
@@ -190,10 +194,6 @@ async function searchThreadIds(env, q) {
   try {
     const live = await env.QNFO_AUDIT.prepare("SELECT DISTINCT thread AS id FROM chat WHERE content LIKE ? LIMIT 300").bind(like).all();
     (live.results || []).forEach((r) => { ids[r.id] = 1; });
-  } catch (e) {}
-  try {
-    const arch = await env.QNFO_AUDIT.prepare("SELECT thread_id AS id FROM chat_sessions WHERE category = 'research' AND (title LIKE ? OR messages LIKE ?) LIMIT 300").bind(like, like).all();
-    (arch.results || []).forEach((r) => { ids[r.id] = 1; });
   } catch (e) {}
   return ids;
 }
@@ -227,6 +227,7 @@ async function handleSession(path, env) {
   if (chatRows.length) {
     const firstUser = chatRows.find((m) => m && m.role === "user");
     if (isInternalThread(firstUser && firstUser.content || "")) return json({ error: "Session not found or not public" }, 404);
+    if (isJunkThread(firstUser && firstUser.content || "")) return json({ error: "Session not found or not public" }, 404);
     const messages = chatRows.map((m) => ({
       role: m.role || "unknown",
       content: redact(String(m.content || "").slice(0, 2e4)),
@@ -245,35 +246,7 @@ async function handleSession(path, env) {
       messages
     });
   }
-  // ARCHIVE: DeepChat research session
-  const row = await env.QNFO_AUDIT.prepare(
-    "SELECT thread_id, title, category, agent_id, model_id, messages, created_at, updated_at FROM chat_sessions WHERE thread_id = ? AND category = 'research'"
-  ).bind(id).first();
-  if (!row) return json({ error: "Session not found or not public" }, 404);
-  let messages = [];
-  try {
-    messages = JSON.parse(row.messages || "[]");
-  } catch (e) {
-    messages = [];
-  }
-  if (!Array.isArray(messages)) messages = [];
-  const clean = messages.map((m) => ({
-    role: m && m.role || "unknown",
-    content: redact(String(m && m.content || "").slice(0, 2e4)),
-    timestamp: m && m.timestamp ? new Date(m.timestamp).toISOString() : null
-  }));
-  return json({
-    id: row.thread_id,
-    kind: "thread",
-    source: "archive",
-    title: redact((row.title || "").slice(0, 500)),
-    category: row.category,
-    model: row.model_id || null,
-    created_at: normTs(row.created_at),
-    updated_at: normTs(row.updated_at),
-    message_count: clean.length,
-    messages: clean
-  });
+  return json({ error: "Session not found or not public" }, 404);
 }
 __name(handleSession, "handleSession");
 async function handleFeed(url, env) {
@@ -360,17 +333,7 @@ async function relatedThreads(query, env, limit = 6) {
       if (r.role === "user" && !meta[r.thread].title) meta[r.thread].title = String(r.content || "").slice(0, 200);
     }
   } catch (e) {}
-  try {
-    const archRes = await env.QNFO_AUDIT.prepare("SELECT thread_id, title, messages, updated_at FROM chat_sessions WHERE category = 'research'").all();
-    for (const t of archRes.results || []) {
-      let msgs = [];
-      try { msgs = JSON.parse(t.messages || "[]"); } catch (e) { msgs = []; }
-      if (!Array.isArray(msgs) || msgs.length === 0) continue;
-      const userMsg = msgs.find((m) => m && m.role === "user");
-      hay[t.thread_id] = (t.title || "") + " " + msgs.map((m) => m && m.content || "").join(" ");
-      meta[t.thread_id] = { title: t.title || (userMsg && userMsg.content) || t.thread_id, n: msgs.length, last_ts: t.updated_at || null };
-    }
-  } catch (e) {}
+
   const scored = [];
   for (const id of Object.keys(hay)) {
     const lowerHay = hay[id].toLowerCase();
@@ -566,12 +529,12 @@ function typeset(el){
   function run(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise([el]).catch(function(){});}}
   if(window.MathJax){run();}else{setTimeout(run,300);setTimeout(run,1200);}
 }
-function tagHtml(s){return s&&s.source==='live'?'<span class="tag live">LIVE</span>':'<span class="tag arch">ARCHIVE</span>';}
+function tagHtml(s){return '<span class="tag live">LIVE</span>';}
 /* feed */
 function renderFeed(){
   state.offset=0;state.sessions=[];
   $('#live-dot').hidden=true;
-  view.innerHTML='<section class="page"><p class="lede">A public, read-only window into the QNFO research conversations — live from the QNFO AI worker chat log. Threads appear as they happen; older research threads are kept in the archive.</p><div class="toolbar"><input id="search" type="search" placeholder="Search conversations…" autocomplete="off" aria-label="Search conversations"><span id="count-label"></span></div><div id="feed-empty" class="empty" hidden>No conversations yet — new QNFO AI worker conversations will appear here live.</div><div id="session-list" class="list"></div></section>';
+  view.innerHTML='<section class="page"><p class="lede">Live research conversations submitted through the QNFO AI worker — the most recent threads, newest first.</p><div class="toolbar"><input id="search" type="search" placeholder="Search conversations…" autocomplete="off" aria-label="Search conversations"><span id="count-label"></span></div><div id="feed-empty" class="empty" hidden>No conversations yet — new QNFO AI worker conversations will appear here live.</div><div id="session-list" class="list"></div></section>';
   var si=$('#search');si.addEventListener('input',function(){state.q=this.value.trim();loadSessions(true);});
   loadSessions(true);
   startPoll();
