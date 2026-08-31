@@ -95,6 +95,13 @@ function collapseThreads(items) {
   });
 }
 __name(collapseThreads, "collapseThreads");
+var INTERNAL_MARKERS = ["INTENT_TOKEN", "rotation verification", "intent orchestrator accepts", "You decide how a newly extracted memory", "You synthesize a few durable", "memory relates to what is already known", "accepted the rotated", "web-search find email"];
+function isInternalThread(title) {
+  const t = String(title || "").toLowerCase();
+  return INTERNAL_MARKERS.some((m) => t.indexOf(m.toLowerCase()) >= 0);
+}
+__name(isInternalThread, "isInternalThread");
+
 // ---- Live + archive thread sources ----
 async function liveThreads(env) {
   // qnfo-ai worker chat log: per-message rows grouped by thread_id
@@ -110,6 +117,8 @@ async function liveThreads(env) {
       const firstTs = normTs(t.first_ts);
       const lastTs = normTs(t.last_ts);
       if (!firstTs && !lastTs) continue;
+      const rawTitle = String(t.title || "(untitled)");
+      if (isInternalThread(rawTitle)) continue;
       items.push({
         id: t.id,
         kind: "thread",
@@ -217,6 +226,7 @@ async function handleSession(path, env) {
   const chatRows = chatRes.results || [];
   if (chatRows.length) {
     const firstUser = chatRows.find((m) => m && m.role === "user");
+    if (isInternalThread(firstUser && firstUser.content || "")) return json({ error: "Session not found or not public" }, 404);
     const messages = chatRows.map((m) => ({
       role: m.role || "unknown",
       content: redact(String(m.content || "").slice(0, 2e4)),
