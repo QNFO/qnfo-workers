@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{TITLE}</title>
+<meta name="description" content="QNFO — an open-science research collective publishing critical analyses of the quantum computing industry. {TAG}">
+<meta property="og:title" content="{TITLE}">
+<meta property="og:description" content="QNFO — open-science research, independently verifiable.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://hub.qnfo.org">
+<link rel="canonical" href="https://hub.qnfo.org">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2324315e'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' fill='%23faf7f2' font-family='Georgia,serif'%3EQ%3C/text%3E%3C/svg%3E">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
+:root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--radius:10px}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Public Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+.top{display:flex;align-items:center;gap:1.3rem;padding:1rem 1.6rem;max-width:920px;margin:0 auto;border-bottom:1px solid var(--border)}
+.brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:1.18rem;color:var(--ink);display:inline-flex;align-items:center;gap:.5rem}
+.qmark{display:inline-flex;align-items:center;justify-content:center;width:1.5rem;height:1.5rem;border-radius:6px;background:var(--accent);color:var(--paper);font-family:'Fraunces',Georgia,serif;font-size:.95rem;font-weight:600}
+.top nav{margin-left:auto;display:flex;gap:1rem;flex-wrap:wrap}
+.top nav a{color:var(--muted);font-size:.86rem;font-weight:500;padding:.3rem .5rem;border-radius:6px}
+.top nav a:hover{color:var(--accent);background:var(--accent-soft)}
+main{max-width:920px;margin:0 auto;padding:0 1.6rem 4rem}
+.hero{text-align:center;padding:4rem 0 2.4rem}
+.hero .tag{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem}
+.hero h1{font-family:'Fraunces',Georgia,serif;font-size:3rem;font-weight:600;margin:0 0 .8rem;letter-spacing:-.015em}
+.hero p{color:var(--muted);font-size:1.08rem;max-width:620px;margin:0 auto;line-height:1.7}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem;margin-top:1.6rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.3rem;display:block;color:var(--ink);transition:all .15s}
+.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.card h3{font-family:'Fraunces',Georgia,serif;font-size:1.08rem;font-weight:600;margin:0 0 .3rem}
+.card p{margin:0;font-size:.86rem;color:var(--muted);line-height:1.55}
+.card .go{font-size:.78rem;color:var(--accent);margin-top:.5rem;display:block}
+.foot{max-width:920px;margin:0 auto;padding:1.4rem 1.6rem 2.4rem;border-top:1px solid var(--border);display:flex;gap:1.4rem;justify-content:center;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.foot a{color:var(--muted)}
+.foot a:hover{color:var(--accent)}
+@media(max-width:640px){.top{flex-wrap:wrap}.top nav{margin-left:0;width:100%}.hero h1{font-size:2.4rem}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="https://hub.qnfo.org"><span class="qmark">Q</span> QNFO</a>
+  <nav>
+    <a href="https://papers.qnfo.org">Papers</a>
+    <a href="https://ideas.qnfo.org">Ideas</a>
+    <a href="https://qwav.org">QWAV</a>
+    <a href="https://ask.qwav.tech">Ask</a>
+    <a href="https://archive.qnfo.org">Archive</a>
+    <a href="https://qnfo.org/legal">License</a>
+  </nav>
+</header>
+<main>
+  <section class="hero">
+    <span class="tag">{TAG}</span>
+    <h1>QNFO</h1>
+    <p>An open-science research collective publishing critical analyses of the quantum computing industry — p-adic mathematics, ultrametric geometry, topological quantum computation, and the thermodynamic reality of computation. Every claim independently verifiable.</p>
+  </section>
+  <div class="cards">
+    <a class="card" href="https://papers.qnfo.org">
+      <h3>Research Papers</h3><p>The full corpus — number theory, physics, QEC, CS — with Zenodo DOIs.</p><span class="go">Browse papers →</span>
+    </a>
+    <a class="card" href="https://ideas.qnfo.org">
+      <h3>Ideas — Live</h3><p>Research conversations as they develop, live from the QNFO AI worker.</p><span class="go">Watch ideas →</span>
+    </a>
+    <a class="card" href="https://ask.qwav.tech">
+      <h3>Ask the Corpus</h3><p>Natural-language answers grounded in the research corpus, with citations.</p><span class="go">Ask QWAV →</span>
+    </a>
+    <a class="card" href="https://qwav.org">
+      <h3>QWAV Platform</h3><p>Pre-commercial computing benchmarked in joules-per-solution, not qubit counts.</p><span class="go">Explore QWAV →</span>
+    </a>
+    <a class="card" href="https://archive.qnfo.org">
+      <h3>Research Archive</h3><p>Archived publications and historical records.</p><span class="go">Open archive →</span>
+    </a>
+    <a class="card" href="https://graph-api.qnfo.org">
+      <h3>Knowledge Graph</h3><p>8,000+ nodes mapping the conceptual structure of the research program.</p><span class="go">Explore graph →</span>
+    </a>
+  </div>
+</main>
+<footer class="foot">
+  <span>© 2026 QNFO Research</span>
+  <a href="https://qnfo.org">QNFO Research Foundation</a>
+  <a href="https://qwav.org">QWAV</a>
+  <a href="https://qnfo.org/legal">QNFO-ULA</a>
+</footer>
+</body>
+</html>

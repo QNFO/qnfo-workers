@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>QNFO Research Archive</title>
+  <meta name="description" content="QNFO Research Archive — browse all publications, datasets, and historical research artifacts across the QNFO and QWAV ecosystem.">
+  <meta property="og:title" content="QNFO Research Archive">
+  <meta property="og:description" content="Complete research archive of QNFO publications, datasets, and artifacts across the Quniverse ecosystem.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://archive.qnfo.org">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://archive.qnfo.org">
+  <style
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');>
+    :root{--blue:#24315e;--blue-dark:#1a2547;--blue-light:#d8dcef;--blue-subtle:#eceef6;--text:#1b1915;--text-muted:#8a8376;--bg:#faf7f2;--surface:#f2eee6;--border:#e2dcd0;--radius:10px;--radius-lg:14px;--max-w:1080px;--shadow-md:0 4px 16px rgba(27,25,21,.08);--ink:#1b1915}
+    *,*::before,*::after{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:0;color:var(--text);background:var(--bg);line-height:1.65;-webkit-font-smoothing:antialiased}
+
+    /* Nav */
+    .nav{display:flex;align-items:center;gap:1.5rem;padding:.85rem 1.5rem;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+    .nav-brand{font-weight:800;font-size:1.1rem;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:.5rem;margin-right:auto}
+    .nav-links{display:flex;gap:.25rem;align-items:center}
+    .nav-links a{color:var(--text-muted);text-decoration:none;font-weight:500;font-size:.875rem;padding:.4rem .75rem;border-radius:6px;transition:all .15s}
+    .nav-links a:hover{color:var(--blue);background:var(--blue-subtle)}
+    .nav-links .active{color:var(--blue);background:var(--blue-subtle)}
+    .qwav-badge{background:linear-gradient(135deg,#1a56db,#1040a8);color:#fff!important;font-weight:600;font-size:.8rem!important;padding:.3rem .65rem!important;border-radius:6px}
+    .hamburger{display:none;background:none;border:none;cursor:pointer;padding:.5rem;flex-direction:column;gap:5px;z-index:101}
+    .hamburger span{display:block;width:22px;height:2.5px;background:var(--text);border-radius:3px;transition:all .25s}
+    .mobile-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:99;flex-direction:column;padding:5rem 2rem 2rem;gap:.5rem}
+    .mobile-menu.open{display:flex}
+    .mobile-menu a{font-size:1.15rem;color:var(--text);text-decoration:none;font-weight:600;padding:.75rem 1rem;border-radius:8px}
+    .mobile-menu a:hover{background:var(--blue-subtle);color:var(--blue)}
+
+    /* Content */
+    .container{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem}
+    h1{font-size:1.8rem;border-bottom:2px solid var(--border);padding-bottom:.6rem;margin-bottom:1.5rem}
+    h2{font-size:1.3rem;margin-top:2.5rem;margin-bottom:1rem}
+    .intro{color:var(--text-muted);margin-bottom:2rem;font-size:1rem;max-width:700px}
+
+    /* Archive cards */
+    .archive-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}
+    .archive-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;transition:all .2s;text-decoration:none;color:var(--text);display:block}
+    .archive-card:hover{border-color:var(--blue);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+    .archive-card h3{font-size:1rem;margin:0 0 .5rem;color:var(--blue)}
+    .archive-card p{font-size:.85rem;color:var(--text-muted);margin:0;line-height:1.4}
+
+    /* Footer */
+    .footer{background:var(--surface);border-top:1px solid var(--border);padding:2.5rem 1.5rem 2rem;margin-top:3rem}
+    .footer-grid{max-width:var(--max-w);margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:2rem}
+    .footer-col h4{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.08em}
+    .footer-col a{display:block;color:var(--text-muted);text-decoration:none;padding:.25rem 0;font-size:.82rem;transition:color .15s}
+    .footer-col a:hover{color:var(--blue)}
+    .footer-bottom{max-width:var(--max-w);margin:2rem auto 0;padding-top:1.5rem;border-top:1px solid var(--border);text-align:center;font-size:.78rem;color:var(--text-muted)}
+    .footer-bottom a{color:var(--blue);text-decoration:none}
+
+    @media(max-width:768px){
+      .nav-links{display:none}
+      .hamburger{display:flex}
+      .container{padding:1rem}
+      .archive-grid{grid-template-column
+/* === QNFO/QWAV unified design system (2026-08-31) === */
+h1,h2,h3,h4{font-family:'Fraunces',Georgia,serif;letter-spacing:-.01em}
+.nav{background:rgba(250,247,242,.92)}
+.nav-brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:1.15rem}
+.intro p{color:var(--muted)}
+.archive-card{background:var(--surface);border:1px solid var(--border);border-radius:14px}
+.archive-card h3{font-family:'Fraunces',Georgia,serif}
+.archive-card a{color:var(--blue)}
+.footer{background:var(--surface);border-top:1px solid var(--border)}
+.footer-grid a,.footer-bottom{color:var(--muted)}
+a{color:var(--blue)}
+.qwav-badge{background:var(--ink,#1b1915)!important;color:var(--bg)!important;border-radius:999px!important}
+s:1fr}
+      .footer-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:480px){
+      .footer-grid{grid-template-columns:1fr}
+    }
+  </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-LV7RHRVW6R');
+</script>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-brand" href="https://archive.qnfo.org"><span class="qmark" style="display:inline-flex;align-items:center;justify-content:center;width:1.5rem;height:1.5rem;border-radius:6px;background:var(--ink,#1b1915);color:var(--bg);font-family:Fraunces,Georgia,serif;font-size:.95rem;font-weight:600">Q</span> QWAV</a>
+  <div class="nav-links">
+    <a href="https://qnfo.org">QNFO Hub</a>
+    <a href="https://papers.qnfo.org/papers">Papers</a>
+    <a href="https://qwav.org" class="qwav-badge">QWAV Deep</a>
+    <a href="https://graph-api.qnfo.org">Knowledge Graph</a>
+    <a href="https://legal.qnfo.org">License</a>
+  </div>
+  <button class="hamburger" onclick="document.getElementById('mobile-menu').classList.toggle('open')" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="https://qnfo.org"><span class="qmark" style="display:inline-flex;align-items:center;justify-content:center;width:1.5rem;height:1.5rem;border-radius:6px;background:var(--ink,#1b1915);color:var(--bg);font-family:Fraunces,Georgia,serif;font-size:.95rem;font-weight:600">Q</span></a>
+  <a href="https://papers.qnfo.org/papers">📄 Papers</a>
+  <a href="https://qwav.org">🌊 QWAV Deep</a>
+  <a href="https://graph-api.qnfo.org">🔗 Knowledge Graph</a>
+  <a href="https://legal.qnfo.org">⚖️ License</a>
+</div>
+
+<div class="container">
+  <h1>Research Archive</h1>
+  <p class="intro">The QNFO Research Archive provides comprehensive access to all publications, datasets, and research artifacts across the QNFO and QWAV ecosystem. All content is licensed under the QNFO Unified License Agreement v2.0.</p>
+
+  <h2>📄 Papers &amp; Publications</h2>
+  <div class="archive-grid">
+    <a href="https://papers.qnfo.org/papers" class="archive-card">
+      <h3>All Papers</h3>
+      <p>Complete listing of 658+ QNFO papers across quantum error correction, number theory, physics, and computer science.</p>
+    </a>
+    <a href="https://papers.qnfo.org/papers?category=qec" class="archive-card">
+      <h3>Quantum Error Correction</h3>
+      <p>p-adic stabilizer codes, ultrametric QEC, code constructions beyond the stabilizer formalism.</p>
+    </a>
+    <a href="https://papers.qnfo.org/papers?category=number-theory" class="archive-card">
+      <h3>Number Theory</h3>
+      <p>p-adic valuation, Ostrowski's theorem, Tate's thesis, Mahler compression, and Langlands program.</p>
+    </a>
+    <a href="https://papers.qnfo.org/papers?category=physics" class="archive-card">
+      <h3>Physics</h3>
+      <p>Topological quantum matter, ZBW-Majorana hypothesis, Page-Wootters formalism, and Wheeler-DeWitt.</p>
+    </a>
+    <a href="https://papers.qnfo.org/papers?category=computer-science" class="archive-card">
+      <h3>Computer Science</h3>
+      <p>Condensed mathematics, formal verification, ultrametric algorithms, and computational benchmarking.</p>
+    </a>
+    <a href="https://papers.qnfo.org/rss.xml" class="archive-card">
+      <h3>RSS Feed</h3>
+      <p>Subscribe to the QNFO Papers RSS feed for automatic updates on new publications.</p>
+    </a>
+  </div>
+
+  <h2>🌊 QWAV Discovery Tools</h2>
+  <div class="archive-grid">
+    <a href="https://qwav.org" class="archive-card">
+      <h3>QWAV Deep Feed</h3>
+      <p>AI-powered research feed with semantic search via Vectorize. Browse 79+ indexed papers with intelligent filtering.</p>
+    </a>
+    <a href="https://ask-qwav.pages.dev" class="archive-card">
+      <h3>Ask QWAV (AI Assistant)</h3>
+      <p>Natural-language questions grounded in the QNFO research corpus with source citations. Powered by Workers AI.</p>
+    </a>
+  </div>
+
+  <h2>🔗 Knowledge Graph</h2>
+  <div class="archive-grid">
+    <a href="https://graph-api.qnfo.org" class="archive-card">
+      <h3>Graph API</h3>
+      <p>2,500+ nodes, 1,400+ edges — REST API for programmatic access to the QNFO knowledge graph. Query nodes, neighbors, and impact analysis.</p>
+    </a>
+    <a href="https://papers.qnfo.org/sitemap.xml" class="archive-card">
+      <h3>Papers Sitemap</h3>
+      <p>XML sitemap of all papers for search engine indexing and structured discovery.</p>
+    </a>
+    <a href="https://papers.qnfo.org/llms.txt" class="archive-card">
+      <h3>LLMs.txt</h3>
+      <p>Machine-readable index of all papers optimized for AI systems and automated discovery tools.</p>
+    </a>
+  </div>
+
+  <h2>⚖️ Legal &amp; Governance</h2>
+  <div class="archive-grid">
+    <a href="https://legal.qnfo.org" class="archive-card">
+      <h3>QNFO-ULA v2.0</h3>
+      <p>Full text of the QNFO Unified License Agreement governing all QNFO and QWAV content.</p>
+    </a>
+    <a href="https://legal.qnfo.org/privacy" class="archive-card">
+      <h3>Privacy Policy</h3>
+      <p>Privacy policy for QNFO websites, APIs, and services.</p>
+    </a>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h4>Research</h4>
+      <a href="https://qnfo.org">QNFO Hub</a>
+      <a href="https://papers.qnfo.org/papers">All Papers</a>
+      <a href="https://qwav.org">QWAV Deep Feed</a>
+      <a href="https://ask-qwav.pages.dev">Ask QWAV (AI)</a>
+      <a href="https://papers.qnfo.org/rss.xml">RSS Feed</a>
+    </div>
+    <div class="footer-col">
+      <h4>Categories</h4>
+      <a href="https://papers.qnfo.org/papers?category=qec">Quantum Error Correction</a>
+      <a href="https://papers.qnfo.org/papers?category=number-theory">Number Theory</a>
+      <a href="https://papers.qnfo.org/papers?category=physics">Physics</a>
+      <a href="https://papers.qnfo.org/papers?category=computer-science">Computer Science</a>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <a href="https://legal.qnfo.org">License (QNFO-ULA v2.0)</a>
+      <a href="https://legal.qnfo.org/privacy">Privacy Policy</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2025–2026 <a href="https://qnfo.org">QNFO Research Foundation</a>. Licensed under <a href="https://legal.qnfo.org">QNFO-ULA v2.0</a> (CC BY-NC-SA 4.0 + Supplemental Terms).</p>
+  </div>
+</footer>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"d56f42de9417473288293d7a2c873778","r":1}' crossorigin="anonymous"></script>
+</body>
+</html>
