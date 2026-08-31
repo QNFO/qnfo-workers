@@ -1,0 +1,16 @@
+name = "qnfo-idea-factory"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# Deployment: script-only PUT /content (preserves bindings + secrets).
+# Never deploy with `wrangler deploy` unless the D1 binding below is set
+# exactly (it replaces bindings). Deploys are done via the API to preserve
+# the SYNC_TOKEN secret.
+
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# Secret (set in dashboard / via API, never committed):
+#   SYNC_TOKEN — required for GET /api/proposals (idea review queue).
