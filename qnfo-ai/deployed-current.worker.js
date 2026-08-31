@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.5.3";
+var VERSION = "5.6.0";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -285,7 +285,6 @@ function normalizeForVision(messages) {
 }
 __name(normalizeForVision, "normalizeForVision");
 function shouldEnsemble(cls) {
-  if (cls.domain === "science" || cls.domain === "legal") return false;
   return cls.uncertainty === "medium" || cls.complexity === "high";
 }
 __name(shouldEnsemble, "shouldEnsemble");
@@ -464,6 +463,142 @@ var RUN_CODE_TOOL = {
     }
   }
 };
+
+var GATEWAY_SERVICES = {
+  email: { base: "https://qnfo-email.q08.workers.dev", secret: "EMAIL_API_KEY", auth: "bearer" },
+  social: { base: "https://qnfo-social.q08.workers.dev", secret: "SOCIAL_TOKEN", auth: "bearer" },
+  intent: { base: "https://qnfo-intent-orchestrator.q08.workers.dev", secret: "INTENT_TOKEN", auth: "bearer" }
+};
+async function callGatewayService(env, svc, path, opts) {
+  var cfg = GATEWAY_SERVICES[svc];
+  if (!cfg) return { ok: false, error: "unknown service: " + svc };
+  var token = env[cfg.secret];
+  if (!token) return { ok: false, error: "service not configured (missing " + cfg.secret + ")", notConfigured: true };
+  try {
+    var headers = { "Content-Type": "application/json" };
+    if (cfg.auth === "bearer") headers["Authorization"] = "Bearer " + token;
+    var method = (opts && opts.method) || (opts && opts.body ? "POST" : "GET");
+    var resp = await fetch(cfg.base + path, { method: method, headers: headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+    var text = await resp.text();
+    var data;
+    try { data = JSON.parse(text); } catch (e) { data = { raw: text.slice(0, 500) }; }
+    return { ok: resp.ok, status: resp.status, data: data };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+function wantsAgentTools(body, messages) {
+  if (body && (body.agent === true || body.agent === "true")) return true;
+  var txt = "";
+  var arr = Array.isArray(messages) ? messages : [];
+  for (var i = arr.length - 1; i >= 0; i--) {
+    var m = arr[i];
+    if (m && m.role === "user") {
+      txt = typeof m.content === "string" ? m.content : (Array.isArray(m.content) ? m.content.filter(function(p){ return p && typeof p.text === "string"; }).map(function(p){ return p.text; }).join(" ") : "");
+      break;
+    }
+  }
+  txt = txt.toLowerCase();
+  if (!txt) return false;
+  var P = [
+    "check my email", "check email", "check the inbox", "read my email", "read my inbox", "any new email", "my inbox",
+    "send an email", "send email", "reply to", "draft a reply", "draft an email", "email ",
+    "post to bluesky", "post this", "post a", "to bluesky", "tweet",
+    "search my papers", "search the papers", "search my research", "search my notes", "search my knowledge",
+    "my papers", "my notes", "my tasks", "my research", "what papers", "find papers", "what research",
+    "remind me", "add a task", "add a note", "note that", "write down", "set a reminder", "add a reminder",
+    "who should i contact", "suggest contacts", "suggest collaborators", "reach out to", "contact "
+  ];
+  for (var j = 0; j < P.length; j++) { if (txt.indexOf(P[j]) !== -1) return true; }
+  return false;
+}
+var GATEWAY_ACTION_TOOLS = [
+  { type: "function", function: { name: "search_research", description: "Semantic search across the QNFO/QWAV research paper corpus. Returns paper slugs, titles, authors, DOIs, and relevance scores. Use to answer questions about papers and the research program.", parameters: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "integer", description: "Max results 1-10, default 5" } }, required: ["query"] } } },
+  { type: "function", function: { name: "search_knowledge", description: "Semantic search across ALL QNFO internal knowledge sources (papers, notes, tasks, handoffs, query log, patents, infra, cloud-ops). Returns top matches per source. Use for questions about your own notes, tasks, or activity.", parameters: { type: "object", properties: { query: { type: "string", description: "Search query" }, limit: { type: "integer", description: "Max results per source 1-10, default 3" } }, required: ["query"] } } },
+  { type: "function", function: { name: "suggest_contacts", description: "Suggest researchers to contact based on a topic, using papers in the corpus. Returns candidate papers with titles, authors, and DOIs. Use for networking and collaboration outreach planning.", parameters: { type: "object", properties: { topic: { type: "string", description: "Topic or area to find contacts for" }, limit: { type: "integer", description: "Max papers 1-10, default 5" } }, required: ["topic"] } } },
+  { type: "function", function: { name: "email_check", description: "Check the QNFO/QWAV inbox. action=recent lists recent emails; action=body fetches one email by id; action=search finds emails by keyword; action=stats returns counts. Read-only.", parameters: { type: "object", properties: { action: { type: "string", enum: ["recent", "body", "search", "stats"], description: "Which email operation to run" }, id: { type: "integer", description: "Email id, required for action=body" }, query: { type: "string", description: "Search keyword for action=search" }, limit: { type: "integer", description: "Max results, default 10" } }, required: ["action"] } } },
+  { type: "function", function: { name: "email_send", description: "Send an email from a QNFO domain account. Use ONLY after the user explicitly asks you to send to a specific address. Never send to external recipients unprompted.", parameters: { type: "object", properties: { to: { type: "string", description: "Recipient email address" }, subject: { type: "string", description: "Subject line" }, body: { type: "string", description: "Plain text body" }, reply_to_id: { type: "integer", description: "Optional: id of email being replied to" }, from: { type: "string", description: "Optional: QNFO-domain from address" } }, required: ["to", "subject", "body"] } } },
+  { type: "function", function: { name: "social_post", description: "Post a short message to the QNFO Bluesky account. Use ONLY when the user explicitly asks to post.", parameters: { type: "object", properties: { text: { type: "string", description: "Post text, max 290 chars" } }, required: ["text"] } } },
+  { type: "function", function: { name: "social_compose", description: "Compose a promotion thread for a paper (title + abstract + optional DOI). Fact-checks against the abstract and queues for review rather than posting immediately. Returns draft posts and any flagged issues.", parameters: { type: "object", properties: { title: { type: "string", description: "Paper title" }, abstract: { type: "string", description: "Paper abstract" }, doi: { type: "string", description: "Optional DOI" } }, required: ["title", "abstract"] } } },
+  { type: "function", function: { name: "express_intent", description: "Record a note, task, reminder, event, or email request into the QNFO intent queue for routing and the daily digest. Use for requests like remind me to, add a task, or note that.", parameters: { type: "object", properties: { desire: { type: "string", description: "The desire, task, or note in natural language" } }, required: ["desire"] } } }
+];
+var GATEWAY_TOOLS = [RUN_CODE_TOOL].concat(GATEWAY_ACTION_TOOLS);
+async function executeGatewayTool(env, fnName, args) {
+  args = args || {};
+  try {
+    if (fnName === "run_code") return executeCode(args.code || "");
+    if (fnName === "search_research") {
+      var q = String(args.query || "").slice(0, 500);
+      var limit = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
+      if (!env.PAPER_VZ) return { ok: false, error: "paper index not bound" };
+      var embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [q] });
+      var vec = (embed && embed.data && embed.data[0]) || (Array.isArray(embed) ? embed[0] : null);
+      if (!vec) return { ok: false, error: "embedding failed" };
+      var hits = await env.PAPER_VZ.query(vec, { topK: limit, returnValues: false, returnMetadata: "all" });
+      var matches = (hits.matches || []).map(function(m){ return { id: m.id, score: Math.round((m.score || 0) * 1e4) / 1e4, slug: (m.metadata || {}).slug || m.id, title: (m.metadata || {}).title || "", authors: (m.metadata || {}).authors || "", doi: (m.metadata || {}).doi || "" }; });
+      return { ok: true, count: matches.length, matches: matches };
+    }
+    if (fnName === "search_knowledge") {
+      var q2 = String(args.query || "").slice(0, 500);
+      var k = Math.min(parseInt(args.limit || 3, 10) || 3, 10);
+      var r = await searchQnfoIndexes(env, q2, k);
+      if (r && r.error) return { ok: false, error: r.error };
+      return { ok: true, total: r.total, sources: r.sources };
+    }
+    if (fnName === "suggest_contacts") {
+      var topic = String(args.topic || "").slice(0, 300);
+      var lim2 = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
+      if (!env.PAPER_VZ) return { ok: false, error: "paper index not bound" };
+      var emb = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [topic] });
+      var v2 = (emb && emb.data && emb.data[0]) || (Array.isArray(emb) ? emb[0] : null);
+      if (!v2) return { ok: false, error: "embedding failed" };
+      var h2 = await env.PAPER_VZ.query(v2, { topK: lim2, returnValues: false, returnMetadata: "all" });
+      var cands = (h2.matches || []).map(function(m){ return { slug: (m.metadata || {}).slug || m.id, title: (m.metadata || {}).title || "", authors: (m.metadata || {}).authors || "", doi: (m.metadata || {}).doi || "", score: Math.round((m.score || 0) * 1e4) / 1e4 }; });
+      return { ok: true, topic: topic, candidates: cands, note: "Emails are not stored in this index; use email_check or the errata pipeline to resolve full contact addresses." };
+    }
+    if (fnName === "email_check") {
+      var action = String(args.action || "recent");
+      if (action === "stats") { var r1 = await callGatewayService(env, "email", "/stats"); return r1.ok ? { ok: true, stats: r1.data } : r1; }
+      if (action === "recent") { var lim3 = Math.min(parseInt(args.limit || 10, 10) || 10, 100); var r2 = await callGatewayService(env, "email", "/emails/recent?limit=" + lim3); return r2.ok ? { ok: true, emails: r2.data } : r2; }
+      if (action === "body") { var id = parseInt(args.id || 0, 10); if (!id) return { ok: false, error: "id required for body" }; var r3 = await callGatewayService(env, "email", "/emails/body?id=" + id); return r3.ok ? { ok: true, email: r3.data } : r3; }
+      if (action === "search") { var q3 = String(args.query || "").slice(0, 200); var lim4 = Math.min(parseInt(args.limit || 10, 10) || 10, 100); var r4 = await callGatewayService(env, "email", "/emails/search?q=" + encodeURIComponent(q3) + "&limit=" + lim4); return r4.ok ? { ok: true, emails: r4.data } : r4; }
+      return { ok: false, error: "invalid action (recent|body|search|stats)" };
+    }
+    if (fnName === "email_send") {
+      var to = String(args.to || "").trim();
+      var subject = String(args.subject || "");
+      var body = String(args.body || "");
+      if (!to || !subject) return { ok: false, error: "to and subject required" };
+      var payload = { to: to, subject: subject, body: body };
+      if (args.reply_to_id) payload.reply_to_id = parseInt(args.reply_to_id, 10);
+      if (args.from) payload.from = String(args.from);
+      return callGatewayService(env, "email", "/send", { method: "POST", body: payload });
+    }
+    if (fnName === "social_post") {
+      var text = String(args.text || "").slice(0, 290);
+      if (!text) return { ok: false, error: "text required" };
+      return callGatewayService(env, "social", "/post", { method: "POST", body: { text: text } });
+    }
+    if (fnName === "social_compose") {
+      var title = String(args.title || "").slice(0, 300);
+      var abstract = String(args.abstract || "").slice(0, 4000);
+      if (!title || !abstract) return { ok: false, error: "title and abstract required" };
+      var p2 = { title: title, abstract: abstract };
+      if (args.doi) p2.doi = String(args.doi);
+      return callGatewayService(env, "social", "/compose", { method: "POST", body: p2 });
+    }
+    if (fnName === "express_intent") {
+      var desire = String(args.desire || "").slice(0, 4000);
+      if (!desire) return { ok: false, error: "desire required" };
+      var r5 = await callGatewayService(env, "intent", "/intent?source=chat-tool&device=mobile", { method: "POST", body: { desire: desire } });
+      return r5.ok ? { ok: true, intent: r5.data } : r5;
+    }
+    return { ok: false, error: "unknown tool: " + fnName };
+  } catch (e) {
+    return { ok: false, error: "tool error: " + (e && e.message ? e.message : String(e)) };
+  }
+}
+
 async function executeCode(code) {
   const logs = [];
   const sandbox = {
@@ -498,20 +633,19 @@ async function executeCode(code) {
   }
 }
 __name(executeCode, "executeCode");
-async function executeBuiltinTools(toolCalls) {
+async function executeBuiltinTools(env, toolCalls) {
   const results = [];
   for (const tc of toolCalls || []) {
     const fnName = tc && tc.function && tc.function.name;
-    if (fnName === "run_code") {
-      let code = "";
-      try {
-        code = JSON.parse(tc.function.arguments || "{}").code || "";
-      } catch (e) {
-        code = "";
-      }
-      const res = await executeCode(code);
-      results.push({ role: "tool", tool_call_id: tc.id || "call_0000", content: JSON.stringify(res) });
+    if (!fnName) continue;
+    let args = {};
+    try {
+      args = JSON.parse((tc && tc.function && tc.function.arguments) || "{}") || {};
+    } catch (e) {
+      args = {};
     }
+    const res = await executeGatewayTool(env, fnName, args);
+    results.push({ role: "tool", tool_call_id: tc.id || "call_0000", content: JSON.stringify(res) });
   }
   return results;
 }
@@ -586,40 +720,69 @@ async function callGateway(env, model, messages, maxTokens, stream) {
   return resp.json();
 }
 __name(callGateway, "callGateway");
+function withTimeout(p, ms, label) {
+  let timer;
+  const to = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error((label || "op") + " timed out after " + ms + "ms")), ms);
+  });
+  return Promise.race([p, to]).finally(() => clearTimeout(timer));
+}
+__name(withTimeout, "withTimeout");
+
 async function runEnsemble(env, messages, maxTokens) {
   const t0 = Date.now();
-  const primary = await runWorkersAI(env, ENSEMBLE.primary.wa, messages, maxTokens, false);
-  const primaryText = extractWAContent(primary);
-  let verificationResult = "passed";
+  let primaryText = "";
+  let primaryModel = ENSEMBLE.primary.wa;
+  try {
+    const primary = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, messages, maxTokens, false), 40000, "ensemble-primary");
+    primaryText = extractWAContent(primary);
+  } catch (e) {
+    try {
+      const fb = await withTimeout(runWorkersAI(env, "deepseek-v4-flash", messages, maxTokens, false), 40000, "ensemble-fallback");
+      primaryText = extractWAContent(fb);
+      primaryModel = "deepseek-v4-flash";
+    } catch (e2) {
+      primaryText = "";
+      primaryModel = "deepseek-v4-flash";
+    }
+  }
+  let verificationResult = primaryModel === ENSEMBLE.primary.wa ? "passed" : "degraded";
   let agreementRate = 0;
   let verifiedBy = ENSEMBLE.validator.wa;
   let finalText = primaryText;
-  try {
-    const vMsg = [
-      { role: "system", content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced \u2014 or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
-      ...messages,
-      { role: "assistant", content: primaryText }
-    ];
-    const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false);
-    const vText = extractWAContent(vOut).trim();
-    const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
-    agreementRate = pass ? 1 : 0;
-    if (!pass) {
-      verificationResult = "reviewed";
-      const rMsg = [
-        { role: "system", content: "You are a review pass. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
+  if (primaryModel !== ENSEMBLE.primary.wa) {
+    verifiedBy = primaryModel;
+  }
+  if (primaryText) {
+    try {
+      const vMsg = [
+        { role: "system", content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced — or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const rOut = await runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false);
-      const rText = extractWAContent(rOut);
-      if (rText.trim()) {
-        finalText = rText;
-        verificationResult = "refined";
-        verifiedBy = ENSEMBLE.reviewer.wa;
+      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 35000, "ensemble-validator");
+      const vText = extractWAContent(vOut).trim();
+      const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
+      agreementRate = pass ? 1 : 0;
+      if (!pass) {
+        verificationResult = "reviewed";
+        const rMsg = [
+          { role: "system", content: "You are a review pass. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
+          ...messages,
+          { role: "assistant", content: primaryText }
+        ];
+        const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 35000, "ensemble-reviewer");
+        const rText = extractWAContent(rOut);
+        if (rText.trim()) {
+          finalText = rText;
+          verificationResult = "refined";
+          verifiedBy = ENSEMBLE.reviewer.wa;
+        }
       }
+    } catch (e) {
+      verificationResult = "skipped";
     }
-  } catch (e) {
+  } else {
     verificationResult = "skipped";
   }
   return {
@@ -632,6 +795,28 @@ async function runEnsemble(env, messages, maxTokens) {
   };
 }
 __name(runEnsemble, "runEnsemble");
+async function expressIdea(env, text, threadId) {
+  try {
+    if (!env.INTENT_TOKEN || !env.QNFO_AUDIT || !text) return;
+    const existing = await env.QNFO_AUDIT.prepare("SELECT thread_id FROM intent_express_log WHERE thread_id = ?1").bind(threadId).first();
+    if (existing) return;
+    await env.QNFO_AUDIT.prepare("INSERT INTO intent_express_log (thread_id, ts) VALUES (?1, ?2)").bind(threadId, new Date().toISOString()).run();
+    try {
+      const fetcher = (env.QNFO_INTENT && env.QNFO_INTENT.fetch) ? env.QNFO_INTENT : { fetch: (u, o) => fetch(u, o) };
+      const resp = await fetcher.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN },
+        body: JSON.stringify({ desire: String(text || "").slice(0, 500), source: "chatbox-auto", device: "mobile" })
+      });
+      await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("http:" + String(resp.status), threadId).run();
+    } catch (e2) {
+      await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("err:" + String(e2 && e2.message || e2).slice(0, 120), threadId).run();
+    }
+  } catch (e) {
+    console.log("intent express failed:", e && e.message || e);
+  }
+}
+__name(expressIdea, "expressIdea");
 async function handleChat(env, body, authHeader, ctx, ua) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
@@ -652,8 +837,13 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: "model and messages required" }, 400);
   }
+  const _userTurns = (Array.isArray(rawMessages) ? rawMessages.filter((m) => m && m.role === "user") : []);
+  const _ideaText = _firstUser ? (typeof _firstUser.content === "string" ? _firstUser.content : (Array.isArray(_firstUser.content) ? _firstUser.content.filter((p) => p && typeof p.text === "string").map((p) => p.text).join(" ").slice(0, 500) : "")) : "";
+  if (env.INTENT_TOKEN && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0) {
+    ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId));
+  }
   const hasImage = hasImageParts(messages);
-  const wantsCode = body.run_code === true || body.run_code === "true" || Array.isArray(tools) && tools.some((t) => t && t.function && t.function.name === "run_code");
+  const wantsCode = body.run_code === true || body.run_code === "true" || body.agent === true || body.agent === "true" || wantsAgentTools(body, messages) || Array.isArray(tools) && tools.some((t) => t && t.function && t.function.name === "run_code");
   if (!messages.some((m) => m && m.role === "system")) {
     messages = [{ role: "system", content: DEFAULT_SYSTEM_PROMPT }, ...messages];
   }
@@ -1019,12 +1209,12 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     let modelTools = Array.isArray(tools) && tools.length ? tools : null;
     if (wantsCode) {
       const hasRunCode = modelTools && modelTools.some((t) => t && t.function && t.function.name === "run_code");
-      modelTools = [...modelTools || [], ...hasRunCode ? [] : [RUN_CODE_TOOL]];
+      modelTools = (modelTools && modelTools.length ? modelTools : []).concat(GATEWAY_TOOLS.filter((t) => !(modelTools || []).some((x) => x && x.function && x.function.name === t.function.name)));
     }
     let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP);
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
     if (wantsCode && toolCalls && toolCalls.length) {
-      const toolResults = await executeBuiltinTools(toolCalls);
+      const toolResults = await executeBuiltinTools(env, toolCalls);
       if (toolResults.length) {
         const assistantMsg = { role: "assistant", content: content || "", tool_calls: toolCalls };
         const follow = await runModelTurn(env, effSpec, [...messages, assistantMsg, ...toolResults], max_tokens, null, effTemp, effTopP);
@@ -1408,7 +1598,7 @@ var worker_default = {
         status: "ok",
         worker: "qnfo-ai",
         version: VERSION,
-        capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search", "vision", "function-calling", "context-aware-routing"],
+        capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search", "vision", "function-calling", "context-aware-routing", "tool-gateway"],
         routes: ROUTES,
         bindings: {
           ai: !!env.AI,
