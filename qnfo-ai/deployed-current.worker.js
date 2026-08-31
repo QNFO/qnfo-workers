@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.6.0";
+var VERSION = "5.6.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -312,10 +312,10 @@ __name(searchQnfoIndexes, "searchQnfoIndexes");
 var ENSEMBLE = {
   primary: { wa: "@cf/moonshotai/kimi-k2.7-code", ctx: 262144 },
   // frontier coder (262k ctx, reasoning + vision, $0.95/M)
-  validator: { wa: "@cf/openai/gpt-oss-120b", ctx: 131072 },
-  // independent reasoning check ($0.35/M)
+  validator: { wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", ctx: 65536 },
+  // fast flash judgment (~0.3s small-prompt; proven fallback model)
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
-  // 1M-ctx reasoning refinement ($1.32/M)
+  // 1M-ctx reasoning refinement ($1.32/M) — LAZY: runs only on validator FAIL
 };
 var json = /* @__PURE__ */ __name((obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
@@ -750,6 +750,7 @@ async function runEnsemble(env, messages, maxTokens) {
   let agreementRate = 0;
   let verifiedBy = ENSEMBLE.validator.wa;
   let finalText = primaryText;
+  let membersRun = ["primary", "validator"];
   if (primaryModel !== ENSEMBLE.primary.wa) {
     verifiedBy = primaryModel;
   }
@@ -765,24 +766,26 @@ async function runEnsemble(env, messages, maxTokens) {
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const [vOut, rOut] = await Promise.allSettled([
-        withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 25000, "ensemble-validator"),
-        withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 25000, "ensemble-reviewer")
-      ]);
-      const vText = (vOut && vOut.status === "fulfilled" ? extractWAContent(vOut.value) : "").trim();
+      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 15000, "ensemble-validator");
+      const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
-      agreementRate = pass ? 1 : 0;
-      if (!pass && rOut && rOut.status === "fulfilled") {
-        const rText = extractWAContent(rOut.value);
-        if (rText.trim()) {
-          finalText = rText;
-          verificationResult = "refined";
-          verifiedBy = ENSEMBLE.reviewer.wa;
-        } else {
+      if (pass) {
+        agreementRate = 1;
+      } else {
+        try {
+          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 25000, "ensemble-reviewer");
+          const rText = rOut ? extractWAContent(rOut) : "";
+          if (rText.trim()) {
+            finalText = rText;
+            verificationResult = "refined";
+            verifiedBy = ENSEMBLE.reviewer.wa;
+          } else {
+            verificationResult = "reviewed";
+          }
+          membersRun.push("reviewer");
+        } catch (e) {
           verificationResult = "reviewed";
         }
-      } else if (!pass) {
-        verificationResult = "reviewed";
       }
     } catch (e) {
       verificationResult = "skipped";
@@ -792,7 +795,7 @@ async function runEnsemble(env, messages, maxTokens) {
   }
   return {
     text: finalText,
-    members: ["primary", "validator", "reviewer"],
+    members: membersRun,
     verified_by: verifiedBy,
     verification_result: verificationResult,
     agreement_rate: agreementRate,
