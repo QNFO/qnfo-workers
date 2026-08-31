@@ -756,28 +756,33 @@ async function runEnsemble(env, messages, maxTokens) {
   if (primaryText) {
     try {
       const vMsg = [
-        { role: "system", content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced — or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
+        { role: "system", content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced \u2014 or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 35000, "ensemble-validator");
-      const vText = extractWAContent(vOut).trim();
+      const rMsg = [
+        { role: "system", content: "You are a review pass. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
+        ...messages,
+        { role: "assistant", content: primaryText }
+      ];
+      const [vOut, rOut] = await Promise.allSettled([
+        withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 25000, "ensemble-validator"),
+        withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 25000, "ensemble-reviewer")
+      ]);
+      const vText = (vOut && vOut.status === "fulfilled" ? extractWAContent(vOut.value) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
       agreementRate = pass ? 1 : 0;
-      if (!pass) {
-        verificationResult = "reviewed";
-        const rMsg = [
-          { role: "system", content: "You are a review pass. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
-          ...messages,
-          { role: "assistant", content: primaryText }
-        ];
-        const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 35000, "ensemble-reviewer");
-        const rText = extractWAContent(rOut);
+      if (!pass && rOut && rOut.status === "fulfilled") {
+        const rText = extractWAContent(rOut.value);
         if (rText.trim()) {
           finalText = rText;
           verificationResult = "refined";
           verifiedBy = ENSEMBLE.reviewer.wa;
+        } else {
+          verificationResult = "reviewed";
         }
+      } else if (!pass) {
+        verificationResult = "reviewed";
       }
     } catch (e) {
       verificationResult = "skipped";
