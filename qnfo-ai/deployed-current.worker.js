@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.6.2";
+var VERSION = "5.6.6";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -465,9 +465,9 @@ var RUN_CODE_TOOL = {
 };
 
 var GATEWAY_SERVICES = {
-  email: { base: "https://qnfo-email.q08.workers.dev", secret: "EMAIL_API_KEY", auth: "bearer" },
-  social: { base: "https://qnfo-social.q08.workers.dev", secret: "SOCIAL_TOKEN", auth: "bearer" },
-  intent: { base: "https://qnfo-intent-orchestrator.q08.workers.dev", secret: "INTENT_TOKEN", auth: "bearer" }
+  email: { base: "https://qnfo-email.internal", secret: "EMAIL_API_KEY", auth: "bearer", internal: "EMAIL" },
+  social: { base: "https://qnfo-social.internal", secret: "SOCIAL_TOKEN", auth: "bearer", internal: "SOCIAL" },
+  intent: { base: "https://qnfo-intent-orchestrator.internal", secret: "INTENT_TOKEN", auth: "bearer", internal: "QNFO_INTENT" }
 };
 async function callGatewayService(env, svc, path, opts) {
   var cfg = GATEWAY_SERVICES[svc];
@@ -478,7 +478,14 @@ async function callGatewayService(env, svc, path, opts) {
     var headers = { "Content-Type": "application/json" };
     if (cfg.auth === "bearer") headers["Authorization"] = "Bearer " + token;
     var method = (opts && opts.method) || (opts && opts.body ? "POST" : "GET");
-    var resp = await fetch(cfg.base + path, { method: method, headers: headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+    var resp;
+    if (cfg.internal) {
+      var svc = env[cfg.internal];
+      if (!svc) return { ok: false, error: "service binding missing: " + cfg.internal };
+      resp = await svc.fetch(cfg.base + path, { method: method, headers: headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+    } else {
+      resp = await fetch(cfg.base + path, { method: method, headers: headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+    }
     var text = await resp.text();
     var data;
     try { data = JSON.parse(text); } catch (e) { data = { raw: text.slice(0, 500) }; }
@@ -952,7 +959,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     latency_ms: 0,
     rag_sources: webSources ? JSON.stringify(webSources.slice(0, 3).map((s) => s.url)) : null,
     streamed: 1,
-    source: ((ua || "").toLowerCase().indexOf("chatbox") >= 0 ? "chatbox" : (ua || "").toLowerCase().indexOf("deepchat") >= 0 ? "deepchat" : "other"),
+    source: ((ua || "").toLowerCase().indexOf("chatbox") >= 0 || (ua || "").toLowerCase().indexOf("dart") >= 0 || (ua || "").toLowerCase().indexOf("flutter") >= 0 ? "chatbox" : (ua || "").toLowerCase().indexOf("deepchat") >= 0 ? "deepchat" : "other"),
     ua: String(ua || "").slice(0, 200),
     worker: "qnfo-ai",
     messages_json: JSON.stringify((rawMessages || messages).slice(-100)),
@@ -1082,138 +1089,22 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   if (isStream) {
     try {
-      if (effSpec.wa) {
-        if (env.CF_API_TOKEN) {
-          try {
-            const gwResp = await fetch(GW_COMPAT, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN
-              },
-              body: JSON.stringify({
-                model: "workers-ai/" + effSpec.wa,
-                messages,
-                max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
-                stream: true,
-                temperature: effTemp,
-                top_p: effTopP
-              })
-            });
-            if (gwResp.ok) {
-              const reader = gwResp.body.getReader();
-              const decoder = new TextDecoder();
-              let buf = "", acc = "";
-              const enc2 = new TextEncoder();
-              const stream3 = new ReadableStream({
-                async start(controller) {
-                  try {
-                    while (true) {
-                      const { done, value } = await reader.read();
-                      if (done) break;
-                      buf += decoder.decode(value, { stream: true });
-                      const lines = buf.split("\n");
-                      buf = lines.pop();
-                      for (const line of lines) {
-                        const t = line.trim();
-                        if (!t.startsWith("data:")) continue;
-                        const data = t.slice(5).trim();
-                        if (data === "[DONE]") continue;
-                        let parsed;
-                        try {
-                          parsed = JSON.parse(data);
-                        } catch {
-                          continue;
-                        }
-                        const delta = parsed.choices?.[0]?.delta?.content ?? "";
-                        if (!delta) continue;
-                        acc += delta;
-                        const payload = {
-                          id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
-                          object: "chat.completion.chunk",
-                          created: Math.floor(Date.now() / 1e3),
-                          model: routedModel,
-                          choices: [{ index: 0, delta: { role: "assistant", content: delta }, finish_reason: null }]
-                        };
-                        controller.enqueue(enc2.encode("data: " + JSON.stringify(payload) + "\n\n"));
-                      }
-                    }
-                    const donePayload = {
-                      id: "chatcmpl-done",
-                      object: "chat.completion.chunk",
-                      created: Math.floor(Date.now() / 1e3),
-                      model: routedModel,
-                      choices: [{ index: 0, delta: {}, finish_reason: estimateOutputTokens(acc) >= clampTokens(max_tokens, MAX_OUT[effSpec.wa]) ? "length" : "stop" }],
-                      _router: mkRouter(routedModel, "single")
-                    };
-                    controller.enqueue(enc2.encode("data: " + JSON.stringify(donePayload) + "\n\n"));
-                    controller.enqueue(enc2.encode("data: [DONE]\n\n"));
-                    controller.close();
-                  } catch (e) {
-                    controller.error(e);
-                  }
-                }
-              });
-              return streamWithLog(new Response(stream3, {
-                headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" }
-              }), env, ctx, mkLogRec());
-            }
-          } catch (e) {
-          }
-        }
-        const aiResp = await env.AI.run(effSpec.wa, {
-          messages,
-          max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
-          stream: true,
-          temperature: effTemp,
-          top_p: effTopP
-        });
-        const encoder = new TextEncoder();
-        const stream2 = new ReadableStream({
-          async start(controller) {
-            try {
-              let acc = "";
-              const reader = aiResp.getReader();
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = new TextDecoder().decode(value);
-                let parsed;
-                try {
-                  parsed = JSON.parse(chunk);
-                } catch {
-                  parsed = { response: chunk };
-                }
-                const delta = parsed.response ?? parsed.delta?.content ?? chunk;
-                acc += delta;
-                const payload = {
-                  id: "chatcmpl-" + Math.random().toString(16).slice(2, 10),
-                  object: "chat.completion.chunk",
-                  created: Math.floor(Date.now() / 1e3),
-                  model: routedModel,
-                  choices: [{ index: 0, delta: { role: "assistant", content: delta }, finish_reason: null }]
-                };
-                controller.enqueue(encoder.encode("data: " + JSON.stringify(payload) + "\n\n"));
-              }
-              const donePayload = {
-                id: "chatcmpl-done",
-                object: "chat.completion.chunk",
-                created: Math.floor(Date.now() / 1e3),
-                model: routedModel,
-                choices: [{ index: 0, delta: {}, finish_reason: estimateOutputTokens(acc) >= clampTokens(max_tokens, MAX_OUT[effSpec.wa]) ? "length" : "stop" }],
-                _router: mkRouter(routedModel, "single")
-              };
-              controller.enqueue(encoder.encode("data: " + JSON.stringify(donePayload) + "\n\n"));
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              controller.close();
-            } catch (e) {
-              controller.error(e);
-            }
+            if (effSpec.wa) {
+        const waContent = extractWAContent(await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false)) || FALLBACK_TEXT;
+        const waTruncated = (waContent || "").trim().length > 0 && estimateOutputTokens(waContent) >= clampTokens(max_tokens, MAX_OUT[effSpec.wa]);
+        const enc3 = new TextEncoder();
+        const nlnl = String.fromCharCode(10, 10);
+        const stream0 = new ReadableStream({
+          start(controller) {
+            controller.enqueue(enc3.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent }, finish_reason: null }] }) + nlnl));
+            controller.enqueue(enc3.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: waTruncated ? "length" : "stop" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnl));
+            controller.enqueue(enc3.encode("data: [DONE]" + nlnl));
+            controller.close();
           }
         });
-        return streamWithLog(new Response(stream2, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
+        return streamWithLog(new Response(stream0, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
       }
-      if (effSpec.api) {
+if (effSpec.api) {
         const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP });
         return streamWithLog(upstream, env, ctx, mkLogRec());
       }
