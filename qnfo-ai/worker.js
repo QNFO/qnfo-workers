@@ -5,7 +5,7 @@
 // AI binding in wrangler.toml and routes tier-0 through env.AI.run() (Workers AI FREE).
 // Ensemble directive: frontier coder + reasoning validator + 1M-ctx reviewer (best models).
 
-const VERSION = '5.5.3';
+const VERSION = '5.6.0';
 const ROUTES = ['/health', '/', '/v1/chat/completions', '/v1/models', '/v1/models/:id', '/v1/responses', '/chat/completions', '/v1/search', '/v1/history', '/v1/web/search', '/v1/web/fetch'];
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GW_COMPAT = 'https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions';
@@ -454,7 +454,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
   if (!directOnly && env.CF_API_TOKEN && modelId.startsWith('@cf/')) {
     try {
       const body = {
-        model: 'workers-ai/' + modelId,
+        model: modelId,
         messages,
         max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
         stream: stream || false,
@@ -465,7 +465,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'cf-aig-authorization': 'Bearer ' + env.CF_API_TOKEN,
+          'Authorization': 'Bearer ' + env.CF_API_TOKEN,
         },
         body: JSON.stringify(body),
       });
@@ -622,11 +622,10 @@ function extractWAContent(result, depth = 0) {
     const msg = c.message;
     if (msg) {
       if (typeof msg.content === 'string' && msg.content.trim()) return msg.content;
-      // Reasoning models (qwen3-30b, glm-5.3, deepseek-v4, kimi-k2.7, gemma-4): content is
-      // EMPTY/null when output tokens are exhausted on thinking — surface reasoning_content
-      // so the response isn't "All models failed." (v5.4.0).
-      if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) return msg.reasoning_content;
-      if (typeof msg.reasoning === 'string' && msg.reasoning.trim()) return msg.reasoning;
+      // v5.6.0: do NOT surface reasoning_content as the answer. A reasoning model whose
+      // output budget was exhausted on thinking returns content='' with reasoning populated;
+      // returning the thinking is a CoT leak (and truncated mid-sentence). Fall through so
+      // the caller's fallback (FALLBACK_TEXT / reviewer refinement) emits a real answer.
     }
     if (typeof c.text === 'string' && c.text.trim()) return c.text;
   }
@@ -692,7 +691,7 @@ async function runEnsemble(env, messages, maxTokens) {
     // no-validation). Truncate so validation actually runs.
     const vOut = await runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false);
     const vText = extractWAContent(vOut).trim();
-    const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
+    const pass = /\bpass\b/i.test(vText) && !/\bfail/i.test(vText) && !/\bnot\s+pass\b/i.test(vText);
     agreementRate = pass ? 1 : 0;
 
     if (!pass) {
@@ -991,10 +990,10 @@ async function handleChat(env, body, authHeader, ctx) {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'cf-aig-authorization': 'Bearer ' + env.CF_API_TOKEN,
+                'Authorization': 'Bearer ' + env.CF_API_TOKEN,
               },
               body: JSON.stringify({
-                model: 'workers-ai/' + effSpec.wa,
+                model: effSpec.wa,
                 messages,
                 max_tokens: clampTokens(max_tokens, MAX_OUT[effSpec.wa]),
                 stream: true,

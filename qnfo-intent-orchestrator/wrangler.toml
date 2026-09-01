@@ -3,17 +3,43 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
-# Secrets:
+# Secrets (preserved across deploys, set via wrangler secret put):
 #   INTENT_TOKEN - Bearer token for all endpoints
-#   RT           - qnfo-ai router key (outbound classification via service binding)
+#   RT           - qnfo-ai router key (outbound classification/triage via service binding)
 #   CF_TOKEN     - Cloudflare API token (Email Sending)
 #   CF_ACCOUNT   - account id
 #   DIGEST_TO    - digest recipient (rowan.quni@outlook.com)
 #   DIGEST_FROM  - sending address (agent@qnfo.org)
+#   INDEX_TOKEN  - personal-life-search ingest token
+#   DISPATCH_TOKEN - shared dispatch token accepted by qnfo-agent-orchestrator (X-Sync-Token)
+
+[[d1_databases]]
+binding = "D1"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[vectorize]]
+binding = "VZ_P"
+index_name = "personal-life"
+
+[[vectorize]]
+binding = "VZ_R"
+index_name = "qnfo-ai-log"
+
+[[services]]
+binding = "PLS"
+service = "personal-life-search"
+
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+
+[ai]
+binding = "AI"
 
 [observability]
 enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["0 6 * * *"]
+crons = ["0 6 * * *", "30 6 * * *"]

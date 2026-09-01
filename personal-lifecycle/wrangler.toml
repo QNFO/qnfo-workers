@@ -1,0 +1,17 @@
+name = "personal-lifecycle"
+main = "worker.js"
+compatibility_date = "2026-08-10"
+workers_dev = true
+usage_model = "standard"
+
+[[d1_databases]]
+binding = "PERSONAL"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"
+
+[triggers]
+crons = ["0 4 * * *"]
