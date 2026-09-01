@@ -70,10 +70,23 @@ async function run(env) {
   const events = await scan();
   const report = renderReport(scannedAt, events);
   const slug = "conference-radar-" + scannedAt.slice(0, 10);
+  // Phase 2: deliver report to obsidian-writer via service binding (R2 vault, delete-then-create)
+  let delivery = null;
+  try {
+    if (env.OBSIDIAN_WRITER) {
+      const dr = await env.OBSIDIAN_WRITER.fetch("https://obsidian-writer/", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: "conference-radar", section: "Conference Radar", content: report, date: scannedAt.slice(0, 10) }),
+      });
+      delivery = { status: dr.status, ok: dr.ok };
+    }
+  } catch (e) { delivery = { error: String((e && e.message) || e).slice(0, 120) }; }
+
   await env.RADAR_DB.prepare(
     "INSERT OR REPLACE INTO conference_radar (slug, report, events_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?)"
   ).bind(slug, report, JSON.stringify(events), scannedAt, scannedAt).run();
-  return { slug, events: events.filter((e) => !e.error).length, errors: events.filter((e) => e.error).length };
+  return { slug, events: events.filter((e) => !e.error).length, errors: events.filter((e) => e.error).length, delivery };
 }
 
 export default {
