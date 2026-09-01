@@ -20,6 +20,7 @@ jobs:
           WORKER="${{ github.event.inputs.worker }}"
           case "$WORKER" in
             qnfo-ai) MAIN="worker.js";;
+            conference-radar) MAIN="worker.js";;
             *) echo "Unsupported worker: $WORKER"; exit 1;;
           esac
           BUNDLE="$WORKER/deployed-current.worker.js"
