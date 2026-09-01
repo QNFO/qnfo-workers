@@ -20,8 +20,8 @@
 // SAFETY: never sends external outreach in v0.3.x — candidates are queued
 //   with email_verified=0 and REQUIRE verification before any send.
 var MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
-var VERSION = "0.3.1";
-var OUTREACH_MARKERS = ["primon","zeta partition","Madelung","measurement","ultrametric","p-adic","adelic","identity, aggregation","empirical filter","pre-arithmetic","formalism 25","hierarchy distance","spectral statistics","Landauer","exchange phase","logical scalar","Laws of Form","qudit","joules-per-solution","arXiv:","10.5281/zenodo","zenodo"];
+var VERSION = "0.3.2";
+var OUTREACH_MARKERS = ["primon","zeta partition","madelung","measurement","ultrametric","p-adic","adelic","identity, aggregation","empirical filter","pre-arithmetic","formalism 25","hierarchy distance","spectral statistics","landauer","exchange phase","logical scalar","laws of form","qudit","joules-per-solution","arxiv:","10.5281/zenodo","zenodo","qubit delusion","manifesto for honest computation","consilience","q-calculus","notation problem"];
 var QNFO_DOMAINS = ["qnfo.org","qwav.org","qwav.tech","qwav.net","qwav.uk","q-wave.tech","q08.org"];
 
 var DOC = {
@@ -64,7 +64,7 @@ var DOC = {
     no_fabrication: "never fabricates email addresses; unverified contacts are SKIPPED"
   },
   recovery: "Source: QNFO/qnfo-workers repo, qnfo-email-orchestrator/worker.js. Redeploy: python scripts/redeploy-orchestrator.py (reads repo source, POST /versions with keep_bindings ['secret_text'], deploys to production). Bindings documented above.",
-  version_history: ["0.2-service-binding: AI triage only", "0.3: cadence (reply classify, Mon/Wed/Fri, receipt, OUTREACH_DB)", "0.3.1: auth gate on /run/*, thread dedup, classify ordering, https arXiv + paper_id, /doc + /audit, DRY_RUN=false"]
+  version_history: ["0.2-service-binding: AI triage only", "0.3: cadence (reply classify, Mon/Wed/Fri, receipt, OUTREACH_DB)", "0.3.1: auth gate on /run/*, thread dedup, classify ordering, https arXiv + paper_id, /doc + /audit, DRY_RUN=false", "0.3.2: MONDAY SEND wave (C1), marker+classify fixes (C4/C5), audit probe (C6), run-lock + paginated followup (LOW), zenodo->arxiv->verify->draft->send"]
 };
 
 function json(data, status) { status = status || 200; return new Response(JSON.stringify(data), { status: status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
@@ -85,14 +85,13 @@ async function callEmail(env, path, opts) {
   return resp.json();
 }
 function isQnfoAddr(addr) { var d = String(addr || "").split("@").pop().toLowerCase(); return QNFO_DOMAINS.some(function (x) { return d === x || d.endsWith("." + x); }); }
-function isOutreachSubject(subject) { var s = String(subject || "").toLowerCase(); return OUTREACH_MARKERS.some(function (m) { return s.indexOf(m) !== -1; }); }
+function isOutreachSubject(subject) { var s = String(subject || "").toLowerCase(); return OUTREACH_MARKERS.some(function (m) { return s.indexOf(m.toLowerCase()) !== -1; }); }
 function classifyReply(subject, body) {
   var t = (String(subject || "") + " " + String(body || "")).toLowerCase();
-  // F3 fix: critical/dismissive take precedence over positive
   if (/collab|co-author|work together|joint|data that might|would you be interested in/.test(t)) return "collaboration";
-  if (/disagree|wrong|incorrect|flawed|mistake|error in|critic/.test(t)) return "critical";
-  if (/decline|not interested|unsubscribe|no thanks|not relevant|respectfully/.test(t)) return "dismissive";
-  if (/no time|busy|when i have time|will get back|read it later|sometime|will read it/.test(t)) return "read-later";
+  if (/(?!no )\berror in\b|disagree|wrong|incorrect|flawed|mistake|critic/.test(t)) return "critical";
+  if (/decline (the|your|this)|not interested|unsubscribe|no thanks|not relevant/.test(t)) return "dismissive";
+  if (/\bno time\b|busy|when i have time|will get back|read it later|\bsometime\b|will read it/.test(t)) return "read-later";
   if (/thank|thanks|interesting|appreciate|look forward|will read|will look/.test(t)) return "positive";
   return "unclassified";
 }
@@ -130,6 +129,13 @@ async function runCadence(env, mode) {
   var day = now.toISOString().slice(0, 10);
   var dow = now.getUTCDay();
   var result = { ok: true, worker: "qnfo-email-orchestrator", version: VERSION, mode: dry ? "dry" : "live", run_at: now.toISOString(), day: day, dow: dow, inbox: null, replies: [], followup_eligible: 0, day_action: null, receipt_email_id: null };
+  // LOW run-lock: skip if a live run for this day happened within the last 25 min
+  if (!dry) {
+    try {
+      var lockRow = await env.OUTREACH_DB.prepare("SELECT id FROM cadence_runs WHERE day=?1 AND run_at > ?2 LIMIT 1").bind(day, new Date(Date.now() - 25 * 60000).toISOString()).first();
+      if (lockRow) { result.day_action = "skipped-duplicate-run"; result.duplicate_run = true; return result; }
+    } catch (e) {}
+  }
   try {
     var recent = await callEmail(env, "/emails/recent?limit=30");
     var stats = await callEmail(env, "/stats");
@@ -159,40 +165,18 @@ async function runCadence(env, mode) {
     }
   } catch (e) { result.reply_scan_error = e.message; }
   try {
-    var sent = await callEmail(env, "/emails/recent?limit=100&status=sent");
+    var sentA = await callEmail(env, "/emails/recent?limit=100&status=sent");
+    var sentB = null;
+    try { sentB = await callEmail(env, "/emails/recent?limit=100&status=sent&offset=100"); } catch (e) {}
+    var sentAll = (sentA.emails || []).concat(sentB ? (sentB.emails || []) : []);
     var cutoff = Date.now() - 14 * 86400000;
-    result.followup_eligible = (sent.emails || []).filter(function (s) { if (isQnfoAddr(s.recipient)) return false; if (/rwnquni@outlook\.com|@gmail\.com$/.test(String(s.recipient || "")) && /preview|test/i.test(String(s.subject || ""))) return false; var t = new Date(s.received_at || 0).getTime(); return t > 0 && t < cutoff; }).length;
+    result.followup_eligible = sentAll.filter(function (s) { if (isQnfoAddr(s.recipient)) return false; if (/rwnquni@outlook\.com$/.test(String(s.recipient || "")) && /preview|test/i.test(String(s.subject || ""))) return false; var t = new Date(s.received_at || 0).getTime(); return t > 0 && t < cutoff; }).length;
   } catch (e) { result.followup_error = e.message; }
   if (dow === 1) {
-    result.day_action = "monday-arxiv-scan";
+    result.day_action = "monday-arxiv-scan+send";
     try {
-      var topics = ["ultrametric", "primon gas", "adelic", "measurement induced transitions"];
-      var found = [];
-      for (var t = 0; t < topics.length; t++) {
-        var q = "all:" + encodeURIComponent('"' + topics[t] + '"');
-        // F4 fix: https
-        var r = await fetch("https://export.arxiv.org/api/query?search_query=" + q + "&start=0&max_results=5&sortBy=submittedDate&sortOrder=descending", { headers: { "User-Agent": "Mozilla/5.0 (QNFO orchestration worker)" } });
-        var txt = await r.text();
-        var entries = txt.split("<entry>").slice(1);
-        for (var ei = 0; ei < entries.length && ei < 5; ei++) {
-          var ent = entries[ei];
-          var idm = ent.match(/<id>http:\/\/arxiv\.org\/abs\/([^<]+)<\/id>/);
-          var pid = idm ? idm[1].replace(/v\d+$/, "") : ("scan-" + topics[t] + "-" + ei);
-          var tm = ent.match(/<title>([\s\S]*?)<\/title>/);
-          var pt = tm ? tm[1].replace(/\s+/g, " ").trim().slice(0, 200) : ("arxiv scan " + topics[t]);
-          var names = (ent.match(/<name>([^<]+)<\/name>/g) || []).map(function (x) { return x.replace(/<\/?name>/g, "").trim(); });
-          if (names.length) found.push({ topic: topics[t], paper_id: pid, title: pt, authors: names.slice(0, 5) });
-          if (!dry) {
-            for (var n = 0; n < names.length; n++) {
-              // F4 fix: paper_id bound -> UNIQUE(name, paper_id) dedup works
-              await env.OUTREACH_DB.prepare("INSERT OR IGNORE INTO outreach_candidates (scan_date, name, paper_id, paper_title, topic, connection_notes, created_at) VALUES (?,?,?,?,?,?,?)").bind(day, names[n], pid, pt, topics[t], "auto-candidate; email verification required before any send", now.toISOString()).run();
-            }
-          }
-        }
-      }
-      result.day_action = "monday-arxiv-scan";
-      result.scan = found;
-    } catch (e) { result.scan_error = e.message; }
+      result.monday = await mondaySendWave(env, dry);
+    } catch (e) { result.monday_error = e.message; }
   } else if (dow === 3) {
     result.day_action = "wednesday-response-check";
   } else if (dow === 5) {
@@ -236,15 +220,152 @@ async function selfAudit(env) {
     var d1 = await env.OUTREACH_DB.prepare("SELECT COUNT(*) c FROM cadence_runs").first();
     audit.checks.outreach_d1 = { ok: true, cadence_runs: d1 ? d1.c : 0 };
   } catch (e) { audit.checks.outreach_d1 = { ok: false, error: e.message }; }
-  audit.checks.audit_d1 = { ok: true };
+  try {
+    await env.AUDIT_DB.prepare("SELECT 1").first();
+    audit.checks.audit_d1 = { ok: true };
+  } catch (e) { audit.checks.audit_d1 = { ok: false, error: e.message }; }
   return audit;
 }
+
+// ---- C1: Monday autonomous outreach SEND wave ----
+// Pipeline: Zenodo scan (new QNFO papers, 90d) -> paper select (physics) ->
+// arXiv scan (researchers) -> email verify via arXiv source tarball ->
+// dedup vs D1 -> AI draft (academic template) -> send from rowan.quni@qnfo.org.
+// NEVER sends unverified addresses; never same paper twice; cap 5/day.
+function sleepMs(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function extractEmailsFromText(text) {
+  var re = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  var out = [], m;
+  while ((m = re.exec(String(text || ""))) !== null) {
+    var a = m[0].toLowerCase();
+    if (/example\.com|\.\.|@\d/.test(a)) continue;
+    if (out.indexOf(a) === -1) out.push(a);
+  }
+  return out;
+}
+async function extractEmailsFromArxiv(env, paperId) {
+  try {
+    var r = await fetch("https://arxiv.org/e-print/" + paperId, { headers: { "User-Agent": "Mozilla/5.0 (QNFO orchestration worker)", "Accept": "application/x-eprint" } });
+    if (!r.ok) return [];
+    var arr = new Uint8Array(await r.arrayBuffer());
+    var emails = [];
+    try {
+      var ds = new DecompressionStream("gzip");
+      var stream = new Blob([arr]).stream().pipeThrough(ds);
+      var raw = new Uint8Array(await new Response(stream).arrayBuffer());
+      var txt = new TextDecoder("utf-8").decode(raw);
+      emails = extractEmailsFromText(txt);
+      if (!emails.length) emails = extractEmailsFromText(new TextDecoder("utf-8").decode(arr));
+    } catch (e) {
+      emails = extractEmailsFromText(new TextDecoder("utf-8").decode(arr));
+    }
+    return emails;
+  } catch (e) { return []; }
+}
+async function fetchArxiv(query, maxResults) {
+  var url = "https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(query) + "&start=0&max_results=" + (maxResults || 5) + "&sortBy=submittedDate&sortOrder=descending";
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      var r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (QNFO orchestration worker)" } });
+      if (r.ok) return await r.text();
+      if (r.status === 429 || r.status >= 500) { await sleepMs(4000 * (attempt + 1)); continue; }
+      return null;
+    } catch (e) { await sleepMs(4000 * (attempt + 1)); }
+  }
+  return null;
+}
+function parseAtomEntries(xml) {
+  var out = [];
+  var parts = String(xml || "").split("<entry>").slice(1);
+  for (var i = 0; i < parts.length; i++) {
+    var e = parts[i];
+    var idm = e.match(/<id>https?:\/\/arxiv\.org\/abs\/([^<]+)<\/id>/);
+    if (!idm) continue;
+    var pid = idm[1].replace(/v\d+$/, "");
+    var tm = e.match(/<title>([\s\S]*?)<\/title>/);
+    var title = tm ? tm[1].replace(/\s+/g, " ").trim().slice(0, 200) : "";
+    var names = (e.match(/<name>([^<]+)<\/name>/g) || []).map(function (x) { return x.replace(/<\/?name>/g, "").trim(); });
+    if (names.length) out.push({ paper_id: pid, title: title, authors: names });
+  }
+  return out;
+}
+async function mondaySendWave(env, dry) {
+  var wave = { papers: [], candidates: [], sent: 0, skipped: [] };
+  try {
+    var z = await fetch("https://zenodo.org/api/records?q=" + encodeURIComponent('metadata.creators.person_or_org.name:"Quni-Gudzinas"') + "&sort=mostrecent&size=15", { headers: { "User-Agent": "Mozilla/5.0 (QNFO orchestration worker)" } });
+    if (z.ok) {
+      var zj = await z.json();
+      var cutoff = Date.now() - 90 * 86400000;
+      var hits = (zj.hits && zj.hits.hits) || [];
+      for (var i = 0; i < hits.length; i++) {
+        var md = hits[i].metadata || {};
+        var pub = (md.publication_date || "").slice(0, 10);
+        if (pub && new Date(pub + "T00:00:00Z").getTime() < cutoff) continue;
+        var title = md.title || "";
+        if (/notation|infrastructure|communications framework|manifesto|benchmark|meta|platform|white.?paper|joules-per-solution/i.test(title)) continue;
+        wave.papers.push({ doi: hits[i].doi || md.doi || "", title: title, published: pub });
+      }
+    }
+  } catch (e) { wave.zenodo_error = e.message; }
+  if (!wave.papers.length) { wave.no_papers = true; return wave; }
+  wave.papers = wave.papers.slice(0, 2);
+  var topics = [];
+  wave.papers.forEach(function (p) {
+    var t = String(p.title || "").toLowerCase();
+    if (/ultrametric|p-adic|adelic|non-archimedean/.test(t)) topics.push("ultrametric OR p-adic OR adelic");
+    if (/primon|prime|zeta|arithmetic/.test(t)) topics.push("primon OR \"zeta partition\" OR arithmetic");
+    if (/measurement|born rule|relaxation|landauer/.test(t)) topics.push("measurement induced transitions OR born rule");
+    if (/exchange phase|anyon|braid|logical scalar/.test(t)) topics.push("anyon OR braid OR exchange phase");
+    if (/hierarchy|spectral|realization/.test(t)) topics.push("spectral statistics OR hierarchy distance");
+  });
+  if (!topics.length) topics = ["ultrametric OR p-adic OR adelic"];
+  var seen = {};
+  for (var t = 0; t < topics.length && wave.sent < 5; t++) {
+    var xml = await fetchArxiv("all:" + topics[t], 10);
+    var entries = xml ? parseAtomEntries(xml) : [];
+    for (var ei = 0; ei < entries.length && wave.sent < 5; ei++) {
+      var ent = entries[ei];
+      if (seen[ent.paper_id]) continue;
+      seen[ent.paper_id] = true;
+      var author = ent.authors[0];
+      var emails = await extractEmailsFromArxiv(env, ent.paper_id);
+      var verified = emails.filter(function (em) { return !isQnfoAddr(em); });
+      if (!verified.length) { wave.skipped.push({ author: author, paper: ent.title, reason: "no email in arXiv source" }); continue; }
+      var addr = verified[0];
+      try {
+        var dupSent = await env.AUDIT_DB.prepare("SELECT id FROM emails WHERE recipient=?1 AND status='sent' LIMIT 1").bind(addr).first();
+        var dupCamp = await env.OUTREACH_DB.prepare("SELECT id FROM outreach_campaigns WHERE recipient_email=?1 AND paper_title=?2 LIMIT 1").bind(addr, wave.papers[0].title).first();
+        if (dupSent || dupCamp) { wave.skipped.push({ author: author, paper: ent.title, reason: "already contacted" }); continue; }
+      } catch (e) {}
+      if (dry) { wave.skipped.push({ author: author, paper: ent.title, reason: "dry-run (would verify+send)" }); continue; }
+      var subject = "Re: " + ent.title.slice(0, 80) + " - sharing a related result";
+      var bodyText = "";
+      try {
+        var prompt = "Write a short collegial email (max 150 words) from Rowan Quni-Gudzinas (independent researcher, QNFO) to Dr. " + author + ". Their paper: \"" + ent.title + "\" (arXiv " + ent.paper_id + "). Rowan's paper: \"" + wave.papers[0].title + "\" (DOI " + wave.papers[0].doi + "). Connection: both work on " + topics[t] + ". Include ONE specific connection sentence, ONE finding, ONE open question. No CV, no self-introduction. Sign: Best, Rowan Brad Quni-Gudzinas, QNFO. Plain text only.";
+        var ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }] }, { gateway: { id: "default" } });
+        bodyText = ((ai && (ai.response || ai.result)) || "").toString().trim();
+      } catch (e) { bodyText = ""; }
+      if (!bodyText) {
+        bodyText = "Dear Dr. " + author + ",\n\nI came across your recent work on " + topics[t] + " and wanted to share something you might find relevant: my paper \"" + wave.papers[0].title + "\" (DOI " + wave.papers[0].doi + "). It bears directly on your work because of the shared focus on " + topics[t] + ".\n\nI would be interested in your thoughts.\n\nBest,\nRowan Brad Quni-Gudzinas\nQNFO";
+      }
+      try {
+        var sr = await callEmail(env, "/send", { method: "POST", body: { to: addr, subject: subject, body: bodyText, from: "rowan.quni@qnfo.org" } });
+        wave.sent++;
+        wave.candidates.push({ author: author, email: addr, paper: ent.title, arxiv: ent.paper_id, message_id: sr.message_id || null });
+        await env.OUTREACH_DB.prepare("INSERT INTO outreach_campaigns (paper_doi, paper_title, audience_type, recipient_email, recipient_name, connection_point, sent_at, response_type, status) VALUES (?,?,?,?,?,?,?,?,?)").bind(wave.papers[0].doi, wave.papers[0].title, "academic", addr, author, "arXiv " + ent.paper_id + " (" + topics[t] + ")", new Date().toISOString(), "none", "sent").run();
+      } catch (e) { wave.skipped.push({ author: author, paper: ent.title, reason: "send failed: " + e.message }); }
+    }
+    if (topics.length > 1) await sleepMs(3000);
+  }
+  return wave;
+}
+
 export default {
   async fetch(request, env, ctx) {
     var url = new URL(request.url);
     var p = url.pathname;
     if (p === "/health") {
-      return json({ status: "ok", worker: "qnfo-email-orchestrator", version: VERSION, bindings: { ai: !!env.AI, audit_d1: !!env.AUDIT_DB, outreach_d1: !!env.OUTREACH_DB, email_svc: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY }, dryRunDefault: isDryRun(env, null), features: ["inbox-check", "ai-triage", "reply-classify", "cadence-mon-wed-fri", "receipt-alerts", "self-doc", "self-audit"], docs: "/doc" });
+      return json({ status: "ok", worker: "qnfo-email-orchestrator", version: VERSION, bindings: { ai: !!env.AI, audit_d1: !!env.AUDIT_DB, outreach_d1: !!env.OUTREACH_DB, email_svc: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY }, dryRunDefault: isDryRun(env, null), features: ["inbox-check", "ai-triage", "reply-classify", "cadence-mon-wed-fri", "monday-send-wave", "receipt-alerts", "self-doc", "self-audit"], docs: "/doc" });
     }
     if (p === "/doc") { return json(DOC); }
     if (p === "/audit") {

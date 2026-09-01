@@ -1,7 +1,8 @@
 # qnfo-email-orchestrator — Worker Manifest
-**Version:** 0.3.1 (2026-09-01)
+**Version:** 0.3.2 (2026-09-01, OPS.003.R2 red-team remediation)
 **Repo dir:** qnfo-email-orchestrator/
 **Production URL:** https://qnfo-email-orchestrator.q08.workers.dev
+**Deploy:** version 026a4ab6-9d83-4be1-88e3-9a7e1311837d, deployment d4be603b-022c-4bd2-a05d-7fca8eff5f33 (100%), commit c0a2b1d3 (to be pushed)
 **Cron:** 0 */3 * * * (UTC) — set via API, confirmed 2026-09-01T09:17:50Z
 
 ## Purpose
@@ -9,6 +10,7 @@ Cloud replacement for local DeepChat cronjob **3851f539** (qnfo-email-inbox-chec
 Runs the QNFO email + outreach cadence every 3 hours WITHOUT local Windows DeepChat.
 
 ## What it does (per run)
+**v0.3.2 additions (red-team C1-C6):** Monday = autonomous outreach SEND wave: Zenodo scan (Quni-Gudzinas, 90d) -> physics paper select -> arXiv researcher scan (3s pacing, 429 retry) -> email verification via arXiv source tarball -> D1 dedup -> Workers AI draft (academic template) -> send from rowan.quni@qnfo.org (cap 5/day). SKIPPED list with reasons for unverified/already-contacted. Marker case fix, classifyRegex tightening, audit_d1 real probe, run-lock, paginated followup count.
 - Inbox check across all qnfo.org domains (via qnfo-email service binding)
 - Outreach reply detection + classification (taxonomy: positive/critical/dismissive/read-later/collaboration)
 - Follow-up readiness count (>14d silent; 0 eligible per NO-FOLLOW-UP-DEFAULT-1)
