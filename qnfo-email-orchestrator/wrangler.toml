@@ -1,0 +1,19 @@
+# qnfo-email-orchestrator — wrangler.toml (documentation + deploy reference)
+# NOTE: this worker is CURRENTLY managed via the Cloudflare API (versions/deployments)
+# with bindings preserved via keep_bindings ["secret_text"] (BINDING-PRESERVATION-1).
+# This file documents the full binding set and is the source of truth for redeploys.
+name = "qnfo-email-orchestrator"
+main = "worker.js"
+compatibility_date = "2026-08-10"
+
+# ── Bindings (values must be provided at deploy time) ─────────────────────
+# [vars] DRY_RUN = "false"        # plain_text: true=dry detection-only; false=live cron
+# [ai] bindings.AI = { project = "<catalog>" }   # Workers AI llama-3.1-8b-instruct-fp8
+# [[d1_databases]] binding = "AUDIT_DB" database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"   # qnfo-audit (emails table + audit_sessions)
+# [[d1_databases]] binding = "OUTREACH_DB" database_id = "d5077252-8187-41b2-a44e-f84f8724ee36" # qnfo-outreach (outreach_campaigns, cadence_runs, outreach_candidates)
+# [[services]] binding = "EMAIL" service = "qnfo-email" environment = "production"
+# [[secrets]] EMAIL_API_KEY = <value>   # Bearer key for qnfo-email /send + /emails/* (same value as qnfo-email API_KEY)
+
+# ── Cron (managed via Cloudflare API PUT /schedules) ───────────────────────
+# triggers = [{ cron = "0 */3 * * *" }]
+# Scheduled handler: async scheduled(event, env, ctx) -> runCadence(env, null) (live per DRY_RUN)

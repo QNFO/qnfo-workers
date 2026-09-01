@@ -1,0 +1,47 @@
+# qnfo-email-orchestrator — Worker Manifest
+**Version:** 0.3.1 (2026-09-01)
+**Repo dir:** qnfo-email-orchestrator/
+**Production URL:** https://qnfo-email-orchestrator.q08.workers.dev
+**Cron:** 0 */3 * * * (UTC) — set via API, confirmed 2026-09-01T09:17:50Z
+
+## Purpose
+Cloud replacement for local DeepChat cronjob **3851f539** (qnfo-email-inbox-check).
+Runs the QNFO email + outreach cadence every 3 hours WITHOUT local Windows DeepChat.
+
+## What it does (per run)
+- Inbox check across all qnfo.org domains (via qnfo-email service binding)
+- Outreach reply detection + classification (taxonomy: positive/critical/dismissive/read-later/collaboration)
+- Follow-up readiness count (>14d silent; 0 eligible per NO-FOLLOW-UP-DEFAULT-1)
+- Mon: arXiv scan -> outreach_candidates queue (email_verified=0, NEVER auto-sent)
+- Wed: response check only
+- Fri: weekly report + self-audit
+- Receipt emailed to alerts@qnfo.org (D1 sink; never personal inbox — DIGEST-TO-PERSONAL-1)
+
+## Bindings (all required)
+| Binding | Type | Value |
+|---|---|---|
+| AI | ai | project "<catalog>" (llama-3.1-8b-instruct-fp8) |
+| AUDIT_DB | d1 | 35e2e573-92f3-46ac-83c6-22f6429fc5e5 (qnfo-audit) |
+| DRY_RUN | plain_text | "false" (live cron) |
+| EMAIL | service | qnfo-email (production) |
+| EMAIL_API_KEY | secret_text | = qnfo-email API_KEY value |
+| OUTREACH_DB | d1 | d5077252-8187-41b2-a44e-f84f8724ee36 (qnfo-outreach) |
+
+## Deploy state
+- Version 2181fc9d-8aa1-44da-88b3-24c5f60ba8fd (v0.3.1) — deployed 2026-09-01T~11:44Z
+- Deployment 49ba4ebd-bf9f-4c16-bd5c-58f2bdfe7ea1 (100%)
+- Deploy method: POST /versions (keep_bindings ["secret_text"]) + POST /deployments
+- Recovery: see RECOVERY.md + scripts/redeploy-orchestrator.py
+
+## Verification record (2026-09-01)
+- /health: v0.3.1, all 6 bindings true, dryRunDefault=false
+- /run/cadence UNAUTH -> 401 (auth gate works)
+- /run/cadence AUTH -> 200; thread 395 flagged duplicate (dedup works)
+- /audit: email_worker ok (v1.8), outreach_d1 ok (3 cadence_runs), audit_d1 ok
+- Receipt emails: id 400 (v0.3), e4131e70-... (v0.3.1 live) — status=sent in D1
+
+## Safety invariants
+- Never sends external outreach (v0.3.x queues candidates only)
+- Never fabricates email addresses; unverified contacts SKIPPED
+- No follow-ups to silent recipients (user policy 2026-08-20)
+- /run/* requires Bearer EMAIL_API_KEY or x-api-key
