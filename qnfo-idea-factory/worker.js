@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.1.0", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.2.0", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -101,7 +101,7 @@ function isInternalThread(title) {
   return INTERNAL_MARKERS.some((m) => t.indexOf(m.toLowerCase()) >= 0);
 }
 __name(isInternalThread, "isInternalThread");
-var JUNK_MARKERS = ["say ok", "say okay", "test", "testing", "first turn", "second turn", "third turn", "auto-express", "block the response", "opening turn", "capital of", "what is the capital", "who is", "who are you", "what is your name", "tell me a joke", "write a poem", "write me a", "make me a", "create me", "explain simply", "explain everything", "explain like i", "3 sentences", "5 years old", "five years old", "good morning", "good night", "thank you", "thanks", "you're welcome", "are you sure", "can you", "please", "what can you tell me about", "what do you know about", "what is love", "the meaning of life", "continue", "repeat", "again", "rotation verification", "you decide how a newly extracted memory", "you synthesize a few durable", "probe does", "probe: does", "does auto-express", "what is the capital of", "say the word", "just say"];
+var JUNK_MARKERS = ["say ok", "say okay", "test", "testing", "first turn", "second turn", "third turn", "auto-express", "block the response", "opening turn", "capital of", "what is the capital", "who is", "who are you", "what is your name", "tell me a joke", "write a poem", "write me a", "make me a", "create me", "explain simply", "explain everything", "explain like i", "3 sentences", "5 years old", "five years old", "good morning", "good night", "thank you", "thanks", "you're welcome", "are you sure", "can you", "please", "what can you tell me about", "what do you know about", "what is love", "the meaning of life", "continue", "repeat", "again", "rotation verification", "you decide how a newly extracted memory", "you synthesize a few durable", "probe does", "probe: does", "does auto-express", "what is the capital of", "say the word", "just say", "use your ", "call the ", "express_intent", "social_compose", "email_check", "search_research", "tool with action", "say hello", "hello world", "what is 2+2", "reply with the single word", "source detection", "gateway passed", "note these as fixes", "note for remediation"];
 function isJunkThread(title) {
   const raw = String(title || "").trim();
   if (!raw) return true;
@@ -110,6 +110,14 @@ function isJunkThread(title) {
   return JUNK_MARKERS.some((m) => t.indexOf(m) >= 0);
 }
 __name(isJunkThread, "isJunkThread");
+function isSystemContent(c) {
+  const sc = String(c || "").trim();
+  if (!sc) return true;
+  if (sc[0] === "{" && /^\{\s*"type"\s*:/.test(sc)) return true;
+  if (sc.indexOf("data: ") === 0) return true;
+  return false;
+}
+__name(isSystemContent, "isSystemContent");
 
 
 // ---- Live + archive thread sources ----
@@ -119,8 +127,10 @@ async function liveThreads(env) {
     const res = await env.QNFO_AUDIT.prepare(
       "SELECT c.thread AS id, COUNT(*) AS n, MIN(c.ts) AS first_ts, MAX(c.ts) AS last_ts, " +
       "(SELECT content FROM chat c2 WHERE c2.thread = c.thread AND c2.role = 'user' ORDER BY c2.ts ASC, c2.id ASC LIMIT 1) AS title, " +
-      "(SELECT model FROM chat c2 WHERE c2.thread = c.thread ORDER BY c2.ts DESC LIMIT 1) AS model " +
-      "FROM chat c GROUP BY c.thread ORDER BY last_ts DESC LIMIT 20"
+      "(SELECT model FROM chat c2 WHERE c2.thread = c.thread ORDER BY c2.ts DESC LIMIT 1) AS model, " +
+      "(SELECT COUNT(*) FROM chatbox_conversations cc WHERE cc.thread_id = c.thread AND cc.source IN ('chatbox','deepchat')) AS human_n, " +
+      "(SELECT COUNT(*) FROM chatbox_conversations cc WHERE cc.thread_id = c.thread AND cc.source = 'other' AND cc.ua LIKE 'Mozilla/%') AS human_browser_n " +
+      "FROM chat c GROUP BY c.thread ORDER BY last_ts DESC LIMIT 200"
     ).all();
     const items = [];
     for (const t of res.results || []) {
@@ -130,6 +140,9 @@ async function liveThreads(env) {
       const rawTitle = String(t.title || "(untitled)");
       if (isInternalThread(rawTitle)) continue;
       if (isJunkThread(rawTitle)) continue;
+      const humanN = Number(t.human_n) || 0;
+      const browserN = Number(t.human_browser_n) || 0;
+      if (humanN <= 0 && browserN <= 0) continue;
       items.push({
         id: t.id,
         kind: "thread",
@@ -228,7 +241,9 @@ async function handleSession(path, env) {
     const firstUser = chatRows.find((m) => m && m.role === "user");
     if (isInternalThread(firstUser && firstUser.content || "")) return json({ error: "Session not found or not public" }, 404);
     if (isJunkThread(firstUser && firstUser.content || "")) return json({ error: "Session not found or not public" }, 404);
-    const messages = chatRows.map((m) => ({
+    const messages = chatRows
+      .filter((m) => !(m.role === "assistant" && isSystemContent(m.content)))
+      .map((m) => ({
       role: m.role || "unknown",
       content: redact(String(m.content || "").slice(0, 2e4)),
       timestamp: normTs(m.ts),
