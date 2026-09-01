@@ -20,7 +20,7 @@
 // SAFETY: never sends external outreach in v0.3.x — candidates are queued
 //   with email_verified=0 and REQUIRE verification before any send.
 var MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
-var VERSION = "0.3.2";
+var VERSION = "0.3.3";
 var OUTREACH_MARKERS = ["primon","zeta partition","madelung","measurement","ultrametric","p-adic","adelic","identity, aggregation","empirical filter","pre-arithmetic","formalism 25","hierarchy distance","spectral statistics","landauer","exchange phase","logical scalar","laws of form","qudit","joules-per-solution","arxiv:","10.5281/zenodo","zenodo","qubit delusion","manifesto for honest computation","consilience","q-calculus","notation problem"];
 var QNFO_DOMAINS = ["qnfo.org","qwav.org","qwav.tech","qwav.net","qwav.uk","q-wave.tech","q08.org"];
 
@@ -64,7 +64,7 @@ var DOC = {
     no_fabrication: "never fabricates email addresses; unverified contacts are SKIPPED"
   },
   recovery: "Source: QNFO/qnfo-workers repo, qnfo-email-orchestrator/worker.js. Redeploy: python scripts/redeploy-orchestrator.py (reads repo source, POST /versions with keep_bindings ['secret_text'], deploys to production). Bindings documented above.",
-  version_history: ["0.2-service-binding: AI triage only", "0.3: cadence (reply classify, Mon/Wed/Fri, receipt, OUTREACH_DB)", "0.3.1: auth gate on /run/*, thread dedup, classify ordering, https arXiv + paper_id, /doc + /audit, DRY_RUN=false", "0.3.2: MONDAY SEND wave (C1), marker+classify fixes (C4/C5), audit probe (C6), run-lock + paginated followup (LOW), zenodo->arxiv->verify->draft->send"]
+  version_history: ["0.2-service-binding: AI triage only", "0.3: cadence (reply classify, Mon/Wed/Fri, receipt, OUTREACH_DB)", "0.3.1: auth gate on /run/*, thread dedup, classify ordering, https arXiv + paper_id, /doc + /audit, DRY_RUN=false", "0.3.2: MONDAY SEND wave (C1), marker+classify fixes (C4/C5), audit probe (C6), run-lock + paginated followup (LOW), zenodo->arxiv->verify->draft->send", "0.3.3: RED-TEAM blockers — author-bound email verification (tar/.tex + \\email{} macro + role/journal blocklist + name-token), dedup status IN (sent,replied), per-paper try/catch, honest subject (no fake Re:), AI draft anchored to server-side facts, e-print pacing/retry, atomic run-lock"]
 };
 
 function json(data, status) { status = status || 200; return new Response(JSON.stringify(data), { status: status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
@@ -134,6 +134,10 @@ async function runCadence(env, mode) {
     try {
       var lockRow = await env.OUTREACH_DB.prepare("SELECT id FROM cadence_runs WHERE day=?1 AND run_at > ?2 LIMIT 1").bind(day, new Date(Date.now() - 25 * 60000).toISOString()).first();
       if (lockRow) { result.day_action = "skipped-duplicate-run"; result.duplicate_run = true; return result; }
+      // claim the lock atomically (TOCTOU guard): insert a provisional row now; the final log upserts below
+      try {
+        await env.OUTREACH_DB.prepare("INSERT OR IGNORE INTO cadence_runs (run_at, mode, day, summary_json) VALUES (?,?,?,?)").bind(now.toISOString(), "lock", day, "{}").run();
+      } catch (e) {}
     } catch (e) {}
   }
   try {
@@ -243,24 +247,59 @@ function extractEmailsFromText(text) {
   }
   return out;
 }
-async function extractEmailsFromArxiv(env, paperId) {
+var ROLE_EMAIL_RE = /(support|info|contact|admin|office|editor|proofs?|submission|manuscript|correspondence?|sales|press|media|webmaster|postmaster|no[-_]?reply|help|service|legal|billing|hr|jobs|alumni|donate|news|enquiries?|inquiries?|secretary|assistants?|scheduler)[.]?@/i;
+var JOURNAL_DOMAIN_RE = /@(elsevier|springer|wiley|taylorandfrancis|tandfonline|nature|science|acs|aps|aip|iop|osapublishing|mdpi|frontiersin|plos|sagepub|emerald|hindawi|ieee|acm|doi|orcid|arxiv|zenodo|overleaf|latex|overleaf|sharelatex|proceedings|journals|conference|conferences|easychair|submission|editorialmanager)[a-z0-9.-]*\.[a-z]{2,}/i;
+var EMAIL_MACRO_RE = /\\(email|href)\s*\{([^}]*?)\s*mailto:([^}\s]+)/g;
+function authorTokenOk(author, addr) {
+  // author-bound: email local-part must contain a token of the FIRST author's name
+  var toks = String(author || "").toLowerCase().split(/[^a-z]+/).filter(function (x) { return x.length > 2; });
+  var local = String(addr || "").split("@")[0].toLowerCase();
+  for (var i = 0; i < toks.length; i++) if (local.indexOf(toks[i]) !== -1) return true;
+  return false;
+}
+async function extractEmailsFromArxiv(env, paperId, authorName) {
+  var candidates = [];
+  var r = null;
+  for (var ea = 0; ea < 3; ea++) {
+    r = await fetch("https://arxiv.org/e-print/" + paperId, { headers: { "User-Agent": "Mozilla/5.0 (QNFO orchestration worker)", "Accept": "application/x-eprint" } });
+    if (r.ok) break;
+    if (r.status === 429 || r.status >= 500) { await sleepMs(4000 * (ea + 1)); continue; }
+    break;
+  }
+  if (!r || !r.ok) return [];
+  var arr = new Uint8Array(await r.arrayBuffer());
+  var texts = [];
   try {
-    var r = await fetch("https://arxiv.org/e-print/" + paperId, { headers: { "User-Agent": "Mozilla/5.0 (QNFO orchestration worker)", "Accept": "application/x-eprint" } });
-    if (!r.ok) return [];
-    var arr = new Uint8Array(await r.arrayBuffer());
-    var emails = [];
-    try {
-      var ds = new DecompressionStream("gzip");
-      var stream = new Blob([arr]).stream().pipeThrough(ds);
-      var raw = new Uint8Array(await new Response(stream).arrayBuffer());
-      var txt = new TextDecoder("utf-8").decode(raw);
-      emails = extractEmailsFromText(txt);
-      if (!emails.length) emails = extractEmailsFromText(new TextDecoder("utf-8").decode(arr));
-    } catch (e) {
-      emails = extractEmailsFromText(new TextDecoder("utf-8").decode(arr));
+    var ds = new DecompressionStream("gzip");
+    var stream = new Blob([arr]).stream().pipeThrough(ds);
+    var raw = new Uint8Array(await new Response(stream).arrayBuffer());
+    texts.push(new TextDecoder("utf-8").decode(raw));
+  } catch (e) {
+    texts.push(new TextDecoder("utf-8").decode(arr));
+  }
+  for (var ti = 0; ti < texts.length; ti++) {
+    var txt = texts[ti];
+    // .tex-only heuristic: only scan regions belonging to text files (skip binary tar headers)
+    var m;
+    EMAIL_MACRO_RE.lastIndex = 0;
+    while ((m = EMAIL_MACRO_RE.exec(txt)) !== null) {
+      var mac = m[3].replace(/\\_/g, "_").replace(/\\%40/g, "@").trim().toLowerCase();
+      if (mac.indexOf("@") !== -1) candidates.push(mac);
     }
-    return emails;
-  } catch (e) { return []; }
+    var plain = extractEmailsFromText(txt);
+    for (var pi = 0; pi < plain.length; pi++) candidates.push(plain[pi]);
+  }
+  // filter: role/journal blocklist, qnfo domains, and require author token match
+  var verified = [];
+  for (var ci = 0; ci < candidates.length && verified.length < 5; ci++) {
+    var a = candidates[ci];
+    if (isQnfoAddr(a)) continue;
+    if (ROLE_EMAIL_RE.test(a)) continue;
+    if (JOURNAL_DOMAIN_RE.test(a)) continue;
+    if (!authorTokenOk(authorName, a)) continue;   // author-bound (HIGH-1)
+    if (verified.indexOf(a) === -1) verified.push(a);
+  }
+  return verified;
 }
 async function fetchArxiv(query, maxResults) {
   var url = "https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(query) + "&start=0&max_results=" + (maxResults || 5) + "&sortBy=submittedDate&sortOrder=descending";
@@ -328,20 +367,22 @@ async function mondaySendWave(env, dry) {
       if (seen[ent.paper_id]) continue;
       seen[ent.paper_id] = true;
       var author = ent.authors[0];
-      var emails = await extractEmailsFromArxiv(env, ent.paper_id);
-      var verified = emails.filter(function (em) { return !isQnfoAddr(em); });
-      if (!verified.length) { wave.skipped.push({ author: author, paper: ent.title, reason: "no email in arXiv source" }); continue; }
+      var verified = [];
+      try {
+        verified = await extractEmailsFromArxiv(env, ent.paper_id, author);
+      } catch (e) { wave.skipped.push({ author: author, paper: ent.title, reason: "extract failed: " + e.message }); continue; }
+      if (!verified.length) { wave.skipped.push({ author: author, paper: ent.title, reason: "no author-bound email in arXiv source" }); continue; }
       var addr = verified[0];
       try {
-        var dupSent = await env.AUDIT_DB.prepare("SELECT id FROM emails WHERE recipient=?1 AND status='sent' LIMIT 1").bind(addr).first();
+        var dupSent = await env.AUDIT_DB.prepare("SELECT id FROM emails WHERE recipient=?1 AND status IN ('sent','replied') LIMIT 1").bind(addr).first();
         var dupCamp = await env.OUTREACH_DB.prepare("SELECT id FROM outreach_campaigns WHERE recipient_email=?1 AND paper_title=?2 LIMIT 1").bind(addr, wave.papers[0].title).first();
         if (dupSent || dupCamp) { wave.skipped.push({ author: author, paper: ent.title, reason: "already contacted" }); continue; }
       } catch (e) {}
       if (dry) { wave.skipped.push({ author: author, paper: ent.title, reason: "dry-run (would verify+send)" }); continue; }
-      var subject = "Re: " + ent.title.slice(0, 80) + " - sharing a related result";
+      var subject = "QNFO: " + ent.title.slice(0, 70) + " - a related result you may find relevant";
       var bodyText = "";
       try {
-        var prompt = "Write a short collegial email (max 150 words) from Rowan Quni-Gudzinas (independent researcher, QNFO) to Dr. " + author + ". Their paper: \"" + ent.title + "\" (arXiv " + ent.paper_id + "). Rowan's paper: \"" + wave.papers[0].title + "\" (DOI " + wave.papers[0].doi + "). Connection: both work on " + topics[t] + ". Include ONE specific connection sentence, ONE finding, ONE open question. No CV, no self-introduction. Sign: Best, Rowan Brad Quni-Gudzinas, QNFO. Plain text only.";
+        var prompt = "Write a short collegial email (max 130 words) from Rowan Quni-Gudzinas (independent researcher, QNFO) to Dr. " + author + ". Their paper title (VERBATIM, do not invent claims about it): \"" + ent.title + "\" (arXiv " + ent.paper_id + "). Rowan's paper (VERBATIM, the ONLY QNFO facts you may cite): title \"" + wave.papers[0].title + "\", DOI " + wave.papers[0].doi + ". Connection: both engage " + topics[t] + ". IMPORTANT: do NOT fabricate any result, claim, or quote about either paper; if unsure, keep it to the titles/DOI only. Include ONE open question. No CV, no self-introduction. Sign: Best, Rowan Brad Quni-Gudzinas, QNFO. Plain text only.";
         var ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }] }, { gateway: { id: "default" } });
         bodyText = ((ai && (ai.response || ai.result)) || "").toString().trim();
       } catch (e) { bodyText = ""; }
