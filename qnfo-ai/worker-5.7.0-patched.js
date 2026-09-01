@@ -693,8 +693,7 @@ function extractWAContent(result, depth = 0) {
     }
     if (typeof c.text === "string" && c.text.trim()) return c.text;
   }
-  if (result.result && typeof result.result === "object") return extrac
-tWAContent(result.result, depth + 1);
+  if (result.result && typeof result.result === "object") return extractWAContent(result.result, depth + 1);
   return "";
 }
 __name(extractWAContent, "extractWAContent");
@@ -1444,8 +1443,7 @@ async function authOk(header, env) {
 __name(authOk, "authOk");
 var PLAYGROUND_HTML = `<!DOCTYPE html>
 <html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content=
-"width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b57d0">
 <title>__TITLE__</title>
 <style>body{font-family:Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1a1a1a}header h1{font-size:1.25rem;margin:0 0 4px}header p{color:#666;margin:0 0 12px;font-size:.85rem}label{font-size:.8rem;color:#444;display:block;margin:8px 0 2px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:6px 8px;font-size:.9rem;border:1px solid #ccc;border-radius:6px}input[type=text]{flex:1;min-width:200px}input[type=password]{flex:1;min-width:200px}button{background:#0b57d0;color:#fff;border:none;cursor:pointer}button:disabled{opacity:.6}button#new{background:#fff;color:#0b57d0;border:1px solid #ccc}#msgs{margin-top:14px;border-top:1px solid #eee;padding-top:12px}.msg{margin:10px 0;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font-size:.92rem;word-break:break-word}.user{background:#eef4ff}.assistant{background:#f6f6f6}.err{color:#b3261e;font-size:.85rem;margin:8px 0}.meta{color:#888;font-size:.78rem;margin-top:6px}pre{background:#e9e9e9;padding:8px;border-radius:6px;overflow-x:auto;font-size:.85em}code{background:#e9e9e9;padding:1px 4px;border-radius:4px;font-size:.88em}pre code{background:none;padding:0}a{color:#0b57d0}</style></head>
@@ -1811,3 +1809,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+--d9e27b0589f4da4eb5ce7a0a08801b0cc5cb0597162040749079e469cfc5--

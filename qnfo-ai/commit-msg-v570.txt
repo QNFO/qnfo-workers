@@ -1,0 +1,13 @@
+fix(qnfo-ai): v5.7.0 - always-inject gloss, ensemble fallback via callDeepSeek, stripToolMarkup hardening
+
+ROUTER-CONTEXT-GAP-1 DEPLOYED (deployment f5a47381-902b-48c4-a2ea-438aa47ebd64):
+- Gloss injection now ALWAYS prepends DEFAULT_SYSTEM_PROMPT even when the client
+  (ChatBox) supplies its own system message. Previously the gloss was skipped when
+  a system message existed, so qwen3-30b answered JPCUB as 'not in literature'
+  (canonical denial at 08:18:25Z). Verified live: JPCUB with client system message
+  now answers with DOI 10.5281/zenodo.21637028.
+- Ensemble fallback: runEnsemble now calls callDeepSeek(MODELS['deepseek-v4-flash'].api)
+  instead of runWorkersAI with non-Workers-AI id 'deepseek-v4-flash' (always failed ->
+  FALLBACK_TEXT after 40s+25s timeouts; 13 occurrences in 48h).
+- stripToolMarkup hardened: strips functions.<name>:<n> style, residual tool tokens,
+  and unclosed tool_calls_section_begin (the 'continue -> tool call/code' leak).

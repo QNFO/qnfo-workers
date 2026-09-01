@@ -1,6 +1,6 @@
 # ROUTER-CONTEXT-GAP-1 — QNFO-internal feature gloss for qnfo-ai DEFAULT_SYSTEM_PROMPT
 
-**Status:** PREPARED 2026-09-01 (gate ENSEMBLE-AUTO-EXPRESS-LIVE-1 / ROUTER-CONTEXT-GAP-1). Deploy deferred to the qnfo-ai worker owner session (live moved to 5.6.5 with 22 bindings + internal service bindings; repo working tree has owner uncommitted changes — GIT-OWNERSHIP-1). Apply per the steps below once owner coordination is clear.
+**Status:** DEPLOYED 2026-09-01 as qnfo-ai v5.7.0 (deployment f5a47381-902b-48c4-a2ea-438aa47ebd64). Root-cause fix: gloss only injected when request had NO system message; ChatBox sends its own system message (defaultPrompt) so gloss was skipped and qwen3-30b answered JPCUB as not-in-literature. Fix: always prepend DEFAULT_SYSTEM_PROMPT (gloss) even when client system message exists. Verified live: JPCUB with client system message now answers with DOI 10.5281/zenodo.21637028. Also fixed ensemble fallback (callDeepSeek instead of runWorkersAI with non-WA id) + stripToolMarkup hardening (functions.<name>:<n>, unclosed sections).
 
 **Problem (canonical probe 2026-08-31):** qwen3-30b answered "Probe: does auto-express block the response on an opening turn" as a literature term ("no primary sources support this claim") because the DEFAULT_SYSTEM_PROMPT lacks QNFO-internal feature context.
 
