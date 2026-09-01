@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.3.0", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.3.1", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -115,6 +115,8 @@ function isSystemContent(c) {
   if (!sc) return true;
   if (sc[0] === "{" && /^\{\s*"type"\s*:/.test(sc)) return true;
   if (sc.indexOf("data: ") === 0) return true;
+  if (/^1\.\s*\*\*Analyze/i.test(sc)) return true;
+  if (/^Okay, the user is asking/i.test(sc) || /^The user is asking/i.test(sc) || /^Let me understand/i.test(sc)) return true;
   return false;
 }
 __name(isSystemContent, "isSystemContent");
