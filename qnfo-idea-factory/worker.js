@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.3.1", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.4.0", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -250,7 +250,7 @@ async function handleSession(path, env) {
       .filter((m) => !(m.role === "assistant" && isSystemContent(m.content)))
       .map((m) => ({
       role: m.role || "unknown",
-      content: redact(String(m.content || "").slice(0, 2e4)),
+      content: redact(String(m.content || "").slice(0, 2e5)),
       timestamp: normTs(m.ts),
       model: m.model || null
     }));
