@@ -83,10 +83,23 @@ async function run(env) {
     }
   } catch (e) { delivery = { error: String((e && e.message) || e).slice(0, 120) }; }
 
+  // Phase 2: deliver report to qnfo-email via service binding (alerts@qnfo.org internal sink, DIGEST-TO-PERSONAL-1)
+  let email = null;
+  try {
+    if (env.EMAIL && env.EMAIL_API_KEY) {
+      const er = await env.EMAIL.fetch("https://qnfo-email.internal/send", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": env.EMAIL_API_KEY },
+        body: JSON.stringify({ to: "alerts@qnfo.org", subject: "Conference Radar scan " + scannedAt.slice(0, 10), body: report }),
+      });
+      email = { status: er.status, ok: er.ok };
+    }
+  } catch (e) { email = { error: String((e && e.message) || e).slice(0, 120) }; }
+
   await env.RADAR_DB.prepare(
     "INSERT OR REPLACE INTO conference_radar (slug, report, events_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?)"
   ).bind(slug, report, JSON.stringify(events), scannedAt, scannedAt).run();
-  return { slug, events: events.filter((e) => !e.error).length, errors: events.filter((e) => e.error).length, delivery };
+  return { slug, events: events.filter((e) => !e.error).length, errors: events.filter((e) => e.error).length, delivery, email };
 }
 
 export default {
