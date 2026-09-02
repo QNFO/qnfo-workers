@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.1", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.2", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -470,12 +470,16 @@ main{max-width:880px;margin:0 auto;padding:2.2rem 1.6rem 4rem}
 .msg{display:flex}
 .msg.user{justify-content:flex-end}
 .msg .bubble{max-width:78%;padding:.8rem 1rem;border-radius:10px;font-size:.94rem;line-height:1.7;white-space:pre-wrap;word-break:break-word;position:relative}
-.msg.asst .bubble{background:var(--surface);border-left:2px solid var(--accent);border-radius:2px 10px 10px 2px}
+.msg.asst .bubble{max-width:100%;width:100%;background:var(--surface);border-left:2px solid var(--accent);border-radius:0;overflow-x:auto}
 .msg.user .bubble{background:var(--ink);color:#f6f3ec;border-radius:10px 2px 10px 10px}
 .msg .bubble pre{background:#26231d;color:#e8e2d6;padding:.6rem .8rem;border-radius:6px;overflow-x:auto;font-size:.8rem;white-space:pre-wrap}
 .msg .bubble code{font-family:ui-monospace,Consolas,monospace;font-size:.86em}
 .msg .meta{display:block;font-size:.68rem;color:var(--muted);margin-top:.45rem}
 .msg.user .meta{color:rgba(246,243,236,.62);text-align:right}
+.msg .bubble table,.ans table{border-collapse:collapse;width:100%;margin:.5rem 0 .9rem;font-size:.87rem;line-height:1.5}
+.msg .bubble th,.msg .bubble td,.ans th,.ans td{border:1px solid var(--border);padding:.42rem .6rem;text-align:left;vertical-align:top}
+.msg .bubble thead th,.ans thead th{background:var(--accent-soft);font-weight:600}
+.msg .bubble tbody tr:nth-child(even),.ans tbody tr:nth-child(even){background:#fff}
 .ask-row{display:flex;gap:.6rem;margin-bottom:.8rem}
 #ask-input{flex:1;font:inherit;font-size:1.05rem;padding:.7rem .9rem;border:1.5px solid var(--border);border-radius:8px;background:#fff;color:var(--ink);outline:none}
 #ask-input:focus{border-color:var(--accent)}
