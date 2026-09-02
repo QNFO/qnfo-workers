@@ -27,7 +27,7 @@ Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEAR
 
 ## Secrets
 - AUDITOR_TOKEN — Bearer auth token for manual /v1 calls (also stored in .deepchat secrets store per redundancy policy)
-- DIGEST_TO — email target for the fleet audit digest (when SEND_EMAIL binding is present)
+- DIGEST_TO — fleet audit digest target = alerts@qnfo.org sink (user directive 2026-09-02: digests never email personal-domain recipients)
 
 ## Deploy
 ```bash
