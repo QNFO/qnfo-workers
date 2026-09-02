@@ -1,8 +1,9 @@
-// conference-radar Worker - QNFO.OPS.008 (2026-09-01, re-delivered after red-team REFUTAL)
-// Weekly cron scan of verified QNFO-relevant venue event pages; compile radar report to D1.
-// Phase 1: parallel venue scan -> extract dated events -> compile markdown -> store D1 + GET report.
-// Phase 2 (recorded): obsidian-writer (R2 vault) delivery + qnfo-email + Workflows upgrade.
-const VERSION = "1.1.0";
+// conference-radar Worker - QNFO.OPS.008
+// v1.2.0 (2026-09-02): post-red-team fix (agent_issues 353/354) - window-filter (year >= 2026),
+// text-clean (drop SVG/CSS/JSON garbage), structured date fields (year/month/day/url/start/end),
+// curated layer + deadline-imminent flags stored canonically (curated_json + flags_json columns).
+// Weekly cron scan (0 5 * * 1 UTC) of verified QNFO-relevant venue event pages.
+const VERSION = "1.2.0";
 
 const VENUES = [
   ["CWI", "https://www.cwi.nl/en/events/"],
@@ -21,20 +22,78 @@ const VENUES = [
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
-function extractEvents(text, venue) {
+// Canonical deadline-imminent flags (verified by red-team 2026-09-02; AoE = UTC-12).
+const DEADLINE_FLAGS = [
+  { label: "CNA submission", deadline: "2026-09-02T23:59:00-12:00", venue: "CNA", note: "Complex Networks & Applications submission deadline (AoE)" },
+  { label: "QIP 2027 talk submission", deadline: "2026-10-05T23:59:00-12:00", venue: "QIP", note: "Quantum Information Processing 2027 talk submission (AoE)" },
+];
+
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const MONTH_RE = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
+
+function extractEvents(text, venue, venueUrl) {
   const events = [];
+  let discarded = 0;
   const clean = (text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const re = /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:\s*,?\s*\d{4})?[^|\n]{0,80})/gi;
+  // two date orders: [month day , year] and [day month year | month year]
+  const re = new RegExp(
+    "(" + MONTH_RE + ")[a-z]*\\.?\\s+(\\d{1,2})\\s*,?\\s*(20\\d{2})" +
+    "|((?:\\d{1,2}\\s+)?" + MONTH_RE + ")[a-z]*\\.?\\s*,?\\s*(20\\d{2})",
+    "gi"
+  );
   const seen = new Set();
   for (const m of clean.matchAll(re)) {
-    const d = m[0].replace(/\s+/g, " ").trim();
-    const key = d.slice(0, 60);
-    if (!seen.has(key)) {
-      seen.add(key);
-      events.push({ venue, date: d.slice(0, 120), snippet: clean.slice(Math.max(0, m.index - 60), m.index + 160).slice(0, 220) });
-    }
+    const monTok = m[1] || m[4] || "";
+    const dayTok = m[2] || "";
+    const yearTok = m[3] || m[5] || "";
+    const year = yearTok ? parseInt(yearTok, 10) : 0;
+    // window-filter: require explicit year >= 2026 (drops historical/garbage)
+    if (!yearTok || year < 2026) { discarded += 1; continue; }
+    const date = m[0].replace(/\s+/g, " ").trim();
+    const key = venue + "|" + date.slice(0, 60);
+    if (seen.has(key)) continue;
+    const snippet = clean.slice(Math.max(0, m.index - 60), m.index + 160).slice(0, 220);
+    // text-clean: drop SVG/CSS/JSON leakage
+    if (/\.st\d+\s*\{|fill\s*:\s*none|"id"\s*:\s*\d+\s*,/i.test(snippet)) { discarded += 1; continue; }
+    seen.add(key);
+    const mon = (monTok || "").toLowerCase().slice(0, 3);
+    events.push({
+      venue,
+      date,
+      year,
+      month: MONTHS[mon] ?? null,
+      day: dayTok ? parseInt(dayTok, 10) : null,
+      start: date,
+      end: date,
+      url: venueUrl,
+      snippet,
+    });
   }
-  return events.slice(0, 12);
+  const kept = events.slice(0, 12);
+  discarded += Math.max(0, events.length - kept.length);
+  return { events: kept, discarded };
+}
+
+function curate(events) {
+  // dedupe by venue + month + day, sort by year -> month -> day -> venue
+  const uniq = new Map();
+  for (const e of events) {
+    const k = e.venue + "|" + (e.month ?? "?") + "|" + (e.day ?? "");
+    if (!uniq.has(k)) uniq.set(k, e);
+  }
+  return Array.from(uniq.values()).sort((a, b) =>
+    (a.year - b.year) || ((a.month ?? 0) - (b.month ?? 0)) || ((a.day ?? 0) - (b.day ?? 0)) || a.venue.localeCompare(b.venue)
+  );
+}
+
+function flagStatus(deadlineIso, now) {
+  const dl = new Date(deadlineIso).getTime();
+  const diffMs = dl - now.getTime();
+  const days = diffMs / 86400000;
+  if (days < 0) return "PASSED";
+  if (days <= 7) return "IMMINENT";
+  if (days <= 30) return "UPCOMING";
+  return "FUTURE";
 }
 
 async function scanVenue(venue, url) {
@@ -43,10 +102,10 @@ async function scanVenue(venue, url) {
   try {
     const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html" }, redirect: "follow", signal: ctrl.signal });
     const text = await r.text();
-    if (r.ok) return extractEvents(text, venue);
-    return [{ venue, error: "HTTP " + r.status }];
+    if (r.ok) return { venue, ...extractEvents(text, venue, url) };
+    return { venue, events: [], discarded: 0, error: "HTTP " + r.status };
   } catch (e) {
-    return [{ venue, error: e && e.name === "AbortError" ? "timeout" : String((e && e.message) || e).slice(0, 100) }];
+    return { venue, events: [], discarded: 0, error: e && e.name === "AbortError" ? "timeout" : String((e && e.message) || e).slice(0, 100) };
   } finally {
     clearTimeout(t);
   }
@@ -54,25 +113,54 @@ async function scanVenue(venue, url) {
 
 async function scan() {
   const results = await Promise.allSettled(VENUES.map(([v, u]) => scanVenue(v, u)));
-  return results.flatMap((r, i) => (r.status === "fulfilled" ? r.value : [{ venue: VENUES[i][0], error: String(r.reason || "?").slice(0, 100) }]));
+  const events = [];
+  const venueErrors = [];
+  let discarded = 0;
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value) {
+      if (r.value.error) venueErrors.push({ venue: r.value.venue, error: r.value.error });
+      else { events.push(...r.value.events); discarded += r.value.discarded; }
+    } else {
+      venueErrors.push({ venue: VENUES[i][0], error: String((r.reason || "?").slice(0, 100)) });
+    }
+  });
+  return { events, venueErrors, discarded };
 }
 
-function renderReport(scannedAt, events) {
+function renderReport(scannedAt, curated, flags, stats) {
   const lines = [];
   lines.push("# CONFERENCE-RADAR scan " + scannedAt.slice(0, 10));
   lines.push("");
-  lines.push("Events detected: " + events.filter((e) => !e.error).length + " | venue errors: " + events.filter((e) => e.error).length);
+  lines.push("Events in window (2026+): " + stats.inWindow + " | discarded (out-of-window/garbage): " + stats.discarded + " | venue errors: " + stats.venueErrors);
   lines.push("");
-  for (const e of events.filter((x) => !x.error)) lines.push("- [" + e.venue + "] " + e.date);
+  lines.push("## Curated (deduplicated, chronological)");
+  for (const e of curated) lines.push("- [" + e.venue + "] " + e.date + "  <" + e.url + ">");
+  lines.push("");
+  lines.push("## Deadline-imminent flags");
+  for (const f of flags) lines.push("- [" + f.status + "] " + f.label + " - " + f.deadline + " (" + f.note + ")");
   return lines.join("\n");
 }
 
+async function ensureSchema(env) {
+  await env.RADAR_DB.prepare(
+    "CREATE TABLE IF NOT EXISTS conference_radar (slug TEXT PRIMARY KEY, report TEXT, events_json TEXT, scanned_at TEXT, updated_at TEXT, curated_json TEXT, flags_json TEXT)"
+  ).run();
+  for (const col of ["curated_json", "flags_json"]) {
+    try { await env.RADAR_DB.prepare("ALTER TABLE conference_radar ADD COLUMN " + col + " TEXT").run(); } catch (e) { /* already exists */ }
+  }
+}
+
 async function run(env) {
+  await ensureSchema(env);
   const scannedAt = new Date().toISOString();
-  const events = await scan();
-  const report = renderReport(scannedAt, events);
+  const { events, venueErrors, discarded } = await scan();
+  const curated = curate(events);
+  const now = new Date();
+  const flags = DEADLINE_FLAGS.map((f) => ({ ...f, status: flagStatus(f.deadline, now) }));
+  const stats = { inWindow: events.length, discarded, venueErrors: venueErrors.length };
+  const report = renderReport(scannedAt, curated, flags, stats);
   const slug = "conference-radar-" + scannedAt.slice(0, 10);
-  // Phase 2: deliver report to obsidian-writer via service binding (R2 vault, delete-then-create)
+
   let delivery = null;
   try {
     if (env.OBSIDIAN_WRITER) {
@@ -85,7 +173,6 @@ async function run(env) {
     }
   } catch (e) { delivery = { error: String((e && e.message) || e).slice(0, 120) }; }
 
-  // Phase 2: deliver report to qnfo-email via service binding (alerts@qnfo.org internal sink, DIGEST-TO-PERSONAL-1)
   let email = null;
   try {
     if (env.EMAIL && env.EMAIL_API_KEY) {
@@ -99,9 +186,20 @@ async function run(env) {
   } catch (e) { email = { error: String((e && e.message) || e).slice(0, 120) }; }
 
   await env.RADAR_DB.prepare(
-    "INSERT OR REPLACE INTO conference_radar (slug, report, events_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-  ).bind(slug, report, JSON.stringify(events), scannedAt, scannedAt).run();
-  return { slug, events: events.filter((e) => !e.error).length, errors: events.filter((e) => e.error).length, delivery, email };
+    "INSERT OR REPLACE INTO conference_radar (slug, report, events_json, curated_json, flags_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).bind(slug, report, JSON.stringify(events), JSON.stringify(curated), JSON.stringify(flags), scannedAt, scannedAt).run();
+
+  return {
+    slug,
+    version: VERSION,
+    events: events.length,
+    curated: curated.length,
+    discarded,
+    venueErrors: venueErrors.length,
+    flags: flags.map((f) => f.label + ":" + f.status),
+    delivery,
+    email,
+  };
 }
 
 export default {
