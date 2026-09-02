@@ -10,7 +10,7 @@
 const VERSION = "1.0.1";
 const ROUTER = "https://qnfo-ai.q08.workers.dev";
 const UA = "qnfo-chat-canary/" + VERSION;
-const ALERT_TO = "rwnquni@outlook.com";
+// NO personal-inbox email (user directive 2026-09-02): alerts live in qnfo-audit.alerts -> swept into qnfo-events ledger.
 const FROM_EMAIL = "alerts@qnfo.org";
 const FROM_NAME = "QNFO Ops";
 
@@ -61,9 +61,9 @@ async function alert(env, level, message) {
       .bind(new Date().toISOString().slice(0, 10), String(message).slice(0, 200)).first();
     if (dup && dup.n) return;
     await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, created_at) VALUES ('chat-canary',?1,?2,datetime('now'))").bind(level, String(message).slice(0, 400)).run();
-    if (env.SEND_EMAIL) {
+    if (env.SEND_EMAIL && env.ALERT_EMAIL_TO) {
       try {
-        const r = await env.SEND_EMAIL.send({ to: ALERT_TO, from: { email: FROM_EMAIL, name: FROM_NAME }, subject: "QNFO chat-canary " + level, text: String(message).slice(0, 2000) });
+        const r = await env.SEND_EMAIL.send({ to: env.ALERT_EMAIL_TO, from: { email: FROM_EMAIL, name: FROM_NAME }, subject: "QNFO chat-canary " + level, text: String(message).slice(0, 2000) });
         console.log("alert email ok", r && r.messageId || "sent");
       } catch (e) {
         console.log("alert email failed", String((e && e.message) || e));

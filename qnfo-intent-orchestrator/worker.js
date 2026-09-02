@@ -212,7 +212,10 @@ function digestLines(intents) {
   return out.join(NL);
 }
 
+var HUMAN_DOMAINS = new Set('outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com'.split(' '));
 async function sendDigest(env, subject, text) {
+  const dom = String(env.DIGEST_TO || '').split('@')[1] || '';
+  if (HUMAN_DOMAINS.has(dom)) return { skipped: 'personal-domain', to: env.DIGEST_TO }; // user directive 2026-09-02
   const r = await fetch('https://api.cloudflare.com/client/v4/accounts/' + env.CF_ACCOUNT + '/email/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.CF_TOKEN },

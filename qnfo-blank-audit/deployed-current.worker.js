@@ -5,7 +5,7 @@
 // Self-doc: FLEET-SELF-DOC-1. Alert row: qnfo-audit.alerts source='blank-audit' (schema: source/level/message/created_at).
 
 const VERSION = "1.1.0"; // QNFO.OPS.011D: exclude internal model='web-search' rows (by-design blank RAG helper traffic distorted metrics, G4 47/2d); detect old+new fallback phrasings
-const ALERT_TO = "rwnquni@outlook.com";
+// NO personal-inbox email (user directive 2026-09-02): blank-audit findings live in qnfo-audit.alerts (swept into qnfo-events ledger).
 const FROM_EMAIL = "alerts@qnfo.org";
 const FROM_NAME = "QNFO Ops";
 
@@ -40,9 +40,9 @@ async function run(env) {
     await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, created_at) VALUES ('blank-audit','warning',?1,datetime('now'))").bind(msg).run();
     out.alertInserted = true;
 
-    if (env.SEND_EMAIL) {
+    if (env.SEND_EMAIL && env.ALERT_EMAIL_TO) {
       try {
-        const r = await env.SEND_EMAIL.send({ to: ALERT_TO, from: { email: FROM_EMAIL, name: FROM_NAME }, subject: "QNFO gateway blank/fallback daily report", text: msg });
+        const r = await env.SEND_EMAIL.send({ to: env.ALERT_EMAIL_TO, from: { email: FROM_EMAIL, name: FROM_NAME }, subject: "QNFO gateway blank/fallback daily report", text: msg });
         out.email = "sent:" + (r && r.messageId ? String(r.messageId).slice(0, 20) : "ok");
       } catch (e) {
         out.emailError = String((e && e.message) || e);
