@@ -159,6 +159,7 @@ function texSafe(s) {
   s = s.replace(/\\right\s*>/g, "\\right\\rangle ");
   s = s.replace(/<=/g, "\\leq ");
   s = s.replace(/>=/g, "\\geq ");
+  s = s.replace(/<(?=\\)/g, "\\langle ");
   s = s.replace(/</g, "\\lt ");
   s = s.replace(/>/g, "\\gt ");
   return s;
