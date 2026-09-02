@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.11.1";
+var VERSION = "5.12.0";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -74,7 +74,7 @@ var MAX_OUT = {
   "@cf/zai-org/glm-5.3": 8192
 };
 var DEFAULT_MAX_OUT = 8192;
-var DEFAULT_SYSTEM_PROMPT = 'Answer directly and substantively: lead with the answer, then the reasoning. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly. For code, write correct, runnable code. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists. Plain scholarly prose \u2014 no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms \u2014 JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program \u2014 answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.';
+var DEFAULT_SYSTEM_PROMPT = 'Answer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.';
 var FALLBACK_TEXT = "I could not generate a response for that prompt. Please rephrase or try again.";
 var CTX_SAFETY_MARGIN = 512;
 function clampTokens(maxTokens, cap) {
@@ -1276,8 +1276,8 @@ async function logQuery(env, record) {
       const _isPublicRow = _respText.length > 0 && !_isClassifierJson && !_isCOTDump && !_isFallback && record.model !== "web-search";
       if (_isPublicRow) {
         await env.QNFO_AUDIT.batch([
-          env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(record.id + "-u", record.thread_id, record.ts, "user", String(record.prompt || "").slice(0, 2e5), record.model, "qnfo-ai"),
-          env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(record.id + "-a", record.thread_id, record.ts, "assistant", String(record.response || "").slice(0, 2e5), record.model, "qnfo-ai")
+          env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(record.thread_id + ":u:" + String(_seedStr(String(record.prompt || ""))), record.thread_id, record.ts, "user", String(record.prompt || "").slice(0, 2e5), record.model, "qnfo-ai"),
+          env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(record.thread_id + ":a:" + String(_seedStr(String(record.prompt || ""))), record.thread_id, record.ts, "assistant", String(record.response || "").slice(0, 2e5), record.model, "qnfo-ai")
         ]);
       }
     }
