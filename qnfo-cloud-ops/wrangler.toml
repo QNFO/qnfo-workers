@@ -31,6 +31,11 @@ binding = "LIVING"
 database_name = "living-paper"
 database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 
+[[d1_databases]]
+binding = "OUTREACH"
+database_name = "qnfo-outreach"
+database_id = "d5077252-8187-41b2-a44e-f84f8724ee36"
+
 # secret (set via wrangler secret put): OPS_ADMIN_TOKEN
 [[vectorize]]
 binding = "OPS_VZ"

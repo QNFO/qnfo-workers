@@ -5,6 +5,8 @@ import { connect } from "cloudflare:sockets";
 // v1.4.0: zenodo-stats carries the ADR-014 attribution audit (creators + related_identifiers
 // captured per record; creator violations flagged; sole-author mandate held) and weekly-ops
 // carries SEO discoverability health (papers/qnfo/qwav/qwav.tech: status + title + JSON-LD).
+// v1.11.0: jobVisibility adds an outreach section (qnfo-outreach funnel_daily + submissions via
+// OUTREACH binding) - closes the P7 scorecard loop for the outreach/submission engine.
 // v1.10.0: jobEngagement (weekly Mon 07:15 AMS) collects Bluesky + Buffer per-post engagement
 // into qnfo-audit.social_engagements; jobVisibility digest adds citation + engagement sections.
 // v1.2.0+: vectorized event store (OPS_VZ, doc=cloud-ops) + SILENCE POLICY — no
@@ -12,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.10.0";
+const VERSION = "1.11.0";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -1507,6 +1509,16 @@ async function jobVisibility(env) {
     const eng = await env.AUDIT.prepare("SELECT platform, metric, SUM(value) v FROM social_engagements WHERE collected_at >= ?1 AND metric != 'auth_status' AND metric != 'reach' GROUP BY platform, metric ORDER BY platform, metric").bind(wk).all();
     out.engagement = (eng.results || []).map(function (r) { return { platform: r.platform, metric: r.metric, value: r.v || 0 }; });
   } catch (e) { out.eng_error = String(e && e.message || e); }
+  // 7) outreach funnel (qnfo-outreach D1: funnel_daily + submissions)
+  try {
+    if (env.OUTREACH) {
+      const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+      const f = await env.OUTREACH.prepare("SELECT COALESCE(SUM(mined),0) mined, COALESCE(SUM(drafted),0) drafted, COALESCE(SUM(sent),0) sent, COALESCE(SUM(replied),0) replied, COALESCE(SUM(bounced),0) bounced, COALESCE(SUM(opted_out),0) opted_out FROM funnel_daily WHERE day >= ?1").bind(wk).first();
+      const sub = await env.OUTREACH.prepare("SELECT COUNT(*) n FROM submissions WHERE status IN ('submitted','accepted')").first();
+      out.outreach = f ? { mined_7d: f.mined, drafted_7d: f.drafted, sent_7d: f.sent, replied_7d: f.replied, bounced_7d: f.bounced, opted_out_7d: f.opted_out } : {};
+      out.submissions_accepted = sub ? (sub.n || 0) : 0;
+    }
+  } catch (e) { out.outreach_error = String(e && e.message || e); }
   const L = ["QNFO visibility scorecard — " + today, ""];
   if (out.requests !== undefined) L.push("zone qnfo.org 7d: " + out.requests + " requests / " + out.pageviews + " pageviews / " + out.uniques + " unique visitors (" + out.days + " days)");
   else L.push("zone qnfo.org 7d: unavailable (" + (out.web_error || "no data") + ")");
@@ -1519,6 +1531,10 @@ async function jobVisibility(env) {
     L.push("", "social engagement (7d):");
     for (const e of out.engagement) L.push("- " + e.platform + " " + e.metric + ": " + e.value);
   } else L.push("", "social engagement (7d): none collected" + (out.eng_error ? " (" + out.eng_error + ")" : ""));
+  if (out.outreach) {
+    L.push("", "outreach (7d): mined " + (out.outreach.mined_7d || 0) + " / drafted " + (out.outreach.drafted_7d || 0) + " / sent " + (out.outreach.sent_7d || 0) + " / replies " + (out.outreach.replied_7d || 0) + " / bounces " + (out.outreach.bounced_7d || 0) + " / opt-outs " + (out.outreach.opted_out_7d || 0));
+    L.push("open submissions accepted: " + (out.submissions_accepted || 0));
+  } else if (out.outreach_error) L.push("", "outreach (7d): unavailable (" + out.outreach_error + ")");
   const d = await storeDigest(env, "visibility", "QNFO visibility scorecard — " + today, L.join(NL));
   out.digest = d;
   return { status: "ok", notes: out };
@@ -1679,7 +1695,7 @@ export default {
         ams_offset: off,
         crons,
         bindings: {
-          audit: !!env.AUDIT, portfolio: !!env.PORTFOLIO, living: !!env.LIVING, graph: !!env.GRAPH,
+          audit: !!env.AUDIT, portfolio: !!env.PORTFOLIO, living: !!env.LIVING, outreach: !!env.OUTREACH, graph: !!env.GRAPH,
           email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, qnfo_infra: !!env.QNFO_INFRA,
           send_email: !!env.SEND_EMAIL, vault: !!env.VAULT, ai: !!env.AI, ops_vz: !!env.OPS_VZ,
           secrets: { gh: !!env.GH_TOKEN, gmail: !!env.GMAIL_PASS, cf: !!env.CF_TOKEN, admin: !!env.OPS_ADMIN_TOKEN, infra_token: !!env.INFRA_TOKEN }
