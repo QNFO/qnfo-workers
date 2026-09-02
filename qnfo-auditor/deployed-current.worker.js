@@ -9,7 +9,7 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.1.0";
+var VERSION = "1.1.1";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
@@ -210,11 +210,20 @@ async function runAudit(env, mode, log) {
     const impr = await qAll(env, "SELECT fingerprint,last_detail,status,updated_at FROM issue_ledger WHERE source='kaizen' AND category='improvement' AND status='resolved'");
     let eff = 0;
     for (const im of impr) {
-      const cid = String(im.last_detail || "").trim().slice(0, 40);
+      const title = String(im.title || "");
+      const m1 = title.match(/\[([0-9a-f]{4,16})\]/);
+      const cid = (m1 ? m1[1] : "") || String(im.last_detail || "").trim().slice(0, 40);
       if (!cid) continue;
       const cand = await q1(env, "SELECT id,class,source,category,status FROM kaizen_candidates WHERE id=?", cid);
       if (!cand || cand.status === "verified_effective" || cand.status === "ineffective") continue;
-      const n = (await q1(env, "SELECT COUNT(*) n FROM issue_events WHERE source=? AND category=? AND ts > ?", cand.source, cand.category, im.updated_at))?.n || 0;
+      // effectiveness signal: auditor-source (recurring-finding) candidates measured by future finding trend; others by recurrence of source/category events
+      let n = 0;
+      if (cand.source === "auditor") {
+        const later = await qAll(env, "SELECT findings FROM fleet_audit_runs WHERE ts > ?", im.updated_at);
+        for (const rr of later) { let arr = []; try { arr = JSON.parse(rr.findings || "[]"); } catch (e) {} if (arr.some((f) => String(f.check || "") === cand.category)) n++; }
+      } else {
+        n = (await q1(env, "SELECT COUNT(*) n FROM issue_events WHERE source=? AND category=? AND ts > ?", cand.source, cand.category, im.updated_at))?.n || 0;
+      }
       const status = n === 0 ? "verified_effective" : (n >= 2 ? "ineffective" : "proposed");
       if (status === "verified_effective" || status === "ineffective") {
         await env.AUDIT.prepare("UPDATE kaizen_candidates SET status=?, evidence=?, updated_at=? WHERE id=?").bind(status, "effect-check after improvement resolved: recurrence since " + im.updated_at + " = " + n, new Date().toISOString(), cand.id).run();
@@ -324,7 +333,7 @@ async function upsertCandidate(env, cls, source, category, title, evidence, log)
   const matureCut = new Date(Date.now() - 7 * 864e5).toISOString();
   const mature = await qAll(env, "SELECT id,class,source,category,title FROM kaizen_candidates WHERE status='proposed' AND created_at < ? LIMIT 10", matureCut);
   for (const m of mature) {
-    await ledgerEnsure(env, { source: "kaizen", category: "improvement", level: "medium", title: "Improvement candidate: " + m.class + " (" + (m.source || "?") + "/" + (m.category || "?") + ")", detail: m.id });
+    await ledgerEnsure(env, { source: "kaizen", category: "improvement", level: "medium", title: "Improvement candidate: " + m.class + " (" + (m.source || "?") + "/" + (m.category || "?") + ") [" + m.id + "]", detail: m.id });
     await env.AUDIT.prepare("UPDATE kaizen_candidates SET status='promoted', updated_at=? WHERE id=?").bind(new Date().toISOString(), m.id).run();
   }
 }

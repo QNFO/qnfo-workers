@@ -2,7 +2,7 @@
 
 Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEARN procedure over ALL QNFO event/log stores. Runs unattended (no user, no DeepChat), cloud-native.
 
-- **Worker:** qnfo-auditor (v1.1.0)
+- **Worker:** qnfo-auditor (v1.1.1)
 - **Schedule:** standard pass 01:45/13:45 UTC daily; deep pass Monday 06:45 UTC (registered in [triggers])
 - **Canonical source:** QNFO/qnfo-workers/qnfo-auditor
 - **Runbook:** QNFO/qnfo-ops/AUDT/FLEET-AUDIT-AND-ACT-PROCEDURE.md
@@ -28,6 +28,7 @@ Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEAR
 
 v1.0.2 hardening: all time-window cutoffs against ISO-8601 columns now use JS-computed ISO bounds (no SQLite space-format literal mixing); auth is fail-closed when AUDITOR_TOKEN is unset (red-team finding).
 v1.1.0: feedback loops F1-F4 (close the learning loops + supervise subloops). Fixes v1.0.2 scope bug where upsertCandidate referenced runAudit-local cut7d (mature kaizen promotion silently dead).
+v1.1.1: F2 robustness (red-team direct audit): promotion title now embeds [candidate-id] (survives agent note overwriting last_detail); recurring-finding (auditor-source) candidates verified by future finding trend, not source/category events.
 
 ## Endpoints (Bearer AUDITOR_TOKEN)
 - GET /health · GET / · POST /v1/run (mode standard|deep) · GET /v1/runs · GET /v1/state
