@@ -1,0 +1,26 @@
+name = "qnfo-auditor"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# qnfo-auditor v1.0.0 - Fleet Event Audit & Act loop.
+# Reviews/audits/acts on ALL QNFO event/log stores automatically, unattended.
+# Procedure runbook: QNFO/qnfo-ops/AUDT/FLEET-AUDIT-AND-ACT-PROCEDURE.md
+# Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
+# secrets (wrangler secret put): AUDITOR_TOKEN (Bearer auth for /v1 endpoints), DIGEST_TO (alert email target)
+# deploy: wrangler deploy from this dir; then cp worker.js deployed-current.worker.js
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# Native Email Workers binding for the fleet-audit digest (from alerts@qnfo.org).
+[[send_email]]
+name = "SEND_EMAIL"
+
+[triggers]
+crons = ["45 1,13 * * *", "45 6 * * 1"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
