@@ -1,33 +1,30 @@
 // personal-events-radar Worker - QNFO.OPS.010 Stage B
-// v1.0.1 (2026-09-02): personal-plane events radar.
-// v1.0.1 fixes (red-team, 2026-09-02):
-//   - boundary-aware event snippets: snippet ends at the NEXT month-name token so adjacent
-//     events cannot leak text into each other (fixes FNC2026-Austin classified "online"
-//     because the next event's "Virtual event" leaked in -> energy gate bypass)
-//   - calendar POSTs now require at least one keyword hit (n>=1); venue-affinity-only events
-//     stay report-only (fixes every IHES/ESI seminar flooding the personal calendar)
-//   - snippet titles trimmed at word boundaries (no mid-word starts)
-// v1.0.0: initial Stage B worker (scan 24 venues, personal gates, calendar-api POSTs).
-// PURPOSE: weekly scan of the SAME 24 venue sources as events-radar (QNFO.OPS.009), scored
-//   against the PERSONAL plane preferences in personal-life D1 (profile facets + attendance
-//   ledger). Gates every recommendation through the standing personal filters:
-//   - standing filter: no QPL/CWI topics in personal recommendations (profile facet, conf 0.95)
-//   - energy budget: max 2 in-person events per half-year; H2 2026 budget SPENT (LoF26+QPL26),
-//     next in-person eligibility H1 2027; H1 2027 slots computed from the attendance ledger
-//   - Schengen exit deadline 2026-10-17: onsite events at Schengen venues on/after that date
-//     are blocked (profile facet logistics "Schengen visa exit deadline")
-//   - room-question gate: venue affinity (epistemically open, small conversation venues rank up)
-//   - tasting-menu protocol: 3-5 cheap online/hybrid experiments over the next 90 days
+// v1.1.0 (2026-09-02): PERSONAL-QNFO-SEPARATION-1 rebuild.
+//   v1.0.x VIOLATED the separation gate: it scored WORK programs (Laws of Form, ultrametric/
+//   adelic, JPCUB energy, quantum) from research venue pages into the PERSONAL plane calendar.
+//   v1.1.0 removes the entire work/research interest taxonomy and scans PERSONAL-LIFE venues
+//   only: museums, concert halls, open-air theatre, and Amsterdam city culture listings.
+//   Personal plane = personal life (arts, music, museums, queer arts, performance, festivals).
+//   Work venues/conferences live exclusively in the work plane (events-radar) and the
+//   personal-life attendance ledger (trips), never here.
+// PURPOSE: weekly scan of personal-life venue pages scored against the PERSONAL plane
+//   preferences in personal-life D1 (profile facets). Gates every recommendation through the
+//   standing personal filters:
+//   - energy budget: max 2 in-person TRAVEL events per half-year (local Amsterdam events are
+//     commutable and do not consume travel budget); H2 2026 travel budget SPENT
+//   - Schengen exit deadline 2026-10-17: onsite Schengen-venue events on/after that date blocked
+//   - standing filter: no QPL/CWI topics in personal recommendations
+//   - room-question gate: venue affinity (energizing venues rank up)
+//   - tasting-menu protocol: 3-5 cheap local experiments over the next 90 days
 // Cleared events are POSTed to calendar-api /events?plane=personal (source=personal-radar,
 // status=tentative) with relevance+friction; report persisted to D1 qnfo-audit.personal_radar
-// and delivered to obsidian-writer (R2 vault -> D:/Obsidian, section "Personal Events Radar").
-// CAPABILITIES: parallel venue scan (8s AbortController per venue), date-range extraction,
-//   personal-interest relevance, friction scoring, hard gate engine (standing/energy/schengen),
-//   calendar-api dedupe before POST, tasting-menu construction.
+// and delivered to obsidian-writer (section "Personal Events Radar").
+// CAPABILITIES: parallel venue scan (8s AbortController), date-range extraction, personal-life
+//   relevance, friction scoring, hard gate engine, calendar-api dedupe before POST.
 // DEPLOY: cd qnfo-workers/personal-events-radar && wrangler deploy
-// CANONICAL SOURCE: github.com/QNFO/qnfo-workers -> qnfo-workers/personal-events-radar/worker.js
+// CANONICAL SOURCE (remote): github.com/QNFO/qnfo-workers -> personal-events-radar/worker.js
 // NOTE: all regexes are built backslash-free (char classes + fromCharCode) for transport safety.
-const VERSION = "1.0.1";
+const VERSION = "1.1.0";
 const WORKER = "personal-events-radar";
 
 const TAB = String.fromCharCode(9);
@@ -36,61 +33,48 @@ const CR = String.fromCharCode(13);
 const WSC = "[" + " " + TAB + CR + LF + "]";
 const WS = WSC + "+";
 
-// ---- Personal interest taxonomy (from personal-life profile facets) ----
+// ---- Personal-life interest taxonomy (from personal-life profile facets ONLY) ----
+// Evidence: facets likes "museums", "classical concerts", "queer arts and culture",
+// "play and performance", "conversation formats", "audiobooks and literature".
+// NO work/research keywords live here (PERSONAL-QNFO-SEPARATION-1).
 const INTERESTS = [
-  { code: "LOF", name: "Laws of Form", kw: ["laws of form", "spencer-brown", "spencer brown", "calculus of indications", "distinction", "re-entry", "reentry", "brownian"] },
-  { code: "ULT", name: "Ultrametric / p-adic", kw: ["ultrametric", "p-adic", "adelic", "non-archimedean", "idempotent", "hierarchical"] },
-  { code: "INF", name: "Information physics", kw: ["infomatics", "information physics", "szilard", "maxwell", "semantic information", "kolmogorov", "mutual information"] },
-  { code: "EPI", name: "Epistemics / ignorance audit", kw: ["ignorance", "epistemolog", "knowledge", "scaffold", "unknown", "method"] },
-  { code: "ENE", name: "Energy benchmark (JPCUB)", kw: ["energy", "thermodynamic", "landauer", "joules", "carbon", "low-power", "low power", "green computing", "sustainable"] },
-  { code: "CMP", name: "Computation models", kw: ["automata", "turing", "lambda calculus", "reversible", "cellular automata", "computation", "hypercomputation"] },
-  { code: "CNX", name: "Complexity / consilience", kw: ["complexity", "complex systems", "consilience", "interdisciplinary", "network science", "emergence"] },
-  { code: "QFD", name: "Quantum foundations", kw: ["quantum foundations", "foundations of physics", "philosophy of physics", "qubit", "quantum information", "qip", "decoherence", "entanglement"] },
-  { code: "CRY", name: "Cryptography", kw: ["cryptograph", "post-quantum", "lattice", "encryption", "privacy"] },
-  { code: "PBO", name: "Pattern ontology", kw: ["ontology", "pattern", "taxonomy", "knowledge representation"] }
+  { code: "MUS", name: "Museums", kw: ["museum", "exhibition", "expositie", "gallery", "collection", "masterpiece", "old master", "tentoonstelling"] },
+  { code: "CLA", name: "Classical music", kw: ["concert", "classical", "symphony", "orchestra", "orchestral", "chamber music", "recital", "concerto", "sonata", "opera", "baroque", "renaissance music"] },
+  { code: "PER", name: "Play and performance", kw: ["performance", "theatre", "theater", "dance", "ballet", "puppet", "circus", "comedy", "open air", "openluchttheater", "storytelling"] },
+  { code: "QUR", name: "Queer arts and culture", kw: ["queer", "pride", "lgbt", "drag", "ballroom"] },
+  { code: "JAZ", name: "Jazz and contemporary", kw: ["jazz", "contemporary music", "electronic", "dj", "live music", "indie", "folk"] },
+  { code: "LIT", name: "Literature and ideas", kw: ["literature", "poetry", "book", "author", "reading", "philosophy cafe", "debate", "talk"] },
+  { code: "FIL", name: "Film and screen", kw: ["film", "cinema", "screening", "documentary", "movie"] },
+  { code: "FES", name: "Festivals and city life", kw: ["festival", "open day", "night of", "museumnacht", "free entry", "gratis", "market", "parade", "city walk"] }
 ];
 
-// ---- Source catalog: SAME venues as events-radar (QNFO.OPS.009) ----
+// ---- Personal-life venue sources (Amsterdam local; evidence = profile facets) ----
+// Concertgebouw (classical concerts), Rijksmuseum + Van Gogh + Stedelijk (museums),
+// Vondelpark Openluchttheater (he volunteers there), I amsterdam (city culture incl. queer arts).
 const SOURCES = [
-  { name: "CWI", url: "https://www.cwi.nl/en/events/", kind: "workshop", delivery: "hybrid", cost: 1 },
-  { name: "Perimeter", url: "https://perimeterinstitute.ca/conferences", kind: "conference", delivery: "hybrid", cost: 1 },
-  { name: "FQXi", url: "https://fqxi.org/events", kind: "other", delivery: "online", cost: 0 },
-  { name: "IQOQI", url: "https://iqoqi.at", kind: "colloquium", delivery: "hybrid", cost: 0 },
-  { name: "MPI-PKS", url: "https://www.pks.mpg.de/events/workshops-seminars/", kind: "workshop", delivery: "onsite", cost: 1 },
-  { name: "SFI", url: "https://www.santafe.edu/events", kind: "seminar", delivery: "hybrid", cost: 0 },
-  { name: "QuSoft", url: "https://www.qusoft.org", kind: "workshop", delivery: "hybrid", cost: 0 },
-  { name: "QuTech", url: "https://www.qutech.nl/events/", kind: "event", delivery: "hybrid", cost: 0 },
-  { name: "CSH", url: "https://www.csh.ac.at/events/", kind: "webinar", delivery: "hybrid", cost: 0 },
-  { name: "CSS", url: "https://cssociety.org/events", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "CNA", url: "https://www.complexnetworks.org/", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "QIP", url: "https://qipconference.org/", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "HotCarbon", url: "https://hotcarbon.org/", kind: "workshop", delivery: "onsite", cost: 1 },
-  { name: "ACM-eEnergy", url: "https://energy.acm.org/", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "QWorld", url: "https://qworld.net/", kind: "webinar", delivery: "online", cost: 0 },
-  { name: "QCrypt", url: "https://qcrypt.net/", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "IACR", url: "https://www.iacr.org/events/", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "RealWorldCrypto", url: "https://rwc.iacr.org/", kind: "conference", delivery: "onsite", cost: 2 },
-  { name: "ASL", url: "https://aslonline.org/meetings/", kind: "meeting", delivery: "hybrid", cost: 1 },
-  { name: "IAOA", url: "https://iaoa.org/", kind: "other", delivery: "online", cost: 0 },
-  { name: "ICTP", url: "https://www.ictp.it/events", kind: "school", delivery: "hybrid", cost: 1 },
-  { name: "IHES", url: "https://www.ihes.fr/en/events/", kind: "lecture", delivery: "hybrid", cost: 0 },
-  { name: "ESI", url: "https://www.esi.ac.at/events", kind: "workshop", delivery: "hybrid", cost: 1 },
-  { name: "NetSci", url: "https://netscisociety.net/events", kind: "conference", delivery: "hybrid", cost: 2 }
+  { name: "Concertgebouw", url: "https://www.concertgebouw.nl/en", kind: "concert", delivery: "onsite", cost: 2 },
+  { name: "Rijksmuseum", url: "https://www.rijksmuseum.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
+  { name: "VanGoghMuseum", url: "https://www.vangoghmuseum.nl/en/visit/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
+  { name: "Stedelijk", url: "https://www.stedelijk.nl/en/visit/agenda", kind: "exhibition", delivery: "onsite", cost: 1 },
+  { name: "Openluchttheater", url: "https://www.openluchttheater.nl/agenda", kind: "performance", delivery: "onsite", cost: 0 },
+  { name: "Iamsterdam", url: "https://www.iamsterdam.com/en/whats-on", kind: "event", delivery: "onsite", cost: 1 }
 ];
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 // ---- Personal gate configuration (evidence = personal-life profile facets, 2026-09-02) ----
-// facet logistics "energy budget H2 2026 spent" (conf 0.95): H2 2026 in-person budget SPENT
-//   (LoF26 + QPL26). Next in-person eligibility: H1 2027 (QIP27 Singapore = slot 1).
+// facet logistics "energy budget H2 2026 spent" (conf 0.95): H2 2026 in-person TRAVEL budget
+//   SPENT (LoF26 + QPL26). Next in-person travel eligibility: H1 2027 (QIP27 Singapore = slot 1).
 // facet logistics "Schengen visa exit deadline" (conf 0.9): must exit Schengen before 2026-10-17.
 // facet standing-filters "No QPL/CWI topics in personal recommendations" (conf 0.95).
 const ENERGY = { maxInPersonPerHalfYear: 2, h2_2026_spent: true, nextEligibility: "2027-01-01" };
 const SCHENGEN_EXIT = "2026-10-17";
 const STANDING_DROP = /qpl|cwi/i;
-const VENUE_AFFINITY = { SFI: 1, FQXi: 1, CSH: 1, ASL: 1, IAOA: 1, ICTP: 1, IHES: 1, ESI: 1, QuSoft: 1, QuTech: 1, QWorld: 1, QIP: 1, IQOQI: 1, HotCarbon: 1, "ACM-eEnergy": 1 };
-const LOCAL_VENUES = ["CWI", "QuSoft", "QuTech"];
-const SCHENGEN_VENUES = ["CWI", "QuSoft", "QuTech", "MPI-PKS", "CSH", "ESI", "ICTP", "IHES", "IQOQI"];
+// All scanned venues are Amsterdam-local (commutable); travel-energy gate does not apply to them.
+// Room-question gate: energizing local venues rank up.
+const VENUE_AFFINITY = { Concertgebouw: 1, Rijksmuseum: 1, VanGoghMuseum: 1, Stedelijk: 1, Openluchttheater: 1 };
+const LOCAL_VENUES = ["Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk", "Openluchttheater", "Iamsterdam"];
+const SCHENGEN_VENUES = ["Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk", "Openluchttheater", "Iamsterdam"];
 const TRAVEL_KINDS = ["conference", "workshop", "school"];
 
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
@@ -167,28 +151,20 @@ function extractEvents(text, src) {
 function classify(ev) {
   const s = (ev.snippet || "").toLowerCase();
   let kind = ev.srcKind;
-  if (/webinar|online seminar|zoom|livestream|live stream|youtube|virtual talk/i.test(s)) kind = "webinar";
-  else if (/meetup|community|networking|hackathon/i.test(s)) kind = "meetup";
-  else if (/summer school|winter school|school on|doctoral school/i.test(s)) kind = "school";
-  else if (/workshop/i.test(s)) kind = "workshop";
-  else if (/colloquium/i.test(s)) kind = "colloquium";
-  else if (/seminar/i.test(s)) kind = "seminar";
-  else if (/lecture|public talk|talk:/i.test(s)) kind = "lecture";
-  else if (/conference|symposium/i.test(s)) kind = "conference";
-  const hasInPerson = /in person|in-person|onsite|on-site|venue|location:|conference centre|university|hotel/i.test(s);
+  if (/concert|recital|symphony|orchestra|opera/i.test(s)) kind = "concert";
+  else if (/exhibition|expositie|tentoonstelling/i.test(s)) kind = "exhibition";
+  else if (/performance|theatre|theater|dance|ballet|open air|openluchttheater/i.test(s)) kind = "performance";
+  else if (/festival|parade|night of|museumnacht/i.test(s)) kind = "festival";
+  else if (/film|cinema|screening|documentary/i.test(s)) kind = "film";
+  else if (/talk|lecture|reading|debate/i.test(s)) kind = "talk";
   let delivery = ev.srcDelivery;
-  if (/online|virtual|webinar|zoom|remote|livestream|live stream|youtube|hybrid/i.test(s)) delivery = hasInPerson ? "hybrid" : "online";
-  else if (hasInPerson) delivery = "onsite";
+  if (/online|virtual|stream|livestream|live stream|hybrid/i.test(s)) delivery = "hybrid";
   let cost = ev.srcCost;
-  if (/free|no fee|complimentary|donation|open to all|no registration fee/i.test(s)) cost = 0;
-  else if (/registration fee|ticket|registration required|paypal|checkout/i.test(s)) cost = 1;
-  else if (new RegExp("(^|[^a-z])fee([^a-z]|$)").test(s)) cost = 1;
+  if (/free|gratis|no charge|open to all|free entry/i.test(s)) cost = 0;
   return { kind, delivery, cost };
 }
 
 function interestHits(ev) {
-  // keyword window uses the WIDE snippet (title precedes the date on dense listing pages);
-  // classification and gates use the tight boundary snippet so adjacent events cannot leak
   const text = ((ev.wideSnippet || ev.snippet || "") + " " + ev.venue).toLowerCase();
   const hits = [];
   for (const d of INTERESTS) {
@@ -196,7 +172,10 @@ function interestHits(ev) {
     for (const kw of d.kw) if (text.indexOf(kw) !== -1) n += 1;
     if (n > 0) hits.push({ code: d.code, name: d.name, n });
   }
-  if (hits.length === 0 && VENUE_AFFINITY[ev.venue]) hits.push({ code: "VEN", name: "venue-affinity:" + ev.venue, n: 0, affinity: true });
+  if (hits.length === 0) {
+    const a = VENUE_AFFINITY[ev.venue];
+    if (a) hits.push({ code: "VEN", name: "venue-affinity:" + ev.venue, n: 0, affinity: true });
+  }
   hits.sort((a, b) => b.n - a.n);
   return hits;
 }
@@ -204,10 +183,10 @@ function interestHits(ev) {
 function kwEvidence(g) { return (g.e.interestDetail || []).some((h) => h.n >= 1); }
 
 function kindFriction(kind) {
-  const m = { webinar: 0, meetup: 1, lecture: 1, seminar: 1, meeting: 1, colloquium: 2, event: 2, other: 2, workshop: 3, school: 4, conference: 5 };
+  const m = { festival: 0, performance: 1, talk: 1, film: 1, event: 2, exhibition: 2, concert: 2 };
   return m[kind] !== undefined ? m[kind] : 2;
 }
-function deliveryFriction(d) { return d === "online" ? 0 : d === "hybrid" ? 1 : d === "onsite" ? 3 : 2; }
+function deliveryFriction(d) { return d === "onsite" ? 1 : d === "hybrid" ? 0 : 2; }
 function costFriction(c) { return c === 0 ? 0 : c === 1 ? 1 : 2; }
 
 function scoreEvent(ev) {
@@ -228,16 +207,12 @@ function scoreEvent(ev) {
   };
 }
 
-function gateEvent(e, budget) {
+function gateEvent(e) {
   const reasons = [];
   const text = ((e.snippet || "") + " " + e.venue).toLowerCase();
   if (STANDING_DROP.test(text)) reasons.push("standing-filter:QPL/CWI");
-  if (e.delivery === "onsite") {
-    if (SCHENGEN_VENUES.includes(e.venue) && e.startIso >= SCHENGEN_EXIT) reasons.push("schengen-exit:" + SCHENGEN_EXIT);
-    if (TRAVEL_KINDS.includes(e.kind) && !LOCAL_VENUES.includes(e.venue)) {
-      if (ENERGY.h2_2026_spent && e.startIso < ENERGY.nextEligibility) reasons.push("energy-budget:H2-2026-spent");
-      else if (e.startIso >= "2027-01-01" && e.startIso < "2027-07-01" && budget.h1SlotsLeft <= 0) reasons.push("energy-budget:H1-2027-full");
-    }
+  if (e.delivery === "onsite" && SCHENGEN_VENUES.includes(e.venue) && e.startIso >= SCHENGEN_EXIT) {
+    reasons.push("schengen-exit:" + SCHENGEN_EXIT);
   }
   return { cleared: reasons.length === 0, reasons };
 }
@@ -255,18 +230,7 @@ async function scanVenue(src) {
   } finally { clearTimeout(t); }
 }
 
-async function computeBudget(env) {
-  const r = await env.PERSONAL_DB.prepare(
-    "SELECT venue, start_date FROM events WHERE start_date>=? AND start_date<? AND category IN ('conference','workshop','school','program')"
-  ).bind("2027-01-01", "2027-07-01").all();
-  const seen = new Set();
-  let booked = 0;
-  for (const row of (r.results || [])) {
-    const k = (row.venue || "") + "|" + String(row.start_date || "").slice(0, 10);
-    if (!seen.has(k)) { seen.add(k); booked += 1; }
-  }
-  return { h1InPersonBooked: booked, h1SlotsLeft: Math.max(0, ENERGY.maxInPersonPerHalfYear - booked) };
-}
+function normTitle(t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 60); }
 
 async function fetchExistingCalendar(env) {
   try {
@@ -276,17 +240,17 @@ async function fetchExistingCalendar(env) {
   } catch (e) { return []; }
 }
 
-function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
+function renderReport(scannedAt, horizon, gated, stats, posted) {
   const L = [];
   L.push("PERSONAL-EVENTS-RADAR SCAN — generated " + scannedAt.slice(0, 10) + " (window: " + scannedAt.slice(0, 10) + " .. " + horizon + ")");
   L.push("[PERSONAL-RADAR: " + gated.length + " in-window events | " + stats.okVenues + "/" + stats.totalVenues + " venues ok | " + gated.filter((g) => g.cleared && g.e.relevance >= 3 && kwEvidence(g)).length + " cleared | " + posted.posted + " posted to calendar]");
   L.push("");
+  L.push("Scope: PERSONAL LIFE only (museums, concerts, performance, queer arts, festivals,");
+  L.push("local Amsterdam culture). Work/research venues live in events-radar, not here.");
   L.push("Ranking rule: priority = 10 x relevance / (1 + friction). Friction = kind + delivery + cost.");
-  L.push("Hard gates applied in order: standing filter (QPL/CWI) -> Schengen exit (2026-10-17, onsite");
-  L.push("Schengen venues) -> energy budget (max 2 in-person travel events per half-year;");
-  L.push("H2 2026 SPENT via LoF26+QPL26; next in-person eligibility H1 2027).");
-  L.push("Calendar POST rule: cleared gates AND relevance >= 3 AND at least one keyword hit");
-  L.push("(venue-affinity-only events stay report-only, never posted to the calendar).");
+  L.push("Gates: standing filter (QPL/CWI) -> Schengen exit 2026-10-17 (onsite Amsterdam events).");
+  L.push("Local Amsterdam events do NOT consume the in-person TRAVEL budget.");
+  L.push("Calendar POST rule: cleared gates AND relevance >= 3 AND at least one keyword hit.");
   L.push("");
   const cleared = gated.filter((g) => g.cleared && g.e.relevance >= 3);
   const top = cleared.filter((g) => g.e.priority >= 4 && g.e.frictionClass !== "HIGH").sort((a, b) => b.e.priority - a.e.priority || a.e.startIso.localeCompare(b.e.startIso)).slice(0, 10);
@@ -301,7 +265,7 @@ function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
   const tasting = gated.filter((g) => g.cleared && g.e.relevance >= 2 && g.e.friction <= 2 && g.e.startIso >= t90 && g.e.startIso <= t90end)
     .sort((a, b) => a.e.friction - b.e.friction || b.e.relevance - a.e.relevance).slice(0, 5);
   L.push("");
-  L.push("## Tasting menu - 3-5 cheap experiments over the next 90 days");
+  L.push("## Tasting menu - 3-5 cheap local experiments over the next 90 days");
   if (tasting.length === 0) L.push("_No cheap low-friction experiments surfaced this scan._");
   for (const g of tasting) {
     const e = g.e;
@@ -309,9 +273,8 @@ function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
   }
   L.push("");
   L.push("## Budget and gates");
-  L.push("- energy budget: H2 2026 in-person budget SPENT (LoF26 + QPL26). Next in-person eligibility H1 2027.");
-  L.push("- H1 2027 in-person slots: " + budget.h1SlotsLeft + " left of " + ENERGY.maxInPersonPerHalfYear + " (ledger shows " + budget.h1InPersonBooked + " booked).");
-  L.push("- Schengen exit deadline: 2026-10-17. Onsite Schengen-venue events on/after that date are blocked.");
+  L.push("- in-person TRAVEL budget: H2 2026 SPENT (LoF26 + QPL26). Local Amsterdam events are exempt.");
+  L.push("- Schengen exit deadline: 2026-10-17. Onsite Amsterdam events on/after that date are blocked.");
   L.push("- standing filter: QPL / CWI topics excluded from personal recommendations.");
   L.push("- posted to calendar-api plane=personal: " + posted.posted + " new (dedupe skipped " + posted.skipped + ").");
   L.push("");
@@ -340,7 +303,6 @@ async function run(env) {
   const scannedAt = new Date().toISOString();
   const nowIso = scannedAt.slice(0, 10);
   const horizon = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
-  const budget = await computeBudget(env);
 
   const results = await Promise.allSettled(SOURCES.map((s) => scanVenue(s)));
   const rawEvents = [];
@@ -357,14 +319,13 @@ async function run(env) {
   const scored = inWindow.map(scoreEvent);
   const seen = new Set();
   const uniq = scored.filter((e) => { const k = e.venue + "|" + e.startIso; if (seen.has(k)) return false; seen.add(k); return true; });
-  const gated = uniq.map((e) => ({ e, ...gateEvent(e, budget) }));
+  const gated = uniq.map((e) => ({ e, ...gateEvent(e) }));
 
   const existing = await fetchExistingCalendar(env);
-  // dedupe key = venue + dtstart (stable across snippet-window changes; titles drift)
   const existingKeys = new Set(existing.map((x) => String(x.location || "").toLowerCase() + "|" + String(x.dtstart || "").slice(0, 10)));
   let ledgerRows = [];
   try {
-    const lr = await env.PERSONAL_DB.prepare("SELECT title, start_date FROM events WHERE start_date>=?").bind(nowIso).all();
+    const lr = await env.PERSONAL_DB.prepare("SELECT venue, start_date FROM events WHERE start_date>=?").bind(nowIso).all();
     ledgerRows = lr.results || [];
   } catch (e) { /* ledger read best-effort */ }
   const ledgerKeys = new Set(ledgerRows.map((x) => String(x.venue || "").toLowerCase() + "|" + String(x.start_date || "").slice(0, 10)));
@@ -396,7 +357,7 @@ async function run(env) {
   }
 
   const stats = { inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
-  const report = renderReport(scannedAt, horizon, gated, budget, stats, { posted, skipped });
+  const report = renderReport(scannedAt, horizon, gated, stats, { posted, skipped });
   const slug = "personal-events-radar-" + scannedAt.slice(0, 10);
 
   let delivery = null;
@@ -416,7 +377,7 @@ async function run(env) {
 
   return {
     slug, version: VERSION, events: uniq.length, discarded, venueErrors: venueErrors.length,
-    budget, posted: postedList, delivery,
+    posted: postedList, delivery,
     topPicks: gated.filter((g) => g.cleared && g.e.relevance >= 3).sort((a, b) => b.e.priority - a.e.priority).slice(0, 5)
       .map((g) => "P" + g.e.priority + " " + g.e.startIso + " " + g.e.venue + " " + g.e.interests.join("/") + " [" + g.e.delivery + "]")
   };
