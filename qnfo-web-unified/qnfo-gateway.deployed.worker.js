@@ -264,6 +264,7 @@ function renderMarkdown(md) {
   });
   m = m.replace(/\$([^$\n]+?)\$/g, function(_, c) { mi.push(c); return "\u0001M" + (mi.length - 1) + "\u0001"; });
   m = m.replace(/\\\(([^\n]*?)\\\)/g, function(_, c) { mi.push(c); return "\u0001M" + (mi.length - 1) + "\u0001"; });
+  m = m.replace(/\\\$/g, "\u0007");
   function isTableSep(s) { return /^\|?[\s:]*-{3,}[\s:]*\|/.test(s) && /-/.test(s); }
   function emitBlockText(text) {
     var parts = text.split(/(\u0001B\d+\u0001)/g), h = "", cur = "", k;
@@ -394,6 +395,7 @@ function renderMarkdown(md) {
     }
   }
   o = o.replace(/\u0001M(\d+)\u0001/g, function(mm, n) { return "$" + texSafe(mi[+n]) + "$"; });
+  o = o.replace(/\u0007/g, "$");
   o = o.replace(/\u0001B(\d+)\u0001/g, function(mm, n) { return mb[+n - 1] || ""; });
   return o;
 }
