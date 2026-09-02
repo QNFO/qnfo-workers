@@ -12,7 +12,7 @@
 //   POST /triage/dispatch, POST /triage/sync, POST /triage/candidate
 // Scheduled: 06:00 digest email; 06:30 triage batch + task sync + auto-dispatch (1 active task)
 const NL = String.fromCharCode(10);
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const ROUTER = 'https://qnfo-ai.q08.workers.dev';
 const AGENT_ORCH = 'https://qnfo-agent-orchestrator.q08.workers.dev';
 const PROMOTE_THRESHOLD = 60;
@@ -54,26 +54,29 @@ function classifyRules(desire) {
 }
 
 async function classifyAI(env, desire) {
-  try {
-    const r = await env.QNFO_AI.fetch(ROUTER + '/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.RT },
-      body: JSON.stringify({
-        model: 'glm-5.2',
-        messages: [
-          { role: 'system', content: 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only.' },
-          { role: 'user', content: clamp(desire, 1000) }
-        ],
-        max_tokens: 200
-      })
-    });
-    const j = await r.json();
-    const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '';
-    const m = content.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    const p = JSON.parse(m[0]);
-    if (p && typeof p.type === 'string') return { type: p.type, domain: p.domain || 'general', priority: p.priority || 'medium', summary: clamp(p.summary, 120), due: p.due || null };
-  } catch (e) {}
+  const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only.';
+  for (const model of ['glm-5.2', 'glm-5.3-flash']) {
+    try {
+      const r = await env.QNFO_AI.fetch(ROUTER + '/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.RT },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: clamp(desire, 1000) }
+          ],
+          max_tokens: 200
+        })
+      });
+      const j = await r.json();
+      const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '';
+      const m = content.match(/\{[\s\S]*\}/);
+      if (!m) continue;
+      const p = JSON.parse(m[0]);
+      if (p && typeof p.type === 'string') return { type: p.type, domain: p.domain || 'general', priority: p.priority || 'medium', summary: clamp(p.summary, 120), due: p.due || null };
+    } catch (e) {}
+  }
   return null;
 }
 
@@ -98,6 +101,9 @@ async function handleIntent(env, body, source, device) {
   if (!desire) return { error: 'desire required' };
   const ai = await classifyAI(env, desire);
   const cls = ai || classifyRules(desire);
+  if (!cls.summary) {
+    cls.summary = clamp(desire.replace(/^calendar event:\s*/i, '').trim(), 120);
+  }
   const id = 'int-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
   const now = new Date().toISOString();
   const type = (['note', 'task', 'event', 'email', 'reminder', 'research', 'activity', 'unknown'].includes(cls.type) ? cls.type : 'note');
@@ -113,6 +119,7 @@ async function handleIntent(env, body, source, device) {
     'INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)'
   ).bind(id, desire, clamp(source, 60), clamp(device, 60), type, domain, cls.priority, cls.summary || '', cls.due || null, status, null, now, null).run();
   const intent = { id, desire, source, device, type, domain, priority: cls.priority, summary: cls.summary || '', due: cls.due || null, status, created_at: now };
+  if (type === 'event') { await promoteCalendar(env, intent); }
   if (type === 'note') {
     await storeNote(env, intent);
     await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
@@ -132,6 +139,28 @@ async function handleIntent(env, body, source, device) {
     } catch (e) {}
   }
   return intent;
+}
+
+async function promoteCalendar(env, intent) {
+  try {
+    if (!env.CAL_API) return;
+    const plane = intent.domain === 'personal' ? 'personal' : 'qnfo';
+    const from = (intent.due || intent.created_at.slice(0, 10)).slice(0, 10);
+    const title = (intent.summary || intent.desire.slice(0, 120)).replace(/^calendar event:\s*/i, '').trim().slice(0, 300);
+    if (!title) return;
+    const ex = await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane + '&from=' + from + '&to=' + from);
+    const ej = await ex.json();
+    const evs = (ej && ej.events) || [];
+    if (evs.some((e) => (e.title || '') === title && (e.dtstart || '') === from)) return;
+    await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, dtstart: from, dtend: from, source: 'intent-orchestrator', domain: intent.domain || null, status: 'confirmed' })
+    });
+    await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(new Date().toISOString(), intent.id).run();
+  } catch (e) {
+    console.log('calendar promote failed:', e && e.message || e);
+  }
 }
 
 function digestLines(intents) {

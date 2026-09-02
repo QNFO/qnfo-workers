@@ -34,6 +34,12 @@ service = "personal-life-search"
 binding = "QNFO_AI"
 service = "qnfo-ai"
 
+# v1.3.0 - promote accepted event intents into the calendar-api store (plane-aware)
+[[services]]
+binding = "CAL_API"
+service = "calendar-api"
+environment = "production"
+
 [ai]
 binding = "AI"
 
