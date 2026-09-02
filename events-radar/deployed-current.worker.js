@@ -11,7 +11,7 @@
 //   friction scoring, canonical-catalog verification against live source pages, deadline flags.
 // DEPLOY: cd qnfo-workers/events-radar && wrangler deploy  (wrangler.toml: RADAR_DB D1 qnfo-audit)
 // CANONICAL SOURCE: github.com/QNFO/qnfo-workers -> qnfo-workers/events-radar/worker.js
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const WORKER = "events-radar";
 
 // ---- Active QNFO research domains (WBS.TAXONOMY 2026-08-29 + research programs) ----
@@ -83,11 +83,19 @@ const CATALOG = [
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 const MONTH_RE = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
 
+const ENTITY_MAP = { amp: "&", lt: "<", gt: ">", quot: String.fromCharCode(34), apos: String.fromCharCode(39), nbsp: " ", ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", hellip: "…", times: "×", middot: "·", sdot: "⋅", minus: "−", deg: "°", micro: "µ" };
+function decodeEntities(x) {
+  return String(x || "").replace(/&#x([0-9a-fA-F]+);|&#([0-9]+);|&([a-zA-Z][a-zA-Z0-9]*);/g, function(m, hx, dec, name) {
+    if (hx) { try { return String.fromCodePoint(parseInt(hx, 16)); } catch (e) { return m; } }
+    if (dec) { try { return String.fromCodePoint(parseInt(dec, 10)); } catch (e) { return m; } }
+    return Object.prototype.hasOwnProperty.call(ENTITY_MAP, name) ? ENTITY_MAP[name] : m;
+  });
+}
 function cleanHtml(text) {
-  return String(text || "").replace(/<script[\s\S]*?<\/script>/gi, " ")
+  const s = String(text || "").replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ").trim();
+    .replace(/<[^>]+>/g, " ");
+  return decodeEntities(s).replace(/\s+/g, " ").trim();
 }
 
 function pad2(n) { return String(n).padStart(2, "0"); }
