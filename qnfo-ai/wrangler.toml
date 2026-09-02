@@ -68,3 +68,9 @@ binding = "QNFO_INFRA"
 service = "qnfo-infra"
 environment = "production"
 
+# v5.14.0 - QNFO.OPS.010 Stage C: twin calendar retrieval (plane=qnfo)
+[[services]]
+binding = "CAL_API"
+service = "calendar-api"
+environment = "production"
+
