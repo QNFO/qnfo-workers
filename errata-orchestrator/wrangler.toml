@@ -1,0 +1,29 @@
+name = "qnfo-errata-orchestrator"
+main = "worker.js"
+compatibility_date = "2026-08-10"
+workers_dev = true
+usage_model = "standard"
+
+# v1.0.0 (2026-09-02): durable errata orchestration. Steps service-bind the three
+# legacy errata workers (watch/respond/publish). They remain deployed as step-executors;
+# their own hourly crons are disabled at cutover. Modern [[workflows]] binding carries the
+# schedule directly (docs: Trigger Workflows, 2026-06-02 cron-workflows changelog) so no
+# top-level scheduled() handler is needed.
+
+[[workflows]]
+name = "errata-workflow"
+binding = "ERRATA_WORKFLOW"
+class_name = "ErrataWorkflow"
+schedules = ["5 * * * *"]
+
+[[services]]
+binding = "ERRATA_WATCH"
+service = "qnfo-errata-watch"
+
+[[services]]
+binding = "ERRATA_RESPOND"
+service = "qnfo-errata-respond"
+
+[[services]]
+binding = "ERRATA_PUBLISH"
+service = "qnfo-errata-publish"
