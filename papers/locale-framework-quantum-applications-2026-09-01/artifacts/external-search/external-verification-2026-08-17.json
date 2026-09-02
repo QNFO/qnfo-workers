@@ -1,0 +1,39 @@
+{
+  "project": "QNFO.UMP.012",
+  "slug": "locale-framework-quantum-applications",
+  "date": "2026-08-17",
+  "method": "Live verification via arXiv MCP (get_abstract / search_papers) on 2026-08-17; QPL 2026 accepted-papers list fetched live from qpl2026.github.io/accepted/",
+  "seam_documents_external": [
+    {"seam": "T1", "claim": "CV has a natural advantage", "paper": "Maltesson, Rodung, Budinger, Ferrini, Calcluth — Equivalence of continuous- and discrete-variable gate-based quantum computers with finite energy", "arxiv": "2510.08546v2", "status": "verified 200", "note": "epsilon <= 1286*K*n^2*E*^2/sqrt(d); CV cannot exponentially beat DV at bounded energy"},
+    {"seam": "T2", "claim": "More modes = more power", "paper": "Brenner, Dias, Koenig — Trading modes against energy", "arxiv": "2509.18854v1", "status": "verified 200", "note": "linear modes -> poly energy; sublinear -> subexponential; constant modes -> exponential energy (approx GKP)"},
+    {"seam": "T4", "claim": "Parastatistics possible", "paper": "Mekonnen, Galley, Mueller — Invariance under quantum permutations rules out parastatistics", "arxiv": "2502.17576v3", "status": "verified 200", "note": "complete invariance + quantum permutations iff Bose or Fermi"},
+    {"seam": "T5", "claim": "Complex amplitudes essential", "paper": "Hoffreumon, Woods — Quantum theory based on real numbers cannot be experimentally falsified", "arxiv": "2603.19208v1", "status": "verified 200", "note": "RQT reproduces all finite network correlations under operational independence"},
+    {"seam": "T5b", "claim": "Complex numbers needed", "paper": "Hoffreumon, Woods — Quantum theory does not need complex numbers", "arxiv": "2504.02808v2", "status": "verified 200", "note": "real-number QT consistent with the postulates; experimentally indistinguishable"},
+    {"seam": "T6", "claim": "Solovay-Kitaev governs synthesis", "paper": "Deaconu, Gargava, Kalra, Mosca, Yard — Buildings for Synthesis with Clifford+R", "arxiv": "2510.11526v3", "status": "verified 200", "note": "explicit Bruhat-Tits building structure for Clifford+R exact synthesis — the C3 structure leak"},
+    {"seam": "T3", "claim": "Advantage is device-level", "paper": "Koch — Classical Clifford+T sampling without computing marginals (QPL 2026, EPTCS)", "status": "program-verified", "note": "T-by-T sampling: 2t amplitude evals; distance-19 magic-state cultivation in seconds"},
+    {"seam": "T3b", "claim": "GKP advantage robust", "paper": "Calcluth, Hahn, Bermejo Vega, Ferraro, Ferrini — Classical simulation of circuits with realistic odd-dimensional GKP states (QPL 2026)", "status": "program-verified", "note": "realistic odd-d GKP states classically simulable"}
+  ],
+  "corpus_hits_verified": [
+    {"slug": "conditional-truths-locale-framework", "doi": "10.5281/zenodo.21984929", "concept": "10.5281/zenodo.21983324", "note": "parent UMP.011 v0.4 (source framework)"},
+    {"slug": "huang-2025-quantum-advantage-audit", "doi": "10.5281/zenodo.21440671", "note": "QNFO audit of Huang et al. advantage claims"},
+    {"slug": "qec-darwinism-ultrametric", "doi": "10.5281/zenodo.21964674", "note": "Bruhat-Tits tree QEC geometry"},
+    {"slug": "qwave-qudit-advantage", "doi": "10.5281/zenodo.21880104", "note": "JPCUB qudit platform comparison"},
+    {"slug": "paper-physics-of-computation", "doi": "10.5281/zenodo.21255013", "note": "Qubit Delusion Phase III — joules-per-solution criterion"},
+    {"slug": "prime-valuation-qec-implications", "doi": "10.5281/zenodo.21979060", "note": "p-adic valuation QEC implications"}
+  ],
+  "cross_system_validation": {
+    "method": "resolve_paper_id per corpus hit (slug -> D1 doi/zenodo_doi/identifier)",
+    "pass": 4,
+    "soft_drift": [
+      {"slug": "conditional-truths-locale-framework", "doi": "10.5281/zenodo.21984929", "zenodo_doi": "10.5281/zenodo.21983659", "issue": "D1 zenodo_doi column not re-pointed on newversion v0.3->v0.4"},
+      {"slug": "qec-darwinism-ultrametric", "doi": "10.5281/zenodo.21964674", "zenodo_doi": "10.5281/zenodo.21819232", "issue": "D1 zenodo_doi column not re-pointed on newversion"}
+    ]
+  },
+  "sweep_formulations": [
+    "quantum advantage utility practical applications locale conditional truth seams (limit 20)",
+    "quantum advantage utility practical applications energy joules per solution paradigm (limit 10 enriched)",
+    "recall_facts keyword=locale (4 hits)",
+    "search_memories locale framework conditional truth quantum computing energy exchange rate rendering interface (1 hit)"
+  ],
+  "kg_stats": {"totalNodes": 8295, "totalEdges": 8446, "papers": 1634, "projects": 153}
+}
