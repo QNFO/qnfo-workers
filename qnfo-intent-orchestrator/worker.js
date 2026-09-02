@@ -102,7 +102,7 @@ async function handleIntent(env, body, source, device) {
   const now = new Date().toISOString();
   const type = (['note', 'task', 'event', 'email', 'reminder', 'research', 'activity', 'unknown'].includes(cls.type) ? cls.type : 'note');
   const domain = (['research', 'personal', 'qwav', 'general'].includes(cls.domain) ? cls.domain : 'general');
-  const status = type === 'note' ? 'done' : 'pending';
+  let status = type === 'note' ? 'done' : 'pending';
   // v1.2.0 exact-match idempotency: identical desire (deterministic sync templates incl. occurrence
   // start / sender+ts) => return the existing intent instead of duplicating (no re-embed, no re-digest).
   const dupRow = await env.D1.prepare("SELECT id FROM intents WHERE desire = ?1 AND status NOT IN ('rejected','deduped') ORDER BY created_at ASC LIMIT 1").bind(desire).all().catch(() => null);
