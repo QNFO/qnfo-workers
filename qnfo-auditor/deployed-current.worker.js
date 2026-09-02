@@ -9,8 +9,8 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.0.2";
-var SELF = { purpose: "fleet event/log audit + act loop (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"] };
+var VERSION = "1.1.0";
+var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); }
@@ -20,6 +20,7 @@ async function ensureSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS kaizen_candidates (id TEXT PRIMARY KEY, class TEXT, source TEXT, category TEXT, title TEXT, evidence TEXT, status TEXT DEFAULT 'proposed', created_at TEXT, updated_at TEXT)").run();
   await env.AUDIT.prepare("CREATE INDEX IF NOT EXISTS idx_fleet_audit_runs_ts ON fleet_audit_runs(ts)").run();
   await env.AUDIT.prepare("CREATE INDEX IF NOT EXISTS idx_kaizen_candidates_status ON kaizen_candidates(status)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS feedback_probes (k TEXT PRIMARY KEY, ts TEXT, status TEXT, code INTEGER)").run();
 }
 function okAuth(req, env) {
   const t = env.AUDITOR_TOKEN || "";
@@ -63,6 +64,7 @@ async function runAudit(env, mode, log) {
   const count = (arr) => arr.length;
   const F = (check, level, text) => findings.push({ check, level, text: String(text).slice(0, 600) });
   const A = (kind, text) => actions.push({ kind, text: String(text).slice(0, 600) });
+  let trendLine = "";
 
   // ---- snapshot counts ----
   const snapshot = {};
@@ -185,6 +187,95 @@ async function runAudit(env, mode, log) {
     log("C10 resolve-on-recovery: " + closed10);
   } catch (e) { F("C10", "error", "check failed: " + e.message); }
 
+  // ---- FEEDBACK PHASE (v1.1.0): close the learning loops + supervise subloops ----
+  // F1 - subloop supervision heartbeats (is each automated subloop still writing side effects?)
+  try {
+    const cut30h = iso(Date.now() - 30 * 3600e3);
+    const evFeed = await q1(env, "SELECT COUNT(*) n FROM issue_events WHERE detail LIKE 'src:%' AND ts > ?", cut30h);
+    if (!evFeed || evFeed.n === 0) {
+      F("F1", "high", "events-feed-silent: no qnfo-events sweep src rows in 30h (cron 15 3 * * * stalled?)");
+      await ledgerEnsure(env, { source: "auditor", category: "subloop", level: "high", title: "Events feed silent >30h: qnfo-events sweep not writing issue_events", detail: "expected src:alert:/src:coe: sweep rows ~every 24h; none since " + cut30h + ". Check qnfo-events cron 15 3 * * *." });
+    } else { log("F1 events-feed alive: " + evFeed.n + " rows in 30h"); }
+  } catch (e) { F("F1", "error", "check failed: " + e.message); }
+  try {
+    const kz = await q1(env, "SELECT COUNT(*) n, MAX(created_at) last FROM kaizen_reports WHERE created_at > datetime('now','-4 day')");
+    if (!kz || kz.n === 0) {
+      F("F1", "warning", "kaizen-silent: no kaizen_reports in 4 days (worker crons 0 2 * * * + 0 10 * * 1 stalled?)");
+      await ledgerEnsure(env, { source: "auditor", category: "subloop", level: "warning", title: "Kaizen feed silent >4d", detail: "kaizen_reports empty for 4 days; qnfo-kaizen crons 0 2 * * * / 0 10 * * 1." });
+    } else { log("F1 kaizen alive: last " + kz.last); }
+  } catch (e) { F("F1", "error", "check failed: " + e.message); }
+
+  // F2 - improvement-effectiveness verification (does a promoted change actually stop recurrence?)
+  try {
+    const impr = await qAll(env, "SELECT fingerprint,last_detail,status,updated_at FROM issue_ledger WHERE source='kaizen' AND category='improvement' AND status='resolved'");
+    let eff = 0;
+    for (const im of impr) {
+      const cid = String(im.last_detail || "").trim().slice(0, 40);
+      if (!cid) continue;
+      const cand = await q1(env, "SELECT id,class,source,category,status FROM kaizen_candidates WHERE id=?", cid);
+      if (!cand || cand.status === "verified_effective" || cand.status === "ineffective") continue;
+      const n = (await q1(env, "SELECT COUNT(*) n FROM issue_events WHERE source=? AND category=? AND ts > ?", cand.source, cand.category, im.updated_at))?.n || 0;
+      const status = n === 0 ? "verified_effective" : (n >= 2 ? "ineffective" : "proposed");
+      if (status === "verified_effective" || status === "ineffective") {
+        await env.AUDIT.prepare("UPDATE kaizen_candidates SET status=?, evidence=?, updated_at=? WHERE id=?").bind(status, "effect-check after improvement resolved: recurrence since " + im.updated_at + " = " + n, new Date().toISOString(), cand.id).run();
+        eff++;
+        if (status === "ineffective") A("feedback-reopen", "candidate " + cand.class + " (" + (cand.source || "?") + "/" + (cand.category || "?") + ") ineffective: recurrence x" + n);
+      }
+    }
+    log("F2 improvement-effectiveness verified: " + eff);
+  } catch (e) { F("F2", "error", "check failed: " + e.message); }
+
+  // F3 - self-trend (auditor's own finding history -> recurring-finding candidates + digest trend)
+  try {
+    const hist = await qAll(env, "SELECT findings FROM fleet_audit_runs ORDER BY ts DESC LIMIT 12");
+    const per = {};
+    for (const row of hist) { let arr = []; try { arr = JSON.parse(row.findings || "[]"); } catch (e) {} for (const f of arr) { const k = String(f.check || "?"); per[k] = (per[k] || 0) + 1; } }
+    const top = Object.entries(per).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    trendLine = "Audit trend (last " + hist.length + " runs): " + (top.length ? top.map((x) => x[0] + " x" + x[1]).join(", ") : "clean");
+    for (const [check, n] of top) {
+      if (n >= 6) await upsertCandidate(env, "recurring-finding", "auditor", check, "Recurring finding: check " + check + " fired " + n + "/" + hist.length + " runs", JSON.stringify({ check, n, of: hist.length }), log);
+    }
+    log("F3 trend: " + trendLine);
+  } catch (e) { F("F3", "error", "check failed: " + e.message); }
+
+  // F4 - remediation watchdog subloop (live /health probe auto-resolves OPEN HIGH entries whose worker recovered)
+  try {
+    // F4 probes ONLY the true failure subjects named in the entry title (worker-health JSON rows list the failing worker).
+    // chat-canary / blank-audit entries are NOT auto-resolved: their titles name the canary (a probe) not the endpoint - an agent verifies the canary result table instead (no false resolution).
+    const KNOWN = ["qnfo-ai","personal-api"];
+    const dom = (nm) => nm;
+    const cut6h = iso(Date.now() - 6 * 3600e3);
+    const cand6h = iso(Date.now() - 6 * 3600e3);
+    // gate: entry older than 6h (first_seen) AND no recurrence in the last 12h (last_seen) -> candidate for live re-verification
+    const openH = await qAll(env, "SELECT fingerprint,source,title,first_seen,last_seen FROM issue_ledger WHERE status IN ('open','acknowledged') AND level IN ('high','critical','error') AND first_seen < ? AND last_seen < ?", cut6h, cut12h);
+    let probes = 0, closed4 = 0;
+    for (const it of openH) {
+      const title = String(it.title || "") + " " + String(it.source || "");
+      const seen = {};
+      for (const nm of KNOWN) {
+        if (title.indexOf(nm) < 0 || seen[dom(nm)]) continue;
+        seen[dom(nm)] = true;
+        const lastP = await q1(env, "SELECT ts,status FROM feedback_probes WHERE k=?", dom(nm));
+        if (lastP && String(lastP.ts) > cand6h) continue; // >=1 probe per worker per 6h
+        probes++;
+        let ok = false, code = 0;
+        try {
+          const r = await fetch("https://" + dom(nm) + ".q08.workers.dev/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-auditor)" }, signal: AbortSignal.timeout(8000) });
+          code = r.status; const j = await r.json().catch(() => null);
+          ok = r.status === 200 && j && j.ok === true && !!j.version;
+        } catch (e) { code = 0; }
+        await env.AUDIT.prepare("INSERT INTO feedback_probes (k, ts, status, code) VALUES (?,?,?,?) ON CONFLICT(k) DO UPDATE SET ts=excluded.ts, status=excluded.status, code=excluded.code").bind(dom(nm), new Date().toISOString(), ok ? "ok" : "fail", code).run();
+        if (ok) {
+          const still = await q1(env, "SELECT fingerprint,status FROM issue_ledger WHERE fingerprint=?", it.fingerprint);
+          if (still && still.status !== "resolved") { await setFpStatus(env, it.fingerprint, "resolved", "audit close (F4): live /health probe " + dom(nm) + " 200 ok " + new Date().toISOString()); A("recovery-close", dom(nm) + " healthy (F4)"); closed4++; }
+        }
+        if (probes >= 6) break;
+      }
+      if (probes >= 6) break;
+    }
+    log("F4 remediation probes=" + probes + " closed=" + closed4);
+  } catch (e) { F("F4", "error", "check failed: " + e.message); }
+
   // C9 - digest state machine (email only on new/increased HIGH or weekly deep)
   const prev = await q1(env, "SELECT open_high, ts FROM fleet_audit_runs ORDER BY ts DESC LIMIT 1");
   let prevFps = []; try { prevFps = prev && prev.open_high ? JSON.parse(prev.open_high) : []; } catch (e) { prevFps = []; }
@@ -193,6 +284,7 @@ async function runAudit(env, mode, log) {
   const digestParts = [];
   digestParts.push("QNFO fleet audit " + now.slice(0, 10) + " (" + mode + ")");
   digestParts.push("Ledger open: " + snapshot.ledger_open + " | open HIGH/CRITICAL: " + curFps.length + " (new since last run: " + newFps.length + ") | coe 48h: " + snapshot.coe_48h + " | alerts 48h: " + snapshot.alerts_48h + " | agent open: " + snapshot.agent_open + " | deploys 7d: " + snapshot.deploys_7d);
+  if (trendLine) digestParts.push(trendLine);
   if (curFps.length) {
     digestParts.push("");
     digestParts.push("Unresolved HIGH/CRITICAL:");
@@ -228,7 +320,9 @@ async function upsertCandidate(env, cls, source, category, title, evidence, log)
     await env.AUDIT.prepare("UPDATE kaizen_candidates SET evidence=?, updated_at=? WHERE id=?").bind(String(evidence).slice(0, 1500), now, id).run();
   }
   // promote mature candidates (>7d proposed) to the ledger for agent/ops visibility
-  const mature = await qAll(env, "SELECT id,class,source,category,title FROM kaizen_candidates WHERE status='proposed' AND created_at < ? LIMIT 10", cut7d);
+  // v1.1.0 fix: mature cutoff computed here (v1.0.2 referenced runAudit-local cut7d -> ReferenceError, promotion silently dead)
+  const matureCut = new Date(Date.now() - 7 * 864e5).toISOString();
+  const mature = await qAll(env, "SELECT id,class,source,category,title FROM kaizen_candidates WHERE status='proposed' AND created_at < ? LIMIT 10", matureCut);
   for (const m of mature) {
     await ledgerEnsure(env, { source: "kaizen", category: "improvement", level: "medium", title: "Improvement candidate: " + m.class + " (" + (m.source || "?") + "/" + (m.category || "?") + ")", detail: m.id });
     await env.AUDIT.prepare("UPDATE kaizen_candidates SET status='promoted', updated_at=? WHERE id=?").bind(new Date().toISOString(), m.id).run();

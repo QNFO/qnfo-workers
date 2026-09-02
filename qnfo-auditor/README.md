@@ -2,7 +2,7 @@
 
 Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEARN procedure over ALL QNFO event/log stores. Runs unattended (no user, no DeepChat), cloud-native.
 
-- **Worker:** qnfo-auditor (v1.0.2)
+- **Worker:** qnfo-auditor (v1.1.0)
 - **Schedule:** standard pass 01:45/13:45 UTC daily; deep pass Monday 06:45 UTC (registered in [triggers])
 - **Canonical source:** QNFO/qnfo-workers/qnfo-auditor
 - **Runbook:** QNFO/qnfo-ops/AUDT/FLEET-AUDIT-AND-ACT-PROCEDURE.md
@@ -21,8 +21,13 @@ Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEAR
 | C8 | Kaizen feed: recurrence-after-resolve + event clusters → kaizen_candidates; promote mature (>7d) |
 | C9 | Digest state machine: email on new/increased HIGH (standard) or weekly summary (deep) |
 | C10 | Resolve-on-recovery: close open ledger entries when the underlying source condition clears (job resumed / errata terminal / agent_issue closed) |
+| F1 | Subloop supervision: heartbeat each automated subloop (qnfo-events sweep src rows <30h, kaizen_reports <4d) |
+| F2 | Improvement-effectiveness: after a promoted change is resolved, verify recurrence stopped -> verified_effective / ineffective |
+| F3 | Self-trend: auditor's own finding history -> recurring-finding candidates (>=6/12 runs) + digest trend line |
+| F4 | Remediation watchdog: live /health re-probe auto-resolves open HIGH/error health rows whose named worker recovered (qnfo-ai, personal-api; 6h-throttled) |
 
 v1.0.2 hardening: all time-window cutoffs against ISO-8601 columns now use JS-computed ISO bounds (no SQLite space-format literal mixing); auth is fail-closed when AUDITOR_TOKEN is unset (red-team finding).
+v1.1.0: feedback loops F1-F4 (close the learning loops + supervise subloops). Fixes v1.0.2 scope bug where upsertCandidate referenced runAudit-local cut7d (mature kaizen promotion silently dead).
 
 ## Endpoints (Bearer AUDITOR_TOKEN)
 - GET /health · GET / · POST /v1/run (mode standard|deep) · GET /v1/runs · GET /v1/state
