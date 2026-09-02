@@ -5,12 +5,14 @@ import { connect } from "cloudflare:sockets";
 // v1.4.0: zenodo-stats carries the ADR-014 attribution audit (creators + related_identifiers
 // captured per record; creator violations flagged; sole-author mandate held) and weekly-ops
 // carries SEO discoverability health (papers/qnfo/qwav/qwav.tech: status + title + JSON-LD).
+// v1.10.0: jobEngagement (weekly Mon 07:15 AMS) collects Bluesky + Buffer per-post engagement
+// into qnfo-audit.social_engagements; jobVisibility digest adds citation + engagement sections.
 // v1.2.0+: vectorized event store (OPS_VZ, doc=cloud-ops) + SILENCE POLICY — no
 // automated email to personal inboxes except: briefing with decision items,
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.9.0";
+const VERSION = "1.10.0";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -164,6 +166,7 @@ const AMS_SCHEDULE = {
   "sitemap-ping":   { times: ["06:00"], days: null,  fixed: { dom: 1, mon: "*" } },
   "loose-threads-sweep": { times: ["07:00"], days: "1", fixed: null },
   "visibility":      { times: ["07:30"], days: "1", fixed: null },
+  "engagement":      { times: ["07:15"], days: "1", fixed: null },
 };
 
 // Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
@@ -1490,6 +1493,20 @@ async function jobVisibility(env) {
     const sc = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN status='posted' THEN 1 ELSE 0 END),0) posted FROM social_threads WHERE created_at >= ?1").bind(wk).first();
     out.social_threads_7d = sc ? (sc.n || 0) : 0; out.social_posted_7d = sc ? (sc.posted || 0) : 0;
   } catch (e) { out.soc_error = String(e && e.message || e); }
+  // 5) citations (citation_stats: openalex/crossref cited_by + totals)
+  try {
+    const cit = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN metric='cited_by_count' THEN value ELSE 0 END),0) cited FROM citation_stats WHERE source IN ('openalex','crossref') AND collected_at >= datetime('now','-8 days')").first();
+    const citedDois = await env.AUDIT.prepare("SELECT COUNT(DISTINCT doi) n FROM citation_stats WHERE metric='cited_by_count' AND value > 0").first();
+    out.citation_events = cit ? (cit.n || 0) : 0;
+    out.citation_count = cit ? (cit.cited || 0) : 0;
+    out.cited_dois = citedDois ? (citedDois.n || 0) : 0;
+  } catch (e) { out.cit_error = String(e && e.message || e); }
+  // 6) social engagement 7d (social_engagements)
+  try {
+    const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+    const eng = await env.AUDIT.prepare("SELECT platform, metric, SUM(value) v FROM social_engagements WHERE collected_at >= ?1 AND metric != 'auth_status' AND metric != 'reach' GROUP BY platform, metric ORDER BY platform, metric").bind(wk).all();
+    out.engagement = (eng.results || []).map(function (r) { return { platform: r.platform, metric: r.metric, value: r.v || 0 }; });
+  } catch (e) { out.eng_error = String(e && e.message || e); }
   const L = ["QNFO visibility scorecard — " + today, ""];
   if (out.requests !== undefined) L.push("zone qnfo.org 7d: " + out.requests + " requests / " + out.pageviews + " pageviews / " + out.uniques + " unique visitors (" + out.days + " days)");
   else L.push("zone qnfo.org 7d: unavailable (" + (out.web_error || "no data") + ")");
@@ -1497,11 +1514,96 @@ async function jobVisibility(env) {
   if (out.movers && out.movers.length) { L.push("", "zenodo top movers (7d):"); for (const m of out.movers.slice(0, 6)) L.push("- +" + m.dl_gain + " dl / +" + m.vw_gain + " vw  " + m.title + "  " + m.doi); }
   if (out.new_versions !== undefined) { L.push("", "new versions this week: " + out.new_versions); for (const v of (out.versions || []).slice(0, 8)) L.push("- " + v.title + " " + v.ver + "  " + v.doi); }
   L.push("", "social threads created 7d: " + (out.social_threads_7d || 0) + " (posted " + (out.social_posted_7d || 0) + ")");
+  L.push("citations: " + (out.citation_count || 0) + " cited-by across " + (out.cited_dois || 0) + " DOIs (" + (out.citation_events || 0) + " events 7d)");
+  if (out.engagement && out.engagement.length) {
+    L.push("", "social engagement (7d):");
+    for (const e of out.engagement) L.push("- " + e.platform + " " + e.metric + ": " + e.value);
+  } else L.push("", "social engagement (7d): none collected" + (out.eng_error ? " (" + out.eng_error + ")" : ""));
   const d = await storeDigest(env, "visibility", "QNFO visibility scorecard — " + today, L.join(NL));
   out.digest = d;
   return { status: "ok", notes: out };
 }
 
+
+// ---------- engagement collection (Bluesky + Buffer) ----------
+async function jobEngagement(env) {
+  const out = { ts: new Date().toISOString().slice(0, 10) };
+  const stmts = [];
+  const row = (platform, postId, metric, value, note) => {
+    stmts.push(env.AUDIT.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value, note=excluded.note").bind(platform, postId, metric, value, note || null, out.ts));
+  };
+  // 1) Bluesky (AT Protocol) - live
+  try {
+    if (!env.BSKY_HANDLE || !env.BSKY_APP_PASS) { out.bsky = "no credentials"; }
+    else {
+      const BS = "https://bsky.social/xrpc";
+      const sessR = await fetch(BS + "/com.atproto.server.createSession", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ identifier: env.BSKY_HANDLE, password: env.BSKY_APP_PASS }) });
+      const sess = await sessR.json();
+      if (!sessR.ok || !sess.accessJwt) { out.bsky = "session " + sessR.status; }
+      else {
+        const feedR = await fetch(BS + "/app.bsky.feed.getAuthorFeed?actor=" + encodeURIComponent(sess.did) + "&limit=30", { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
+        const feed = await feedR.json();
+        const uris = ((feed && feed.feed) || []).map((f) => f.post && f.post.uri).filter(Boolean);
+        let likes = 0, reposts = 0, replies = 0, counted = 0;
+        for (let i = 0; i < uris.length; i += 25) {
+          const chunk = uris.slice(i, i + 25);
+          const postsR = await fetch(BS + "/app.bsky.feed.getPosts?" + chunk.map((u) => "uris=" + encodeURIComponent(u)).join("&"), { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
+          const posts = await postsR.json();
+          for (const p of (posts && posts.posts) || []) {
+            const l = p.likeCount || 0, r = p.repostCount || 0, c = p.replyCount || 0;
+            likes += l; reposts += r; replies += c; counted++;
+            row("bluesky", p.uri, "likes", l);
+            row("bluesky", p.uri, "reposts", r);
+            row("bluesky", p.uri, "replies", c);
+          }
+        }
+        out.bsky = { posts: counted, likes, reposts, replies };
+      }
+    }
+  } catch (e) { out.bsky_error = String(e && e.message || e); }
+  // 2) Buffer (Mastodon / LinkedIn / X) - token-gated, graceful 401
+  try {
+    if (!env.BUFFER_TOKEN) { out.buffer = "no token"; }
+    else {
+      const B = "https://api.bufferapp.com/1";
+      const pr = await fetch(B + "/profiles.json?access_token=" + env.BUFFER_TOKEN, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
+      if (pr.status === 401) { out.buffer = "unauthorized (reconnect required)"; row("buffer", "auth", "auth_status", 0, "401 unauthorized"); }
+      else if (!pr.ok) { out.buffer = "HTTP " + pr.status; }
+      else {
+        const profiles = await pr.json();
+        let likes = 0, comments = 0, shares = 0, reach = 0, counted = 0;
+        for (const prof of (profiles || []).slice(0, 4)) {
+          try {
+            const ur = await fetch(B + "/profiles/" + prof.id + "/updates/sent.json?access_token=" + env.BUFFER_TOKEN + "&count=10", { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
+            if (!ur.ok) continue;
+            const updates = await ur.json();
+            for (const u of updates || []) {
+              const ir = await fetch(B + "/updates/" + u.id + "/interactions.json?access_token=" + env.BUFFER_TOKEN, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
+              if (!ir.ok) continue;
+              const inter = await ir.json();
+              const f = inter.favorites || 0, c = inter.comments || 0, rt = inter.retweets || 0, sh = inter.shares || 0, re = inter.reach || 0;
+              likes += f; comments += c; shares += rt + sh; reach += re; counted++;
+              row("buffer", String(u.id), "likes", f);
+              row("buffer", String(u.id), "comments", c);
+              row("buffer", String(u.id), "shares", rt + sh);
+              row("buffer", String(u.id), "reach", re);
+            }
+          } catch (e2) {}
+        }
+        out.buffer = { updates: counted, likes, comments, shares, reach };
+      }
+    }
+  } catch (e) { out.buffer_error = String(e && e.message || e); }
+  try {
+    if (stmts.length) {
+      const batch = stmts.slice(0, 100);
+      await env.AUDIT.batch(batch);
+      out.rows_written = batch.length;
+      out.rows_total = stmts.length;
+    } else out.rows_written = 0;
+  } catch (e) { out.write_error = String(e && e.message || e); }
+  return { status: "ok", notes: out };
+}
 // ================= PART 5: registry + dispatch + handlers =================
 
 const JOBS = {
@@ -1522,6 +1624,7 @@ const JOBS = {
   "sitemap-ping": jobSitemapPing,
   "loose-threads-sweep": jobLooseThreadsSweep,
   "visibility": jobVisibility,
+  "engagement": jobEngagement,
 };
 
 // cron -> job dispatch map for a given Amsterdam offset
