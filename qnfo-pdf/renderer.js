@@ -139,6 +139,19 @@ function renderInline(raw) {
 
 function renderMarkdown(body) {
   const e = extractSpecials(body);
+  // Recover blank-line-collapsed markdown (producer stripped newline-newline -> space).
+  // (1) Glued table header: split prose off before a header whose next line is a separator
+  //     with matching column count (lookahead preserves the existing newline).
+  e.text = e.text.replace(/([^\n])[ \t]+(\|[^\n]*\|)[ \t]*(?=\n([ \t]*\|?[\s:|-]+\|?[ \t]*\n))/g, (mm, pre, hdr, sep) => {
+    const nh = hdr.split("|").filter((x) => x.trim() !== "").length;
+    const ns = (sep.match(/-+/g) || []).length;
+    return nh > 0 && nh === ns ? pre + "\n" + hdr : mm;
+  });
+  // (2) Horizontal rules glued to text.
+  e.text = e.text.replace(/([^\n])[ \t]+(---)[ \t]+(?=#{1,6}[ \t])/g, "$1\n$2\n");
+  e.text = e.text.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
+  // (3) Headings glued to preceding text.
+  e.text = e.text.replace(/([^\n])[ \t]+(#{1,6}[ \t])/g, "$1\n$2");
   const lines = e.text.split("\n");
   let o = "", i = 0;
   while (i < lines.length) {
@@ -152,11 +165,29 @@ function renderMarkdown(body) {
         const header = splitRow(line);
         const aligns = parseAlign(lines[si]);
         const rows = [];
+        const sepCount = aligns.length;
+        let tailProse = "";
         let j = si + 1;
         while (j < lines.length) {
           if (!lines[j].trim()) { j++; continue; }
           if (lines[j].trim().indexOf("|") < 0) break;
-          rows.push(splitRow(lines[j]));
+          let cells = splitRow(lines[j]);
+          if (sepCount > 0 && cells.length > sepCount) {
+            const segs = lines[j].trim().split("|");
+            let used = 0, cutIdx = segs.length - 1;
+            for (let k = 0; k < segs.length; k++) {
+              if (segs[k].trim() !== "") {
+                used++;
+                if (used === sepCount) { cutIdx = k; break; }
+              }
+            }
+            cells = segs.slice(0, cutIdx + 1).map((x) => x.trim()).filter((x) => x !== "");
+            tailProse = segs.slice(cutIdx + 1).join("|").trim();
+            rows.push(cells);
+            j++;
+            break;
+          }
+          rows.push(cells);
           j++;
         }
         i = j;
@@ -176,6 +207,7 @@ function renderMarkdown(body) {
           o += "</tr>";
         }
         o += "</tbody></table>";
+        if (tailProse) o += "<p>" + renderInlinePlain(tailProse) + "</p>";
         continue;
       }
     }
