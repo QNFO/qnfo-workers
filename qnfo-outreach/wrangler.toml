@@ -1,0 +1,25 @@
+name = "qnfo-outreach"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+send_email = [
+  { type = "send_email", name = "SEND_EMAIL" }
+]
+
+[triggers]
+crons = ["0 11 * * 1-5"]
+
+[[d1_databases]]
+binding = "OUTREACH_D1"
+database_name = "qnfo-outreach"
+database_id = "d5077252-8187-41b2-a44e-f84f8724ee36"
+
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
