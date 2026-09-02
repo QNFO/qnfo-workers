@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.5.0", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.0", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -95,7 +95,10 @@ function collapseThreads(items) {
   });
 }
 __name(collapseThreads, "collapseThreads");
-var INTERNAL_MARKERS = ["INTENT_TOKEN", "rotation verification", "intent orchestrator accepts", "You decide how a newly extracted memory", "You synthesize a few durable", "memory relates to what is already known", "accepted the rotated", "web-search find email"];
+var INTERNAL_MARKERS = ["INTENT_TOKEN", "rotation verification", "intent orchestrator accepts", "You decide how a newly extracted memory", "You synthesize a few durable", "memory relates to what is already known", "accepted the rotated", "web-search find email",
+  "email received from", "email sync", "calendar event", "read-only context data", "the following sections are read-only",
+  "strategy locked", "dedup-probe", "parity-probe", "filter-probe", "fix-ok", "fil-ok", "verify-5.8.0",
+  "express desire", "intent-orchestrator", "auto-express note", "qnfo-ops.007", "mandate-chain", "object object"];
 function isInternalThread(title) {
   const t = String(title || "").toLowerCase();
   return INTERNAL_MARKERS.some((m) => t.indexOf(m.toLowerCase()) >= 0);
