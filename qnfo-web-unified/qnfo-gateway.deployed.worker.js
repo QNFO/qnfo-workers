@@ -246,6 +246,19 @@ function renderMarkdown(md) {
     mb.push('<div class="math-display">\\[' + c.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "\\]</div>");
     return "B" + mb.length + "";
   });
+  // Recover blank-line-collapsed markdown (\n\n -> space).
+  // (1) Glued table header: split prose off before a header whose next line is a separator
+  //     with matching column count (lookahead preserves the existing newline).
+  m = m.replace(/([^\n])[ \t]+(\|[^\n]*\|)[ \t]*(?=\n([ \t]*\|?[\s:|-]+\|?[ \t]*\n))/g, (mm, pre, hdr, sep) => {
+    const nh = hdr.split("|").filter((x) => x.trim() !== "").length;
+    const ns = (sep.match(/-+/g) || []).length;
+    return nh > 0 && nh === ns ? pre + "\n" + hdr : mm;
+  });
+  // (2) Horizontal rules glued to text.
+  m = m.replace(/([^\n])[ \t]+(---)[ \t]+(?=#{1,6}[ \t])/g, "$1\n$2\n");
+  m = m.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
+  // (3) Headings glued to preceding text.
+  m = m.replace(/([^\n])[ \t]+(#{1,6}[ \t])/g, "$1\n$2");
   let o = "", L = m.split("\n"), i = 0;
   while (i < L.length) {
     let l = L[i], t = l.trim();
@@ -266,24 +279,51 @@ function renderMarkdown(md) {
       let si = i + 1;
       while (si < L.length && L[si].trim() === "") si++;
       if (si < L.length && /^\|?[\s:]*-{3,}[\s:]*\|/.test(L[si].trim())) {
+        // Tolerant: recover producer-collapsed glue (blank line stripped). Count sep cols.
+        let sepCols = (L[si].trim().split("|").map((x) => x.trim()).filter((x) => x)).length || 1;
+        let hdrCells = t.split("|").map((x) => x.trim()).filter((x) => x);
+        let prefixProse = "";
+        if (t.trim().charAt(0) !== "|" && hdrCells.length > sepCols) {
+          const cut = t.indexOf("|");
+          prefixProse = t.slice(0, cut).trim();
+          hdrCells = hdrCells.slice(hdrCells.length - sepCols);
+        } else if (hdrCells.length > sepCols) {
+          hdrCells = hdrCells.slice(0, sepCols);
+        }
         o += "<table><thead><tr>";
-        let hs = t.split("|").map((x) => x.trim()).filter((x) => x);
-        for (let h = 0; h < hs.length; h++) o += "<th>" + _mdInline(hs[h]) + "</th>";
+        for (let h = 0; h < hdrCells.length; h++) o += "<th>" + _mdInline(hdrCells[h]) + "</th>";
         o += "</tr></thead><tbody>";
         i = si + 1;
+        let tailProse = "";
         while (i < L.length) {
           if (L[i].trim() === "") {
             i++;
             continue;
           }
           if (L[i].trim().indexOf("|") < 0) break;
-          o += "<tr>";
           let cs = L[i].trim().split("|").map((x) => x.trim()).filter((x) => x);
+          if (cs.length > sepCols) {
+            // Trailing prose glued after the last cell: keep the row, carry the prose.
+            const segs = L[i].trim().split("|");
+            let used = 0, cutIdx = segs.length - 1;
+            for (let k = 0; k < segs.length; k++) {
+              if (segs[k].trim() !== "") {
+                used++;
+                if (used === sepCols) { cutIdx = k; break; }
+              }
+            }
+            cs = segs.slice(0, cutIdx + 1).map((x) => x.trim()).filter((x) => x);
+            tailProse = segs.slice(cutIdx + 1).join("|").trim();
+          }
+          o += "<tr>";
           for (let c = 0; c < cs.length; c++) o += "<td>" + _mdInline(cs[c]) + "</td>";
           o += "</tr>";
           i++;
+          if (tailProse) break;
         }
         o += "</tbody></table>";
+        if (prefixProse) o += "<p>" + _mdInline(prefixProse) + "</p>";
+        if (tailProse) o += "<p>" + _mdInline(tailProse) + "</p>";
         continue;
       }
     }
