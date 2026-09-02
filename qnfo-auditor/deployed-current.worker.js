@@ -9,7 +9,7 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.1.1";
+var VERSION = "1.1.2";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
@@ -298,6 +298,17 @@ async function runAudit(env, mode, log) {
     digestParts.push("");
     digestParts.push("Unresolved HIGH/CRITICAL:");
     for (const h of snapshot.open_high) digestParts.push(" - [" + h.source + "] " + String(h.title).slice(0, 200) + " (occ " + h.occurrences + ")");
+  }
+  if (mode === "deep") {
+    try {
+      const impr = await qAll(env, "SELECT fingerprint,title,occurrences,updated_at FROM issue_ledger WHERE source='kaizen' AND category='improvement' AND status='open' ORDER BY updated_at DESC LIMIT 15");
+      if (impr.length) {
+        digestParts.push("");
+        digestParts.push("OPEN IMPROVEMENT CANDIDATES (apply + resolve -> F2 auto-verifies effectiveness):");
+        for (const im of impr) digestParts.push(" - [" + im.fingerprint + "] " + String(im.title).slice(0, 200) + " (occ " + im.occurrences + ", since " + im.updated_at + ")");
+        digestParts.push("Resolve via: POST /v1/issues/<fp>/resolve with note evidence, or fix the underlying class and mark the candidate verified_effective.");
+      }
+    } catch (e) {}
   }
   if (findings.length) { digestParts.push(""); digestParts.push("Findings this run: " + findings.length); for (const f of findings.slice(0, 12)) digestParts.push(" - " + f.check + " " + f.level + ": " + f.text.slice(0, 240)); }
   if (actions.length) { digestParts.push(""); digestParts.push("Actions: " + actions.length); for (const a of actions.slice(0, 10)) digestParts.push(" - " + a.kind + ": " + a.text.slice(0, 200)); }
