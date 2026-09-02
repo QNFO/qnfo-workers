@@ -17,21 +17,26 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          WORKER="${{ github.event.inputs.worker }}"
-          MAIN="worker.js"
+          set -e
+          WORKER='${{ github.event.inputs.worker }}'
+          MAIN='worker.js'
           BUNDLE="${WORKER}/deployed-current.worker.js"
           if [ ! -f "$BUNDLE" ]; then
             echo "::error::Missing bundle ${BUNDLE} for worker '${WORKER}'"
-            echo "Available worker dirs with bundles:"
+            echo 'Available worker dirs with bundles:'
             find . -maxdepth 2 -name deployed-current.worker.js | sed 's|^\./||;s|/deployed-current.worker.js||' | sort
             exit 1
           fi
           echo "Deploying ${WORKER} from ${BUNDLE} (bytes: $(wc -c < "$BUNDLE"))"
-          HTTP_CODE=$(curl -sS -o /tmp/deploy.out -w '%{http_code}' -X PUT \
+          curl -sS -o /tmp/deploy.out -w '%{http_code}' -X PUT \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER}" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -F "metadata={\"main_module\":\"${MAIN}\",\"keep_bindings\":[\"ai\",\"d1\",\"vectorize\",\"service\",\"secret_text\",\"kv_namespace\",\"r2_bucket\"]};type=application/json" \
-            -F "${MAIN}=@${BUNDLE};filename=${MAIN};type=application/javascript+module")
-          echo "HTTP ${HTTP_CODE}"
-          python3 -c "import json,sys; d=json.load(open('/tmp/deploy.out')); sys.exit(0 if d.get('success') else 1)" && echo "DEPLOY OK" || { echo '--- CF response ---'; cat /tmp/deploy.out; echo; exit 1; }
-
+            -F 'metadata={"main_module":"worker.js","keep_bindings":["ai","d1","vectorize","service","secret_text","kv_namespace","r2_bucket"]};type=application/json' \
+            -F "${MAIN}=@${BUNDLE};filename=${MAIN};type=application/javascript+module" > /tmp/http.code
+          echo "HTTP $(cat /tmp/http.code)"
+          if ! python3 -c "import json,sys; d=json.load(open('/tmp/deploy.out')); sys.exit(0 if d.get('success') else 1)"; then
+            echo '--- CF response ---'
+            cat /tmp/deploy.out
+            exit 1
+          fi
+          echo 'DEPLOY OK'
