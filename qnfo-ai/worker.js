@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.16.4";
+var VERSION = "5.16.5";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -796,7 +796,7 @@ function stripToolMarkup(text) {
   let t = String(text || "");
   t = t.replace(/<\|tool_calls_section_begin\|>[\s\S]*?<\|tool_calls_section_end\|>/g, " ").replace(/<\|tool_call_begin\|>[\s\S]*?<\|tool_call_end\|>/g, " ").replace(/<\|tool_call_argument_begin\|>[\s\S]*?<\|tool_call_argument_end\|>/g, " ");
   t = t.replace(/<\|tool_call(s|_call)?s?\|>/g, " ").replace(/<\|tool_calls?\|>/g, " ").replace(/<\|tool_call_arguments\|>/g, " ").replace(/\|tool_calls_section_begin\|/g, " ").replace(/\|tool_call_begin\|/g, " ").replace(/\|tool_call_argument_begin\|/g, " ");
-  t = t.replace(/function[\s]*retrieve[\s]*:/g, " ").replace(/[\s]{2,}/g, " ").trim();
+  t = t.replace(/function[\s]*retrieve[\s]*:/g, " ").replace(/[ \t]{2,}/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   t = t.replace(/functions?\.[a-z_]+\s*:\s*\d+/gi, " ").replace(/<\|tool_[a-z_]+\|>/gi, " ").replace(/<\|tool_calls_section_begin\|>[\s\S]*$/gi, " ").trim();
   if (/tool_calls?|function\s*call|\<tool_call/i.test(t)) t = " ";
   return t;
