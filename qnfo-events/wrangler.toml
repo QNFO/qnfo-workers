@@ -1,0 +1,22 @@
+name = "qnfo-events"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# Central issue/event ledger. Ingest POST /v1/events dedupes by fingerprint and
+# repeat-counts the same issue. Status lifecycle: open|acknowledged|resolved|muted.
+# Autonomous fleet sweep (cron + POST /v1/sync) mirrors qnfo-audit.alerts and
+# qnfo-audit.cloud_ops_events rows into the ledger so every alert that previously
+# fired email is tracked/queryable here. Canonical: QNFO/qnfo-workers/qnfo-events
+# secret (set via wrangler secret put): EVENTS_TOKEN
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[triggers]
+crons = ["15 3 * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
