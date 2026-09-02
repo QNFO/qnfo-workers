@@ -1,4 +1,7 @@
-// qnfo-intent-orchestrator v1.1.0 — unified intent layer + autonomous research triage
+// qnfo-intent-orchestrator v1.2.0 — unified intent layer + autonomous research triage
+// v1.2.0 (2026-09-02, R4): exact-match idempotency in handleIntent — an identical desire text
+//   (calendar/email templates embed occurrence-specific start ISO / sender+ts) returns the prior
+//   intent instead of inserting a duplicate row. Extends the research-only semantic dedupe to all types.
 // POST /intent {desire, source?, device?} -> classify -> route:
 //   note    -> embed + store in Vectorize (research: qnfo-ai-log, personal: personal-life)
 //   task/event/email/reminder/research -> queued with parsed metadata
@@ -9,7 +12,7 @@
 //   POST /triage/dispatch, POST /triage/sync, POST /triage/candidate
 // Scheduled: 06:00 digest email; 06:30 triage batch + task sync + auto-dispatch (1 active task)
 const NL = String.fromCharCode(10);
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const ROUTER = 'https://qnfo-ai.q08.workers.dev';
 const AGENT_ORCH = 'https://qnfo-agent-orchestrator.q08.workers.dev';
 const PROMOTE_THRESHOLD = 60;
@@ -100,6 +103,12 @@ async function handleIntent(env, body, source, device) {
   const type = (['note', 'task', 'event', 'email', 'reminder', 'research', 'activity', 'unknown'].includes(cls.type) ? cls.type : 'note');
   const domain = (['research', 'personal', 'qwav', 'general'].includes(cls.domain) ? cls.domain : 'general');
   const status = type === 'note' ? 'done' : 'pending';
+  // v1.2.0 exact-match idempotency: identical desire (deterministic sync templates incl. occurrence
+  // start / sender+ts) => return the existing intent instead of duplicating (no re-embed, no re-digest).
+  const dupRow = await env.D1.prepare("SELECT id FROM intents WHERE desire = ?1 AND status NOT IN ('rejected','deduped') ORDER BY created_at ASC LIMIT 1").bind(desire).all().catch(() => null);
+  if (dupRow && dupRow.results && dupRow.results.length) {
+    return { id: dupRow.results[0].id, duplicate: true, dup_of: dupRow.results[0].id, type, domain, status };
+  }
   await env.D1.prepare(
     'INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)'
   ).bind(id, desire, clamp(source, 60), clamp(device, 60), type, domain, cls.priority, cls.summary || '', cls.due || null, status, null, now, null).run();
