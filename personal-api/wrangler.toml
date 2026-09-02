@@ -1,0 +1,19 @@
+name = "personal-api"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# Deploy: CF API PUT /scripts/personal-api module multipart (main_module=worker.js,
+# keep_bindings=["ai","d1","vectorize"]). Secrets API_KEY/CF_TOKEN/INFRA_TOKEN persist independently.
+# Canonical deploy = CF API module PUT (NOT wrangler deploy from here unless bindings reproduced).
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "PERSONAL"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"
