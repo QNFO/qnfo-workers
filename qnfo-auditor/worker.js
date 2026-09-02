@@ -9,7 +9,7 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.0.1";
+var VERSION = "1.0.2";
 var SELF = { purpose: "fleet event/log audit + act loop (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"] };
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
@@ -23,7 +23,7 @@ async function ensureSchema(env) {
 }
 function okAuth(req, env) {
   const t = env.AUDITOR_TOKEN || "";
-  if (!t) return true;
+  if (!t) return false; // fail-closed (v1.0.2): no unauthenticated control-plane access even if a deploy drops the secret
   const h = req.headers.get("Authorization") || "";
   if (!h.startsWith("Bearer ")) return false;
   const a = h.slice(7);
@@ -57,6 +57,8 @@ async function runAudit(env, mode, log) {
   await ensureSchema(env);
   const now = new Date().toISOString();
   const runId = "audit-" + now.replace(/[:.]/g, "-");
+  const iso = (ms) => new Date(ms).toISOString();
+  const cut2d = iso(Date.now() - 2 * 864e5), cut3d = iso(Date.now() - 3 * 864e5), cut7d = iso(Date.now() - 7 * 864e5), cut12h = iso(Date.now() - 12 * 3600e3), cut14d = iso(Date.now() - 14 * 864e5);
   const findings = []; const actions = [];
   const count = (arr) => arr.length;
   const F = (check, level, text) => findings.push({ check, level, text: String(text).slice(0, 600) });
@@ -66,21 +68,21 @@ async function runAudit(env, mode, log) {
   const snapshot = {};
   try { snapshot.ledger_open = (await q1(env, "SELECT COUNT(*) n FROM issue_ledger WHERE status IN ('open','acknowledged')"))?.n || 0; } catch (e) {}
   try { snapshot.open_high = await qAll(env, "SELECT fingerprint,title,source,level,occurrences,last_seen FROM issue_ledger WHERE status IN ('open','acknowledged') AND level IN ('high','critical') ORDER BY last_seen DESC"); } catch (e) { snapshot.open_high = []; }
-  try { snapshot.coe_48h = (await q1(env, "SELECT COUNT(*) n FROM cloud_ops_events WHERE ts > datetime('now','-2 day')"))?.n || 0; } catch (e) {}
+  try { snapshot.coe_48h = (await q1(env, "SELECT COUNT(*) n FROM cloud_ops_events WHERE ts > ?", cut2d))?.n || 0; } catch (e) {}
   try { snapshot.alerts_48h = (await q1(env, "SELECT COUNT(*) n FROM alerts WHERE created_at > datetime('now','-2 day')"))?.n || 0; } catch (e) {}
   try { snapshot.agent_open = (await q1(env, "SELECT COUNT(*) n FROM agent_issues WHERE status='open'"))?.n || 0; } catch (e) {}
   try { snapshot.deploys_7d = (await q1(env, "SELECT COUNT(*) n FROM deployment_history WHERE deployed_at > datetime('now','-7 day')"))?.n || 0; } catch (e) {}
 
   // C1 - stale open HIGH/CRITICAL (>7d untouched)
   try {
-    const stale = await qAll(env, "SELECT fingerprint,title,source,occurrences,last_seen FROM issue_ledger WHERE status IN ('open','acknowledged') AND level IN ('high','critical') AND updated_at < datetime('now','-7 day')");
+    const stale = await qAll(env, "SELECT fingerprint,title,source,occurrences,last_seen FROM issue_ledger WHERE status IN ('open','acknowledged') AND level IN ('high','critical') AND updated_at < ?", cut7d);
     for (const s of stale) F("C1", "warning", "stale open " + s.level + " [" + s.source + "] " + String(s.title).slice(0, 160) + " (occ " + s.occurrences + ", last " + s.last_seen + ")");
     log("C1 stale-open-high: " + stale.length);
   } catch (e) { F("C1", "error", "check failed: " + e.message); }
 
   // C2 - auto-close stale low/warning (no recurrence >=14d, occ<=3)
   try {
-    const closable = await qAll(env, "SELECT fingerprint,title,source,level,occurrences,last_seen FROM issue_ledger WHERE status='open' AND level IN ('info','warning','low') AND last_seen < datetime('now','-14 day') AND occurrences<=3");
+    const closable = await qAll(env, "SELECT fingerprint,title,source,level,occurrences,last_seen FROM issue_ledger WHERE status='open' AND level IN ('info','warning','low') AND last_seen < ? AND occurrences<=3", cut14d);
     for (const c of closable) {
       await setFpStatus(env, c.fingerprint, "resolved", "audit auto-close (C2): no recurrence for >=14d (last " + c.last_seen + ", occ " + c.occurrences + ")");
       A("auto-close", c.source + ": " + String(c.title).slice(0, 120));
@@ -102,7 +104,7 @@ async function runAudit(env, mode, log) {
 
   // C4 - job silence (recurring scheduler job with no event in 48h)
   try {
-    const jobs = await qAll(env, "SELECT job, COUNT(DISTINCT substr(ts,1,10)) d, MAX(ts) last FROM cloud_ops_events WHERE ts > datetime('now','-14 day') AND job IS NOT NULL GROUP BY job HAVING d>=3");
+    const jobs = await qAll(env, "SELECT job, COUNT(DISTINCT substr(ts,1,10)) d, MAX(ts) last FROM cloud_ops_events WHERE ts > ? AND job IS NOT NULL GROUP BY job HAVING d>=3", cut14d);
     for (const j of jobs) {
       if (String(j.last) < new Date(Date.now() - 48 * 3600e3).toISOString()) {
         F("C4", "high", "job silent >48h: " + j.job + " (last event " + j.last + ")");
@@ -114,7 +116,7 @@ async function runAudit(env, mode, log) {
 
   // C5 - events sweep lag (coe/alerts error rows older than 12h not yet mirrored by qnfo-events sweep)
   try {
-    const lag = await qAll(env, "SELECT id, kind, text, job, ts FROM cloud_ops_events WHERE ts < datetime('now','-12 hour') AND ts > datetime('now','-3 day') AND status IN ('error','failed','partial') AND NOT EXISTS (SELECT 1 FROM issue_events ie WHERE ie.detail='src:coe:'||cloud_ops_events.id)");
+    const lag = await qAll(env, "SELECT id, kind, text, job, ts FROM cloud_ops_events WHERE ts < ? AND ts > ? AND status IN ('error','failed','partial') AND NOT EXISTS (SELECT 1 FROM issue_events ie WHERE ie.detail='src:coe:'||cloud_ops_events.id)", cut12h, cut3d);
     if (lag.length > 0) {
       F("C5", "warning", "events-sweep-lag: " + lag.length + " coe error rows >12h old not mirrored to issue_ledger (oldest " + lag[0].ts + ")");
       await ledgerEnsure(env, { source: "auditor", category: "pipeline", level: "warning", title: "Events sweep lag: " + lag.length + " coe error rows not mirrored in 12h", detail: "qnfo-events daily 03:15 sweep latency; rows: " + lag.slice(0, 5).map((x) => x.id).join(",") });
@@ -149,7 +151,7 @@ async function runAudit(env, mode, log) {
       await upsertCandidate(env, "repeat-resolution", "mixed", "reopen", "Recurrence after resolution x" + rep, JSON.stringify(reopened.slice(0, 10)), log);
     }
     // 8b high-volume event clusters in last 7d
-    const clusters = await qAll(env, "SELECT source, category, COUNT(*) n FROM issue_events WHERE ts > datetime('now','-7 day') GROUP BY source, category HAVING n>=5 ORDER BY n DESC LIMIT 10");
+    const clusters = await qAll(env, "SELECT source, category, COUNT(*) n FROM issue_events WHERE ts > ? GROUP BY source, category HAVING n>=5 ORDER BY n DESC LIMIT 10", cut7d);
     for (const c of clusters) {
       await upsertCandidate(env, "event-cluster", c.source, c.category, "Event cluster: " + c.source + "/" + c.category + " x" + c.n, JSON.stringify(c), log);
     }
@@ -226,7 +228,7 @@ async function upsertCandidate(env, cls, source, category, title, evidence, log)
     await env.AUDIT.prepare("UPDATE kaizen_candidates SET evidence=?, updated_at=? WHERE id=?").bind(String(evidence).slice(0, 1500), now, id).run();
   }
   // promote mature candidates (>7d proposed) to the ledger for agent/ops visibility
-  const mature = await qAll(env, "SELECT id,class,source,category,title FROM kaizen_candidates WHERE status='proposed' AND created_at < datetime('now','-7 day') LIMIT 10");
+  const mature = await qAll(env, "SELECT id,class,source,category,title FROM kaizen_candidates WHERE status='proposed' AND created_at < ? LIMIT 10", cut7d);
   for (const m of mature) {
     await ledgerEnsure(env, { source: "kaizen", category: "improvement", level: "medium", title: "Improvement candidate: " + m.class + " (" + (m.source || "?") + "/" + (m.category || "?") + ")", detail: m.id });
     await env.AUDIT.prepare("UPDATE kaizen_candidates SET status='promoted', updated_at=? WHERE id=?").bind(new Date().toISOString(), m.id).run();
