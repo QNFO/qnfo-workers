@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.15.0";
+var VERSION = "5.15.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -950,12 +950,13 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   // ROUTER-CONTEXT-GAP-1 (2026-09-01): ALWAYS inject the QNFO-internal gloss even when the
   // client (ChatBox) supplies its own system message — merge as an extra system message so
   // internal feature names (JPCUB/QWAV/PaQit/QNFO) are never answered as "not in literature".
-  messages = [{ role: "system", content: DEFAULT_SYSTEM_PROMPT }, ...messages];
+  const SYS = DEFAULT_SYSTEM_PROMPT + "\n\nToday is " + new Date().toISOString().slice(0, 10) + " (UTC). Ground all time-relative statements (today, next week, deadlines, calendar windows) in this date.";
+  messages = [{ role: "system", content: SYS }, ...messages];
   // QNFO.OPS.010 Stage C: twin calendar retrieval (plane=qnfo, DATA-ONLY block).
   if (env.CAL_API) {
     try {
       const _calCtx = await getCalendarContext(env);
-      if (_calCtx) messages = [{ role: "system", content: DEFAULT_SYSTEM_PROMPT }, { role: "system", content: _calCtx }, ...messages];
+      if (_calCtx) messages = [{ role: "system", content: SYS }, { role: "system", content: _calCtx }, ...messages];
     } catch (e) { /* calendar context best-effort */ }
   }
   const _contWords = ["continue", "whats next", "what's next", "what next", "you tell me", "go on", "resume", "proceed", "keep going", "and then", "next", "next step"];
