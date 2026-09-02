@@ -9,8 +9,8 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.0.0";
-var SELF = { purpose: "fleet event/log audit + act loop (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9"] };
+var VERSION = "1.0.1";
+var SELF = { purpose: "fleet event/log audit + act loop (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"] };
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); }
@@ -155,6 +155,33 @@ async function runAudit(env, mode, log) {
     }
     log("C8 clusters: " + clusters.length + ", reopen clusters: " + rep);
   } catch (e) { F("C8", "error", "check failed: " + e.message); }
+
+  // C10 - resolve-on-recovery (close open ledger entries whose underlying source condition cleared)
+  try {
+    const openSrc = await qAll(env, "SELECT fingerprint, source, title, last_seen FROM issue_ledger WHERE status IN ('open','acknowledged') AND source IN ('cloud-ops','errata','agent-issues')");
+    let closed10 = 0;
+    for (const it of openSrc) {
+      const title = String(it.title || "");
+      try {
+        if (it.source === "cloud-ops" && title.indexOf("Job silent >48h:") === 0) {
+          const job = title.slice("Job silent >48h:".length).trim();
+          if (!job) continue;
+          const ev = await q1(env, "SELECT MAX(ts) last FROM cloud_ops_events WHERE job=? AND ts > ?", job, it.last_seen);
+          if (ev && ev.last) { await setFpStatus(env, it.fingerprint, "resolved", "audit close (C10): job '" + job + "' resumed (event " + ev.last + ")"); A("recovery-close", "job-silence " + job); closed10++; }
+        } else if (it.source === "errata") {
+          const mm = title.match(/#(\d+)/); if (!mm) continue;
+          const row = await q1(env, "SELECT status FROM errata_queue WHERE id=?", Number(mm[1]));
+          if (row) { const s = String(row.status || "").toLowerCase();
+            if (["processed","done","completed","published","resolved","cancelled","closed"].indexOf(s) >= 0) { await setFpStatus(env, it.fingerprint, "resolved", "audit close (C10): errata queue #" + mm[1] + " now " + row.status); A("recovery-close", "errata #" + mm[1]); closed10++; } }
+        } else if (it.source === "agent-issues") {
+          const mm = title.match(/#(\d+)/); if (!mm) continue;
+          const row = await q1(env, "SELECT status FROM agent_issues WHERE id=?", Number(mm[1]));
+          if (row && String(row.status || "") !== "open") { await setFpStatus(env, it.fingerprint, "resolved", "audit close (C10): agent_issue #" + mm[1] + " now " + row.status); A("recovery-close", "agent-issue #" + mm[1]); closed10++; }
+        }
+      } catch (e2) {}
+    }
+    log("C10 resolve-on-recovery: " + closed10);
+  } catch (e) { F("C10", "error", "check failed: " + e.message); }
 
   // C9 - digest state machine (email only on new/increased HIGH or weekly deep)
   const prev = await q1(env, "SELECT open_high, ts FROM fleet_audit_runs ORDER BY ts DESC LIMIT 1");

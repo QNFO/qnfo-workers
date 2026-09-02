@@ -2,7 +2,7 @@
 
 Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEARN procedure over ALL QNFO event/log stores. Runs unattended (no user, no DeepChat), cloud-native.
 
-- **Worker:** qnfo-auditor (v1.0.0)
+- **Worker:** qnfo-auditor (v1.0.1)
 - **Schedule:** standard pass 01:45/13:45 UTC daily; deep pass Monday 06:45 UTC (registered in [triggers])
 - **Canonical source:** QNFO/qnfo-workers/qnfo-auditor
 - **Runbook:** QNFO/qnfo-ops/AUDT/FLEET-AUDIT-AND-ACT-PROCEDURE.md
@@ -20,6 +20,7 @@ Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEAR
 | C7 | Flag stuck errata queue rows (>24h non-terminal) |
 | C8 | Kaizen feed: recurrence-after-resolve + event clusters → kaizen_candidates; promote mature (>7d) |
 | C9 | Digest state machine: email on new/increased HIGH (standard) or weekly summary (deep) |
+| C10 | Resolve-on-recovery: close open ledger entries when the underlying source condition clears (job resumed / errata terminal / agent_issue closed) |
 
 ## Endpoints (Bearer AUDITOR_TOKEN)
 - GET /health · GET / · POST /v1/run (mode standard|deep) · GET /v1/runs · GET /v1/state
@@ -33,3 +34,5 @@ Fleet Event Audit & Act loop — the automated REVIEW → AUDIT → ACT → LEAR
 wrangler deploy
 cp worker.js deployed-current.worker.js   # FLEET-SELF-DOC-1 mirror
 ```
+
+**IMPORTANT:** a wrangler deploy can drop secrets that were set via the CF API (observed 2026-09-02 on v1.0.1). After ANY deploy, re-assert secrets idempotently: PUT /accounts/{acct}/workers/scripts/qnfo-auditor/secrets {name:AUDITOR_TOKEN|DIGEST_TO, type:secret_text, text:...} then verify a Bearer-authenticated /v1/run still works.
