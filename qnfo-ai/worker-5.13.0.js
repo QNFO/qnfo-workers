@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.13.0";
+var VERSION = "5.13.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -75,7 +75,7 @@ var MAX_OUT = {
 };
 var DEFAULT_MAX_OUT = 8192;
 var DEFAULT_SYSTEM_PROMPT = 'Answer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on \'CONTINUE\' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.';;
-var FALLBACK_TEXT = "I could not generate a response for that prompt. Please rephrase or try again.";
+var FALLBACK_TEXT = "I could not generate a response for that prompt — the upstream model returned empty output. Please rephrase, or switch to Auto or Ensemble. For QNFO research questions the ensemble verifies answers across models.";
 var CTX_SAFETY_MARGIN = 512;
 function clampTokens(maxTokens, cap) {
   const c = cap || DEFAULT_MAX_OUT;
@@ -1184,12 +1184,16 @@ if (effSpec.api) {
     }
     let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP);
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
-    if (!content && !toolCalls && effSpec.wa && !wantsCode) {
-      const fbSpec = MODELS["qwen2.5-coder-32b"] || MODELS["gemma-4-26b"] || null;
-      if (fbSpec && fbSpec.wa !== effSpec.wa) {
+    if (!content && !toolCalls && !wantsCode) {
+      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"]] : [MODELS["qwen2.5-coder-32b"]];
+      for (const fbSpec of fbCands) {
+        if (!fbSpec) continue;
+        if (effSpec.wa && fbSpec.wa === effSpec.wa) continue;
+        if (effSpec.api && fbSpec.api === effSpec.api) continue;
         try {
-          const fbTurn = await runModelTurn(env, fbSpec, messages, max_tokens, null, 0.3, 0.95);
-          if (fbTurn.content && String(fbTurn.content).trim()) { content = fbTurn.content; provider = fbTurn.provider || provider; }
+          const fbCap = Math.min(clampTokens(max_tokens, DEFAULT_MAX_OUT), fbSpec.maxOut || 8192);
+          const fbTurn = await runModelTurn(env, fbSpec, messages, fbCap, null, 0.3, 0.95);
+          if (fbTurn.content && String(fbTurn.content).trim().length > 0) { content = fbTurn.content; provider = fbTurn.provider || provider; break; }
         } catch (e) {}
       }
     }
@@ -1204,7 +1208,11 @@ if (effSpec.api) {
       }
     }
     content = stripToolMarkup(content);
-    if (!content && !toolCalls) content = FALLBACK_TEXT;
+    if ((!content || !String(content).trim()) && !toolCalls) content = FALLBACK_TEXT;
+    if ((!content || !String(content).trim()) && toolCalls && !wantsCode && (!tools || !tools.length)) {
+      toolCalls = null;
+      content = FALLBACK_TEXT;
+    }
     const singleCap = clampTokens(max_tokens, effSpec.wa ? MAX_OUT[effSpec.wa] : DEFAULT_MAX_OUT);
     const singleOutTokens = estimateOutputTokens(content);
     const contentTruncated = (content || "").trim().length > 0 && singleOutTokens >= singleCap;
