@@ -229,6 +229,9 @@ function renderMarkdown(md) {
   // Strip raw Pandoc citation-key artifacts.
   m = m.replace(/^[ 	]*@[A-Za-z0-9_:-]+:[ 	]*$/gm, "");
   m = m.replace(/\[[@][A-Za-z0-9_:-]+(?:[ 	;,]+[@A-Za-z0-9_:-]+)*\]/g, "");
+  // Bare Pandoc citation keys in table cells / inline: drop "@key" and "@key:" tokens (word boundary).
+  m = m.replace(/(^|[^A-Za-z0-9_])@[A-Za-z][A-Za-z0-9_:-]+/g, "$1");
+
   m = m.replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => {
     mb.push("<pre" + (l ? ' class="lang-' + l + '"' : "") + "><code>" + c.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</code></pre>");
     return "B" + mb.length + "";
