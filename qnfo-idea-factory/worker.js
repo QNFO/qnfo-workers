@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.3", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.4", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -601,7 +601,8 @@ function renderRich(s){
     var bq=t.match(/^>\s?(.*)$/);
     if(bq){if(!quote){flush();html.push('<blockquote>');quote=1;}html.push(bq[1]);continue;}
     // Tolerant table parse: recover producer-collapsed blank lines and never swallow prose.
-    if(t.indexOf('|')>=0&&lines[i+1]&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
+    // Table separator requires a real pipe row (a bare --- is an hr, not a table).
+    if(t.indexOf('|')>=0&&lines[i+1]&&lines[i+1].indexOf('|')>=0&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
       var sepCols=(lines[i+1].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';})).length||1;
       var hdrCells=line.split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
       var prefixProse=null;
