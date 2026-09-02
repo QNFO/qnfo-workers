@@ -1,12 +1,30 @@
 // personal-events-radar Worker - QNFO.OPS.010 Stage B
+// v1.2.3 (2026-09-02): editorial chrome filter (Iamsterdam "Editorial tips / Weekend Guide"
+//   page sections are not events).
+// v1.2.2 (2026-09-02): time-colon guard on year-less day groups ("vrijdag 4 sep 14:00" must
+//   not extract "sep 14"); until-detection extended to till/t/m/tot-<digit> variants so
+//   closing-date rows stay report-only on Dutch and English museum pages.
+// v1.2.1 (2026-09-02): year-less date inference (Eventbrite lists "Thu, Sep 17" without an
+//   adjacent year; infer current/next year with a digit-lookahead guard against
+//   "September 2026" month-year labels; unlocks the queer-arts source).
+// v1.2.0 (2026-09-02): red-team remediation of v1.1.0 (M-1..M-3, S-1..S-4):
+//   - M-1 until-date semantics: "until <date>" rows are RUNNING-UNTIL (report-only, never
+//     posted to the calendar); date shown is the CLOSING date, stated explicitly in the tag.
+//   - M-2 venue coverage: Stedelijk URL fixed (/en/whats-on, 404 -> 200 verified);
+//     Dutch month names added to MONTH_RE (openluchttheater.nl is Dutch-locale);
+//     month-without-day patterns ("Until September 2026") surface as RUNNING-UNTIL rows.
+//   - M-3 widget filter: matchmaker/recommended-concert widgets discarded from extraction.
+//   - S-1 queer arts source added: Eventbrite Amsterdam LGBTQ (profile facet "queer arts
+//     and culture", conf 0.95; server-rendered, verified fetchable).
+//   - S-2 travel-energy gate re-added (inert while all sources are Amsterdam-local; enforces
+//     the budget if a non-local travel source is ever added). Report wording now matches.
+//   - S-3 ledger dedupe: venue matched by normalized-slug containment (ledger rows carry
+//     full-address venue strings; radar uses short names).
+//   - S-4 titles trimmed at word boundaries; header counts labelled "this run".
 // v1.1.0 (2026-09-02): PERSONAL-QNFO-SEPARATION-1 rebuild.
-//   v1.0.x VIOLATED the separation gate: it scored WORK programs (Laws of Form, ultrametric/
-//   adelic, JPCUB energy, quantum) from research venue pages into the PERSONAL plane calendar.
-//   v1.1.0 removes the entire work/research interest taxonomy and scans PERSONAL-LIFE venues
-//   only: museums, concert halls, open-air theatre, and Amsterdam city culture listings.
-//   Personal plane = personal life (arts, music, museums, queer arts, performance, festivals).
-//   Work venues/conferences live exclusively in the work plane (events-radar) and the
-//   personal-life attendance ledger (trips), never here.
+//   v1.0.x VIOLATED the separation gate: it scored WORK programs from research venue pages
+//   into the PERSONAL plane calendar. v1.1.0 removed the entire work/research interest
+//   taxonomy and scans PERSONAL-LIFE venues only.
 // PURPOSE: weekly scan of personal-life venue pages scored against the PERSONAL plane
 //   preferences in personal-life D1 (profile facets). Gates every recommendation through the
 //   standing personal filters:
@@ -17,14 +35,12 @@
 //   - room-question gate: venue affinity (energizing venues rank up)
 //   - tasting-menu protocol: 3-5 cheap local experiments over the next 90 days
 // Cleared events are POSTed to calendar-api /events?plane=personal (source=personal-radar,
-// status=tentative) with relevance+friction; report persisted to D1 qnfo-audit.personal_radar
-// and delivered to obsidian-writer (section "Personal Events Radar").
-// CAPABILITIES: parallel venue scan (8s AbortController), date-range extraction, personal-life
-//   relevance, friction scoring, hard gate engine, calendar-api dedupe before POST.
+// status=tentative) with relevance+friction; RUNNING-UNTIL exhibitions are report-only;
+// report persisted to D1 qnfo-audit.personal_radar and delivered to obsidian-writer.
 // DEPLOY: cd qnfo-workers/personal-events-radar && wrangler deploy
 // CANONICAL SOURCE (remote): github.com/QNFO/qnfo-workers -> personal-events-radar/worker.js
 // NOTE: all regexes are built backslash-free (char classes + fromCharCode) for transport safety.
-const VERSION = "1.1.0";
+const VERSION = "1.2.3";
 const WORKER = "personal-events-radar";
 
 const TAB = String.fromCharCode(9);
@@ -34,14 +50,12 @@ const WSC = "[" + " " + TAB + CR + LF + "]";
 const WS = WSC + "+";
 
 // ---- Personal-life interest taxonomy (from personal-life profile facets ONLY) ----
-// Evidence: facets likes "museums", "classical concerts", "queer arts and culture",
-// "play and performance", "conversation formats", "audiobooks and literature".
 // NO work/research keywords live here (PERSONAL-QNFO-SEPARATION-1).
 const INTERESTS = [
   { code: "MUS", name: "Museums", kw: ["museum", "exhibition", "expositie", "gallery", "collection", "masterpiece", "old master", "tentoonstelling"] },
   { code: "CLA", name: "Classical music", kw: ["concert", "classical", "symphony", "orchestra", "orchestral", "chamber music", "recital", "concerto", "sonata", "opera", "baroque", "renaissance music"] },
   { code: "PER", name: "Play and performance", kw: ["performance", "theatre", "theater", "dance", "ballet", "puppet", "circus", "comedy", "open air", "openluchttheater", "storytelling"] },
-  { code: "QUR", name: "Queer arts and culture", kw: ["queer", "pride", "lgbt", "drag", "ballroom"] },
+  { code: "QUR", name: "Queer arts and culture", kw: ["queer", "pride", "lgbt", "lgbtq", "drag", "ballroom"] },
   { code: "JAZ", name: "Jazz and contemporary", kw: ["jazz", "contemporary music", "electronic", "dj", "live music", "indie", "folk"] },
   { code: "LIT", name: "Literature and ideas", kw: ["literature", "poetry", "book", "author", "reading", "philosophy cafe", "debate", "talk"] },
   { code: "FIL", name: "Film and screen", kw: ["film", "cinema", "screening", "documentary", "movie"] },
@@ -49,36 +63,30 @@ const INTERESTS = [
 ];
 
 // ---- Personal-life venue sources (Amsterdam local; evidence = profile facets) ----
-// Concertgebouw (classical concerts), Rijksmuseum + Van Gogh + Stedelijk (museums),
-// Vondelpark Openluchttheater (he volunteers there), I amsterdam (city culture incl. queer arts).
 const SOURCES = [
   { name: "Concertgebouw", url: "https://www.concertgebouw.nl/en", kind: "concert", delivery: "onsite", cost: 2 },
   { name: "Rijksmuseum", url: "https://www.rijksmuseum.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
   { name: "VanGoghMuseum", url: "https://www.vangoghmuseum.nl/en/visit/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
-  { name: "Stedelijk", url: "https://www.stedelijk.nl/en/visit/agenda", kind: "exhibition", delivery: "onsite", cost: 1 },
+  { name: "Stedelijk", url: "https://www.stedelijk.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
   { name: "Openluchttheater", url: "https://www.openluchttheater.nl/agenda", kind: "performance", delivery: "onsite", cost: 0 },
-  { name: "Iamsterdam", url: "https://www.iamsterdam.com/en/whats-on", kind: "event", delivery: "onsite", cost: 1 }
+  { name: "Iamsterdam", url: "https://www.iamsterdam.com/en/whats-on", kind: "event", delivery: "onsite", cost: 1 },
+  { name: "EventbriteLGBTQ", url: "https://www.eventbrite.nl/d/netherlands--amsterdam/events/lgbtq/", kind: "event", delivery: "onsite", cost: 1 }
 ];
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 // ---- Personal gate configuration (evidence = personal-life profile facets, 2026-09-02) ----
-// facet logistics "energy budget H2 2026 spent" (conf 0.95): H2 2026 in-person TRAVEL budget
-//   SPENT (LoF26 + QPL26). Next in-person travel eligibility: H1 2027 (QIP27 Singapore = slot 1).
-// facet logistics "Schengen visa exit deadline" (conf 0.9): must exit Schengen before 2026-10-17.
-// facet standing-filters "No QPL/CWI topics in personal recommendations" (conf 0.95).
 const ENERGY = { maxInPersonPerHalfYear: 2, h2_2026_spent: true, nextEligibility: "2027-01-01" };
 const SCHENGEN_EXIT = "2026-10-17";
 const STANDING_DROP = /qpl|cwi/i;
-// All scanned venues are Amsterdam-local (commutable); travel-energy gate does not apply to them.
-// Room-question gate: energizing local venues rank up.
-const VENUE_AFFINITY = { Concertgebouw: 1, Rijksmuseum: 1, VanGoghMuseum: 1, Stedelijk: 1, Openluchttheater: 1 };
-const LOCAL_VENUES = ["Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk", "Openluchttheater", "Iamsterdam"];
-const SCHENGEN_VENUES = ["Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk", "Openluchttheater", "Iamsterdam"];
+const VENUE_AFFINITY = { Concertgebouw: 1, Rijksmuseum: 1, VanGoghMuseum: 1, Stedelijk: 1, Openluchttheater: 1, EventbriteLGBTQ: 1 };
+const LOCAL_VENUES = ["Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk", "Openluchttheater", "Iamsterdam", "EventbriteLGBTQ"];
+const SCHENGEN_VENUES = ["Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk", "Openluchttheater", "Iamsterdam", "EventbriteLGBTQ"];
 const TRAVEL_KINDS = ["conference", "workshop", "school"];
 
-const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-const MONTH_RE = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
+// Dutch month names added (openluchttheater.nl is Dutch-locale); /i flag makes case moot.
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12, maa: 3, mei: 5, okt: 10 };
+const MONTH_RE = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Januari|Februari|Maart|April|Mei|Juni|Juli|Augustus|September|Oktober|November|December)";
 const ENTITY_MAP = { amp: "&", lt: "<", gt: ">", quot: String.fromCharCode(34), apos: String.fromCharCode(39), nbsp: " ", ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", hellip: "…", times: "×", middot: "·", sdot: "⋅", minus: "−", deg: "°", micro: "µ" };
 
 function decodeEntities(x) {
@@ -109,6 +117,8 @@ function extractEvents(text, src) {
     if (new RegExp('"id"' + WSC + "*:" + WSC + "*[0-9]+" + WSC + "*,").test(s)) return true;
     if (/window[.]/.test(s)) return true;
     if (new RegExp("function" + WS + "[(]").test(s)) return true;
+    if (/matchmaker|recommended concerts|you choose/i.test(s)) return true; // M-3 widget filter
+    if (/editorial tips|weekend guide/i.test(s)) return true; // v1.2.3 editorial chrome filter
     return false;
   };
   const seen = new Set();
@@ -116,11 +126,15 @@ function extractEvents(text, src) {
   const rangeRe2 = new RegExp("([0-9]{1,2})" + WSC + "*[-–—]" + WSC + "*([0-9]{1,2})" + WS + "(" + MONTH_RE + ")[a-z]*[.]?" + WSC + "*,?" + WSC + "*(20[0-9]{2})", "gi");
   const singleRe = new RegExp("(" + MONTH_RE + ")[a-z]*[.]?" + WS + "([0-9]{1,2})" + WSC + "*,?" + WSC + "*(20[0-9]{2})", "gi");
   const singleRe2 = new RegExp("([0-9]{1,2})" + WS + "(" + MONTH_RE + ")[a-z]*[.]?" + WSC + "*,?" + WSC + "*(20[0-9]{2})", "gi");
-  const push = (mo, d1, d2, yr, idx) => {
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth() + 1;
+  const push = (mo, d1, d2, yr, idx, inferYear) => {
     const mon = (mo || "").toLowerCase().slice(0, 3);
     const month = MONTHS[mon];
     if (!month) { discarded += 1; return; }
-    const year = yr ? parseInt(yr, 10) : 0;
+    let year = yr ? parseInt(yr, 10) : 0;
+    if (!year && inferYear) year = month >= nowMonth ? nowYear : nowYear + 1;
     if (year < cutYear || year > cutYear + 2) { discarded += 1; return; }
     const startIso = toISO(year, month, Math.min(d1 || 1, 28));
     const endIso = d2 ? toISO(year, month, Math.min(d2, 28)) : startIso;
@@ -135,15 +149,41 @@ function extractEvents(text, src) {
     if (spIdx !== -1 && spIdx < 40) snippet = snippet.slice(spIdx + 1);
     if (dropGarbage(snippet)) { discarded += 1; return; }
     seen.add(key);
+    const pre = clean.slice(Math.max(0, idx - 40), idx).toLowerCase();
+    const runningUntil = new RegExp("until|till|t/m|tot(?=" + WSC + "*[0-9])", "i").test(pre); // M-1: closing-date semantics
     const wideSnippet = clean.slice(Math.max(0, idx - 120), Math.min(clean.length, idx + 40)).slice(0, 240);
     const dateText = (d2 ? mo + " " + d1 + "-" + d2 + ", " + year : mo + " " + d1 + ", " + year);
-    events.push({ venue: src.name, dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, wideSnippet, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
+    events.push({ venue: src.name, dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, wideSnippet, runningUntil, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
   };
   for (const m of clean.matchAll(rangeRe)) push(m[1], parseInt(m[2], 10), parseInt(m[3], 10), m[4], m.index);
   for (const m of clean.matchAll(rangeRe2)) push(m[3], parseInt(m[1], 10), parseInt(m[2], 10), m[4], m.index);
   for (const m of clean.matchAll(singleRe)) push(m[1], parseInt(m[2], 10), null, m[3], m.index);
   for (const m of clean.matchAll(singleRe2)) push(m[2], parseInt(m[1], 10), null, m[3], m.index);
-  const kept = events.slice(0, 16);
+  // year-less variants (Eventbrite: "Thu, Sep 17"); lookahead blocks "September 2026" labels;
+  // skip positions where a year token follows within 20 chars (year-ful regex already handled)
+  const rangeReNY = new RegExp("(" + MONTH_RE + ")[a-z]*[.]?" + WS + "([0-9]{1,2})(?![0-9:])" + WSC + "*[-–—]" + WSC + "*([0-9]{1,2})(?![0-9:])", "gi");
+  const singleReNY = new RegExp("(" + MONTH_RE + ")[a-z]*[.]?" + WS + "([0-9]{1,2})(?![0-9:])", "gi");
+  const singleRe2NY = new RegExp("([0-9]{1,2})(?![0-9])" + WS + "(" + MONTH_RE + ")[a-z]*[.]?", "gi");
+  const nearYear = (i) => /20[0-9]{2}/.test(clean.slice(i, i + 20));
+  for (const m of clean.matchAll(rangeReNY)) { if (!nearYear(m.index)) push(m[1], parseInt(m[2], 10), parseInt(m[3], 10), null, m.index, true); }
+  for (const m of clean.matchAll(singleReNY)) { if (!nearYear(m.index)) push(m[1], parseInt(m[2], 10), null, null, m.index, true); }
+  for (const m of clean.matchAll(singleRe2NY)) { if (!nearYear(m.index)) push(m[2], parseInt(m[1], 10), null, null, m.index, true); }
+  // month-without-day: "Until September 2026" (museums list closing exhibitions this way)
+  const untilMonthRe = new RegExp("(?:until|till|t/m)" + WS + "(" + MONTH_RE + ")[a-z]*" + WSC + "*[.]?" + WSC + "*(20[0-9]{2})", "gi");
+  for (const m of clean.matchAll(untilMonthRe)) {
+    const mon = (m[1] || "").toLowerCase().slice(0, 3);
+    const month = MONTHS[mon];
+    const year = parseInt(m[2], 10);
+    if (!month || year < cutYear || year > cutYear + 2) continue;
+    const endIso = toISO(year, month, 28);
+    const key = src.name + "|rm|" + endIso;
+    if (seen.has(key)) continue;
+    const snippet = clean.slice(Math.max(0, m.index - 60), m.index + 120).slice(0, 200);
+    if (dropGarbage(snippet)) continue;
+    seen.add(key);
+    events.push({ venue: src.name, dateText: "until " + m[1] + " " + year, startIso: endIso, endIso, year, month, day: null, url: src.url, snippet, wideSnippet: snippet, runningUntil: true, runningUntilMonth: true, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
+  }
+  const kept = events.slice(0, 20);
   discarded += Math.max(0, events.length - kept.length);
   return { events: kept, discarded };
 }
@@ -207,12 +247,29 @@ function scoreEvent(ev) {
   };
 }
 
-function gateEvent(e) {
+async function computeBudget(env) { // S-2: travel gate ledger read (inert while all sources local)
+  const r = await env.PERSONAL_DB.prepare(
+    "SELECT venue, start_date FROM events WHERE start_date>=? AND start_date<? AND category IN ('conference','workshop','school','program')"
+  ).bind("2027-01-01", "2027-07-01").all();
+  const seen = new Set();
+  let booked = 0;
+  for (const row of (r.results || [])) {
+    const k = (row.venue || "") + "|" + String(row.start_date || "").slice(0, 10);
+    if (!seen.has(k)) { seen.add(k); booked += 1; }
+  }
+  return { h1InPersonBooked: booked, h1SlotsLeft: Math.max(0, ENERGY.maxInPersonPerHalfYear - booked) };
+}
+
+function gateEvent(e, budget) {
   const reasons = [];
   const text = ((e.snippet || "") + " " + e.venue).toLowerCase();
   if (STANDING_DROP.test(text)) reasons.push("standing-filter:QPL/CWI");
   if (e.delivery === "onsite" && SCHENGEN_VENUES.includes(e.venue) && e.startIso >= SCHENGEN_EXIT) {
     reasons.push("schengen-exit:" + SCHENGEN_EXIT);
+  }
+  if (e.delivery === "onsite" && TRAVEL_KINDS.includes(e.kind) && !LOCAL_VENUES.includes(e.venue)) {
+    if (ENERGY.h2_2026_spent && e.startIso < ENERGY.nextEligibility) reasons.push("energy-budget:H2-2026-spent");
+    else if (e.startIso >= "2027-01-01" && e.startIso < "2027-07-01" && budget.h1SlotsLeft <= 0) reasons.push("energy-budget:H1-2027-full");
   }
   return { cleared: reasons.length === 0, reasons };
 }
@@ -230,7 +287,7 @@ async function scanVenue(src) {
   } finally { clearTimeout(t); }
 }
 
-function normTitle(t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 60); }
+const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 async function fetchExistingCalendar(env) {
   try {
@@ -240,20 +297,23 @@ async function fetchExistingCalendar(env) {
   } catch (e) { return []; }
 }
 
-function renderReport(scannedAt, horizon, gated, stats, posted) {
+function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
   const L = [];
   L.push("PERSONAL-EVENTS-RADAR SCAN — generated " + scannedAt.slice(0, 10) + " (window: " + scannedAt.slice(0, 10) + " .. " + horizon + ")");
-  L.push("[PERSONAL-RADAR: " + gated.length + " in-window events | " + stats.okVenues + "/" + stats.totalVenues + " venues ok | " + gated.filter((g) => g.cleared && g.e.relevance >= 3 && kwEvidence(g)).length + " cleared | " + posted.posted + " posted to calendar]");
+  L.push("[PERSONAL-RADAR: " + gated.length + " in-window events | " + stats.okVenues + "/" + stats.totalVenues + " venues ok | " + gated.filter((g) => g.cleared && g.e.relevance >= 3 && kwEvidence(g) && !g.e.runningUntil && !g.e.runningUntilMonth).length + " cleared | " + posted.posted + " posted this run]");
   L.push("");
   L.push("Scope: PERSONAL LIFE only (museums, concerts, performance, queer arts, festivals,");
   L.push("local Amsterdam culture). Work/research venues live in events-radar, not here.");
   L.push("Ranking rule: priority = 10 x relevance / (1 + friction). Friction = kind + delivery + cost.");
-  L.push("Gates: standing filter (QPL/CWI) -> Schengen exit 2026-10-17 (onsite Amsterdam events).");
-  L.push("Local Amsterdam events do NOT consume the in-person TRAVEL budget.");
+  L.push("Gates: standing filter (QPL/CWI) -> Schengen exit 2026-10-17 (onsite Amsterdam events)");
+  L.push("-> in-person TRAVEL budget (applies only to non-local travel events; all current");
+  L.push("sources are Amsterdam-local, so the travel gate is inert but enforced).");
   L.push("Calendar POST rule: cleared gates AND relevance >= 3 AND at least one keyword hit.");
+  L.push("RUNNING-UNTIL exhibitions are report-only: the date shown is the CLOSING date, never");
+  L.push("posted to the calendar as an event on that day.");
   L.push("");
   const cleared = gated.filter((g) => g.cleared && g.e.relevance >= 3);
-  const top = cleared.filter((g) => g.e.priority >= 4 && g.e.frictionClass !== "HIGH").sort((a, b) => b.e.priority - a.e.priority || a.e.startIso.localeCompare(b.e.startIso)).slice(0, 10);
+  const top = cleared.filter((g) => !g.e.runningUntil && !g.e.runningUntilMonth && g.e.priority >= 4 && g.e.frictionClass !== "HIGH").sort((a, b) => b.e.priority - a.e.priority || a.e.startIso.localeCompare(b.e.startIso)).slice(0, 10);
   L.push("## Top picks - personal relevance / friction");
   if (top.length === 0) L.push("_No events cleared the top-pick threshold this scan._");
   for (const g of top) {
@@ -262,7 +322,7 @@ function renderReport(scannedAt, horizon, gated, stats, posted) {
   }
   const t90 = scannedAt.slice(0, 10);
   const t90end = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
-  const tasting = gated.filter((g) => g.cleared && g.e.relevance >= 2 && g.e.friction <= 2 && g.e.startIso >= t90 && g.e.startIso <= t90end)
+  const tasting = gated.filter((g) => g.cleared && !g.e.runningUntil && !g.e.runningUntilMonth && g.e.relevance >= 2 && g.e.friction <= 2 && g.e.startIso >= t90 && g.e.startIso <= t90end)
     .sort((a, b) => a.e.friction - b.e.friction || b.e.relevance - a.e.relevance).slice(0, 5);
   L.push("");
   L.push("## Tasting menu - 3-5 cheap local experiments over the next 90 days");
@@ -273,7 +333,8 @@ function renderReport(scannedAt, horizon, gated, stats, posted) {
   }
   L.push("");
   L.push("## Budget and gates");
-  L.push("- in-person TRAVEL budget: H2 2026 SPENT (LoF26 + QPL26). Local Amsterdam events are exempt.");
+  L.push("- in-person TRAVEL budget: H2 2026 SPENT (LoF26 + QPL26); H1 2027 ledger shows " + budget.h1InPersonBooked + " booked, " + budget.h1SlotsLeft + " slot(s) left.");
+  L.push("- local Amsterdam events do NOT consume the travel budget; the gate enforces only non-local travel kinds.");
   L.push("- Schengen exit deadline: 2026-10-17. Onsite Amsterdam events on/after that date are blocked.");
   L.push("- standing filter: QPL / CWI topics excluded from personal recommendations.");
   L.push("- posted to calendar-api plane=personal: " + posted.posted + " new (dedupe skipped " + posted.skipped + ").");
@@ -282,7 +343,10 @@ function renderReport(scannedAt, horizon, gated, stats, posted) {
   const chrono = gated.slice().sort((a, b) => a.e.startIso.localeCompare(b.e.startIso) || a.e.venue.localeCompare(b.e.venue));
   for (const g of chrono) {
     const e = g.e;
-    const tag = g.cleared ? (e.relevance >= 3 ? "CLEARED" : "LOW-RELEVANCE") : g.reasons.join("; ");
+    let tag;
+    if (e.runningUntil || e.runningUntilMonth) tag = "RUNNING-UNTIL (closes " + e.startIso + ", report-only)";
+    else if (g.cleared) tag = e.relevance >= 3 ? "CLEARED" : "LOW-RELEVANCE";
+    else tag = g.reasons.join("; ");
     L.push("- " + e.startIso + (e.endIso && e.endIso !== e.startIso ? ".." + e.endIso : "") + " [" + e.kind + "|" + e.delivery + "|" + (e.cost === 0 ? "free" : e.cost === 1 ? "fee?" : "paid") + "] " + e.venue + ": " + e.snippet.slice(0, 100) + "  [" + tag + "]");
   }
   L.push("");
@@ -303,6 +367,7 @@ async function run(env) {
   const scannedAt = new Date().toISOString();
   const nowIso = scannedAt.slice(0, 10);
   const horizon = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+  const budget = await computeBudget(env);
 
   const results = await Promise.allSettled(SOURCES.map((s) => scanVenue(s)));
   const rawEvents = [];
@@ -319,7 +384,7 @@ async function run(env) {
   const scored = inWindow.map(scoreEvent);
   const seen = new Set();
   const uniq = scored.filter((e) => { const k = e.venue + "|" + e.startIso; if (seen.has(k)) return false; seen.add(k); return true; });
-  const gated = uniq.map((e) => ({ e, ...gateEvent(e) }));
+  const gated = uniq.map((e) => ({ e, ...gateEvent(e, budget) }));
 
   const existing = await fetchExistingCalendar(env);
   const existingKeys = new Set(existing.map((x) => String(x.location || "").toLowerCase() + "|" + String(x.dtstart || "").slice(0, 10)));
@@ -328,15 +393,20 @@ async function run(env) {
     const lr = await env.PERSONAL_DB.prepare("SELECT venue, start_date FROM events WHERE start_date>=?").bind(nowIso).all();
     ledgerRows = lr.results || [];
   } catch (e) { /* ledger read best-effort */ }
-  const ledgerKeys = new Set(ledgerRows.map((x) => String(x.venue || "").toLowerCase() + "|" + String(x.start_date || "").slice(0, 10)));
+  const ledgerSlugs = ledgerRows.map((x) => ({ v: slug(x.venue), d: String(x.start_date || "").slice(0, 10) }));
 
   let posted = 0, skipped = 0;
   const postedList = [];
   for (const g of gated) {
+    if (g.e.runningUntil || g.e.runningUntilMonth) { skipped += 1; continue; } // M-1 report-only
     if (!g.cleared || g.e.relevance < 3 || !kwEvidence(g)) continue;
-    const title = g.e.venue + ": " + g.e.snippet.slice(0, 90);
+    let title = g.e.venue + ": " + g.e.snippet.slice(0, 90);
+    const cut = title.lastIndexOf(" ");
+    if (cut > 30) title = title.slice(0, cut); // S-4 word-boundary trim
     const key = g.e.venue.toLowerCase() + "|" + g.e.startIso;
-    if (existingKeys.has(key) || ledgerKeys.has(key)) { skipped += 1; continue; }
+    const kSlug = slug(g.e.venue);
+    const ledgerDup = ledgerSlugs.some((r) => r.d === g.e.startIso && (r.v.indexOf(kSlug) !== -1 || kSlug.indexOf(r.v) !== -1)); // S-3 containment
+    if (existingKeys.has(key) || ledgerDup) { skipped += 1; continue; }
     if (posted >= 8) { skipped += 1; continue; }
     const body = {
       title, dtstart: g.e.startIso, dtend: g.e.endIso, all_day: false,
@@ -357,8 +427,8 @@ async function run(env) {
   }
 
   const stats = { inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
-  const report = renderReport(scannedAt, horizon, gated, stats, { posted, skipped });
-  const slug = "personal-events-radar-" + scannedAt.slice(0, 10);
+  const report = renderReport(scannedAt, horizon, gated, budget, stats, { posted, skipped });
+  const slugN = "personal-events-radar-" + scannedAt.slice(0, 10);
 
   let delivery = null;
   try {
@@ -373,12 +443,12 @@ async function run(env) {
 
   await env.AUDIT_DB.prepare(
     "INSERT OR REPLACE INTO personal_radar (slug, report, events_json, posted_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).bind(slug, report, JSON.stringify(gated), JSON.stringify(postedList), scannedAt, scannedAt).run();
+  ).bind(slugN, report, JSON.stringify(gated), JSON.stringify(postedList), scannedAt, scannedAt).run();
 
   return {
-    slug, version: VERSION, events: uniq.length, discarded, venueErrors: venueErrors.length,
-    posted: postedList, delivery,
-    topPicks: gated.filter((g) => g.cleared && g.e.relevance >= 3).sort((a, b) => b.e.priority - a.e.priority).slice(0, 5)
+    slug: slugN, version: VERSION, events: uniq.length, discarded, venueErrors: venueErrors.length,
+    budget, posted: postedList, delivery,
+    topPicks: gated.filter((g) => g.cleared && !g.e.runningUntil && !g.e.runningUntilMonth && g.e.relevance >= 3).sort((a, b) => b.e.priority - a.e.priority).slice(0, 5)
       .map((g) => "P" + g.e.priority + " " + g.e.startIso + " " + g.e.venue + " " + g.e.interests.join("/") + " [" + g.e.delivery + "]")
   };
 }
