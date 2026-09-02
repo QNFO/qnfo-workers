@@ -16,7 +16,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.2", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.3", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -426,7 +426,7 @@ var UI_HTML = String.raw`
 <link rel="canonical" href="https://ideas.qnfo.org">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2324315e'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' fill='%23faf7f2' font-family='Georgia,serif'%3EQ%3C/text%3E%3C/svg%3E">
 <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],processEscapes:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code'],enableMenu:false}};</script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg.js';document.head.appendChild(s);"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
 :root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--live:#2f6d4f;--arch:#8a8376}
@@ -556,6 +556,21 @@ function renderRich(s){
     blocks.push('<pre><code'+(lang?' class="lang-'+esc(lang)+'"':'')+'>'+esc(code.replace(/\n$/,''))+'</code></pre>');
     return '\u0002'+String(blocks.length-1)+'\u0002';
   });
+  // Recover blank-line-collapsed markdown (producer stripped \n\n -> space).
+  // (1) Glued table header: split prose off BEFORE a header whose next line is a
+  //     separator with matching column count (lookahead preserves the existing newline).
+  raw=raw.replace(/([^\n])[ \t]+(\|[^\n]*\|)[ \t]*(?=\n([ \t]*\|?[\s:|-]+\|?[ \t]*\n))/g,function(m,pre,hdr,sep){
+    var nh=(hdr.split('|').filter(function(x){return x.trim()!=='';})).length;
+    var ns=(sep.match(/-+/g)||[]).length;
+    return (nh>0&&nh===ns)?(pre+'\n'+hdr):m;
+  });
+  // (2) Horizontal rules glued to text: "text. --- ##" -> "text.\n---\n##".
+  raw=raw.replace(/([^\n])[ \t]+(---)[ \t]+(?=#{1,6}[ \t])/g,'$1\n$2\n');
+  raw=raw.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g,'$1\n$2\n');
+  // (3) Headings glued to preceding text.
+  raw=raw.replace(/([^\n])[ \t]+(#{1,6}[ \t])/g,'$1\n$2');
+  // (4) Blockquote glue: "text. > quote" -> "text.\n> quote".
+  raw=raw.replace(/([^\n])[ \t]+(>[ \t]*\S)/g,'$1\n$2');
   var inline=function(x){
     var h=esc(x);
     var math=[];
@@ -585,21 +600,45 @@ function renderRich(s){
     if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){flush();html.push('<hr>');continue;}
     var bq=t.match(/^>\s?(.*)$/);
     if(bq){if(!quote){flush();html.push('<blockquote>');quote=1;}html.push(bq[1]);continue;}
+    // Tolerant table parse: recover producer-collapsed blank lines and never swallow prose.
     if(t.indexOf('|')>=0&&lines[i+1]&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
-      var header=t.split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
-      var body=[];
+      var sepCols=(lines[i+1].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';})).length||1;
+      var hdrCells=line.split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+      var prefixProse=null;
+      // Glued header: prose ran onto the same line as the table header (blank line stripped).
+      if(line.trim().charAt(0)!=='|'&&hdrCells.length>sepCols){
+        var cut=line.indexOf('|');
+        prefixProse=line.slice(0,cut).trim();
+        hdrCells=hdrCells.slice(hdrCells.length-sepCols);
+      } else if(hdrCells.length>sepCols){
+        hdrCells=hdrCells.slice(0,sepCols);
+      }
+      var body=[];var tailProse=null;
       i+=2;
       while(i<lines.length&&lines[i].trim()!==''&&lines[i].indexOf('|')>=0){
-        body.push(lines[i].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';}));
+        var rc=lines[i].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+        // Row with trailing prose glued after the last cell: keep the row, carry the prose.
+        if(rc.length>sepCols){
+          var segs=lines[i].split('|');
+          var used=0,cutIdx=segs.length-1;
+          for(var k=0;k<segs.length;k++){if(segs[k].trim()!==''){used++;if(used===sepCols){cutIdx=k;break;}}}
+          rc=segs.slice(0,cutIdx+1).map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+          tailProse=segs.slice(cutIdx+1).join('|').trim();
+          body.push(rc);
+          i++;
+          break;
+        }
+        body.push(rc);
         i++;
       }
-      i--;
-      if(header.length){
-        flush();
-        var th='';header.forEach(function(c){th+='<th>'+inline(c)+'</th>';});
+      flush();
+      if(prefixProse&&prefixProse.length){para.push(prefixProse);flush();}
+      if(hdrCells.length){
+        var th='';hdrCells.forEach(function(c){th+='<th>'+inline(c)+'</th>';});
         var tb='';body.forEach(function(rw){if(rw.length){tb+='<tr>'+rw.map(function(c){return '<td>'+inline(c)+'</td>';}).join('')+'</tr>';}});
         html.push('<table><thead><tr>'+th+'</tr></thead><tbody>'+tb+'</tbody></table>');
       }
+      if(tailProse&&tailProse.length){para.push(tailProse);}
       continue;
     }
     var um=t.match(/^[-*+]\s+(.*)$/);
