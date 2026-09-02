@@ -152,12 +152,28 @@ __name222(detectCategory, "detectCategory");
 __name2222(detectCategory, "detectCategory");
 __name22222(detectCategory, "detectCategory");
 var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number Theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
+function texSafe(s) {
+  if (!s) return "";
+  s = String(s);
+  s = s.replace(/\\left\s*</g, "\\left\\langle ");
+  s = s.replace(/\\right\s*>/g, "\\right\\rangle ");
+  s = s.replace(/<=/g, "\\leq ");
+  s = s.replace(/>=/g, "\\geq ");
+  s = s.replace(/</g, "\\lt ");
+  s = s.replace(/>/g, "\\gt ");
+  return s;
+}
+function cleanPunct(s) {
+  return String(s || "").replace(/[ \t]+([,.!?;:])/g, "$1");
+}
 function _mdInline(t) {
-  t = esc(t || "");
+  t = String(t || "");
   var _math = [];
-  t = t.replace(/\$\$([\s\S]*?)\$\$/g, function(m, c) { _math.push(c); return "\u0003M" + (_math.length - 1) + "\u0003"; });
-  t = t.replace(/\$([^\$\n]+?)\$/g, function(m, c) { _math.push(c); return "\u0003M" + (_math.length - 1) + "\u0003"; });
-  t = t.replace(/\\\\(([\s\S]*?)\\\\)/g, function(m, c) { _math.push(c); return "\u0003M" + (_math.length - 1) + "\u0003"; });
+  function saveMath(c, disp) { _math.push((disp ? "D" : "") + c); return "\u0003M" + (_math.length - 1) + "\u0003"; }
+  t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) { return saveMath(c, true); });
+  t = t.replace(/\$([^$\n]+?)\$/g, function(m, c) { return saveMath(c, false); });
+  t = t.replace(/\\\(([^\n]*?)\\\)/g, function(m, c) { return saveMath(c, false); });
+  t = esc(t);
   t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
   t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -165,16 +181,15 @@ function _mdInline(t) {
   t = t.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   t = t.replace(/_([^_]+)_/g, "<em>$1</em>");
   t = t.replace(/~~([^~]+)~~/g, "<del>$1</del>");
-  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
-  t = t.replace(/\u0003M(\d+)\u0003/g, function(m, i) { return "$" + _math[+i] + "$"; });
+  var _bt = String.fromCharCode(96);
+  t = t.replace(new RegExp(_bt + "([^" + _bt + "]+)" + _bt, "g"), "<code>$1</code>");
+  t = t.replace(/\u0003M(\d+)\u0003/g, function(m, i) {
+    var c = _math[+i]; var disp = c.charAt(0) === "D";
+    return (disp ? "$$" : "$") + texSafe(disp ? c.slice(1) : c) + (disp ? "$$" : "$");
+  });
   return t;
 }
-__name(_mdInline, "_mdInline");
-__name2(_mdInline, "_mdInline");
-__name22(_mdInline, "_mdInline");
-__name222(_mdInline, "_mdInline");
-__name2222(_mdInline, "_mdInline");
-__name22222(_mdInline, "_mdInline");
+
 function fixMojibake(s) {
   if (!s) return "";
   const map = [
@@ -225,149 +240,163 @@ __name22(fixMojibake, "fixMojibake");
 __name222(fixMojibake, "fixMojibake");
 function renderMarkdown(md) {
   if (!md) return "";
-  let mb = [], m = md;
-  // Strip raw Pandoc citation-key artifacts.
-  m = m.replace(/^[ 	]*@[A-Za-z0-9_:-]+:[ 	]*$/gm, "");
-  m = m.replace(/\[[@][A-Za-z0-9_:-]+(?:[ 	;,]+[@A-Za-z0-9_:-]+)*\]/g, "");
-  // Bare Pandoc citation keys in table cells / inline: drop "@key" and "@key:" tokens (word boundary).
+  var m = String(md).replace(/\r\n?/g, "\n");
+  var mb = [], mi = [], L, o = "", i;
+  m = m.replace(/^[ \t]*@[A-Za-z0-9_:-]+:[ \t]*$/gm, "");
+  m = m.replace(/\[[@][A-Za-z0-9_:-]+(?:[ \t;,]+[@A-Za-z0-9_:-]+)*\]/g, "");
   m = m.replace(/(^|[^A-Za-z0-9_])@[A-Za-z][A-Za-z0-9_:-]+/g, "$1");
-
-  m = m.replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => {
-    mb.push("<pre" + (l ? ' class="lang-' + l + '"' : "") + "><code>" + c.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</code></pre>");
-    return "B" + mb.length + "";
-  });
-  // Convert single-$ spans containing a line break into display-math $$ so they render as
-  // a block instead of being split across paragraphs and mangled by the emphasis pass.
-  m = m.replace(/\$([\s\S]*?)\$/g, function(all, c) {
-    if (c.indexOf("\n") >= 0 && c.indexOf("\n\n") < 0) return "$$" + c + "$$";
-    return all;
-  });
-  m = m.replace(/\$\$([\s\S]*?)\$\$/g, (_, c) => {
-    mb.push('<div class="math-display">\\[' + c.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "\\]</div>");
-    return "B" + mb.length + "";
-  });
-  // Recover blank-line-collapsed markdown (\n\n -> space).
-  // (1) Glued table header: split prose off before a header whose next line is a separator
-  //     with matching column count (lookahead preserves the existing newline).
-  m = m.replace(/([^\n])[ \t]+(\|[^\n]*\|)[ \t]*(?=\n([ \t]*\|?[\s:|-]+\|?[ \t]*\n))/g, (mm, pre, hdr, sep) => {
-    const nh = hdr.split("|").filter((x) => x.trim() !== "").length;
-    const ns = (sep.match(/-+/g) || []).length;
-    return nh > 0 && nh === ns ? pre + "\n" + hdr : mm;
-  });
-  // (2) Horizontal rules glued to text.
-  m = m.replace(/([^\n])[ \t]+(---)[ \t]+(?=#{1,6}[ \t])/g, "$1\n$2\n");
   m = m.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
-  // (3) Headings glued to preceding text.
   m = m.replace(/([^\n])[ \t]+(#{1,6}[ \t])/g, "$1\n$2");
-  let o = "", L = m.split("\n"), i = 0;
-  while (i < L.length) {
-    let l = L[i], t = l.trim();
-    if (!t) {
-      i++;
-      continue;
+  var _bt2 = String.fromCharCode(96);
+  var _fence = new RegExp(_bt2 + _bt2 + _bt2 + "(\\w*)\\n([\\s\\S]*?)" + _bt2 + _bt2 + _bt2, "g");
+  m = m.replace(_fence, function(_, l, c) {
+    mb.push("<pre" + (l ? ' class="lang-' + l + '"' : "") + "><code>" + esc(c) + "</code></pre>");
+    return "\u0001B" + mb.length + "\u0001";
+  });
+  m = m.replace(/\$\$([\s\S]*?)\$\$/g, function(_, c) {
+    mb.push('<div class="math-display">\\[' + texSafe(c) + '\\]</div>');
+    return "\u0001B" + mb.length + "\u0001";
+  });
+  m = m.replace(/\\\[([\s\S]*?)\\\]/g, function(_, c) {
+    mb.push('<div class="math-display">\\[' + texSafe(c) + '\\]</div>');
+    return "\u0001B" + mb.length + "\u0001";
+  });
+  m = m.replace(/\$([^$\n]+?)\$/g, function(_, c) { mi.push(c); return "\u0001M" + (mi.length - 1) + "\u0001"; });
+  m = m.replace(/\\\(([^\n]*?)\\\)/g, function(_, c) { mi.push(c); return "\u0001M" + (mi.length - 1) + "\u0001"; });
+  function isTableSep(s) { return /^\|?[\s:]*-{3,}[\s:]*\|/.test(s) && /-/.test(s); }
+  function emitBlockText(text) {
+    var parts = text.split(/(\u0001B\d+\u0001)/g), h = "", cur = "", k;
+    for (k = 0; k < parts.length; k++) {
+      var p = parts[k], tm = /^\u0001B(\d+)\u0001$/.exec(p);
+      if (tm) {
+        if (cur.trim()) { h += "<p>" + _mdInline(cleanPunct(cur)) + "</p>"; cur = ""; }
+        h += mb[+tm[1] - 1] + "\n";
+      } else cur += p;
     }
-    if (t[0] === ">") {
-      o += "<blockquote>";
-      while (i < L.length && L[i].trim()[0] === ">") {
-        o += "<p>" + _mdInline(L[i].trim().replace(/^>\s?/, "")) + "</p>";
+    if (cur.trim()) h += "<p>" + _mdInline(cleanPunct(cur)) + "</p>";
+    return h;
+  }
+  function isListStart(s) { return /^[-*+]\s/.test(s) || /^\d+[.)]\s/.test(s); }
+  function isContinuation(s) { return /^[ \t]+\S/.test(s); }
+  L = m.split("\n");
+  i = 0;
+  while (i < L.length) {
+    var l = L[i], t = l.trim();
+    if (!t) { i++; continue; }
+    var bm = /^\u0001B(\d+)\u0001$/.exec(t);
+    if (bm) { o += mb[+bm[1] - 1] + "\n"; i++; continue; }
+    var hm = /^(#{1,6})\s+(.+)/.exec(t);
+    if (hm) { o += "<h" + hm[1].length + ">" + _mdInline(cleanPunct(hm[2])) + "</h" + hm[1].length + ">\n"; i++; continue; }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { o += "<hr>\n"; i++; continue; }
+    if (t.charAt(0) === ">") {
+      var q = "";
+      while (i < L.length && L[i].trim().charAt(0) === ">") {
+        var qt = L[i].trim().replace(/^>\s?/, "");
+        q += (q ? " " : "") + qt;
         i++;
       }
-      o += "</blockquote>";
+      o += "<blockquote><p>" + _mdInline(cleanPunct(q)) + "</p></blockquote>\n";
       continue;
     }
     if (t.indexOf("|") >= 0) {
-      let si = i + 1;
+      var si = i + 1;
       while (si < L.length && L[si].trim() === "") si++;
-      if (si < L.length && /^\|?[\s:]*-{3,}[\s:]*\|/.test(L[si].trim())) {
-        // Tolerant: recover producer-collapsed glue (blank line stripped). Count sep cols.
-        let sepCols = (L[si].trim().split("|").map((x) => x.trim()).filter((x) => x)).length || 1;
-        let hdrCells = t.split("|").map((x) => x.trim()).filter((x) => x);
-        let prefixProse = "";
+      if (si < L.length && isTableSep(L[si].trim())) {
+        var sepCols = L[si].trim().split("|").map(function(x) { return x.trim(); }).filter(function(x) { return x; }).length || 1;
+        var hdrCells = t.split("|").map(function(x) { return x.trim(); }).filter(function(x) { return x; });
+        var prefixProse = "";
         if (t.trim().charAt(0) !== "|" && hdrCells.length > sepCols) {
-          const cut = t.indexOf("|");
-          prefixProse = t.slice(0, cut).trim();
+          var cutAt = t.indexOf("|");
+          prefixProse = t.slice(0, cutAt).trim();
           hdrCells = hdrCells.slice(hdrCells.length - sepCols);
         } else if (hdrCells.length > sepCols) {
           hdrCells = hdrCells.slice(0, sepCols);
         }
         o += "<table><thead><tr>";
-        for (let h = 0; h < hdrCells.length; h++) o += "<th>" + _mdInline(hdrCells[h]) + "</th>";
+        for (var hc = 0; hc < hdrCells.length; hc++) o += "<th>" + _mdInline(cleanPunct(hdrCells[hc])) + "</th>";
         o += "</tr></thead><tbody>";
         i = si + 1;
-        let tailProse = "";
+        var tailProse = "";
         while (i < L.length) {
-          if (L[i].trim() === "") {
-            i++;
-            continue;
-          }
-          if (L[i].trim().indexOf("|") < 0) break;
-          let cs = L[i].trim().split("|").map((x) => x.trim()).filter((x) => x);
+          if (L[i].trim() === "") { i++; continue; }
+          var lc = L[i], lct = lc.trim();
+          if (isListStart(lct) || /^(#{1,6})\s/.test(lct) || /^\u0001B\d+\u0001$/.test(lct) || lct.charAt(0) === ">" || lct.indexOf("|") < 0) break;
+          var segs = lc.trim().split("|");
+          if (segs.length && segs[0].trim() === "") segs.shift();
+          if (segs.length && segs[segs.length - 1].trim() === "") segs.pop();
+          var cs = segs.map(function(x) { return x.trim(); });
           if (cs.length > sepCols) {
-            // Trailing prose glued after the last cell: keep the row, carry the prose.
-            const segs = L[i].trim().split("|");
-            let used = 0, cutIdx = segs.length - 1;
-            for (let k = 0; k < segs.length; k++) {
-              if (segs[k].trim() !== "") {
-                used++;
-                if (used === sepCols) { cutIdx = k; break; }
-              }
+            var used = 0, cutIdx = segs.length - 1, k2;
+            for (k2 = 0; k2 < segs.length; k2++) {
+              if (segs[k2].trim() !== "") { used++; if (used === sepCols) { cutIdx = k2; break; } }
             }
-            cs = segs.slice(0, cutIdx + 1).map((x) => x.trim()).filter((x) => x);
+            cs = segs.slice(0, cutIdx + 1).map(function(x) { return x.trim(); }).filter(function(x) { return x; });
             tailProse = segs.slice(cutIdx + 1).join("|").trim();
           }
           o += "<tr>";
-          for (let c = 0; c < cs.length; c++) o += "<td>" + _mdInline(cs[c]) + "</td>";
+          for (var c3 = 0; c3 < cs.length; c3++) o += "<td>" + _mdInline(cleanPunct(cs[c3])) + "</td>";
+          for (var pd = cs.length; pd < sepCols; pd++) o += "<td></td>";
           o += "</tr>";
           i++;
           if (tailProse) break;
         }
-        o += "</tbody></table>";
-        if (prefixProse) o += "<p>" + _mdInline(prefixProse) + "</p>";
-        if (tailProse) o += "<p>" + _mdInline(tailProse) + "</p>";
+        o += "</tbody></table>\n";
+        if (prefixProse) o += "<p>" + _mdInline(cleanPunct(prefixProse)) + "</p>\n";
+        if (tailProse) o += "<p>" + _mdInline(cleanPunct(tailProse)) + "</p>\n";
         continue;
       }
     }
-    let hm = t.match(/^(#{1,4})\s+(.+)/);
-    if (hm) {
-      o += "<h" + (hm[1].length + 1) + ">" + _mdInline(hm[2]) + "</h" + (hm[1].length + 1) + ">";
-      i++;
-      continue;
-    }
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
-      o += "<hr>";
-      i++;
-      continue;
-    }
-    if (/^[-*+]\s/.test(t)) {
-      o += "<ul>";
-      while (i < L.length && /^[-*+]\s/.test(L[i].trim())) {
-        o += "<li>" + _mdInline(L[i].trim().replace(/^[-*+]\s/, "")) + "</li>";
-        i++;
+    if (isListStart(t)) {
+      var ordered = /^\d+[.)]\s/.test(t);
+      o += ordered ? "<ol>" : "<ul>";
+      var inItem = false, itemText = "";
+      while (i < L.length) {
+        var liRaw = L[i];
+        if (!liRaw.trim()) break;
+        var lit = liRaw.trim();
+        var mList = /^([-*+]|\d+[.)])\s+(.*)$/.exec(lit);
+        if (mList) {
+          if (inItem) {
+            o += "<li>" + _mdInline(cleanPunct(itemText)) + "</li>";
+            itemText = "";
+          }
+          itemText = mList[2];
+          inItem = true;
+          i++;
+        } else if (inItem && isContinuation(liRaw) && !/^\|?[\s:]* -{3,}/.test(lit) && !isTableSep(lit)) {
+          itemText += " " + lit;
+          i++;
+        } else break;
       }
-      o += "</ul>";
+      if (inItem) o += "<li>" + _mdInline(cleanPunct(itemText)) + "</li>";
+      o += ordered ? "</ol>" : "</ul>";
+      o += "\n";
       continue;
     }
-    if (/^\d+\.\s/.test(t)) {
-      o += "<ol>";
-      while (i < L.length && /^\d+\.\s/.test(L[i].trim())) {
-        o += "<li>" + _mdInline(L[i].trim().replace(/^\d+\.\s/, "")) + "</li>";
-        i++;
-      }
-      o += "</ol>";
-      continue;
+    var para = [];
+    while (i < L.length) {
+      var pl = L[i], pt = pl.trim();
+      if (!pt) break;
+      if (/^(#{1,6})\s/.test(pt)) break;
+      if (isListStart(pt)) break;
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(pt)) break;
+      if (pt.charAt(0) === ">") break;
+      if (/^\u0001B\d+\u0001$/.test(pt)) break;
+      if (pt.indexOf("|") >= 0 && i + 1 < L.length && isTableSep(L[i + 1].trim())) break;
+      para.push(pt);
+      i++;
     }
-    o += "<p>" + _mdInline(t) + "</p>";
-    i++;
+    if (para.length) {
+      o += emitBlockText(cleanPunct(para.join(" "))) + "\n";
+    } else {
+      i++;
+    }
   }
-  o = o.replace(/\x01B(\d+)\x01/g, (_, n) => mb[parseInt(n) - 1] || "");
+  o = o.replace(/\u0001M(\d+)\u0001/g, function(mm, n) { return "$" + texSafe(mi[+n]) + "$"; });
+  o = o.replace(/\u0001B(\d+)\u0001/g, function(mm, n) { return mb[+n - 1] || ""; });
   return o;
 }
-__name(renderMarkdown, "renderMarkdown");
-__name2(renderMarkdown, "renderMarkdown");
-__name22(renderMarkdown, "renderMarkdown");
-__name222(renderMarkdown, "renderMarkdown");
-__name2222(renderMarkdown, "renderMarkdown");
-__name22222(renderMarkdown, "renderMarkdown");
+
 function renderHubHTML(recentPapers, paperCount) {
   const total = paperCount || (recentPapers ? recentPapers.length : 0);
   const cards = [
@@ -472,10 +501,10 @@ __name(citationAuthorsMeta, "citationAuthorsMeta");
 __name2(citationAuthorsMeta, "citationAuthorsMeta");
 function renderPaperHTML(paper) {
   const cleanMd = fixMojibake(stripFrontmatter(paper.body_md || ""));
-  const md = cleanMd.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const md = cleanMd;
   const abstract = (paper.abstract || "").slice(0, 300);
   const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "Unknown";
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' + buildPaperJsonLd(paper) + "<title>" + esc(paper.title) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(paper.title) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(paper.title) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '"><meta name="citation_publisher" content="QNFO Research Foundation"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"],["\\(","\\)"]],displayMath:[["$$","$$"],["\\[","\\]"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}</script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"></script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + esc(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article></div></body></html>";
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' + buildPaperJsonLd(paper) + "<title>" + esc(paper.title) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(paper.title) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(paper.title) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '"><meta name="citation_publisher" content="QNFO Research Foundation"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"],["\\(","\\)"]],displayMath:[["$$","$$"],["\\[","\\]"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}</script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"></script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + esc(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article></div></body></html>";
 }
 __name(renderPaperHTML, "renderPaperHTML");
 __name2(renderPaperHTML, "renderPaperHTML");
