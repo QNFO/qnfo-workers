@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.16.3";
+var VERSION = "5.16.4";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1320,8 +1320,12 @@ async function logQuery(env, record) {
   } catch (e) {
     console.log("ai_queries insert failed:", e && e.message || e);
   }
+  const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
+  const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
+  const _machineUA = /curl\/|python-requests|python\/|Go-http-client|node-fetch|axios|okhttp\/|Java\/|insomnia|postman|qnfo-chat-canary|qnfo-canary|UptimeRobot/i.test(String(record.ua || ""));
+  const _internalProbe = _probePrompt || _probeThread || _machineUA;
   try {
-    if (env.QNFO_AUDIT && record.thread_id) {
+    if (env.QNFO_AUDIT && record.thread_id && !_internalProbe) {
       await env.QNFO_AUDIT.prepare("INSERT INTO chatbox_conversations (id, thread_id, source, worker, model, messages_json, prompt, response, ts, ua) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(record.id, record.thread_id, record.source || "other", record.worker || "qnfo-ai", record.model, record.messages_json || null, record.prompt || "", record.response || "", record.ts, record.ua || "").run();
     }
   } catch (e) {
@@ -1334,8 +1338,8 @@ async function logQuery(env, record) {
       const _isClassifierJson = /^\{\s*"type"\s*:/.test(_respText);
       const _isCOTDump = /^1\.\s*\*\*Analyze/i.test(_respText) || /^Okay, the user is asking/i.test(_respText) || /^The user is asking/i.test(_respText) || /^Let me understand/i.test(_respText);
       const _isFallback = _respText.indexOf("I could not generate a response") >= 0 || _respText === FALLBACK_TEXT;
-      const _machineUA = /curl\/|python-requests|python\/|Go-http-client|node-fetch|axios|okhttp\/|Java\/|insomnia|postman/i.test(String(record.ua || ""));
-      const _isPublicRow = _respText.length > 0 && !_isClassifierJson && !_isCOTDump && !_isFallback && !_machineUA && record.model !== "web-search";
+      // v5.16.4: reuse probe/machine predicate computed above
+      const _isPublicRow = _respText.length > 0 && !_isClassifierJson && !_isCOTDump && !_isFallback && !_machineUA && !_internalProbe && record.model !== "web-search";
       if (_isPublicRow) {
         await env.QNFO_AUDIT.batch([
           env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(record.thread_id + ":u:" + String(_seedStr(String(record.prompt || ""))), record.thread_id, record.ts, "user", String(record.prompt || "").slice(0, 2e5), record.model, "qnfo-ai"),
@@ -1348,7 +1352,7 @@ async function logQuery(env, record) {
   }
 
   try {
-    if (env.LOG_VZ && env.AI) {
+    if (env.LOG_VZ && env.AI && !_internalProbe) {
       const text = [record.prompt.slice(0, 2e3), record.response.slice(0, 2e3)].filter(Boolean);
       if (text.length) {
         const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text });
