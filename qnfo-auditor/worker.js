@@ -9,8 +9,9 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.1.2";
+var VERSION = "1.1.3";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
+var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); }
@@ -316,7 +317,11 @@ async function runAudit(env, mode, log) {
   let email = null;
   const wantEmail = mode === "deep" || newFps.length > 0 || curFps.length > (prevFps.length || 0);
   if (wantEmail) {
-    if (env.SEND_EMAIL && env.DIGEST_TO) {
+    const digDom = String(env.DIGEST_TO || "").split("@")[1] || "";
+    if (HUMAN_DOMAINS.has(digDom)) {
+      email = { ok: false, skipped: "personal-domain", to: env.DIGEST_TO };
+      log("C9 digest: skipped personal-domain recipient " + digDom);
+    } else if (env.SEND_EMAIL && env.DIGEST_TO) {
       try {
         const r = await env.SEND_EMAIL.send({ to: env.DIGEST_TO, from: { email: "alerts@qnfo.org", name: "QNFO Ops" }, subject: "QNFO fleet audit digest " + now.slice(0, 10) + " (HIGH open: " + curFps.length + ")", text: digestText });
         email = { ok: true, messageId: r && r.messageId };
