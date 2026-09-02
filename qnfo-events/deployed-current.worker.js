@@ -4,7 +4,7 @@
 // queryable by API. Autonomous sweep mirrors qnfo-audit.alerts and
 // qnfo-audit.cloud_ops_events so alerts that previously fired email are tracked.
 // Canonical source: QNFO/qnfo-workers/qnfo-events (FLEET-SELF-DOC-1)
-var VERSION = "1.0.2";
+var VERSION = "1.1.0";
 var SELF = { purpose: "central issue/event ledger + fleet sweep" };
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
 function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
@@ -96,6 +96,41 @@ async function sweep(env) {
   } catch (e) { coeN = -1; }
   return { alertsN: alertsN, coeN: coeN };
 }
+async function review(env) {
+  await ensureSchema(env);
+  const now = new Date().toISOString();
+  const out = { reviewed: 0, autoResolved: 0, escalated: 0, staleResolved: 0 };
+  try {
+    const open = await env.AUDIT.prepare("SELECT fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences FROM issue_ledger WHERE status IN ('open','acknowledged') ORDER BY last_seen ASC").all();
+    const rows = open.results || [];
+    out.reviewed = rows.length;
+    const ago = (iso, hours) => { try { return (Date.now() - new Date(iso).getTime()) > hours * 3600e3; } catch (e) { return false; } };
+    for (const it of rows) {
+      const fp = it.fingerprint;
+      const occ = it.occurrences || 1;
+      const source = String(it.source || "");
+      if (occ >= 3 && (it.level === "high" || it.level === "error")) {
+        const dup = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1").bind(String(it.title || "").slice(0,180)).first();
+        if (!dup) {
+          await env.AUDIT.prepare("INSERT INTO agent_issues (priority, status, title, description, created_at, updated_at) VALUES ('high','open',?1,?2,?3,?3)").bind(String(it.title || "").slice(0,180), ("AUTO-ESCALATION from qnfo-events review " + now + " - repeated occurrence " + occ + "x, source " + source + ". Fix at the mechanism, not the symptom (RECURRENCE-ZERO-1).").slice(0,500), Date.now()).run();
+          out.escalated++;
+        }
+      } else if (it.status === "acknowledged" && ago(it.last_seen, 24) && occ <= 2) {
+        await env.AUDIT.prepare("UPDATE issue_ledger SET status='resolved', resolved_at=?1, last_detail='auto-resolved by review loop (stale acknowledged)', updated_at=?1 WHERE fingerprint=?2").bind(now, fp).run();
+        out.staleResolved++;
+      } else if (ago(it.last_seen, 72) && occ <= 2 && (it.level === "info" || it.level === "warning")) {
+        await env.AUDIT.prepare("UPDATE issue_ledger SET status='resolved', resolved_at=?1, last_detail='auto-resolved by review loop (stale, no repeat)', updated_at=?1 WHERE fingerprint=?2").bind(now, fp).run();
+        out.staleResolved++;
+      }
+    }
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0,300);
+  }
+  try {
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1,?2,'review',?3,'qnfo-events','ok')").bind("review-" + Date.now().toString(36), now, JSON.stringify(out).slice(0,600)).run();
+  } catch (e) { out.auditErr = String(e && e.message || e).slice(0,120); }
+  return out;
+}
 async function handle(req, env) {
   const url = new URL(req.url);
   const path = url.pathname;
@@ -133,6 +168,7 @@ async function handle(req, env) {
     return json(await setStatus(env, fp, statusMap[action], body.note || ""));
   }
   if (path === "/v1/sync" && m === "POST") return json(await sweep(env));
+  if (path === "/v1/review" && m === "POST") return json(await review(env));
   if (path === "/") return json({ ok: true, name: "qnfo-events", version: VERSION, endpoints: ["/v1/events POST", "/v1/issues GET", "/v1/issues/:fp/:action POST", "/v1/sync POST", "/health"] });
   return json({ error: "not found" }, 404);
 }
