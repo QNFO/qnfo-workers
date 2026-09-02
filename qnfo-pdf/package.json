@@ -1,0 +1,10 @@
+{
+  "name": "qnfo-pdf",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Cloud-native PDF renderer for QNFO scientific papers (Browser Run + MathJax).",
+  "dependencies": {
+    "katex": "^0.16.21"
+  }
+}

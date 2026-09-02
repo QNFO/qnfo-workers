@@ -1,0 +1,17 @@
+name = "qnfo-pdf"
+main = "worker.js"
+compatibility_date = "2026-03-24"
+
+[browser]
+binding = "BROWSER"
+
+[[d1_databases]]
+binding = "LIVING"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "qnfo-releases"
+
+[vars]
