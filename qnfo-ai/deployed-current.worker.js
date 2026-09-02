@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.13.2";
+var VERSION = "5.13.3";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1151,12 +1151,13 @@ async function handleChat(env, body, authHeader, ctx, ua) {
             if (effSpec.wa) {
         let waContent = stripToolMarkup(extractWAContent(await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false)));
         if (!waContent || !String(waContent).trim()) {
-          const wafb = MODELS["qwen2.5-coder-32b"];
-          if (wafb && wafb.wa !== effSpec.wa) {
+          const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"]];
+          for (const wafb of wafbCands) {
+            if (!wafb || wafb.wa === effSpec.wa) continue;
             try {
               const wafbOut = await runWorkersAI(env, wafb.wa, messages, clampTokens(max_tokens, Math.min(wafb.maxOut || 8192, DEFAULT_MAX_OUT)), false);
               const wafbText = stripToolMarkup(extractWAContent(wafbOut));
-              if (wafbText && String(wafbText).trim()) waContent = wafbText;
+              if (wafbText && String(wafbText).trim()) { waContent = wafbText; break; }
             } catch (e2) {}
           }
         }
@@ -1196,7 +1197,7 @@ if (effSpec.api) {
     let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP);
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
     if (!content && !toolCalls && !wantsCode) {
-      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"]] : [MODELS["qwen2.5-coder-32b"]];
+      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"]] : [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"]];
       for (const fbSpec of fbCands) {
         if (!fbSpec) continue;
         if (effSpec.wa && fbSpec.wa === effSpec.wa) continue;
