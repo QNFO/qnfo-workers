@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.14.0";
+var VERSION = "5.16.3";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -94,7 +94,7 @@ async function getCalendarContext(env) {
     return L.join(String.fromCharCode(10));
   } catch (e) { return null; }
 }
-var FALLBACK_TEXT = "I could not generate a response for that prompt — the upstream model returned empty output. Please rephrase, or switch to Auto or Ensemble. For QNFO research questions the ensemble verifies answers across models.";
+var FALLBACK_TEXT = "I do not have a reliable answer for that right now. For QNFO research topics the ensemble mode (model=ensemble) cross-checks answers across models, and rephrasing usually helps. Current QNFO state is published on Zenodo (open access), and the joules-per-compute benchmark (JPCUB) lives at github.com/rwnq8/joules-per-compute-benchmark.";
 var CTX_SAFETY_MARGIN = 512;
 function clampTokens(maxTokens, cap) {
   const c = cap || DEFAULT_MAX_OUT;
@@ -410,7 +410,7 @@ function seededPick(pool, key) {
 __name(seededPick, "seededPick");
 var ROUTE_POOLS = {
   code:     ["kimi-k2.7-code", "glm-5.3", "qwen2.5-coder-32b", "deepseek-v4-pro-wa", "gpt-oss-120b"],
-  science:  ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa", "glm-5.2"],
+  science:  ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa"],
   legal:    ["deepseek-v4-pro", "glm-5.3", "kimi-k2.6"],
   creative: ["glm-5.3", "gemma-4-26b", "glm-4.7-flash", "qwen3-30b"],
   general:  ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
@@ -896,7 +896,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   };
 }
 __name(runEnsemble, "runEnsemble");
-async function expressIdea(env, text, threadId) {
+async function expressIdea(env, text, threadId, source) {
   try {
     if (!env.INTENT_TOKEN || !env.QNFO_AUDIT || !text) return;
     const existing = await env.QNFO_AUDIT.prepare("SELECT thread_id FROM intent_express_log WHERE thread_id = ?1").bind(threadId).first();
@@ -904,11 +904,12 @@ async function expressIdea(env, text, threadId) {
     await env.QNFO_AUDIT.prepare("INSERT INTO intent_express_log (thread_id, ts) VALUES (?1, ?2)").bind(threadId, new Date().toISOString()).run();
     try {
       const fetcher = (env.QNFO_INTENT && env.QNFO_INTENT.fetch) ? env.QNFO_INTENT : { fetch: (u, o) => fetch(u, o) };
-      const resp = await fetcher.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/intent", {
+      // v5.16.2 timeout: never leave intent_express_log status null on a hung orchestrator.
+      const resp = await withTimeout(fetcher.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN },
-        body: JSON.stringify({ desire: String(text || "").slice(0, 500), source: "chatbox-auto", device: "mobile" })
-      });
+        body: JSON.stringify({ desire: String(text || "").slice(0, 500), source: source || "chatbox-auto", device: source === "chatbox" ? "mobile" : "desktop" })
+      }), 25000, "express-intent");
       await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("http:" + String(resp.status), threadId).run();
     } catch (e2) {
       await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("err:" + String(e2 && e2.message || e2).slice(0, 120), threadId).run();
@@ -940,20 +941,26 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   const _userTurns = (Array.isArray(rawMessages) ? rawMessages.filter((m) => m && m.role === "user") : []);
   const _ideaText = _firstUser ? (typeof _firstUser.content === "string" ? _firstUser.content : (Array.isArray(_firstUser.content) ? _firstUser.content.filter((p) => p && typeof p.text === "string").map((p) => p.text).join(" ").slice(0, 500) : "")) : "";
-  if (env.INTENT_TOKEN && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0) {
-    ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId));
+  const _uaL = String(ua || "").toLowerCase();
+  const _ideaSource = _uaL.indexOf("chatbox") >= 0 || _uaL.indexOf("dart") >= 0 || _uaL.indexOf("flutter") >= 0 ? "chatbox" : _uaL.indexOf("deepchat") >= 0 ? "deepchat" : "other";
+  // v5.16.1 (QNFO.OPS.011): auto-express only for REAL chat clients (ChatBox/DeepChat).
+  // Machine traffic (curl/python/canary/browser PWA) must NOT create intents silently.
+  const _isChatClient = _ideaSource === "chatbox" || _ideaSource === "deepchat";
+  if (env.INTENT_TOKEN && _isChatClient && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0) {
+    ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId, _ideaSource));
   }
   const hasImage = hasImageParts(messages);
   const wantsCode = body.run_code === true || body.run_code === "true" || body.agent === true || body.agent === "true" || wantsAgentTools(body, messages) || Array.isArray(tools) && tools.some((t) => t && t.function && t.function.name === "run_code");
   // ROUTER-CONTEXT-GAP-1 (2026-09-01): ALWAYS inject the QNFO-internal gloss even when the
   // client (ChatBox) supplies its own system message — merge as an extra system message so
   // internal feature names (JPCUB/QWAV/PaQit/QNFO) are never answered as "not in literature".
-  messages = [{ role: "system", content: DEFAULT_SYSTEM_PROMPT }, ...messages];
+  const SYS = DEFAULT_SYSTEM_PROMPT + "\n\nToday is " + new Date().toISOString().slice(0, 10) + " (UTC). Ground all time-relative statements (today, next week, deadlines, calendar windows) in this date.";
+  messages = [{ role: "system", content: SYS }, ...messages];
   // QNFO.OPS.010 Stage C: twin calendar retrieval (plane=qnfo, DATA-ONLY block).
   if (env.CAL_API) {
     try {
       const _calCtx = await getCalendarContext(env);
-      if (_calCtx) messages = [{ role: "system", content: DEFAULT_SYSTEM_PROMPT }, { role: "system", content: _calCtx }, ...messages];
+      if (_calCtx) messages = [{ role: "system", content: SYS }, { role: "system", content: _calCtx }, ...messages];
     } catch (e) { /* calendar context best-effort */ }
   }
   const _contWords = ["continue", "whats next", "what's next", "what next", "you tell me", "go on", "resume", "proceed", "keep going", "and then", "next", "next step"];
@@ -1040,6 +1047,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     latency_ms: 0,
     rag_sources: webSources ? JSON.stringify(webSources.slice(0, 3).map((s) => s.url)) : null,
     streamed: 1,
+    _t0: t0,
     source: ((ua || "").toLowerCase().indexOf("chatbox") >= 0 || (ua || "").toLowerCase().indexOf("dart") >= 0 || (ua || "").toLowerCase().indexOf("flutter") >= 0 ? "chatbox" : (ua || "").toLowerCase().indexOf("deepchat") >= 0 ? "deepchat" : "other"),
     ua: String(ua || "").slice(0, 200),
     worker: "qnfo-ai",
@@ -1173,11 +1181,14 @@ async function handleChat(env, body, authHeader, ctx, ua) {
             if (effSpec.wa) {
         let waContent = stripToolMarkup(extractWAContent(await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false)));
         if (!waContent || !String(waContent).trim()) {
-          const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"]];
+          const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
-            if (!wafb || wafb.wa === effSpec.wa) continue;
+            if (!wafb || (wafb.wa && wafb.wa === effSpec.wa)) continue;
             try {
-              const wafbOut = await runWorkersAI(env, wafb.wa, messages, clampTokens(max_tokens, Math.min(wafb.maxOut || 8192, DEFAULT_MAX_OUT)), false);
+              let wafbOut;
+              if (wafb.wa) wafbOut = await runWorkersAI(env, wafb.wa, messages, clampTokens(max_tokens, Math.min(wafb.maxOut || 8192, DEFAULT_MAX_OUT)), false);
+              else if (wafb.api) wafbOut = await callDeepSeek(env, wafb.api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
+              else continue;
               const wafbText = stripToolMarkup(extractWAContent(wafbOut));
               if (wafbText && String(wafbText).trim()) { waContent = wafbText; break; }
             } catch (e2) {}
@@ -1219,7 +1230,15 @@ if (effSpec.api) {
     let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP);
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
     if (!content && !toolCalls && !wantsCode) {
-      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"]] : [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"]];
+      try {
+        const rt = await runModelTurn(env, effSpec, messages, clampTokens(max_tokens, effSpec.wa ? MAX_OUT[effSpec.wa] : DEFAULT_MAX_OUT), null, 0.2, 0.9);
+        if (rt.content && String(rt.content).trim().length > 0) {
+          content = rt.content;
+          provider = rt.provider || provider;
+        }
+      } catch (e) {
+      }
+      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
       for (const fbSpec of fbCands) {
         if (!fbSpec) continue;
         if (effSpec.wa && fbSpec.wa === effSpec.wa) continue;
@@ -1314,8 +1333,9 @@ async function logQuery(env, record) {
       const _respText = String(record.response || "").trim();
       const _isClassifierJson = /^\{\s*"type"\s*:/.test(_respText);
       const _isCOTDump = /^1\.\s*\*\*Analyze/i.test(_respText) || /^Okay, the user is asking/i.test(_respText) || /^The user is asking/i.test(_respText) || /^Let me understand/i.test(_respText);
-      const _isFallback = _respText.indexOf("I could not generate a response") >= 0;
-      const _isPublicRow = _respText.length > 0 && !_isClassifierJson && !_isCOTDump && !_isFallback && record.model !== "web-search";
+      const _isFallback = _respText.indexOf("I could not generate a response") >= 0 || _respText === FALLBACK_TEXT;
+      const _machineUA = /curl\/|python-requests|python\/|Go-http-client|node-fetch|axios|okhttp\/|Java\/|insomnia|postman/i.test(String(record.ua || ""));
+      const _isPublicRow = _respText.length > 0 && !_isClassifierJson && !_isCOTDump && !_isFallback && !_machineUA && record.model !== "web-search";
       if (_isPublicRow) {
         await env.QNFO_AUDIT.batch([
           env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(record.thread_id + ":u:" + String(_seedStr(String(record.prompt || ""))), record.thread_id, record.ts, "user", String(record.prompt || "").slice(0, 2e5), record.model, "qnfo-ai"),
@@ -1397,7 +1417,7 @@ function streamWithLog(upstream, env, ctx, rec) {
       }
     }
   });
-  ctx.waitUntil(done.then(() => logQuery(env, { ...rec, response: acc.slice(0, 2e5), streamed: 1 })).catch(() => {
+  ctx.waitUntil(done.then(() => logQuery(env, { ...rec, response: acc.slice(0, 2e5), streamed: 1, latency_ms: rec._t0 ? Date.now() - rec._t0 : 0 })).catch(() => {
   }));
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
 }
@@ -1649,7 +1669,11 @@ var worker_default = {
           infra_vz: !!env.INFRA_VZ,
           cloud_ops_vz: !!env.CLOUD_OPS_VZ,
           log_vz: !!env.LOG_VZ,
-          query_db: !!env.QNFO_AUDIT
+          query_db: !!env.QNFO_AUDIT,
+          cal_api: !!env.CAL_API,
+          qnfo_infra: !!env.QNFO_INFRA,
+          qnfo_intent: !!env.QNFO_INTENT,
+          intent_token: !!env.INTENT_TOKEN
         }
       });
     }
@@ -1866,8 +1890,9 @@ var worker_default = {
       try {
         const r = await webSearch(q, k);
         if (r.error) return json({ error: r.error }, 502);
-        if (env.QNFO_AUDIT) ctx.waitUntil(logQuery(env, { id: "q-" + Math.random().toString(16).slice(2, 18), ts: (/* @__PURE__ */ new Date()).toISOString(), model: "web-search", strategy: "web", complexity: "medium", domain: "web", prompt: q.slice(0, 2e3), response: "", prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, latency_ms: 0, rag_sources: JSON.stringify(r.results.slice(0, 5).map((x) => x.url)), streamed: 0 }).catch(() => {
-        }));
+        // v5.16.0 (QNFO.OPS.011I): internal /v1/web/search helper calls are no longer logged
+        // to ai_queries - RAG helper traffic, not user chat; by-design blank responses
+        // distorted chat-quality metrics (G4).
         return json({ query: q, engine: "duckduckgo", count: r.results.length, results: r.results });
       } catch (e) {
         return json({ error: e.message }, 500);

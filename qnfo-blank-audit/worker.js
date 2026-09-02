@@ -4,7 +4,7 @@
 // Deploy: Cloudflare API PUT module + bindings (canonical source: QNFO/qnfo-workers repo, qnfo-blank-audit/ dir)
 // Self-doc: FLEET-SELF-DOC-1. Alert row: qnfo-audit.alerts source='blank-audit' (schema: source/level/message/created_at).
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0"; // QNFO.OPS.011D: exclude internal model='web-search' rows (by-design blank RAG helper traffic distorted metrics, G4 47/2d); detect old+new fallback phrasings
 const ALERT_TO = "rwnquni@outlook.com";
 const FROM_EMAIL = "alerts@qnfo.org";
 const FROM_NAME = "QNFO Ops";
@@ -21,8 +21,8 @@ async function run(env) {
       "SELECT COUNT(*) AS total_24h, " +
       "COALESCE(SUM(CASE WHEN response IS NULL OR TRIM(response)='' THEN 1 ELSE 0 END),0) AS blank, " +
       "COALESCE(SUM(CASE WHEN response IS NOT NULL AND LENGTH(TRIM(response)) BETWEEN 1 AND 7 THEN 1 ELSE 0 END),0) AS junk, " +
-      "COALESCE(SUM(CASE WHEN response LIKE '%fallback%' THEN 1 ELSE 0 END),0) AS fallback " +
-      "FROM ai_queries WHERE ts > datetime('now','-1 day')"
+      "COALESCE(SUM(CASE WHEN response LIKE '%fallback%' OR response LIKE '%could not generate%' OR response LIKE '%do not have a reliable answer%' THEN 1 ELSE 0 END),0) AS fallback " +
+      "FROM ai_queries WHERE ts > datetime('now','-1 day') AND model != 'web-search'"
     ).first();
     const row = q || {};
     out.total_24h = row.total_24h || 0;

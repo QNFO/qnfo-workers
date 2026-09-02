@@ -74,3 +74,11 @@ binding = "CAL_API"
 service = "calendar-api"
 environment = "production"
 
+# v5.16.2 - QNFO.OPS.011: restore QNFO_INTENT service binding. auto-express (expressIdea)
+# was silently 404ing: the binding was absent so expressIdea fell back to a public
+# workers.dev fetch, which returns 404 from a Worker (same-account restriction).
+[[services]]
+binding = "QNFO_INTENT"
+service = "qnfo-intent-orchestrator"
+environment = "production"
+
