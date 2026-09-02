@@ -10,7 +10,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.8.1";
+const VERSION = "1.9.0";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -163,6 +163,7 @@ const AMS_SCHEDULE = {
   "worker-health":  { times: ["05:05", "17:05"], days: "*",   fixed: null },
   "sitemap-ping":   { times: ["06:00"], days: null,  fixed: { dom: 1, mon: "*" } },
   "loose-threads-sweep": { times: ["07:00"], days: "1", fixed: null },
+  "visibility":      { times: ["07:30"], days: "1", fixed: null },
 };
 
 // Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
@@ -1446,6 +1447,61 @@ async function jobWorkerHealth(env) {
   return { status: "ok", notes: out };
 }
 
+
+// ---------- P7 visibility scorecard (weekly Monday) ----------
+// IMPRESSIONS-ZONE-NOT-WORKER-1: real web impressions live in CF GraphQL
+// httpRequests1dGroups for the qnfo.org zone (84e9dc1d7fb72629ccdbe3174ed24420);
+// worker_invocations are self-health only and are NEVER cited as external traffic.
+async function jobVisibility(env) {
+  const ZONE = "84e9dc1d7fb72629ccdbe3174ed24420";
+  const today = new Date().toISOString().slice(0, 10);
+  const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const out = { zone: ZONE, ts: today };
+  const UA = { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + (env.CF_TOKEN || "") };
+  // 1) honest zone totals, last 7 days (httpRequests1dGroups)
+  try {
+    const q = ['query { viewer { zones(filter: {zoneTag: "', ZONE, '"}) { httpRequests1dGroups(limit: 7, filter: {date_geq: "', since, '", date_leq: "', today, '"}) { dimensions { date } sum { requests pageViews } uniq { uniques } } } } }'].join("");
+    const r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { ...UA, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+    if (r.ok) {
+      const d = await r.json();
+      const days = (d.data && d.data.viewer && d.data.viewer.zones && d.data.viewer.zones[0] && d.data.viewer.zones[0].httpRequests1dGroups) || [];
+      let req = 0, pv = 0, uniq = 0;
+      for (const day of days) { req += (day.sum.requests || 0); pv += (day.sum.pageViews || 0); uniq += (day.uniq.uniques || 0); }
+      out.days = days.length; out.requests = req; out.pageviews = pv; out.uniques = uniq;
+    } else out.web_error = "HTTP " + r.status;
+  } catch (e) { out.web_error = String(e && e.message || e); }
+  // 2) zenodo_stats deltas (cumulative table updated daily by zenodo-stats job)
+  try {
+    const agg = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(downloads),0) dl, COALESCE(SUM(views),0) vw, COALESCE(SUM(prev_downloads),0) pdl, COALESCE(SUM(prev_views),0) pvw FROM zenodo_stats").first();
+    if (agg) { out.dois = agg.n; out.zenodo_downloads = agg.dl; out.zenodo_views = agg.vw; out.dl_delta = agg.dl - agg.pdl; out.vw_delta = agg.vw - agg.pvw; }
+    const mov = await env.AUDIT.prepare("SELECT doi, title, downloads, prev_downloads, views, prev_views FROM zenodo_stats WHERE updated_at >= datetime('now','-8 days') ORDER BY (downloads - prev_downloads) DESC LIMIT 10").all();
+    out.movers = ((mov.results || []).map(function (r) { return { doi: r.doi, title: String(r.title || "").slice(0, 50), dl_gain: (r.downloads || 0) - (r.prev_downloads || 0), vw_gain: (r.views || 0) - (r.prev_views || 0) }; })).filter(function (m) { return m.dl_gain > 0 || m.vw_gain > 0; });
+  } catch (e) { out.zs_error = String(e && e.message || e); }
+  // 3) new versions this week (living-paper published rows updated in last 7 days)
+  try {
+    const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const vs = await env.LIVING.prepare("SELECT title, version, zenodo_doi, updated_at FROM papers WHERE status IN ('published','distributed') AND zenodo_doi IS NOT NULL AND zenodo_doi != '' AND updated_at >= ?1 ORDER BY updated_at DESC LIMIT 12").bind(wk).all();
+    out.new_versions = (vs.results || []).length;
+    out.versions = (vs.results || []).map(function (r) { return { title: String(r.title || "").slice(0, 50), ver: r.version, doi: r.zenodo_doi }; });
+  } catch (e) { out.lp_error = String(e && e.message || e); }
+  // 4) social threads created this week (qnfo-audit social_threads)
+  try {
+    const wk = new Date(Date.now() - 7 * 864e5).toISOString().replace("T", " ");
+    const sc = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN status='posted' THEN 1 ELSE 0 END),0) posted FROM social_threads WHERE created_at >= ?1").bind(wk).first();
+    out.social_threads_7d = sc ? (sc.n || 0) : 0; out.social_posted_7d = sc ? (sc.posted || 0) : 0;
+  } catch (e) { out.soc_error = String(e && e.message || e); }
+  const L = ["QNFO visibility scorecard — " + today, ""];
+  if (out.requests !== undefined) L.push("zone qnfo.org 7d: " + out.requests + " requests / " + out.pageviews + " pageviews / " + out.uniques + " unique visitors (" + out.days + " days)");
+  else L.push("zone qnfo.org 7d: unavailable (" + (out.web_error || "no data") + ")");
+  L.push("zenodo: " + (out.dois || 0) + " records | downloads " + (out.zenodo_downloads || 0) + " (+Δ" + (out.dl_delta || 0) + ") | views " + (out.zenodo_views || 0) + " (+Δ" + (out.vw_delta || 0) + ")");
+  if (out.movers && out.movers.length) { L.push("", "zenodo top movers (7d):"); for (const m of out.movers.slice(0, 6)) L.push("- +" + m.dl_gain + " dl / +" + m.vw_gain + " vw  " + m.title + "  " + m.doi); }
+  if (out.new_versions !== undefined) { L.push("", "new versions this week: " + out.new_versions); for (const v of (out.versions || []).slice(0, 8)) L.push("- " + v.title + " " + v.ver + "  " + v.doi); }
+  L.push("", "social threads created 7d: " + (out.social_threads_7d || 0) + " (posted " + (out.social_posted_7d || 0) + ")");
+  const d = await storeDigest(env, "visibility", "QNFO visibility scorecard — " + today, L.join(NL));
+  out.digest = d;
+  return { status: "ok", notes: out };
+}
+
 // ================= PART 5: registry + dispatch + handlers =================
 
 const JOBS = {
@@ -1465,6 +1521,7 @@ const JOBS = {
   "worker-health": jobWorkerHealth,
   "sitemap-ping": jobSitemapPing,
   "loose-threads-sweep": jobLooseThreadsSweep,
+  "visibility": jobVisibility,
 };
 
 // cron -> job dispatch map for a given Amsterdam offset
