@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.20.1"; // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.20.3"; // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -314,6 +314,64 @@ function hasImageParts(messages) {
   return false;
 }
 __name(hasImageParts, "hasImageParts");
+function _bytesToB64(bytes) {
+  let bin = "";
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CH, bytes.length)));
+  return btoa(bin);
+}
+function _sniffMime(b) {
+  if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length >= 4 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46) return "image/webp";
+  if (b.length >= 3 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  return "image/png";
+}
+// VISION-REMOTE-INLINE-1 (2026-09-03): Workers AI vision models only accept inline
+// data:image/... URIs. A remote http(s) image_url part surfaces upstream as
+// '3030: Malformed image URI - expected format data:image/<format>;<encoding>,<data>'
+// (reproduced live 2026-09-03). Fetch remote images here and inline them as data
+// URLs before the Workers AI vision call; on fetch failure replace the part with an
+// explicit unavailable note so the model never sees an opaque 3030.
+async function inlineRemoteImages(messages) {
+  if (!Array.isArray(messages)) return messages;
+  for (const m of messages) {
+    if (!m || !Array.isArray(m.content)) continue;
+    for (let i = 0; i < m.content.length; i++) {
+      const p = m.content[i];
+      if (!p || typeof p !== "object") continue;
+      const isImg = p.type === "image_url" || p.type === "input_image" || p.type === "image" || p.image_url;
+      if (!isImg) continue;
+      let u = typeof p.image_url === "string" ? p.image_url : p.image_url && p.image_url.url;
+      if (typeof u !== "string" || !u) continue;
+      if (/^data:image\//i.test(u)) continue;
+      if (!/^https?:\/\//i.test(u)) {
+        m.content[i] = { type: "text", text: "[IMAGE UNAVAILABLE: unsupported image source (" + String(u).slice(0, 80) + ") - only data: URIs and http(s) URLs are accepted]" };
+        continue;
+      }
+      try {
+        const ac = new AbortController();
+        const to = setTimeout(() => ac.abort(), 15000);
+        let resp;
+        try { resp = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "image/*" }, signal: ac.signal, redirect: "follow" }); }
+        finally { clearTimeout(to); }
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const buf = new Uint8Array(await resp.arrayBuffer());
+        if (buf.length > 12 * 1024 * 1024) throw new Error("image too large (" + Math.round(buf.length / 1048576) + " MB)");
+        const ct = String(resp.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+        const mime = /^image\//.test(ct) ? ct : _sniffMime(buf);
+        const dataUrl = "data:" + mime + ";base64," + _bytesToB64(buf);
+        if (p.image_url && typeof p.image_url === "object") p.image_url.url = dataUrl;
+        else if (typeof p.image_url === "string") p.image_url = dataUrl;
+        else p.image_url = { url: dataUrl };
+      } catch (e) {
+        m.content[i] = { type: "text", text: "[IMAGE UNAVAILABLE: remote fetch failed (" + String(e && e.message || e).slice(0, 120) + ")]" };
+      }
+    }
+  }
+  return messages;
+}
+
 function normalizeForVision(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -1088,6 +1146,10 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: "model and messages required" }, 400);
   }
+  // VISION-REMOTE-INLINE-1 (5.20.3): inline http(s) image parts to data URLs BEFORE
+  // routing so hasImageParts sees them and vision models never receive remote URLs
+  // (Workers AI vision rejects remote URIs with 3030: Malformed image URI).
+  messages = await inlineRemoteImages(messages);
   const _userTurns = (Array.isArray(rawMessages) ? rawMessages.filter((m) => m && m.role === "user") : []);
   const _ideaText = _firstUser ? (typeof _firstUser.content === "string" ? _firstUser.content : (Array.isArray(_firstUser.content) ? _firstUser.content.filter((p) => p && typeof p.text === "string").map((p) => p.text).join(" ").slice(0, 500) : "")) : "";
   const _uaL = String(ua || "").toLowerCase();
@@ -1251,7 +1313,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const effective = spec ? target : "deepseek-v4-flash";
   const effSpec = spec ? spec : MODELS["deepseek-v4-flash"];
   const routedModel = effective;
-  messages = effSpec.vision ? normalizeForVision(messages) : normalizeMessagesContent(messages);
+  messages = effSpec.vision ? await inlineRemoteImages(normalizeForVision(messages)) : normalizeMessagesContent(messages);
   const effTemp = Number.isFinite(temperature) ? temperature : Number.isFinite(effSpec.temp) ? effSpec.temp : 0.7;
   const effTopP = Number.isFinite(top_p) ? top_p : Number.isFinite(effSpec.topP) ? effSpec.topP : 0.9;
   const effMaxOut = clampTokens(max_tokens, MAX_OUT[effSpec.wa] || DEFAULT_MAX_OUT);
