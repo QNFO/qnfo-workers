@@ -88,3 +88,9 @@ environment = "production"
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "qnfo-media"
+
+# v5.20.0 - CROSS-APP-1: Dynamic Workers loader for run_code parity. Cloudflare Workers
+# disallow request-time eval/new Function, so agent-mode run_code compiles user code as a
+# fresh module via env.LOADER.load (same mechanism as qnfo-ops run_code).
+[[worker_loaders]]
+binding = "LOADER"

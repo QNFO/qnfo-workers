@@ -4,7 +4,7 @@
 // ISOLATION: logs only to qnfo-audit (ops_ai_log + cloud_ops_events); NEVER writes
 // ai_queries / chatbox_conversations / intent_express_log; never calls the intent
 // orchestrator -> the research feed and ideas stream stay clean.
-var VERSION = "1.2.1"; // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.2.3"; // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -419,7 +419,21 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     msgs.push(base);
   }
   const prompt = lastUserText(msgs).slice(0, 4000);
-  if (clientTools) {
+  // CROSS-APP-1 (2026-09-03): ChatBox (Vercel AI SDK: ai-sdk/... runtime/browser) always
+  // sends a tools array on every request. That must NOT put the request into client-tools
+  // relay mode for ops-scope prompts or server-side execution never runs (observed: model
+  // answers "nothing ran / I'm the ops endpoint" while ChatBox mobile has no MCP to run
+  // anything). Policy: relay client tools to the client ONLY when they are external-only
+  // AND the prompt carries no ops intent; otherwise run the server-side ops agent loop so
+  // fleet tools, run_code and code execution work identically on DeepChat, ChatBox Desktop
+  // and ChatBox Android.
+  const _opsToolNames = new Set(OPS_TOOLS.map((t) => t.name));
+  const _clientHasServerTool = !!(clientTools || []).some((t) => t && t.function && _opsToolNames.has(t.function.name));
+  const _norm = String(prompt || "").toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  const _promptServerTool = OPS_TOOLS.some((t) => _norm.indexOf(String(t.name).toLowerCase().replace(/[^a-z0-9]+/g, " ")) >= 0);
+  const _opsIntent = _clientHasServerTool || _promptServerTool || /(fleet|issues|backlog|audit|email|code|execute|status|health|drain|worker|database|query|cron|cost|media|run|research|brief|summary|list|log)/.test(_norm);
+  const _externalOnly = !!(clientTools && !_clientHasServerTool);
+  if (_externalOnly && !_opsIntent) {
     try {
       const cResp = await callDeepSeekClient(env, msgs, maxOut, clientTools, clientToolChoice);
       const cChoice = cResp && cResp.choices && cResp.choices[0];

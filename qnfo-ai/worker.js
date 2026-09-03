@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.19.0"; // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.20.0"; // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -615,7 +615,7 @@ var GATEWAY_TOOLS = [RUN_CODE_TOOL].concat(GATEWAY_ACTION_TOOLS);
 async function executeGatewayTool(env, fnName, args) {
   args = args || {};
   try {
-    if (fnName === "run_code") return executeCode(args.code || "");
+    if (fnName === "run_code") return await executeDynamicCode(env, args.code || "");
     if (fnName === "search_research") {
       var q = String(args.query || "").slice(0, 500);
       var limit = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
@@ -685,6 +685,27 @@ async function executeGatewayTool(env, fnName, args) {
     return { ok: false, error: "unknown tool: " + fnName };
   } catch (e) {
     return { ok: false, error: "tool error: " + (e && e.message ? e.message : String(e)) };
+  }
+}
+
+async function executeDynamicCode(env, code) {
+  if (!code || !String(code).trim()) return { ok: false, error: "code required" };
+  if (!env.LOADER) return { ok: false, error: "run_code unavailable: Dynamic Workers LOADER binding missing on qnfo-ai" };
+  // CROSS-APP-1 (2026-09-03): Cloudflare Workers disallow request-time eval/new Function
+  // ("Code generation from strings disallowed for this context"). Compile user code as a
+  // fresh module via the Dynamic Workers loader binding (globalOutbound:null = network cut,
+  // no bindings/secrets) - parity with qnfo-ops run_code so agent-mode code execution works
+  // identically from DeepChat, ChatBox Desktop and ChatBox Android.
+  const head = 'export default { async fetch(request, env) { const logs = []; const console = { log: (...a) => logs.push(a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")), error: (...a) => logs.push("ERROR: " + a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")) }; try { const __r = await (async () => { ';
+  const tail = ' })(); const out = logs.length ? logs.join(String.fromCharCode(10)) : __r === void 0 ? "(no return value)" : typeof __r === "string" ? __r : JSON.stringify(__r); return new Response(JSON.stringify({ ok: true, output: String(out).slice(0, 8000) }), { headers: { "Content-Type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ ok: false, error: String((e && e.message) || e).slice(0, 2000) }), { headers: { "Content-Type": "application/json" } }); } } };';
+  try {
+    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + String(code) + tail }, globalOutbound: null });
+    const resp = await worker.getEntrypoint().fetch("https://code-exec.invalid/");
+    const j = await resp.json();
+    if (j && j.ok) return { ok: true, output: String(j.output || "") };
+    return { ok: false, error: String((j && j.error) || ("code worker HTTP " + resp.status)) };
+  } catch (e) {
+    return { ok: false, error: "code worker error: " + String((e && e.message) || e).slice(0, 2000) };
   }
 }
 
