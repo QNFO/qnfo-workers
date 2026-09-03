@@ -1,11 +1,13 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// qnfo-ipatent.js
+// worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+var __defProp222 = Object.defineProperty;
+var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var AI_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var AI_DRAFT_MODELS = [
   "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
@@ -31,6 +33,7 @@ function corsHeaders(extra = {}) {
 __name(corsHeaders, "corsHeaders");
 __name2(corsHeaders, "corsHeaders");
 __name22(corsHeaders, "corsHeaders");
+__name222(corsHeaders, "corsHeaders");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -40,6 +43,7 @@ function json(data, status = 200) {
 __name(json, "json");
 __name2(json, "json");
 __name22(json, "json");
+__name222(json, "json");
 function html(html2, status = 200) {
   return new Response(html2, {
     status,
@@ -49,6 +53,7 @@ function html(html2, status = 200) {
 __name(html, "html");
 __name2(html, "html");
 __name22(html, "html");
+__name222(html, "html");
 function generateId() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let id = "USP-";
@@ -58,6 +63,7 @@ function generateId() {
 __name(generateId, "generateId");
 __name2(generateId, "generateId");
 __name22(generateId, "generateId");
+__name222(generateId, "generateId");
 function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -65,6 +71,7 @@ function escapeHtml(str) {
 __name(escapeHtml, "escapeHtml");
 __name2(escapeHtml, "escapeHtml");
 __name22(escapeHtml, "escapeHtml");
+__name222(escapeHtml, "escapeHtml");
 function sanitize(str, maxLen = 1e4) {
   if (!str) return "";
   return String(str).slice(0, maxLen).trim();
@@ -72,6 +79,7 @@ function sanitize(str, maxLen = 1e4) {
 __name(sanitize, "sanitize");
 __name2(sanitize, "sanitize");
 __name22(sanitize, "sanitize");
+__name222(sanitize, "sanitize");
 async function checkRateLimit(env, ip) {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
@@ -88,6 +96,7 @@ async function checkRateLimit(env, ip) {
 __name(checkRateLimit, "checkRateLimit");
 __name2(checkRateLimit, "checkRateLimit");
 __name22(checkRateLimit, "checkRateLimit");
+__name222(checkRateLimit, "checkRateLimit");
 async function embedText(env, text) {
   const embedResult = await env.AI.run(AI_EMBED_MODEL, { text });
   const vector = embedResult?.data;
@@ -99,6 +108,7 @@ async function embedText(env, text) {
 __name(embedText, "embedText");
 __name2(embedText, "embedText");
 __name22(embedText, "embedText");
+__name222(embedText, "embedText");
 async function searchDisclosures(env, query, limit = VZ_TOP_K) {
   try {
     const vector = await embedText(env, query);
@@ -123,6 +133,7 @@ async function searchDisclosures(env, query, limit = VZ_TOP_K) {
 __name(searchDisclosures, "searchDisclosures");
 __name2(searchDisclosures, "searchDisclosures");
 __name22(searchDisclosures, "searchDisclosures");
+__name222(searchDisclosures, "searchDisclosures");
 async function draftDisclosure(env, { title, technicalField, description, ragContext }) {
   const ragText = ragContext.length > 0 ? ragContext.map(
     (r, i) => `EXAMPLE ${i + 1}: "${r.title}" [field: ${r.technical_field || "n/a"}] \u2014 ${(r.disclosure_text || "").slice(0, 500)}`
@@ -210,6 +221,7 @@ IMPORTANT:
 __name(draftDisclosure, "draftDisclosure");
 __name2(draftDisclosure, "draftDisclosure");
 __name22(draftDisclosure, "draftDisclosure");
+__name222(draftDisclosure, "draftDisclosure");
 function parseDisclosureSections(text) {
   text = text.replace(/\*\*(\s*\d+\.\s*[A-Z][^*\n]*?)\s*\*\*/g, "## $1").replace(/^\s*##\s*([A-Z][^\n]*?)\s*$/gm, (m, t) => {
     return /^\d+\./.test(t.trim()) ? m : m;
@@ -238,6 +250,7 @@ function parseDisclosureSections(text) {
 __name(parseDisclosureSections, "parseDisclosureSections");
 __name2(parseDisclosureSections, "parseDisclosureSections");
 __name22(parseDisclosureSections, "parseDisclosureSections");
+__name222(parseDisclosureSections, "parseDisclosureSections");
 function formatClaims(claimsText) {
   const lines = claimsText.split(/\n/);
   let html2 = "";
@@ -257,6 +270,7 @@ function formatClaims(claimsText) {
 __name(formatClaims, "formatClaims");
 __name2(formatClaims, "formatClaims");
 __name22(formatClaims, "formatClaims");
+__name222(formatClaims, "formatClaims");
 function generateHtmlDocument({ submissionId, title, inventorName, inventorEmail, sections, date }) {
   const esc = escapeHtml;
   return `<!DOCTYPE html>
@@ -314,6 +328,7 @@ ${sections.declaration ? `<h2>8. Inventor Declaration</h2><div class="section">$
 __name(generateHtmlDocument, "generateHtmlDocument");
 __name2(generateHtmlDocument, "generateHtmlDocument");
 __name22(generateHtmlDocument, "generateHtmlDocument");
+__name222(generateHtmlDocument, "generateHtmlDocument");
 async function handleDraft(request, env, ctx) {
   if (request.method !== "POST") return json({ error: "POST required" }, 405);
   let body;
@@ -403,6 +418,7 @@ async function handleDraft(request, env, ctx) {
 __name(handleDraft, "handleDraft");
 __name2(handleDraft, "handleDraft");
 __name22(handleDraft, "handleDraft");
+__name222(handleDraft, "handleDraft");
 async function handleSearch(env, url) {
   const q = url.searchParams.get("q") || url.searchParams.get("query");
   if (!q || q.trim().length < 2) return json({ error: "Missing query parameter (q or query)" }, 400);
@@ -413,6 +429,7 @@ async function handleSearch(env, url) {
 __name(handleSearch, "handleSearch");
 __name2(handleSearch, "handleSearch");
 __name22(handleSearch, "handleSearch");
+__name222(handleSearch, "handleSearch");
 async function handleDisclosures(env, url) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "20"), 50);
   const offset = parseInt(url.searchParams.get("offset") || "0");
@@ -424,6 +441,7 @@ async function handleDisclosures(env, url) {
 __name(handleDisclosures, "handleDisclosures");
 __name2(handleDisclosures, "handleDisclosures");
 __name22(handleDisclosures, "handleDisclosures");
+__name222(handleDisclosures, "handleDisclosures");
 async function handleSubmission(env, id) {
   const row = await env.IPATENT_DB.prepare("SELECT * FROM submissions WHERE submission_id = ?1").bind(id).first();
   if (!row) return json({ error: "Submission not found: " + id }, 404);
@@ -432,6 +450,7 @@ async function handleSubmission(env, id) {
 __name(handleSubmission, "handleSubmission");
 __name2(handleSubmission, "handleSubmission");
 __name22(handleSubmission, "handleSubmission");
+__name222(handleSubmission, "handleSubmission");
 async function handleStatus(env) {
   const [subCount, recent] = await Promise.all([
     env.IPATENT_DB.prepare("SELECT COUNT(*) as cnt FROM submissions").first(),
@@ -457,11 +476,7 @@ async function handleStatus(env) {
 __name(handleStatus, "handleStatus");
 __name2(handleStatus, "handleStatus");
 __name22(handleStatus, "handleStatus");
-/* ---- Adaptive IP-domain suggestions (v3.4) ----
-   SUGGESTION-DOMAIN-1 (HARD GATE): the iPATENT suggestion surface is IP-domain only.
-   Suggestions are grounded in the iPATENT corpus (DISCLOSURES_VZ + IDEA_BANK) and
-   drafting craft. Personal/ops actions (email, tasks, reminders, social posting) are
-   NEVER suggested here. */
+__name222(handleStatus, "handleStatus");
 var FIELD_SUGGESTIONS = [
   "Quantum Computing & Information",
   "Cryptography & Post-Quantum Security",
@@ -484,12 +499,13 @@ function ideaMeta() {
   if (IDEA_META_CACHE) return IDEA_META_CACHE;
   IDEA_META_CACHE = (Array.isArray(IDEA_BANK) ? IDEA_BANK : []).map((d, i) => ({
     i,
-    title: String((d && d.title) || ""),
-    technical_field: String((d && d.technical_field) || ""),
-    focus: String((d && d.description) || "").replace(/\s+/g, " ").slice(0, 160)
+    title: String(d && d.title || ""),
+    technical_field: String(d && d.technical_field || ""),
+    focus: String(d && d.description || "").replace(/\s+/g, " ").slice(0, 160)
   })).filter((m) => m.title && m.title.length > 3);
   return IDEA_META_CACHE;
 }
+__name(ideaMeta, "ideaMeta");
 function fieldPrefixes(field) {
   const f = String(field || "").trim().toLowerCase();
   if (!f) return FIELD_SUGGESTIONS.slice(0, 6);
@@ -499,6 +515,7 @@ function fieldPrefixes(field) {
   });
   return out.slice(0, 6);
 }
+__name(fieldPrefixes, "fieldPrefixes");
 async function handleSuggest(env, url) {
   const q = (url.searchParams.get("q") || "").trim().slice(0, 300);
   const field = (url.searchParams.get("field") || "").trim().slice(0, 80);
@@ -507,7 +524,7 @@ async function handleSuggest(env, url) {
   const meta = ideaMeta();
   const examples = [];
   if (meta.length) {
-    const day = Math.floor(Date.now() / 86400000);
+    const day = Math.floor(Date.now() / 864e5);
     const step = Math.max(1, Math.floor(meta.length / 4));
     for (let k = 0; k < 4 && k < meta.length; k++) examples.push(meta[(day + k * step) % meta.length]);
   }
@@ -525,6 +542,7 @@ async function handleSuggest(env, url) {
   }
   return json(out);
 }
+__name(handleSuggest, "handleSuggest");
 var LANDING_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1132,4 +1150,4 @@ var qnfo_ipatent_default = {
 export {
   qnfo_ipatent_default as default
 };
-//# sourceMappingURL=qnfo-ipatent.js.map
+//# sourceMappingURL=worker.js.map
