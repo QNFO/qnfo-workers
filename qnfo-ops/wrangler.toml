@@ -93,3 +93,8 @@ environment = "production"
 #   OPS_ROUTER_AUTH_KEY  - Bearer auth for /v1/chat/completions (mirror ~/.env)
 #   DEEPSEEK_API_KEY     - api.deepseek.com upstream key (same value as DeepChat deepseek provider)
 #   EMAIL_API_KEY        - preserved from v0.4 (qnfo-email API key, Bearer)
+
+# v1.2.0 - Dynamic Workers loader (run_code server tool): compiles user JS into a
+# fresh sandboxed Worker per call (network cut via globalOutbound: null; no bindings).
+[[worker_loaders]]
+binding = "LOADER"

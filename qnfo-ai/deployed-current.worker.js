@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.17.2"; // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.18.0"; // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -153,10 +153,36 @@ function truncateMessagesToFit(messages, maxInputTokens) {
     if (used + cost > charBudget) {
       if (tail.length === 0) {
         const remain = Math.max(0, charBudget - used);
-        const raw = typeof arr[i].content === "string" ? arr[i].content : flattenContentToString(arr[i].content);
-        const clipped = { ...arr[i], content: raw.slice(0, remain) };
-        tail.unshift(clipped);
-        used += remain;
+        const c0 = arr[i].content;
+        const hasImg = Array.isArray(c0) && c0.some((pp) => pp && typeof pp === "object" && (pp.type === "image_url" || pp.type === "input_image" || pp.type === "image" || pp.image_url));
+        let clippedContent;
+        if (hasImg) {
+          // VISION-OCR-1 (2026-09-03): keep every image part; clip text to remaining budget.
+          const parts = [];
+          let textChars = 0;
+          let imgCount = 0;
+          for (const pp of c0) {
+            if (!pp || typeof pp !== "object") continue;
+            if (pp.type === "image_url" || pp.type === "input_image" || pp.type === "image" || pp.image_url) {
+              parts.push(pp);
+              imgCount++;
+              continue;
+            }
+            const rawTxt = typeof pp.text === "string" ? pp.text : "";
+            const textBudget = Math.max(0, remain - imgCount * PER_IMAGE_CHARS);
+            if (rawTxt && textChars < textBudget) {
+              const take = Math.min(rawTxt.length, textBudget - textChars);
+              if (take > 0) parts.push({ ...pp, text: rawTxt.slice(0, take) });
+              textChars += take;
+            }
+          }
+          clippedContent = parts;
+        } else {
+          const raw = typeof c0 === "string" ? c0 : flattenContentToString(c0);
+          clippedContent = raw.slice(0, remain);
+        }
+        tail.unshift({ ...arr[i], content: clippedContent });
+        used += contentCharLen(clippedContent);
       }
       break;
     }
@@ -259,6 +285,7 @@ function normalizeForWorkersAITools(messages) {
   });
 }
 __name(normalizeForWorkersAITools, "normalizeForWorkersAITools");
+var PER_IMAGE_CHARS = 2550;
 function contentCharLen(content) {
   if (typeof content === "string") return content.length;
   if (Array.isArray(content)) {
@@ -266,10 +293,8 @@ function contentCharLen(content) {
     for (const p of content) {
       if (!p || typeof p !== "object") continue;
       if (typeof p.text === "string") n += p.text.length;
-      else if (p.image_url) {
-        const u = typeof p.image_url === "string" ? p.image_url : p.image_url && p.image_url.url;
-        if (typeof u === "string") n += u.length;
-      }
+      else if (p.type === "image_url" || p.type === "input_image" || p.type === "image") n += PER_IMAGE_CHARS;
+      else if (p.image_url) n += PER_IMAGE_CHARS;
     }
     return n;
   }
@@ -1216,7 +1241,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
           temperature: effTemp,
           top_p: effTopP,
           tools: sToolMode ? sTools : void 0,
-          tool_choice: sToolMode ? (clientToolChoice || "auto") : void 0
+          tool_choice: sToolMode ? (clientToolChoice || "auto") : void 0,
+          vision: effSpec.vision
         });
         const waToolCalls = sToolMode ? extractWAToolCalls(waOut0) : null;
         const waTCIndexed = (waToolCalls || []).map((tc0, i0) => ({ ...tc0, index: tc0 && tc0.index != null ? tc0.index : i0 }));
