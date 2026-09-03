@@ -23,3 +23,7 @@ index_name = "personal-life"
 binding = "CAL_API"
 service = "calendar-api"
 environment = "production"
+
+# v3.0.0 morning brief prebuild: 05:05 UTC = 07:05 Amsterdam (CEST; 06:05 UTC in winter)
+[triggers]
+crons = ["5 5 * * *"]
