@@ -4,7 +4,7 @@
 // ISOLATION: logs only to qnfo-audit (ops_ai_log + cloud_ops_events); NEVER writes
 // ai_queries / chatbox_conversations / intent_express_log; never calls the intent
 // orchestrator -> the research feed and ideas stream stay clean.
-var VERSION = "1.1.0"; // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.1.1"; // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -383,13 +383,14 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       const cMsg = (cChoice && cChoice.message) || {};
       const cText = String(cMsg.content || "");
       const cToolCalls = Array.isArray(cMsg.tool_calls) && cMsg.tool_calls.length ? cMsg.tool_calls : null;
+      const cToolCallsIndexed = (cToolCalls || []).map(function (tc0, i0) { return Object.assign({}, tc0, { index: tc0 && tc0.index != null ? tc0.index : i0 }); });
       const cUsage = (cResp && cResp.usage) || {};
       const cRespId = randId("chatcmpl-");
       const cCreated = Math.floor(Date.now() / 1000);
       const cRec = { id: randId("ops-"), ts: iso(), model: wanted, strategy: "client-tools", prompt: prompt, response: (cText || (cToolCalls ? JSON.stringify(cToolCalls) : "")).slice(0, 20000), prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(msgs)), completion_tokens: cUsage.completion_tokens || estTokens(cText), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: cToolCalls ? JSON.stringify(cToolCalls).slice(0, 3000) : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
       ctx.waitUntil(logOps(env, cRec));
       const cMsgOut = { role: "assistant", content: cText };
-      if (cToolCalls) cMsgOut.tool_calls = cToolCalls;
+      if (cToolCalls) cMsgOut.tool_calls = cToolCallsIndexed;
       const cFr = (cChoice && cChoice.finish_reason) || "stop";
       if (isStream) {
         const encS = new TextEncoder();

@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.17.1"; // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.17.2"; // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1219,13 +1219,14 @@ async function handleChat(env, body, authHeader, ctx, ua) {
           tool_choice: sToolMode ? (clientToolChoice || "auto") : void 0
         });
         const waToolCalls = sToolMode ? extractWAToolCalls(waOut0) : null;
+        const waTCIndexed = (waToolCalls || []).map((tc0, i0) => ({ ...tc0, index: tc0 && tc0.index != null ? tc0.index : i0 }));
         let waContent = stripToolMarkup(extractWAContent(waOut0));
         if (waToolCalls && waToolCalls.length) {
           const encT = new TextEncoder();
           const nlnlT = String.fromCharCode(10, 10);
           const streamT = new ReadableStream({
             start(controller) {
-              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent || "", tool_calls: waToolCalls }, finish_reason: null }] }) + nlnlT));
+              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent || "", tool_calls: waTCIndexed }, finish_reason: null }] }) + nlnlT));
               controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnlT));
               controller.enqueue(encT.encode("data: [DONE]" + nlnlT));
               controller.close();
