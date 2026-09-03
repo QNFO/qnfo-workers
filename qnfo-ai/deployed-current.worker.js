@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.20.7";
+var VERSION = "5.20.7-p1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1054,12 +1054,12 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (primaryText) {
     try {
       const vMsg = [
-        { role: "system", content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. If the user explicitly asked for brevity (one word, briefly, short, concise, single sentence, no explanation), a concise accurate answer that satisfies that constraint is PASS. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced \u2014 or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
+        { role: "system", content: 'Strict validation pass: judge the assistant response for correctness, completeness, and nuance against the user request. If the user explicitly asked for brevity (one word, briefly, short, concise, single sentence, no explanation), a concise accurate answer that satisfies that constraint is PASS. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced \u2014 or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
         ...messages,
         { role: "assistant", content: primaryText }
       ];
       const rMsg = [
-        { role: "system", content: "You are a review pass. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
+        { role: "system", content: "Review pass: improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
         ...messages,
         { role: "assistant", content: primaryText }
       ];
@@ -2404,4 +2404,3 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map
