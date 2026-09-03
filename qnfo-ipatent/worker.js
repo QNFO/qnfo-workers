@@ -337,6 +337,10 @@ async function handleDraft(request, env, ctx) {
   }
   const searchQuery = `${title} ${technicalField} ${description.slice(0, 1e3)}`;
   const ragContext = await searchDisclosures(env, searchQuery);
+  const topRag = ragContext && ragContext.length ? ragContext[0] : null;
+  const priorArt = topRag && Number(topRag.score) >= 0.8
+    ? { flag: true, top_title: topRag.title, top_score: Math.round(Number(topRag.score) * 100) / 100, section: topRag.section || "", message: "Very close to an existing corpus filing - refine the distinguishing features before filing." }
+    : null;
   let sections;
   try {
     sections = await draftDisclosure(env, { title, technicalField, description, ragContext });
@@ -397,6 +401,7 @@ async function handleDraft(request, env, ctx) {
     sections,
     document_html: documentHtml,
     rag_sources: ragContext.map((r) => ({ title: r.title, score: r.score, section: r.section })),
+    prior_art: priorArt,
     rate_limit: rateLimit
   });
 }
@@ -440,7 +445,7 @@ async function handleStatus(env) {
   return json({
     status: "ok",
     worker: "qnfo-ipatent",
-    version: "3.4.1",
+    version: "3.4.2",
     model: AI_DRAFT_MODELS[0],
     embed_model: AI_EMBED_MODEL,
     draft_models: AI_DRAFT_MODELS,
@@ -796,7 +801,9 @@ var LANDING_HTML = `<!DOCTYPE html>
   .g-t{color:var(--ink)}
   .g-pct{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber)}
   .g-note{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink-soft)}
-  @media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest{display:none}.form-card{box-shadow:none}}
+    .close-warn{display:none;margin:0 0 18px;border:1px solid var(--amber);border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.65;color:var(--ink)}
+  .close-warn b{color:var(--amber);letter-spacing:.06em}
+@media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest{display:none}.form-card{box-shadow:none}}
 </style>
 </head>
 <body>
@@ -894,6 +901,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       <span>DRAFT DISCLOSURE \xB7 FOR REVIEW</span>
       <span id="resultId"></span>
     </div>
+    <div class="close-warn" id="closeWarn" style="display:none"></div>
     <div class="paper">
       <div class="wm">DRAFT</div>
       <div class="pno">UNITED STATES PROVISIONAL PATENT DISCLOSURE \xB7 SUBMISSION DRAFT</div>
@@ -1072,6 +1080,13 @@ var LANDING_HTML = `<!DOCTYPE html>
       document.getElementById('resultId').textContent = 'SUBMISSION ' + data.submission_id;
       rc.innerHTML = renderSections(data.sections||{});
       rag.innerHTML = renderRag(data.rag_sources||[]);
+      var cw = document.getElementById('closeWarn');
+      if(cw){
+        if(data.prior_art && data.prior_art.flag){
+          cw.style.display = 'block';
+          cw.innerHTML = '<b>PRIOR-ART CLOSENESS WARNING</b> &mdash; your description is very close to &ldquo;' + esc(data.prior_art.top_title || '') + '&rdquo; (' + Math.round((Number(data.prior_art.top_score) || 0) * 100) + '% similar, section ' + esc(data.prior_art.section || 'n/a') + '). ' + esc(data.prior_art.message || 'Refine the distinguishing features before filing.') + ' This is a style/prior-art reference, not a clearance opinion.';
+        } else { cw.style.display = 'none'; }
+      }
       status.textContent = 'Draft generated \xB7 submission ' + data.submission_id;
       document.getElementById('result').scrollIntoView({behavior:'smooth'});
     }catch(err){
@@ -1127,7 +1142,7 @@ var qnfo_ipatent_default = {
         return json({
           status: "ok",
           worker: "qnfo-ipatent",
-          version: "3.4.1",
+          version: "3.4.2",
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,

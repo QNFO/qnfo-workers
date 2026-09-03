@@ -1,6 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.4.1 (2026-09-03) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
+**Version:** 3.4.2 (2026-09-03) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
@@ -13,6 +13,8 @@ index and a Workers-AI drafting model.
 **v3.4.1:** clean technical-field taxonomy on the public suggestion surface — internal corpus
 folder labels (`99_Brutal_Cleanup`, `Early_Drafts_202507`) are mapped to clean USPTO-style
 fields via `cleanField()` on `/api/suggest` + `/api/idea` display surfaces (SOFT-N3 closure).
+
+**v3.4.2:** prior-art closeness warning on /api/draft + result banner - when the description scores >=0.80 against an existing corpus filing, the response carries prior_art (flag/top_title/top_score/section) and the UI shows an amber PRIOR-ART CLOSENESS WARNING.
 - `GET /api/suggest` — adaptive suggestion endpoint, IP-domain only:
   - `field` param → technical-field completions from `FIELD_SUGGESTIONS`.
   - empty `q` → rotating corpus examples (light metadata) for starter chips.
