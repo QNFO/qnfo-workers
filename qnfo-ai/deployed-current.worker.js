@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.16.4";
+var VERSION = "5.16.6"; // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -796,7 +796,7 @@ function stripToolMarkup(text) {
   let t = String(text || "");
   t = t.replace(/<\|tool_calls_section_begin\|>[\s\S]*?<\|tool_calls_section_end\|>/g, " ").replace(/<\|tool_call_begin\|>[\s\S]*?<\|tool_call_end\|>/g, " ").replace(/<\|tool_call_argument_begin\|>[\s\S]*?<\|tool_call_argument_end\|>/g, " ");
   t = t.replace(/<\|tool_call(s|_call)?s?\|>/g, " ").replace(/<\|tool_calls?\|>/g, " ").replace(/<\|tool_call_arguments\|>/g, " ").replace(/\|tool_calls_section_begin\|/g, " ").replace(/\|tool_call_begin\|/g, " ").replace(/\|tool_call_argument_begin\|/g, " ");
-  t = t.replace(/function[\s]*retrieve[\s]*:/g, " ").replace(/[\s]{2,}/g, " ").trim();
+  t = t.replace(/function[\s]*retrieve[\s]*:/g, " ").replace(/[ \t]{2,}/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   t = t.replace(/functions?\.[a-z_]+\s*:\s*\d+/gi, " ").replace(/<\|tool_[a-z_]+\|>/gi, " ").replace(/<\|tool_calls_section_begin\|>[\s\S]*$/gi, " ").trim();
   if (/tool_calls?|function\s*call|\<tool_call/i.test(t)) t = " ";
   return t;
@@ -946,7 +946,11 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   // v5.16.1 (QNFO.OPS.011): auto-express only for REAL chat clients (ChatBox/DeepChat).
   // Machine traffic (curl/python/canary/browser PWA) must NOT create intents silently.
   const _isChatClient = _ideaSource === "chatbox" || _ideaSource === "deepchat";
-  if (env.INTENT_TOKEN && _isChatClient && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0) {
+  // v5.16.6 (QNFO.OPS.015): ops/infra commands typed at the RESEARCH endpoint must not
+  // auto-express into the ideas/intents stream - they belong to the qnfo-ops endpoint
+  // (qnfo-ops.q08.workers.dev). Conservative guard: verb+ops-noun or explicit ops phrasing.
+  var _opsCmdLike = /^(check|read|fetch|show|pull|open|list|audit|fix|run|execute|deploy|restart|redeploy|rebuild|triage|drain|process|purge|rollback|send|reply|verify|probe|scan|review|update|sync|test|clean|monitor|watch)\b[\s\S]{0,90}\b(email|inbox|mailbox|backlog|agent issue|issues?|worker|cloudflare|d1|r2|vectorize|cron|scheduler|fleet|infrastructure|deploy|pipeline|backup|secret|binding|queue|outreach|log|alert|metrics|dashboard|status|health)\b/i.test(_ideaText) || /^(deploy|restart|rollback|triage|drain|redeploy|rebuild|execute)\b/i.test(_ideaText) || /^(check|read|show|open|fetch|pull|list)\s+(my\s+)?(email|mail|inbox|messages)\b/i.test(_ideaText) || /(check my email|audit (the |this )?(fleet|infra|worker)|fix (this|the) issue|run the pipeline|execute this research|whats the (fleet|worker|infra) (status|health))/i.test(_ideaText);
+  if (env.INTENT_TOKEN && _isChatClient && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0 && !_opsCmdLike) {
     ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId, _ideaSource));
   }
   const hasImage = hasImageParts(messages);

@@ -1,0 +1,95 @@
+name = "qnfo-ops"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# ============================================================
+# qnfo-ops v1.0.0 — OPS/INFRASTRUCTURE AI EXECUTION ENDPOINT
+# Purpose: OpenAI-compatible ops agent (DeepChat + ChatBox) that
+# executes code/actions on the cloud-native fleet. STRICTLY
+# separated from the qnfo-ai RESEARCH feed and personal-api:
+# logs ONLY to qnfo-audit.ops_ai_log + cloud_ops_events; never
+# writes ai_queries / chatbox_conversations / intent_express_log
+# and never calls the intent orchestrator (no idea-stream clutter).
+# Upstream LLM: api.deepseek.com (DEEPSEEK_API_KEY secret),
+# model deepseek-v4-flash (direct, supports tools + streaming).
+# Auth: Bearer OPS_ROUTER_AUTH_KEY secret (SHA-256 compare).
+# ============================================================
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Ops audit store: qnfo-audit D1 (ops_ai_log + cloud_ops_events + agent_issues)
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# --- Preserved v0.4 fleet-probe service bindings (11) ---
+[[services]]
+binding = "LIFECYCLE"
+service = "qnfo-lifecycle"
+environment = "production"
+
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[[services]]
+binding = "ORCH"
+service = "qnfo-email-orchestrator"
+environment = "production"
+
+[[services]]
+binding = "INDEXER"
+service = "qnfo-paper-indexer"
+environment = "production"
+
+[[services]]
+binding = "KAIZEN"
+service = "qnfo-kaizen"
+environment = "production"
+
+[[services]]
+binding = "GATEWAY"
+service = "qnfo-gateway"
+environment = "production"
+
+[[services]]
+binding = "ARCHIVE"
+service = "qnfo-archive"
+environment = "production"
+
+[[services]]
+binding = "AI"
+service = "qnfo-ai"
+environment = "production"
+
+[[services]]
+binding = "AISEARCH"
+service = "qnfo-ai-search"
+environment = "production"
+
+[[services]]
+binding = "MEMORY"
+service = "qnfo-memory-mcp"
+environment = "production"
+
+[[services]]
+binding = "SKILLSYNC"
+service = "qnfo-skill-sync"
+environment = "production"
+
+# --- v1.0.0 additions ---
+# Backlog executor drain (ops_issue_run tool)
+[[services]]
+binding = "BACKLOG"
+service = "qnfo-backlog-exec"
+environment = "production"
+
+# Secrets (set via wrangler secret put / API; never in git):
+#   OPS_ROUTER_AUTH_KEY  - Bearer auth for /v1/chat/completions (mirror ~/.env)
+#   DEEPSEEK_API_KEY     - api.deepseek.com upstream key (same value as DeepChat deepseek provider)
+#   EMAIL_API_KEY        - preserved from v0.4 (qnfo-email API key, Bearer)
