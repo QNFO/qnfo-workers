@@ -1,0 +1,23 @@
+name = "qnfo-ipatent"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# Canonical source: QNFO/qnfo-workers/qnfo-ipatent (restored 2026-09-03 from deployed v3.3 bundle).
+# Deploys: wrangler deploy from THIS directory (bindings below reproduce the live set exactly).
+# Live custom route: ipatent.qnfo.org (verified). qnfo.org gateway 301s /ipatent here.
+
+[[d1_databases]]
+binding = "IPATENT_DB"
+database_name = "ipatent-db"
+database_id = "19cc87d6-4207-477c-bf8c-94fb231b8965"
+
+[[r2_buckets]]
+binding = "IPATENT_R2"
+bucket_name = "ipatent"
+
+[[vectorize]]
+binding = "DISCLOSURES_VZ"
+index_name = "ipatent-corpus"
+
+[ai]
+binding = "AI"
