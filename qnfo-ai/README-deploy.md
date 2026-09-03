@@ -1,14 +1,18 @@
-# qnfo-ai deployment (bundle-as-truth, decided 2026-08-31)
+# qnfo-ai deployment (canonical-state, updated 2026-09-03)
 
-DEPLOYABLE ARTIFACT: `deployed-current.worker.js` — the live esbuild BUNDLE. It is
-the source of truth for what runs. Deploy via the GitHub Actions workflow
-(`deploy-worker.yml`, Cloudflare API PUT with keep_bindings) or the API directly.
+Deployable artifact: `worker.js` IS the canonical source AND the deployed bundle
+(no separate build step in this repo state). `deployed-current.worker.js` mirrors
+it byte-for-byte after every deploy. As of v5.16.6/5.16.7 the two files are
+identical (sha da5dd13f -> updated each release).
 
-`worker.js` = CLEAN SOURCE (reconstructed 2026-08-11, v4.3.0-era) — DOCUMENTATION ONLY,
-STALE as of 2026-08-31 (missing ~1.2 versions of model additions + recent fixes:
-persona removal, isCurrentEvents auto-web-search, browserMarkdown, intent-harvest,
-/v1/threads read-back, first-user thread keying). Do NOT deploy it; do NOT edit it
-as if it were live.
+Flow:
+1. Edit `worker.js` (bundle-as-truth; keep the VERSION constant + header current)
+2. Deploy: `CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=edb167b78c9fb901ea5bca3ce58ccc4b wrangler deploy` (from this dir; wrangler.toml carries all bindings; secrets are preserved)
+3. Verify: poll /health for the new VERSION (DEPLOY-VERIFY-VERSION-1)
+4. Sync: `cp worker.js deployed-current.worker.js` and commit both
 
-Workflow: edit the live worker (bundle) -> deploy -> push the new bundle to
-`deployed-current.worker.js` (keep versioned snapshots like deployed-5.5.3-patched.worker.js).
+History note (2026-08-31 era): an older README said worker.js was doc-only and
+deployed-current.worker.js was the live esbuild bundle deployed via GitHub Actions
+API PUT. That state was reconciled 2026-09-03: deployed-current had gone stale
+(5.16.4) while live was 5.16.5 (worker.js). Both files are now identical and
+worker.js is canonical.

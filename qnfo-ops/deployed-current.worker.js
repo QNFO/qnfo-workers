@@ -4,7 +4,7 @@
 // ISOLATION: logs only to qnfo-audit (ops_ai_log + cloud_ops_events); NEVER writes
 // ai_queries / chatbox_conversations / intent_express_log; never calls the intent
 // orchestrator -> the research feed and ideas stream stay clean.
-var VERSION = "1.0.2"; // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.0.3"; // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -169,7 +169,8 @@ async function d1Query(env, args) {
   const raw = String((args && args.sql) || "").trim();
   const sql = raw.replace(/;\s*$/, "");
   if (!/^(select|with)\b/i.test(sql)) return { ok: false, error: "read-only SELECT/WITH only" };
-  if (/;(\s)*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex)/i.test(sql)) return { ok: false, error: "single read statement only" };
+  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, error: "single read statement only" };
+  if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
   if (!/\blimit\s+\d+/i.test(sql) && !/^\s*select\s+(count|sum|avg|min|max)\s*\(/i.test(sql) && !/select\s+sqlite_version/i.test(sql)) return { ok: false, error: "add LIMIT n (aggregate exempt)" };
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
   try {
@@ -286,6 +287,12 @@ function detectSource(ua) {
 async function handleChat(env, body, authHeader, ua, ctx) {
   const okAuth = await authOk(authHeader, env);
   if (!okAuth) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+  // AUDIT-DESIGN-2026-09-03: soft daily cap (250 chats/UTC day) read from the ops audit trail
+  try {
+    const _today = new Date().toISOString().slice(0, 10);
+    const _cnt = env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts LIKE ?1").bind(_today + "%").first() : null;
+    if (_cnt && _cnt.c >= 250) return json({ error: "ops endpoint daily request cap reached (250 per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
+  } catch (e) { /* cap best-effort */ }
   const model = body && body.model; const messages = body && body.messages; const max_tokens = body && body.max_tokens; const stream = body && body.stream;
   const wanted = model || "ops-exec";
   if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash") return json({ error: "unknown model " + wanted + " (available: ops-exec, deepseek-v4-flash)" }, 400);
@@ -388,14 +395,14 @@ export default {
       bindings.deepseek_key = !!env.DEEPSEEK_API_KEY;
       bindings.auth = !!env.OPS_ROUTER_AUTH_KEY;
       bindings.email_key = !!env.EMAIL_API_KEY;
-      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: ["ops-ai-gateway", "openai-compatible", "tool-execution", "fleet-probes", "isolated-ops-logging"], routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings: bindings, generatedAt: iso() });
+      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "isolated-ops-logging"], routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings: bindings, generatedAt: iso() });
     }
     if (path === "/" && method === "GET") {
       return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Models: ops-exec, deepseek-v4-flash. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
     }
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/v1/models" && method === "GET") {
-      const mk = function (id) { return { id: id, object: "model", created: 171e7, owned_by: "qnfo", _router: { tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } }; };
+      const mk = function (id) { return { id: id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (chat + agent tool loop + code-shaped execution on the cloud-native fleet)" : "DeepSeek V4 Flash via qnfo-ops (chat + agent tools)", capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://qnfo-ops.q08.workers.dev/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } }; };
       return json({ object: "list", data: [mk("ops-exec"), mk("deepseek-v4-flash")] });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {

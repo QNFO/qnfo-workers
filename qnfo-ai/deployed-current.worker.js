@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.16.6"; // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.16.7"; // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -949,7 +949,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   // v5.16.6 (QNFO.OPS.015): ops/infra commands typed at the RESEARCH endpoint must not
   // auto-express into the ideas/intents stream - they belong to the qnfo-ops endpoint
   // (qnfo-ops.q08.workers.dev). Conservative guard: verb+ops-noun or explicit ops phrasing.
-  var _opsCmdLike = /^(check|read|fetch|show|pull|open|list|audit|fix|run|execute|deploy|restart|redeploy|rebuild|triage|drain|process|purge|rollback|send|reply|verify|probe|scan|review|update|sync|test|clean|monitor|watch)\b[\s\S]{0,90}\b(email|inbox|mailbox|backlog|agent issue|issues?|worker|cloudflare|d1|r2|vectorize|cron|scheduler|fleet|infrastructure|deploy|pipeline|backup|secret|binding|queue|outreach|log|alert|metrics|dashboard|status|health)\b/i.test(_ideaText) || /^(deploy|restart|rollback|triage|drain|redeploy|rebuild|execute)\b/i.test(_ideaText) || /^(check|read|show|open|fetch|pull|list)\s+(my\s+)?(email|mail|inbox|messages)\b/i.test(_ideaText) || /(check my email|audit (the |this )?(fleet|infra|worker)|fix (this|the) issue|run the pipeline|execute this research|whats the (fleet|worker|infra) (status|health))/i.test(_ideaText);
+  var _opsCmdLike = /^(check|read|fetch|show|pull|open|list|audit|fix|run|execute|deploy|restart|redeploy|rebuild|triage|drain|process|purge|rollback|send|reply|verify|probe|scan|review|update|sync|test|clean|monitor|watch)\b[\s\S]{0,90}\b(email|inbox|mailbox|backlog|agent issue|issues?|worker|cloudflare|d1|r2|vectorize|cron|scheduler|fleet|infrastructure|deploy|pipeline|backup|secret|binding|queue|outreach|log|alert|metrics|dashboard|status|health|qnfo-ai|qnfo-ops|personal-api|qnfo-backlog-exec)\b/i.test(_ideaText) || /^(deploy|restart|rollback|triage|drain|redeploy|rebuild|execute)\b/i.test(_ideaText) || /^(check|read|show|open|fetch|pull|list)\s+(my\s+)?(email|mail|inbox|messages)\b/i.test(_ideaText) || /(check my email|audit (the |this )?(fleet|infra|worker)|fix (this|the) issue|run the pipeline|execute this research|whats the (fleet|worker|infra|qnfo-ai|qnfo-ops|personal-api) (status|health)|(whats|what is|whats the) (the )?(status|health|version|uptime) of (the )?(qnfo-ai|qnfo-ops|personal-api|qnfo-backlog-exec|research endpoint|ops endpoint))/i.test(_ideaText);
   if (env.INTENT_TOKEN && _isChatClient && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0 && !_opsCmdLike) {
     ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId, _ideaSource));
   }
@@ -1662,7 +1662,7 @@ var worker_default = {
         status: "ok",
         worker: "qnfo-ai",
         version: VERSION,
-        capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search", "vision", "function-calling", "context-aware-routing", "tool-gateway"],
+        capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search", "vision", "function-calling", "context-aware-routing", "tool-gateway", "chat", "agent", "code"],
         routes: ROUTES,
         bindings: {
           ai: !!env.AI,
@@ -1691,6 +1691,7 @@ var worker_default = {
         object: "model",
         created: 171e7,
         owned_by: m.tier === 0 ? "workers-ai" : m.family,
+        capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(m.reasoning ? ["reasoning"] : []).concat(m.vision ? ["vision"] : []),
         _router: {
           tier: m.tier,
           family: m.family,
@@ -1705,8 +1706,8 @@ var worker_default = {
           availability: m.tier === 0 ? "always" : m.tier <= 2 ? "key-required" : "billing-required"
         }
       }));
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       return json({ object: "list", data });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
