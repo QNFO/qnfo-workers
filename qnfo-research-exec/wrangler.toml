@@ -1,0 +1,33 @@
+name = "qnfo-research-exec"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# AI binding (Workers AI) - REQUIRED for note/paper generation via env.AI.run
+[ai]
+binding = "AI"
+
+# D1: audit log + research queue
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# D1: living-paper store (papers table)
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+# R2: paper markdown mirror (post-publish)
+[[r2_buckets]]
+binding = "MIRROR"
+bucket_name = "qnfo-releases"
+
+# Cron: research pipeline drain (10-min cadence, matches prior API schedule)
+[triggers]
+crons = ["*/10 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
