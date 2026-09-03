@@ -40,6 +40,9 @@ import sys, json, hashlib, datetime, argparse, os, urllib.request
 
 API = "https://calendar-api.q08.workers.dev"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+# Auth (calendar-api v0.3.0 gate, 2026-09-03): read CAL_TOKEN from env or calendar-token.txt next to
+# this script. Without a token the API rejects with 401 - the bridge will error clearly.
+TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calendar-token.txt")
 PLANES = {
     "qnfo":     {"store_prefix": "rowan.quni@outlook.com", "folder": "QNFO Research Calendar"},
     "personal": {"store_prefix": "rwnquni@outlook.com",    "folder": "Personal Calendar"},
@@ -49,8 +52,22 @@ STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bridge_st
 def log(*a):
     print(*a, flush=True)
 
+def _token():
+    t = os.environ.get("CAL_TOKEN") or ""
+    if not t:
+        try:
+            with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+                t = f.read().strip()
+        except Exception:
+            t = ""
+    return t
+
 def http_json(url, method="GET", body=None):
-    req = urllib.request.Request(url, method=method, headers={"User-Agent": UA})
+    headers = {"User-Agent": UA}
+    tok = _token()
+    if tok:
+        headers["Authorization"] = "Bearer " + tok
+    req = urllib.request.Request(url, method=method, headers=headers)
     if body is not None:
         req.add_header("Content-Type", "application/json")
         req.data = json.dumps(body).encode()

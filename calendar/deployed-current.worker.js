@@ -1,4 +1,9 @@
 // calendar-api Worker - QNFO.OPS.010
+// v0.3.0 (2026-09-03): AUTH GATE - all routes except /health and /events.ics require
+//   Authorization: Bearer <CAL_TOKEN> (fail-closed). Fixes red-team HIGH C1: the worker was
+//   publicly writable (unauthenticated POST/DELETE verified 2026-09-03). Service-binding
+//   consumers (personal-api, qnfo-intent-orchestrator, personal-events-radar) now send the
+//   header from their own CAL_TOKEN secret; the local Outlook bridge reads calendar-token.txt.
 // v0.2.1 (2026-09-02): fix v0.2.0 defect - CRLF was declared outside the worker source
 //   (ReferenceError at buildICS); route regex rebuilt backslash-free via new RegExp.
 // v0.2.0 (2026-09-02): QNFO.OPS.010 Stage C part 1 - R2 .ics publish.
@@ -20,7 +25,7 @@
 // Health: GET /health
 // DEPLOY: cd qnfo-workers/calendar && wrangler deploy  (CAL_DB D1 qnfo-audit, ICS_R2 qnfo-assets)
 // CANONICAL SOURCE (remote): github.com/QNFO/qnfo-workers -> calendar/worker.js
-const VERSION = "0.2.1";
+const VERSION = "0.3.0";
 const WORKER = "calendar-api";
 const PLANES = ["qnfo", "personal"];
 const ALLOWED_SOURCES = ["radar", "catalog", "manual", "personal-radar", "personal-profile"];
@@ -46,6 +51,24 @@ function fmtDate(iso, allDay) {
 function uidFor(plane, id) { return plane + "-" + id + "@qnfo.cloud"; }
 function cors() { return { "content-type": "application/json", "access-control-allow-origin": "*" }; }
 function json(body, status) { return new Response(JSON.stringify(body), { status: status || 200, headers: cors() }); }
+
+/* v0.3.0 auth gate (red-team C1): fail-closed bearer check against CAL_TOKEN secret.
+   /health and /events.ics stay public by design (health = version; events.ics = calendar
+   subscription feed, equivalent to the published R2 ICS whose URL already carries a token). */
+function bearerToken(request) {
+  return String(request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+}
+function tokenEq(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+function authorized(request, env) {
+  const exp = env.CAL_TOKEN;
+  if (!exp) return false; // fail-closed: no secret configured means nothing is allowed through the gate
+  return tokenEq(bearerToken(request), exp);
+}
 
 async function ensureSchema(env) {
   await env.CAL_DB.prepare(
@@ -124,6 +147,7 @@ export default {
     }
 
     if (path === "/publish") {
+      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
       const out = await publishICS(env);
       return json({ ok: true, published: out });
     }
@@ -133,6 +157,8 @@ export default {
       const ics = await buildICS(env, plane, fromIso);
       return new Response(ics, { headers: { "content-type": "text/calendar; charset=utf-8" } });
     }
+
+    if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
 
     if (path === "/events" && method === "GET") {
       const from = url.searchParams.get("from"); const to = url.searchParams.get("to");

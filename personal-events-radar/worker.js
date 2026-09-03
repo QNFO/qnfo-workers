@@ -1,4 +1,5 @@
 // personal-events-radar Worker - QNFO.OPS.010 Stage B
+// v1.2.4 (2026-09-03): CAL_TOKEN auth header on calendar-api calls (calendar-api v0.3.0 gate).
 // v1.2.3 (2026-09-02): editorial chrome filter (Iamsterdam "Editorial tips / Weekend Guide"
 //   page sections are not events).
 // v1.2.2 (2026-09-02): time-colon guard on year-less day groups ("vrijdag 4 sep 14:00" must
@@ -40,7 +41,7 @@
 // DEPLOY: cd qnfo-workers/personal-events-radar && wrangler deploy
 // CANONICAL SOURCE (remote): github.com/QNFO/qnfo-workers -> personal-events-radar/worker.js
 // NOTE: all regexes are built backslash-free (char classes + fromCharCode) for transport safety.
-const VERSION = "1.2.3";
+const VERSION = "1.2.4";
 const WORKER = "personal-events-radar";
 
 const TAB = String.fromCharCode(9);
@@ -289,9 +290,11 @@ async function scanVenue(src) {
 
 const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
+function calAuthH(env) { return env.CAL_TOKEN ? { Authorization: "Bearer " + env.CAL_TOKEN } : {}; }
+
 async function fetchExistingCalendar(env) {
   try {
-    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal");
+    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal", { headers: calAuthH(env) });
     const j = await r.json();
     return (j.events || []).filter((e) => e.source === "personal-radar");
   } catch (e) { return []; }
@@ -416,7 +419,7 @@ async function run(env) {
     };
     try {
       const pr = await env.CAL_API.fetch("https://calendar-api/events?plane=personal", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+        method: "POST", headers: Object.assign({ "content-type": "application/json" }, calAuthH(env)), body: JSON.stringify(body)
       });
       if (pr.ok) {
         posted += 1;

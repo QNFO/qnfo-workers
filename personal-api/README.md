@@ -25,6 +25,9 @@ AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION
 - Honest-failure guard: if the last tool call failed, the final-answer prompt forces the
   model to disclose the failure instead of claiming success (anti-confabulation).
 
+## v3.0.3 (2026-09-03)
+CAL_TOKEN auth header on every calendar-api service call (calendar-api v0.3.0 gate).
+
 ## v2.x history
 - v2.1.1: twin calendar retrieval via CAL_API (QNFO.OPS.010 Stage C).
 - v2.0.0 (2026-09-02): pro model primary (deepseek-v4-pro-0813), profile prime, live
@@ -40,7 +43,7 @@ glm-5.3-flash, qwen3.8-27b), personal-twin-pro (glm-5.3 first), personal-twin-re
 ## Bindings
 AI (Workers AI), PERSONAL (D1 personal-life e8d6c61a-10b7-4086-b81e-9e6e85afa407),
 VZ (Vectorize personal-life), CAL_API (service: calendar-api, production).
-Secrets: API_KEY (auth), CF_TOKEN (infra/analytics), INFRA_TOKEN.
+Secrets: API_KEY (auth), CF_TOKEN (infra/analytics), INFRA_TOKEN, CAL_TOKEN (calendar-api auth since v3.0.3).
 New D1 tables (auto-created): tasks, daily_briefs.
 
 ## Routes (auth-gated except /health and the playground)
@@ -57,6 +60,7 @@ cp worker.js deployed-current.worker.js (FLEET-SELF-DOC-1 parity) + verify /heal
 - Twin cannot read qnfo-intent-orchestrator queue (INTENT_TOKEN not provisioned): tasks
   expressed via DeepChat MCP and tasks created via twin live in separate queues; the
   calendar is the shared surface (both promote into calendar-api).
-- calendar-api itself has NO auth: unauthenticated public writes are possible (verified
-  2026-09-03); the twin's service-binding path is unaffected. Fix belongs in calendar-api.
+- calendar-api is now AUTH-GATED (v0.3.0, CAL_TOKEN bearer; /health + /events.ics stay
+  public by design). personal-api sends the header from its own CAL_TOKEN secret on every
+  calendar-api call (calHeaders). The local Outlook bridge reads calendar/bridge/calendar-token.txt.
 - /v1/plan is uncached (1-2 LLM calls); brief is D1-cached.

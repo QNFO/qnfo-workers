@@ -1,4 +1,5 @@
-// qnfo-intent-orchestrator v1.2.0 — unified intent layer + autonomous research triage
+// qnfo-intent-orchestrator v1.3.3 (2026-09-03): CAL_TOKEN auth header on calendar-api calls
+// v1.2.0 — unified intent layer + autonomous research triage
 // v1.2.0 (2026-09-02, R4): exact-match idempotency in handleIntent — an identical desire text
 //   (calendar/email templates embed occurrence-specific start ISO / sender+ts) returns the prior
 //   intent instead of inserting a duplicate row. Extends the research-only semantic dedupe to all types.
@@ -12,7 +13,7 @@
 //   POST /triage/dispatch, POST /triage/sync, POST /triage/candidate
 // Scheduled: 06:00 digest email; 06:30 triage batch + task sync + auto-dispatch (1 active task)
 const NL = String.fromCharCode(10);
-const VERSION = '1.3.2';
+const VERSION = '1.3.3';
 const ROUTER = 'https://qnfo-ai.q08.workers.dev';
 const AGENT_ORCH = 'https://qnfo-agent-orchestrator.q08.workers.dev';
 const PROMOTE_THRESHOLD = 60;
@@ -182,13 +183,14 @@ async function promoteCalendar(env, intent) {
     const from = (intent.due || intent.created_at.slice(0, 10)).slice(0, 10);
     const title = (intent.summary || intent.desire.slice(0, 120)).replace(/^calendar event:\s*/i, '').trim().slice(0, 300);
     if (!title) return;
-    const ex = await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane + '&from=' + from + '&to=' + from);
+    const authH = env.CAL_TOKEN ? { Authorization: 'Bearer ' + env.CAL_TOKEN } : {};
+    const ex = await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane + '&from=' + from + '&to=' + from, { headers: authH });
     const ej = await ex.json();
     const evs = (ej && ej.events) || [];
     if (evs.some((e) => (e.title || '') === title && (e.dtstart || '') === from)) return;
     await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authH),
       body: JSON.stringify({ title, dtstart: from, dtend: from, source: 'intent-orchestrator', domain: intent.domain || null, status: 'confirmed' })
     });
     await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(new Date().toISOString(), intent.id).run();
