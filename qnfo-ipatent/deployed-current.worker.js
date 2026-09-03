@@ -459,7 +459,7 @@ async function handleStatus(env) {
   return json({
     status: "ok",
     worker: "qnfo-ipatent",
-    version: "3.4",
+    version: "3.4.1",
     model: AI_DRAFT_MODELS[0],
     embed_model: AI_EMBED_MODEL,
     draft_models: AI_DRAFT_MODELS,
@@ -494,13 +494,48 @@ var FIELD_SUGGESTIONS = [
   "Networking & Secure Communication",
   "Power & Thermal Management"
 ];
+var MESSY_FIELD_TOKENS = ["draft", "brutal", "cleanup", "folder", "misc", "uncategorized", "_"];
+var FIELD_RULES = [
+  ["Cryptography & Post-Quantum Security", /qkd|key distribution|bb84|quantum key|cryptograph|encrypt|decrypt|post-quantum|breach|security breach/i],
+  ["Quantum Computing & Information", /quantum|qubit|qpu|coherence|entangl|superposition|qec|surface code|wave function|state vector|probabilistic states/i],
+  ["Resonant / Analog Signal Processing", /harmonic|resonan|oscillat|waveform|spectral|aperiodic|carrier wave|field modulation|radio frequency|rf signal/i],
+  ["Topological Computation", /topolog|braid|anyon/i],
+  ["Neuromorphic & Neural Hardware", /neuromorph|neural|spiking|brain|synaptic/i],
+  ["Cryogenic & Semiconductor Electronics", /cryo|semiconductor|cmos|nanos|fabricat|integrated circuit|substrate|10k-30k|millikelvin/i],
+  ["Data Encoding & Compression", /compress|encoding|entropy cod|storage|bitstream|data format/i],
+  ["Networking & Secure Communication", /communicat|transmission|wireless|network|modulat|signal transmission/i],
+  ["Power & Thermal Management", /thermal|power|energy|heat|efficien/i],
+  ["Measurement & Sensing Systems", /measure|sensor|sensing|detect/i],
+  ["Control Systems & Feedback", /control|feedback|orchestrat|stabiliz/i],
+  ["Error Correction & Stabilization", /error correction|error-correct|fault tolerant/i],
+  ["Materials & Nanofabrication", /material|substrate|medium|lattice|nanoparticle|film|engineered medium/i],
+  ["Software Methods & Simulation", /simulat|software|algorithm|framework|engine|computer-implemented|method and system|generative/i]
+];
+function cleanField(title, raw, bodyText) {
+  const rl = String(raw || "").toLowerCase();
+  const messy = !rl || MESSY_FIELD_TOKENS.some((m) => rl.indexOf(m) >= 0);
+  if (!messy) return String(raw || "");
+  const t = String(title || "") + " " + String(bodyText || "");
+  for (const r of FIELD_RULES) {
+    if (r[1].test(t)) return r[0];
+  }
+  return "Quantum Computing & Information";
+}
+__name(cleanField, "cleanField");
+function decorateIdea(idea) {
+  if (!idea || typeof idea !== "object") return idea;
+  const clean = cleanField(String(idea.title || ""), String(idea.technical_field || ""), String(idea.description || ""));
+  return Object.assign({}, idea, { field_clean: clean, technical_field: clean });
+}
+__name(decorateIdea, "decorateIdea");
 var IDEA_META_CACHE = null;
 function ideaMeta() {
   if (IDEA_META_CACHE) return IDEA_META_CACHE;
   IDEA_META_CACHE = (Array.isArray(IDEA_BANK) ? IDEA_BANK : []).map((d, i) => ({
     i,
     title: String(d && d.title || ""),
-    technical_field: String(d && d.technical_field || ""),
+    technical_field: cleanField(String(d && d.title || ""), String(d && d.technical_field || ""), String(d && d.description || "")),
+    field_clean: cleanField(String(d && d.title || ""), String(d && d.technical_field || ""), String(d && d.description || "")),
     focus: String(d && d.description || "").replace(/\s+/g, " ").slice(0, 160)
   })).filter((m) => m.title && m.title.length > 3);
   return IDEA_META_CACHE;
@@ -535,6 +570,7 @@ async function handleSuggest(env, url) {
       title: x.title,
       section: x.section,
       technical_field: x.technical_field,
+      field_clean: cleanField(String(x.title || ""), String(x.technical_field || ""), String(x.disclosure_text || "")),
       score: Math.round((Number(x.score) || 0) * 100) / 100,
       source_file: x.source_file,
       snippet: String(x.disclosure_text || "").replace(/\s+/g, " ").slice(0, 180)
@@ -977,7 +1013,8 @@ var LANDING_HTML = `<!DOCTYPE html>
         b.className = 'sug-chip';
         var t = m.title || 'Example';
         b.textContent = t.length > 60 ? t.slice(0,60) + '...' : t;
-        b.title = (m.technical_field ? m.technical_field + ' / ' : '') + (m.focus || '');
+        var tf = m.field_clean || m.technical_field || '';
+        b.title = (tf ? tf + ' / ' : '') + (m.focus || '');
         b.addEventListener('click', function(){ applyExample(m.i); });
         zone.appendChild(b);
       });
@@ -987,7 +1024,7 @@ var LANDING_HTML = `<!DOCTYPE html>
     fetch(API_BASE + '/idea?i=' + encodeURIComponent(i)).then(function(r){return r.json();}).then(function(idea){
       if(!idea || !idea.title) throw new Error('no idea returned');
       document.getElementById('title').value = idea.title || '';
-      document.getElementById('technicalField').value = idea.technical_field || '';
+      document.getElementById('technicalField').value = idea.field_clean || idea.technical_field || '';
       document.getElementById('description').value = idea.description || '';
       var st = document.getElementById('status');
       if(st){ st.className = 'status'; st.textContent = 'Loaded a corpus example - edit it before drafting.'; }
@@ -1077,7 +1114,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       const idea = await resp.json();
       if(!resp.ok || !idea.title) throw new Error(idea.error || ('HTTP ' + resp.status));
       document.getElementById('title').value = idea.title;
-      document.getElementById('technicalField').value = idea.technical_field || '';
+      document.getElementById('technicalField').value = idea.field_clean || idea.technical_field || '';
       document.getElementById('description').value = idea.description;
       status.textContent = 'Invented: "' + idea.title.slice(0,60) + '" \u2014 drafting disclosure\u2026';
       form.dispatchEvent(new Event('submit', {cancelable:true}));
@@ -1107,7 +1144,7 @@ var qnfo_ipatent_default = {
         return json({
           status: "ok",
           worker: "qnfo-ipatent",
-          version: "3.4",
+          version: "3.4.1",
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,
@@ -1136,7 +1173,7 @@ var qnfo_ipatent_default = {
           idea = IDEA_BANK[Math.floor(Math.random() * IDEA_BANK.length)] || IDEA_BANK[0];
         }
         if (!idea) return json({ error: "No idea bank entries" }, 404);
-        return json(idea);
+        return json(decorateIdea(idea));
       }
       if (path === "/api/suggest" && request.method === "GET") return handleSuggest(env, url);
       if (path === "/api/status" && request.method === "GET") return handleStatus(env);

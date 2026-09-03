@@ -55,7 +55,9 @@ var SUGGEST_DENY = [
   "secret",
   "deploy",
   "wrangler",
-  "worker status"
+  "worker status",
+  "what's the tl;dr",
+  "this would be good for a research paper"
 ];
 var DENY_WORDS = [
   "email",
@@ -188,7 +190,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.0", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.1", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();

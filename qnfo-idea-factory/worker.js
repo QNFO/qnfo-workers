@@ -21,7 +21,7 @@ var SUGGEST_DENY = [
   "post to bluesky", "post this", "to bluesky", "tweet", "social media", "linkedin",
   "whatsapp", "who should i contact", "reach out to", "suggest contacts", "contact me",
   "daily brief", "the fleet", "infra status", "cloudflare", "d1 database", "r2 bucket",
-  "backup", "obsidian", "vault", "cron", "secret", "deploy", "wrangler", "worker status"
+  "backup", "obsidian", "vault", "cron", "secret", "deploy", "wrangler", "worker status", "what's the tl;dr", "this would be good for a research paper"
 ];
 var DENY_WORDS = ["email", "inbox", "mailbox", "gmail", "outlook", "calendar", "appointment",
   "bluesky", "tweet", "whatsapp", "remind", "reminder", "meeting", "contact", "notifications", "to-do", "task "];
@@ -107,7 +107,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.0", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.1", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();

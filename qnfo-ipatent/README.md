@@ -1,6 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.4 (2026-09-03) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
+**Version:** 3.4.1 (2026-09-03) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
@@ -9,6 +9,10 @@ an 8-section USPTO-style draft with claims, using RAG over the ipatent-corpus Ve
 index and a Workers-AI drafting model.
 
 ## What v3.4 added (adaptive, IP-domain suggestions — SUGGESTION-DOMAIN-1)
+
+**v3.4.1:** clean technical-field taxonomy on the public suggestion surface — internal corpus
+folder labels (`99_Brutal_Cleanup`, `Early_Drafts_202507`) are mapped to clean USPTO-style
+fields via `cleanField()` on `/api/suggest` + `/api/idea` display surfaces (SOFT-N3 closure).
 - `GET /api/suggest` — adaptive suggestion endpoint, IP-domain only:
   - `field` param → technical-field completions from `FIELD_SUGGESTIONS`.
   - empty `q` → rotating corpus examples (light metadata) for starter chips.
