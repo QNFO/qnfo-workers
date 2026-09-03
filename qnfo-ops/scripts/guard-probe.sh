@@ -14,7 +14,7 @@ echo "ops thread:   $TID_OPS"
 echo "idea thread:  $TID_IDEA"
 curl -s -m 120 "$BASE" -H "Content-Type: application/json" -H "Authorization: Bearer $KEY" -H "User-Agent: ChatBox/1.4.0 (dart:io)" -d "{\"model\":\"deepseek-v4-flash\",\"thread_id\":\"$TID_OPS\",\"stream\":false,\"max_tokens\":40,\"messages\":[{\"role\":\"user\",\"content\":\"check my email and list what came in\"}]}" > /dev/null
 curl -s -m 120 "$BASE" -H "Content-Type: application/json" -H "Authorization: Bearer $KEY" -H "User-Agent: ChatBox/1.4.0 (dart:io)" -d "{\"model\":\"deepseek-v4-flash\",\"thread_id\":\"$TID_IDEA\",\"stream\":false,\"max_tokens\":40,\"messages\":[{\"role\":\"user\",\"content\":\"new research idea: probe whether decoherence times set a fundamental limit on spin-chain quantum speed limits\"}]}" > /dev/null
-sleep 8
+sleep 30
 echo "Now query qnfo-audit D1:"
 echo "  SELECT thread_id, ts, status FROM intent_express_log WHERE thread_id LIKE \"probe-%\";"
-echo "Expected: only the idea thread row, status http:201. chatbox_conversations stays clean (probe- prefix)."
+echo "Expected: only the idea thread row, status http:201. Wait >=30s: the orchestrator classify chain can take 15-30s under load, so an earlier sample may still show status=null (benign lag; the intent itself is created+triage-d before the express status UPDATE lands). chatbox_conversations stays clean (probe- prefix)."
