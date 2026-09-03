@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.12.0"; // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.13.0"; // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -1279,6 +1279,16 @@ async function jobBackfill(env) {
 }
 
 // ---------- outreach engine v1: queue -> verify (arXiv tarball) -> dedup -> send -> log ----------
+const OUTREACH_ACTIVATION_AT = Date.parse("2026-09-15T00:00:00Z");
+const EMAIL_VALID = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+function validEmail(em) {
+  if (!em || em.length > 254 || !EMAIL_VALID.test(em)) return false;
+  if (/^[%@#]|\.\./.test(em)) return false;
+  const d = em.split("@")[1] || "";
+  if (!d.includes(".")) return false;
+  return true;
+}
+
 const OUTREACH_FROM = { email: "rowan.quni@qnfo.org", name: "Rowan Brad Quni-Gudzinas" };
 
 async function verifyArxivEmail(env, paperId) {
@@ -1310,6 +1320,13 @@ async function verifyArxivEmail(env, paperId) {
 async function jobOutreach(env) {
   const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, errors: [] };
   if (!env.SEND_EMAIL) return { status: "error", notes: { error: "SEND_EMAIL binding missing" } };
+  // OUTREACH-ENGINE-LIVE-1 activation gate (2026-09-03 red-team): legacy drain must NOT send
+  // external outreach before ACTIVATION_AT, and must honor the qnfo-outreach kill switch.
+  try {
+    const kill = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key = 'external_sends_enabled'").first();
+    const canExternal = Date.now() >= OUTREACH_ACTIVATION_AT && kill && kill.value === "1";
+    if (!canExternal) return { status: "gated", notes: { sent: 0, reason: "pre-activation or kill switch off (activation 2026-09-15)", kill: !!(kill && kill.value === "1") } };
+  } catch (e) { return { status: "gated", notes: { sent: 0, reason: "gate check failed", error: String(e && e.message || e) } }; }
   const today = new Date().toISOString().slice(0, 10);
   const sentKey = "outreach_sent_" + today;
   let sentToday = Number(await stateGet(env, sentKey, "0")) || 0;
@@ -1331,6 +1348,7 @@ async function jobOutreach(env) {
       }
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) { out.skipped_dupe++; continue; }
+      if (!validEmail(email)) { out.errors.push({ id: r.id, error: "invalid email " + email }); continue; }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
       const body = [
         "Hello,",
