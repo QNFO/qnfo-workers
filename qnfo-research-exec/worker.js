@@ -1,4 +1,4 @@
-var VERSION = "0.4.9";
+var VERSION = "0.4.9-p1";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/qwen/qwen3-30b-a3b-fp8"];
 var MAX_NOTE = 4000, MAX_PAPER = 30000;
@@ -211,6 +211,7 @@ export default {
     return json({ error:"not found" }, 404);
   }
 };
+
 
 
 
