@@ -4,7 +4,7 @@
 // ISOLATION: logs only to qnfo-audit (ops_ai_log + cloud_ops_events); NEVER writes
 // ai_queries / chatbox_conversations / intent_express_log; never calls the intent
 // orchestrator -> the research feed and ideas stream stay clean.
-var VERSION = "1.2.4"; // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.2.5"; // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -429,9 +429,17 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   // and ChatBox Android.
   const _opsToolNames = new Set(OPS_TOOLS.map((t) => t.name));
   const _clientHasServerTool = !!(clientTools || []).some((t) => t && t.function && _opsToolNames.has(t.function.name));
+  const allUserText = msgs.filter((m) => m.role === "user").map((m) => String(m.content || "")).join(" ").slice(0, 8000);
   const _norm = String(prompt || "").toLowerCase().replace(/[^a-z0-9]+/g, " ");
-  const _promptServerTool = OPS_TOOLS.some((t) => _norm.indexOf(String(t.name).toLowerCase().replace(/[^a-z0-9]+/g, " ")) >= 0);
-  const _opsIntent = _clientHasServerTool || _promptServerTool || /(fleet|issues|backlog|audit|email|code|execute|status|health|drain|worker|database|query|cron|cost|media|run|research|brief|summary|list|log)/.test(_norm);
+  const _allNorm = String(allUserText || "").toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  const _kw = new Set("fleet issues backlog audit email code execute status health drain worker database query cron cost media run research brief summary list log".split(" "));
+  const _promptServerTool = OPS_TOOLS.some((t) => _allNorm.indexOf(String(t.name).toLowerCase().replace(/[^a-z0-9]+/g, " ")) >= 0);
+  // OPS-TOOLSAFE-1 (2026-09-03): intent detection uses (a) server tool names supplied by the
+  // client, (b) server tool names ANYWHERE in the conversation, (c) prior assistant tool_calls /
+  // tool messages that used server tools, (d) ops keywords ANYWHERE in the conversation (not just
+  // the last user turn) - retry/follow-up turns can no longer slip into client-tools relay.
+  const _histOpsTool = msgs.some((m) => ((m.role === "assistant" && (m.tool_calls || []).some((tc) => tc && tc.function && _opsToolNames.has(tc.function.name))) || (m.role === "tool" && m.name && _opsToolNames.has(String(m.name)))));
+  const _opsIntent = _clientHasServerTool || _promptServerTool || _histOpsTool || _allNorm.split(" ").some((w) => _kw.has(w));
   const _externalOnly = !!(clientTools && !_clientHasServerTool);
   if (_externalOnly && !_opsIntent) {
     try {
@@ -441,6 +449,14 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       const cText = String(cMsg.content || "");
       const cToolCalls = Array.isArray(cMsg.tool_calls) && cMsg.tool_calls.length ? cMsg.tool_calls : null;
       const cToolCallsIndexed = (cToolCalls || []).map(function (tc0, i0) { return Object.assign({}, tc0, { index: tc0 && tc0.index != null ? tc0.index : i0 }); });
+      const _clientFnNames = new Set((clientTools || []).map((t) => t && t.function && t.function.name));
+      const _outsideCalls = (cToolCalls || []).filter((tc) => !(tc && tc.function && _clientFnNames.has(tc.function.name)));
+      if (_outsideCalls.length) {
+        // OPS-TOOLSAFE-1: model attempted a function NOT in the client-provided tools (typically a
+        // qnfo-ops server tool it knows from the ops system prompt). Relaying it would make the
+        // client fail with "tried to call unavailable tool". Fall through to the server-side agent
+        // loop below so the intended ops tool runs server-side.
+      } else {
       const cUsage = (cResp && cResp.usage) || {};
       const cRespId = randId("chatcmpl-");
       const cCreated = Math.floor(Date.now() / 1000);
@@ -463,6 +479,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         return new Response(streamS, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
       }
       return json({ id: cRespId, object: "chat.completion", created: cCreated, model: wanted, choices: [{ index: 0, message: cMsgOut, finish_reason: cFr }], usage: { prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(msgs)), completion_tokens: cUsage.completion_tokens || estTokens(cText), total_tokens: (cUsage.prompt_tokens || estTokens(JSON.stringify(msgs))) + (cUsage.completion_tokens || estTokens(cText)) } });
+      }
     } catch (e) {
       const errText = "ops client-tools error: " + (e && e.message ? e.message : String(e));
       ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "client-tools", prompt: prompt, response: errText.slice(0, 2000), latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
