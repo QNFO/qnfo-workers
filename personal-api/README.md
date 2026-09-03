@@ -1,8 +1,17 @@
-# personal-api - Agentic Personal Twin (v3.0.2)
+# personal-api - Agentic Personal Twin (v3.0.4)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
+
+## v3.0.4 (2026-09-03) - harvest suppression
+When the calendar_add tool succeeds in a request, the legacy chat-harvest no longer writes
+duplicate event rows + notes into the personal-life store (red-team C4); the canonical row
+is the calendar-api store copy.
+
+## v3.0.3 (2026-09-03) - CAL_TOKEN auth header
+All calendar-api service calls send Authorization: Bearer CAL_TOKEN (calendar-api v0.3.0
+auth gate, red-team C1 fix). Secret CAL_TOKEN mirrors calendar-api's.
 
 ## v3.0.0 (2026-09-03) - agentic upgrade
 - Tool loop in /v1/chat/completions: the model can take ACTIONS via a JSON tool-call
