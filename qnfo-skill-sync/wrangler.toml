@@ -1,0 +1,25 @@
+name = "qnfo-skill-sync"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "AUDIT_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[r2_buckets]]
+binding = "SKILLS_BUCKET"
+bucket_name = "qnfo-skills"
+
+[triggers]
+crons = ["0 3 * * *"]
+
+# Secrets (set via wrangler secret put, persist across deploys):
+#   GITHUB_TOKEN, SYNC_TOKEN, SKILLS_REPO, SKILLS_BRANCH
+[observability]
+enabled = true
+head_sampling_rate = 1
