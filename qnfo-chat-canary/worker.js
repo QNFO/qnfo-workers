@@ -5,9 +5,10 @@
 // /run?cron=canary|sentguard&token=<RUN_TOKEN> -> manual trigger (verification).
 // Probes: UTC date grounding, QNFO calendar grounding, JPCUB grounding, fallback
 //   regression, /v1/models shape (ChatBox parity). Results -> qnfo-audit.chat_canary;
+//   ops-feed guard (QNFO.OPS.015): ops phrase sent as a chat client must NOT auto-express
 //   failures -> qnfo-audit.alerts source='chat-canary' + out-of-band email.
 // Self-doc: FLEET-SELF-DOC-1. Canonical: QNFO/qnfo-workers/qnfo-chat-canary.
-const VERSION = "1.0.1";
+const VERSION = "1.0.2"; // ops-feed guard probe (QNFO.OPS.015, audit P0-1 2026-09-03)
 const ROUTER = "https://qnfo-ai.q08.workers.dev";
 const UA = "qnfo-chat-canary/" + VERSION;
 // NO personal-inbox email (user directive 2026-09-02): alerts live in qnfo-audit.alerts -> swept into qnfo-events ledger.
@@ -36,11 +37,11 @@ function isFallback(t) {
   return s.indexOf("I could not generate a response") >= 0 || s.indexOf("I do not have a reliable answer for that right now") >= 0;
 }
 
-async function chatProbe(env, model, prompt, threadId) {
+async function chatProbe(env, model, prompt, threadId, uaOverride) {
   const t0 = Date.now();
   const r = await aiFetch(env, "/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.ROUTER_AUTH_KEY, "User-Agent": UA },
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.ROUTER_AUTH_KEY, "User-Agent": uaOverride || UA },
     body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], thread_id: threadId, stream: false })
   });
   const j = await r.json().catch(() => ({}));
@@ -96,13 +97,31 @@ async function runCanary(env) {
   if (!ok3) await alert(env, "HIGH", "chat-canary JPCUB probe FAILED " + today + ": " + p3.content.slice(0, 200));
   out.probes.push({ probe: "jpcub", ok: ok3, model: p3.model, latency: p3.latency });
 
-  const m = await aiFetch(env, "/v1/models", { headers: { "User-Agent": UA } });
+  const m = await aiFetch(env, "/v1/models", { headers: { "User-Agent": uaOverride || UA } });
   const mj = await m.json().catch(() => ({}));
   const ids = (mj.data || []).map((x) => x.id);
   const ok4 = m.status === 200 && ids.length > 15 && ids.indexOf("auto") >= 0 && ids.indexOf("ensemble") >= 0;
   await record(env, "canary", "models", "list", ok4, ok4 ? "ok count=" + ids.length : "status=" + m.status + " count=" + ids.length, 0);
   if (!ok4) await alert(env, "HIGH", "chat-canary /v1/models probe FAILED " + today + " count=" + ids.length);
   out.probes.push({ probe: "models", ok: ok4, model: "list", latency: 0 });
+  // ops-feed guard probe (QNFO.OPS.015 / audit P0-1 2026-09-03): an ops command sent with a
+  // chat-client UA must NOT auto-express into the ideas stream. At most once per UTC day.
+  const ranToday = await env.AUDIT.prepare("SELECT COUNT(*) n FROM chat_canary WHERE probe='opsguard' AND ts LIKE ?1").bind(today + "%").first();
+  if (!(ranToday && ranToday.n)) {
+    const opsPhrase = "check my email and show the last 3 messages";
+    const opsThread = "canary-" + today + "-opsguard";
+    const p5 = await chatProbe(env, "deepseek-v4-flash", opsPhrase, opsThread, "ChatBox/1.4.0 (dart:io)");
+    await new Promise(function (res) { setTimeout(res, 4000); });
+    const ie = await env.AUDIT.prepare("SELECT thread_id FROM intent_express_log WHERE thread_id = ?1").bind(opsThread).first();
+    const ok5 = p5.status === 200 && !ie;
+    await record(env, "canary", "opsguard", p5.model, ok5, ok5 ? "ok (no express row)" : "GUARD REGRESSION: express row " + (ie ? ie.thread_id : "none") + " status=" + p5.status + " " + p5.content.slice(0, 120), p5.latency);
+    if (!ok5) {
+      try { await env.AUDIT.prepare("DELETE FROM intent_express_log WHERE thread_id = ?1").bind(opsThread).run(); } catch (e2) {}
+      try { await env.AUDIT.prepare("DELETE FROM intents WHERE desire LIKE ?1").bind("%" + opsPhrase.slice(0, 60) + "%").run(); } catch (e3) {}
+      await alert(env, "HIGH", "OPS-FEED-GUARD REGRESSION: ops command auto-expressed on qnfo-ai " + today + " - research/ideas stream polluted. Check qnfo-ai _opsCmdLike guard.");
+    }
+    out.probes.push({ probe: "opsguard", ok: ok5, model: p5.model, latency: p5.latency });
+  }
 
   out.allOk = out.probes.every((p) => p.ok);
   out.status = out.allOk ? "clean" : "failures";

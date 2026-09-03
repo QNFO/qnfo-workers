@@ -63,3 +63,4 @@ guard on the research side: qnfo-ai v5.16.6+ skips auto-express for ops phrasing
 - v1.0.1 2026-09-03 — drop new Function sandbox (runtime constraint); add ops_fleet_log tool; final-answer round
 - v1.0.2 2026-09-03 — user-affirmation gate for ops_issue_run + DATA-ONLY tool-result boundary (red-team HARD-1)
 - v1.0.3 2026-09-03 — d1 read-only guard hardened (audit HARD-1); daily cap 250/UTC day; /v1/models capability advertisement
+- v1.0.4 2026-09-03 — /cost route (utc-day + 30d spend from ops_ai_log) + guarded email_mark / email_respond tools (reply-to-inbound only; user-affirmation + negation-aware; spam-token subject rejection)
