@@ -1,7 +1,7 @@
-var VERSION = "0.4.8";
+var VERSION = "0.4.9";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/qwen/qwen3-30b-a3b-fp8"];
-var MAX_NOTE = 4000, MAX_PAPER = 16000;
+var MAX_NOTE = 4000, MAX_PAPER = 30000;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
 var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
@@ -211,6 +211,7 @@ export default {
     return json({ error:"not found" }, 404);
   }
 };
+
 
 
 
