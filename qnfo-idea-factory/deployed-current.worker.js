@@ -8,6 +8,97 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 //   chat read stale DeepChat session syncs (chat_sessions) instead of the qnfo-ai chat logs.
 // ARCHIVE source: DeepChat research session snapshots (chat_sessions category='research').
 
+/* ---- Adaptive research-domain suggestions (v2.7.0) ----
+   SUGGESTION-DOMAIN-1 (HARD GATE): the Ideas ASK suggestion surface stays in the
+   research domain. Personal/ops actions (email, inbox, calendar, tasks, reminders,
+   social posting, infrastructure ops) are NEVER suggested. Live suggestions come from
+   real research threads that pass the domain filter, plus a rotating frontier set. */
+var SUGGEST_DENY = [
+  "check my email", "check email", "check the inbox", "read my email", "read my inbox",
+  "my inbox", "any new email", "send an email", "send email", "draft an email", "reply to",
+  "outlook", "gmail", "mailbox", "inbox", "calendar", "appointment", "meeting today",
+  "my tasks", "add a task", "remind me", "set a reminder", "reminder", "to-do",
+  "post to bluesky", "post this", "to bluesky", "tweet", "social media", "linkedin",
+  "whatsapp", "who should i contact", "reach out to", "suggest contacts", "contact me",
+  "daily brief", "the fleet", "infra status", "cloudflare", "d1 database", "r2 bucket",
+  "backup", "obsidian", "vault", "cron", "secret", "deploy", "wrangler", "worker status"
+];
+var DENY_WORDS = ["email", "inbox", "mailbox", "gmail", "outlook", "calendar", "appointment",
+  "bluesky", "tweet", "whatsapp", "remind", "reminder", "meeting", "contact", "notifications", "to-do", "task "];
+function suggestDomainSafe(t) {
+  const s = String(t || "").toLowerCase();
+  if (!s) return false;
+  if (s.length < 12 || s.length > 130) return false;
+  if (/[\n\r]/.test(s)) return false;
+  for (let i = 0; i < SUGGEST_DENY.length; i++) if (s.indexOf(SUGGEST_DENY[i]) !== -1) return false;
+  for (let i = 0; i < DENY_WORDS.length; i++) {
+    const re = new RegExp("(^|[^a-z0-9])" + DENY_WORDS[i] + "($|[^a-z0-9])");
+    if (re.test(s)) return false;
+  }
+  if (/^(what time|what day|what is the time|write a|write code|implement a|run |execute |check |read |send |reply |post |remind )/.test(s)) return false;
+  return true;
+}
+var FRONTIER_STARTERS = [
+  "What is the Landauer floor for cryogenic quantum controllers?",
+  "Can joules-per-compute benchmarking stay fair across very different architectures?",
+  "Where does the Margolus-Levitin bound bind for a 1,000-logical-qubit surface code?",
+  "Is energy per logical qubit the right normalization for quantum advantage claims?",
+  "What would falsify p-adic valuations as a model of physical measurement?",
+  "How do ultrametric geometries constrain what a discrete spacetime can compute?",
+  "Can Laws-of-Form calculus be grounded in a measurable quantum process?",
+  "Which thermodynamic constraints separate computation from physical evolution?",
+  "Is wall-clock latency a more honest quantum metric than qubit count?",
+  "What experiment would distinguish resonance computing from classical coupling?",
+  "How should open-science audits handle papers that overclaim quantum advantage?",
+  "What does the cmb higher-n point-function literature imply for early-universe models?",
+  "When does a strange-loop architecture become a testable physical claim?",
+  "What is the smallest honest demonstration of topological quantum computation?",
+  "Can an LLM energy audit reach chip-benchmark rigor?",
+  "Which condensed-matter systems give the most honest error-correction energy budget?"
+];
+function frontierPick(n) {
+  const day = Math.floor(Date.now() / 86400000);
+  const out = [];
+  for (let k = 0; k < n && k < FRONTIER_STARTERS.length; k++) out.push(FRONTIER_STARTERS[(day + k * 5) % FRONTIER_STARTERS.length]);
+  return out;
+}
+async function handleSuggest(url, env) {
+  const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
+  const ql = q.toLowerCase();
+  let live = [];
+  try { live = await liveThreads(env); } catch (e) { live = []; }
+  const recency = (s) => { const ms = Date.parse(s.updated_at || s.created_at || ""); return Number.isFinite(ms) ? ms : 0; };
+  const dom = (live || []).filter((s) => suggestDomainSafe(s.title));
+  dom.sort((a, b) => {
+    const sa = Math.min(Number(a.message_count) || 0, 30) - Math.max(0, (Date.now() - recency(a)) / 86400000) * 0.35;
+    const sb = Math.min(Number(b.message_count) || 0, 30) - Math.max(0, (Date.now() - recency(b)) / 86400000) * 0.35;
+    return sb - sa;
+  });
+  const dedupe = (arr) => { const seen = {}; const out = []; for (const it of arr) { const k = String(it.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); if (!k || seen[k]) continue; seen[k] = 1; out.push(it); } return out; };
+  const recent = dedupe(dom).slice(0, 20);
+  const toItem = (s) => ({ title: String(s.title || "").slice(0, 120), source: "recent", thread: s.id || null });
+  const groups = [];
+  const qIsOps = ql.length >= 2 && (SUGGEST_DENY.some((p) => ql.indexOf(p) >= 0) || DENY_WORDS.some((w) => { try { return new RegExp("(^|[^a-z0-9])" + w + "($|[^a-z0-9])").test(ql); } catch (e) { return false; } }));
+  if (ql.length >= 2 && !qIsOps) {
+    const matched = dedupe(recent.filter((s) => s.title.toLowerCase().indexOf(ql) >= 0).slice(0, 6).map(toItem));
+    const fm = FRONTIER_STARTERS.filter((t) => t.toLowerCase().indexOf(ql) >= 0).slice(0, 2).map((t) => ({ title: t, source: "frontier" }));
+    let cm = [];
+    try {
+      const ids = await searchThreadIds(env, q);
+      const seenTitles = {};
+      matched.concat(fm).forEach((m) => { seenTitles[String(m.title).toLowerCase()] = 1; });
+      cm = recent.filter((s) => ids[s.id] && !seenTitles[s.title.toLowerCase()]).slice(0, 3).map(toItem);
+    } catch (e) { cm = []; }
+    const items = matched.concat(fm, cm).slice(0, 6);
+    if (items.length) groups.push({ id: "match", label: "Live suggestions for your question", items });
+    groups.push({ id: "recent", label: "Recent research questions", items: recent.filter((s) => s.title.toLowerCase().indexOf(ql) < 0).slice(0, 4).map(toItem) });
+    groups.push({ id: "frontier", label: "Frontier questions", items: frontierPick(3) });
+  } else {
+    groups.push({ id: "recent", label: "Recent research questions", items: recent.slice(0, 6).map(toItem) });
+    groups.push({ id: "frontier", label: "Frontier questions", items: frontierPick(4) });
+  }
+  return json({ q, policy: "research-domain only; personal/ops actions are never suggested", groups });
+}
 var worker_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -16,7 +107,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.6.2", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.0", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -24,6 +115,7 @@ var worker_default = {
       if (path.startsWith("/api/session/")) return handleSession(path, env);
       if (path === "/api/feed") return handleFeed(url, env);
       if (path === "/api/ask" && request.method === "POST") return handleAsk(url, request, env);
+      if (path === "/api/suggest" && request.method === "GET") return handleSuggest(url, env);
       if (path === "/api/proposals" && request.method === "POST") return handleProposalPost(request, env);
       if (path === "/api/proposals" && request.method === "GET") return handleProposalList(request, env);
       if (path === "/") return serveUI();
@@ -104,7 +196,7 @@ function isInternalThread(title) {
   return INTERNAL_MARKERS.some((m) => t.indexOf(m.toLowerCase()) >= 0);
 }
 __name(isInternalThread, "isInternalThread");
-var JUNK_MARKERS = ["say ok", "say okay", "test", "testing", "first turn", "second turn", "third turn", "auto-express", "block the response", "opening turn", "capital of", "what is the capital", "who is", "who are you", "what is your name", "tell me a joke", "write a poem", "write me a", "make me a", "create me", "explain simply", "explain everything", "explain like i", "3 sentences", "5 years old", "five years old", "good morning", "good night", "thank you", "thanks", "you're welcome", "are you sure", "can you", "please", "what can you tell me about", "what do you know about", "what is love", "the meaning of life", "continue", "repeat", "again", "rotation verification", "you decide how a newly extracted memory", "you synthesize a few durable", "probe does", "probe: does", "does auto-express", "what is the capital of", "say the word", "just say", "use your ", "call the ", "express_intent", "social_compose", "email_check", "search_research", "tool with action", "say hello", "hello world", "what is 2+2", "reply with the single word", "source detection", "gateway passed", "note these as fixes", "note for remediation", "mismatch-probe", "reasoning-leak", "filter-probe", "verify-5.8.0", "say the word", "nebul", "fil-ok", "fix-ok"];
+var JUNK_MARKERS = ["say ok", "say okay", "test", "testing", "first turn", "second turn", "third turn", "auto-express", "block the response", "opening turn", "capital of", "what is the capital", "who is", "who are you", "what is your name", "tell me a joke", "write a poem", "write me a", "make me a", "create me", "explain simply", "explain everything", "explain like i", "3 sentences", "5 years old", "five years old", "good morning", "good night", "thank you", "thanks", "you're welcome", "are you sure", "can you", "please", "what can you tell me about", "what do you know about", "what is love", "the meaning of life", "continue", "repeat", "again", "this sucks", "terrible response", "needs remediation", "what time is it", "what time", "write a python", "write code", "implement a", "rotation verification", "you decide how a newly extracted memory", "you synthesize a few durable", "probe does", "probe: does", "does auto-express", "what is the capital of", "say the word", "just say", "use your ", "call the ", "express_intent", "social_compose", "email_check", "search_research", "tool with action", "say hello", "hello world", "what is 2+2", "reply with the single word", "source detection", "gateway passed", "note these as fixes", "note for remediation", "mismatch-probe", "reasoning-leak", "filter-probe", "verify-5.8.0", "say the word", "nebul", "fil-ok", "fix-ok", "guard-probe", "what should i do today", "be more productive", "personally and professionally", "productivity", "daily planning", "life advice"];
 function isJunkThread(title) {
   const raw = String(title || "").trim();
   if (!raw) return true;
@@ -426,7 +518,7 @@ var UI_HTML = String.raw`
 <link rel="canonical" href="https://ideas.qnfo.org">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2324315e'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' fill='%23faf7f2' font-family='Georgia,serif'%3EQ%3C/text%3E%3C/svg%3E">
 <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],processEscapes:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code'],enableMenu:false}};</script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg.js';document.head.appendChild(s);"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
 :root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--live:#2f6d4f;--arch:#8a8376}
@@ -489,6 +581,7 @@ main{max-width:880px;margin:0 auto;padding:2.2rem 1.6rem 4rem}
 .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.4rem}
 .chips button{font:inherit;font-size:.74rem;color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:999px;padding:.28rem .7rem;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chips button:hover{color:var(--accent);border-color:var(--accent)}
+.chips{row-gap:.35rem}.chips .grp{flex-basis:100%;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:.2rem;user-select:none}
 .ans{background:var(--surface);border-left:2px solid var(--accent);padding:1rem 1.2rem;border-radius:2px 10px 10px 2px;font-size:.95rem;line-height:1.75;white-space:pre-wrap;word-break:break-word;margin:0 0 1rem}
 .srcs h4,.rel h4{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:1.2rem 0 .5rem}
 .src{padding:.45rem 0;border-bottom:1px solid var(--border);font-size:.85rem;margin:0;display:flex;justify-content:space-between;gap:.6rem}
@@ -556,6 +649,21 @@ function renderRich(s){
     blocks.push('<pre><code'+(lang?' class="lang-'+esc(lang)+'"':'')+'>'+esc(code.replace(/\n$/,''))+'</code></pre>');
     return '\u0002'+String(blocks.length-1)+'\u0002';
   });
+  // Recover blank-line-collapsed markdown (producer stripped \n\n -> space).
+  // (1) Glued table header: split prose off BEFORE a header whose next line is a
+  //     separator with matching column count (lookahead preserves the existing newline).
+  raw=raw.replace(/([^\n])[ \t]+(\|[^\n]*\|)[ \t]*(?=\n([ \t]*\|?[\s:|-]+\|?[ \t]*\n))/g,function(m,pre,hdr,sep){
+    var nh=(hdr.split('|').filter(function(x){return x.trim()!=='';})).length;
+    var ns=(sep.match(/-+/g)||[]).length;
+    return (nh>0&&nh===ns)?(pre+'\n'+hdr):m;
+  });
+  // (2) Horizontal rules glued to text: "text. --- ##" -> "text.\n---\n##".
+  raw=raw.replace(/([^\n])[ \t]+(---)[ \t]+(?=#{1,6}[ \t])/g,'$1\n$2\n');
+  raw=raw.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g,'$1\n$2\n');
+  // (3) Headings glued to preceding text.
+  raw=raw.replace(/([^\n])[ \t]+(#{1,6}[ \t])/g,'$1\n$2');
+  // (4) Blockquote glue: "text. > quote" -> "text.\n> quote".
+  raw=raw.replace(/([^\n])[ \t]+(>[ \t]*\S)/g,'$1\n$2');
   var inline=function(x){
     var h=esc(x);
     var math=[];
@@ -585,21 +693,46 @@ function renderRich(s){
     if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){flush();html.push('<hr>');continue;}
     var bq=t.match(/^>\s?(.*)$/);
     if(bq){if(!quote){flush();html.push('<blockquote>');quote=1;}html.push(bq[1]);continue;}
-    if(t.indexOf('|')>=0&&lines[i+1]&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
-      var header=t.split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
-      var body=[];
+    // Tolerant table parse: recover producer-collapsed blank lines and never swallow prose.
+    // Table separator requires a real pipe row (a bare --- is an hr, not a table).
+    if(t.indexOf('|')>=0&&lines[i+1]&&lines[i+1].indexOf('|')>=0&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
+      var sepCols=(lines[i+1].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';})).length||1;
+      var hdrCells=line.split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+      var prefixProse=null;
+      // Glued header: prose ran onto the same line as the table header (blank line stripped).
+      if(line.trim().charAt(0)!=='|'&&hdrCells.length>sepCols){
+        var cut=line.indexOf('|');
+        prefixProse=line.slice(0,cut).trim();
+        hdrCells=hdrCells.slice(hdrCells.length-sepCols);
+      } else if(hdrCells.length>sepCols){
+        hdrCells=hdrCells.slice(0,sepCols);
+      }
+      var body=[];var tailProse=null;
       i+=2;
       while(i<lines.length&&lines[i].trim()!==''&&lines[i].indexOf('|')>=0){
-        body.push(lines[i].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';}));
+        var rc=lines[i].split('|').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+        // Row with trailing prose glued after the last cell: keep the row, carry the prose.
+        if(rc.length>sepCols){
+          var segs=lines[i].split('|');
+          var used=0,cutIdx=segs.length-1;
+          for(var k=0;k<segs.length;k++){if(segs[k].trim()!==''){used++;if(used===sepCols){cutIdx=k;break;}}}
+          rc=segs.slice(0,cutIdx+1).map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+          tailProse=segs.slice(cutIdx+1).join('|').trim();
+          body.push(rc);
+          i++;
+          break;
+        }
+        body.push(rc);
         i++;
       }
-      i--;
-      if(header.length){
-        flush();
-        var th='';header.forEach(function(c){th+='<th>'+inline(c)+'</th>';});
+      flush();
+      if(prefixProse&&prefixProse.length){para.push(prefixProse);flush();}
+      if(hdrCells.length){
+        var th='';hdrCells.forEach(function(c){th+='<th>'+inline(c)+'</th>';});
         var tb='';body.forEach(function(rw){if(rw.length){tb+='<tr>'+rw.map(function(c){return '<td>'+inline(c)+'</td>';}).join('')+'</tr>';}});
         html.push('<table><thead><tr>'+th+'</tr></thead><tbody>'+tb+'</tbody></table>');
       }
+      if(tailProse&&tailProse.length){para.push(tailProse);}
       continue;
     }
     var um=t.match(/^[-*+]\s+(.*)$/);
@@ -702,21 +835,33 @@ function renderAsk(){
   stopPoll();
   $('#live-dot').hidden=true;
   view.innerHTML='<section class="page"><p class="lede">Ask the QNFO research corpus — the indexed papers and knowledge base answer, with sources.</p><div class="ask-row"><input id="ask-input" type="text" maxlength="500" placeholder="Ask anything…" autocomplete="off" aria-label="Ask the research corpus"><button id="ask-go">Ask</button></div><div class="chips" id="ask-chips"></div><div id="ask-result"></div></section>';
-  $('#ask-input').addEventListener('keydown',function(e){if(e.key==='Enter')doAsk();});
+  var ai0=$('#ask-input');
+  ai0.addEventListener('keydown',function(e){if(e.key==='Enter')doAsk();});
   $('#ask-go').addEventListener('click',doAsk);
-  loadAskChips();
+  ai0.addEventListener('input',function(){var v=ai0.value.trim();if(askDebounce)clearTimeout(askDebounce);askDebounce=setTimeout(function(){loadAskChips(v.length>=2?v:'');},320);});
+  loadAskChips('');
 }
-function loadAskChips(){
-  fetch('/api/sessions?limit=8').then(function(r){return r.json();}).then(function(d){
-    if(!d.sessions||!d.sessions.length)return;
-    var el=$('#ask-chips');
-    d.sessions.slice(0,5).forEach(function(s){
-      var b=document.createElement('button');b.type='button';
-      b.textContent=s.title&&s.title.length>52?s.title.slice(0,52)+'…':(s.title||'ask');
-      b.title=s.title||'';
-      b.onclick=function(){var i=$('#ask-input');if(i){i.value=s.title||'';doAsk();}};
-      el.appendChild(b);
+var askDebounce=null;
+function loadAskChips(q){
+  var el=$('#ask-chips');if(!el)return;
+  var clean=String(q||'').trim().slice(0,120);
+  var url='/api/suggest'+(clean?'?q='+encodeURIComponent(clean):'');
+  fetch(url).then(function(r){return r.json();}).then(function(d){
+    if(!d.groups||!d.groups.length){el.innerHTML='';return;}
+    var html='';
+    d.groups.forEach(function(g){
+      html+='<span class="grp">'+esc(g.label||'')+'</span>';
+      (g.items||[]).forEach(function(it){
+        var full=String(it.title||'ask');
+        var shown=full.length>84?full.slice(0,84)+'…':full;
+        html+='<button type="button" data-ask="'+esc(full)+'" title="'+esc(full)+'">'+esc(shown)+'</button>';
+      });
     });
+    el.innerHTML=html;
+    var bs=el.querySelectorAll('button');
+    for(var bj=0;bj<bs.length;bj++){
+      (function(b){b.addEventListener('click',function(){var inp=$('#ask-input');if(inp){inp.value=b.getAttribute('data-ask')||'';doAsk();}});})(bs[bj]);
+    }
   }).catch(function(){});
 }
 function doAsk(){
