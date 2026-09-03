@@ -1,0 +1,21 @@
+name = "qnfo-gateway"
+main = "qnfo-gateway.deployed.worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = false
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[r2_buckets]]
+binding = "QNFO_BUCKET"
+bucket_name = "qnfo"

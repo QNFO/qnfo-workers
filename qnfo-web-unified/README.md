@@ -17,6 +17,7 @@ Reference implementation: https://ideas.qnfo.org
 | Surface | Host | Where it runs | File |
 |---|---|---|---|
 | QNFO Research Foundation | qnfo.org | qnfo-gateway Worker (COMMON_CSS replaced) | qnfo-gateway.deployed.worker.js |
+| QNFO About page (gateway v3.5.0) | qnfo.org/about | qnfo-gateway Worker (live D1 counts) | qnfo-gateway.deployed.worker.js |
 | QNFO Papers (+ Load More, no 50-cap) | papers.qnfo.org | qnfo-gateway Worker | qnfo-gateway.deployed.worker.js |
 | QNFO Hub + subdomains | hub.qnfo.org, q08.org, design/quantum/measure/hensel/unity.qnfo.org | qnfo-hub Pages (index.html + host-aware _worker.js) | hub-index.html, hub-worker.js |
 | QNFO Research Archive | archive.qnfo.org | qnfo-publications Pages | archive-qnfo.html |
