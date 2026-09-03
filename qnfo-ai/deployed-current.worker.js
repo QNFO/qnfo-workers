@@ -2,9 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-// TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
-// client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.20.3"; // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var VERSION = "5.20.5";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -14,8 +14,6 @@ var MODELS = {
   "qwen3-30b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen3-30b-a3b-fp8", reasoning: false, maxOut: 8192, ctx: 32768, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
   "qwen2.5-coder-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen2.5-coder-32b-instruct", reasoning: false, maxOut: 8192, ctx: 32768, temp: 0.2, topP: 0.95, tools: false, vision: false },
-  "gemma-2b": { tier: 0, family: "google", wa: "@cf/google/gemma-2b-it-lora", reasoning: false, maxOut: 4096, ctx: 8192, temp: 0.7, topP: 0.9, tools: false, vision: false },
-  "granite-h-micro": { tier: 0, family: "ibm", wa: "@cf/ibm-granite/granite-4.0-h-micro", reasoning: false, maxOut: 4096, ctx: 128e3, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
   "glm-5.2": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.2", reasoning: true, maxOut: 8192, ctx: 128e3, temp: 0.6, topP: 0.95, tools: true, vision: false },
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 8192, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
@@ -44,7 +42,7 @@ var MODELS = {
   // account owner's behalf (explicit user directive "accept all terms").
   "llama-3.2-11b-vision": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-11b-vision-instruct", reasoning: false, maxOut: 2048, ctx: 131072, temp: 0.6, topP: 0.9, tools: false, vision: true },
   // DeepSeek API (1M context)
-  "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 8192, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
+  "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 32768, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 8192, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
   "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat", maxOut: 8192, ctx: 1048576, temp: 0.4, topP: 0.9, tools: true, vision: false }
   // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
@@ -60,8 +58,6 @@ var MAX_OUT = {
   "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": 8192,
   "@cf/qwen/qwen3-30b-a3b-fp8": 8192,
   "@cf/qwen/qwen2.5-coder-32b-instruct": 8192,
-  "@cf/google/gemma-2b-it-lora": 4096,
-  "@cf/ibm-granite/granite-4.0-h-micro": 4096,
   "@cf/zai-org/glm-5.2": 8192,
   "@cf/moonshotai/kimi-k2.6": 8192,
   "@cf/qwen/qwq-32b": 8192,
@@ -72,18 +68,18 @@ var MAX_OUT = {
   "@cf/openai/gpt-oss-120b": 32768,
   "@cf/deepseek-ai/deepseek-v4-flash-0731": 8192,
   "@cf/deepseek-ai/deepseek-v4-pro-0813": 32768,
+  "deepseek-chat": 32768,
+  // tier-1 DeepSeek API output cap (raised from DEFAULT 8192 for #415 full-length papers)
+  "deepseek-reasoner": 32768,
   "@cf/moonshotai/kimi-k2.7-code": 32768,
   "@cf/zai-org/glm-5.3": 8192
 };
 var DEFAULT_MAX_OUT = 8192;
-var DEFAULT_SYSTEM_PROMPT = 'Answer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on \'CONTINUE\' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.';;
-
-// QNFO.OPS.010 Stage C (2026-09-02): twin calendar retrieval - inject upcoming QNFO-plane
-// calendar events from calendar-api (service binding CAL_API) as a DATA-ONLY system block.
+var DEFAULT_SYSTEM_PROMPT = "Answer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on 'CONTINUE' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.";
 async function getCalendarContext(env) {
   try {
-    const from = new Date().toISOString().slice(0, 10);
-    const to = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
+    const from = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const to = new Date(Date.now() + 21 * 864e5).toISOString().slice(0, 10);
     const r = await env.CAL_API.fetch("https://calendar-api/events?plane=qnfo&from=" + from + "&to=" + to);
     if (!r.ok) return null;
     const j = await r.json();
@@ -94,8 +90,11 @@ async function getCalendarContext(env) {
       L.push("- " + String(e.dtstart || "").slice(0, 10) + " [" + (e.status || "confirmed") + (e.source ? "/" + e.source : "") + "] " + (e.title || "") + (e.location ? " @ " + e.location : "") + (e.url ? " <" + e.url + ">" : ""));
     }
     return L.join(String.fromCharCode(10));
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
+__name(getCalendarContext, "getCalendarContext");
 var FALLBACK_TEXT = "I do not have a reliable answer for that right now. For QNFO research topics the ensemble mode (model=ensemble) cross-checks answers across models, and rephrasing usually helps. Current QNFO state is published on Zenodo (open access), and the joules-per-compute benchmark (JPCUB) lives at github.com/rwnq8/joules-per-compute-benchmark.";
 var CTX_SAFETY_MARGIN = 512;
 function clampTokens(maxTokens, cap) {
@@ -104,6 +103,7 @@ function clampTokens(maxTokens, cap) {
   return Math.min(t, c);
 }
 __name(clampTokens, "clampTokens");
+__name2(clampTokens, "clampTokens");
 var TIER0_TOTAL_CAP = 24e3;
 function estimateInputTokens(messages) {
   let chars = 0;
@@ -113,16 +113,19 @@ function estimateInputTokens(messages) {
   return Math.ceil(chars / 3);
 }
 __name(estimateInputTokens, "estimateInputTokens");
+__name2(estimateInputTokens, "estimateInputTokens");
 function estimateOutputTokens(text) {
   return Math.ceil(String(text || "").length / 3);
 }
 __name(estimateOutputTokens, "estimateOutputTokens");
+__name2(estimateOutputTokens, "estimateOutputTokens");
 function modelCtx(spec) {
   if (!spec) return DEEPSEEK_MAX_CONTEXT;
   if (spec.ctx) return spec.ctx;
   return spec.tier === 0 ? TIER0_TOTAL_CAP : DEEPSEEK_MAX_CONTEXT;
 }
 __name(modelCtx, "modelCtx");
+__name2(modelCtx, "modelCtx");
 function contextAwareTarget(cls, target, estInput, maxOut) {
   const spec = MODELS[target];
   if (!spec || spec.tier !== 0) return target;
@@ -135,6 +138,7 @@ function contextAwareTarget(cls, target, estInput, maxOut) {
   return cls.domain === "science" ? "deepseek-v4-flash-thinking" : "deepseek-v4-flash";
 }
 __name(contextAwareTarget, "contextAwareTarget");
+__name2(contextAwareTarget, "contextAwareTarget");
 var DEEPSEEK_MAX_CONTEXT = 1048576;
 function truncateMessagesToFit(messages, maxInputTokens) {
   const arr = Array.isArray(messages) ? messages : [];
@@ -157,7 +161,6 @@ function truncateMessagesToFit(messages, maxInputTokens) {
         const hasImg = Array.isArray(c0) && c0.some((pp) => pp && typeof pp === "object" && (pp.type === "image_url" || pp.type === "input_image" || pp.type === "image" || pp.image_url));
         let clippedContent;
         if (hasImg) {
-          // VISION-OCR-1 (2026-09-03): keep every image part; clip text to remaining budget.
           const parts = [];
           let textChars = 0;
           let imgCount = 0;
@@ -192,6 +195,7 @@ function truncateMessagesToFit(messages, maxInputTokens) {
   return system ? [system, ...tail] : tail;
 }
 __name(truncateMessagesToFit, "truncateMessagesToFit");
+__name2(truncateMessagesToFit, "truncateMessagesToFit");
 function normalizeResponsesInput(body) {
   const messages = [];
   if (body.instructions) {
@@ -230,6 +234,7 @@ function normalizeResponsesInput(body) {
   return messages;
 }
 __name(normalizeResponsesInput, "normalizeResponsesInput");
+__name2(normalizeResponsesInput, "normalizeResponsesInput");
 function normalizeResponsesContent(content) {
   if (content == null) return "";
   if (typeof content === "string") return content;
@@ -250,6 +255,7 @@ function normalizeResponsesContent(content) {
   return String(content);
 }
 __name(normalizeResponsesContent, "normalizeResponsesContent");
+__name2(normalizeResponsesContent, "normalizeResponsesContent");
 function flattenContentToString(content) {
   if (content == null) return "";
   if (typeof content === "string") return content;
@@ -267,6 +273,7 @@ function flattenContentToString(content) {
   return String(content);
 }
 __name(flattenContentToString, "flattenContentToString");
+__name2(flattenContentToString, "flattenContentToString");
 function normalizeMessagesContent(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -276,6 +283,7 @@ function normalizeMessagesContent(messages) {
   });
 }
 __name(normalizeMessagesContent, "normalizeMessagesContent");
+__name2(normalizeMessagesContent, "normalizeMessagesContent");
 function normalizeForWorkersAITools(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -285,6 +293,7 @@ function normalizeForWorkersAITools(messages) {
   });
 }
 __name(normalizeForWorkersAITools, "normalizeForWorkersAITools");
+__name2(normalizeForWorkersAITools, "normalizeForWorkersAITools");
 var PER_IMAGE_CHARS = 2550;
 function contentCharLen(content) {
   if (typeof content === "string") return content.length;
@@ -301,6 +310,7 @@ function contentCharLen(content) {
   return String(content ?? "").length;
 }
 __name(contentCharLen, "contentCharLen");
+__name2(contentCharLen, "contentCharLen");
 function hasImageParts(messages) {
   if (!Array.isArray(messages)) return false;
   for (const m of messages) {
@@ -314,25 +324,22 @@ function hasImageParts(messages) {
   return false;
 }
 __name(hasImageParts, "hasImageParts");
+__name2(hasImageParts, "hasImageParts");
 function _bytesToB64(bytes) {
   let bin = "";
-  const CH = 0x8000;
+  const CH = 32768;
   for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CH, bytes.length)));
   return btoa(bin);
 }
+__name(_bytesToB64, "_bytesToB64");
 function _sniffMime(b) {
-  if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
-  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
-  if (b.length >= 4 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46) return "image/webp";
-  if (b.length >= 3 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  if (b.length >= 4 && b[0] === 137 && b[1] === 80 && b[2] === 78 && b[3] === 71) return "image/png";
+  if (b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255) return "image/jpeg";
+  if (b.length >= 4 && b[0] === 82 && b[1] === 73 && b[2] === 70 && b[3] === 70) return "image/webp";
+  if (b.length >= 3 && b[0] === 71 && b[1] === 73 && b[2] === 70) return "image/gif";
   return "image/png";
 }
-// VISION-REMOTE-INLINE-1 (2026-09-03): Workers AI vision models only accept inline
-// data:image/... URIs. A remote http(s) image_url part surfaces upstream as
-// '3030: Malformed image URI - expected format data:image/<format>;<encoding>,<data>'
-// (reproduced live 2026-09-03). Fetch remote images here and inline them as data
-// URLs before the Workers AI vision call; on fetch failure replace the part with an
-// explicit unavailable note so the model never sees an opaque 3030.
+__name(_sniffMime, "_sniffMime");
 async function inlineRemoteImages(messages) {
   if (!Array.isArray(messages)) return messages;
   for (const m of messages) {
@@ -351,10 +358,13 @@ async function inlineRemoteImages(messages) {
       }
       try {
         const ac = new AbortController();
-        const to = setTimeout(() => ac.abort(), 15000);
+        const to = setTimeout(() => ac.abort(), 15e3);
         let resp;
-        try { resp = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "image/*" }, signal: ac.signal, redirect: "follow" }); }
-        finally { clearTimeout(to); }
+        try {
+          resp = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "image/*" }, signal: ac.signal, redirect: "follow" });
+        } finally {
+          clearTimeout(to);
+        }
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         const buf = new Uint8Array(await resp.arrayBuffer());
         if (buf.length > 12 * 1024 * 1024) throw new Error("image too large (" + Math.round(buf.length / 1048576) + " MB)");
@@ -371,7 +381,7 @@ async function inlineRemoteImages(messages) {
   }
   return messages;
 }
-
+__name(inlineRemoteImages, "inlineRemoteImages");
 function normalizeForVision(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -397,10 +407,12 @@ function normalizeForVision(messages) {
   });
 }
 __name(normalizeForVision, "normalizeForVision");
+__name2(normalizeForVision, "normalizeForVision");
 function shouldEnsemble(cls) {
   return cls.uncertainty === "medium" || cls.complexity === "high";
 }
 __name(shouldEnsemble, "shouldEnsemble");
+__name2(shouldEnsemble, "shouldEnsemble");
 var QNFO_INDEXES = ["PAPER_VZ", "NOTES_VZ", "TASKS_VZ", "HANDOFFS_VZ", "LOG_VZ", "IPATENT_VZ", "INFRA_VZ", "CLOUD_OPS_VZ"];
 async function searchQnfoIndexes(env, q, k) {
   const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
@@ -422,6 +434,7 @@ async function searchQnfoIndexes(env, q, k) {
   return { sources, total };
 }
 __name(searchQnfoIndexes, "searchQnfoIndexes");
+__name2(searchQnfoIndexes, "searchQnfoIndexes");
 var ENSEMBLE = {
   primary: { wa: "@cf/moonshotai/kimi-k2.7-code", ctx: 262144 },
   // frontier coder (262k ctx, reasoning + vision, $0.95/M)
@@ -430,13 +443,12 @@ var ENSEMBLE = {
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
   // 1M-ctx reasoning refinement ($1.32/M) — LAZY: runs only on validator FAIL
 };
-// Vendor-diverse ensemble primary pools (seeded rotation avoids correlated groupthink).
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
   science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-pro-0813"],
   general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-4.7-flash"]
 };
-var json = /* @__PURE__ */ __name((obj, status = 200) => new Response(JSON.stringify(obj), {
+var json = /* @__PURE__ */ __name2((obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
   headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS" }
 }), "json");
@@ -448,22 +460,34 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 __name(timingSafeEqual, "timingSafeEqual");
+__name2(timingSafeEqual, "timingSafeEqual");
 function isCurrentEvents(q) {
   var t = String(q || "").toLowerCase();
-  var words = ["today","tonight","now","latest","recent","news","breaking","current","live","right now","this week","this month","this year","upcoming","forecast","weather","stock","price","score","rate","schedule","hours","open now","happening","happened","election","announced","announcement","release","update","since","when did","how much is","cost of","next week","next month"];
+  var words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "schedule", "hours", "open now", "happening", "happened", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
   for (var i = 0; i < words.length; i++) {
     var w = words[i];
     if (t.indexOf(" " + w + " ") !== -1 || t.indexOf(w) === 0 || t === w) return true;
   }
-  var months = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+  var months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
   var hasDigit = false;
-  for (var j = 0; j < t.length; j++) { var c = t.charCodeAt(j); if (c >= 48 && c <= 57) { hasDigit = true; break; } }
+  for (var j = 0; j < t.length; j++) {
+    var c = t.charCodeAt(j);
+    if (c >= 48 && c <= 57) {
+      hasDigit = true;
+      break;
+    }
+  }
   if (hasDigit) {
-    for (var k = 0; k < months.length; k++) { if (t.indexOf(months[k]) !== -1) return true; }
-    for (var y = 2024; y <= 2039; y++) { if (t.indexOf(String(y)) !== -1) return true; }
+    for (var k = 0; k < months.length; k++) {
+      if (t.indexOf(months[k]) !== -1) return true;
+    }
+    for (var y = 2024; y <= 2039; y++) {
+      if (t.indexOf(String(y)) !== -1) return true;
+    }
   }
   return false;
 }
+__name(isCurrentEvents, "isCurrentEvents");
 function classify(prompt) {
   const p = (prompt || "").toLowerCase();
   let complexity = "medium", domain = "general", uncertainty = "low", divergence = "high", verifiability = "unverifiable";
@@ -491,23 +515,29 @@ function classify(prompt) {
   return { complexity, domain, uncertainty, divergence, verifiability };
 }
 __name(classify, "classify");
+__name2(classify, "classify");
 function _seedStr(str) {
   let h = 2166136261;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
   return h >>> 0;
 }
 __name(_seedStr, "_seedStr");
+__name2(_seedStr, "_seedStr");
 function seededPick(pool, key) {
   if (!pool || !pool.length) return null;
   return pool[_seedStr(String(key || "")) % pool.length];
 }
 __name(seededPick, "seededPick");
+__name2(seededPick, "seededPick");
 var ROUTE_POOLS = {
-  code:     ["kimi-k2.7-code", "glm-5.3", "qwen2.5-coder-32b", "deepseek-v4-pro-wa", "gpt-oss-120b"],
-  science:  ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa"],
-  legal:    ["deepseek-v4-pro", "glm-5.3", "kimi-k2.6"],
+  code: ["kimi-k2.7-code", "glm-5.3", "qwen2.5-coder-32b", "deepseek-v4-pro-wa", "gpt-oss-120b"],
+  science: ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa"],
+  legal: ["deepseek-v4-pro", "glm-5.3", "kimi-k2.6"],
   creative: ["glm-5.3", "gemma-4-26b", "glm-4.7-flash", "qwen3-30b"],
-  general:  ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
+  general: ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
 };
 function autoRoute(cls, prompt) {
   if (cls.complexity === "high" && cls.domain !== "code") {
@@ -517,6 +547,7 @@ function autoRoute(cls, prompt) {
   return seededPick(pool, prompt || "");
 }
 __name(autoRoute, "autoRoute");
+__name2(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
   const { temperature, top_p, tools, vision, tool_choice } = opts;
   const directOnly = !!(tools && tools.length) || !!vision;
@@ -576,6 +607,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
   }
 }
 __name(runWorkersAI, "runWorkersAI");
+__name2(runWorkersAI, "runWorkersAI");
 function extractWAToolCalls(result, depth = 0) {
   if (!result || typeof result !== "object" || depth > 4) return null;
   const raw = result.tool_calls || result.result?.tool_calls || result.choices?.[0]?.message?.tool_calls || (result.result && typeof result.result === "object" ? result.result.choices?.[0]?.message?.tool_calls : null) || null;
@@ -589,6 +621,7 @@ function extractWAToolCalls(result, depth = 0) {
   }).filter(Boolean);
 }
 __name(extractWAToolCalls, "extractWAToolCalls");
+__name2(extractWAToolCalls, "extractWAToolCalls");
 var RUN_CODE_TOOL = {
   type: "function",
   function: {
@@ -603,7 +636,6 @@ var RUN_CODE_TOOL = {
     }
   }
 };
-
 var GATEWAY_SERVICES = {
   email: { base: "https://qnfo-email.internal", secret: "EMAIL_API_KEY", auth: "bearer", internal: "EMAIL" },
   social: { base: "https://qnfo-social.internal", secret: "SOCIAL_TOKEN", auth: "bearer", internal: "SOCIAL" },
@@ -617,23 +649,28 @@ async function callGatewayService(env, svc, path, opts) {
   try {
     var headers = { "Content-Type": "application/json" };
     if (cfg.auth === "bearer") headers["Authorization"] = "Bearer " + token;
-    var method = (opts && opts.method) || (opts && opts.body ? "POST" : "GET");
+    var method = opts && opts.method || (opts && opts.body ? "POST" : "GET");
     var resp;
     if (cfg.internal) {
       var svc = env[cfg.internal];
       if (!svc) return { ok: false, error: "service binding missing: " + cfg.internal };
-      resp = await svc.fetch(cfg.base + path, { method: method, headers: headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+      resp = await svc.fetch(cfg.base + path, { method, headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
     } else {
-      resp = await fetch(cfg.base + path, { method: method, headers: headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
+      resp = await fetch(cfg.base + path, { method, headers, body: opts && opts.body ? JSON.stringify(opts.body) : void 0 });
     }
     var text = await resp.text();
     var data;
-    try { data = JSON.parse(text); } catch (e) { data = { raw: text.slice(0, 500) }; }
-    return { ok: resp.ok, status: resp.status, data: data };
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = { raw: text.slice(0, 500) };
+    }
+    return { ok: resp.ok, status: resp.status, data };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : String(e) };
   }
 }
+__name(callGatewayService, "callGatewayService");
 function wantsAgentTools(body, messages) {
   if (body && (body.agent === true || body.agent === "true")) return true;
   var txt = "";
@@ -641,24 +678,66 @@ function wantsAgentTools(body, messages) {
   for (var i = arr.length - 1; i >= 0; i--) {
     var m = arr[i];
     if (m && m.role === "user") {
-      txt = typeof m.content === "string" ? m.content : (Array.isArray(m.content) ? m.content.filter(function(p){ return p && typeof p.text === "string"; }).map(function(p){ return p.text; }).join(" ") : "");
+      txt = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.filter(function(p) {
+        return p && typeof p.text === "string";
+      }).map(function(p) {
+        return p.text;
+      }).join(" ") : "";
       break;
     }
   }
   txt = txt.toLowerCase();
   if (!txt) return false;
   var P = [
-    "check my email", "check email", "check the inbox", "read my email", "read my inbox", "any new email", "my inbox",
-    "send an email", "send email", "reply to", "draft a reply", "draft an email", "email ",
-    "post to bluesky", "post this", "post a", "to bluesky", "tweet",
-    "search my papers", "search the papers", "search my research", "search my notes", "search my knowledge",
-    "my papers", "my notes", "my tasks", "my research", "what papers", "find papers", "what research",
-    "remind me", "add a task", "add a note", "note that", "write down", "set a reminder", "add a reminder",
-    "who should i contact", "suggest contacts", "suggest collaborators", "reach out to", "contact "
+    "check my email",
+    "check email",
+    "check the inbox",
+    "read my email",
+    "read my inbox",
+    "any new email",
+    "my inbox",
+    "send an email",
+    "send email",
+    "reply to",
+    "draft a reply",
+    "draft an email",
+    "email ",
+    "post to bluesky",
+    "post this",
+    "post a",
+    "to bluesky",
+    "tweet",
+    "search my papers",
+    "search the papers",
+    "search my research",
+    "search my notes",
+    "search my knowledge",
+    "my papers",
+    "my notes",
+    "my tasks",
+    "my research",
+    "what papers",
+    "find papers",
+    "what research",
+    "remind me",
+    "add a task",
+    "add a note",
+    "note that",
+    "write down",
+    "set a reminder",
+    "add a reminder",
+    "who should i contact",
+    "suggest contacts",
+    "suggest collaborators",
+    "reach out to",
+    "contact "
   ];
-  for (var j = 0; j < P.length; j++) { if (txt.indexOf(P[j]) !== -1) return true; }
+  for (var j = 0; j < P.length; j++) {
+    if (txt.indexOf(P[j]) !== -1) return true;
+  }
   return false;
 }
+__name(wantsAgentTools, "wantsAgentTools");
 var GATEWAY_ACTION_TOOLS = [
   { type: "function", function: { name: "search_research", description: "Semantic search across the QNFO/QWAV research paper corpus. Returns paper slugs, titles, authors, DOIs, and relevance scores. Use to answer questions about papers and the research program.", parameters: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "integer", description: "Max results 1-10, default 5" } }, required: ["query"] } } },
   { type: "function", function: { name: "search_knowledge", description: "Semantic search across ALL QNFO internal knowledge sources (papers, notes, tasks, handoffs, query log, patents, infra, cloud-ops). Returns top matches per source. Use for questions about your own notes, tasks, or activity.", parameters: { type: "object", properties: { query: { type: "string", description: "Search query" }, limit: { type: "integer", description: "Max results per source 1-10, default 3" } }, required: ["query"] } } },
@@ -679,11 +758,13 @@ async function executeGatewayTool(env, fnName, args) {
       var limit = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
       if (!env.PAPER_VZ) return { ok: false, error: "paper index not bound" };
       var embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [q] });
-      var vec = (embed && embed.data && embed.data[0]) || (Array.isArray(embed) ? embed[0] : null);
+      var vec = embed && embed.data && embed.data[0] || (Array.isArray(embed) ? embed[0] : null);
       if (!vec) return { ok: false, error: "embedding failed" };
       var hits = await env.PAPER_VZ.query(vec, { topK: limit, returnValues: false, returnMetadata: "all" });
-      var matches = (hits.matches || []).map(function(m){ return { id: m.id, score: Math.round((m.score || 0) * 1e4) / 1e4, slug: (m.metadata || {}).slug || m.id, title: (m.metadata || {}).title || "", authors: (m.metadata || {}).authors || "", doi: (m.metadata || {}).doi || "" }; });
-      return { ok: true, count: matches.length, matches: matches };
+      var matches = (hits.matches || []).map(function(m) {
+        return { id: m.id, score: Math.round((m.score || 0) * 1e4) / 1e4, slug: (m.metadata || {}).slug || m.id, title: (m.metadata || {}).title || "", authors: (m.metadata || {}).authors || "", doi: (m.metadata || {}).doi || "" };
+      });
+      return { ok: true, count: matches.length, matches };
     }
     if (fnName === "search_knowledge") {
       var q2 = String(args.query || "").slice(0, 500);
@@ -697,18 +778,37 @@ async function executeGatewayTool(env, fnName, args) {
       var lim2 = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
       if (!env.PAPER_VZ) return { ok: false, error: "paper index not bound" };
       var emb = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [topic] });
-      var v2 = (emb && emb.data && emb.data[0]) || (Array.isArray(emb) ? emb[0] : null);
+      var v2 = emb && emb.data && emb.data[0] || (Array.isArray(emb) ? emb[0] : null);
       if (!v2) return { ok: false, error: "embedding failed" };
       var h2 = await env.PAPER_VZ.query(v2, { topK: lim2, returnValues: false, returnMetadata: "all" });
-      var cands = (h2.matches || []).map(function(m){ return { slug: (m.metadata || {}).slug || m.id, title: (m.metadata || {}).title || "", authors: (m.metadata || {}).authors || "", doi: (m.metadata || {}).doi || "", score: Math.round((m.score || 0) * 1e4) / 1e4 }; });
-      return { ok: true, topic: topic, candidates: cands, note: "Emails are not stored in this index; use email_check or the errata pipeline to resolve full contact addresses." };
+      var cands = (h2.matches || []).map(function(m) {
+        return { slug: (m.metadata || {}).slug || m.id, title: (m.metadata || {}).title || "", authors: (m.metadata || {}).authors || "", doi: (m.metadata || {}).doi || "", score: Math.round((m.score || 0) * 1e4) / 1e4 };
+      });
+      return { ok: true, topic, candidates: cands, note: "Emails are not stored in this index; use email_check or the errata pipeline to resolve full contact addresses." };
     }
     if (fnName === "email_check") {
       var action = String(args.action || "recent");
-      if (action === "stats") { var r1 = await callGatewayService(env, "email", "/stats"); return r1.ok ? { ok: true, stats: r1.data } : r1; }
-      if (action === "recent") { var lim3 = Math.min(parseInt(args.limit || 10, 10) || 10, 100); var r2 = await callGatewayService(env, "email", "/emails/recent?limit=" + lim3); return r2.ok ? { ok: true, emails: r2.data } : r2; }
-      if (action === "body") { var id = parseInt(args.id || 0, 10); if (!id) return { ok: false, error: "id required for body" }; var r3 = await callGatewayService(env, "email", "/emails/body?id=" + id); return r3.ok ? { ok: true, email: r3.data } : r3; }
-      if (action === "search") { var q3 = String(args.query || "").slice(0, 200); var lim4 = Math.min(parseInt(args.limit || 10, 10) || 10, 100); var r4 = await callGatewayService(env, "email", "/emails/search?q=" + encodeURIComponent(q3) + "&limit=" + lim4); return r4.ok ? { ok: true, emails: r4.data } : r4; }
+      if (action === "stats") {
+        var r1 = await callGatewayService(env, "email", "/stats");
+        return r1.ok ? { ok: true, stats: r1.data } : r1;
+      }
+      if (action === "recent") {
+        var lim3 = Math.min(parseInt(args.limit || 10, 10) || 10, 100);
+        var r2 = await callGatewayService(env, "email", "/emails/recent?limit=" + lim3);
+        return r2.ok ? { ok: true, emails: r2.data } : r2;
+      }
+      if (action === "body") {
+        var id = parseInt(args.id || 0, 10);
+        if (!id) return { ok: false, error: "id required for body" };
+        var r3 = await callGatewayService(env, "email", "/emails/body?id=" + id);
+        return r3.ok ? { ok: true, email: r3.data } : r3;
+      }
+      if (action === "search") {
+        var q3 = String(args.query || "").slice(0, 200);
+        var lim4 = Math.min(parseInt(args.limit || 10, 10) || 10, 100);
+        var r4 = await callGatewayService(env, "email", "/emails/search?q=" + encodeURIComponent(q3) + "&limit=" + lim4);
+        return r4.ok ? { ok: true, emails: r4.data } : r4;
+      }
       return { ok: false, error: "invalid action (recent|body|search|stats)" };
     }
     if (fnName === "email_send") {
@@ -716,7 +816,7 @@ async function executeGatewayTool(env, fnName, args) {
       var subject = String(args.subject || "");
       var body = String(args.body || "");
       if (!to || !subject) return { ok: false, error: "to and subject required" };
-      var payload = { to: to, subject: subject, body: body };
+      var payload = { to, subject, body };
       if (args.reply_to_id) payload.reply_to_id = parseInt(args.reply_to_id, 10);
       if (args.from) payload.from = String(args.from);
       return callGatewayService(env, "email", "/send", { method: "POST", body: payload });
@@ -724,20 +824,20 @@ async function executeGatewayTool(env, fnName, args) {
     if (fnName === "social_post") {
       var text = String(args.text || "").slice(0, 290);
       if (!text) return { ok: false, error: "text required" };
-      return callGatewayService(env, "social", "/post", { method: "POST", body: { text: text } });
+      return callGatewayService(env, "social", "/post", { method: "POST", body: { text } });
     }
     if (fnName === "social_compose") {
       var title = String(args.title || "").slice(0, 300);
-      var abstract = String(args.abstract || "").slice(0, 4000);
+      var abstract = String(args.abstract || "").slice(0, 4e3);
       if (!title || !abstract) return { ok: false, error: "title and abstract required" };
-      var p2 = { title: title, abstract: abstract };
+      var p2 = { title, abstract };
       if (args.doi) p2.doi = String(args.doi);
       return callGatewayService(env, "social", "/compose", { method: "POST", body: p2 });
     }
     if (fnName === "express_intent") {
-      var desire = String(args.desire || "").slice(0, 4000);
+      var desire = String(args.desire || "").slice(0, 4e3);
       if (!desire) return { ok: false, error: "desire required" };
-      var r5 = await callGatewayService(env, "intent", "/intent?source=chat-tool&device=mobile", { method: "POST", body: { desire: desire } });
+      var r5 = await callGatewayService(env, "intent", "/intent?source=chat-tool&device=mobile", { method: "POST", body: { desire } });
       return r5.ok ? { ok: true, intent: r5.data } : r5;
     }
     return { ok: false, error: "unknown tool: " + fnName };
@@ -745,15 +845,10 @@ async function executeGatewayTool(env, fnName, args) {
     return { ok: false, error: "tool error: " + (e && e.message ? e.message : String(e)) };
   }
 }
-
+__name(executeGatewayTool, "executeGatewayTool");
 async function executeDynamicCode(env, code) {
   if (!code || !String(code).trim()) return { ok: false, error: "code required" };
   if (!env.LOADER) return { ok: false, error: "run_code unavailable: Dynamic Workers LOADER binding missing on qnfo-ai" };
-  // CROSS-APP-1 (2026-09-03): Cloudflare Workers disallow request-time eval/new Function
-  // ("Code generation from strings disallowed for this context"). Compile user code as a
-  // fresh module via the Dynamic Workers loader binding (globalOutbound:null = network cut,
-  // no bindings/secrets) - parity with qnfo-ops run_code so agent-mode code execution works
-  // identically from DeepChat, ChatBox Desktop and ChatBox Android.
   const head = 'export default { async fetch(request, env) { const logs = []; const console = { log: (...a) => logs.push(a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")), error: (...a) => logs.push("ERROR: " + a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")) }; try { const __r = await (async () => { ';
   const tail = ' })(); const out = logs.length ? logs.join(String.fromCharCode(10)) : __r === void 0 ? "(no return value)" : typeof __r === "string" ? __r : JSON.stringify(__r); return new Response(JSON.stringify({ ok: true, output: String(out).slice(0, 8000) }), { headers: { "Content-Type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ ok: false, error: String((e && e.message) || e).slice(0, 2000) }), { headers: { "Content-Type": "application/json" } }); } } };';
   try {
@@ -761,12 +856,12 @@ async function executeDynamicCode(env, code) {
     const resp = await worker.getEntrypoint().fetch("https://code-exec.invalid/");
     const j = await resp.json();
     if (j && j.ok) return { ok: true, output: String(j.output || "") };
-    return { ok: false, error: String((j && j.error) || ("code worker HTTP " + resp.status)) };
+    return { ok: false, error: String(j && j.error || "code worker HTTP " + resp.status) };
   } catch (e) {
-    return { ok: false, error: "code worker error: " + String((e && e.message) || e).slice(0, 2000) };
+    return { ok: false, error: "code worker error: " + String(e && e.message || e).slice(0, 2e3) };
   }
 }
-
+__name(executeDynamicCode, "executeDynamicCode");
 async function executeBuiltinTools(env, toolCalls) {
   const results = [];
   for (const tc of toolCalls || []) {
@@ -774,7 +869,7 @@ async function executeBuiltinTools(env, toolCalls) {
     if (!fnName) continue;
     let args = {};
     try {
-      args = JSON.parse((tc && tc.function && tc.function.arguments) || "{}") || {};
+      args = JSON.parse(tc && tc.function && tc.function.arguments || "{}") || {};
     } catch (e) {
       args = {};
     }
@@ -784,6 +879,7 @@ async function executeBuiltinTools(env, toolCalls) {
   return results;
 }
 __name(executeBuiltinTools, "executeBuiltinTools");
+__name2(executeBuiltinTools, "executeBuiltinTools");
 async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP, toolChoice) {
   if (effSpec.wa) {
     const out = await runWorkersAI(env, effSpec.wa, messages, maxTokens, false, {
@@ -806,10 +902,8 @@ async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, e
   return { content: "", toolCalls: null, provider: effSpec.family || "unknown" };
 }
 __name(runModelTurn, "runModelTurn");
+__name2(runModelTurn, "runModelTurn");
 function normalizeMDWhitespace(text) {
-  // FORMAT-1 (2026-09-03): never collapse newlines. Old /\s{2,}/->" " glued every blank
-  // line into a space so GFM clients (ChatBox) saw walls of text and no tables. Collapse
-  // horizontal runs only; preserve single blank lines; fenced code stays verbatim.
   const fence = String.fromCharCode(96).repeat(3);
   const segs = String(text || "").split(fence);
   for (let i = 0; i < segs.length; i++) {
@@ -818,6 +912,7 @@ function normalizeMDWhitespace(text) {
   }
   return segs.join(fence).trim();
 }
+__name(normalizeMDWhitespace, "normalizeMDWhitespace");
 function stripCOT(text) {
   let t = String(text || "");
   t = t.replace(/<think>[\s\S]*?<\/think>/g, " ").replace(/<\/?think>/g, " ");
@@ -829,6 +924,7 @@ function stripCOT(text) {
   return t;
 }
 __name(stripCOT, "stripCOT");
+__name2(stripCOT, "stripCOT");
 function extractWAContent(result, depth = 0) {
   if (typeof result === "string") return stripCOT(result);
   if (!result || typeof result !== "object" || depth > 4) return "";
@@ -844,14 +940,15 @@ function extractWAContent(result, depth = 0) {
     }
     if (typeof c.text === "string" && c.text.trim()) return c.text;
   }
-  if (result.result && typeof result.result === "object") return extrac
-tWAContent(result.result, depth + 1);
+  if (result.result && typeof result.result === "object") return extrac;
+  tWAContent(result.result, depth + 1);
   return "";
 }
 __name(extractWAContent, "extractWAContent");
+__name2(extractWAContent, "extractWAContent");
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
   const { temperature, top_p, tool_choice } = opts;
-  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false };
+  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT), stream: stream || false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = tool_choice || "auto";
@@ -868,6 +965,7 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, o
   return resp.json();
 }
 __name(callDeepSeek, "callDeepSeek");
+__name2(callDeepSeek, "callDeepSeek");
 async function callGateway(env, model, messages, maxTokens, stream) {
   const resp = await fetch(GW_COMPAT, {
     method: "POST",
@@ -879,6 +977,7 @@ async function callGateway(env, model, messages, maxTokens, stream) {
   return resp.json();
 }
 __name(callGateway, "callGateway");
+__name2(callGateway, "callGateway");
 function withTimeout(p, ms, label) {
   let timer;
   const to = new Promise((_, reject) => {
@@ -887,33 +986,43 @@ function withTimeout(p, ms, label) {
   return Promise.race([p, to]).finally(() => clearTimeout(timer));
 }
 __name(withTimeout, "withTimeout");
-
+__name2(withTimeout, "withTimeout");
 function stripToolMarkup(text) {
   let t = String(text || "");
   t = t.replace(/<\|tool_calls_section_begin\|>[\s\S]*?<\|tool_calls_section_end\|>/g, " ").replace(/<\|tool_call_begin\|>[\s\S]*?<\|tool_call_end\|>/g, " ").replace(/<\|tool_call_argument_begin\|>[\s\S]*?<\|tool_call_argument_end\|>/g, " ");
   t = t.replace(/<\|tool_call(s|_call)?s?\|>/g, " ").replace(/<\|tool_calls?\|>/g, " ").replace(/<\|tool_call_arguments\|>/g, " ").replace(/\|tool_calls_section_begin\|/g, " ").replace(/\|tool_call_begin\|/g, " ").replace(/\|tool_call_argument_begin\|/g, " ");
-  t = t.replace(/function[\s]*retrieve[\s]*:/g, " "); t = normalizeMDWhitespace(t);
+  t = t.replace(/function[\s]*retrieve[\s]*:/g, " ");
+  t = normalizeMDWhitespace(t);
   t = t.replace(/functions?\.[a-z_]+\s*:\s*\d+/gi, " ").replace(/<\|tool_[a-z_]+\|>/gi, " ").replace(/<\|tool_calls_section_begin\|>[\s\S]*$/gi, " ").trim();
   if (/tool_calls?|function\s*call|\<tool_call/i.test(t)) t = " ";
   return t;
 }
+__name(stripToolMarkup, "stripToolMarkup");
 async function runEnsemble(env, messages, maxTokens, domain) {
   const t0 = Date.now();
   let primaryText = "";
   const useCoderPrimary = domain === "code";
-  const _key = (function () { for (let i = messages.length - 1; i >= 0; i--) { if (messages[i] && messages[i].role === "user") { const c = messages[i].content; return typeof c === "string" ? c.toLowerCase() : ""; } } return ""; })();
-  const _pool = useCoderPrimary ? ENSEMBLE_POOL.code : (domain === "science" ? ENSEMBLE_POOL.science : ENSEMBLE_POOL.general);
+  const _key = (function() {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i] && messages[i].role === "user") {
+        const c = messages[i].content;
+        return typeof c === "string" ? c.toLowerCase() : "";
+      }
+    }
+    return "";
+  })();
+  const _pool = useCoderPrimary ? ENSEMBLE_POOL.code : domain === "science" ? ENSEMBLE_POOL.science : ENSEMBLE_POOL.general;
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
-    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), 40000, "ensemble-primary");
+    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), 4e4, "ensemble-primary");
     primaryText = extractWAContent(primary);
   } catch (e) {
     primaryText = "";
   }
   if (!primaryText) {
     try {
-      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), 40000, "ensemble-fallback");
+      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), 4e4, "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
     } catch (e2) {
@@ -924,7 +1033,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (!primaryText) {
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), 25000, "ensemble-primary-retry");
+      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), 25e3, "ensemble-primary-retry");
       const rt = extractWAContent(retry);
       if (rt && String(rt).trim()) {
         primaryText = rt;
@@ -954,14 +1063,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 15000, "ensemble-validator");
+      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 15e3, "ensemble-validator");
       const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
       if (pass) {
         agreementRate = 1;
       } else {
         try {
-          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 25000, "ensemble-reviewer");
+          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 25e3, "ensemble-reviewer");
           const rText = rOut ? extractWAContent(rOut) : "";
           if (rText.trim()) {
             finalText = rText;
@@ -992,20 +1101,20 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   };
 }
 __name(runEnsemble, "runEnsemble");
+__name2(runEnsemble, "runEnsemble");
 async function expressIdea(env, text, threadId, source) {
   try {
     if (!env.INTENT_TOKEN || !env.QNFO_AUDIT || !text) return;
     const existing = await env.QNFO_AUDIT.prepare("SELECT thread_id FROM intent_express_log WHERE thread_id = ?1").bind(threadId).first();
     if (existing) return;
-    await env.QNFO_AUDIT.prepare("INSERT INTO intent_express_log (thread_id, ts) VALUES (?1, ?2)").bind(threadId, new Date().toISOString()).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO intent_express_log (thread_id, ts) VALUES (?1, ?2)").bind(threadId, (/* @__PURE__ */ new Date()).toISOString()).run();
     try {
-      const fetcher = (env.QNFO_INTENT && env.QNFO_INTENT.fetch) ? env.QNFO_INTENT : { fetch: (u, o) => fetch(u, o) };
-      // v5.16.2 timeout: never leave intent_express_log status null on a hung orchestrator.
+      const fetcher = env.QNFO_INTENT && env.QNFO_INTENT.fetch ? env.QNFO_INTENT : { fetch: /* @__PURE__ */ __name((u, o) => fetch(u, o), "fetch") };
       const resp = await withTimeout(fetcher.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN },
         body: JSON.stringify({ desire: String(text || "").slice(0, 500), source: source || "chatbox-auto", device: source === "chatbox" ? "mobile" : "desktop" })
-      }), 25000, "express-intent");
+      }), 25e3, "express-intent");
       await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("http:" + String(resp.status), threadId).run();
     } catch (e2) {
       await env.QNFO_AUDIT.prepare("UPDATE intent_express_log SET status = ?1 WHERE thread_id = ?2").bind("err:" + String(e2 && e2.message || e2).slice(0, 120), threadId).run();
@@ -1015,8 +1124,8 @@ async function expressIdea(env, text, threadId, source) {
   }
 }
 __name(expressIdea, "expressIdea");
-__name(expressIdea, "expressIdea");
-// ---- MEDIA-INGEST-1 (2026-09-03): capture image parts from chat into R2 + audit row ----
+__name2(expressIdea, "expressIdea");
+__name2(expressIdea, "expressIdea");
 function collectMediaUrls(messages) {
   const out = [];
   if (!Array.isArray(messages)) return out;
@@ -1037,7 +1146,7 @@ function collectMediaUrls(messages) {
       const meta = comma > 0 ? u.slice(5, comma) : "";
       const mime = (meta.split(";")[0] || "application/octet-stream").trim().toLowerCase();
       const b64 = comma > 0 ? u.slice(comma + 1) : "";
-      const approx = Math.floor((b64.length * 3) / 4);
+      const approx = Math.floor(b64.length * 3 / 4);
       if (approx <= 0 || approx > MAX_BYTES) continue;
       out.push({ mime, b64 });
     }
@@ -1046,19 +1155,22 @@ function collectMediaUrls(messages) {
   return out;
 }
 __name(collectMediaUrls, "collectMediaUrls");
+__name2(collectMediaUrls, "collectMediaUrls");
 async function ensureMediaTable(env) {
   if (!env.QNFO_AUDIT) return;
   try {
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS media_objects (id TEXT PRIMARY KEY, ts TEXT, thread TEXT, model TEXT, source TEXT, mime TEXT, bytes INTEGER, bucket TEXT, key TEXT, extracted_text TEXT, processed INTEGER DEFAULT 0)").run();
-  } catch (e) { /* retried next call */ }
+  } catch (e) {
+  }
 }
 __name(ensureMediaTable, "ensureMediaTable");
+__name2(ensureMediaTable, "ensureMediaTable");
 async function mediaCapture(env, messages, meta) {
   if (!env.MEDIA || !env.QNFO_AUDIT) return { skipped: "no MEDIA/QNFO_AUDIT binding" };
   const parts = collectMediaUrls(messages);
   if (!parts.length) return { skipped: "no data: images" };
   await ensureMediaTable(env);
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const day = now.slice(0, 10).replace(/-/g, "/");
   let added = 0, dup = 0;
   for (const part of parts) {
@@ -1068,20 +1180,27 @@ async function mediaCapture(env, messages, meta) {
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const digest = await crypto.subtle.digest("SHA-256", bytes);
       const id = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-      const ext = (part.mime === "image/png") ? "png" : (part.mime === "image/jpeg" || part.mime === "image/jpg") ? "jpg" : (part.mime === "image/webp") ? "webp" : (part.mime === "image/gif") ? "gif" : "bin";
+      const ext = part.mime === "image/png" ? "png" : part.mime === "image/jpeg" || part.mime === "image/jpg" ? "jpg" : part.mime === "image/webp" ? "webp" : part.mime === "image/gif" ? "gif" : "bin";
       const existing = await env.QNFO_AUDIT.prepare("SELECT id FROM media_objects WHERE id = ?1").bind(id).first();
-      if (existing) { dup++; continue; }
+      if (existing) {
+        dup++;
+        continue;
+      }
       const key = "images/" + day + "/" + id.slice(0, 2) + "/" + id + "." + ext;
       await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: part.mime } });
-      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO media_objects (id, ts, thread, model, source, mime, bytes, bucket, key, extracted_text, processed) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
-        .bind(id, now, String((meta && meta.thread) || ""), String((meta && meta.model) || ""), String((meta && meta.source) || "qnfo-ai"), part.mime, bytes.length, "qnfo-media", key, "", 0).run();
+      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO media_objects (id, ts, thread, model, source, mime, bytes, bucket, key, extracted_text, processed) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(id, now, String(meta && meta.thread || ""), String(meta && meta.model || ""), String(meta && meta.source || "qnfo-ai"), part.mime, bytes.length, "qnfo-media", key, "", 0).run();
       added++;
-    } catch (e) { /* skip bad part */ }
+    } catch (e) {
+    }
   }
-  try { await mediaPrune(env); } catch (e) { }
+  try {
+    await mediaPrune(env);
+  } catch (e) {
+  }
   return { added, dup };
 }
 __name(mediaCapture, "mediaCapture");
+__name2(mediaCapture, "mediaCapture");
 async function mediaPrune(env) {
   if (!env.MEDIA || !env.QNFO_AUDIT) return;
   try {
@@ -1090,22 +1209,36 @@ async function mediaPrune(env) {
     let over = (total && total.total || 0) - cap;
     const cutTs = new Date(Date.now() - 21 * 864e5).toISOString();
     const stale = await env.QNFO_AUDIT.prepare("SELECT id, key FROM media_objects WHERE ts < ?1 ORDER BY ts ASC LIMIT 500").bind(cutTs).all();
-    for (const row of (stale.results || [])) {
-      try { await env.MEDIA.delete(row.key); } catch (e) { }
-      try { await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE id = ?1").bind(row.id).run(); } catch (e) { }
+    for (const row of stale.results || []) {
+      try {
+        await env.MEDIA.delete(row.key);
+      } catch (e) {
+      }
+      try {
+        await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE id = ?1").bind(row.id).run();
+      } catch (e) {
+      }
     }
     if (over > 0) {
       const oldest = await env.QNFO_AUDIT.prepare("SELECT id, key, bytes FROM media_objects ORDER BY ts ASC LIMIT 1000").all();
-      for (const row of (oldest.results || [])) {
+      for (const row of oldest.results || []) {
         if (over <= 0) break;
-        try { await env.MEDIA.delete(row.key); } catch (e) { }
-        try { await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE id = ?1").bind(row.id).run(); } catch (e) { }
-        over -= (row.bytes || 0);
+        try {
+          await env.MEDIA.delete(row.key);
+        } catch (e) {
+        }
+        try {
+          await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE id = ?1").bind(row.id).run();
+        } catch (e) {
+        }
+        over -= row.bytes || 0;
       }
     }
-  } catch (e) { /* prune best-effort */ }
+  } catch (e) {
+  }
 }
 __name(mediaPrune, "mediaPrune");
+__name2(mediaPrune, "mediaPrune");
 async function mediaProcess(env, id) {
   if (!env.MEDIA || !env.QNFO_AUDIT || !env.AI) return { ok: false, error: "missing binding" };
   const row = await env.QNFO_AUDIT.prepare("SELECT id, key, mime, bucket FROM media_objects WHERE id = ?1").bind(id).first();
@@ -1119,12 +1252,12 @@ async function mediaProcess(env, id) {
     messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
     max_tokens: 1024
   });
-  const text = String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || "").trim();
-  await env.QNFO_AUDIT.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8000), id).run();
-  return { ok: true, id, extracted_text: text.slice(0, 8000) };
+  const text = String(out && (out.response || out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || "").trim();
+  await env.QNFO_AUDIT.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8e3), id).run();
+  return { ok: true, id, extracted_text: text.slice(0, 8e3) };
 }
 __name(mediaProcess, "mediaProcess");
-
+__name2(mediaProcess, "mediaProcess");
 async function handleChat(env, body, authHeader, ctx, ua) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
@@ -1139,47 +1272,38 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
   const clientToolChoice = tool_choice;
-  const _firstUser = (Array.isArray(rawMessages) ? rawMessages.find((m) => m && m.role === "user") : null);
+  const _firstUser = Array.isArray(rawMessages) ? rawMessages.find((m) => m && m.role === "user") : null;
   const _firstSlug = String(_firstUser && _firstUser.content || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || Math.random().toString(16).slice(2, 10);
-  const threadId = String(body && body.thread_id || "").trim() || "t-" + _firstSlug + "-" + new Date().toISOString().slice(0, 10);
+  const threadId = String(body && body.thread_id || "").trim() || "t-" + _firstSlug + "-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   let messages = rawMessages;
   if (!model || !Array.isArray(messages) || messages.length === 0) {
     return json({ error: "model and messages required" }, 400);
   }
-  // VISION-REMOTE-INLINE-1 (5.20.3): inline http(s) image parts to data URLs BEFORE
-  // routing so hasImageParts sees them and vision models never receive remote URLs
-  // (Workers AI vision rejects remote URIs with 3030: Malformed image URI).
   messages = await inlineRemoteImages(messages);
-  const _userTurns = (Array.isArray(rawMessages) ? rawMessages.filter((m) => m && m.role === "user") : []);
-  const _ideaText = _firstUser ? (typeof _firstUser.content === "string" ? _firstUser.content : (Array.isArray(_firstUser.content) ? _firstUser.content.filter((p) => p && typeof p.text === "string").map((p) => p.text).join(" ").slice(0, 500) : "")) : "";
+  const _userTurns = Array.isArray(rawMessages) ? rawMessages.filter((m) => m && m.role === "user") : [];
+  const _ideaText = _firstUser ? typeof _firstUser.content === "string" ? _firstUser.content : Array.isArray(_firstUser.content) ? _firstUser.content.filter((p) => p && typeof p.text === "string").map((p) => p.text).join(" ").slice(0, 500) : "" : "";
   const _uaL = String(ua || "").toLowerCase();
   const _ideaSource = _uaL.indexOf("chatbox") >= 0 || _uaL.indexOf("dart") >= 0 || _uaL.indexOf("flutter") >= 0 ? "chatbox" : _uaL.indexOf("deepchat") >= 0 ? "deepchat" : "other";
-  // v5.16.1 (QNFO.OPS.011): auto-express only for REAL chat clients (ChatBox/DeepChat).
-  // Machine traffic (curl/python/canary/browser PWA) must NOT create intents silently.
   const _isChatClient = _ideaSource === "chatbox" || _ideaSource === "deepchat";
-  // v5.16.6 (QNFO.OPS.015): ops/infra commands typed at the RESEARCH endpoint must not
-  // auto-express into the ideas/intents stream - they belong to the qnfo-ops endpoint
-  // (qnfo-ops.q08.workers.dev). Conservative guard: verb+ops-noun or explicit ops phrasing.
   var _opsCmdLike = /^(check|read|fetch|show|pull|open|list|audit|fix|run|execute|deploy|restart|redeploy|rebuild|triage|drain|process|purge|rollback|send|reply|verify|probe|scan|review|update|sync|test|clean|monitor|watch)\b[\s\S]{0,90}\b(email|inbox|mailbox|backlog|agent issue|issues?|worker|cloudflare|d1|r2|vectorize|cron|scheduler|fleet|infrastructure|deploy|pipeline|backup|secret|binding|queue|outreach|log|alert|metrics|dashboard|status|health|qnfo-ai|qnfo-ops|personal-api|qnfo-backlog-exec)\b/i.test(_ideaText) || /^(deploy|restart|rollback|triage|drain|redeploy|rebuild|execute)\b/i.test(_ideaText) || /^(check|read|show|open|fetch|pull|list)\s+(my\s+)?(email|mail|inbox|messages)\b/i.test(_ideaText) || /(check my email|audit (the |this )?(fleet|infra|worker)|fix (this|the) issue|run the pipeline|execute this research|whats the (fleet|worker|infra|qnfo-ai|qnfo-ops|personal-api) (status|health)|(whats|what is|whats the) (the )?(status|health|version|uptime) of (the )?(qnfo-ai|qnfo-ops|personal-api|qnfo-backlog-exec|research endpoint|ops endpoint))/i.test(_ideaText);
   if (env.INTENT_TOKEN && _isChatClient && _userTurns.length <= 1 && _ideaText.trim().length >= 12 && ua && ua.trim().length > 0 && !_opsCmdLike) {
     ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId, _ideaSource));
   }
   const hasImage = hasImageParts(messages);
   if (hasImage && env.MEDIA) {
-    ctx.waitUntil(mediaCapture(env, rawMessages, { thread: threadId, model: String(body && body.model || "auto"), source: "qnfo-ai" }).catch((e) => { console.log("media capture:", e && e.message || e); }));
+    ctx.waitUntil(mediaCapture(env, rawMessages, { thread: threadId, model: String(body && body.model || "auto"), source: "qnfo-ai" }).catch((e) => {
+      console.log("media capture:", e && e.message || e);
+    }));
   }
   const wantsCode = body.run_code === true || body.run_code === "true" || body.agent === true || body.agent === "true" || wantsAgentTools(body, messages) || Array.isArray(tools) && tools.some((t) => t && t.function && t.function.name === "run_code");
-  // ROUTER-CONTEXT-GAP-1 (2026-09-01): ALWAYS inject the QNFO-internal gloss even when the
-  // client (ChatBox) supplies its own system message — merge as an extra system message so
-  // internal feature names (JPCUB/QWAV/PaQit/QNFO) are never answered as "not in literature".
-  const SYS = DEFAULT_SYSTEM_PROMPT + "\n\nToday is " + new Date().toISOString().slice(0, 10) + " (UTC). Ground all time-relative statements (today, next week, deadlines, calendar windows) in this date.";
+  const SYS = DEFAULT_SYSTEM_PROMPT + "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground all time-relative statements (today, next week, deadlines, calendar windows) in this date.";
   messages = [{ role: "system", content: SYS }, ...messages];
-  // QNFO.OPS.010 Stage C: twin calendar retrieval (plane=qnfo, DATA-ONLY block).
   if (env.CAL_API) {
     try {
       const _calCtx = await getCalendarContext(env);
       if (_calCtx) messages = [{ role: "system", content: SYS }, { role: "system", content: _calCtx }, ...messages];
-    } catch (e) { /* calendar context best-effort */ }
+    } catch (e) {
+    }
   }
   const _contWords = ["continue", "whats next", "what's next", "what next", "you tell me", "go on", "resume", "proceed", "keep going", "and then", "next", "next step"];
   const _cp0 = lastUserText(messages).trim().toLowerCase().replace(/[.!?]+$/g, "").trim();
@@ -1250,7 +1374,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       }
     }
   }
-  const mkLogRec = /* @__PURE__ */ __name(() => ({
+  const mkLogRec = /* @__PURE__ */ __name2(() => ({
     id: "q-" + Math.random().toString(16).slice(2, 18),
     ts: (/* @__PURE__ */ new Date()).toISOString(),
     model: routedModel,
@@ -1266,13 +1390,13 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     rag_sources: webSources ? JSON.stringify(webSources.slice(0, 3).map((s) => s.url)) : null,
     streamed: 1,
     _t0: t0,
-    source: ((ua || "").toLowerCase().indexOf("chatbox") >= 0 || (ua || "").toLowerCase().indexOf("dart") >= 0 || (ua || "").toLowerCase().indexOf("flutter") >= 0 ? "chatbox" : (ua || "").toLowerCase().indexOf("deepchat") >= 0 ? "deepchat" : "other"),
+    source: (ua || "").toLowerCase().indexOf("chatbox") >= 0 || (ua || "").toLowerCase().indexOf("dart") >= 0 || (ua || "").toLowerCase().indexOf("flutter") >= 0 ? "chatbox" : (ua || "").toLowerCase().indexOf("deepchat") >= 0 ? "deepchat" : "other",
     ua: String(ua || "").slice(0, 200),
     worker: "qnfo-ai",
     messages_json: JSON.stringify((rawMessages || messages).slice(-100)),
     thread_id: threadId
   }), "mkLogRec");
-  const mkRouter = /* @__PURE__ */ __name((routed, strategy, extra = {}) => ({
+  const mkRouter = /* @__PURE__ */ __name2((routed, strategy, extra = {}) => ({
     routed_model: routed,
     tier: MODELS[routed]?.tier ?? 0,
     complexity: cls.complexity,
@@ -1327,13 +1451,13 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   if (isEnsemble || autoEnsemble) {
     try {
-      const ensResp = /* @__PURE__ */ __name((content, body2) => {
+      const ensResp = /* @__PURE__ */ __name2((content, body2) => {
         const logRec = { ...mkLogRec(), model: "ensemble", streamed: isStream ? 1 : 0, response: String(content).slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
         if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
         if (isStream) {
           const enc8 = new TextEncoder();
           const nlnl = String.fromCharCode(10, 10);
-          const chunk = /* @__PURE__ */ __name((delta, finish) => enc8.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "ensemble", choices: [{ index: 0, delta, finish_reason: finish }] }) + nlnl), "chunk");
+          const chunk = /* @__PURE__ */ __name2((delta, finish) => enc8.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "ensemble", choices: [{ index: 0, delta, finish_reason: finish }] }) + nlnl), "chunk");
           const stream2 = new ReadableStream({
             start(controller) {
               controller.enqueue(chunk({ role: "assistant", content }, null));
@@ -1396,14 +1520,14 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   if (isStream) {
     try {
-            if (effSpec.wa) {
+      if (effSpec.wa) {
         const sTools = Array.isArray(tools) && tools.length ? tools : null;
         const sToolMode = !!sTools && !!effSpec.tools;
         const waOut0 = await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false, {
           temperature: effTemp,
           top_p: effTopP,
           tools: sToolMode ? sTools : void 0,
-          tool_choice: sToolMode ? (clientToolChoice || "auto") : void 0,
+          tool_choice: sToolMode ? clientToolChoice || "auto" : void 0,
           vision: effSpec.vision
         });
         const waToolCalls = sToolMode ? extractWAToolCalls(waOut0) : null;
@@ -1425,15 +1549,19 @@ async function handleChat(env, body, authHeader, ctx, ua) {
         if (!waContent || !String(waContent).trim()) {
           const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
-            if (!wafb || (wafb.wa && wafb.wa === effSpec.wa)) continue;
+            if (!wafb || wafb.wa && wafb.wa === effSpec.wa) continue;
             try {
               let wafbOut;
               if (wafb.wa) wafbOut = await runWorkersAI(env, wafb.wa, messages, clampTokens(max_tokens, Math.min(wafb.maxOut || 8192, DEFAULT_MAX_OUT)), false);
               else if (wafb.api) wafbOut = await callDeepSeek(env, wafb.api, messages, clampTokens(max_tokens, DEFAULT_MAX_OUT), false);
               else continue;
               const wafbText = stripToolMarkup(extractWAContent(wafbOut));
-              if (wafbText && String(wafbText).trim()) { waContent = wafbText; break; }
-            } catch (e2) {}
+              if (wafbText && String(wafbText).trim()) {
+                waContent = wafbText;
+                break;
+              }
+            } catch (e2) {
+            }
           }
         }
         waContent = (waContent || "").trim() || FALLBACK_TEXT;
@@ -1450,7 +1578,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
         });
         return streamWithLog(new Response(stream0, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
       }
-if (effSpec.api) {
+      if (effSpec.api) {
         const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP, tool_choice: clientToolChoice });
         return streamWithLog(upstream, env, ctx, mkLogRec());
       }
@@ -1488,8 +1616,13 @@ if (effSpec.api) {
         try {
           const fbCap = Math.min(clampTokens(max_tokens, DEFAULT_MAX_OUT), fbSpec.maxOut || 8192);
           const fbTurn = await runModelTurn(env, fbSpec, messages, fbCap, null, 0.3, 0.95);
-          if (fbTurn.content && String(fbTurn.content).trim().length > 0) { content = fbTurn.content; provider = fbTurn.provider || provider; break; }
-        } catch (e) {}
+          if (fbTurn.content && String(fbTurn.content).trim().length > 0) {
+            content = fbTurn.content;
+            provider = fbTurn.provider || provider;
+            break;
+          }
+        } catch (e) {
+        }
       }
     }
     if (wantsCode && toolCalls && toolCalls.length) {
@@ -1539,6 +1672,7 @@ if (effSpec.api) {
   }
 }
 __name(handleChat, "handleChat");
+__name2(handleChat, "handleChat");
 function lastUserText(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -1552,6 +1686,7 @@ function lastUserText(messages) {
   return "";
 }
 __name(lastUserText, "lastUserText");
+__name2(lastUserText, "lastUserText");
 async function logQuery(env, record) {
   try {
     if (env.QNFO_AUDIT) {
@@ -1580,7 +1715,6 @@ async function logQuery(env, record) {
       const _isClassifierJson = /^\{\s*"type"\s*:/.test(_respText);
       const _isCOTDump = /^1\.\s*\*\*Analyze/i.test(_respText) || /^Okay, the user is asking/i.test(_respText) || /^The user is asking/i.test(_respText) || /^Let me understand/i.test(_respText);
       const _isFallback = _respText.indexOf("I could not generate a response") >= 0 || _respText === FALLBACK_TEXT;
-      // v5.16.4: reuse probe/machine predicate computed above
       const _isPublicRow = _respText.length > 0 && !_isClassifierJson && !_isCOTDump && !_isFallback && !_machineUA && !_internalProbe && record.model !== "web-search";
       if (_isPublicRow) {
         await env.QNFO_AUDIT.batch([
@@ -1592,7 +1726,6 @@ async function logQuery(env, record) {
   } catch (e) {
     console.log("chat thread log failed:", e && e.message || e);
   }
-
   try {
     if (env.LOG_VZ && env.AI && !_internalProbe) {
       const text = [record.prompt.slice(0, 2e3), record.response.slice(0, 2e3)].filter(Boolean);
@@ -1613,6 +1746,7 @@ async function logQuery(env, record) {
   }
 }
 __name(logQuery, "logQuery");
+__name2(logQuery, "logQuery");
 function streamWithLog(upstream, env, ctx, rec) {
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
@@ -1669,10 +1803,12 @@ function streamWithLog(upstream, env, ctx, rec) {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
 }
 __name(streamWithLog, "streamWithLog");
+__name2(streamWithLog, "streamWithLog");
 function cleanText(html) {
   return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'").replace(/&#x26;/g, "&").replace(/&#039;/g, "'").replace(/\s+/g, " ").trim();
 }
 __name(cleanText, "cleanText");
+__name2(cleanText, "cleanText");
 function isPrivateHost(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
   if (h === "localhost" || h === "::1" || h === "[::1]") return true;
@@ -1681,6 +1817,7 @@ function isPrivateHost(host) {
   return false;
 }
 __name(isPrivateHost, "isPrivateHost");
+__name2(isPrivateHost, "isPrivateHost");
 function parseDdg(html, isLite, k) {
   const results = [];
   if (!isLite) {
@@ -1731,6 +1868,7 @@ function parseDdg(html, isLite, k) {
   return results;
 }
 __name(parseDdg, "parseDdg");
+__name2(parseDdg, "parseDdg");
 async function webSearch(q, k) {
   const qq = encodeURIComponent(q);
   const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept": "text/html" };
@@ -1753,6 +1891,7 @@ async function webSearch(q, k) {
   return { error: "search engine unreachable" };
 }
 __name(webSearch, "webSearch");
+__name2(webSearch, "webSearch");
 async function browserMarkdown(env, url, maxChars) {
   try {
     const token = env.CF_TOKEN || env.CF_API_TOKEN;
@@ -1764,12 +1903,15 @@ async function browserMarkdown(env, url, maxChars) {
     });
     if (!r.ok) return null;
     const j = await r.json();
-    const md = j && j.success && j.result ? (typeof j.result === "string" ? j.result : JSON.stringify(j.result)) : "";
+    const md = j && j.success && j.result ? typeof j.result === "string" ? j.result : JSON.stringify(j.result) : "";
     if (!md) return null;
     const cap = Math.max(Number(maxChars) || 6e3, 500);
     return { url, text: md.slice(0, cap), truncated: md.length > cap };
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
+__name(browserMarkdown, "browserMarkdown");
 async function webFetch(url, maxChars, env) {
   const u = new URL(url);
   if (!/^https?:$/i.test(u.protocol)) return { error: "only http(s) URLs" };
@@ -1791,6 +1933,7 @@ async function webFetch(url, maxChars, env) {
   return result;
 }
 __name(webFetch, "webFetch");
+__name2(webFetch, "webFetch");
 async function authOk(header, env) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!header || !header.startsWith("Bearer ") || !expected) return false;
@@ -1801,6 +1944,7 @@ async function authOk(header, env) {
   return timingSafeEqual(a, b);
 }
 __name(authOk, "authOk");
+__name2(authOk, "authOk");
 var PLAYGROUND_HTML = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content=
@@ -1827,12 +1971,12 @@ function inlineMd(x){
     var seg=parts[i].split('**');var mid=[];
     for(var j=0;j<seg.length;j++){mid.push(j%2===1?'<b>'+esc(seg[j])+'</b>':esc(seg[j]));}
     var t=mid.join('');
-    out.push(t.replace(/(https?:\/\/[^\s<]+)/g,function(u){var clean=u.replace(/[.,;:!?)]+$/,'');return '<a href="'+clean+'" target="_blank" rel="noopener">'+clean+'</a>';}));
+    out.push(t.replace(/(https?://[^s<]+)/g,function(u){var clean=u.replace(/[.,;:!?)]+$/,'');return '<a href="'+clean+'" target="_blank" rel="noopener">'+clean+'</a>';}));
   }
   return out.join('');
 }
 function tableRow(r){
-  var v=String(r||'').replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|');
+  var v=String(r||'').replace(/^s*|/,'').replace(/|s*$/,'').split('|');
   var o=[];for(var i=0;i<v.length;i++){o.push(v[i].trim());}
   return o;
 }
@@ -1843,8 +1987,8 @@ function mdText(t){
   while(i<lines.length){
     var line=lines[i];
     if(!line.trim()){i++;continue;}
-    if(/^\s*\|.*\|\s*$/.test(line)&&i+1<lines.length&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
-      var rows=[];while(i<lines.length&&/^\s*\|.*\|\s*$/.test(lines[i])){rows.push(lines[i].trim());i++;}
+    if(/^s*|.*|s*$/.test(line)&&i+1<lines.length&&/^s*|?[s:|-]+|?s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
+      var rows=[];while(i<lines.length&&/^s*|.*|s*$/.test(lines[i])){rows.push(lines[i].trim());i++;}
       if(rows.length>=2){
         var head=tableRow(rows[0]);var body='';
         for(var r2=2;r2<rows.length;r2++){var cells=tableRow(rows[r2]);var tds='';for(var c2=0;c2<cells.length;c2++){tds+='<td>'+inlineMd(cells[c2])+'</td>';}body+='<tr>'+tds+'</tr>';}
@@ -1853,26 +1997,26 @@ function mdText(t){
         continue;
       }
     }
-    var hm=/^(#{1,6})\s+(.*)$/.exec(line);
+    var hm=/^(#{1,6})s+(.*)$/.exec(line);
     if(hm){var lv=hm[1].length;html.push('<h'+lv+'>'+inlineMd(hm[2])+'</h'+lv+'>');i++;continue;}
-    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){html.push('<hr>');i++;continue;}
-    if(/^\s*>\s?/.test(line)){
-      var q=[];while(i<lines.length&&/^\s*>\s?/.test(lines[i])){q.push(lines[i].replace(/^\s*>\s?/,''));i++;}
+    if(/^s*(-{3,}|*{3,}|_{3,})s*$/.test(line)){html.push('<hr>');i++;continue;}
+    if(/^s*>s?/.test(line)){
+      var q=[];while(i<lines.length&&/^s*>s?/.test(lines[i])){q.push(lines[i].replace(/^s*>s?/,''));i++;}
       html.push('<blockquote>'+q.map(function(x){return inlineMd(x);}).join('<br>')+'</blockquote>');
       continue;
     }
-    if(/^\s*[-*+]\s+/.test(line)){
-      var items=[];while(i<lines.length&&/^\s*[-*+]\s+/.test(lines[i])){items.push(lines[i].replace(/^\s*[-*+]\s+/,''));i++;}
+    if(/^s*[-*+]s+/.test(line)){
+      var items=[];while(i<lines.length&&/^s*[-*+]s+/.test(lines[i])){items.push(lines[i].replace(/^s*[-*+]s+/,''));i++;}
       html.push('<ul>'+items.map(function(x){return '<li>'+inlineMd(x)+'</li>';}).join('')+'</ul>');
       continue;
     }
-    if(/^\s*\d+[.)]\s+/.test(line)){
-      var oi=[];while(i<lines.length&&/^\s*\d+[.)]\s+/.test(lines[i])){oi.push(lines[i].replace(/^\s*\d+[.)]\s+/,''));i++;}
+    if(/^s*d+[.)]s+/.test(line)){
+      var oi=[];while(i<lines.length&&/^s*d+[.)]s+/.test(lines[i])){oi.push(lines[i].replace(/^s*d+[.)]s+/,''));i++;}
       html.push('<ol>'+oi.map(function(x){return '<li>'+inlineMd(x)+'</li>';}).join('')+'</ol>');
       continue;
     }
     var para=[];
-    while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^#{1,6}\s/.test(lines[i])&&!/^\s*>/.test(lines[i])&&!/^\s*[-*+]\s+/.test(lines[i])&&!/^\s*\d+[.)]\s+/.test(lines[i])&&!/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])){
+    while(i<lines.length&&!/^s*$/.test(lines[i])&&!/^#{1,6}s/.test(lines[i])&&!/^s*>/.test(lines[i])&&!/^s*[-*+]s+/.test(lines[i])&&!/^s*d+[.)]s+/.test(lines[i])&&!/^s*(-{3,}|*{3,}|_{3,})s*$/.test(lines[i])){
       para.push(inlineMd(lines[i]));i++;
     }
     if(para.length)html.push('<p>'+para.join('<br>')+'</p>');
@@ -1884,7 +2028,9 @@ function md(s){
   var blocks=String(s||'').split(tb);
   for(var i=0;i<blocks.length;i++){
     var b=blocks[i];
-    if(i%2===1){out.push('<pre>'+esc(b.replace(/^\n/,'').replace(/\n$/,''))+'</pre>');}
+    if(i%2===1){out.push('<pre>'+esc(b.replace(/^
+/,'').replace(/
+$/,''))+'</pre>');}
     else{out.push(mdText(b));}
   }
   return out.join('');
@@ -1961,7 +2107,8 @@ var worker_default = {
           ai: !!env.AI,
           deepseek_key: !!env.DEEPSEEK_API_KEY,
           cf_token: !!env.CF_API_TOKEN,
-          auth: !!env.ROUTER_AUTH_KEY, loader: !!env.LOADER,
+          auth: !!env.ROUTER_AUTH_KEY,
+          loader: !!env.LOADER,
           paper_vz: !!env.PAPER_VZ,
           notes_vz: !!env.NOTES_VZ,
           tasks_vz: !!env.TASKS_VZ,
@@ -2056,7 +2203,7 @@ var worker_default = {
       };
       if (body.stream) {
         const encoder = new TextEncoder();
-        const enc = /* @__PURE__ */ __name((obj) => encoder.encode("data: " + JSON.stringify(obj) + "\n\n"), "enc");
+        const enc = /* @__PURE__ */ __name2((obj) => encoder.encode("data: " + JSON.stringify(obj) + "\n\n"), "enc");
         const stream = new ReadableStream({
           start(controller) {
             if (text) {
@@ -2192,9 +2339,6 @@ var worker_default = {
       try {
         const r = await webSearch(q, k);
         if (r.error) return json({ error: r.error }, 502);
-        // v5.16.0 (QNFO.OPS.011I): internal /v1/web/search helper calls are no longer logged
-        // to ai_queries - RAG helper traffic, not user chat; by-design blank responses
-        // distorted chat-quality metrics (G4).
         return json({ query: q, engine: "duckduckgo", count: r.results.length, results: r.results });
       } catch (e) {
         return json({ error: e.message }, 500);
@@ -2250,7 +2394,7 @@ var worker_default = {
     if (path.startsWith("/v1/media/") && method === "POST") {
       const authH = request.headers.get("Authorization") || "";
       if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
-      const id = decodeURIComponent(path.slice("/v1/media/".length).split("/")[0] || "")
+      const id = decodeURIComponent(path.slice("/v1/media/".length).split("/")[0] || "");
       const pr = await mediaProcess(env, id);
       return json(pr, pr.ok ? 200 : 502);
     }

@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.20.4"; // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.20.5"; // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -42,7 +42,7 @@ var MODELS = {
   // account owner's behalf (explicit user directive "accept all terms").
   "llama-3.2-11b-vision": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-11b-vision-instruct", reasoning: false, maxOut: 2048, ctx: 131072, temp: 0.6, topP: 0.9, tools: false, vision: true },
   // DeepSeek API (1M context)
-  "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 8192, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
+  "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 32768, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 8192, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
   "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat", maxOut: 8192, ctx: 1048576, temp: 0.4, topP: 0.9, tools: true, vision: false }
   // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
@@ -68,6 +68,8 @@ var MAX_OUT = {
   "@cf/openai/gpt-oss-120b": 32768,
   "@cf/deepseek-ai/deepseek-v4-flash-0731": 8192,
   "@cf/deepseek-ai/deepseek-v4-pro-0813": 32768,
+  "deepseek-chat": 32768, // tier-1 DeepSeek API output cap (raised from DEFAULT 8192 for #415 full-length papers)
+  "deepseek-reasoner": 32768,
   "@cf/moonshotai/kimi-k2.7-code": 32768,
   "@cf/zai-org/glm-5.3": 8192
 };
@@ -847,7 +849,7 @@ tWAContent(result.result, depth + 1);
 __name(extractWAContent, "extractWAContent");
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
   const { temperature, top_p, tool_choice } = opts;
-  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false };
+  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT), stream: stream || false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = tool_choice || "auto";

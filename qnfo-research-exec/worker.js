@@ -1,9 +1,11 @@
-var VERSION = "0.4.7";
+var VERSION = "0.4.8";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/qwen/qwen3-30b-a3b-fp8"];
 var MAX_NOTE = 4000, MAX_PAPER = 16000;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
+var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
+var GATEWAY_MODEL = "deepseek-v4-flash";
 
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -33,6 +35,22 @@ async function runModel(env, prompt, maxTokens) {
     }
   }
   return "";
+}
+
+async function gatewayPaper(env, prompt) {
+  if (!env.ROUTER_TOKEN) { await logEvent(env, "ai-error", "gateway: no ROUTER_TOKEN"); return ""; }
+  try {
+    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }) });
+    if (!r.ok) { await logEvent(env, "ai-error", "gateway " + r.status); return ""; }
+    const d = await r.json();
+    const c = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+    if (c && String(c).trim().length > 40) return String(c).trim();
+    await logEvent(env, "ai-empty", "gateway empty/shallow");
+    return "";
+  } catch (e) {
+    await logEvent(env, "ai-error", "gateway threw: " + String(e && e.message || e).slice(0, 200));
+    return "";
+  }
 }
 
 var NOTE_PROMPT = [
@@ -126,7 +144,9 @@ async function genNote(env, row) {
 
 async function genPaper(env, row) {
   const note = row.context || row.idea || row.summary;
-  const paper = await runModel(env, PAPER_PROMPT + "\n\n" + (row.idea || row.summary) + "\n\nNOTE:\n" + note, MAX_PAPER);
+  const prompt = PAPER_PROMPT + "\n\n" + (row.idea || row.summary) + "\n\nNOTE:\n" + note;
+  let paper = await gatewayPaper(env, prompt);
+  if (!paper) paper = await runModel(env, prompt, MAX_PAPER);
   if (!paper) { await markError(env, row, "paper empty (all models)"); return { ok:false, stage:"draft" }; }
   const title = cleanTitle(paper);
   const abstract = cleanAbstract(paper);
@@ -191,4 +211,5 @@ export default {
     return json({ error:"not found" }, 404);
   }
 };
+
 
