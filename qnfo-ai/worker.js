@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.18.0"; // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.19.0"; // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run, avoids GW_COMPAT multimodal mangle) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -970,6 +970,116 @@ async function expressIdea(env, text, threadId, source) {
   }
 }
 __name(expressIdea, "expressIdea");
+__name(expressIdea, "expressIdea");
+// ---- MEDIA-INGEST-1 (2026-09-03): capture image parts from chat into R2 + audit row ----
+function collectMediaUrls(messages) {
+  const out = [];
+  if (!Array.isArray(messages)) return out;
+  const MAX_PER_REQ = 10;
+  const MAX_BYTES = 15 * 1024 * 1024;
+  for (const m of messages) {
+    if (!m || typeof m !== "object") continue;
+    const c = m.content;
+    if (!Array.isArray(c)) continue;
+    for (const part of c) {
+      if (!part || typeof part !== "object") continue;
+      let u = null;
+      if (part.type === "image_url" || part.type === "input_image" || part.type === "image") u = typeof part.image_url === "string" ? part.image_url : part.image_url && part.image_url.url;
+      else if (part.image_url) u = typeof part.image_url === "string" ? part.image_url : part.image_url && part.image_url.url;
+      if (!u || typeof u !== "string" || !u.startsWith("data:")) continue;
+      if (out.length >= MAX_PER_REQ) break;
+      const comma = u.indexOf(",");
+      const meta = comma > 0 ? u.slice(5, comma) : "";
+      const mime = (meta.split(";")[0] || "application/octet-stream").trim().toLowerCase();
+      const b64 = comma > 0 ? u.slice(comma + 1) : "";
+      const approx = Math.floor((b64.length * 3) / 4);
+      if (approx <= 0 || approx > MAX_BYTES) continue;
+      out.push({ mime, b64 });
+    }
+    if (out.length >= MAX_PER_REQ) break;
+  }
+  return out;
+}
+__name(collectMediaUrls, "collectMediaUrls");
+async function ensureMediaTable(env) {
+  if (!env.QNFO_AUDIT) return;
+  try {
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS media_objects (id TEXT PRIMARY KEY, ts TEXT, thread TEXT, model TEXT, source TEXT, mime TEXT, bytes INTEGER, bucket TEXT, key TEXT, extracted_text TEXT, processed INTEGER DEFAULT 0)").run();
+  } catch (e) { /* retried next call */ }
+}
+__name(ensureMediaTable, "ensureMediaTable");
+async function mediaCapture(env, messages, meta) {
+  if (!env.MEDIA || !env.QNFO_AUDIT) return { skipped: "no MEDIA/QNFO_AUDIT binding" };
+  const parts = collectMediaUrls(messages);
+  if (!parts.length) return { skipped: "no data: images" };
+  await ensureMediaTable(env);
+  const now = new Date().toISOString();
+  const day = now.slice(0, 10).replace(/-/g, "/");
+  let added = 0, dup = 0;
+  for (const part of parts) {
+    try {
+      const bin = atob(part.b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const id = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+      const ext = (part.mime === "image/png") ? "png" : (part.mime === "image/jpeg" || part.mime === "image/jpg") ? "jpg" : (part.mime === "image/webp") ? "webp" : (part.mime === "image/gif") ? "gif" : "bin";
+      const existing = await env.QNFO_AUDIT.prepare("SELECT id FROM media_objects WHERE id = ?1").bind(id).first();
+      if (existing) { dup++; continue; }
+      const key = "images/" + day + "/" + id.slice(0, 2) + "/" + id + "." + ext;
+      await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: part.mime } });
+      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO media_objects (id, ts, thread, model, source, mime, bytes, bucket, key, extracted_text, processed) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+        .bind(id, now, String((meta && meta.thread) || ""), String((meta && meta.model) || ""), String((meta && meta.source) || "qnfo-ai"), part.mime, bytes.length, "qnfo-media", key, "", 0).run();
+      added++;
+    } catch (e) { /* skip bad part */ }
+  }
+  try { await mediaPrune(env); } catch (e) { }
+  return { added, dup };
+}
+__name(mediaCapture, "mediaCapture");
+async function mediaPrune(env) {
+  if (!env.MEDIA || !env.QNFO_AUDIT) return;
+  try {
+    const total = await env.QNFO_AUDIT.prepare("SELECT COALESCE(SUM(bytes),0) AS total FROM media_objects").first();
+    const cap = 2 * 1024 * 1024 * 1024;
+    let over = (total && total.total || 0) - cap;
+    const cutTs = new Date(Date.now() - 21 * 864e5).toISOString();
+    const stale = await env.QNFO_AUDIT.prepare("SELECT id, key FROM media_objects WHERE ts < ?1 ORDER BY ts ASC LIMIT 500").bind(cutTs).all();
+    for (const row of (stale.results || [])) {
+      try { await env.MEDIA.delete(row.key); } catch (e) { }
+      try { await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE id = ?1").bind(row.id).run(); } catch (e) { }
+    }
+    if (over > 0) {
+      const oldest = await env.QNFO_AUDIT.prepare("SELECT id, key, bytes FROM media_objects ORDER BY ts ASC LIMIT 1000").all();
+      for (const row of (oldest.results || [])) {
+        if (over <= 0) break;
+        try { await env.MEDIA.delete(row.key); } catch (e) { }
+        try { await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE id = ?1").bind(row.id).run(); } catch (e) { }
+        over -= (row.bytes || 0);
+      }
+    }
+  } catch (e) { /* prune best-effort */ }
+}
+__name(mediaPrune, "mediaPrune");
+async function mediaProcess(env, id) {
+  if (!env.MEDIA || !env.QNFO_AUDIT || !env.AI) return { ok: false, error: "missing binding" };
+  const row = await env.QNFO_AUDIT.prepare("SELECT id, key, mime, bucket FROM media_objects WHERE id = ?1").bind(id).first();
+  if (!row) return { ok: false, error: "no such media object" };
+  const obj = await env.MEDIA.get(row.key);
+  if (!obj) return { ok: false, error: "object missing in R2" };
+  const buf = await obj.arrayBuffer();
+  const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+  const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + b64;
+  const out = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+    messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
+    max_tokens: 1024
+  });
+  const text = String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || "").trim();
+  await env.QNFO_AUDIT.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8000), id).run();
+  return { ok: true, id, extracted_text: text.slice(0, 8000) };
+}
+__name(mediaProcess, "mediaProcess");
+
 async function handleChat(env, body, authHeader, ctx, ua) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
@@ -1006,6 +1116,9 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId, _ideaSource));
   }
   const hasImage = hasImageParts(messages);
+  if (hasImage && env.MEDIA) {
+    ctx.waitUntil(mediaCapture(env, rawMessages, { thread: threadId, model: String(body && body.model || "auto"), source: "qnfo-ai" }).catch((e) => { console.log("media capture:", e && e.message || e); }));
+  }
   const wantsCode = body.run_code === true || body.run_code === "true" || body.agent === true || body.agent === "true" || wantsAgentTools(body, messages) || Array.isArray(tools) && tools.some((t) => t && t.function && t.function.name === "run_code");
   // ROUTER-CONTEXT-GAP-1 (2026-09-01): ALWAYS inject the QNFO-internal gloss even when the
   // client (ChatBox) supplies its own system message — merge as an extra system message so
@@ -2060,6 +2173,37 @@ var worker_default = {
     }
     if (path === "/icon.svg" && method === "GET") {
       return new Response(ICON_SVG, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } });
+    }
+    if (path.startsWith("/v1/media") && method === "GET") {
+      const authH = request.headers.get("Authorization") || "";
+      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!env.QNFO_AUDIT) return json({ error: "QNFO_AUDIT binding missing" }, 501);
+      await ensureMediaTable(env);
+      let rest = path.slice("/v1/media".length);
+      if (rest.charAt(0) === "/") rest = rest.slice(1);
+      rest = rest.split("/")[0] || "";
+      if (!rest || rest === "list") {
+        const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10), 1), 200);
+        const withText = (url.searchParams.get("with_text") || "") === "1";
+        const cols = "id, ts, thread, model, source, mime, bytes, key, processed" + (withText ? ", extracted_text" : "");
+        const rows = await env.QNFO_AUDIT.prepare("SELECT " + cols + " FROM media_objects ORDER BY ts DESC LIMIT ?1").bind(limit).all();
+        const total = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(bytes),0) AS bytes FROM media_objects").first();
+        return json({ count: (rows.results || []).length, total: total || { n: 0, bytes: 0 }, media: rows.results || [] });
+      }
+      const id = decodeURIComponent(rest);
+      if (!env.MEDIA) return json({ error: "MEDIA binding missing" }, 501);
+      const row = await env.QNFO_AUDIT.prepare("SELECT id, key, mime, bucket, processed, extracted_text FROM media_objects WHERE id = ?1").bind(id).first();
+      if (!row) return json({ error: "not found", id }, 404);
+      const obj = await env.MEDIA.get(row.key);
+      if (!obj) return json({ error: "object missing in R2", id }, 404);
+      return new Response(obj.body, { headers: { "Content-Type": row.mime || "application/octet-stream", "Cache-Control": "private, max-age=3600", "X-Media-Id": id, "X-Media-Processed": String(row.processed || 0) } });
+    }
+    if (path.startsWith("/v1/media/") && method === "POST") {
+      const authH = request.headers.get("Authorization") || "";
+      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      const id = decodeURIComponent(path.slice("/v1/media/".length).split("/")[0] || "")
+      const pr = await mediaProcess(env, id);
+      return json(pr, pr.ok ? 200 : 502);
     }
     return json({ error: "Not found" }, 404);
   }

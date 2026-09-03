@@ -82,3 +82,9 @@ binding = "QNFO_INTENT"
 service = "qnfo-intent-orchestrator"
 environment = "production"
 
+
+# v5.19.0 - MEDIA-INGEST-1: R2 image store (images sent to the endpoint are captured for
+# training / audit / reprocessing; retention pruned by worker mediaPrune ~2GiB/21d).
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "qnfo-media"

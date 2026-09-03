@@ -1,13 +1,25 @@
 name = "personal-api"
 main = "worker.js"
 compatibility_date = "2026-08-01"
+workers_dev = true
 
-# Deploy: wrangler deploy from this directory (canonical since v2.1.0 - all bindings
-# reproduced in this file: ai + PERSONAL d1 + VZ vectorize + CAL_API service).
-# Secrets API_KEY/CF_TOKEN/INFRA_TOKEN persist independently across wrangler deploys.
+# ============================================================
+# personal-api (personal twin) - canonical repo mirror (2026-09-03)
+# Recreated from the live deployed bundle (no local source existed) so the
+# worker now has a canonical git home + wrangler deploy path. Bindings below
+# reproduce the live settings. Secrets (never in git): API_KEY, CAL_TOKEN,
+# CF_TOKEN, INFRA_TOKEN.
+# v3.1.0: VISION-1 personal endpoint accepts images (vision-capable WA models
+# ordered first; upstream no longer answers "no image" via non-vision
+# deepseek) + MEDIA-INGEST-1 image capture to R2 personal-media + D1 table.
+# ============================================================
 
 [ai]
 binding = "AI"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
 
 [[d1_databases]]
 binding = "PERSONAL"
@@ -18,12 +30,13 @@ database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 binding = "VZ"
 index_name = "personal-life"
 
-# v2.1.0 - QNFO.OPS.010 Stage C: twin calendar retrieval (plane=personal)
 [[services]]
 binding = "CAL_API"
 service = "calendar-api"
 environment = "production"
 
-# v3.0.0 morning brief prebuild: 05:05 UTC = 07:05 Amsterdam (CEST; 06:05 UTC in winter)
-[triggers]
-crons = ["5 5 * * *"]
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "personal-media"
+
+# Secrets (wrangler secret put): API_KEY, CAL_TOKEN, CF_TOKEN, INFRA_TOKEN
