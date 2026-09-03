@@ -11,7 +11,7 @@
 //   >=6h run backoff; per-venue audit rows; self-doc /health; manual trigger /?run=1.
 // DEPLOY: cd qnfo-workers/qnfo-venue-radar && wrangler d1 execute qnfo-audit --remote --file=migrations/001_venue_radar.sql && wrangler deploy
 // CANONICAL SOURCE: github.com/QNFO/qnfo-workers -> qnfo-workers/qnfo-venue-radar/worker.js
-const VERSION = "1.0.2";
+const VERSION = "1.0.3";
 const WORKER = "qnfo-venue-radar";
 
 // QNFO research keyword buckets (extends LESSWRONG-INTEGRATION.md section 6 + events-radar DOMAINS)
@@ -129,11 +129,12 @@ async function run(env, forced) {
   const enabled = await cfg("venue_radar_enabled");
   if (enabled !== "1") return { ok: true, worker: WORKER, version: VERSION, skipped: "disabled", ts: t0 };
 
-  if (!forced) {
+  {
     const last = await cfg("last_run_utc");
     if (last) {
       const dt = Date.now() - Date.parse(last);
-      if (!Number.isNaN(dt) && dt < 6 * 3600 * 1000) return { ok: true, worker: WORKER, version: VERSION, skipped: "backoff", ts: t0 };
+      if (!Number.isNaN(dt) && dt < 6 * 3600 * 1000 && !forced) return { ok: true, worker: WORKER, version: VERSION, skipped: "backoff", ts: t0 };
+      if (!Number.isNaN(dt) && forced && dt < 5 * 60 * 1000) return { ok: true, worker: WORKER, version: VERSION, skipped: "too-frequent", ts: t0 };
     }
   }
 
