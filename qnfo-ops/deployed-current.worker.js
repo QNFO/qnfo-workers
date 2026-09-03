@@ -4,7 +4,7 @@
 // ISOLATION: logs only to qnfo-audit (ops_ai_log + cloud_ops_events); NEVER writes
 // ai_queries / chatbox_conversations / intent_express_log; never calls the intent
 // orchestrator -> the research feed and ideas stream stay clean.
-var VERSION = "1.0.4"; // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.1.0"; // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -312,6 +312,21 @@ async function callDeepSeek(env, messages, maxTokens, withTools) {
   }
   return resp.json();
 }
+async function callDeepSeekClient(env, messages, maxTokens, tools, toolChoice) {
+  const body = { model: UPSTREAM_MODEL, messages: messages, max_tokens: maxTokens, temperature: 0.5, top_p: 0.9, stream: false };
+  if (tools && tools.length) {
+    body.tools = tools;
+    body.tool_choice = toolChoice || "auto";
+  }
+  const resp = await fetch(DEEPSEEK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error("deepseek " + resp.status + ": " + (await resp.text()).slice(0, 300));
+  return resp.json();
+}
+
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) { if (arr[i] && arr[i].role === "user") return String(arr[i].content || ""); }
@@ -344,15 +359,58 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const maxOut = clamp(max_tokens, DEFAULT_MAX_OUT);
   const sysDate = "\n\nToday is " + new Date().toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
   const sys = OPS_SYSTEM_PROMPT + sysDate;
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientToolChoice = (body && body.tool_choice) || "auto";
   let msgs = [{ role: "system", content: sys }];
   for (const m of messages) {
     if (!m || !m.role) continue;
     let content = m.content;
     if (content && typeof content === "object" && !Array.isArray(content)) content = String(content.content || JSON.stringify(content));
-    if (Array.isArray(content)) content = content.map(function (p) { return p && p.text ? p.text : (typeof p === "string" ? p : ""); }).filter(Boolean).join("\n");
-    msgs.push({ role: m.role, content: String(content || "") });
+    if (Array.isArray(content)) content = content.map(function (p2) { return p2 && p2.text ? p2.text : (typeof p2 === "string" ? p2 : ""); }).filter(Boolean).join(String.fromCharCode(10));
+    const base = { role: m.role, content: String(content || "") };
+    if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length) base.tool_calls = m.tool_calls;
+    if (m.role === "tool") {
+      if (m.tool_call_id) base.tool_call_id = String(m.tool_call_id);
+      if (m.name) base.name = String(m.name);
+    }
+    msgs.push(base);
   }
   const prompt = lastUserText(msgs).slice(0, 4000);
+  if (clientTools) {
+    try {
+      const cResp = await callDeepSeekClient(env, msgs, maxOut, clientTools, clientToolChoice);
+      const cChoice = cResp && cResp.choices && cResp.choices[0];
+      const cMsg = (cChoice && cChoice.message) || {};
+      const cText = String(cMsg.content || "");
+      const cToolCalls = Array.isArray(cMsg.tool_calls) && cMsg.tool_calls.length ? cMsg.tool_calls : null;
+      const cUsage = (cResp && cResp.usage) || {};
+      const cRespId = randId("chatcmpl-");
+      const cCreated = Math.floor(Date.now() / 1000);
+      const cRec = { id: randId("ops-"), ts: iso(), model: wanted, strategy: "client-tools", prompt: prompt, response: (cText || (cToolCalls ? JSON.stringify(cToolCalls) : "")).slice(0, 20000), prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(msgs)), completion_tokens: cUsage.completion_tokens || estTokens(cText), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: cToolCalls ? JSON.stringify(cToolCalls).slice(0, 3000) : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
+      ctx.waitUntil(logOps(env, cRec));
+      const cMsgOut = { role: "assistant", content: cText };
+      if (cToolCalls) cMsgOut.tool_calls = cToolCalls;
+      const cFr = (cChoice && cChoice.finish_reason) || "stop";
+      if (isStream) {
+        const encS = new TextEncoder();
+        const nlnlS = String.fromCharCode(10, 10);
+        const streamS = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encS.encode("data: " + JSON.stringify({ id: cRespId, object: "chat.completion.chunk", created: cCreated, model: wanted, choices: [{ index: 0, delta: cMsgOut, finish_reason: null }] }) + nlnlS));
+            controller.enqueue(encS.encode("data: " + JSON.stringify({ id: cRespId + "-done", object: "chat.completion.chunk", created: cCreated, model: wanted, choices: [{ index: 0, delta: {}, finish_reason: cFr }] }) + nlnlS));
+            controller.enqueue(encS.encode("data: [DONE]" + nlnlS));
+            controller.close();
+          }
+        });
+        return new Response(streamS, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      return json({ id: cRespId, object: "chat.completion", created: cCreated, model: wanted, choices: [{ index: 0, message: cMsgOut, finish_reason: cFr }], usage: { prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(msgs)), completion_tokens: cUsage.completion_tokens || estTokens(cText), total_tokens: (cUsage.prompt_tokens || estTokens(JSON.stringify(msgs))) + (cUsage.completion_tokens || estTokens(cText)) } });
+    } catch (e) {
+      const errText = "ops client-tools error: " + (e && e.message ? e.message : String(e));
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "client-tools", prompt: prompt, response: errText.slice(0, 2000), latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
+      return json({ error: errText }, 502);
+    }
+  }
   const toolLog = [];
   let content = "";
   let finishReason = "stop";

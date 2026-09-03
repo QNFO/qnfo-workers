@@ -2,7 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.16.9"; // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+// TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
+// client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
+var VERSION = "5.17.1"; // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -248,6 +250,15 @@ function normalizeMessagesContent(messages) {
   });
 }
 __name(normalizeMessagesContent, "normalizeMessagesContent");
+function normalizeForWorkersAITools(messages) {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map((m) => {
+    if (!m || typeof m !== "object") return m;
+    if (m.content == null) return { ...m, content: "" };
+    return m;
+  });
+}
+__name(normalizeForWorkersAITools, "normalizeForWorkersAITools");
 function contentCharLen(content) {
   if (typeof content === "string") return content.length;
   if (Array.isArray(content)) {
@@ -424,7 +435,7 @@ function autoRoute(cls, prompt) {
 }
 __name(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
-  const { temperature, top_p, tools, vision } = opts;
+  const { temperature, top_p, tools, vision, tool_choice } = opts;
   const directOnly = !!(tools && tools.length) || !!vision;
   if (!directOnly && env.CF_API_TOKEN && modelId.startsWith("@cf/")) {
     try {
@@ -451,8 +462,10 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
     } catch (e) {
     }
   }
+  let waMessages = messages;
+  if (tools && tools.length) waMessages = normalizeForWorkersAITools(messages);
   const aiBody = {
-    messages,
+    messages: waMessages,
     // v4.3.5: clamp to the model's output cap so an oversized client max_tokens
     // (e.g. 32000 on a 24000-max model) cannot surface as an upstream 400 -> router 502.
     max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
@@ -462,7 +475,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
   if (Number.isFinite(top_p)) aiBody.top_p = top_p;
   if (tools && tools.length) {
     aiBody.tools = tools;
-    aiBody.tool_choice = "auto";
+    aiBody.tool_choice = tool_choice || "auto";
   }
   for (let attempt = 0; ; attempt++) {
     try {
@@ -701,18 +714,19 @@ async function executeBuiltinTools(env, toolCalls) {
   return results;
 }
 __name(executeBuiltinTools, "executeBuiltinTools");
-async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP) {
+async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP, toolChoice) {
   if (effSpec.wa) {
     const out = await runWorkersAI(env, effSpec.wa, messages, maxTokens, false, {
       temperature: effTemp,
       top_p: effTopP,
       tools: effSpec.tools ? tools : void 0,
+      tool_choice: toolChoice,
       vision: effSpec.vision
     });
     return { content: extractWAContent(out), toolCalls: extractWAToolCalls(out), provider: "workers-ai" };
   }
   if (effSpec.api) {
-    const out = await callDeepSeek(env, effSpec.api, messages, maxTokens, false, tools, { temperature: effTemp, top_p: effTopP });
+    const out = await callDeepSeek(env, effSpec.api, messages, maxTokens, false, tools, { temperature: effTemp, top_p: effTopP, tool_choice: toolChoice });
     return { content: out?.choices?.[0]?.message?.content ?? "", toolCalls: out?.choices?.[0]?.message?.tool_calls ?? null, provider: "deepseek" };
   }
   if (effSpec.gateway) {
@@ -766,11 +780,11 @@ tWAContent(result.result, depth + 1);
 }
 __name(extractWAContent, "extractWAContent");
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
-  const { temperature, top_p } = opts;
+  const { temperature, top_p, tool_choice } = opts;
   const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false };
   if (tools && tools.length) {
     body.tools = tools;
-    body.tool_choice = "auto";
+    body.tool_choice = tool_choice || "auto";
   }
   if (Number.isFinite(temperature)) body.temperature = temperature;
   if (Number.isFinite(top_p)) body.top_p = top_p;
@@ -943,7 +957,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   if (!timingSafeEqual(a, b) && !(env.ROUTER_AUTH_KEY_2 && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(env.ROUTER_AUTH_KEY_2))))) {
     return json({ error: "Unauthorized" }, 401);
   }
-  const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools } = body || {};
+  const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
+  const clientToolChoice = tool_choice;
   const _firstUser = (Array.isArray(rawMessages) ? rawMessages.find((m) => m && m.role === "user") : null);
   const _firstSlug = String(_firstUser && _firstUser.content || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || Math.random().toString(16).slice(2, 10);
   const threadId = String(body && body.thread_id || "").trim() || "t-" + _firstSlug + "-" + new Date().toISOString().slice(0, 10);
@@ -1195,7 +1210,29 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   if (isStream) {
     try {
             if (effSpec.wa) {
-        let waContent = stripToolMarkup(extractWAContent(await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false)));
+        const sTools = Array.isArray(tools) && tools.length ? tools : null;
+        const sToolMode = !!sTools && !!effSpec.tools;
+        const waOut0 = await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false, {
+          temperature: effTemp,
+          top_p: effTopP,
+          tools: sToolMode ? sTools : void 0,
+          tool_choice: sToolMode ? (clientToolChoice || "auto") : void 0
+        });
+        const waToolCalls = sToolMode ? extractWAToolCalls(waOut0) : null;
+        let waContent = stripToolMarkup(extractWAContent(waOut0));
+        if (waToolCalls && waToolCalls.length) {
+          const encT = new TextEncoder();
+          const nlnlT = String.fromCharCode(10, 10);
+          const streamT = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: waContent || "", tool_calls: waToolCalls }, finish_reason: null }] }) + nlnlT));
+              controller.enqueue(encT.encode("data: " + JSON.stringify({ id: "chatcmpl-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], _router: mkRouter(routedModel, isAuto ? "auto" : "single") }) + nlnlT));
+              controller.enqueue(encT.encode("data: [DONE]" + nlnlT));
+              controller.close();
+            }
+          });
+          return streamWithLog(new Response(streamT, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
+        }
         if (!waContent || !String(waContent).trim()) {
           const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
@@ -1225,7 +1262,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
         return streamWithLog(new Response(stream0, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
       }
 if (effSpec.api) {
-        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP });
+        const upstream = await callDeepSeek(env, effSpec.api, messages, max_tokens, true, tools, { temperature: effTemp, top_p: effTopP, tool_choice: clientToolChoice });
         return streamWithLog(upstream, env, ctx, mkLogRec());
       }
       if (effSpec.gateway) {
@@ -1243,7 +1280,7 @@ if (effSpec.api) {
       const hasRunCode = modelTools && modelTools.some((t) => t && t.function && t.function.name === "run_code");
       modelTools = (modelTools && modelTools.length ? modelTools : []).concat(GATEWAY_TOOLS.filter((t) => !(modelTools || []).some((x) => x && x.function && x.function.name === t.function.name)));
     }
-    let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP);
+    let turn = await runModelTurn(env, effSpec, messages, max_tokens, modelTools, effTemp, effTopP, clientToolChoice);
     let content = turn.content, toolCalls = turn.toolCalls, provider = turn.provider;
     if (!content && !toolCalls && !wantsCode) {
       try {
@@ -1430,6 +1467,7 @@ function streamWithLog(upstream, env, ctx, rec) {
           const fb = { id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "qnfo-ai", choices: [{ index: 0, delta: { content: FALLBACK_TEXT }, finish_reason: "stop" }] };
           controller.enqueue(encoder.encode("data: " + JSON.stringify(fb) + "\n\n"));
         }
+        controller.enqueue(encoder.encode("data: [DONE]" + String.fromCharCode(10, 10)));
         controller.close();
         markDone && markDone();
       } catch (e) {
