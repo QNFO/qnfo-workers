@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "5.16.7"; // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.16.9"; // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -722,12 +722,24 @@ async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, e
   return { content: "", toolCalls: null, provider: effSpec.family || "unknown" };
 }
 __name(runModelTurn, "runModelTurn");
+function normalizeMDWhitespace(text) {
+  // FORMAT-1 (2026-09-03): never collapse newlines. Old /\s{2,}/->" " glued every blank
+  // line into a space so GFM clients (ChatBox) saw walls of text and no tables. Collapse
+  // horizontal runs only; preserve single blank lines; fenced code stays verbatim.
+  const fence = String.fromCharCode(96).repeat(3);
+  const segs = String(text || "").split(fence);
+  for (let i = 0; i < segs.length; i++) {
+    if (i % 2 === 1) continue;
+    segs[i] = segs[i].replace(/\r\n?/g, "\n").replace(/[ \t]{2,}/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  }
+  return segs.join(fence).trim();
+}
 function stripCOT(text) {
   let t = String(text || "");
   t = t.replace(/<think>[\s\S]*?<\/think>/g, " ").replace(/<\/?think>/g, " ");
   t = t.replace(/^(Okay,?\s+)?(the\s+)?(user\s+is\s+asking|user\s+asked|user\s+wants|let\s+me\s+(?:understand|start|begin|break|explain|think|recall|analyze|first|work))[\s\S]{0,600}?(?=\n{2,}|\n[A-Z][^\n]{0,120}\n)/i, " ");
   t = t.replace(/^(First,?\s+)?(I\s+need\s+to\s+(?:explain|understand|recall|figure|work|determine|answer)|I\s+should\s+start|I\s+must\s+(?:explain|understand))[\s\S]{0,600}?(?=\n{2,}|\n[A-Z][^\n]{0,120}\n)/i, " ");
-  t = t.replace(/\s{2,}/g, " ").trim();
+  t = normalizeMDWhitespace(t);
   if (!t) return "";
   if (/^(Okay,?\s+)?(the\s+)?(user\s+is\s+asking|user\s+asked|let\s+me\s+understand|i\s+need\s+to\s+explain)/i.test(t) && t.length < 200) return "";
   return t;
@@ -796,7 +808,7 @@ function stripToolMarkup(text) {
   let t = String(text || "");
   t = t.replace(/<\|tool_calls_section_begin\|>[\s\S]*?<\|tool_calls_section_end\|>/g, " ").replace(/<\|tool_call_begin\|>[\s\S]*?<\|tool_call_end\|>/g, " ").replace(/<\|tool_call_argument_begin\|>[\s\S]*?<\|tool_call_argument_end\|>/g, " ");
   t = t.replace(/<\|tool_call(s|_call)?s?\|>/g, " ").replace(/<\|tool_calls?\|>/g, " ").replace(/<\|tool_call_arguments\|>/g, " ").replace(/\|tool_calls_section_begin\|/g, " ").replace(/\|tool_call_begin\|/g, " ").replace(/\|tool_call_argument_begin\|/g, " ");
-  t = t.replace(/function[\s]*retrieve[\s]*:/g, " ").replace(/[ \t]{2,}/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  t = t.replace(/function[\s]*retrieve[\s]*:/g, " "); t = normalizeMDWhitespace(t);
   t = t.replace(/functions?\.[a-z_]+\s*:\s*\d+/gi, " ").replace(/<\|tool_[a-z_]+\|>/gi, " ").replace(/<\|tool_calls_section_begin\|>[\s\S]*$/gi, " ").trim();
   if (/tool_calls?|function\s*call|\<tool_call/i.test(t)) t = " ";
   return t;
@@ -1568,7 +1580,7 @@ var PLAYGROUND_HTML = `<!DOCTYPE html>
 "width=device-width,initial-scale=1">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b57d0">
 <title>__TITLE__</title>
-<style>body{font-family:Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1a1a1a}header h1{font-size:1.25rem;margin:0 0 4px}header p{color:#666;margin:0 0 12px;font-size:.85rem}label{font-size:.8rem;color:#444;display:block;margin:8px 0 2px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:6px 8px;font-size:.9rem;border:1px solid #ccc;border-radius:6px}input[type=text]{flex:1;min-width:200px}input[type=password]{flex:1;min-width:200px}button{background:#0b57d0;color:#fff;border:none;cursor:pointer}button:disabled{opacity:.6}button#new{background:#fff;color:#0b57d0;border:1px solid #ccc}#msgs{margin-top:14px;border-top:1px solid #eee;padding-top:12px}.msg{margin:10px 0;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font-size:.92rem;word-break:break-word}.user{background:#eef4ff}.assistant{background:#f6f6f6}.err{color:#b3261e;font-size:.85rem;margin:8px 0}.meta{color:#888;font-size:.78rem;margin-top:6px}pre{background:#e9e9e9;padding:8px;border-radius:6px;overflow-x:auto;font-size:.85em}code{background:#e9e9e9;padding:1px 4px;border-radius:4px;font-size:.88em}pre code{background:none;padding:0}a{color:#0b57d0}</style></head>
+<style>body{font-family:Segoe UI,Roboto,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#fff;color:#1a1a1a}header h1{font-size:1.25rem;margin:0 0 4px}header p{color:#666;margin:0 0 12px;font-size:.85rem}label{font-size:.8rem;color:#444;display:block;margin:8px 0 2px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:6px 8px;font-size:.9rem;border:1px solid #ccc;border-radius:6px}input[type=text]{flex:1;min-width:200px}input[type=password]{flex:1;min-width:200px}button{background:#0b57d0;color:#fff;border:none;cursor:pointer}button:disabled{opacity:.6}button#new{background:#fff;color:#0b57d0;border:1px solid #ccc}#msgs{margin-top:14px;border-top:1px solid #eee;padding-top:12px}.msg{margin:10px 0;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font-size:.92rem;word-break:break-word}.user{background:#eef4ff}.assistant{background:#f6f6f6}.err{color:#b3261e;font-size:.85rem;margin:8px 0}.meta{color:#888;font-size:.78rem;margin-top:6px}table{border-collapse:collapse;margin:.4rem 0;max-width:100%;font-size:.88em}th,td{border:1px solid #d5d5d5;padding:4px 9px;text-align:left;vertical-align:top}th{background:#f0f2f5}blockquote{margin:.3rem 0 .3rem .4rem;padding:.1rem .6rem;border-left:3px solid #c9ccd1;color:#444}ul,ol{margin:.3rem 0 .5rem;padding-left:1.3rem}h1,h2,h3,h4,h5,h6{margin:.6rem 0 .25rem;line-height:1.3}hr{border:0;border-top:1px solid #ddd;margin:.6rem 0}pre{background:#e9e9e9;padding:8px;border-radius:6px;overflow-x:auto;font-size:.85em}code{background:#e9e9e9;padding:1px 4px;border-radius:4px;font-size:.88em}pre code{background:none;padding:0}a{color:#0b57d0}</style></head>
 <body><header><h1>__TITLE__</h1><p>OpenAI-compatible chat over Cloudflare. Key: __KEY_HINT__</p></header>
 <div class="row"><input type="password" id="key" placeholder="API key (Bearer)"><input type="text" id="thread" placeholder="thread_id (optional)"></div>
 <div class="row"><select id="model"></select><label><input type="checkbox" id="web"> web search</label><button id="new">New chat</button><span style="flex:1"></span></div>
@@ -1580,19 +1592,73 @@ var $=function(s){return document.querySelector(s);};
 var NL=String.fromCharCode(10);
 var savedModel='';
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function inlineMd(x){
+  var parts=String(x||'').split(String.fromCharCode(96));
+  var out=[];
+  for(var i=0;i<parts.length;i++){
+    if(i%2===1){out.push('<code>'+esc(parts[i])+'</code>');continue;}
+    var seg=parts[i].split('**');var mid=[];
+    for(var j=0;j<seg.length;j++){mid.push(j%2===1?'<b>'+esc(seg[j])+'</b>':esc(seg[j]));}
+    var t=mid.join('');
+    out.push(t.replace(/(https?:\/\/[^\s<]+)/g,function(u){var clean=u.replace(/[.,;:!?)]+$/,'');return '<a href="'+clean+'" target="_blank" rel="noopener">'+clean+'</a>';}));
+  }
+  return out.join('');
+}
+function tableRow(r){
+  var v=String(r||'').replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|');
+  var o=[];for(var i=0;i<v.length;i++){o.push(v[i].trim());}
+  return o;
+}
+function mdText(t){
+  var NL2=String.fromCharCode(10);
+  var lines=String(t||'').split(NL2);
+  var html=[];var i=0;
+  while(i<lines.length){
+    var line=lines[i];
+    if(!line.trim()){i++;continue;}
+    if(/^\s*\|.*\|\s*$/.test(line)&&i+1<lines.length&&/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])&&lines[i+1].indexOf('-')>=0){
+      var rows=[];while(i<lines.length&&/^\s*\|.*\|\s*$/.test(lines[i])){rows.push(lines[i].trim());i++;}
+      if(rows.length>=2){
+        var head=tableRow(rows[0]);var body='';
+        for(var r2=2;r2<rows.length;r2++){var cells=tableRow(rows[r2]);var tds='';for(var c2=0;c2<cells.length;c2++){tds+='<td>'+inlineMd(cells[c2])+'</td>';}body+='<tr>'+tds+'</tr>';}
+        var ths='';for(var c1=0;c1<head.length;c1++){ths+='<th>'+inlineMd(head[c1])+'</th>';}
+        html.push('<table><thead><tr>'+ths+'</tr></thead>'+(body?'<tbody>'+body+'</tbody>':'')+'</table>');
+        continue;
+      }
+    }
+    var hm=/^(#{1,6})\s+(.*)$/.exec(line);
+    if(hm){var lv=hm[1].length;html.push('<h'+lv+'>'+inlineMd(hm[2])+'</h'+lv+'>');i++;continue;}
+    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){html.push('<hr>');i++;continue;}
+    if(/^\s*>\s?/.test(line)){
+      var q=[];while(i<lines.length&&/^\s*>\s?/.test(lines[i])){q.push(lines[i].replace(/^\s*>\s?/,''));i++;}
+      html.push('<blockquote>'+q.map(function(x){return inlineMd(x);}).join('<br>')+'</blockquote>');
+      continue;
+    }
+    if(/^\s*[-*+]\s+/.test(line)){
+      var items=[];while(i<lines.length&&/^\s*[-*+]\s+/.test(lines[i])){items.push(lines[i].replace(/^\s*[-*+]\s+/,''));i++;}
+      html.push('<ul>'+items.map(function(x){return '<li>'+inlineMd(x)+'</li>';}).join('')+'</ul>');
+      continue;
+    }
+    if(/^\s*\d+[.)]\s+/.test(line)){
+      var oi=[];while(i<lines.length&&/^\s*\d+[.)]\s+/.test(lines[i])){oi.push(lines[i].replace(/^\s*\d+[.)]\s+/,''));i++;}
+      html.push('<ol>'+oi.map(function(x){return '<li>'+inlineMd(x)+'</li>';}).join('')+'</ol>');
+      continue;
+    }
+    var para=[];
+    while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^#{1,6}\s/.test(lines[i])&&!/^\s*>/.test(lines[i])&&!/^\s*[-*+]\s+/.test(lines[i])&&!/^\s*\d+[.)]\s+/.test(lines[i])&&!/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])){
+      para.push(inlineMd(lines[i]));i++;
+    }
+    if(para.length)html.push('<p>'+para.join('<br>')+'</p>');
+  }
+  return html.join('');
+}
 function md(s){
-  var out=[];var tb=String.fromCharCode(96).repeat(3);var blocks=String(s||'').split(tb);
+  var out=[];var tb=String.fromCharCode(96).repeat(3);
+  var blocks=String(s||'').split(tb);
   for(var i=0;i<blocks.length;i++){
     var b=blocks[i];
-    if(i%2===1){out.push('<pre>'+esc(b)+'</pre>');}
-    else{
-      var p=b.split('**');var mid=[];
-      for(var j=0;j<p.length;j++){mid.push(j%2===1?'<b>'+esc(p[j])+'</b>':esc(p[j]));}
-      var t=mid.join('');
-      var c=t.split(String.fromCharCode(96));var fin=[];
-      for(var k=0;k<c.length;k++){fin.push(k%2===1?'<code>'+c[k]+'</code>':c[k]);}
-      out.push(fin.join('').replace(/(https?://[^s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').split(NL).join('<br>'));
-    }
+    if(i%2===1){out.push('<pre>'+esc(b.replace(/^\n/,'').replace(/\n$/,''))+'</pre>');}
+    else{out.push(mdText(b));}
   }
   return out.join('');
 }
