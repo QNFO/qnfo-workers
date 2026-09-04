@@ -1,6 +1,3 @@
---685d4c6c149b02bf30f9bfbb2b6f0e3ab62e670da310b12ce1841322bf51
-Content-Disposition: form-data; name="worker.js"
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -633,5 +630,4 @@ var worker_default = {
 };
 export {
   worker_default as default
-};
---685d4c6c149b02bf30f9bfbb2b6f0e3ab62e670da310b12ce1841322bf51--
+};
