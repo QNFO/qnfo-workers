@@ -89,3 +89,22 @@ prompt is preserved; a compact ops-tool context is appended to it.
   + heartbeats (first_byte 0.14s); FLEET-COMPACT-1 parallel probes + handler-type
   compaction (fleet 13.0s->6.1s); RELAY-COST-1 relay cost tracking via include_usage
   tee; PARAM-TUNE-1 env knobs; relay honors client temperature/top_p.
+
+
+## URL routing & client-404 diagnostic lesson (URL-PATH-404-DIAGNOSTIC-1, 2026-09-04)
+Exact-match routing (path === "/v1/chat/completions") 404s when an OpenAI-compatible client
+(DeepChat) joins base_url + path with a trailing slash (/v1/chat/completions/). The 404 comes
+from the router BEFORE any handler, so the client shows "Request failed..." / "Model test
+failed: Not Found" with NO ops_ai_log row. Canonical 2026-09-04: qnfo-ops ops-exec failed in
+the real DeepChat client while curl passed full-payload tests; the cause was NOT
+reasoning_content / auth / model params - it was a 404 from URL path mismatch.
+- FIX (URL-ROBUST-1): normalize paths before routing - strip trailing slashes.
+- Diagnostic (REQ-CAPTURE-1, temporary): logs every API-looking request incl. 404s with the
+  exact path to ops_req_log.
+- LESSON: when a real client fails fast with no server-side log, read the client's own error
+  text first (model check "Not Found" = HTTP 404 = URL/path issue), then capture the actual
+  request path. curl-only verification does NOT exercise the client's URL construction.
+
+## Version history (continued)
+- v1.9.0 + URL-ROBUST-1 2026-09-04 -- trailing-slash path normalization (DeepChat 404 fix);
+  REQ-CAPTURE-1 request logger (temporary; ops_req_log) for client-404 diagnosis.
