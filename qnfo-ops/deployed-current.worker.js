@@ -2,9 +2,10 @@
 // Separate from qnfo-ai (research) and personal-api (personal). OpenAI-compatible
 // gateway for DeepChat + ChatBox that executes code/actions on the cloud-native fleet.
 // ISOLATION: logs only to qnfo-audit (ops_ai_log + cloud_ops_events); NEVER writes
-// ai_queries / chatbox_conversations / intent_express_log; never calls the intent
-// orchestrator -> the research feed and ideas stream stay clean.
-var VERSION = "1.2.5"; // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+// ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
+// called ONLY by the research_feed tool (user-invoked RESEARCH ideas) - never by
+// ops-command auto-express -> the ideas stream stays free of ops clutter.
+var VERSION = "1.3.0"; // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -54,15 +55,15 @@ var OPS_SYSTEM_PROMPT = [
   "Scope: operations on the QNFO cloud-native fleet - workers, D1, R2, Vectorize, crons, email accounts, agent backlog, audits, and running code. Research questions belong on the research endpoint; ops commands belong here.",
   "Rules:",
   "1. EXECUTE, DO NOT NARRATE: when the user asks for an ops action (check email, list open issues, fleet status, run an audit, execute this snippet), call the matching tool and report REAL results with evidence. Never fabricate tool output, counts, versions, or statuses.",
-  "2. Tools: fleet_status, ops_issues_list, ops_issue_run, ops_d1_query, email_check, email_stats, ops_fleet_log, email_mark, email_respond.",
+  "2. Tools: fleet_status (full 62-worker fleet), ops_issues_list, ops_issue_run, ops_d1_query (multi-DB read-only), vectorize_query (research corpus + notes/tasks/handoffs), r2_list, r2_get, kv_get, research_feed (ideation -> research pipeline), email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code.",
   "3. Heavy or mutating actions (ops_issue_run triggers the backlog-executor drain) require confirm:true; with confirm false or omitted, return the plan and what would run, without executing.",
   "3b. email_respond sends a REPLY inside an existing inbound thread only (reply_to_id required) and requires explicit affirmation in the latest user message (yes / please reply / send it / go ahead). Subjects containing spam-trip tokens (TEST, VERIFY, CANARY, MATRIX, PIPELINE TEST) are rejected. email_mark updates a message status (read/processed/archived/spam/rejected).",
-  "4. ops_d1_query is READ-ONLY SELECT/WITH on the qnfo-audit database (tables incl. agent_issues, ai_queries, cloud_ops_events, ops_ai_log, handoffs, outreach_log, sent_log). Never attempt writes; never echo credentials; add LIMIT unless the query is an aggregate.",
-  "5. Arbitrary JavaScript execution is NOT available on the Cloudflare Workers runtime (dynamic code generation is disallowed). Code-shaped ops requests are executed through the typed tools: SQL via ops_d1_query, drains via ops_issue_run, probes via fleet_status, mailbox reads via email_check/email_stats. State this constraint plainly when asked to run raw JS.",
+  "4. ops_d1_query is READ-ONLY SELECT/WITH across ALL bound D1 databases. Pass db = audit|living|graph|portfolio|outreach|cms|ipatent|personal (default audit). qnfo-audit tables incl. agent_issues, ai_queries, cloud_ops_events, ops_ai_log, handoffs, outreach_log, sent_log. living-paper = research papers store; qnfo-graph = knowledge graph. Never attempt writes; never echo credentials; add LIMIT unless the query is an aggregate.",
+  "5. Code-shaped requests execute through the typed tools: SQL via ops_d1_query, corpus search via vectorize_query, object reads via r2_list/r2_get, key reads via kv_get, drains via ops_issue_run, probes via fleet_status, mailbox via email_check/email_stats. Pure-compute code runs via run_code (Dynamic Workers LOADER, no network/filesystem/secrets). Never fabricate run_code output.",
   "6. Answer concisely with Markdown; lead with the direct result and the evidence the tools returned (versions, counts, ids, statuses). Plain neutral prose, no persona, no filler, no meta-commentary.",
   "7. Never claim an action succeeded unless the tool returned ok. On error report the exact error text.",
   "8. Every executed tool call is logged to qnfo-audit (ops_ai_log + cloud_ops_events). This log is the audit trail for everything you do.",
-  "9. Internal fleet context: qnfo-ai = research gateway, qnfo-ops = this ops endpoint, personal-api = personal twin, qnfo-intent-orchestrator = ideas/intents stream (NOT used here), qnfo-backlog-exec = agent-issue drainer, qnfo-cloud-ops = weekly visibility digest, qnfo-audit D1 = ops/audit store, living-paper D1 = research papers store."
+  "9. Internal fleet context: qnfo-ai = research gateway, qnfo-ops = this ops endpoint, personal-api = personal twin, qnfo-intent-orchestrator = ideas/intents stream (research_feed expresses RESEARCH ideas there ONLY, never ops commands), qnfo-backlog-exec = agent-issue drainer, qnfo-cloud-ops = weekly visibility digest. Bound resources: D1 (qnfo-audit, living-paper, qnfo-graph, portfolio-state, qnfo-outreach, qnfo-cms, ipatent-db, personal-life), Vectorize (qwav-research-v2, qnfo-notes, qnfo-tasks, qnfo-handoffs, qnfo-ai-log), R2 (qnfo-releases, qnfo-audit, qnfo-backups, qnfo-skills), KV (equation-cache)."
 ].join(String.fromCharCode(10));
 
 // ---------------------------------------------------------------- tools
@@ -70,7 +71,12 @@ var OPS_TOOLS = [
   { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-email-orchestrator, qnfo-paper-indexer, qnfo-kaizen, qnfo-gateway, qnfo-archive, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-skill-sync, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_issues_list", description: "List agent issues from qnfo-audit agent_issues (the ops backlog). Default: open issues, newest first.", parameters: { type: "object", properties: { status: { type: "string", enum: ["open", "closed", "all"], description: "issue status filter (default open)" }, priority: { type: "string", enum: ["high", "medium", "low"], description: "optional priority filter" }, limit: { type: "number", description: "max rows 1-50 (default 20)" } }, additionalProperties: false } },
   { name: "ops_issue_run", description: "Trigger the qnfo-backlog-exec drain on open agent_issues (safe by design: it only auto-closes health-availability rows whose re-probe PASSes; failures are escalated to alerts). confirm must be true to execute; otherwise returns the plan.", parameters: { type: "object", properties: { confirm: { type: "boolean", description: "must be true to trigger the drain" } }, additionalProperties: false } },
-  { name: "ops_d1_query", description: "READ-ONLY query on the qnfo-audit D1 database. Accepts a single SELECT or WITH...SELECT statement; aggregates exempt from LIMIT; plain selects need LIMIT. Returns up to 100 rows.", parameters: { type: "object", properties: { sql: { type: "string", description: "read-only SQL (SELECT/WITH)" } }, required: ["sql"], additionalProperties: false } },
+  { name: "ops_d1_query", description: "READ-ONLY SQL (SELECT/WITH) across the bound D1 databases. db selects the target: audit (default) | living | graph | portfolio | outreach | cms | ipatent | personal. Aggregates exempt from LIMIT; plain selects need LIMIT. Returns up to 100 rows.", parameters: { type: "object", properties: { db: { type: "string", enum: ["audit", "living", "graph", "portfolio", "outreach", "cms", "ipatent", "personal"], description: "target database (default audit)" }, sql: { type: "string", description: "read-only SQL (SELECT/WITH)" } }, required: ["sql"], additionalProperties: false } },
+  { name: "vectorize_query", description: "Semantic search a bound Vectorize index: research (qwav-research-v2 corpus), notes (qnfo-notes), tasks (qnfo-tasks), handoffs (qnfo-handoffs), ailog (qnfo-ai-log). Returns top matches with scores + ids + metadata.", parameters: { type: "object", properties: { index: { type: "string", enum: ["research", "notes", "tasks", "handoffs", "ailog"], description: "index to query (default research)" }, q: { type: "string", description: "query text" }, topK: { type: "number", description: "1-20 (default 5)" } }, required: ["q"], additionalProperties: false } },
+  { name: "r2_list", description: "List objects in a bound R2 bucket: releases (qnfo-releases = published papers), audit (qnfo-audit), backups (qnfo-backups), skills (qnfo-skills). Optional prefix + limit.", parameters: { type: "object", properties: { bucket: { type: "string", enum: ["releases", "audit", "backups", "skills"], description: "bucket (default releases)" }, prefix: { type: "string", description: "object key prefix" }, limit: { type: "number", description: "max keys 1-500 (default 50)" } }, additionalProperties: false } },
+  { name: "r2_get", description: "Fetch one object's text content from a bound R2 bucket by key (releases/audit/backups/skills).", parameters: { type: "object", properties: { bucket: { type: "string", enum: ["releases", "audit", "backups", "skills"], description: "bucket (default releases)" }, key: { type: "string", description: "object key" }, maxChars: { type: "number", description: "max chars to return (default 4000)" } }, required: ["key"], additionalProperties: false } },
+  { name: "kv_get", description: "Read a string value from the bound KV namespace (equation-cache).", parameters: { type: "object", properties: { key: { type: "string", description: "KV key" } }, required: ["key"], additionalProperties: false } },
+  { name: "research_feed", description: "Feed a research idea directly into the research pipeline: semantic-searches the research corpus for related existing work, then (unless express=false) expresses the idea to the intent orchestrator as a research intent. Returns related papers + expression status.", parameters: { type: "object", properties: { idea: { type: "string", description: "the research idea / question" }, express: { type: "boolean", description: "also express the idea into the research pipeline (default true)" } }, required: ["idea"], additionalProperties: false } },
   { name: "email_check", description: "List recent inbound/outbound qnfo.org-domain emails with status (read-only; does not send anything).", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 8)" }, status: { type: "string", description: "optional status filter (received/processed/sent/replied/archived/spam/read/rejected)" } }, additionalProperties: false } },
   { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_fleet_log", description: "Read the last ops_ai_log entries (this endpoint execution log, qnfo-audit). Use when the user asks what the ops endpoint has done recently.", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 5)" } }, additionalProperties: false } },
@@ -98,6 +104,12 @@ var FLEET = [
   { name: "qnfo-skill-sync", binding: "SKILLSYNC" },
   { name: "qnfo-backlog-exec", binding: "BACKLOG" }
 ];
+// v1.3.0: Cloudflare API account id for the dynamic full-fleet list (CF_API_TOKEN secret).
+var CF_ACCOUNT_ID = "edb167b78c9fb901ea5bca3ce58ccc4b";
+// v1.3.0 resource maps: tool param name -> binding key
+var DB_MAP = { audit: "QNFO_AUDIT", living: "LIVING_PAPER", graph: "QNFO_GRAPH", portfolio: "PORTFOLIO", outreach: "QNFO_OUTREACH", cms: "QNFO_CMS", ipatent: "IPATENT", personal: "PERSONAL" };
+var VZ_MAP = { research: "RESEARCH_VZ", notes: "NOTES_VZ", tasks: "TASKS_VZ", handoffs: "HANDOFFS_VZ", ailog: "AILOG_VZ" };
+var R2_MAP = { releases: "RELEASES_R2", audit: "AUDIT_R2", backups: "BACKUPS_R2", skills: "SKILLS_R2" };
 async function probeService(env, f, path) {
   const svc = env[f.binding];
   if (!svc || !svc.fetch) return { ok: false, http: 0, body: {}, error: "binding missing" };
@@ -124,7 +136,27 @@ async function fleetStatus(env) {
     if (f.countPath && h.ok) { const c = await probeService(env, f, f.countPath); count = c.ok ? c.body : null; }
     out.push({ name: f.name, healthy: h.ok, http: h.http, version: (h.body && (h.body.version || "")) || "", error: h.error || null, count: count });
   }
-  return { fleet: out, healthyCount: out.filter(function (x) { return x.healthy; }).length, total: out.length, ts: iso() };
+  // v1.3.0: dynamic full-fleet list via Cloudflare API. Workers without a service
+  // binding report deployment metadata (modified_on + handlers) - a Worker cannot
+  // probe a sibling's workers.dev /health from inside a Worker (404), so real /health
+  // is reported only for the service-bound core.
+  let apiList = [];
+  if (env.CF_API_TOKEN) {
+    try {
+      const resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
+      const j = await resp.json();
+      apiList = (j && j.result) || [];
+    } catch (e) { apiList = []; }
+  }
+  const boundNames = new Set(FLEET.map(function (f) { return f.name; }));
+  for (const w of apiList) {
+    if (boundNames.has(w.id)) continue;
+    out.push({ name: w.id, healthy: null, http: null, version: "", error: null, count: null, probe: "api", modified_on: w.modified_on || null, handlers: w.handlers || [] });
+  }
+  out.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+  const healthy = out.filter(function (x) { return x.healthy === true; }).length;
+  const deployed = out.filter(function (x) { return x.healthy === true || x.probe === "api"; }).length;
+  return { fleet: out, healthyCount: healthy, deployedCount: deployed, total: out.length, ts: iso() };
 }
 
 // ---------------------------------------------------------------- tool executors
@@ -177,11 +209,12 @@ async function d1Query(env, args) {
   if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, error: "single read statement only" };
   if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
   if (!/\blimit\s+\d+/i.test(sql) && !/^\s*select\s+(count|sum|avg|min|max)\s*\(/i.test(sql) && !/select\s+sqlite_version/i.test(sql)) return { ok: false, error: "add LIMIT n (aggregate exempt)" };
-  if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
+  const bind = DB_MAP[String((args && args.db) || "audit")] || DB_MAP.audit;
+  if (!env[bind]) return { ok: false, error: "db not bound: " + bind + " (available: audit|living|graph|portfolio|outreach|cms|ipatent|personal)" };
   try {
-    const res = await env.QNFO_AUDIT.prepare(sql).all();
+    const res = await env[bind].prepare(sql).all();
     const rows = (res.results || []).slice(0, 100);
-    return { ok: true, rowCount: rows.length, rows: rows };
+    return { ok: true, db: bind, rowCount: rows.length, rows: rows };
   } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
 }
 async function emailRecent(env, args) {
@@ -292,6 +325,102 @@ async function runCodeTool(env, args) {
   }
 }
 
+async function vectorizeQuery(env, args) {
+  const q = String((args && args.q) || "").trim();
+  if (!q) return { ok: false, error: "q (query text) required" };
+  const key = VZ_MAP[String((args && args.index) || "research")] || VZ_MAP.research;
+  const topK = Math.min(Math.max(parseInt((args && args.topK) || 5, 10) || 5, 1), 20);
+  if (!env[key]) return { ok: false, error: "vectorize index not bound: " + key };
+  try {
+    let vec = null;
+    if (env.WAI) {
+      const embed = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [q.slice(0, 500)] });
+      vec = (embed && embed.data && embed.data[0]) || (Array.isArray(embed) ? embed[0] : null);
+    }
+    if (!vec) return { ok: false, error: "embedding failed (AI binding missing or empty result)" };
+    const res = await env[key].query(vec, { topK: topK, returnValues: false, returnMetadata: "all" });
+    const matches = (res.matches || []).map(function (m) {
+      return { id: m.id, score: typeof m.score === "number" ? Number(m.score.toFixed(4)) : m.score, metadata: m.metadata || {} };
+    });
+    return { ok: true, index: key, count: matches.length, matches: matches };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+
+async function r2List(env, args) {
+  const key = R2_MAP[String((args && args.bucket) || "releases")] || R2_MAP.releases;
+  const limit = Math.min(Math.max(parseInt((args && args.limit) || 50, 10) || 50, 1), 500);
+  const prefix = args && args.prefix ? String(args.prefix) : undefined;
+  if (!env[key]) return { ok: false, error: "r2 bucket not bound: " + key };
+  try {
+    const list = await env[key].list(prefix ? { prefix: prefix, limit: limit } : { limit: limit });
+    const objects = (list.objects || []).map(function (o) { return { key: o.key, size: o.size, uploaded: o.uploaded, etag: o.etag }; });
+    return { ok: true, bucket: key, count: objects.length, truncated: !!list.truncated, objects: objects };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+
+async function r2Get(env, args) {
+  const key = R2_MAP[String((args && args.bucket) || "releases")] || R2_MAP.releases;
+  const objKey = String((args && args.key) || "");
+  if (!objKey) return { ok: false, error: "key required" };
+  const maxChars = Math.min(Math.max(parseInt((args && args.maxChars) || 4000, 10) || 4000, 1), 30000);
+  if (!env[key]) return { ok: false, error: "r2 bucket not bound: " + key };
+  try {
+    const obj = await env[key].get(objKey);
+    if (!obj) return { ok: false, error: "object not found: " + objKey };
+    const text = await obj.text();
+    return { ok: true, bucket: key, key: objKey, size: text.length, truncated: text.length > maxChars, text: text.slice(0, maxChars) };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+
+async function kvGet(env, args) {
+  const k = String((args && args.key) || "");
+  if (!k) return { ok: false, error: "key required" };
+  if (!env.EQCACHE_KV) return { ok: false, error: "kv namespace not bound: EQCACHE_KV" };
+  try {
+    const v = await env.EQCACHE_KV.get(k);
+    return { ok: true, key: k, found: v !== null && v !== undefined, value: v === null || v === undefined ? null : String(v).slice(0, 8000) };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+
+async function researchFeed(env, args) {
+  const idea = String((args && args.idea) || "").trim();
+  if (!idea) return { ok: false, error: "idea required" };
+  const topK = Math.min(Math.max(parseInt((args && args.topK) || 5, 10) || 5, 1), 10);
+  let related = [];
+  try {
+    if (env.RESEARCH_VZ && env.WAI) {
+      const embed = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [idea.slice(0, 500)] });
+      const vec = (embed && embed.data && embed.data[0]) || (Array.isArray(embed) ? embed[0] : null);
+      if (vec) {
+        const res = await env.RESEARCH_VZ.query(vec, { topK: topK, returnValues: false, returnMetadata: "all" });
+        related = (res.matches || []).map(function (m) {
+          const md = m.metadata || {};
+          return { id: m.id, score: typeof m.score === "number" ? Number(m.score.toFixed(4)) : m.score, title: md.title || md.slug || "", slug: md.slug || "", doi: md.doi || "", version: md.version || "" };
+        });
+      }
+    }
+  } catch (e) { related = []; }
+  const express = !(args && args.express === false);
+  let expressed = null;
+  if (!express) {
+    expressed = { ok: true, skipped: true, reason: "express=false" };
+  } else if (!env.QNFO_INTENT || !env.INTENT_TOKEN) {
+    expressed = { ok: false, skipped: true, reason: "INTENT_TOKEN / QNFO_INTENT not configured on qnfo-ops (set INTENT_TOKEN secret to enable pipeline feed)" };
+  } else {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(function () { ctrl.abort(); }, 20000);
+      const resp = await env.QNFO_INTENT.fetch("https://qnfo-intent-orchestrator.internal/intent", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN }, body: JSON.stringify({ desire: idea, source: "qnfo-ops-research-feed", device: "chatbox" }), signal: ctrl.signal });
+      clearTimeout(t);
+      let j = null; try { j = await resp.json(); } catch (e) { j = null; }
+      expressed = { ok: resp.ok, http: resp.status, intent: j };
+    } catch (e) {
+      expressed = { ok: false, error: String((e && e.message) || e).slice(0, 200) };
+    }
+  }
+  return { ok: true, idea: idea.slice(0, 400), relatedPapers: related, expressed: expressed };
+}
+
 async function execTool(env, name, rawArgs, userText) {
   let args = {};
   try { args = JSON.parse(rawArgs || "{}"); } catch (e) { args = { _parseError: String((e && e.message) || e) }; }
@@ -302,6 +431,11 @@ async function execTool(env, name, rawArgs, userText) {
     else if (name === "ops_issues_list") res = await listIssues(env, args);
     else if (name === "ops_issue_run") res = await triggerBacklog(env, args, userText);
     else if (name === "ops_d1_query") res = await d1Query(env, args);
+    else if (name === "vectorize_query") res = await vectorizeQuery(env, args);
+    else if (name === "r2_list") res = await r2List(env, args);
+    else if (name === "r2_get") res = await r2Get(env, args);
+    else if (name === "kv_get") res = await kvGet(env, args);
+    else if (name === "research_feed") res = await researchFeed(env, args);
     else if (name === "email_check") res = await emailRecent(env, args);
     else if (name === "email_stats") res = await emailStats(env);
     else if (name === "email_mark") res = await emailMark(env, args, userText);
@@ -588,7 +722,15 @@ export default {
       bindings.auth = !!env.OPS_ROUTER_AUTH_KEY;
       bindings.loader = !!env.LOADER;
       bindings.email_key = !!env.EMAIL_API_KEY;
-      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "isolated-ops-logging"], routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings: bindings, generatedAt: iso() });
+      bindings.d1 = { audit: !!env.QNFO_AUDIT, living: !!env.LIVING_PAPER, graph: !!env.QNFO_GRAPH, portfolio: !!env.PORTFOLIO, outreach: !!env.QNFO_OUTREACH, cms: !!env.QNFO_CMS, ipatent: !!env.IPATENT, personal: !!env.PERSONAL };
+      bindings.vectorize = { research: !!env.RESEARCH_VZ, notes: !!env.NOTES_VZ, tasks: !!env.TASKS_VZ, handoffs: !!env.HANDOFFS_VZ, ailog: !!env.AILOG_VZ };
+      bindings.r2 = { releases: !!env.RELEASES_R2, audit: !!env.AUDIT_R2, backups: !!env.BACKUPS_R2, skills: !!env.SKILLS_R2 };
+      bindings.kv = { eqcache: !!env.EQCACHE_KV };
+      bindings.intent = !!(env.QNFO_INTENT && env.QNFO_INTENT.fetch);
+      bindings.intent_token = !!env.INTENT_TOKEN;
+      bindings.cf_api_token = !!env.CF_API_TOKEN;
+      bindings.ai = !!env.WAI;
+      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-feed", "isolated-ops-logging"], routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings: bindings, generatedAt: iso() });
     }
     if (path === "/" && method === "GET") {
       return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Models: ops-exec, deepseek-v4-flash. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });

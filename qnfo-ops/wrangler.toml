@@ -98,3 +98,94 @@ environment = "production"
 # fresh sandboxed Worker per call (network cut via globalOutbound: null; no bindings).
 [[worker_loaders]]
 binding = "LOADER"
+
+# --- v1.3.0: full Cloudflare resource surface (D1 + Vectorize + R2 + KV) ---
+# D1 (read-only via ops_d1_query db param): living-paper (research), qnfo-graph (KG),
+# portfolio-state, qnfo-outreach, qnfo-cms, ipatent-db, personal-life.
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[d1_databases]]
+binding = "QNFO_GRAPH"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[d1_databases]]
+binding = "PORTFOLIO"
+database_name = "portfolio-state"
+database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
+
+[[d1_databases]]
+binding = "QNFO_OUTREACH"
+database_name = "qnfo-outreach"
+database_id = "d5077252-8187-41b2-a44e-f84f8724ee36"
+
+[[d1_databases]]
+binding = "QNFO_CMS"
+database_name = "qnfo-cms"
+database_id = "0458a344-090d-4264-a0e0-c95d7fa237f3"
+
+[[d1_databases]]
+binding = "IPATENT"
+database_name = "ipatent-db"
+database_id = "19cc87d6-4207-477c-bf8c-94fb231b8965"
+
+[[d1_databases]]
+binding = "PERSONAL"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+# Vectorize (semantic search via vectorize_query)
+[[vectorize]]
+binding = "RESEARCH_VZ"
+index_name = "qwav-research-v2"
+
+[[vectorize]]
+binding = "NOTES_VZ"
+index_name = "qnfo-notes"
+
+[[vectorize]]
+binding = "TASKS_VZ"
+index_name = "qnfo-tasks"
+
+[[vectorize]]
+binding = "HANDOFFS_VZ"
+index_name = "qnfo-handoffs"
+
+[[vectorize]]
+binding = "AILOG_VZ"
+index_name = "qnfo-ai-log"
+
+# R2 (object list/get via r2_list / r2_get)
+[[r2_buckets]]
+binding = "RELEASES_R2"
+bucket_name = "qnfo-releases"
+
+[[r2_buckets]]
+binding = "AUDIT_R2"
+bucket_name = "qnfo-audit"
+
+[[r2_buckets]]
+binding = "BACKUPS_R2"
+bucket_name = "qnfo-backups"
+
+[[r2_buckets]]
+binding = "SKILLS_R2"
+bucket_name = "qnfo-skills"
+
+# KV (key read via kv_get)
+[[kv_namespaces]]
+binding = "EQCACHE_KV"
+id = "2fbbb9fa2d774a6e80d3a3d2547f8b5f"
+
+# Service binding: intent orchestrator (research_feed expresses RESEARCH ideas only)
+[[services]]
+binding = "QNFO_INTENT"
+service = "qnfo-intent-orchestrator"
+environment = "production"
+
+# Workers AI (text embeddings for vectorize_query / research_feed)
+[ai]
+binding = "WAI"
