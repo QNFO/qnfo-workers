@@ -26,7 +26,7 @@ function sjs(v) { try { return JSON.stringify(v); } catch (e) { return '{}'; } }
 function safeEqual(a, b) { if (!a || !b || a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
 
 // ---- static probe plan -----------------------------------------------------
-// kind: http|d1|r2|vectorize. soft: failures recorded but not alarmed.
+// kind: http|d1|r2|vectorize. soft: status recorded as tolerated (ok=1) - never alarmed.
 // http probes: binding=SVC_* means fetch via service binding (internal), url is fallback/display.
 const PROBES = [
   { id: 'qnfo-ai-health', kind: 'http', url: 'https://qnfo-ai.q08.workers.dev/health', binding: 'SVC_QNFO_AI', expect: 200 },
