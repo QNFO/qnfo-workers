@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.13.0"; // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.13.1"; // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -1684,6 +1684,23 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+async function selfRegister(env) {
+  const manifest = {
+    service: 'qnfo-cloud-ops', kind: 'worker', version: VERSION,
+    base_url: 'https://qnfo-cloud-ops.q08.workers.dev',
+    purpose: 'scheduled QNFO visibility: weekly digest + P7 scorecard + outreach legacy-drain gate + AI-endpoint health + SEO discoverability health',
+    capabilities: ['scheduled', 'weekly-visibility-digest', 'p7-scorecard', 'outreach-drain-gate', 'ai-endpoint-health', 'seo-health', 'job-runner'],
+    routes: ['/health', '/run', '/search'],
+    tools: [], models: [], deps: ['qnfo-audit D1', 'qnfo-infra', 'qnfo-graph', 'living-paper', 'portfolio-state', 'qnfo-outreach', 'qnfo-email', 'send_email', 'VAULT R2']
+  };
+  const resp = await env.QNFO_OPS.fetch('https://qnfo-ops.internal/registry/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (env.REGISTRY_TOKEN || '') },
+    body: JSON.stringify(manifest)
+  });
+  return resp.ok;
+}
+
 export default {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
@@ -1709,12 +1726,15 @@ export default {
     }
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
     if (path === "/health" && request.method === "GET") {
+      if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
+        ctx.waitUntil(selfRegister(env).catch((err) => console.log("self-register err", err && err.message || err)));
+      }
       const off = amsOffset(new Date());
       const crons = buildCrons(off).map((c) => c.cron + " -> " + c.job);
       return new Response(JSON.stringify({
