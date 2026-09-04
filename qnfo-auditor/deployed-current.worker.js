@@ -9,7 +9,7 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.1.6";
+var VERSION = "1.1.7";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
 var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
@@ -163,6 +163,7 @@ async function runAudit(env, mode, log) {
         log("C7-act orphan queue " + p.id + " -> orphaned");
       } else if (act.status === "error") {
         await env.AUDIT.prepare("UPDATE errata_actions SET status='drafted', updated_at=datetime('now') WHERE id=?").bind(act.id).run();
+        await ledgerEnsure(env, { source: "errata", category: "publish-retry", level: "warning", title: "Errata publish retry queue #" + p.id + " (action " + act.id + " was error) -> re-drafted", detail: "auto-retry after publish failure (2026-09-04 403 delete case); repeats accumulate here for visibility" });
         A("errata-retry", "errata action " + act.id + " (error) for queue #" + p.id + " -> re-drafted for publish retry");
         log("C7-act retry action " + act.id + " -> drafted");
       } else if (["superseded","stale"].indexOf(String(act.status)) >= 0) {
