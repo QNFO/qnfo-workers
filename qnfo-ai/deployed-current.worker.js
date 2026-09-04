@@ -4,10 +4,25 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.20.9";
+var VERSION = "5.20.10";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
+var _modelHealthCache = null;
+var _modelHealthCacheAt = 0;
+async function loadModelHealth(env) {
+  if (_modelHealthCache && Date.now() - _modelHealthCacheAt < 6e4) return _modelHealthCache;
+  var map = {};
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT model_id, status, ctx_override, vision_override, reasoning_override FROM ai_model_health").all();
+    for (var i = 0; i < (r && r.results ? r.results.length : 0); i++) map[r.results[i].model_id] = r.results[i];
+  } catch (e) {
+  }
+  _modelHealthCache = map;
+  _modelHealthCacheAt = Date.now();
+  return map;
+}
+__name(loadModelHealth, "loadModelHealth");
 var MODELS = {
   // Workers AI free — original three
   "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 8192, ctx: 8e4, temp: 0.6, topP: 0.95, tools: false, vision: false },
@@ -539,12 +554,17 @@ var ROUTE_POOLS = {
   creative: ["glm-5.3", "gemma-4-26b", "glm-4.7-flash", "qwen3-30b"],
   general: ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
 };
-function autoRoute(cls, prompt) {
+function autoRoute(cls, prompt, health) {
+  const h = health || {};
+  const okPool = /* @__PURE__ */ __name((pool2) => pool2.filter((x) => !h[x] || h[x].status !== "failing"), "okPool");
   if (cls.complexity === "high" && cls.domain !== "code") {
-    return seededPick(["glm-5.3", "deepseek-v4-pro-wa", "gpt-oss-120b", "deepseek-v4-pro"], prompt || "");
+    const base2 = ["glm-5.3", "deepseek-v4-pro-wa", "gpt-oss-120b", "deepseek-v4-pro"];
+    const pool2 = okPool(base2);
+    return seededPick(pool2.length ? pool2 : base2, prompt || "");
   }
-  const pool = ROUTE_POOLS[cls.domain] || ROUTE_POOLS.general;
-  return seededPick(pool, prompt || "");
+  const base = ROUTE_POOLS[cls.domain] || ROUTE_POOLS.general;
+  const pool = okPool(base);
+  return seededPick(pool.length ? pool : base, prompt || "");
 }
 __name(autoRoute, "autoRoute");
 __name2(autoRoute, "autoRoute");
@@ -1415,7 +1435,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const isAuto = reqModel === "auto";
   const isEnsemble = reqModel === "ensemble";
   let estInputTokens = estimateInputTokens(messages);
-  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages)), estInputTokens, max_tokens) : reqModel;
+  const autoHealth = isAuto ? await loadModelHealth(env) : null;
+  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
   let spec = MODELS[target];
   if (hasImage && !isEnsemble) {
     const v = MODELS["llama-3.2-11b-vision"];
@@ -2126,26 +2147,34 @@ var worker_default = {
       });
     }
     if (path === "/v1/models" && method === "GET") {
-      const data = Object.entries(MODELS).map(([id, m]) => ({
-        id,
-        object: "model",
-        created: 171e7,
-        owned_by: m.tier === 0 ? "workers-ai" : m.family,
-        capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(m.reasoning ? ["reasoning"] : []).concat(m.vision ? ["vision"] : []),
-        _router: {
-          tier: m.tier,
-          family: m.family,
-          reasoning: !!m.reasoning,
-          ctx: m.ctx || null,
-          temperature: m.temp ?? null,
-          top_p: m.topP ?? null,
-          vision: !!m.vision,
-          tools: !!m.tools,
-          costPer1MInput: m.tier === 0 ? 0 : m.tier === 1 ? 0.14 : m.tier === 2 ? 2.19 : null,
-          costPer1MOutput: m.tier === 0 ? 0 : m.tier === 1 ? 0.28 : m.tier === 2 ? 2.19 : null,
-          availability: m.tier === 0 ? "always" : m.tier <= 2 ? "key-required" : "billing-required"
-        }
-      }));
+      const health = await loadModelHealth(env);
+      const data = Object.entries(MODELS).map(([id, m]) => {
+        const h = health[id] || {};
+        const reasoning = h.reasoning_override != null ? !!h.reasoning_override : !!m.reasoning;
+        const vision = h.vision_override != null ? !!h.vision_override : !!m.vision;
+        const ctx2 = h.ctx_override != null ? h.ctx_override : m.ctx || null;
+        return {
+          id,
+          object: "model",
+          created: 171e7,
+          owned_by: m.tier === 0 ? "workers-ai" : m.family,
+          capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(reasoning ? ["reasoning"] : []).concat(vision ? ["vision"] : []),
+          _router: {
+            tier: m.tier,
+            family: m.family,
+            reasoning,
+            ctx: ctx2,
+            temperature: m.temp ?? null,
+            top_p: m.topP ?? null,
+            vision,
+            tools: !!m.tools,
+            overridden: !!(h.ctx_override != null || h.vision_override != null || h.reasoning_override != null),
+            costPer1MInput: m.tier === 0 ? 0 : m.tier === 1 ? 0.14 : m.tier === 2 ? 2.19 : null,
+            costPer1MOutput: m.tier === 0 ? 0 : m.tier === 1 ? 0.28 : m.tier === 2 ? 2.19 : null,
+            availability: m.tier === 0 ? "always" : m.tier <= 2 ? "key-required" : "billing-required"
+          }
+        };
+      });
       data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       return json({ object: "list", data });

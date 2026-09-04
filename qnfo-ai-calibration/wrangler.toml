@@ -1,0 +1,33 @@
+name = "qnfo-ai-calibration"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# SVC-BINDING-1 (2026-09-04): internal probes via service bindings - same-account
+# workers.dev fetches 404 at the edge from inside a Worker (verified live).
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+
+[[services]]
+binding = "QNFO_OPS"
+service = "qnfo-ops"
+environment = "production"
+
+[[services]]
+binding = "PT_API"
+service = "personal-api"
+environment = "production"

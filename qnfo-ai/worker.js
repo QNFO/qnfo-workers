@@ -4,10 +4,25 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.20.9"; // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.20.10"; // CAL-HEALTH-1 2026-09-04: ai_model_health consumption - auto routing deprioritizes failing models (loadModelHealth cached 60s) + /v1/models merges live ctx/vision/reasoning overrides written by the qnfo-ai-calibration worker (self-correcting advertisement) // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
+// CAL-HEALTH-1 (2026-09-04): ai_model_health (written by the qnfo-ai-calibration worker)
+// drives auto-routing deprioritization + /v1/models advertisement overrides (self-correcting).
+var _modelHealthCache = null;
+var _modelHealthCacheAt = 0;
+async function loadModelHealth(env) {
+  if (_modelHealthCache && Date.now() - _modelHealthCacheAt < 60000) return _modelHealthCache;
+  var map = {};
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT model_id, status, ctx_override, vision_override, reasoning_override FROM ai_model_health").all();
+    for (var i = 0; i < (r && r.results ? r.results.length : 0); i++) map[r.results[i].model_id] = r.results[i];
+  } catch (e) { }
+  _modelHealthCache = map;
+  _modelHealthCacheAt = Date.now();
+  return map;
+}
 var MODELS = {
   // Workers AI free — original three
   "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 8192, ctx: 80000, temp: 0.6, topP: 0.95, tools: false, vision: false },
@@ -509,12 +524,17 @@ var ROUTE_POOLS = {
   creative: ["glm-5.3", "gemma-4-26b", "glm-4.7-flash", "qwen3-30b"],
   general:  ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
 };
-function autoRoute(cls, prompt) {
+function autoRoute(cls, prompt, health) {
+  const h = health || {};
+  const okPool = (pool) => pool.filter((x) => !h[x] || h[x].status !== "failing");
   if (cls.complexity === "high" && cls.domain !== "code") {
-    return seededPick(["glm-5.3", "deepseek-v4-pro-wa", "gpt-oss-120b", "deepseek-v4-pro"], prompt || "");
+    const base = ["glm-5.3", "deepseek-v4-pro-wa", "gpt-oss-120b", "deepseek-v4-pro"];
+    const pool = okPool(base);
+    return seededPick(pool.length ? pool : base, prompt || "");
   }
-  const pool = ROUTE_POOLS[cls.domain] || ROUTE_POOLS.general;
-  return seededPick(pool, prompt || "");
+  const base = ROUTE_POOLS[cls.domain] || ROUTE_POOLS.general;
+  const pool = okPool(base);
+  return seededPick(pool.length ? pool : base, prompt || "");
 }
 __name(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
@@ -1295,7 +1315,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const isAuto = reqModel === "auto";
   const isEnsemble = reqModel === "ensemble";
   let estInputTokens = estimateInputTokens(messages);
-  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages)), estInputTokens, max_tokens) : reqModel;
+  const autoHealth = isAuto ? await loadModelHealth(env) : null;
+  let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
   let spec = MODELS[target];
   if (hasImage && !isEnsemble) {
     const v = MODELS["llama-3.2-11b-vision"];
@@ -1983,26 +2004,34 @@ var worker_default = {
       });
     }
     if (path === "/v1/models" && method === "GET") {
-      const data = Object.entries(MODELS).map(([id, m]) => ({
+      const health = await loadModelHealth(env);
+      const data = Object.entries(MODELS).map(([id, m]) => {
+        const h = health[id] || {};
+        const reasoning = h.reasoning_override != null ? !!h.reasoning_override : !!m.reasoning;
+        const vision = h.vision_override != null ? !!h.vision_override : !!m.vision;
+        const ctx = h.ctx_override != null ? h.ctx_override : (m.ctx || null);
+        return {
         id,
         object: "model",
         created: 171e7,
         owned_by: m.tier === 0 ? "workers-ai" : m.family,
-        capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(m.reasoning ? ["reasoning"] : []).concat(m.vision ? ["vision"] : []),
+        capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(reasoning ? ["reasoning"] : []).concat(vision ? ["vision"] : []),
         _router: {
           tier: m.tier,
           family: m.family,
-          reasoning: !!m.reasoning,
-          ctx: m.ctx || null,
+          reasoning: reasoning,
+          ctx: ctx,
           temperature: m.temp ?? null,
           top_p: m.topP ?? null,
-          vision: !!m.vision,
+          vision: vision,
           tools: !!m.tools,
+          overridden: !!(h.ctx_override != null || h.vision_override != null || h.reasoning_override != null),
           costPer1MInput: m.tier === 0 ? 0 : m.tier === 1 ? 0.14 : m.tier === 2 ? 2.19 : null,
           costPer1MOutput: m.tier === 0 ? 0 : m.tier === 1 ? 0.28 : m.tier === 2 ? 2.19 : null,
           availability: m.tier === 0 ? "always" : m.tier <= 2 ? "key-required" : "billing-required"
         }
-      }));
+      };
+      });
       data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       return json({ object: "list", data });
