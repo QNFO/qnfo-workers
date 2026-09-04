@@ -5,8 +5,14 @@
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_queue tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "1.7.2"; // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.8.0"; // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
+// 1.8.0 (2026-09-04) RELAY-MODEL-1: model=deepseek-v4-flash is a PURE pass-through relay (no OPS
+// prompt injection, no ops-intent server loop, no 8192 clamp; real upstream SSE streaming when
+// stream:true) so the DeepChat main agent can default to QNFO-OPS/deepseek-v4-flash while keeping
+// its native toolchain; every relayed chat still lands in ops_ai_log. OPS-DAILY-CAP-1: daily chat
+// cap reads env.OPS_DAILY_CAP (default 250). KAIZEN-CHAT-FAIL-1: failed chats auto-file agent_issues
+// tickets (dedupe by open title) feeding the qnfo-kaizen daily digest.
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
@@ -589,6 +595,18 @@ async function logOps(env, rec) {
     await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)")
       .bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", "ops", rec.prompt || "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0).run();
   } catch (e) { console.log("ops_ai_log insert failed:", e && e.message || e); }
+  // KAIZEN-CHAT-FAIL-1 (2026-09-04): failed chats auto-file agent_issues tickets (dedupe by open
+  // title) so the qnfo-kaizen daily digest picks up ops chat failures - continuous improvement feed.
+  if (rec && !rec.ok) {
+    try {
+      const title = "[ops-chat-fail] model=" + String(rec.model || "?") + " " + String(rec.response || "").slice(0, 80);
+      const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'").bind(title).first();
+      if (!dup) {
+        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?7)")
+          .bind(title, "Auto-filed by qnfo-ops chat-failure feed (KAIZEN-CHAT-FAIL-1): chat via " + String(rec.model || "?") + " failed. Prompt: " + String(rec.prompt || "").slice(0, 300) + "\nResponse/error: " + String(rec.response || "").slice(0, 300), "qnfo-ops", "ops-chat-fail", "medium", "open", new Date().toISOString().slice(0, 19).replace("T", " ")).run();
+      }
+    } catch (e2) { /* best-effort */ }
+  }
 }
 
 // ---------------------------------------------------------------- upstream call
@@ -633,21 +651,94 @@ function detectSource(ua) {
   return "other";
 }
 
+// ---------------------------------------------------------------- relay model (pure pass-through)
+// RELAY-MODEL-1 (2026-09-04): transparent OpenAI-compatible relay to upstream DeepSeek that
+// preserves the client's own system prompt + tools (DeepChat main agent keeps its native
+// toolchain), with full audit logging to ops_ai_log.
+function normalizeMessages(messages) {
+  const out = [];
+  for (const m of messages) {
+    if (!m || !m.role) continue;
+    let content = m.content;
+    if (content && typeof content === "object" && !Array.isArray(content)) content = String(content.content || JSON.stringify(content));
+    if (Array.isArray(content)) content = content.map(function (p2) { return p2 && p2.text ? p2.text : (typeof p2 === "string" ? p2 : ""); }).filter(Boolean).join(String.fromCharCode(10));
+    const base = { role: m.role, content: String(content || "") };
+    if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length) base.tool_calls = m.tool_calls;
+    if (m.role === "tool") {
+      if (m.tool_call_id) base.tool_call_id = String(m.tool_call_id);
+      if (m.name) base.name = String(m.name);
+    }
+    out.push(base);
+  }
+  return out;
+}
+async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
+  const t0 = Date.now();
+  const norm = normalizeMessages(messages);
+  const maxOut = clamp(maxTokens, 32768); // no 8192 ops clamp on the relay path
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientToolChoice = (body && body.tool_choice) || "auto";
+  const prompt = lastUserText(norm).slice(0, 4000);
+  const fail = async function (errText) {
+    const rec = { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt: prompt, response: String(errText || "").slice(0, 500), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 };
+    ctx.waitUntil(logOps(env, rec));
+  };
+  try {
+    if (isStream) {
+      const upBody = { model: UPSTREAM_MODEL, messages: norm, max_tokens: maxOut, temperature: 0.5, top_p: 0.9, stream: true };
+      if (clientTools) { upBody.tools = clientTools; upBody.tool_choice = clientToolChoice; }
+      const resp = await fetch(DEEPSEEK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+        body: JSON.stringify(upBody)
+      });
+      if (!resp.ok || !resp.body) {
+        await fail("upstream " + resp.status + ": " + (await resp.text()).slice(0, 300));
+        return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
+      }
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt: prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
+      return new Response(resp.body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache" } });
+    }
+    const cResp = await callDeepSeekClient(env, norm, maxOut, clientTools, clientToolChoice);
+    const cChoice = cResp && cResp.choices && cResp.choices[0];
+    const cMsg = (cChoice && cChoice.message) || {};
+    const cText = String(cMsg.content || "");
+    const cToolCalls = Array.isArray(cMsg.tool_calls) && cMsg.tool_calls.length ? cMsg.tool_calls : null;
+    const cUsage = (cResp && cResp.usage) || {};
+    const cRespId = randId("chatcmpl-");
+    const cCreated = Math.floor(Date.now() / 1000);
+    ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt: prompt, response: (cText || (cToolCalls ? JSON.stringify(cToolCalls) : "")).slice(0, 20000), prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(norm)), completion_tokens: cUsage.completion_tokens || estTokens(cText), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: cToolCalls ? JSON.stringify(cToolCalls).slice(0, 3000) : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 0, ok: 1 }));
+    const cMsgOut = { role: "assistant", content: cText };
+    if (cToolCalls) cMsgOut.tool_calls = cToolCalls.map(function (tc0, i0) { return Object.assign({}, tc0, { index: tc0 && tc0.index != null ? tc0.index : i0 }); });
+    const cFr = (cChoice && cChoice.finish_reason) || "stop";
+    return json({ id: cRespId, object: "chat.completion", created: cCreated, model: "deepseek-v4-flash", choices: [{ index: 0, message: cMsgOut, finish_reason: cFr }], usage: cUsage });
+  } catch (e) {
+    await fail((e && e.message) || String(e));
+    return json({ error: "relay error: " + ((e && e.message) || String(e)) }, 502);
+  }
+}
+
 // ---------------------------------------------------------------- chat handler
 async function handleChat(env, body, authHeader, ua, ctx) {
   const okAuth = await authOk(authHeader, env);
   if (!okAuth) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
-  // AUDIT-DESIGN-2026-09-03: soft daily cap (250 chats/UTC day) read from the ops audit trail
+  // AUDIT-DESIGN-2026-09-03: soft daily cap read from the ops audit trail; OPS-DAILY-CAP-1
+  // (2026-09-04): env override OPS_DAILY_CAP (default 250) - raised for DeepChat main-agent traffic.
   try {
     const _today = new Date().toISOString().slice(0, 10);
+    const _capN = Number(env.OPS_DAILY_CAP);
+    const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 250;
     const _cnt = env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts LIKE ?1").bind(_today + "%").first() : null;
-    if (_cnt && _cnt.c >= 250) return json({ error: "ops endpoint daily request cap reached (250 per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
+    if (_cnt && _cnt.c >= _cap) return json({ error: "ops endpoint daily request cap reached (" + _cap + " per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
   } catch (e) { /* cap best-effort */ }
   const model = body && body.model; const messages = body && body.messages; const max_tokens = body && body.max_tokens; const stream = body && body.stream;
   const wanted = model || "ops-exec";
   if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash") return json({ error: "unknown model " + wanted + " (available: ops-exec, deepseek-v4-flash)" }, 400);
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
+  // RELAY-MODEL-1 (2026-09-04): deepseek-v4-flash = pure pass-through relay (DeepChat main agent
+  // default). No OPS prompt injection, no ops-intent server loop, no 8192 clamp, real SSE streaming.
+  if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
   const t0 = Date.now();
   const isStream = !!stream;
   const maxOut = clamp(max_tokens, Math.min(DEFAULT_MAX_OUT, 8192)); // OPS-LATENCY-1 2026-09-03: bound default/large answers (16k-token generations caused client timeouts)
@@ -1011,11 +1102,11 @@ export default {
         const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
         const wk = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
         const month = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
-        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: 250, ts: iso() });
+        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: (Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 250), ts: iso() });
       } catch (e) { return json({ error: "cost query failed: " + ((e && e.message) || String(e)) }, 502); }
     }
     if (path === "/v1/models" && method === "GET") {
-      const mk = function (id) { return { id: id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (chat + agent tool loop + code-shaped execution on the cloud-native fleet)" : "DeepSeek V4 Flash via qnfo-ops (chat + agent tools)", capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://qnfo-ops.q08.workers.dev/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } }; };
+      const mk = function (id) { return { id: id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (chat + agent tool loop + code-shaped execution on the cloud-native fleet)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://qnfo-ops.q08.workers.dev/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } }; };
       return json({ object: "list", data: [mk("ops-exec"), mk("deepseek-v4-flash")] });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {

@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.7.2";
+var VERSION = "1.8.0";
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -715,6 +715,16 @@ async function logOps(env, rec) {
   } catch (e) {
     console.log("ops_ai_log insert failed:", e && e.message || e);
   }
+  if (rec && !rec.ok) {
+    try {
+      const title = "[ops-chat-fail] model=" + String(rec.model || "?") + " " + String(rec.response || "").slice(0, 80);
+      const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'").bind(title).first();
+      if (!dup) {
+        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?7)").bind(title, "Auto-filed by qnfo-ops chat-failure feed (KAIZEN-CHAT-FAIL-1): chat via " + String(rec.model || "?") + " failed. Prompt: " + String(rec.prompt || "").slice(0, 300) + "\nResponse/error: " + String(rec.response || "").slice(0, 300), "qnfo-ops", "ops-chat-fail", "medium", "open", (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ")).run();
+      }
+    } catch (e2) {
+    }
+  }
 }
 __name(logOps, "logOps");
 async function callDeepSeek(env, messages, maxTokens, withTools) {
@@ -765,13 +775,86 @@ function detectSource(ua) {
   return "other";
 }
 __name(detectSource, "detectSource");
+function normalizeMessages(messages) {
+  const out = [];
+  for (const m of messages) {
+    if (!m || !m.role) continue;
+    let content = m.content;
+    if (content && typeof content === "object" && !Array.isArray(content)) content = String(content.content || JSON.stringify(content));
+    if (Array.isArray(content)) content = content.map(function(p2) {
+      return p2 && p2.text ? p2.text : typeof p2 === "string" ? p2 : "";
+    }).filter(Boolean).join(String.fromCharCode(10));
+    const base = { role: m.role, content: String(content || "") };
+    if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length) base.tool_calls = m.tool_calls;
+    if (m.role === "tool") {
+      if (m.tool_call_id) base.tool_call_id = String(m.tool_call_id);
+      if (m.name) base.name = String(m.name);
+    }
+    out.push(base);
+  }
+  return out;
+}
+__name(normalizeMessages, "normalizeMessages");
+async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
+  const t0 = Date.now();
+  const norm = normalizeMessages(messages);
+  const maxOut = clamp(maxTokens, 32768);
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientToolChoice = body && body.tool_choice || "auto";
+  const prompt = lastUserText(norm).slice(0, 4e3);
+  const fail = /* @__PURE__ */ __name(async function(errText) {
+    const rec = { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: String(errText || "").slice(0, 500), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 };
+    ctx.waitUntil(logOps(env, rec));
+  }, "fail");
+  try {
+    if (isStream) {
+      const upBody = { model: UPSTREAM_MODEL, messages: norm, max_tokens: maxOut, temperature: 0.5, top_p: 0.9, stream: true };
+      if (clientTools) {
+        upBody.tools = clientTools;
+        upBody.tool_choice = clientToolChoice;
+      }
+      const resp = await fetch(DEEPSEEK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+        body: JSON.stringify(upBody)
+      });
+      if (!resp.ok || !resp.body) {
+        await fail("upstream " + resp.status + ": " + (await resp.text()).slice(0, 300));
+        return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
+      }
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
+      return new Response(resp.body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache" } });
+    }
+    const cResp = await callDeepSeekClient(env, norm, maxOut, clientTools, clientToolChoice);
+    const cChoice = cResp && cResp.choices && cResp.choices[0];
+    const cMsg = cChoice && cChoice.message || {};
+    const cText = String(cMsg.content || "");
+    const cToolCalls = Array.isArray(cMsg.tool_calls) && cMsg.tool_calls.length ? cMsg.tool_calls : null;
+    const cUsage = cResp && cResp.usage || {};
+    const cRespId = randId("chatcmpl-");
+    const cCreated = Math.floor(Date.now() / 1e3);
+    ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: (cText || (cToolCalls ? JSON.stringify(cToolCalls) : "")).slice(0, 2e4), prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(norm)), completion_tokens: cUsage.completion_tokens || estTokens(cText), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: cToolCalls ? JSON.stringify(cToolCalls).slice(0, 3e3) : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 0, ok: 1 }));
+    const cMsgOut = { role: "assistant", content: cText };
+    if (cToolCalls) cMsgOut.tool_calls = cToolCalls.map(function(tc0, i0) {
+      return Object.assign({}, tc0, { index: tc0 && tc0.index != null ? tc0.index : i0 });
+    });
+    const cFr = cChoice && cChoice.finish_reason || "stop";
+    return json({ id: cRespId, object: "chat.completion", created: cCreated, model: "deepseek-v4-flash", choices: [{ index: 0, message: cMsgOut, finish_reason: cFr }], usage: cUsage });
+  } catch (e) {
+    await fail(e && e.message || String(e));
+    return json({ error: "relay error: " + (e && e.message || String(e)) }, 502);
+  }
+}
+__name(handleRelay, "handleRelay");
 async function handleChat(env, body, authHeader, ua, ctx) {
   const okAuth = await authOk(authHeader, env);
   if (!okAuth) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
   try {
     const _today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const _capN = Number(env.OPS_DAILY_CAP);
+    const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 250;
     const _cnt = env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts LIKE ?1").bind(_today + "%").first() : null;
-    if (_cnt && _cnt.c >= 250) return json({ error: "ops endpoint daily request cap reached (250 per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
+    if (_cnt && _cnt.c >= _cap) return json({ error: "ops endpoint daily request cap reached (" + _cap + " per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
   } catch (e) {
   }
   const model = body && body.model;
@@ -782,6 +865,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash") return json({ error: "unknown model " + wanted + " (available: ops-exec, deepseek-v4-flash)" }, 400);
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
+  if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
   const t0 = Date.now();
   const isStream = !!stream;
   const maxOut = clamp(max_tokens, Math.min(DEFAULT_MAX_OUT, 8192));
@@ -1168,14 +1252,14 @@ var worker_default = {
         const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
         const wk = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
         const month = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
-        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: 250, ts: iso() });
+        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 250, ts: iso() });
       } catch (e) {
         return json({ error: "cost query failed: " + (e && e.message || String(e)) }, 502);
       }
     }
     if (path === "/v1/models" && method === "GET") {
       const mk = /* @__PURE__ */ __name(function(id) {
-        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (chat + agent tool loop + code-shaped execution on the cloud-native fleet)" : "DeepSeek V4 Flash via qnfo-ops (chat + agent tools)", capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://qnfo-ops.q08.workers.dev/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
+        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (chat + agent tool loop + code-shaped execution on the cloud-native fleet)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://qnfo-ops.q08.workers.dev/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
       }, "mk");
       return json({ object: "list", data: [mk("ops-exec"), mk("deepseek-v4-flash")] });
     }
