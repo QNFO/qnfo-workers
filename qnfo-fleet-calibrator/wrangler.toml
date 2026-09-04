@@ -1,0 +1,57 @@
+name = "qnfo-fleet-calibrator"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# qnfo-fleet-calibrator v1.0.0 - Autonomous fleet-wide calibration + stress-testing controller.
+# Scheduled server-side calibration/stress of fleet performance with self-auditing, self-correcting,
+# self-improving loops and reversible autonomous adjustments. 100% cloud-native (CLOUD-FRONTEND-ONLY-1).
+# Runbook: QNFO/qnfo-ops/docs/FLEET-CALIBRATION.md
+# Canonical source: QNFO/qnfo-workers/qnfo-fleet-calibrator (FLEET-SELF-DOC-1)
+# secrets (wrangler secret put): RUN_SECRET (X-Run-Key auth for /run + /report)
+# deploy: wrangler deploy from this dir; then cp worker.js deployed-current.worker.js
+# endpoints: GET /health (public); POST /run?type=daily|stress|monthly&simulate=anomaly; GET /report (auth)
+
+[[d1_databases]]
+binding = "DB_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[r2_buckets]]
+binding = "R2_AUDIT"
+bucket_name = "qnfo-audit"
+
+[[kv_namespaces]]
+binding = "KV_CAL"
+id = "d3768b93a76640be83151b00a8b42717"
+
+[[vectorize]]
+binding = "VEC_CAL"
+index_name = "qnfo-calibration"
+
+# Service bindings for sibling probes (CF error 1042 blocks worker->workers.dev fetches).
+[[services]]
+binding = "SVC_QNFO_AI"
+service = "qnfo-ai"
+
+[[services]]
+binding = "SVC_QNFO_INFRA"
+service = "qnfo-infra"
+
+[[services]]
+binding = "SVC_QNFO_AUDITOR"
+service = "qnfo-auditor"
+
+[[services]]
+binding = "SVC_PERSONAL_API"
+service = "personal-api"
+
+[[services]]
+binding = "SVC_QNFO_INTENT"
+service = "qnfo-intent-orchestrator"
+
+[triggers]
+crons = ["0 3 * * *", "30 3 * * 1", "0 4 1 * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
