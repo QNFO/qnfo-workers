@@ -9,7 +9,7 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.1.3";
+var VERSION = "1.1.4";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
 var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
@@ -138,12 +138,28 @@ async function runAudit(env, mode, log) {
 
   // C7 - errata stuck (queue rows not terminal after 24h)
   try {
-    const stuck = await qAll(env, "SELECT id,sender,subject,status,updated_at FROM errata_queue WHERE status NOT IN ('processed','done','completed','published','resolved','cancelled','closed') AND updated_at < datetime('now','-24 hour') ORDER BY updated_at ASC LIMIT 10");
+    const stuck = await qAll(env, "SELECT id,sender,subject,status,updated_at FROM errata_queue WHERE status NOT IN ('processed','done','completed','published','resolved','cancelled','closed','audited','implemented') AND updated_at < datetime('now','-24 hour') ORDER BY updated_at ASC LIMIT 10");
     if (stuck.length > 0) {
       F("C7", "high", "errata-stuck: " + stuck.length + " queue rows non-terminal >24h");
       for (const s of stuck.slice(0, 3)) await ledgerEnsure(env, { source: "errata", category: "stuck", level: "high", title: "Errata queue stuck >24h #" + s.id + ": " + String(s.subject || "").slice(0, 140), detail: "status " + s.status + " since " + s.updated_at + " sender " + (s.sender || "") });
     }
-    log("C7 errata-stuck: " + stuck.length);
+    // C7-ACT: verify parked pipeline-end rows ('audited'/'implemented') and close the loop user-free
+    const parked = await qAll(env, "SELECT id,status FROM errata_queue WHERE status IN ('audited','implemented') AND updated_at < datetime('now','-24 hour')");
+    for (const p of parked) {
+      const act = await q1(env, "SELECT id,status FROM errata_actions WHERE queue_id=? ORDER BY id DESC LIMIT 1", p.id);
+      if (act && act.status === "published") {
+        await env.AUDIT.prepare("UPDATE errata_queue SET status='published', updated_at=datetime('now') WHERE id=?").bind(p.id).run();
+        A("errata-terminal-flip", "errata queue #" + p.id + " -> published (action " + act.id + " published)");
+        log("C7-act flip queue " + p.id + " -> published");
+      } else if (act && act.status === "drafted") {
+        log("C7-act queue " + p.id + " has drafted action, in publish flow");
+      } else if (!act) {
+        await env.AUDIT.prepare("UPDATE errata_queue SET status='detected', updated_at=datetime('now') WHERE id=?").bind(p.id).run();
+        A("errata-requeue", "errata queue #" + p.id + " orphan (no action) -> re-queued to detected");
+        log("C7-act requeue orphan queue " + p.id);
+      }
+    }
+    log("C7 errata-stuck: " + stuck.length + ", parked: " + parked.length);
   } catch (e) { F("C7", "error", "check failed: " + e.message); }
 
   // C8 - kaizen/improvement feed
