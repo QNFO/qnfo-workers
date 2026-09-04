@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.20.11";
+var VERSION = "5.20.12";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1310,7 +1310,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     ctx.waitUntil(expressIdea(env, _ideaText.slice(0, 500), threadId, _ideaSource));
   }
   const hasImage = hasImageParts(messages);
-  if (hasImage && env.MEDIA) {
+  if (hasImage && env.MEDIA && String(ua || "").indexOf("QNFO-AI-Calibration") < 0) {
     ctx.waitUntil(mediaCapture(env, rawMessages, { thread: threadId, model: String(body && body.model || "auto"), source: "qnfo-ai" }).catch((e) => {
       console.log("media capture:", e && e.message || e);
     }));
