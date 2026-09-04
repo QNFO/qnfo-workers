@@ -5,9 +5,9 @@
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_feed tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "1.4.0"; // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.5.0"; // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/registry", "/registry/:service", "/registry/refresh", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
 var DEFAULT_MAX_OUT = 16384;
@@ -55,7 +55,7 @@ var OPS_SYSTEM_PROMPT = [
   "Scope: operations on the QNFO cloud-native fleet - workers, D1, R2, Vectorize, crons, email accounts, agent backlog, audits, and running code. Research questions belong on the research endpoint; ops commands belong here.",
   "Rules:",
   "1. EXECUTE, DO NOT NARRATE: when the user asks for an ops action (check email, list open issues, fleet status, run an audit, execute this snippet), call the matching tool and report REAL results with evidence. Never fabricate tool output, counts, versions, or statuses.",
-  "2. Tools: fleet_status (full 62-worker fleet), ops_issues_list, ops_issue_run, ops_d1_query (multi-DB read-only), vectorize_query (research corpus + notes/tasks/handoffs), r2_list, r2_get, kv_get, research_queue (queue idea -> autonomous backend execution), intents_query, candidates_query, service_discover (machine registry), email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code.",
+  "2. Tools: fleet_status (full 62-worker fleet), ops_issues_list, ops_issue_run, ops_d1_query (multi-DB read-only), vectorize_query (research corpus + notes/tasks/handoffs), r2_list, r2_get, kv_get, research_queue (queue idea -> autonomous backend execution), intents_query, candidates_query, service_discover (machine registry), backlog_status, cf_analytics (account cost/usage), email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code.",
   "3. Heavy or mutating actions (ops_issue_run triggers the backlog-executor drain) require confirm:true; with confirm false or omitted, return the plan and what would run, without executing.",
   "3b. email_respond sends a REPLY inside an existing inbound thread only (reply_to_id required) and requires explicit affirmation in the latest user message (yes / please reply / send it / go ahead). Subjects containing spam-trip tokens (TEST, VERIFY, CANARY, MATRIX, PIPELINE TEST) are rejected. email_mark updates a message status (read/processed/archived/spam/rejected).",
   "4. ops_d1_query is READ-ONLY SELECT/WITH across ALL bound D1 databases. Pass db = audit|living|graph|portfolio|outreach|cms|ipatent|personal (default audit). qnfo-audit tables incl. agent_issues, ai_queries, cloud_ops_events, ops_ai_log, handoffs, outreach_log, sent_log. living-paper = research papers store; qnfo-graph = knowledge graph. Never attempt writes; never echo credentials; add LIMIT unless the query is an aggregate.",
@@ -80,6 +80,8 @@ var OPS_TOOLS = [
   { name: "intents_query", description: "QUERY the intent orchestrator queue (the QUERY half of queue-and-query ops): list queued intents (notes/tasks/events/emails/research) with status + metadata.", parameters: { type: "object", properties: { status: { type: "string", description: "filter: pending | done (default all)" }, limit: { type: "number", description: "1-100 (default 20)" } }, additionalProperties: false } },
   { name: "candidates_query", description: "QUERY the research triage candidates (research ideas that passed triage, with scores + dispatch status) - the result side of the autonomous research pipeline.", parameters: { type: "object", properties: { status: { type: "string", description: "candidate status filter" }, limit: { type: "number", description: "1-100 (default 20)" } }, additionalProperties: false } },
   { name: "service_discover", description: "Query the machine-readable service registry (D1 service_registry): discover what services/workers/endpoints exist and their capabilities/routes/tools/models. Pass service=<name> for one service, omit for the full registry.", parameters: { type: "object", properties: { service: { type: "string", description: "optional service name (omit for full registry)" } }, additionalProperties: false } },
+  { name: "backlog_status", description: "Query the live open-backlog count (agent_issues awaiting remediation) from qnfo-backlog-exec /health.", parameters: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "cf_analytics", description: "Account-wide Cloudflare analytics (30d): Workers AI neurons + estimated cost by model, and worker invocations by worker. Reads the CF GraphQL API via CF_API_TOKEN.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "email_check", description: "List recent inbound/outbound qnfo.org-domain emails with status (read-only; does not send anything).", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 8)" }, status: { type: "string", description: "optional status filter (received/processed/sent/replied/archived/spam/read/rejected)" } }, additionalProperties: false } },
   { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_fleet_log", description: "Read the last ops_ai_log entries (this endpoint execution log, qnfo-audit). Use when the user asks what the ops endpoint has done recently.", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 5)" } }, additionalProperties: false } },
@@ -488,6 +490,8 @@ async function execTool(env, name, rawArgs, userText) {
     else if (name === "intents_query") res = await intentsQuery(env, args);
     else if (name === "candidates_query") res = await candidatesQuery(env, args);
     else if (name === "service_discover") res = await serviceDiscover(env, args);
+    else if (name === "backlog_status") res = await backlogStatus(env);
+    else if (name === "cf_analytics") res = await cfAnalytics(env);
     else if (name === "email_check") res = await emailRecent(env, args);
     else if (name === "email_stats") res = await emailStats(env);
     else if (name === "email_mark") res = await emailMark(env, args, userText);
@@ -761,6 +765,49 @@ async function handleChat(env, body, authHeader, ua, ctx) {
 // ---------------------------------------------------------------- router
 var BINDING_KEYS = ["LIFECYCLE", "EMAIL", "ORCH", "INDEXER", "KAIZEN", "GATEWAY", "ARCHIVE", "AI", "AISEARCH", "MEMORY", "SKILLSYNC", "BACKLOG"];
 // ---------------------------------------------------------------- service registry (machine-readable discovery)
+async function registryRegister(env, body) {
+  if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
+  const service = String((body && body.service) || "").trim();
+  if (!service) return { ok: false, error: "service required" };
+  await ensureSchema(env);
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at")
+      .bind(service, body.kind || "worker", body.version || null, body.base_url || null, body.purpose || null, JSON.stringify(body.capabilities || []), JSON.stringify(body.routes || []), JSON.stringify(body.tools || []), JSON.stringify(body.models || []), JSON.stringify(body.deps || []), iso()).run();
+    return { ok: true, registered: service, version: body.version || null, ts: iso() };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+
+async function cfAnalytics(env) {
+  if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const out = {};
+  try {
+    const q = '{ viewer { accounts(filter: {accountTag: "' + CF_ACCOUNT_ID + '"}) { aiInferenceAdaptiveGroups(limit: 100, filter: {date_geq: "' + since + '"}) { sum { totalNeurons } dimensions { date modelId } } } } }';
+    const r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_API_TOKEN }, body: JSON.stringify({ query: q }) });
+    const j = await r.json();
+    const rows = (j.data && j.data.viewer.accounts[0] && j.data.viewer.accounts[0].aiInferenceAdaptiveGroups) || [];
+    let neurons = 0; const byModel = {};
+    for (const row of rows) { const n = (row.sum && row.sum.totalNeurons) || 0; neurons += n; const m = (row.dimensions && row.dimensions.modelId) || "unknown"; byModel[m] = (byModel[m] || 0) + n; }
+    out.ai_30d = { neurons: neurons, est_cost_usd: Math.round(neurons * 0.011 / 1000 * 100) / 100, by_model: Object.entries(byModel).slice(0, 8).map(function (e) { return { model: e[0], neurons: e[1] }; }) };
+  } catch (e) { out.ai_30d = { error: String((e && e.message) || e).slice(0, 200) }; }
+  try {
+    const q2 = '{ viewer { accounts(filter: {accountTag: "' + CF_ACCOUNT_ID + '"}) { workersInvocationsAdaptiveGroups(limit: 100, filter: {date_geq: "' + since + '"}) { sum { requests } dimensions { date worker } } } } }';
+    const r2 = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_API_TOKEN }, body: JSON.stringify({ query: q2 }) });
+    const j2 = await r2.json();
+    const rows2 = (j2.data && j2.data.viewer.accounts[0] && j2.data.viewer.accounts[0].workersInvocationsAdaptiveGroups) || [];
+    let reqs = 0; const byWorker = {};
+    for (const row of rows2) { const n = (row.sum && row.sum.requests) || 0; reqs += n; const w = (row.dimensions && row.dimensions.worker) || "unknown"; byWorker[w] = (byWorker[w] || 0) + n; }
+    out.worker_invocations_30d = { requests: reqs, by_worker: Object.entries(byWorker).slice(0, 8).map(function (e) { return { worker: e[0], requests: e[1] }; }) };
+  } catch (e) { out.worker_invocations_30d = { error: String((e && e.message) || e).slice(0, 200) }; }
+  return { ok: true, ts: iso(), since: since.slice(0, 10), ai_30d: out.ai_30d, worker_invocations_30d: out.worker_invocations_30d };
+}
+
+async function backlogStatus(env) {
+  if (!env.BACKLOG) return { ok: false, error: "backlog binding missing" };
+  const h = await probeService(env, { binding: "BACKLOG", name: "qnfo-backlog-exec" }, "/health");
+  return { ok: h.ok, healthy: h.ok, http: h.http, version: (h.body && h.body.version) || "", openBacklog: (h.body && typeof h.body.openBacklog === "number") ? h.body.openBacklog : -1 };
+}
+
 function manifest() {
   return {
     service: WORKER, kind: "worker", version: VERSION, base_url: "https://qnfo-ops.q08.workers.dev",
@@ -862,6 +909,12 @@ export default {
       if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
       return json(await registryRefresh(env));
     }
+    if (path === "/registry/register" && method === "POST") {
+      if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      let body = null; try { body = await request.json(); } catch (e) { return json({ error: "invalid JSON" }, 400); }
+      return json(await registryRegister(env, body));
+    }
+    if (path === "/analytics" && method === "GET") return json(await cfAnalytics(env));
     if (path.startsWith("/registry/") && method === "GET") { const svc = decodeURIComponent(path.slice("/registry/".length)); return json(await registryGet(env, svc)); }
     if (path === "/cost" && method === "GET") {
       try {
@@ -887,5 +940,9 @@ export default {
       return handleChat(env, body, request.headers.get("Authorization") || "", ua, ctx);
     }
     return json({ error: "not found", routes: ROUTES }, 404);
+  },
+  async scheduled(controller, env, ctx) {
+    // DISCOVERY-1 self-heal: auto-refresh the service registry on a cron (CF API sweep + service-binding /health).
+    try { await registryRefresh(env); } catch (e) { console.log("registry cron failed:", (e && e.message) || e); }
   }
 };
