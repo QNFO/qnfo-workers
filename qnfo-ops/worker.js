@@ -43,6 +43,14 @@ function envFloat(env, key, def) {
 function costUsdCalc(promptTokens, completionTokens) {
   return Math.round((((promptTokens || 0) / 1e6 * 0.14) + ((completionTokens || 0) / 1e6 * 0.28)) * 1e6) / 1e6;
 }
+// REQ-DIAG (temporary, 2026-09-04): capture incoming chat requests to isolate DeepChat integration failure.
+async function reqDiag(env, stage, info) {
+  if (!env.QNFO_AUDIT) return;
+  try {
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_req_log (id TEXT PRIMARY KEY, ts TEXT, stage TEXT, info TEXT)").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO ops_req_log (id, ts, stage, info) VALUES (?1,?2,?3,?4)").bind(randId("req-"), iso(), stage, String(info).slice(0, 2000)).run();
+  } catch (e) { /* best-effort */ }
+}
 async function authOk(header, env) {
   const expected = env.OPS_ROUTER_AUTH_KEY;
   if (!header || !header.startsWith("Bearer ") || !expected) return false;
@@ -743,6 +751,7 @@ function extractUsageObject(buf) {
 function relayStream(upstreamBody, recId, env, ctx, norm) {
   const reader = upstreamBody.getReader();
   const dec = new TextDecoder();
+  const enc = new TextEncoder();
   let buf = "";
   let usage = null;
   return new ReadableStream({
@@ -751,20 +760,42 @@ function relayStream(upstreamBody, recId, env, ctx, norm) {
         while (true) {
           const r = await reader.read();
           if (r.done) break;
-          controller.enqueue(r.value);
-          try {
-            buf += dec.decode(r.value, { stream: true });
-            if (buf.length > 64000) buf = buf.slice(-64000);
-            const u = extractUsageObject(buf);
-            if (u) usage = u;
-          } catch (e) { /* parse best-effort */ }
+          buf += dec.decode(r.value, { stream: true });
+          if (buf.length > 64000) buf = buf.slice(-64000);
+          let idx;
+          while ((idx = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, idx);
+            buf = buf.slice(idx + 1);
+            const raw = line.endsWith("\r") ? line.slice(0, -1) : line;
+            if (!raw) continue;
+            if (raw.indexOf(":") === 0) { controller.enqueue(enc.encode(raw + "\n")); continue; }
+            if (raw.indexOf("data:") !== 0) { controller.enqueue(enc.encode(raw + "\n")); continue; }
+            const payload = raw.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const chunk = JSON.parse(payload);
+              if (chunk.usage) { usage = chunk.usage; continue; }
+              const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+              if (delta) {
+                // REASONING-STRIP-1: same clean-delta normalization as the ops-exec path.
+                const clean = {};
+                if (delta.role) clean.role = delta.role;
+                clean.content = delta.content != null ? delta.content : "";
+                if (delta.tool_calls) clean.tool_calls = delta.tool_calls;
+                chunk.choices[0].delta = clean;
+              }
+              delete chunk.system_fingerprint;
+              if (chunk.choices) for (const ch of chunk.choices) delete ch.logprobs;
+              controller.enqueue(enc.encode("data: " + JSON.stringify(chunk) + "\n\n"));
+            } catch (e) { /* skip malformed chunk */ }
+          }
         }
         ctx.waitUntil(patchOps(env, recId, usage ? (usage.prompt_tokens || 0) : estTokens(JSON.stringify(norm)), usage ? (usage.completion_tokens || 0) : 0));
       } catch (e) {
         try { controller.error(e); } catch (e2) { /* already closed */ }
         return;
       }
-      try { controller.close(); } catch (e) { /* already closed */ }
+      try { controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); } catch (e) { /* already closed */ }
     }
   });
 }
@@ -778,6 +809,7 @@ async function patchOps(env, id, promptTokens, completionTokens) {
 // ---------------------------------------------------------------- chat handler
 async function handleChat(env, body, authHeader, ua, ctx) {
   const okAuth = await authOk(authHeader, env);
+  await reqDiag(env, "auth", JSON.stringify({ okAuth: okAuth, model: body && body.model, stream: !!(body && body.stream), max_tokens: body && body.max_tokens, authPrefix: String(authHeader || "").slice(0, 12), bodyKeys: body ? Object.keys(body).slice(0, 24) : [] }));
   if (!okAuth) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
   // AUDIT-DESIGN-2026-09-03: soft daily cap read from the ops audit trail; OPS-DAILY-CAP-1
   // (2026-09-04): env override OPS_DAILY_CAP (default 250) - raised for DeepChat main-agent traffic.
@@ -916,7 +948,14 @@ async function handleChat(env, body, authHeader, ua, ctx) {
               const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
               if (delta) {
                 if (delta.content) content += delta.content;
-                emitChunk(delta, null);
+                // REASONING-STRIP-1 (2026-09-04): generic OpenAI clients (DeepChat "openai" apiType,
+                // ChatBox) do not expect DeepSeek's reasoning_content field - it caused the client
+                // stream parser to fail fast. Emit a clean standard delta (role + content + tool_calls only).
+                const clean = {};
+                if (delta.role) clean.role = delta.role;
+                clean.content = delta.content != null ? delta.content : "";
+                if (delta.tool_calls) clean.tool_calls = delta.tool_calls;
+                emitChunk(clean, null);
               }
             } catch (e) { /* skip malformed chunk */ }
           }
@@ -1195,6 +1234,9 @@ export default {
     const path = url.pathname;
     const method = request.method;
     const ua = request.headers.get("User-Agent") || "";
+    if (path === "/v1/chat/completions" || path === "/chat/completions") {
+      await reqDiag(env, "arrival", JSON.stringify({ method: method, auth_prefix: (request.headers.get("Authorization") || "").slice(0, 12), auth_len: (request.headers.get("Authorization") || "").length, clen: request.headers.get("Content-Length") || "", ctype: request.headers.get("Content-Type") || "", ua: ua.slice(0, 60) }));
+    }
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (path === "/health" && method === "GET") {
       const bindings = {};
