@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.0-p1";
+var VERSION = "0.3.0-p2"; // 2026-09-04: fix NaN in weekly report string (stray unary + between "## Ops AI Gateway" and "## Top 10" sections)
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -138,7 +138,7 @@ async function runScan(env) {
   scored.sort((a, b) => b.composite - a.composite);
   const flagged = scored.filter((s) => s.composite > 0.7);
   const reportDate = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const findingsMd = "# Kaizen Report \u2014 " + reportDate + "\n\n- Worker: qnfo-kaizen v" + VERSION + "\n- Generated: " + (/* @__PURE__ */ new Date()).toISOString() + "\n- Skills scanned: " + scored.length + "\n- Flagged (composite > 0.7): " + flagged.length + "\n\n## Flagged\n" + (flagged.length ? flagged.map((f) => "- **" + f.skill + "** v" + f.version + " composite=" + f.composite + " (staleness " + f.stalenessDays + "d, incidents " + (incidents[f.skill.toLowerCase()] || 0) + ", refs " + f.crossRefs + ")").join("\n") : "- none") + "\n\n## Ops AI Gateway (7d)\n- chats: " + (opsStats.chats7d || 0) + "\n- failures: " + (opsStats.failures7d || 0) + "\n- by model: " + ((opsStats.byModel || []).join(", ") || "none") + "\n" + + "\n\n## Top 10 by composite\n" + scored.slice(0, 10).map((s) => "- " + s.skill + " v" + s.version + ": " + s.composite).join("\n");
+  const findingsMd = "# Kaizen Report \u2014 " + reportDate + "\n\n- Worker: qnfo-kaizen v" + VERSION + "\n- Generated: " + (/* @__PURE__ */ new Date()).toISOString() + "\n- Skills scanned: " + scored.length + "\n- Flagged (composite > 0.7): " + flagged.length + "\n\n## Flagged\n" + (flagged.length ? flagged.map((f) => "- **" + f.skill + "** v" + f.version + " composite=" + f.composite + " (staleness " + f.stalenessDays + "d, incidents " + (incidents[f.skill.toLowerCase()] || 0) + ", refs " + f.crossRefs + ")").join("\n") : "- none") + "\n\n## Ops AI Gateway (7d)\n- chats: " + (opsStats.chats7d || 0) + "\n- failures: " + (opsStats.failures7d || 0) + "\n- by model: " + ((opsStats.byModel || []).join(", ") || "none") + "\n\n## Top 10 by composite\n" + scored.slice(0, 10).map((s) => "- " + s.skill + " v" + s.version + ": " + s.composite).join("\n");
   const reportId = "kaizen-" + reportDate + "-" + Date.now();
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO kaizen_reports (id, session_id, report_date, findings, improvements_applied, wbs_code) VALUES (?, ?, ?, ?, ?, ?)").bind(

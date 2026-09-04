@@ -18,7 +18,8 @@ code (code-shaped ops via typed tools), streaming, tool_use.
 
 ## Upstream
 api.deepseek.com direct (DEEPSEEK_API_KEY secret). Tool calling verified live.
-Daily soft cap: 250 chats per UTC day (from ops_ai_log audit trail).
+Daily soft cap: OPS_DAILY_CAP env (default 5000 for DeepChat main-agent traffic;
+fallback 250) chats per UTC day (from ops_ai_log audit trail).
 
 ## Deploy
 ```
@@ -48,10 +49,10 @@ never calls the intent orchestrator. Its full audit trail is qnfo-audit.ops_ai_l
 guard on the research side: qnfo-ai v5.16.6+ skips auto-express for ops phrasing.
 
 ## Constraints (honest, verified)
-- Workers runtime disallows dynamic code generation (eval/new Function): arbitrary
-  JS snippets CANNOT run inside the worker. Code-shaped ops execute via the typed
-  tools (ops_d1_query SQL, ops_issue_run drains, fleet_status probes,
-  email_check/email_stats). The endpoint states this plainly when asked for raw JS.
+- Workers runtime disallows request-time eval/new Function, so pure-compute code runs
+  via the run_code tool on the Dynamic Workers LOADER binding (isolated: no network,
+  filesystem, secrets or bindings). SQL/objects/keys/fleet/mailbox run via the typed
+  tools (ops_d1_query, r2_list/r2_get, kv_get, fleet_status, email_check/email_stats).
 - ops_d1_query is strictly read-only: SELECT/WITH only; mutation keywords are
   rejected anywhere in the statement (audit HARD-1 2026-09-03). Consequence: text
   searches for words like "delete" inside titles need LIKE with the word split.
@@ -64,3 +65,27 @@ guard on the research side: qnfo-ai v5.16.6+ skips auto-express for ops phrasing
 - v1.0.2 2026-09-03 — user-affirmation gate for ops_issue_run + DATA-ONLY tool-result boundary (red-team HARD-1)
 - v1.0.3 2026-09-03 — d1 read-only guard hardened (audit HARD-1); daily cap 250/UTC day; /v1/models capability advertisement
 - v1.0.4 2026-09-03 — /cost route (utc-day + 30d spend from ops_ai_log) + guarded email_mark / email_respond tools (reply-to-inbound only; user-affirmation + negation-aware; spam-token subject rejection)
+
+## Hybrid mode (HYBRID-MODEL-1, v1.9.0+)
+Tool-carrying clients (DeepChat main agent) get MERGED tools: client-native tools
+(client wins on name collision) + server ops tools. Server tools execute server-side
+inside the loop; pure client-tool rounds hand back to the client with
+finish_reason=tool_calls so the client's native toolchain (subagents/skills/files/
+code mode) keeps working. ChatBox keeps the pure server loop. The client's system
+prompt is preserved; a compact ops-tool context is appended to it.
+
+## Environment knobs (PARAM-TUNE-1)
+- OPS_ANSWER_CAP (16384) - final-answer token cap (hard cap DEFAULT_MAX_OUT)
+- OPS_TOOL_ROUND_MAX (2000) - per-tool-round token budget
+- OPS_LOOP_DEADLINE_MS (30000) - agent-tool loop wall budget
+- OPS_MAX_TOOL_ITERS (8) - max tool rounds per request
+- OPS_TOOL_RESULT_CAP (16000) - tool-result text cap (chars)
+- OPS_TEMPERATURE (0.5) / OPS_TOP_P (0.9) - defaults when the client sends none
+- OPS_DAILY_CAP (5000) - chats per UTC day
+
+## Version history (continued)
+- v1.9.0 2026-09-04 — HYBRID-MODEL-1 merged tool loop; ANSWER-ROUND-1 no-tools answer
+  round at full cap (fleet truncation fix); STREAM-FINAL-1 token-streamed final answers
+  + heartbeats (first_byte 0.14s); FLEET-COMPACT-1 parallel probes + handler-type
+  compaction (fleet 13.0s->6.1s); RELAY-COST-1 relay cost tracking via include_usage
+  tee; PARAM-TUNE-1 env knobs; relay honors client temperature/top_p.
