@@ -9,7 +9,7 @@
 //   C8 kaizen feed, C9 digest state machine.
 // Canonical source: QNFO/qnfo-workers/qnfo-auditor (FLEET-SELF-DOC-1)
 // Deploy: wrangler deploy from this dir; secrets: AUDITOR_TOKEN, DIGEST_TO.
-var VERSION = "1.1.4";
+var VERSION = "1.1.5";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","F1","F2","F3","F4"] };
 var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 function json(o, st) { return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } }); }
@@ -157,6 +157,12 @@ async function runAudit(env, mode, log) {
         await env.AUDIT.prepare("UPDATE errata_queue SET status='detected', updated_at=datetime('now') WHERE id=?").bind(p.id).run();
         A("errata-requeue", "errata queue #" + p.id + " orphan (no action) -> re-queued to detected");
         log("C7-act requeue orphan queue " + p.id);
+      } else if (["error","superseded","stale"].indexOf(String(act.status)) >= 0) {
+        await env.AUDIT.prepare("UPDATE errata_actions SET status='drafted', updated_at=datetime('now') WHERE id=?").bind(act.id).run();
+        A("errata-retry", "errata action " + act.id + " (" + act.status + ") for queue #" + p.id + " -> re-drafted for publish retry");
+        log("C7-act retry action " + act.id + " -> drafted");
+      } else {
+        log("C7-act queue " + p.id + " action " + act.status + ", awaiting pipeline");
       }
     }
     log("C7 errata-stuck: " + stuck.length + ", parked: " + parked.length);
