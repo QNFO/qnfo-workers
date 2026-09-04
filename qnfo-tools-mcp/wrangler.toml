@@ -45,3 +45,10 @@ environment = "production"
 binding = "PL_SEARCH"
 service = "personal-life-search"
 environment = "production"
+
+# v1.1.1 - self-registration to the qnfo-ops service registry (cross-service discovery).
+# Secret: REGISTRY_TOKEN (shared with qnfo-ops /registry/register) - set via wrangler secret put.
+[[services]]
+binding = "QNFO_OPS"
+service = "qnfo-ops"
+environment = "production"
