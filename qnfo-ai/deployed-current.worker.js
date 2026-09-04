@@ -1,46 +1,50 @@
+--dbb9a2b3b4eaf61f1f6ed70091e194729b2f1ce25ebba26dabee5a62d752
+Content-Disposition: form-data; name="worker.js"; filename="worker.js"
+Content-Type: application/javascript+module
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.20.7-p1";
+var VERSION = "5.20.8";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var MODELS = {
   // Workers AI free — original three
-  "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 8192, ctx: 32768, temp: 0.6, topP: 0.95, tools: false, vision: false },
-  "qwen3-30b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen3-30b-a3b-fp8", reasoning: false, maxOut: 8192, ctx: 32768, temp: 0.7, topP: 0.9, tools: true, vision: false },
+  "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 8192, ctx: 8e4, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  "qwen3-30b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen3-30b-a3b-fp8", reasoning: true, maxOut: 8192, ctx: 32768, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
   "qwen2.5-coder-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen2.5-coder-32b-instruct", reasoning: false, maxOut: 8192, ctx: 32768, temp: 0.2, topP: 0.95, tools: false, vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
-  "glm-5.2": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.2", reasoning: true, maxOut: 8192, ctx: 128e3, temp: 0.6, topP: 0.95, tools: true, vision: false },
+  "glm-5.2": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.2", reasoning: true, maxOut: 8192, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: false },
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 8192, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
-  "qwq-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwq-32b", reasoning: true, maxOut: 8192, ctx: 131072, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  "qwq-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwq-32b", reasoning: true, maxOut: 8192, ctx: 24e3, temp: 0.6, topP: 0.95, tools: false, vision: false },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
   // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
   "glm-4.7-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-4.7-flash", reasoning: true, maxOut: 8192, ctx: 131072, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // $0.06/M — cheap general default (131k ctx, reasoning)
-  "gemma-4-26b": { tier: 0, family: "google", wa: "@cf/google/gemma-4-26b-a4b-it", reasoning: false, maxOut: 8192, ctx: 131072, temp: 0.7, topP: 0.9, tools: true, vision: false },
+  "gemma-4-26b": { tier: 0, family: "google", wa: "@cf/google/gemma-4-26b-a4b-it", reasoning: true, maxOut: 8192, ctx: 256e3, temp: 0.7, topP: 0.9, tools: true, vision: true },
   // $0.10/M
-  "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 8192, ctx: 1048576, temp: 0.6, topP: 0.9, tools: true, vision: true },
+  "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 8192, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
-  "gpt-oss-120b": { tier: 0, family: "openai", wa: "@cf/openai/gpt-oss-120b", reasoning: true, maxOut: 32768, ctx: 131072, temp: 0.6, topP: 0.9, tools: true, vision: false },
+  "gpt-oss-120b": { tier: 0, family: "openai", wa: "@cf/openai/gpt-oss-120b", reasoning: true, maxOut: 32768, ctx: 128e3, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $0.35/M reasoning/agentic
-  "deepseek-v4-flash-wa": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", reasoning: true, maxOut: 8192, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
+  "deepseek-v4-flash-wa": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", reasoning: true, maxOut: 8192, ctx: 1310720, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // $0.44/M official DeepSeek V4 Flash (1M ctx, reasoning)
   "deepseek-v4-pro-wa": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", reasoning: true, maxOut: 32768, ctx: 1048576, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.32/M 1M-ctx reasoning
   "kimi-k2.7-code": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.7-code", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.2, topP: 0.95, tools: true, vision: true },
   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
-  "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 8192, ctx: 1048576, temp: 0.6, topP: 0.9, tools: true, vision: false },
+  "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 8192, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.40/M 1M-ctx agentic coding
   // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
   // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
-  "llama-3.2-11b-vision": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-11b-vision-instruct", reasoning: false, maxOut: 2048, ctx: 131072, temp: 0.6, topP: 0.9, tools: false, vision: true },
+  "llama-3.2-11b-vision": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-11b-vision-instruct", reasoning: false, maxOut: 2048, ctx: 128e3, temp: 0.6, topP: 0.9, tools: false, vision: true },
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
@@ -550,7 +554,7 @@ __name(autoRoute, "autoRoute");
 __name2(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
   const { temperature, top_p, tools, vision, tool_choice } = opts;
-  const directOnly = !!(tools && tools.length) || !!vision;
+  const directOnly = !!(tools && tools.length);
   if (!directOnly && env.CF_API_TOKEN && modelId.startsWith("@cf/")) {
     try {
       const body = {
@@ -1054,12 +1058,12 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (primaryText) {
     try {
       const vMsg = [
-        { role: "system", content: 'Strict validation pass: judge the assistant response for correctness, completeness, and nuance against the user request. If the user explicitly asked for brevity (one word, briefly, short, concise, single sentence, no explanation), a concise accurate answer that satisfies that constraint is PASS. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced \u2014 or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
+        { role: "system", content: 'You are a strict validator. Judge the assistant response for correctness, completeness, and nuance against the user request. If the user explicitly asked for brevity (one word, briefly, short, concise, single sentence, no explanation), a concise accurate answer that satisfies that constraint is PASS. Reply ONLY with "PASS" if it is accurate, complete, and appropriately nuanced \u2014 or "FAIL" followed by one sentence naming the specific deficiency (incorrect, incomplete, too shallow, or generic).' },
         ...messages,
         { role: "assistant", content: primaryText }
       ];
       const rMsg = [
-        { role: "system", content: "Review pass: improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
+        { role: "system", content: "You are a review pass. Improve the assistant response to fully satisfy the user request with depth and nuance: correct any errors, fill gaps, add relevant context or alternative perspectives, and replace generic statements with specific, substantive ones. Output only the improved response." },
         ...messages,
         { role: "assistant", content: primaryText }
       ];
@@ -2404,3 +2408,6 @@ var worker_default = {
 export {
   worker_default as default
 };
+//# sourceMappingURL=worker.js.map
+
+--dbb9a2b3b4eaf61f1f6ed70091e194729b2f1ce25ebba26dabee5a62d752--
