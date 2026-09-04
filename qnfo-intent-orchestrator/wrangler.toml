@@ -40,6 +40,13 @@ binding = "CAL_API"
 service = "calendar-api"
 environment = "production"
 
+# v1.3.4 - self-registration to the qnfo-ops service registry (cross-service discovery).
+# Secret: REGISTRY_TOKEN (shared with qnfo-ops /registry/register) - set via wrangler secret put.
+[[services]]
+binding = "QNFO_OPS"
+service = "qnfo-ops"
+environment = "production"
+
 [ai]
 binding = "AI"
 

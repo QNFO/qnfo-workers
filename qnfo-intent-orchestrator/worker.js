@@ -13,7 +13,7 @@
 //   POST /triage/dispatch, POST /triage/sync, POST /triage/candidate
 // Scheduled: 06:00 digest email; 06:30 triage batch + task sync + auto-dispatch (1 active task)
 const NL = String.fromCharCode(10);
-const VERSION = '1.3.3';
+const VERSION = '1.3.4'; // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN)
 const ROUTER = 'https://qnfo-ai.q08.workers.dev';
 const AGENT_ORCH = 'https://qnfo-agent-orchestrator.q08.workers.dev';
 const PROMOTE_THRESHOLD = 60;
@@ -453,6 +453,23 @@ async function autoDispatch(env) {
   if (!top) return { dispatched: false, reason: 'no-promoted-candidates' };
   return dispatchCandidate(env, top);
 }
+async function selfRegister(env) {
+  const manifest = {
+    service: 'qnfo-intent-orchestrator', kind: 'worker', version: VERSION,
+    base_url: 'https://qnfo-intent-orchestrator.q08.workers.dev',
+    purpose: 'intent orchestrator: classify/route/queue desires (notes, tasks, events, emails, research) + autonomous research triage/dispatch pipeline',
+    capabilities: ['intent-classify', 'intent-queue', 'exact-match-dedupe', 'semantic-dedupe', 'research-triage', 'research-dispatch', 'digest', 'calendar-promote'],
+    routes: ['/health', '/intent', '/intents', '/intents/stats', '/digest', '/digest/send', '/triage/run', '/triage/sync', '/triage/candidates', '/triage/stats', '/triage/dispatch', '/triage/candidate'],
+    tools: [], models: [], deps: ['qnfo-ai (router, RT)', 'D1 qnfo-audit', 'personal-life-search', 'calendar-api', 'AI (embeddings)', 'INTENT_TOKEN']
+  };
+  const resp = await env.QNFO_OPS.fetch('https://qnfo-ops.internal/registry/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (env.REGISTRY_TOKEN || '') },
+    body: JSON.stringify(manifest)
+  });
+  return resp.ok;
+}
+
 export default {
   async scheduled(event, env) {
     if (event.cron === '0 6 * * *') {
@@ -488,6 +505,9 @@ export default {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (path === '/health' && method === 'GET') {
+      if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
+        ctx.waitUntil(selfRegister(env).catch(e => console.log('self-register err', e && e.message || e)));
+      }
       return new Response(JSON.stringify({ ok: true, worker: 'qnfo-intent-orchestrator', version: VERSION }), { headers: { 'Content-Type': 'application/json', ...cors } });
     }
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');

@@ -5,7 +5,7 @@
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_feed tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "1.5.0"; // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.6.0"; // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -765,6 +765,20 @@ async function handleChat(env, body, authHeader, ua, ctx) {
 // ---------------------------------------------------------------- router
 var BINDING_KEYS = ["LIFECYCLE", "EMAIL", "ORCH", "INDEXER", "KAIZEN", "GATEWAY", "ARCHIVE", "AI", "AISEARCH", "MEMORY", "SKILLSYNC", "BACKLOG"];
 // ---------------------------------------------------------------- service registry (machine-readable discovery)
+async function regAuthOk(header, env) {
+  const a = await authOk(header, env);
+  if (a) return true;
+  const tok = String(header || "").replace(/^Bearer\s+/i, "");
+  const exp = env.REGISTRY_TOKEN;
+  if (!exp || !tok) return false;
+  const x = new TextEncoder().encode(tok);
+  const y = new TextEncoder().encode(exp);
+  if (x.byteLength !== y.byteLength) return false;
+  let d = 0;
+  for (let i = 0; i < x.byteLength; i++) d |= x[i] ^ y[i];
+  return d === 0;
+}
+
 async function registryRegister(env, body) {
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
   const service = String((body && body.service) || "").trim();
@@ -816,7 +830,7 @@ function manifest() {
     routes: ROUTES,
     tools: OPS_TOOLS.map(function (t) { return { name: t.name, description: t.description, parameters: t.parameters }; }),
     models: ["ops-exec", "deepseek-v4-flash"],
-    deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
+    deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "REGISTRY_TOKEN (fleet self-registration)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
     generatedAt: iso(),
   };
 }
@@ -896,6 +910,7 @@ export default {
       bindings.intent = !!(env.QNFO_INTENT && env.QNFO_INTENT.fetch);
       bindings.intent_token = !!env.INTENT_TOKEN;
       bindings.cf_api_token = !!env.CF_API_TOKEN;
+      bindings.registry_token = !!env.REGISTRY_TOKEN;
       bindings.ai = !!env.WAI;
       return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-feed", "isolated-ops-logging"], routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings: bindings, generatedAt: iso() });
     }
@@ -906,11 +921,11 @@ export default {
     if (path === "/manifest" && method === "GET") return json(manifest());
     if (path === "/registry" && method === "GET") return json(await registryList(env));
     if (path === "/registry/refresh" && method === "POST") {
-      if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      if (!(await regAuthOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
       return json(await registryRefresh(env));
     }
     if (path === "/registry/register" && method === "POST") {
-      if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      if (!(await regAuthOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
       let body = null; try { body = await request.json(); } catch (e) { return json({ error: "invalid JSON" }, 400); }
       return json(await registryRegister(env, body));
     }
