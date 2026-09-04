@@ -1101,13 +1101,13 @@ async function cfAnalytics(env) {
     out.ai_30d = { neurons: neurons, est_cost_usd: Math.round(neurons * 0.011 / 1000 * 100) / 100, by_model: Object.entries(byModel).slice(0, 8).map(function (e) { return { model: e[0], neurons: e[1] }; }) };
   } catch (e) { out.ai_30d = { error: String((e && e.message) || e).slice(0, 200) }; }
   try {
-    const q2 = '{ viewer { accounts(filter: {accountTag: "' + CF_ACCOUNT_ID + '"}) { workersInvocationsAdaptiveGroups(limit: 100, filter: {date_geq: "' + since + '"}) { sum { requests } dimensions { date worker } } } } }';
+    const q2 = '{ viewer { accounts(filter: {accountTag: "' + CF_ACCOUNT_ID + '"}) { workersInvocationsAdaptive(limit: 10000, filter: {date_geq: "' + since + '", date_leq: "' + new Date().toISOString().slice(0, 10) + '"}) { sum { requests errors } dimensions { scriptName } } } } }';
     const r2 = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_API_TOKEN }, body: JSON.stringify({ query: q2 }) });
     const j2 = await r2.json();
-    const rows2 = (j2.data && j2.data.viewer.accounts[0] && j2.data.viewer.accounts[0].workersInvocationsAdaptiveGroups) || [];
-    let reqs = 0; const byWorker = {};
-    for (const row of rows2) { const n = (row.sum && row.sum.requests) || 0; reqs += n; const w = (row.dimensions && row.dimensions.worker) || "unknown"; byWorker[w] = (byWorker[w] || 0) + n; }
-    out.worker_invocations_30d = { requests: reqs, by_worker: Object.entries(byWorker).slice(0, 8).map(function (e) { return { worker: e[0], requests: e[1] }; }) };
+    const rows2 = (j2.data && j2.data.viewer.accounts[0] && j2.data.viewer.accounts[0].workersInvocationsAdaptive) || [];
+    let reqs = 0; let errs = 0; const byWorker = {};
+    for (const row of rows2) { const n = (row.sum && row.sum.requests) || 0; reqs += n; errs += (row.sum && row.sum.errors) || 0; const w = (row.dimensions && row.dimensions.scriptName) || "unknown"; byWorker[w] = (byWorker[w] || 0) + n; }
+    out.worker_invocations_30d = { requests: reqs, errors: errs, by_worker: Object.entries(byWorker).slice(0, 8).map(function (e) { return { worker: e[0], requests: e[1] }; }) };
   } catch (e) { out.worker_invocations_30d = { error: String((e && e.message) || e).slice(0, 200) }; }
   return { ok: true, ts: iso(), since: since.slice(0, 10), ai_30d: out.ai_30d, worker_invocations_30d: out.worker_invocations_30d };
 }

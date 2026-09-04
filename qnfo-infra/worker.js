@@ -15,7 +15,7 @@
 //   This makes ALL Cloudflare infrastructure data/records available to any AI agent
 //   (qnfo-ai router, personal-api twin, Chatbox, MCP) with a single authenticated call.
 const NL = String.fromCharCode(10);
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 const ACCT = null;
 
 function auth(token, env) {
@@ -140,18 +140,20 @@ async function collectAnalytics(env) {
     out.ai_30d = { neurons: neurons, est_cost_usd: Math.round(neurons * 0.011 / 1000 * 100) / 100, by_model: Object.entries(byModel).slice(0, 8).map(([m, n]) => ({ model: m, neurons: n })) };
   } catch (e) { out.ai_30d = { error: String(e) }; }
   try {
-    const q = '{ viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT + '"}) { workersInvocationsAdaptiveGroups(limit: 100, filter: {date_geq: "' + since + '"}) { sum { requests } dimensions { date worker } } } } }';
+    const q = '{ viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT + '"}) { workersInvocationsAdaptive(limit: 10000, filter: {date_geq: "' + since + '", date_leq: "' + new Date().toISOString().slice(0, 10) + '"}) { sum { requests errors } dimensions { scriptName } } } } }';
     const j = await gql(env, q);
-    const rows = (j.data && j.data.viewer.accounts[0] && j.data.viewer.accounts[0].workersInvocationsAdaptiveGroups) || [];
+    const rows = (j.data && j.data.viewer.accounts[0] && j.data.viewer.accounts[0].workersInvocationsAdaptive) || [];
     const byWorker = {};
     let total = 0;
+    let totalErrs = 0;
     for (const r of rows) {
       const n = (r.sum && r.sum.requests) || 0;
       total += n;
-      const w = r.dimensions && r.dimensions.worker || 'unknown';
+      totalErrs += (r.sum && r.sum.errors) || 0;
+      const w = r.dimensions && r.dimensions.scriptName || 'unknown';
       byWorker[w] = (byWorker[w] || 0) + n;
     }
-    out.workers_30d = { requests: total, by_worker: Object.entries(byWorker).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([w, n]) => ({ worker: w, requests: n })) };
+    out.workers_30d = { requests: total, errors: totalErrs, by_worker: Object.entries(byWorker).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([w, n]) => ({ worker: w, requests: n })) };
   } catch (e) { out.workers_30d = { error: String(e) }; }
   return out;
 }
