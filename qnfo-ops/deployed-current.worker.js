@@ -1192,9 +1192,20 @@ async function registryGet(env, service) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const path = url.pathname;
+    const pathRaw = url.pathname;
     const method = request.method;
     const ua = request.headers.get("User-Agent") || "";
+    // REQ-CAPTURE-1 (temporary 2026-09-04): log every API-looking request BEFORE routing so 404s
+    // (canonical: DeepChat model check 'Not Found') are captured with their exact path.
+    try {
+      if (env.QNFO_AUDIT && (pathRaw.indexOf("chat") >= 0 || pathRaw.indexOf("model") >= 0 || pathRaw.indexOf("completion") >= 0 || pathRaw.indexOf("response") >= 0 || pathRaw.indexOf("/v1") === 0)) {
+        await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_req_log (id TEXT PRIMARY KEY, ts TEXT, method TEXT, path TEXT, auth_prefix TEXT, auth_len INTEGER, ua TEXT, clen TEXT)").run();
+        await env.QNFO_AUDIT.prepare("INSERT INTO ops_req_log (id, ts, method, path, auth_prefix, auth_len, ua, clen) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(randId("req-"), iso(), method, pathRaw, (request.headers.get("Authorization") || "").slice(0, 10), (request.headers.get("Authorization") || "").length, ua.slice(0, 60), request.headers.get("Content-Length") || "").run();
+      }
+    } catch (e) { /* best-effort */ }
+    // URL-ROBUST-1: OpenAI clients sometimes append a trailing "/" when joining base_url + path.
+    // Exact-match routing 404'd those; normalize before dispatch (root "/" stays).
+    const path = pathRaw.length > 1 ? pathRaw.replace(/\/+$/, "") : pathRaw;
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (path === "/health" && method === "GET") {
       const bindings = {};
