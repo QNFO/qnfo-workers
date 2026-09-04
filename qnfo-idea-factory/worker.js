@@ -107,7 +107,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.2", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.3", bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -169,6 +169,15 @@ function redact(s) {
   return t;
 }
 __name(redact, "redact");
+// ROLE-LABEL-NORMALIZE-1 (feed-side guard, 2026-09-04): strip a leading transport role-label
+// wrapper (User message:/Assistant message:/etc) from thread titles so legacy/wrapped rows never
+// surface the label and identical normalized titles dedupe in collapseThreads (defense-in-depth
+// behind the qnfo-ai v5.20.13 ingestion fix).
+function normLabel(s) {
+  if (typeof s !== "string") return s;
+  return s.replace(/^(?:User message|Assistant message|System message|User|Assistant|Human|AI|System)\s*:\s*(?:\r?\n)+/i, "").replace(/^\r?\n+/, "");
+}
+__name(normLabel, "normLabel");
 function collapseThreads(items) {
   var map = {}, order = [];
   for (var i = 0; i < items.length; i++) {
@@ -247,7 +256,7 @@ async function liveThreads(env) {
         id: t.id,
         kind: "thread",
         source: "live",
-        title: redact(String(t.title || "(untitled)").slice(0, 200)),
+        title: redact(normLabel(String(t.title || "(untitled)")).slice(0, 200)),
         created_at: firstTs || lastTs,
         updated_at: lastTs || firstTs,
         message_count: Number(t.n) || 0,
