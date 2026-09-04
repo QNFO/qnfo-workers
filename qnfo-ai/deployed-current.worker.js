@@ -1,14 +1,10 @@
---dbb9a2b3b4eaf61f1f6ed70091e194729b2f1ce25ebba26dabee5a62d752
-Content-Disposition: form-data; name="worker.js"; filename="worker.js"
-Content-Type: application/javascript+module
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.20.8";
+var VERSION = "5.20.9";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -135,7 +131,7 @@ function contextAwareTarget(cls, target, estInput, maxOut) {
   if (!spec || spec.tier !== 0) return target;
   const out = clampTokens(maxOut, MAX_OUT[spec.wa] || DEFAULT_MAX_OUT);
   if (estInput + out <= modelCtx(spec) - CTX_SAFETY_MARGIN) return target;
-  const big = MODELS["qwq-32b"];
+  const big = MODELS["glm-5.3-flash"];
   if (big && spec.wa !== big.wa && estInput + out <= modelCtx(big) - CTX_SAFETY_MARGIN) {
     return "qwq-32b";
   }
@@ -2409,5 +2405,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-
---dbb9a2b3b4eaf61f1f6ed70091e194729b2f1ce25ebba26dabee5a62d752--
