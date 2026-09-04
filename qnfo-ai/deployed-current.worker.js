@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.20.10";
+var VERSION = "5.20.11";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1709,8 +1709,12 @@ function lastUserText(messages) {
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");
 async function logQuery(env, record) {
+  const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
+  const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
+  const _machineUA = /curl\/|python-requests|python\/|Go-http-client|node-fetch|axios|okhttp\/|Java\/|insomnia|postman|qnfo-chat-canary|qnfo-canary|QNFO-AI-Calibration|UptimeRobot/i.test(String(record.ua || ""));
+  const _internalProbe = _probePrompt || _probeThread || _machineUA;
   try {
-    if (env.QNFO_AUDIT) {
+    if (env.QNFO_AUDIT && !_internalProbe) {
       await env.QNFO_AUDIT.prepare(
         "INSERT INTO ai_queries (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"
       ).bind(record.id, record.ts, record.model, record.strategy, record.complexity, record.domain, record.prompt, record.response, record.prompt_tokens, record.completion_tokens, record.cost_usd, record.latency_ms, record.rag_sources, record.streamed).run();
@@ -1718,10 +1722,6 @@ async function logQuery(env, record) {
   } catch (e) {
     console.log("ai_queries insert failed:", e && e.message || e);
   }
-  const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
-  const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
-  const _machineUA = /curl\/|python-requests|python\/|Go-http-client|node-fetch|axios|okhttp\/|Java\/|insomnia|postman|qnfo-chat-canary|qnfo-canary|UptimeRobot/i.test(String(record.ua || ""));
-  const _internalProbe = _probePrompt || _probeThread || _machineUA;
   try {
     if (env.QNFO_AUDIT && record.thread_id && !_internalProbe) {
       await env.QNFO_AUDIT.prepare("INSERT INTO chatbox_conversations (id, thread_id, source, worker, model, messages_json, prompt, response, ts, ua) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(record.id, record.thread_id, record.source || "other", record.worker || "qnfo-ai", record.model, record.messages_json || null, record.prompt || "", record.response || "", record.ts, record.ua || "").run();
