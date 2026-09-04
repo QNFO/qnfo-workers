@@ -55,7 +55,8 @@ WORKER-EDIT-BASE-VERIFY-1 / DEPLOY-LAST-WINS-RECONCILE-1:
 
 ## Status (2026-09-04)
 - ADOPTED (rich registry entries): qnfo-intent-orchestrator v1.3.4,
-  qnfo-tools-mcp v1.1.1 (full 15-tool MCP catalog machine-discoverable).
+  qnfo-tools-mcp v1.1.1 (full 15-tool MCP catalog machine-discoverable),
+  qnfo-cloud-ops v1.13.1 (visibility digest; verified 2026-09-04, commit d45a8a6).
 - SWEEP-RICH (12 service-bound workers self-doc via qnfo-ops cron /health sweep;
   no per-worker change needed): qnfo-ai, qnfo-ai-search, qnfo-archive,
   qnfo-backlog-exec, qnfo-email, qnfo-email-orchestrator, qnfo-gateway,
