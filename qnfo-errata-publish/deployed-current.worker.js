@@ -20007,7 +20007,7 @@ __name(renderPdf, "renderPdf");
 async function zenodo(env, path, opts) {
   const sep = path.indexOf("?") >= 0 ? "&" : "?";
   const url = ZENODO + path + sep + "access_token=" + env.ZENODO_TOKEN;
-  const headers = { "User-Agent": "QNFO-errata-publish/0.6" };
+  const headers = { "User-Agent": "QNFO-errata-publish/0.7" };
   const init = { method: opts && opts.method || "GET", headers };
   if (opts && opts.jsonBody !== void 0) {
     headers["Content-Type"] = "application/json";
@@ -20072,7 +20072,7 @@ async function publishNewVersion(env, action, paper) {
     if (k !== "prereserve_doi" && k !== "doi" && k !== "recid") metaClean[k] = meta[k];
   }
   try {
-    const pr = await fetch("https://zenodo.org/api/records/" + recordId, { headers: { "User-Agent": "QNFO-errata-publish/0.6" } }).then(function(r) {
+    const pr = await fetch("https://zenodo.org/api/records/" + recordId, { headers: { "User-Agent": "QNFO-errata-publish/0.7" } }).then(function(r) {
       return r.json();
     });
     const prRels = pr.metadata && pr.metadata.related_identifiers || [];
@@ -20190,6 +20190,7 @@ async function publishAction(env, action) {
     return { action_id: action.id, slug: paper.slug, error: e.message, published: pub };
   }
   await env.WATCH_DB.prepare("UPDATE errata_actions SET status='published', updated_at=datetime('now') WHERE id=?").bind(action.id).run();
+  await env.WATCH_DB.prepare("UPDATE errata_queue SET status='published', updated_at=datetime('now') WHERE id=?").bind(action.queue_id).run();
   const notify = await notifyUser(env, action, paper, pub, null);
   return { action_id: action.id, slug: paper.slug, published: pub, repoint, notify };
 }
@@ -20227,7 +20228,7 @@ async function runPublish(env, mode) {
       results.push({ action_id: a.id, error: e.message });
     }
   }
-  return { ok: true, worker: "qnfo-errata-publish", version: "0.6.0", dry, processed: rows.length, results };
+  return { ok: true, worker: "qnfo-errata-publish", version: "0.7.0", dry, processed: rows.length, results };
 }
 __name(runPublish, "runPublish");
 var publish_worker_src_default = {
@@ -20237,7 +20238,7 @@ var publish_worker_src_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-publish", version: "0.6.0", bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
+      return json({ ok: true, worker: "qnfo-errata-publish", version: "0.7.0", bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
     }
     if (url.pathname === "/debug/pdf") {
       try {
