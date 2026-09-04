@@ -1,0 +1,27 @@
+name = "qnfo-kaizen"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# qnfo-kaizen v0.3.0-p1 - continuous-improvement meta loop + skill drift watchtower
+# Canonical repo created 2026-09-04 (was API-managed with no repo - FLEET-SELF-DOC-1).
+# Digest: skill staleness scan (weekly Mon 10:00 UTC) + meta-claims application loop (daily 02:00 UTC).
+# OPS-KAIZEN-DIGEST-1 (2026-09-04): weekly scan includes an Ops AI Gateway section (ops_ai_log 7d stats).
+
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[r2_buckets]]
+binding = "SKILLS_BUCKET"
+bucket_name = "qnfo-skills"
+
+[ai]
+binding = "AI"
+
+[triggers]
+crons = ["0 2 * * *", "0 10 * * 1"]
+
+# Secrets (already set on the deployed script; persist across wrangler deploys):
+#   KAIZEN_TOKEN, GITHUB_TOKEN
