@@ -5,9 +5,9 @@
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_queue tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "1.6.1"; // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.7.0"; // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
 var DEFAULT_MAX_OUT = 16384;
@@ -82,6 +82,8 @@ var OPS_TOOLS = [
   { name: "service_discover", description: "Query the machine-readable service registry (D1 service_registry): discover what services/workers/endpoints exist and their capabilities/routes/tools/models. Pass service=<name> for one service, omit for the full registry.", parameters: { type: "object", properties: { service: { type: "string", description: "optional service name (omit for full registry)" } }, additionalProperties: false } },
   { name: "backlog_status", description: "Query the live open-backlog count (agent_issues awaiting remediation) from qnfo-backlog-exec /health.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "cf_analytics", description: "Account-wide Cloudflare analytics (30d): Workers AI neurons + estimated cost by model, and worker invocations by worker. Reads the CF GraphQL API via CF_API_TOKEN.", parameters: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "telemetry_report", description: "Self-report: scan the ops endpoint's own execution telemetry (tool calls, failures, chats, open self-heal issues) for a window. Use when the user asks what has been failing or how the endpoint is doing.", parameters: { type: "object", properties: { hours: { type: "number", description: "window in hours 1-168 (default 24)" } }, additionalProperties: false } },
+  { name: "telemetry_analyze", description: "RUN the telemetry self-heal analyzer: finds persistent tool failures (>=2 errors, no success since the last error) and auto-files agent_issues fix tickets (dedupe by open title). The self-improving loop.", parameters: { type: "object", properties: { hours: { type: "number", description: "window in hours 1-168 (default 6)" } }, additionalProperties: false } },
   { name: "email_check", description: "List recent inbound/outbound qnfo.org-domain emails with status (read-only; does not send anything).", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 8)" }, status: { type: "string", description: "optional status filter (received/processed/sent/replied/archived/spam/read/rejected)" } }, additionalProperties: false } },
   { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_fleet_log", description: "Read the last ops_ai_log entries (this endpoint execution log, qnfo-audit). Use when the user asks what the ops endpoint has done recently.", parameters: { type: "object", properties: { limit: { type: "number", description: "1-20 (default 5)" } }, additionalProperties: false } },
@@ -161,7 +163,7 @@ async function fleetStatus(env) {
   out.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
   const healthy = out.filter(function (x) { return x.healthy === true; }).length;
   const deployed = out.filter(function (x) { return x.healthy === true || x.probe === "api"; }).length;
-  return { fleet: out, healthyCount: healthy, deployedCount: deployed, total: out.length, ts: iso() };
+  return { ok: true, fleet: out, healthyCount: healthy, deployedCount: deployed, total: out.length, ts: iso() };
 }
 
 // ---------------------------------------------------------------- tool executors
@@ -472,6 +474,61 @@ async function serviceDiscover(env, args) {
   } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
 }
 
+// ---- telemetry self-heal loop (v1.7.0): the endpoint diagnoses its own tool failures
+// and files agent_issues tickets for PERSISTENT failures (no success since the last
+// error). Self-recovered failures are counted but not filed. Dedupe: skip when an open
+// issue with the same title already exists.
+async function telemetryAnalyze(env, hours) {
+  if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
+  const h = Math.min(Math.max(parseInt(hours, 10) || 6, 1), 168);
+  const since = new Date(Date.now() - h * 3600 * 1000).toISOString();
+  const out = { ok: true, windowHours: h, scanned: 0, persistent: [], recovered: 0, filed: 0, alreadyOpen: 0, ts: iso() };
+  try {
+    const rows = await env.QNFO_AUDIT.prepare("SELECT text, MAX(ts) last_ts, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text IS NOT NULL GROUP BY text ORDER BY n DESC LIMIT 100").bind(since).all();
+    out.scanned = (rows.results || []).length;
+    for (const r of (rows.results || [])) {
+      if ((r.n || 0) < 2) continue;
+      // self-recovery: any ok event for the same tool AFTER the last error?
+      try {
+        const okRow = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts > ?1 AND status = 'ok' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2").bind(r.last_ts, r.text).first();
+        if (okRow && okRow.c > 0) { out.recovered++; continue; }
+      } catch (e2) { /* fall through to file */ }
+      const title = "[self-heal] tool " + String(r.text).slice(0, 60) + " failing x" + r.n + " (" + h + "h no recovery)";
+      try {
+        const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'").bind(title).first();
+        if (dup) { out.alreadyOpen++; continue; }
+        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?7)")
+          .bind(title, "Auto-filed by qnfo-ops telemetry self-heal loop (" + r.n + " failures in " + h + "h, last " + String(r.last_ts).slice(0, 19) + "). Re-probe the tool via the ops endpoint and close when it succeeds.", "qnfo-ops", "telemetry-self-heal", (r.n || 0) >= 5 ? "high" : "medium", "open", new Date().toISOString().slice(0, 19).replace("T", " ")).run();
+        out.filed++;
+        out.persistent.push({ tool: r.text, count: r.n, lastError: r.last_ts });
+      } catch (e3) { out.insertError = String((e3 && e3.message) || e3); }
+    }
+  } catch (e) { out.error = String((e && e.message) || e); }
+  return out;
+}
+
+async function telemetryReport(env, hours) {
+  if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
+  const h = Math.min(Math.max(parseInt(hours, 10) || 24, 1), 168);
+  const since = new Date(Date.now() - h * 3600 * 1000).toISOString();
+  const out = { ok: true, windowHours: h, ts: iso() };
+  try {
+    const calls = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool'").bind(since).first();
+    const fails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool'").bind(since).first();
+    const chats = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1").bind(since).first();
+    const chatFails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1 AND ok = 0").bind(since).first();
+    const openIssues = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status = 'open' AND category = 'telemetry-self-heal'").first();
+    const top = await env.QNFO_AUDIT.prepare("SELECT text, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' GROUP BY text ORDER BY n DESC LIMIT 5").bind(since).all();
+    out.tool_calls = (calls && calls.c) || 0;
+    out.tool_failures = (fails && fails.c) || 0;
+    out.chats = (chats && chats.c) || 0;
+    out.chat_failures = (chatFails && chatFails.c) || 0;
+    out.open_self_heal_issues = (openIssues && openIssues.c) || 0;
+    out.top_failing_tools = (top.results || []).map(function (r) { return { tool: r.text, failures: r.n }; });
+  } catch (e) { out.error = String((e && e.message) || e); }
+  return out;
+}
+
 async function execTool(env, name, rawArgs, userText) {
   let args = {};
   try { args = JSON.parse(rawArgs || "{}"); } catch (e) { args = { _parseError: String((e && e.message) || e) }; }
@@ -492,6 +549,8 @@ async function execTool(env, name, rawArgs, userText) {
     else if (name === "service_discover") res = await serviceDiscover(env, args);
     else if (name === "backlog_status") res = await backlogStatus(env);
     else if (name === "cf_analytics") res = await cfAnalytics(env);
+    else if (name === "telemetry_report") res = await telemetryReport(env, args);
+    else if (name === "telemetry_analyze") res = await telemetryAnalyze(env, args && args.hours);
     else if (name === "email_check") res = await emailRecent(env, args);
     else if (name === "email_stats") res = await emailStats(env);
     else if (name === "email_mark") res = await emailMark(env, args, userText);
@@ -826,7 +885,7 @@ function manifest() {
   return {
     service: WORKER, kind: "worker", version: VERSION, base_url: "https://qnfo-ops.q08.workers.dev",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "isolated-ops-logging"],
+    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function (t) { return { name: t.name, description: t.description, parameters: t.parameters }; }),
     models: ["ops-exec", "deepseek-v4-flash"],
@@ -930,6 +989,15 @@ export default {
       return json(await registryRegister(env, body));
     }
     if (path === "/analytics" && method === "GET") return json(await cfAnalytics(env));
+    if (path === "/telemetry" && method === "GET") {
+      const hours = parseInt(url.searchParams.get("hours") || "24", 10);
+      return json(await telemetryReport(env, hours));
+    }
+    if (path === "/telemetry/analyze" && method === "POST") {
+      if (!(await regAuthOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
+      const hours = parseInt((url.searchParams.get("hours") || "6"), 10);
+      return json(await telemetryAnalyze(env, hours));
+    }
     if (path.startsWith("/registry/") && method === "GET") { const svc = decodeURIComponent(path.slice("/registry/".length)); return json(await registryGet(env, svc)); }
     if (path === "/cost" && method === "GET") {
       try {
@@ -959,5 +1027,8 @@ export default {
   async scheduled(controller, env, ctx) {
     // DISCOVERY-1 self-heal: auto-refresh the service registry on a cron (CF API sweep + service-binding /health).
     try { await registryRefresh(env); } catch (e) { console.log("registry cron failed:", (e && e.message) || e); }
+    // TELEMETRY-SELF-HEAL-1: every cron fire, analyze the endpoint's own tool-failure
+    // telemetry and file agent_issues for persistent (non-self-recovered) failures.
+    try { await telemetryAnalyze(env, 6); } catch (e) { console.log("telemetry cron failed:", (e && e.message) || e); }
   }
 };
