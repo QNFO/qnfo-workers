@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.13.1"; // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.13.2"; // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -79,11 +79,26 @@ async function sendDigest(env, subject, text, toOverride) {
 
 // ---------- vectorized event store (OPS_VZ) + silent digest ----------
 async function embedText(env, text) {
-  try {
-    const resp = await env.AI.run(EMBED_MODEL, { text: [String(text).slice(0, 1800)] }, { gateway: { id: "default" } });
-    const v = (resp && resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
-    return v || null;
-  } catch (e) { return null; }
+  // GW-ERROR-SELFHEAL-1 (2026-09-05): bge-base-en-v1.5 through the default AI Gateway rate-limits
+  // at ~50 req/min (AiError 429). Batch/digest recorders that embed many items in a row previously
+  // 429'd the whole tail (~245/day at 03:00 UTC). Retry with small backoff so transient quota blips
+  // self-heal instead of silently dropping vector rows.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const resp = await env.AI.run(EMBED_MODEL, { text: [String(text).slice(0, 1800)] }, { gateway: { id: "default" } });
+      const v = (resp && resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
+      return v || null;
+    } catch (e) {
+      const msg = String(e && e.message || e || "");
+      const isRate = /429|rate limit|capacity|try again/i.test(msg);
+      if (isRate && attempt < 3) {
+        await new Promise((res) => setTimeout(res, 300 + attempt * 600));
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
 }
 
 async function recordEvent(env, kind, id, text, meta) {
