@@ -1,0 +1,43 @@
+name = "qnfo-errata-publish"
+main = "deployed-current.worker.js"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# D1: living-paper (papers table)
+[[d1_databases]]
+binding = "PAPERS_DB"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+# D1: audit/watch (errata_queue, errata_actions)
+[[d1_databases]]
+binding = "WATCH_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# D1: knowledge graph
+[[d1_databases]]
+binding = "GRAPH_DB"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+# R2: paper mirror
+[[r2_buckets]]
+binding = "MIRROR"
+bucket_name = "qnfo-releases"
+
+# Browser rendering (PDF regeneration)
+[browser]
+binding = "BROWSER"
+
+# Email notifications
+[[send_email]]
+name = "SEND_EMAIL"
+
+[triggers]
+crons = ["30 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
