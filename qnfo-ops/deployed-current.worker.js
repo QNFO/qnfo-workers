@@ -5,7 +5,7 @@
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_queue tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "1.9.0"; // HYBRID-MODEL-1 + ANSWER-ROUND-1 + STREAM-FINAL-1 + FLEET-COMPACT-1 + RELAY-COST-1 + PARAM-TUNE-1 (2026-09-04): merged hybrid tool loop for tool-carrying clients (client-native tools preserved + server ops tools; client wins name collisions; ChatBox keeps pure server loop); no-tools answer round at full cap (fleet truncation fix); token-streamed final answers + heartbeats; parallel+compact fleet probe; relay cost tracking via include_usage tee; env-tunable production knobs. // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "1.9.1"; // analytics GraphQL fix: workersInvocationsAdaptive (was nonexistent ...Groups field returning 0 requests) // HYBRID-MODEL-1 + ANSWER-ROUND-1 + STREAM-FINAL-1 + FLEET-COMPACT-1 + RELAY-COST-1 + PARAM-TUNE-1 (2026-09-04): merged hybrid tool loop for tool-carrying clients (client-native tools preserved + server ops tools; client wins name collisions; ChatBox keeps pure server loop); no-tools answer round at full cap (fleet truncation fix); token-streamed final answers + heartbeats; parallel+compact fleet probe; relay cost tracking via include_usage tee; env-tunable production knobs. // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 // 1.8.0 (2026-09-04) RELAY-MODEL-1: model=deepseek-v4-flash is a PURE pass-through relay (no OPS
 // prompt injection, no ops-intent server loop, no 8192 clamp; real upstream SSE streaming when
@@ -13,7 +13,7 @@ var WORKER = "qnfo-ops";
 // its native toolchain; every relayed chat still lands in ops_ai_log. OPS-DAILY-CAP-1: daily chat
 // cap reads env.OPS_DAILY_CAP (default 250). KAIZEN-CHAT-FAIL-1: failed chats auto-file agent_issues
 // tickets (dedupe by open title) feeding the qnfo-kaizen daily digest.
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
 var DEFAULT_MAX_OUT = 16384;
@@ -62,6 +62,46 @@ function timingSafeEqual(a, b) {
 function estTokens(text) { return Math.ceil(String(text || "").length / 3); }
 function iso() { return new Date().toISOString(); }
 function randId(prefix) { return (prefix || "id-") + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6); }
+
+// RESPONSES-API-1 (2026-09-05): DeepChat's native OpenAI client (main agent, UA "node") uses the
+// Responses API (POST /v1/responses) - qnfo-ops 404'd it while /v1/chat/completions worked
+// (canonical: ops-exec 'Request failed...' in DeepChat, no ops_ai_log row). Convert the Responses
+// body to chat messages and reuse handleChat; mirror qnfo-ai v5.20.13.
+function normalizeResponsesInput(body) {
+  const messages = [];
+  if (body.instructions) messages.push({ role: "system", content: body.instructions });
+  const input = body.input;
+  if (typeof input === "string") { messages.push({ role: "user", content: input }); return messages; }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (!item || typeof item !== "object") continue;
+      if (item.type === "message" || item.role) {
+        const role = item.role === "system" ? "system" : item.role === "assistant" ? "assistant" : "user";
+        messages.push({ role: role, content: normalizeResponsesContent(item.content) });
+      } else if (item.type === "function_call") {
+        messages.push({ role: "assistant", content: "", tool_calls: [{ id: item.call_id || ("call_" + randId("")), type: "function", function: { name: item.name || "", arguments: typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments || {}) } }] });
+      } else if (item.type === "function_call_output") {
+        messages.push({ role: "tool", tool_call_id: item.call_id || ("call_" + randId("")), content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? "") });
+      }
+    }
+  }
+  return messages;
+}
+function normalizeResponsesContent(content) {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts = [];
+    for (const p of content) {
+      if (!p || typeof p !== "object") continue;
+      if (typeof p.text === "string") parts.push(p.text);
+      else if (p.type === "input_image" && p.image_url) parts.push("[image]");
+      else if (typeof p.refusal === "string") parts.push(p.refusal);
+    }
+    return parts.join(String.fromCharCode(10));
+  }
+  return String(content);
+}
 function snippet(v, n) {
   const s = typeof v === "string" ? v : JSON.stringify(v);
   return s ? s.slice(0, n || 2000) : "";
@@ -1101,13 +1141,13 @@ async function cfAnalytics(env) {
     out.ai_30d = { neurons: neurons, est_cost_usd: Math.round(neurons * 0.011 / 1000 * 100) / 100, by_model: Object.entries(byModel).slice(0, 8).map(function (e) { return { model: e[0], neurons: e[1] }; }) };
   } catch (e) { out.ai_30d = { error: String((e && e.message) || e).slice(0, 200) }; }
   try {
-    const q2 = '{ viewer { accounts(filter: {accountTag: "' + CF_ACCOUNT_ID + '"}) { workersInvocationsAdaptiveGroups(limit: 100, filter: {date_geq: "' + since + '"}) { sum { requests } dimensions { date worker } } } } }';
+    const q2 = '{ viewer { accounts(filter: {accountTag: "' + CF_ACCOUNT_ID + '"}) { workersInvocationsAdaptive(limit: 10000, filter: {date_geq: "' + since + '", date_leq: "' + new Date().toISOString().slice(0, 10) + '"}) { sum { requests errors } dimensions { scriptName } } } } }';
     const r2 = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_API_TOKEN }, body: JSON.stringify({ query: q2 }) });
     const j2 = await r2.json();
-    const rows2 = (j2.data && j2.data.viewer.accounts[0] && j2.data.viewer.accounts[0].workersInvocationsAdaptiveGroups) || [];
-    let reqs = 0; const byWorker = {};
-    for (const row of rows2) { const n = (row.sum && row.sum.requests) || 0; reqs += n; const w = (row.dimensions && row.dimensions.worker) || "unknown"; byWorker[w] = (byWorker[w] || 0) + n; }
-    out.worker_invocations_30d = { requests: reqs, by_worker: Object.entries(byWorker).slice(0, 8).map(function (e) { return { worker: e[0], requests: e[1] }; }) };
+    const rows2 = (j2.data && j2.data.viewer.accounts[0] && j2.data.viewer.accounts[0].workersInvocationsAdaptive) || [];
+    let reqs = 0; let errs = 0; const byWorker = {};
+    for (const row of rows2) { const n = (row.sum && row.sum.requests) || 0; reqs += n; errs += (row.sum && row.sum.errors) || 0; const w = (row.dimensions && row.dimensions.scriptName) || "unknown"; byWorker[w] = (byWorker[w] || 0) + n; }
+    out.worker_invocations_30d = { requests: reqs, errors: errs, by_worker: Object.entries(byWorker).slice(0, 8).map(function (e) { return { worker: e[0], requests: e[1] }; }) };
   } catch (e) { out.worker_invocations_30d = { error: String((e && e.message) || e).slice(0, 200) }; }
   return { ok: true, ts: iso(), since: since.slice(0, 10), ai_30d: out.ai_30d, worker_invocations_30d: out.worker_invocations_30d };
 }
@@ -1269,6 +1309,48 @@ export default {
       const id = path.split("/").pop();
       if (id !== "ops-exec" && id !== "deepseek-v4-flash") return json({ error: "model not found" }, 404);
       return json({ id: id, object: "model", created: 171e7, owned_by: "qnfo" });
+    }
+    if (path === "/v1/responses" && method === "POST") {
+      let body;
+      try { body = await request.json(); } catch (e) { return json({ error: "invalid JSON" }, 400); }
+      if (!body.model || body.input == null) return json({ error: "model and input required" }, 400);
+      // RESPONSES-API-1: convert Responses API body -> chat completions body, reuse handleChat.
+      const chatBody = {
+        model: body.model,
+        messages: normalizeResponsesInput(body),
+        max_tokens: body.max_output_tokens ?? body.max_tokens,
+        stream: false,
+        temperature: body.temperature
+      };
+      const chatResp = await handleChat(env, chatBody, request.headers.get("Authorization") || "", ua, ctx);
+      if (!chatResp.ok) return chatResp;
+      const chatData = await chatResp.json();
+      const text = (chatData && chatData.choices && chatData.choices[0] && chatData.choices[0].message && chatData.choices[0].message.content) ? String(chatData.choices[0].message.content) : "";
+      const respObj = {
+        id: "resp_" + Math.random().toString(16).slice(2, 10),
+        object: "response",
+        created_at: Math.floor(Date.now() / 1000),
+        status: "completed",
+        model: (chatData && chatData.model) || body.model,
+        output: [{ type: "message", id: "msg_" + Math.random().toString(16).slice(2, 10), role: "assistant", content: [{ type: "output_text", text: text }] }],
+        usage: (chatData && chatData.usage) || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+      };
+      if (body.stream) {
+        const enc = new TextEncoder();
+        const nlnl = String.fromCharCode(10, 10);
+        const stream = new ReadableStream({
+          start(controller) {
+            if (text) {
+              controller.enqueue(enc.encode("data: " + JSON.stringify({ type: "response.output_text.delta", delta: text, item_id: respObj.output[0].id, output_index: 0, content_index: 0 }) + nlnl));
+            }
+            controller.enqueue(enc.encode("data: " + JSON.stringify({ type: "response.completed", response: respObj }) + nlnl));
+            controller.enqueue(enc.encode("data: [DONE]" + nlnl));
+            controller.close();
+          }
+        });
+        return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      return json(respObj);
     }
     if ((path === "/v1/chat/completions" || path === "/chat/completions") && method === "POST") {
       let body = null;

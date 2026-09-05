@@ -13,7 +13,7 @@ var WORKER = "qnfo-ops";
 // its native toolchain; every relayed chat still lands in ops_ai_log. OPS-DAILY-CAP-1: daily chat
 // cap reads env.OPS_DAILY_CAP (default 250). KAIZEN-CHAT-FAIL-1: failed chats auto-file agent_issues
 // tickets (dedupe by open title) feeding the qnfo-kaizen daily digest.
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
 var DEFAULT_MAX_OUT = 16384;
@@ -62,6 +62,46 @@ function timingSafeEqual(a, b) {
 function estTokens(text) { return Math.ceil(String(text || "").length / 3); }
 function iso() { return new Date().toISOString(); }
 function randId(prefix) { return (prefix || "id-") + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6); }
+
+// RESPONSES-API-1 (2026-09-05): DeepChat's native OpenAI client (main agent, UA "node") uses the
+// Responses API (POST /v1/responses) - qnfo-ops 404'd it while /v1/chat/completions worked
+// (canonical: ops-exec 'Request failed...' in DeepChat, no ops_ai_log row). Convert the Responses
+// body to chat messages and reuse handleChat; mirror qnfo-ai v5.20.13.
+function normalizeResponsesInput(body) {
+  const messages = [];
+  if (body.instructions) messages.push({ role: "system", content: body.instructions });
+  const input = body.input;
+  if (typeof input === "string") { messages.push({ role: "user", content: input }); return messages; }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (!item || typeof item !== "object") continue;
+      if (item.type === "message" || item.role) {
+        const role = item.role === "system" ? "system" : item.role === "assistant" ? "assistant" : "user";
+        messages.push({ role: role, content: normalizeResponsesContent(item.content) });
+      } else if (item.type === "function_call") {
+        messages.push({ role: "assistant", content: "", tool_calls: [{ id: item.call_id || ("call_" + randId("")), type: "function", function: { name: item.name || "", arguments: typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments || {}) } }] });
+      } else if (item.type === "function_call_output") {
+        messages.push({ role: "tool", tool_call_id: item.call_id || ("call_" + randId("")), content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? "") });
+      }
+    }
+  }
+  return messages;
+}
+function normalizeResponsesContent(content) {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts = [];
+    for (const p of content) {
+      if (!p || typeof p !== "object") continue;
+      if (typeof p.text === "string") parts.push(p.text);
+      else if (p.type === "input_image" && p.image_url) parts.push("[image]");
+      else if (typeof p.refusal === "string") parts.push(p.refusal);
+    }
+    return parts.join(String.fromCharCode(10));
+  }
+  return String(content);
+}
 function snippet(v, n) {
   const s = typeof v === "string" ? v : JSON.stringify(v);
   return s ? s.slice(0, n || 2000) : "";
@@ -1269,6 +1309,48 @@ export default {
       const id = path.split("/").pop();
       if (id !== "ops-exec" && id !== "deepseek-v4-flash") return json({ error: "model not found" }, 404);
       return json({ id: id, object: "model", created: 171e7, owned_by: "qnfo" });
+    }
+    if (path === "/v1/responses" && method === "POST") {
+      let body;
+      try { body = await request.json(); } catch (e) { return json({ error: "invalid JSON" }, 400); }
+      if (!body.model || body.input == null) return json({ error: "model and input required" }, 400);
+      // RESPONSES-API-1: convert Responses API body -> chat completions body, reuse handleChat.
+      const chatBody = {
+        model: body.model,
+        messages: normalizeResponsesInput(body),
+        max_tokens: body.max_output_tokens ?? body.max_tokens,
+        stream: false,
+        temperature: body.temperature
+      };
+      const chatResp = await handleChat(env, chatBody, request.headers.get("Authorization") || "", ua, ctx);
+      if (!chatResp.ok) return chatResp;
+      const chatData = await chatResp.json();
+      const text = (chatData && chatData.choices && chatData.choices[0] && chatData.choices[0].message && chatData.choices[0].message.content) ? String(chatData.choices[0].message.content) : "";
+      const respObj = {
+        id: "resp_" + Math.random().toString(16).slice(2, 10),
+        object: "response",
+        created_at: Math.floor(Date.now() / 1000),
+        status: "completed",
+        model: (chatData && chatData.model) || body.model,
+        output: [{ type: "message", id: "msg_" + Math.random().toString(16).slice(2, 10), role: "assistant", content: [{ type: "output_text", text: text }] }],
+        usage: (chatData && chatData.usage) || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+      };
+      if (body.stream) {
+        const enc = new TextEncoder();
+        const nlnl = String.fromCharCode(10, 10);
+        const stream = new ReadableStream({
+          start(controller) {
+            if (text) {
+              controller.enqueue(enc.encode("data: " + JSON.stringify({ type: "response.output_text.delta", delta: text, item_id: respObj.output[0].id, output_index: 0, content_index: 0 }) + nlnl));
+            }
+            controller.enqueue(enc.encode("data: " + JSON.stringify({ type: "response.completed", response: respObj }) + nlnl));
+            controller.enqueue(enc.encode("data: [DONE]" + nlnl));
+            controller.close();
+          }
+        });
+        return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      }
+      return json(respObj);
     }
     if ((path === "/v1/chat/completions" || path === "/chat/completions") && method === "POST") {
       let body = null;
