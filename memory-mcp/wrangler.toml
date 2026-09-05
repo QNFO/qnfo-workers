@@ -3,6 +3,7 @@ main = "worker.js"
 compatibility_date = "2026-08-10"
 workers_dev = true
 usage_model = "standard"
+logpush = true  # Workers Logs (Log Explorer) — stream console + uncaught exceptions
 
 [[d1_databases]]
 binding = "LIVING_PAPER"

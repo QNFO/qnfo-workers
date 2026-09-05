@@ -6,7 +6,7 @@
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_NAME = "qnfo-memory-mcp";
-const SERVER_VERSION = "2.0.2";
+const SERVER_VERSION = "2.0.3";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 
 const TOOLS = [
@@ -351,6 +351,7 @@ export default {
       let body;
       try { body = await request.json(); }
       catch (e) { return json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null }, 400); }
+      if (!body || typeof body !== "object" || Array.isArray(body)) return json({ jsonrpc: "2.0", error: { code: -32600, message: "Invalid Request: body must be a JSON-RPC object" }, id: null }, 400);
       const method = body.method, params = body.params, id = body.id;
       if (method === "initialize") {
         return json({ jsonrpc: "2.0", id, result: { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: { name: SERVER_NAME, version: SERVER_VERSION } } });
