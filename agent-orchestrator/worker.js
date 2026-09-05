@@ -221,7 +221,9 @@ TOOLS
 - github_publish(repo?, path, content, message?): publish a file to a GitHub repository.
 - zenodo_publish(slug, title, body_md, authors?, description?, keywords?): publish to Zenodo (permanent DOI). Keep 'Quni-Gudzinas' in authors so the social autoScan detects it.
 
-When you have enough evidence, answer directly in Markdown. Do not make additional tool calls in the final response.`;
+When you have enough evidence, answer directly in Markdown. Do not make additional tool calls in the final response.
+
+ADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.`;
 var TOOLS = [
   {
     type: "function",

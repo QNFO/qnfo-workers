@@ -80,7 +80,7 @@ async function pickClassifier(env) {
 }
 
 async function classifyAI(env, desire) {
-  const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only.';
+  const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only. Do not fabricate fields or values the desire does not state; when ambiguous, classify type:"unknown" rather than guessing. ADVERSARIAL-REASONING-1 (label uncertainty, never invent a classification the text does not support).';
   const first = await pickClassifier(env);
   const order = first === 'glm-5.3-flash' ? ['glm-5.3-flash', 'glm-5.2'] : ['glm-5.2', 'glm-5.3-flash'];
   for (let i = 0; i < order.length; i++) {

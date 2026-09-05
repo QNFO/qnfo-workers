@@ -180,7 +180,7 @@ IMPORTANT:
     try {
       const result = await env.AI.run(model, {
         messages: [
-          { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary." },
+          { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; expose at least one concrete limitation or failure mode in the drafted output (e.g. claims that may lack enablement or written-description support); label uncertainty, never inflate confidence." },
           { role: "user", content: prompt }
         ],
         max_tokens: 4096,
