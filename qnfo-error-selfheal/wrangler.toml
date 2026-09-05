@@ -1,0 +1,20 @@
+name = "qnfo-error-selfheal"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# qnfo-audit D1: agent_issues + alerts + errata_actions + self-heal state tables
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[triggers]
+crons = ["17 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+logpush = true
+
+# Secrets: CF_API_TOKEN (Cloudflare API token with account analytics read + Log Explorer read)
