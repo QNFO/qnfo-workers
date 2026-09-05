@@ -4,7 +4,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.20.13"; // ROLE-LABEL-NORMALIZE-1 2026-09-04 (user directive): strip a leading transport role-label wrapper (User message: / Assistant message: / user: / Human: / AI:) from first-user content BEFORE thread-slug + auto-express idea-text + chat-log/feed content, so ChatBox wrapped & clean sends of the same turn collapse to ONE ideas.qnfo thread+title (was: "User message:\n<idea>" made its own t-user-message-* thread duplicating the clean sibling) // MEDIA-NOLOG-1 2026-09-04: mediaCapture skipped for QNFO-AI-Calibration UA - calibration vision probes no longer create media_objects rows / R2 qnfo-media objects (was 1 deduped row per cycle after every purge) // NOLOG-1 2026-09-04: logQuery now skips ai_queries for internal/machine probes (was logging everything; chatbox already filtered) and QNFO-AI-Calibration UA joins the machine probe regex - calibration sweeps no longer pollute query-history/log tables // CAL-HEALTH-1 2026-09-04: ai_model_health consumption - auto routing deprioritizes failing models (loadModelHealth cached 60s) + /v1/models merges live ctx/vision/reasoning overrides written by the qnfo-ai-calibration worker (self-correcting advertisement) // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
+var VERSION = "5.21.1";
+// GW-ERROR-SELFHEAL-1 2026-09-05: runWorkersAI schema-adaptive content-shape + 429 retry // ROLE-LABEL-NORMALIZE-1 2026-09-04 (user directive): strip a leading transport role-label wrapper (User message: / Assistant message: / user: / Human: / AI:) from first-user content BEFORE thread-slug + auto-express idea-text + chat-log/feed content, so ChatBox wrapped & clean sends of the same turn collapse to ONE ideas.qnfo thread+title (was: "User message:\n<idea>" made its own t-user-message-* thread duplicating the clean sibling) // MEDIA-NOLOG-1 2026-09-04: mediaCapture skipped for QNFO-AI-Calibration UA - calibration vision probes no longer create media_objects rows / R2 qnfo-media objects (was 1 deduped row per cycle after every purge) // NOLOG-1 2026-09-04: logQuery now skips ai_queries for internal/machine probes (was logging everything; chatbox already filtered) and QNFO-AI-Calibration UA joins the machine probe regex - calibration sweeps no longer pollute query-history/log tables // CAL-HEALTH-1 2026-09-04: ai_model_health consumption - auto routing deprioritizes failing models (loadModelHealth cached 60s) + /v1/models merges live ctx/vision/reasoning overrides written by the qnfo-ai-calibration worker (self-correcting advertisement) // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -557,65 +558,86 @@ function autoRoute(cls, prompt, health) {
 __name(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
   const { temperature, top_p, tools, vision, tool_choice } = opts;
-    // VISION-GW-1 (2026-09-04): vision stays gateway-first - the OpenAI-compat gateway
-  // delivers image_url parts to moonshot/zai/gemma vision models while direct env.AI.run
-  // returned "[Unsupported Image]"/"no image provided" (verified live). Direct run remains
-  // the fallback when the gateway is unavailable.
   const directOnly = !!(tools && tools.length);
-  if (!directOnly && env.CF_API_TOKEN && modelId.startsWith("@cf/")) {
-    try {
-      const body = {
-        model: "workers-ai/" + modelId,
-        messages,
-        max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
-        stream: stream || false
-      };
-      if (Number.isFinite(temperature)) body.temperature = temperature;
-      if (Number.isFinite(top_p)) body.top_p = top_p;
-      const gwResp = await fetch(GW_COMPAT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN
-        },
-        body: JSON.stringify(body)
-      });
-      if (gwResp.ok) {
-        if (stream) return gwResp;
-        return await gwResp.json();
-      }
-    } catch (e) {
+  // GW-ERROR-SELFHEAL-1 (2026-09-05): Workers AI text-generation model schemas reject image/array
+  // content parts (verified live 2026-09-05: qwen2.5-coder-32b-instruct via the compat gateway
+  // accepts STRING content and rejects array content with AiError 5006). The router therefore must
+  // never send image-bearing message arrays to a NON-vision model. runWorkersAI does not mutate
+  // content shapes (flattening an image array would corrupt a legitimate vision call) - it fails
+  // fast when a non-vision WA model would receive image parts, and it retries 429 capacity/rate
+  // blips once with backoff before the caller's fallback chain absorbs the failure.
+  const msgsHaveImages = Array.isArray(messages) && messages.some((m) => Array.isArray(m && m.content) && m.content.some((p) => p && typeof p === "object" && (p.type === "image_url" || p.image_url)));
+  let specVision = !!vision;
+  if (!specVision) {
+    for (const _k in MODELS) {
+      const _s = MODELS[_k];
+      if (_s && _s.wa === modelId && _s.vision) { specVision = true; break; }
     }
   }
-  let waMessages = messages;
-  if (tools && tools.length) waMessages = normalizeForWorkersAITools(messages);
-  const aiBody = {
-    messages: waMessages,
-    // v4.3.5: clamp to the model's output cap so an oversized client max_tokens
-    // (e.g. 32000 on a 24000-max model) cannot surface as an upstream 400 -> router 502.
-    max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]),
-    stream: stream || false
-  };
-  if (Number.isFinite(temperature)) aiBody.temperature = temperature;
-  if (Number.isFinite(top_p)) aiBody.top_p = top_p;
-  if (tools && tools.length) {
-    aiBody.tools = tools;
-    aiBody.tool_choice = tool_choice || "auto";
+  const baseMsgs = (tools && tools.length) ? normalizeForWorkersAITools(messages) : messages;
+  if (msgsHaveImages && !specVision) {
+    const err = new Error("runWorkersAI: non-vision WA model " + modelId + " cannot accept image parts (skipped; caller fallback continues)");
+    err.gwShapeSkip = true;
+    throw err;
   }
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await env.AI.run(modelId, aiBody);
-    } catch (e) {
-      const msg = String(e && e.message || e || "");
-      const isCapErr = /max_tokens|max output|context window|too (many|long)|token limit|max_new_tokens/i.test(msg);
-      const cur = aiBody.max_tokens;
-      if (isCapErr && attempt < 3 && Number.isFinite(cur) && cur > 1024) {
-        aiBody.max_tokens = Math.max(1024, Math.floor(cur / 2));
+  const buildBody = (msgs) => {
+    const b = { model: "workers-ai/" + modelId, messages: msgs, max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]), stream: stream || false };
+    if (Number.isFinite(temperature)) b.temperature = temperature;
+    if (Number.isFinite(top_p)) b.top_p = top_p;
+    if (tools && tools.length) { b.tools = tools; b.tool_choice = tool_choice || "auto"; }
+    return b;
+  };
+  const buildAIBody = (msgs) => {
+    const b = { messages: msgs, max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]), stream: stream || false };
+    if (Number.isFinite(temperature)) b.temperature = temperature;
+    if (Number.isFinite(top_p)) b.top_p = top_p;
+    if (tools && tools.length) { b.tools = tools; b.tool_choice = tool_choice || "auto"; }
+    return b;
+  };
+  // Direct env.AI.run path with cap-halving and 429 retries (unchanged semantics + rate-limit retry).
+  const runDirect = async (initialMsgs) => {
+    const aiBody = buildAIBody(initialMsgs);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await env.AI.run(modelId, aiBody);
+      } catch (e) {
+        const msg = String(e && e.message || e || "");
+        const isCapErr = /max_tokens|max output|context window|too (many|long)|token limit|max_new_tokens/i.test(msg);
+        const cur = aiBody.max_tokens;
+        if (isCapErr && attempt < 3 && Number.isFinite(cur) && cur > 1024) {
+          aiBody.max_tokens = Math.max(1024, Math.floor(cur / 2));
+          continue;
+        }
+        if (/429|rate limit|capacity temporarily|try again/i.test(msg) && attempt < 2) {
+          await new Promise((res) => setTimeout(res, 250 + attempt * 250));
+          continue;
+        }
+        throw e;
+      }
+    }
+  };
+  // Gateway (OpenAI-compat) path first when configured; 429-aware, no content-shape mutation.
+  if (!directOnly && env.CF_API_TOKEN && modelId.startsWith("@cf/")) {
+    for (let gi = 0; gi < 3; gi++) {
+      let gwResp;
+      try {
+        gwResp = await fetch(GW_COMPAT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
+          body: JSON.stringify(buildBody(baseMsgs))
+        });
+      } catch (e) {
+        break; // network failure: fall through to direct AI path
+      }
+      if (gwResp.ok) { if (stream) return gwResp; return await gwResp.json(); }
+      if (gwResp.status === 429 && gi === 0) {
+        await new Promise((r2) => setTimeout(r2, 350));
         continue;
       }
-      throw e;
+      break; // non-recoverable: fall through to direct AI path (existing behavior)
     }
   }
+  return runDirect(baseMsgs);
 }
 __name(runWorkersAI, "runWorkersAI");
 function extractWAToolCalls(result, depth = 0) {
@@ -1469,6 +1491,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
           const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
             if (!wafb || (wafb.wa && wafb.wa === effSpec.wa)) continue;
+            if (hasImage && !wafb.vision) continue; // GW-ERROR-SELFHEAL-1: never send image parts to a text model
             try {
               let wafbOut;
               if (wafb.wa) wafbOut = await runWorkersAI(env, wafb.wa, messages, clampTokens(max_tokens, Math.min(wafb.maxOut || 8192, DEFAULT_MAX_OUT)), false);
@@ -1526,6 +1549,7 @@ if (effSpec.api) {
       const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
       for (const fbSpec of fbCands) {
         if (!fbSpec) continue;
+        if (hasImage && !fbSpec.vision) continue; // GW-ERROR-SELFHEAL-1: never send image parts to a text model
         if (effSpec.wa && fbSpec.wa === effSpec.wa) continue;
         if (effSpec.api && fbSpec.api === effSpec.api) continue;
         try {
