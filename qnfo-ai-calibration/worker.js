@@ -13,7 +13,8 @@
 // DEPLOY: wrangler deploy (secrets: QNFO_ROUTER_KEY, OPS_KEY, PT_KEY, DEEPSEEK_KEY, CF_API_TOKEN)
 // CANONICAL SOURCE: qnfo-workers/qnfo-ai-calibration (FLEET-SELF-DOC-1)
 // ROUTES: GET /health | GET /manifest | POST /run (auth) | GET /results (auth) | GET /
-var VERSION = "1.0.2"; // SVC-BINDING-1: same-account workers.dev fetches 404 at the edge from inside a Worker (verified live 2026-09-04) - internal probes use service bindings (QNFO_AI/QNFO_OPS/PT_API); DeepSeek/catalog stay public
+var VERSION = "1.1.0";
+// GW-WATCH-1 2026-09-05: autonomous AI Gateway failure sweep (detect -> D1 -> issue -> auto-close) // SVC-BINDING-1: same-account workers.dev fetches 404 at the edge from inside a Worker (verified live 2026-09-04) - internal probes use service bindings (QNFO_AI/QNFO_OPS/PT_API); DeepSeek/catalog stay public
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var OPS = "https://qnfo-ops.q08.workers.dev";
 var PT = "https://personal-api.q08.workers.dev";
@@ -250,10 +251,107 @@ async function closeIssue(env, title, reason) {
   return true;
 }
 
+
+// GW-WATCH-1 (2026-09-05): autonomous AI Gateway failure sweep. Every calibration run queries the
+// account AI Gateway logs for failed requests (success=false) since the last sweep, groups by
+// model+status, records counts into qnfo-audit.ai_gateway_failures, auto-files an agent_issue for a
+// NEW recurring class (count >= 2 in the window), and auto-closes an issue when its class has had no
+// failure in 24h. This makes gateway error detection + triage + recovery user-free: any NEW error
+// class surfaces as an open issue for the ops cycle, and recovered classes close themselves.
+async function gatewayFailureSweep(env, t0) {
+  var out = { ok: true, classes: 0, total: 0, summary: "" };
+  try {
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ai_gateway_failures (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, model TEXT, status INTEGER, count INTEGER, error_class TEXT, sample_detail TEXT, source TEXT)").run();
+  } catch (e) { out.ok = false; out.summary = "ddl err " + String(e && e.message || e).slice(0, 80); return out; }
+  var lastTs = t0 - 45 * 60 * 1000;
+  try {
+    var cfg = await env.QNFO_AUDIT.prepare("SELECT value FROM ai_calibration_config WHERE key = ?1").bind("gw_sweep_last_ts").first();
+    if (cfg && cfg.value != null && Number(cfg.value) > 0) lastTs = Number(cfg.value);
+  } catch (e) {}
+  var startIso = new Date(lastTs).toISOString();
+  var buckets = {};
+  var rows = [];
+  var limit = 3;
+  try {
+    for (var page = 1; page <= limit; page++) {
+      var r = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs?per_page=50&page=" + page + "&success=false&start_time=" + encodeURIComponent(startIso), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 25e3);
+      if (r.status !== 200 || !r.data || !Array.isArray(r.data.result)) break;
+      var arr = r.data.result;
+      if (!arr.length) break;
+      for (var i = 0; i < arr.length; i++) {
+        var row = arr[i];
+        var st = row.status_code || 0;
+        var mdl = row.model || "unknown";
+        var key = st + "|" + mdl;
+        buckets[key] = buckets[key] || { status: st, model: mdl, count: 0, sample: "" };
+        buckets[key].count++;
+        if (!buckets[key].sample) buckets[key].sample = (row.id || "") + "@" + (row.created_at || "");
+      }
+      rows = rows.concat(arr);
+      if (arr.length < 50) break;
+      await new Promise(function(res) { setTimeout(res, 5); });
+    }
+  } catch (e) {
+    out.ok = false;
+    out.summary = "fetch err " + String(e && e.message || e).slice(0, 120);
+    return out;
+  }
+  var cls = Object.keys(buckets);
+  out.total = rows.length;
+  out.classes = cls.length;
+  var parts = [];
+  for (var ci = 0; ci < cls.length; ci++) {
+    var b = buckets[cls[ci]];
+    var clsLabel = "other";
+    try {
+      if (b.sample) {
+        var d = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs/" + encodeURIComponent(b.sample.split("@")[0]), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 20e3);
+        var rh = d.data && d.data.response_head ? String(d.data.response_head) : "";
+        if (/string' not in 'array'|oneOf|Bad input/.test(rh)) clsLabel = "content-shape";
+        else if (/capacity temporarily|rate limit/i.test(rh)) clsLabel = "rate-capacity";
+        else if (/image|dimensions|at least 10px/i.test(rh)) clsLabel = "image-input";
+        else if (/arguments must be valid JSON/i.test(rh)) clsLabel = "tool-args-json";
+        else if (/unavailable|5[0-9][0-9]|internal/i.test(rh)) clsLabel = "upstream";
+        b.sample = rh.slice(0, 200) || b.sample;
+      }
+    } catch (e) {}
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO ai_gateway_failures (ts, model, status, count, error_class, sample_detail, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'qnfo-ai-calibration')").bind(t0, b.model, b.status, b.count, clsLabel, String(b.sample || "").slice(0, 300)).run();
+    } catch (e) {}
+    parts.push(b.status + " " + b.model + " x" + b.count + " [" + clsLabel + "]");
+    var title = "[gw-fail] " + b.status + " " + b.model;
+    try {
+      var prev = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND status = ?2 AND ts < ?3 AND ts > ?4").bind(b.model, b.status, lastTs, lastTs - 45 * 60 * 1000).first();
+      var prevCount = prev ? Number(prev.c || 0) : 0;
+      if (b.count >= 2 || prevCount > 0) {
+        await fileIssue(env, title, "gateway failures in sweep window: " + b.count + "x status=" + b.status + " class=" + clsLabel + " sample=" + String(b.sample || "").slice(0, 200) + ". Router-level self-heal handles content-shape/rate classes; escalate if this class persists.", "high");
+      }
+    } catch (e) {}
+  }
+  try {
+    var openTitles = await env.QNFO_AUDIT.prepare("SELECT id, title FROM agent_issues WHERE title LIKE '[gw-fail]%' AND status = 'open'").all();
+    for (var oi = 0; oi < (openTitles.results || []).length; oi++) {
+      var ttl = openTitles.results[oi].title;
+      var modelPart = ttl.replace(/^\[gw-fail\] \d+ /, "");
+      try {
+        var recent = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND ts > ?2").bind(modelPart, t0 - 24 * 3600 * 1000).first();
+        if (!recent || Number(recent.c || 0) === 0) await closeIssue(env, ttl, "no failures for 24h");
+      } catch (e) {}
+    }
+  } catch (e) {}
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO ai_calibration_config (key, value) VALUES ('gw_sweep_last_ts', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1").bind(String(t0)).run();
+  } catch (e) {}
+  out.summary = cls.length ? parts.join("; ") : "clean (0 failed requests in window)";
+  return out;
+}
+
 async function calibration(env, trigger) {
   var t0 = Date.now();
   var runId = "cal-" + t0 + "-" + Math.random().toString(16).slice(2, 8);
   var results = [];
+  var gwSweepRes = null;
+  try { gwSweepRes = await gatewayFailureSweep(env, t0); if (gwSweepRes) results.push({ probe: "gateway-sweep", target: "ai-gateway-default", status: gwSweepRes.ok ? "pass" : "fail", latency_ms: 0, detail: String(gwSweepRes.summary || "").slice(0, 300) }); } catch (e) {}
   var failing = {};
   var driftByModel = {};
   var failThreshold = parseInt(await cfgGet(env, "fail_threshold", "2"), 10) || 2;
