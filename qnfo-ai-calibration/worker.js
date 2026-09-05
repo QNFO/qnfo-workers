@@ -13,7 +13,7 @@
 // DEPLOY: wrangler deploy (secrets: QNFO_ROUTER_KEY, OPS_KEY, PT_KEY, DEEPSEEK_KEY, CF_API_TOKEN)
 // CANONICAL SOURCE: qnfo-workers/qnfo-ai-calibration (FLEET-SELF-DOC-1)
 // ROUTES: GET /health | GET /manifest | POST /run (auth) | GET /results (auth) | GET /
-var VERSION = "1.1.0";
+var VERSION = "1.1.1";
 // GW-WATCH-1 2026-09-05: autonomous AI Gateway failure sweep (detect -> D1 -> issue -> auto-close) // SVC-BINDING-1: same-account workers.dev fetches 404 at the edge from inside a Worker (verified live 2026-09-04) - internal probes use service bindings (QNFO_AI/QNFO_OPS/PT_API); DeepSeek/catalog stay public
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var OPS = "https://qnfo-ops.q08.workers.dev";
@@ -306,7 +306,8 @@ async function gatewayFailureSweep(env, t0) {
     try {
       if (b.sample) {
         var d = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs/" + encodeURIComponent(b.sample.split("@")[0]), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 20e3);
-        var rh = d.data && d.data.response_head ? String(d.data.response_head) : "";
+        var dres = d.data && d.data.result;
+      var rh = dres && dres.response_head ? String(dres.response_head) : (d.data && d.data.response_head ? String(d.data.response_head) : "");
         if (/string' not in 'array'|oneOf|Bad input/.test(rh)) clsLabel = "content-shape";
         else if (/capacity temporarily|rate limit/i.test(rh)) clsLabel = "rate-capacity";
         else if (/image|dimensions|at least 10px/i.test(rh)) clsLabel = "image-input";
