@@ -77,7 +77,7 @@ prompt is preserved; a compact ops-tool context is appended to it.
 ## Environment knobs (PARAM-TUNE-1)
 - OPS_ANSWER_CAP (16384) - final-answer token cap (hard cap DEFAULT_MAX_OUT)
 - OPS_TOOL_ROUND_MAX (2000) - per-tool-round token budget
-- OPS_LOOP_DEADLINE_MS (30000) - agent-tool loop wall budget
+- OPS_LOOP_DEADLINE_MS (180000) - SOFT agent-tool loop wall budget (OPS-TIME-BUDGET-1 2026-09-06: raised 30s->180s; once spent the runner stops requesting more tool rounds and produces the final answer at full answerCap - no 1200-token panic stub)
 - OPS_MAX_TOOL_ITERS (8) - max tool rounds per request
 - OPS_TOOL_RESULT_CAP (16000) - tool-result text cap (chars)
 - OPS_TEMPERATURE (0.5) / OPS_TOP_P (0.9) - defaults when the client sends none
@@ -90,6 +90,16 @@ prompt is preserved; a compact ops-tool context is appended to it.
   compaction (fleet 13.0s->6.1s); RELAY-COST-1 relay cost tracking via include_usage
   tee; PARAM-TUNE-1 env knobs; relay honors client temperature/top_p.
 
+
+## Version history (continued)
+- v2.0.1 2026-09-06 — OPS-TIME-BUDGET-1: tool-loop time budget is SOFT + default raised
+  30s->180s (OPS_LOOP_DEADLINE_MS). The 30s default killed real multi-tool ops-exec runs after
+  ~4 DeepSeek tool rounds (each 6-15s with thinking mode) and then panic-answered at a
+  1200-token cap -> thinking consumed the cap -> empty content -> misleading "Ops tool loop
+  reached its time budget after N tool call(s)" dead-end stub. Now when the budget is spent the
+  runner stops requesting MORE tools and lets the next no-tools round produce the final answer
+  at full answerCap (with the existing LENGTH-EMPTY-RETRY-1 safety net).
+- v2.0.0 2026-09-05 — CTX-TRUNC-1 server-side history truncation to model context.
 
 ## URL routing & client-404 diagnostic lesson (URL-PATH-404-DIAGNOSTIC-1, 2026-09-04)
 Exact-match routing (path === "/v1/chat/completions") 404s when an OpenAI-compatible client
