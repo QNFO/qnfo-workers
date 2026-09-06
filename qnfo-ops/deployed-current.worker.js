@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_queue tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "2.1.0"; // OPS-DURABLE-1 (2026-09-06): async/durable ops-exec jobs (POST /v1/jobs or x-ops-async:1 -> Queue qnfo-ops-jobs -> OpsExecWorkflow durable executor -> qnfo-audit.ops_jobs + ops_ai_log strategy=job-workflow). Interactive chat stays request-scoped (v2.0.1 OPS-TIME-BUDGET-1 soft loop). // OPS-TIME-BUDGET-1 (2026-09-06): tool-loop time budget is SOFT + default raised 30s->180s (OPS_LOOP_DEADLINE_MS); once spent the runner stops requesting more tools and answers at full answerCap - removes the 1200-token panic stub. // TOOL-CALL-GROUP-1 (2026-09-05): normalizeResponsesInput coalesces consecutive function_call items into ONE assistant tool_calls message (parallel tool-call round [fcA,fcB,fcoA,fcoB] was emitted as assistant[A],assistant[B],tool[A],tool[B] by v1.9.6 -> DeepSeek 400 "insufficient tool messages following tool_calls message" -> Bad Gateway; canonical 1MB+ ua=node /v1/responses x3 at 20:51, repro HTTP 502). // RESPONSES-TOOL-ID-1 (2026-09-05): /v1/responses normalizeResponsesInput now resolves function_call identity as call_id || id (ai-sdk echoes id without call_id -> random id mismatch -> DeepSeek 400 "assistant tool_calls must be followed by tool messages" -> client "Request failed / Bad Gateway"; canonical 855KB ua=node history 3x 20:35) + defers function_calls lacking both and pairs to the next output call_id + keeps chat-style tool_calls on assistant message items. // F4-F5-RESOLVE-1 (2026-09-05): /v1/responses stream emits the item-level SSE sequence (output_item.added -> output_text/function_call_arguments delta+done -> output_item.done) before response.completed so strict Responses clients reconstruct function_call items (was completed-only) + adaptive tool-round cap scales with context (estTokens*0.2 max 8000) so thinking-mode reasoning_content no longer exhausts the 2000 default on large prompts (v1.9.3 length-retry stays as safety net). // RESPONSES-TOOLS-1 (2026-09-05): pass client tools through /v1/responses (Responses tools -> chat tools) + convert chat tool_calls -> Responses function_call output items (status=requires_action) so the DeepChat main agent keeps its native toolchain through the Responses API. // LENGTH-EMPTY-RETRY-1 (2026-09-05): retry the answer round on finish_reason="length" even when content is EMPTY (deepseek-v4-flash thinking mode can spend the 2000-token tool-round cap on reasoning_content and return empty content -> ai-sdk client saw "Provider stopped the response for an unspecified reason"; canonical /v1/responses 46K-token prompt, completion_tokens=2000, response empty). // REASONING-CONTENT-1 (2026-09-05): preserve reasoning_content on assistant tool-call messages in normalizeMessages + inline work-build + agent-loop work.push + clientHandoff - DeepSeek thinking mode returns 400 "reasoning_content must be passed back" on the 2nd+ tool-loop iteration, which made the server agent loop (strategy=agent) fail 3/3 while chat/agent-tools/hybrid/relay passed. // analytics GraphQL fix: workersInvocationsAdaptive (was nonexistent ...Groups field returning 0 requests) // HYBRID-MODEL-1 + ANSWER-ROUND-1 + STREAM-FINAL-1 + FLEET-COMPACT-1 + RELAY-COST-1 + PARAM-TUNE-1 (2026-09-04): merged hybrid tool loop for tool-carrying clients (client-native tools preserved + server ops tools; client wins name collisions; ChatBox keeps pure server loop); no-tools answer round at full cap (fleet truncation fix); token-streamed final answers + heartbeats; parallel+compact fleet probe; relay cost tracking via include_usage tee; env-tunable production knobs. // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "2.2.0"; // OPS-DURABLE-2 (2026-09-06): durable-job cost from real DeepSeek usage (upUsage accumulator + costUsdCalc), queue DLQ (qnfo-ops-jobs-dlq) + idempotent workflow create on redelivery, job lifecycle endpoints (GET /v1/jobs list, DELETE /v1/jobs/:id terminate), OPS_JOBS_DAILY_CAP guard, manifest capability async-jobs. // OPS-DURABLE-1 (2026-09-06): async/durable ops-exec jobs (POST /v1/jobs or x-ops-async:1 -> Queue qnfo-ops-jobs -> OpsExecWorkflow durable executor -> qnfo-audit.ops_jobs + ops_ai_log strategy=job-workflow). Interactive chat stays request-scoped (v2.0.1 OPS-TIME-BUDGET-1 soft loop). // OPS-TIME-BUDGET-1 (2026-09-06): tool-loop time budget is SOFT + default raised 30s->180s (OPS_LOOP_DEADLINE_MS); once spent the runner stops requesting more tools and answers at full answerCap - removes the 1200-token panic stub. // TOOL-CALL-GROUP-1 (2026-09-05): normalizeResponsesInput coalesces consecutive function_call items into ONE assistant tool_calls message (parallel tool-call round [fcA,fcB,fcoA,fcoB] was emitted as assistant[A],assistant[B],tool[A],tool[B] by v1.9.6 -> DeepSeek 400 "insufficient tool messages following tool_calls message" -> Bad Gateway; canonical 1MB+ ua=node /v1/responses x3 at 20:51, repro HTTP 502). // RESPONSES-TOOL-ID-1 (2026-09-05): /v1/responses normalizeResponsesInput now resolves function_call identity as call_id || id (ai-sdk echoes id without call_id -> random id mismatch -> DeepSeek 400 "assistant tool_calls must be followed by tool messages" -> client "Request failed / Bad Gateway"; canonical 855KB ua=node history 3x 20:35) + defers function_calls lacking both and pairs to the next output call_id + keeps chat-style tool_calls on assistant message items. // F4-F5-RESOLVE-1 (2026-09-05): /v1/responses stream emits the item-level SSE sequence (output_item.added -> output_text/function_call_arguments delta+done -> output_item.done) before response.completed so strict Responses clients reconstruct function_call items (was completed-only) + adaptive tool-round cap scales with context (estTokens*0.2 max 8000) so thinking-mode reasoning_content no longer exhausts the 2000 default on large prompts (v1.9.3 length-retry stays as safety net). // RESPONSES-TOOLS-1 (2026-09-05): pass client tools through /v1/responses (Responses tools -> chat tools) + convert chat tool_calls -> Responses function_call output items (status=requires_action) so the DeepChat main agent keeps its native toolchain through the Responses API. // LENGTH-EMPTY-RETRY-1 (2026-09-05): retry the answer round on finish_reason="length" even when content is EMPTY (deepseek-v4-flash thinking mode can spend the 2000-token tool-round cap on reasoning_content and return empty content -> ai-sdk client saw "Provider stopped the response for an unspecified reason"; canonical /v1/responses 46K-token prompt, completion_tokens=2000, response empty). // REASONING-CONTENT-1 (2026-09-05): preserve reasoning_content on assistant tool-call messages in normalizeMessages + inline work-build + agent-loop work.push + clientHandoff - DeepSeek thinking mode returns 400 "reasoning_content must be passed back" on the 2nd+ tool-loop iteration, which made the server agent loop (strategy=agent) fail 3/3 while chat/agent-tools/hybrid/relay passed. // analytics GraphQL fix: workersInvocationsAdaptive (was nonexistent ...Groups field returning 0 requests) // HYBRID-MODEL-1 + ANSWER-ROUND-1 + STREAM-FINAL-1 + FLEET-COMPACT-1 + RELAY-COST-1 + PARAM-TUNE-1 (2026-09-04): merged hybrid tool loop for tool-carrying clients (client-native tools preserved + server ops tools; client wins name collisions; ChatBox keeps pure server loop); no-tools answer round at full cap (fleet truncation fix); token-streamed final answers + heartbeats; parallel+compact fleet probe; relay cost tracking via include_usage tee; env-tunable production knobs. // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 // 1.8.0 (2026-09-04) RELAY-MODEL-1: model=deepseek-v4-flash is a PURE pass-through relay (no OPS
 // prompt injection, no ops-intent server loop, no 8192 clamp; real upstream SSE streaming when
@@ -1255,7 +1255,7 @@ function manifest() {
   return {
     service: WORKER, kind: "worker", version: VERSION, base_url: "https://qnfo-ops.q08.workers.dev",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "hybrid-tools", "streamed-answers"],
+    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "hybrid-tools", "streamed-answers", "async-jobs"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function (t) { return { name: t.name, description: t.description, parameters: t.parameters }; }),
     models: ["ops-exec", "deepseek-v4-flash"],
@@ -1356,6 +1356,12 @@ async function createJobFromBody(env, body) {
   if (!Array.isArray(body.messages) || !body.messages.length) return { error: "messages array required", status: 400 };
   const payload = JSON.stringify(body);
   if (payload.length > 900000) return { error: "payload too large for async job (max ~900KB; got " + payload.length + ")", status: 413 };
+  const capJobs = envInt(env, "OPS_JOBS_DAILY_CAP", 200);
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const cnt = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ops_jobs WHERE created_at LIKE ?1").bind(today + "%").first();
+    if (cnt && Number(cnt.c) >= capJobs) return { error: "daily async job cap reached (" + capJobs + "); retry after 23:59Z UTC", status: 429 };
+  } catch (eCap) { /* cap check best-effort */ }
   const jobId = randId("job-");
   try {
     await ensureJobsSchema(env);
@@ -1414,6 +1420,8 @@ export class OpsExecWorkflow extends WorkflowEntrypoint {
     let content = "";
     let finishReason = "stop";
     let final = null;
+    let upUsage = null;
+    const addUsage = function (rU) { if (rU && rU.usage) { if (!upUsage) upUsage = { prompt_tokens: 0, completion_tokens: 0 }; upUsage.prompt_tokens += Number(rU.usage.prompt_tokens) || 0; upUsage.completion_tokens += Number(rU.usage.completion_tokens) || 0; } };
         // Durable agent loop - each LLM round + each tool call is a step.do (canonical Durable AI Agent idiom).
     for (let turn = 0; turn <= maxTurns; turn++) {
       const withTools = turn < maxTurns;
@@ -1428,6 +1436,7 @@ export class OpsExecWorkflow extends WorkflowEntrypoint {
         final = { status: "failed", error: "deepseek round " + turn + " failed: " + ((e && e.message) || String(e)) };
         break;
       }
+      addUsage(resp);
       const choice = resp && resp.choices && resp.choices[0];
       const msg0 = choice && choice.message;
       const toolCalls = msg0 && Array.isArray(msg0.tool_calls) && msg0.tool_calls.length ? msg0.tool_calls : null;
@@ -1462,6 +1471,7 @@ export class OpsExecWorkflow extends WorkflowEntrypoint {
       if (withTools && finishReason === "length") {
         try {
           const r3 = await callDeepSeek(env, work, answerCap, null, { temperature: temperature, topP: topP });
+          addUsage(r3);
           const c3 = r3 && r3.choices && r3.choices[0];
           const m3 = c3 && c3.message;
           content = String((m3 && m3.content) || "");
@@ -1475,7 +1485,7 @@ export class OpsExecWorkflow extends WorkflowEntrypoint {
     if (!final) final = { status: "succeeded", response: String(content || "(iteration cap reached with no final answer)"), finishReason: finishReason };
         const doneRes = await step.do("job-finalize", async function () {
       await jobSet(env, jobId, final.status, { response: final.response, tool_log: JSON.stringify(toolLog).slice(0, 3000), strategy: "job-workflow" });
-      const rec = { id: randId("ops-"), ts: iso(), model: "ops-exec", strategy: "job-workflow", prompt: prompt, response: String(final.response || "").slice(0, 20000) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: estTokens(JSON.stringify(work)), completion_tokens: estTokens(content), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3000), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.status === "succeeded" ? 1 : 0 };
+      const rec = { id: randId("ops-"), ts: iso(), model: "ops-exec", strategy: "job-workflow", prompt: prompt, response: String(final.response || "").slice(0, 20000) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: (upUsage && upUsage.prompt_tokens) ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: (upUsage && upUsage.completion_tokens) ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc((upUsage && upUsage.prompt_tokens) || 0, (upUsage && upUsage.completion_tokens) || 0), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3000), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.status === "succeeded" ? 1 : 0 };
       await logOps(env, rec);
       return { status: final.status, error: final.error || null, response: String(final.response || "").slice(0, 2000) };
     });
@@ -1667,6 +1677,38 @@ export default {
       if (created.error) return json({ error: created.error, id: created.id || null }, created.status || 400);
       return json({ id: created.id, status: "queued", model: created.model, workflow: "ops-exec-workflow", poll: "/v1/jobs/" + created.id, ts: iso() }, 202);
     }
+    if (path === "/v1/jobs" && method === "GET") {
+      if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      const st = (url.searchParams.get("status") || "").trim();
+      const lim = Math.max(1, Math.min(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 100));
+      const sel = "SELECT id, status, model, strategy, error, created_at, updated_at FROM ops_jobs";
+      let rows = null;
+      if (st) rows = await env.QNFO_AUDIT.prepare(sel + " WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2").bind(st, lim).all();
+      else rows = await env.QNFO_AUDIT.prepare(sel + " ORDER BY created_at DESC LIMIT ?1").bind(lim).all();
+      return json({ jobs: (rows && rows.results) || [], count: (rows && rows.results) ? rows.results.length : 0 });
+    }
+    if (path.startsWith("/v1/jobs/") && method === "DELETE") {
+      if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      const jid = decodeURIComponent(path.slice("/v1/jobs/".length));
+      if (!jid || jid.indexOf("/") >= 0) return json({ error: "bad job id" }, 400);
+      const row = await jobGetRow(env, jid);
+      if (!row) return json({ error: "job not found: " + jid }, 404);
+      let term = "none";
+      try {
+        const inst = env.OPS_EXEC_WORKFLOW.get(jid);
+        await inst.terminate();
+        term = "terminated";
+      } catch (eD) {
+        const em = String((eD && eD.message) || eD);
+        if (em.indexOf("complete") >= 0 || em.indexOf("errored") >= 0 || em.indexOf("terminated") >= 0 || em.indexOf("not_found") >= 0 || em.indexOf("No such") >= 0 || em.indexOf("not found") >= 0) term = "instance-unavailable";
+        else term = "terminate-error";
+      }
+      if (row.status === "queued" || row.status === "running") {
+        await jobSet(env, jid, "terminated", { error: "user DELETE " + iso() + " terminate=" + term });
+        return json({ id: jid, status: "terminated", terminate: term });
+      }
+      return json({ id: jid, status: row.status, terminate: term, note: "row already terminal; instance lifecycle call attempted" });
+    }
     if (path.startsWith("/v1/jobs/") && method === "GET") {
       if (!(await authOk(request.headers.get("Authorization") || "", env))) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
       const jid = decodeURIComponent(path.slice("/v1/jobs/".length));
@@ -1695,9 +1737,24 @@ export default {
         if (!env.OPS_EXEC_WORKFLOW || typeof env.OPS_EXEC_WORKFLOW.create !== "function") throw new Error("OPS_EXEC_WORKFLOW binding missing");
         await env.OPS_EXEC_WORKFLOW.create({ id: jobId, params: { jobId: jobId } });
       } catch (e) {
-        // Transient create errors -> rethrow so the queue retries (max_retries); the ops_jobs row stays queued until then.
-        console.log("workflow create failed for " + jobId + ": " + ((e && e.message) || String(e)));
-        throw e;
+        // OPS-DURABLE-2 (2026-09-06): Queues are at-least-once; a redelivered batch can hit an
+        // instance id that already exists. If the instance exists, treat as success (durable
+        // replay of an already-created run). Otherwise rethrow so the queue retries (max_retries);
+        // the ops_jobs row stays queued until then.
+        const em = String((e && e.message) || e).toLowerCase();
+        const dupish = em.indexOf("already") >= 0 || em.indexOf("exist") >= 0 || em.indexOf("duplicate") >= 0 || em.indexOf("409") >= 0 || em.indexOf("conflict") >= 0;
+        let exists = false;
+        if (dupish) {
+          try {
+            const inst = env.OPS_EXEC_WORKFLOW.get(jobId);
+            await inst.status();
+            exists = true;
+          } catch (e2) { exists = false; }
+        }
+        if (!exists) {
+          console.log("workflow create failed for " + jobId + ": " + ((e && e.message) || String(e)));
+          throw e;
+        }
       }
     }
   }
