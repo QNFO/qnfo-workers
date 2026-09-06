@@ -201,5 +201,24 @@ environment = "production"
 binding = "WAI"
 
 # v1.5.0: service registry auto-refresh (self-heal discovery) every 30 min
+# OPS-DURABLE-1 (2026-09-06): async/durable ops-exec jobs. POST /v1/jobs (or x-ops-async:1 on chat)
+# enqueues to qnfo-ops-jobs; this worker's queue() consumer creates an ops-exec-workflow instance;
+# OpsExecWorkflow (worker.js export class) runs the durable agent loop (each LLM round + tool call
+# is a step.do -> individually retryable, survives isolate recycling, not bound by request CPU/wall).
+[[queues.producers]]
+binding = "OPS_JOBS_QUEUE"
+queue = "qnfo-ops-jobs"
+
+[[queues.consumers]]
+queue = "qnfo-ops-jobs"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 5
+
+[[workflows]]
+binding = "OPS_EXEC_WORKFLOW"
+name = "ops-exec-workflow"
+class_name = "OpsExecWorkflow"
+
 [triggers]
 crons = ["*/30 * * * *"]

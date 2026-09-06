@@ -29,5 +29,15 @@ fi
 if ! grep -qE "^cpu_ms = 300000" "$DIR/wrangler.toml"; then
   echo "FAIL: [limits] cpu_ms not 300000 in wrangler.toml (CPU-BUDGET-1 - default 30s CPU kills run_code-heavy loops via Error 1102)"; FAIL=1
 fi
+# OPS-DURABLE-1 (2026-09-06): durable async ops-exec path must stay present (Queue + Workflows executor).
+if ! grep -q "export class OpsExecWorkflow" "$DIR/worker.js"; then
+  echo "FAIL: OpsExecWorkflow class missing from worker.js (OPS-DURABLE-1)"; FAIL=1
+fi
+if ! grep -q 'OPS_JOBS_QUEUE' "$DIR/wrangler.toml"; then
+  echo "FAIL: OPS_JOBS_QUEUE binding missing from wrangler.toml (OPS-DURABLE-1)"; FAIL=1
+fi
+if ! grep -qF '[[workflows]]' "$DIR/wrangler.toml"; then
+  echo "FAIL: [[workflows]] missing from wrangler.toml (OPS-DURABLE-1)"; FAIL=1
+fi
 if [ "$FAIL" -eq 0 ]; then echo "GUARD PASS"; else echo "GUARD FAIL"; fi
 exit $FAIL
