@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.1.1";
+var VERSION = "0.3.0";
 var MODELS_DEFAULT = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct";
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -173,11 +173,18 @@ function decisionFrom(parsedList, basis) {
   var decision;
   var minAvg = Math.min.apply(null, avgs);
   var maxAvg = Math.max.apply(null, avgs);
+  // Speculative-content guard (P3-CAL row 104, v0.2.0): a claim-heavy record that reviewers
+  // themselves flag as speculative / lacking empirical evidence must not PUBLISH, regardless of scores.
+  var speculative = parsedList.some(function (p) {
+    if (!p) return false;
+    var txt = arrOf(p.weaknesses).concat(arrOf(p.limitations_of_review), arrOf(p.fatal_flaws)).join(" ").toLowerCase();
+    return /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/.test(txt);
+  });
   if (fatal || avg < 4) decision = "REJECT";
   else if (basis !== "text") decision = "REVISE"; // metadata-only can never PUBLISH (anti rubber-stamp)
-  else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence) decision = "PUBLISH";
+  else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence && !speculative) decision = "PUBLISH";
   else decision = "REVISE";
-  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " basis=" + basis + " lowconf=" + anyLowConfidence };
+  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, speculative: speculative, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " speculative=" + speculative + " basis=" + basis + " lowconf=" + anyLowConfidence };
 }
 
 function buildReport(rec, parsedList, dec, modelsUsed, basis) {
@@ -280,7 +287,7 @@ async function enqueueNew(env, limit) {
 }
 
 async function pickQueued(env) {
-  var row = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
+  var row = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE status='queued' OR (status='error' AND ran_at IS NOT NULL AND ran_at < datetime('now','-30 minutes')) ORDER BY id ASC LIMIT 1").first();
   return row ? row.recid : null;
 }
 
@@ -376,7 +383,25 @@ var index_default = {
           : await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions ORDER BY id DESC LIMIT ?").bind(limD).all();
         return json({ ok: true, count: rowsD.results.length, rows: rowsD.results });
       }
-      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next")) {
+      if (path === "/" || path === "/index.html") {
+        var escH = function (s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+        var recParam = Number(url.searchParams.get("recid") || 0);
+        if (recParam) {
+          var repR = await env.AUDIT.prepare("SELECT decision, avg_score, basis, report_md, created_at FROM jnl_reviews WHERE recid = ?").bind(recParam).first();
+          if (!repR) return new Response("No review found for recid " + recParam, { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+          var repHtml = "<!doctype html><html><head><meta charset='utf-8'><title>AI Referee Report " + recParam + "</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><p><a href='/'>← index</a></p><h1>AI Referee Report — Zenodo recid " + recParam + "</h1><p>Decision: <strong>" + escH(repR.decision) + "</strong> · avg " + escH(String(repR.avg_score)) + " · basis " + escH(repR.basis) + " · " + escH(repR.created_at) + "</p><p><a href='https://zenodo.org/records/" + recParam + "'>Zenodo record</a></p><pre style='white-space:pre-wrap;background:#f7f7f7;padding:1rem;border-radius:6px'>" + escH(repR.report_md) + "</pre><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Advisory AI referee report — not an endorsement or proof. Overlay stores no content.</footer></body></html>";
+          return new Response(repHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+        }
+        var idxRows = await env.AUDIT.prepare("SELECT d.recid, d.decision, d.avg_score, d.basis, d.created_at, r.title, r.doi FROM jnl_decisions d LEFT JOIN jnl_records r ON r.recid = d.recid ORDER BY d.id DESC LIMIT 100").all();
+        var cards = "";
+        for (var xi = 0; xi < idxRows.results.length; xi++) {
+          var xr = idxRows.results[xi];
+          cards = cards + "<li><a href='/?recid=" + xr.recid + "'>" + escH(xr.title || ("recid " + xr.recid)) + "</a> — <strong>" + escH(xr.decision) + "</strong> (avg " + escH(String(xr.avg_score)) + ", " + escH(xr.basis) + ", " + escH(xr.created_at) + ")" + (xr.doi ? " · <a href='https://doi.org/" + escH(xr.doi) + "'>DOI</a>" : "") + "</li>";
+        }
+        var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal — open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> — structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><p>Queue: " + (idxRows.results.length ? "" : "no decisions yet") + "</p><ul>" + cards + "</ul><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds · metadata-only reviews never PUBLISH · overlay-only (no Zenodo write-back).</footer></body></html>";
+        return new Response(idxHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+      }
+      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal")) {
         var authed = await authOk(request, env);
         if (!authed) return json({ ok: false, error: "unauthorized" }, 401);
         if (path === "/enqueue" || path === "/seed") {
@@ -412,6 +437,32 @@ var index_default = {
             outN.push({ recid: rec, ok: !!rr.ok, decision: rr.decision || null, error: rr.error || null });
           }
           return json({ ok: true, ran: outN });
+        }
+        if (path === "/cal") {
+          var bodyC = {};
+          try { bodyC = await request.json(); } catch (e) {}
+          var calTitle = String(bodyC.title || "calibration control").slice(0, 200);
+          var calText = String(bodyC.text || "").slice(0, 16000);
+          if (!calText) return json({ ok: false, error: "text required" }, 400);
+          var bCal = await dailyBudgetOk(env);
+          if (!bCal.ok) return json({ ok: false, error: "daily budget reached", budget: bCal }, 429);
+          var modelsC = String((env.JNL_MODELS || MODELS_DEFAULT)).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+          var sysC = reviewerSystem("an adversarial calibration referee");
+          var usrC = "CALIBRATION CONTROL TITLE: " + calTitle + "\n\nFULL TEXT:\n" + calText + "\n\nDecide whether this submission would pass peer review. Produce the review JSON.";
+          var parsedC = [];
+          var usedC = [];
+          for (var ci = 0; ci < modelsC.length; ci++) {
+            try {
+              var outCTxt = await aiRun(env, modelsC[ci], sysC, usrC);
+              var pC = parseJsonObject(outCTxt);
+              if (pC) { parsedC.push(pC); usedC.push(modelsC[ci]); }
+            } catch (e) { await log(env, null, "cal_model_error", String(e && e.message || e).slice(0, 300)); }
+          }
+          if (!parsedC.length) return json({ ok: false, error: "no model produced parseable JSON" }, 500);
+          var decC = decisionFrom(parsedC, "text");
+          await log(env, null, "cal", decC.decision + " avg=" + decC.avg + " title=" + calTitle.slice(0, 80));
+          await bumpDaily(env);
+          return json({ ok: true, title: calTitle, decision: decC.decision, avg_score: decC.avg, models: usedC, reason: decC.reason });
         }
       }
       return json({ ok: true, service: "jnl-referee", version: VERSION, path: path, method: method, endpoints: ["GET /health", "GET /queue", "GET /reviews?recid=", "GET /decisions?recid=", "POST /enqueue (x-jnl-token)", "POST /seed (x-jnl-token)", "POST /run {recid} (x-jnl-token)", "POST /run-next {n} (x-jnl-token)"], note: "AI referee overlay for Zenodo community aiscience; isolated jnl-* stack; overlay-only (no Zenodo write-back)" });
