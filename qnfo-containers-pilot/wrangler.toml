@@ -4,7 +4,7 @@ compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-# Cloudflare Containers pilot -- public python:3.12-slim image (no local Docker).
+# Cloudflare Containers executor -- public python:3.12-slim image (no local Docker).
 # Each Durable Object instance controls one container instance (scale-to-zero on idle).
 [[containers]]
 class_name = "PyContainer"
@@ -20,4 +20,10 @@ class_name = "PyContainer"
 tag = "v1"
 new_sqlite_classes = ["PyContainer"]
 
-# Fail-closed auth for /exec and /version. Set via: wrangler secret put PILOT_TOKEN
+# v0.2.0: audit logging to qnfo-audit.cloud_ops_events (register rows 93/94 evidence)
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# Fail-closed auth. Set via: wrangler secret put PILOT_TOKEN
