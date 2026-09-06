@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.1.0";
+var VERSION = "0.1.1";
 var MODELS_DEFAULT = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct";
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -171,12 +171,13 @@ function decisionFrom(parsedList, basis) {
   var avg = avgs.reduce(function (a, b) { return a + b; }, 0) / avgs.length;
   var disagreement = avgs.length > 1 && Math.abs(avgs[0] - avgs[1]) >= 2.5;
   var decision;
+  var minAvg = Math.min.apply(null, avgs);
+  var maxAvg = Math.max.apply(null, avgs);
   if (fatal || avg < 4) decision = "REJECT";
-  else if (basis !== "text" && avg < 7) decision = "REVISE";
   else if (basis !== "text") decision = "REVISE"; // metadata-only can never PUBLISH (anti rubber-stamp)
-  else if (avg >= 7 && !anyLowConfidence) decision = "PUBLISH";
+  else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence) decision = "PUBLISH";
   else decision = "REVISE";
-  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, reason: "avg=" + Math.round(avg * 100) / 100 + " fatal=" + fatal + " basis=" + basis + " lowconf=" + anyLowConfidence };
+  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " basis=" + basis + " lowconf=" + anyLowConfidence };
 }
 
 function buildReport(rec, parsedList, dec, modelsUsed, basis) {
