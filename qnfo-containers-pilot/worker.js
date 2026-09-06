@@ -14,7 +14,7 @@
 // CANONICAL SOURCE: QNFO/qnfo-workers/qnfo-containers-pilot
 // SECRET: wrangler secret put PILOT_TOKEN
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const MAX_CODE = 40000;
 const MAX_OUT = 60000;
 const WORKSPACE = "/workspace";
@@ -101,6 +101,19 @@ export class PyContainer {
         return json({ ok: true, containerRunning: this.ctx.container.running, result: out });
       }
 
+      if (path === "/sh") {
+        if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
+        let body = {};
+        try { body = await request.json(); } catch (e) { body = {}; }
+        const cmd = typeof body.cmd === "string" ? body.cmd : "";
+        if (!cmd) return json({ ok: false, error: "body.cmd (string) required" }, 400);
+        if (cmd.length > MAX_CODE) return json({ ok: false, error: "cmd too long (max " + MAX_CODE + ")" }, 413);
+        await this.ensureStarted();
+        const out = await this.run(["sh", "-c", cmd]);
+        await logEvent(this.env, "container.sh", "sh -c <cmd>", { exitCode: out.exitCode, stdoutLen: out.stdout.length, stderrLen: out.stderr.length }, null, out.exitCode === 0 ? "ok" : "error");
+        return json({ ok: true, containerRunning: this.ctx.container.running, result: out });
+      }
+
       if (path === "/workspace/write") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         let body = {};
@@ -145,7 +158,7 @@ export class PyContainer {
 
   async ensureStarted() {
     if (!this.ctx.container.running) {
-      await this.ctx.container.start({ entrypoint: ["python", "-m", "http.server", "8080"] });
+      await this.ctx.container.start({ entrypoint: ["python", "-m", "http.server", "8080"], enableInternet: true });
     }
   }
 
