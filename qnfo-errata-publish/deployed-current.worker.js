@@ -1,55 +1,62 @@
-var __create = Object.create;
+--acaaee90a8bd68ab0697be092f7f21f96f51070a13b57a5b1abbab8b6978
+Content-Disposition: form-data; name="deployed-current.worker.js"
+
 var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// deployed-current.worker.js
+import { Buffer as Buffer2 } from "node:buffer";
+import { Buffer as Buffer3 } from "node:buffer";
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var __create = Object.create;
+var __defProp22 = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-var __esm = (fn, res, err) => function __init() {
+var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+var __esm = /* @__PURE__ */ __name2((fn, res, err) => /* @__PURE__ */ __name2(/* @__PURE__ */ __name(function __init() {
   if (err) throw err[0];
   try {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
   } catch (e) {
     throw err = [e], e;
   }
-};
-var __commonJS = (cb, mod) => function __require() {
+}, "__init"), "__init"), "__esm");
+var __commonJS = /* @__PURE__ */ __name2((cb, mod) => /* @__PURE__ */ __name2(/* @__PURE__ */ __name(function __require() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   } catch (e) {
     throw mod = 0, e;
   }
-};
-var __export = (target, all) => {
+}, "__require"), "__require"), "__commonJS");
+var __export = /* @__PURE__ */ __name2((target, all) => {
   for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from2, except, desc) => {
+    __defProp22(target, name, { get: all[name], enumerable: true });
+}, "__export");
+var __copyProps = /* @__PURE__ */ __name2((to, from2, except, desc) => {
   if (from2 && typeof from2 === "object" || typeof from2 === "function") {
     for (let key of __getOwnPropNames(from2))
       if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from2[key], enumerable: !(desc = __getOwnPropDesc(from2, key)) || desc.enumerable });
+        __defProp22(to, key, { get: /* @__PURE__ */ __name2(() => from2[key], "get"), enumerable: !(desc = __getOwnPropDesc(from2, key)) || desc.enumerable });
   }
   return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+}, "__copyProps");
+var __toESM = /* @__PURE__ */ __name2((mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
   // If the importer is in node compatibility mode or this is not an ESM
   // file that has been converted to a CommonJS file using a Babel-
   // compatible transform (i.e. "__esModule" has not been set), then set
   // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  isNodeMode || !mod || !mod.__esModule ? __defProp22(target, "default", { value: mod, enumerable: true }) : target,
   mod
-));
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/generated/version.js
+)), "__toESM");
 var packageVersion;
 var init_version = __esm({
   "node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/generated/version.js"() {
     packageVersion = "1.4.0";
   }
 });
-
-// node_modules/ms/index.js
 var require_ms = __commonJS({
   "node_modules/ms/index.js"(exports, module) {
     var s = 1e3;
@@ -127,6 +134,8 @@ var require_ms = __commonJS({
       }
     }
     __name(parse, "parse");
+    __name2(parse, "parse");
+    __name22(parse, "parse");
     function fmtShort(ms) {
       var msAbs = Math.abs(ms);
       if (msAbs >= d) {
@@ -144,6 +153,8 @@ var require_ms = __commonJS({
       return ms + "ms";
     }
     __name(fmtShort, "fmtShort");
+    __name2(fmtShort, "fmtShort");
+    __name22(fmtShort, "fmtShort");
     function fmtLong(ms) {
       var msAbs = Math.abs(ms);
       if (msAbs >= d) {
@@ -161,15 +172,17 @@ var require_ms = __commonJS({
       return ms + " ms";
     }
     __name(fmtLong, "fmtLong");
+    __name2(fmtLong, "fmtLong");
+    __name22(fmtLong, "fmtLong");
     function plural(ms, msAbs, n, name) {
       var isPlural = msAbs >= n * 1.5;
       return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
     }
     __name(plural, "plural");
+    __name2(plural, "plural");
+    __name22(plural, "plural");
   }
 });
-
-// node_modules/debug/src/common.js
 var require_common = __commonJS({
   "node_modules/debug/src/common.js"(exports, module) {
     function setup(env) {
@@ -196,6 +209,8 @@ var require_common = __commonJS({
         return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
       }
       __name(selectColor, "selectColor");
+      __name2(selectColor, "selectColor");
+      __name22(selectColor, "selectColor");
       createDebug.selectColor = selectColor;
       function createDebug(namespace) {
         let prevTime;
@@ -236,7 +251,9 @@ var require_common = __commonJS({
           const logFn = self2.log || createDebug.log;
           logFn.apply(self2, args);
         }
-        __name(debug2, "debug");
+        __name(debug2, "debug2");
+        __name2(debug2, "debug2");
+        __name22(debug2, "debug");
         debug2.namespace = namespace;
         debug2.useColors = createDebug.useColors();
         debug2.color = createDebug.selectColor(namespace);
@@ -245,7 +262,7 @@ var require_common = __commonJS({
         Object.defineProperty(debug2, "enabled", {
           enumerable: true,
           configurable: false,
-          get: /* @__PURE__ */ __name(() => {
+          get: /* @__PURE__ */ __name22(() => {
             if (enableOverride !== null) {
               return enableOverride;
             }
@@ -255,7 +272,7 @@ var require_common = __commonJS({
             }
             return enabledCache;
           }, "get"),
-          set: /* @__PURE__ */ __name((v) => {
+          set: /* @__PURE__ */ __name22((v) => {
             enableOverride = v;
           }, "set")
         });
@@ -265,12 +282,16 @@ var require_common = __commonJS({
         return debug2;
       }
       __name(createDebug, "createDebug");
+      __name2(createDebug, "createDebug");
+      __name22(createDebug, "createDebug");
       function extend(namespace, delimiter) {
         const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
         newDebug.log = this.log;
         return newDebug;
       }
       __name(extend, "extend");
+      __name2(extend, "extend");
+      __name22(extend, "extend");
       function enable(namespaces) {
         createDebug.save(namespaces);
         createDebug.namespaces = namespaces;
@@ -286,6 +307,8 @@ var require_common = __commonJS({
         }
       }
       __name(enable, "enable");
+      __name2(enable, "enable");
+      __name22(enable, "enable");
       function matchesTemplate(search, template) {
         let searchIndex = 0;
         let templateIndex = 0;
@@ -315,6 +338,8 @@ var require_common = __commonJS({
         return templateIndex === template.length;
       }
       __name(matchesTemplate, "matchesTemplate");
+      __name2(matchesTemplate, "matchesTemplate");
+      __name22(matchesTemplate, "matchesTemplate");
       function disable() {
         const namespaces = [
           ...createDebug.names,
@@ -324,6 +349,8 @@ var require_common = __commonJS({
         return namespaces;
       }
       __name(disable, "disable");
+      __name2(disable, "disable");
+      __name22(disable, "disable");
       function enabled(name) {
         for (const skip of createDebug.skips) {
           if (matchesTemplate(name, skip)) {
@@ -338,6 +365,8 @@ var require_common = __commonJS({
         return false;
       }
       __name(enabled, "enabled");
+      __name2(enabled, "enabled");
+      __name22(enabled, "enabled");
       function coerce(val) {
         if (val instanceof Error) {
           return val.stack || val.message;
@@ -345,19 +374,23 @@ var require_common = __commonJS({
         return val;
       }
       __name(coerce, "coerce");
+      __name2(coerce, "coerce");
+      __name22(coerce, "coerce");
       function destroy() {
         console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
       }
       __name(destroy, "destroy");
+      __name2(destroy, "destroy");
+      __name22(destroy, "destroy");
       createDebug.enable(createDebug.load());
       return createDebug;
     }
     __name(setup, "setup");
+    __name2(setup, "setup");
+    __name22(setup, "setup");
     module.exports = setup;
   }
 });
-
-// node_modules/debug/src/browser.js
 var require_browser = __commonJS({
   "node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
@@ -467,6 +500,8 @@ var require_browser = __commonJS({
       typeof navigator !== "undefined" && "Cloudflare-Workers" && "Cloudflare-Workers".toLowerCase().match(/applewebkit\/(\d+)/);
     }
     __name(useColors, "useColors");
+    __name2(useColors, "useColors");
+    __name22(useColors, "useColors");
     function formatArgs(args) {
       args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module.exports.humanize(this.diff);
       if (!this.useColors) {
@@ -488,6 +523,8 @@ var require_browser = __commonJS({
       args.splice(lastC, 0, c);
     }
     __name(formatArgs, "formatArgs");
+    __name2(formatArgs, "formatArgs");
+    __name22(formatArgs, "formatArgs");
     exports.log = console.debug || console.log || (() => {
     });
     function save(namespaces) {
@@ -501,6 +538,8 @@ var require_browser = __commonJS({
       }
     }
     __name(save, "save");
+    __name2(save, "save");
+    __name22(save, "save");
     function load() {
       let r;
       try {
@@ -513,6 +552,8 @@ var require_browser = __commonJS({
       return r;
     }
     __name(load, "load");
+    __name2(load, "load");
+    __name22(load, "load");
     function localstorage() {
       try {
         return localStorage;
@@ -520,6 +561,8 @@ var require_browser = __commonJS({
       }
     }
     __name(localstorage, "localstorage");
+    __name2(localstorage, "localstorage");
+    __name22(localstorage, "localstorage");
     module.exports = require_common()(exports);
     var { formatters } = module.exports;
     formatters.j = function(v) {
@@ -531,8 +574,6 @@ var require_browser = __commonJS({
     };
   }
 });
-
-// node_modules/ws/browser.js
 var require_browser2 = __commonJS({
   "node_modules/ws/browser.js"(exports, module) {
     "use strict";
@@ -543,20 +584,25 @@ var require_browser2 = __commonJS({
     };
   }
 });
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/node/NodeWebSocketTransport.js
 var NodeWebSocketTransport_exports = {};
 __export(NodeWebSocketTransport_exports, {
-  NodeWebSocketTransport: () => NodeWebSocketTransport
+  NodeWebSocketTransport: /* @__PURE__ */ __name2(() => NodeWebSocketTransport, "NodeWebSocketTransport")
 });
-var import_ws, NodeWebSocketTransport;
+var import_ws;
+var NodeWebSocketTransport;
 var init_NodeWebSocketTransport = __esm({
   "node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/node/NodeWebSocketTransport.js"() {
     import_ws = __toESM(require_browser2(), 1);
     init_version();
     NodeWebSocketTransport = class _NodeWebSocketTransport {
       static {
-        __name(this, "NodeWebSocketTransport");
+        __name(this, "_NodeWebSocketTransport");
+      }
+      static {
+        __name2(this, "_NodeWebSocketTransport");
+      }
+      static {
+        __name22(this, "NodeWebSocketTransport");
       }
       static create(url, headers) {
         return new Promise((resolve, reject) => {
@@ -605,18 +651,22 @@ var init_NodeWebSocketTransport = __esm({
     };
   }
 });
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/BrowserWebSocketTransport.js
 var BrowserWebSocketTransport_exports = {};
 __export(BrowserWebSocketTransport_exports, {
-  BrowserWebSocketTransport: () => BrowserWebSocketTransport
+  BrowserWebSocketTransport: /* @__PURE__ */ __name2(() => BrowserWebSocketTransport, "BrowserWebSocketTransport")
 });
 var BrowserWebSocketTransport;
 var init_BrowserWebSocketTransport = __esm({
   "node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/BrowserWebSocketTransport.js"() {
     BrowserWebSocketTransport = class _BrowserWebSocketTransport {
       static {
-        __name(this, "BrowserWebSocketTransport");
+        __name(this, "_BrowserWebSocketTransport");
+      }
+      static {
+        __name2(this, "_BrowserWebSocketTransport");
+      }
+      static {
+        __name22(this, "BrowserWebSocketTransport");
       }
       static create(url) {
         return new Promise((resolve, reject) => {
@@ -654,16 +704,8 @@ var init_BrowserWebSocketTransport = __esm({
     };
   }
 });
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cloudflare/globalPatcher.js
-import { Buffer as Buffer2 } from "node:buffer";
 globalThis.Buffer = Buffer2;
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/util.js
-import { Buffer as Buffer3 } from "node:buffer";
-
-// node_modules/@cloudflare/puppeteer/lib/esm/third_party/rxjs/rxjs.js
-var extendStatics = /* @__PURE__ */ __name(function(d, b) {
+var extendStatics = /* @__PURE__ */ __name22(function(d, b) {
   extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
     d2.__proto__ = b2;
   } || function(d2, b2) {
@@ -679,9 +721,13 @@ function __extends(d, b) {
     this.constructor = d;
   }
   __name(__, "__");
+  __name2(__, "__");
+  __name22(__, "__");
   d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 }
 __name(__extends, "__extends");
+__name2(__extends, "__extends");
+__name22(__extends, "__extends");
 function __awaiter(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
@@ -689,6 +735,8 @@ function __awaiter(thisArg, _arguments, P, generator) {
     });
   }
   __name(adopt, "adopt");
+  __name2(adopt, "adopt");
+  __name22(adopt, "adopt");
   return new (P || (P = Promise))(function(resolve, reject) {
     function fulfilled(value) {
       try {
@@ -698,6 +746,8 @@ function __awaiter(thisArg, _arguments, P, generator) {
       }
     }
     __name(fulfilled, "fulfilled");
+    __name2(fulfilled, "fulfilled");
+    __name22(fulfilled, "fulfilled");
     function rejected(value) {
       try {
         step(generator["throw"](value));
@@ -706,16 +756,22 @@ function __awaiter(thisArg, _arguments, P, generator) {
       }
     }
     __name(rejected, "rejected");
+    __name2(rejected, "rejected");
+    __name22(rejected, "rejected");
     function step(result) {
       result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
+    __name2(step, "step");
+    __name22(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 }
 __name(__awaiter, "__awaiter");
+__name2(__awaiter, "__awaiter");
+__name22(__awaiter, "__awaiter");
 function __generator(thisArg, body) {
-  var _ = { label: 0, sent: /* @__PURE__ */ __name(function() {
+  var _ = { label: 0, sent: /* @__PURE__ */ __name22(function() {
     if (t[0] & 1) throw t[1];
     return t[1];
   }, "sent"), trys: [], ops: [] }, f, y, t, g;
@@ -728,6 +784,8 @@ function __generator(thisArg, body) {
     };
   }
   __name(verb, "verb");
+  __name2(verb, "verb");
+  __name22(verb, "verb");
   function step(op) {
     if (f) throw new TypeError("Generator is already executing.");
     while (g && (g = 0, op[0] && (_ = 0)), _) try {
@@ -784,13 +842,17 @@ function __generator(thisArg, body) {
     return { value: op[0] ? op[1] : void 0, done: true };
   }
   __name(step, "step");
+  __name2(step, "step");
+  __name22(step, "step");
 }
 __name(__generator, "__generator");
+__name2(__generator, "__generator");
+__name22(__generator, "__generator");
 function __values(o) {
   var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
   if (m) return m.call(o);
   if (o && typeof o.length === "number") return {
-    next: /* @__PURE__ */ __name(function() {
+    next: /* @__PURE__ */ __name22(function() {
       if (o && i >= o.length) o = void 0;
       return { value: o && o[i++], done: !o };
     }, "next")
@@ -798,6 +860,8 @@ function __values(o) {
   throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
 }
 __name(__values, "__values");
+__name2(__values, "__values");
+__name22(__values, "__values");
 function __read(o, n) {
   var m = typeof Symbol === "function" && o[Symbol.iterator];
   if (!m) return o;
@@ -816,6 +880,8 @@ function __read(o, n) {
   return ar;
 }
 __name(__read, "__read");
+__name2(__read, "__read");
+__name22(__read, "__read");
 function __spreadArray(to, from2, pack) {
   if (pack || arguments.length === 2) for (var i = 0, l = from2.length, ar; i < l; i++) {
     if (ar || !(i in from2)) {
@@ -826,10 +892,14 @@ function __spreadArray(to, from2, pack) {
   return to.concat(ar || Array.prototype.slice.call(from2));
 }
 __name(__spreadArray, "__spreadArray");
+__name2(__spreadArray, "__spreadArray");
+__name22(__spreadArray, "__spreadArray");
 function __await(v) {
   return this instanceof __await ? (this.v = v, this) : new __await(v);
 }
 __name(__await, "__await");
+__name2(__await, "__await");
+__name22(__await, "__await");
 function __asyncGenerator(thisArg, _arguments, generator) {
   if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
   var g = generator.apply(thisArg, _arguments || []), i, q = [];
@@ -844,6 +914,8 @@ function __asyncGenerator(thisArg, _arguments, generator) {
     };
   }
   __name(verb, "verb");
+  __name2(verb, "verb");
+  __name22(verb, "verb");
   function resume(n, v) {
     try {
       step(g[n](v));
@@ -852,24 +924,36 @@ function __asyncGenerator(thisArg, _arguments, generator) {
     }
   }
   __name(resume, "resume");
+  __name2(resume, "resume");
+  __name22(resume, "resume");
   function step(r) {
     r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);
   }
   __name(step, "step");
+  __name2(step, "step");
+  __name22(step, "step");
   function fulfill(value) {
     resume("next", value);
   }
   __name(fulfill, "fulfill");
+  __name2(fulfill, "fulfill");
+  __name22(fulfill, "fulfill");
   function reject(value) {
     resume("throw", value);
   }
   __name(reject, "reject");
+  __name2(reject, "reject");
+  __name22(reject, "reject");
   function settle(f, v) {
     if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]);
   }
   __name(settle, "settle");
+  __name2(settle, "settle");
+  __name22(settle, "settle");
 }
 __name(__asyncGenerator, "__asyncGenerator");
+__name2(__asyncGenerator, "__asyncGenerator");
+__name22(__asyncGenerator, "__asyncGenerator");
 function __asyncValues(o) {
   if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
   var m = o[Symbol.asyncIterator], i;
@@ -884,20 +968,28 @@ function __asyncValues(o) {
     };
   }
   __name(verb, "verb");
+  __name2(verb, "verb");
+  __name22(verb, "verb");
   function settle(resolve, reject, d, v) {
     Promise.resolve(v).then(function(v2) {
       resolve({ value: v2, done: d });
     }, reject);
   }
   __name(settle, "settle");
+  __name2(settle, "settle");
+  __name22(settle, "settle");
 }
 __name(__asyncValues, "__asyncValues");
+__name2(__asyncValues, "__asyncValues");
+__name22(__asyncValues, "__asyncValues");
 function isFunction(value) {
   return typeof value === "function";
 }
 __name(isFunction, "isFunction");
+__name2(isFunction, "isFunction");
+__name22(isFunction, "isFunction");
 function createErrorClass(createImpl) {
-  var _super = /* @__PURE__ */ __name(function(instance) {
+  var _super = /* @__PURE__ */ __name22(function(instance) {
     Error.call(instance);
     instance.stack = new Error().stack;
   }, "_super");
@@ -907,15 +999,17 @@ function createErrorClass(createImpl) {
   return ctorFunc;
 }
 __name(createErrorClass, "createErrorClass");
+__name2(createErrorClass, "createErrorClass");
+__name22(createErrorClass, "createErrorClass");
 var UnsubscriptionError = createErrorClass(function(_super) {
-  return /* @__PURE__ */ __name(function UnsubscriptionErrorImpl(errors) {
+  return /* @__PURE__ */ __name22(/* @__PURE__ */ __name2(/* @__PURE__ */ __name(function UnsubscriptionErrorImpl(errors) {
     _super(this);
     this.message = errors ? errors.length + " errors occurred during unsubscription:\n" + errors.map(function(err, i) {
       return i + 1 + ") " + err.toString();
     }).join("\n  ") : "";
     this.name = "UnsubscriptionError";
     this.errors = errors;
-  }, "UnsubscriptionErrorImpl");
+  }, "UnsubscriptionErrorImpl"), "UnsubscriptionErrorImpl"), "UnsubscriptionErrorImpl");
 });
 function arrRemove(arr, item) {
   if (arr) {
@@ -924,6 +1018,8 @@ function arrRemove(arr, item) {
   }
 }
 __name(arrRemove, "arrRemove");
+__name2(arrRemove, "arrRemove");
+__name22(arrRemove, "arrRemove");
 var Subscription = (function() {
   function Subscription2(initialTeardown) {
     this.initialTeardown = initialTeardown;
@@ -932,6 +1028,8 @@ var Subscription = (function() {
     this._finalizers = null;
   }
   __name(Subscription2, "Subscription2");
+  __name2(Subscription2, "Subscription2");
+  __name22(Subscription2, "Subscription2");
   Subscription2.prototype.unsubscribe = function() {
     var e_1, _a, e_2, _b;
     var errors;
@@ -1050,6 +1148,8 @@ function isSubscription(value) {
   return value instanceof Subscription || value && "closed" in value && isFunction(value.remove) && isFunction(value.add) && isFunction(value.unsubscribe);
 }
 __name(isSubscription, "isSubscription");
+__name2(isSubscription, "isSubscription");
+__name22(isSubscription, "isSubscription");
 function execFinalizer(finalizer) {
   if (isFunction(finalizer)) {
     finalizer();
@@ -1058,6 +1158,8 @@ function execFinalizer(finalizer) {
   }
 }
 __name(execFinalizer, "execFinalizer");
+__name2(execFinalizer, "execFinalizer");
+__name22(execFinalizer, "execFinalizer");
 var config = {
   onUnhandledError: null,
   onStoppedNotification: null,
@@ -1066,7 +1168,7 @@ var config = {
   useDeprecatedNextContext: false
 };
 var timeoutProvider = {
-  setTimeout: /* @__PURE__ */ __name(function(handler, timeout2) {
+  setTimeout: /* @__PURE__ */ __name22(function(handler, timeout2) {
     var args = [];
     for (var _i = 2; _i < arguments.length; _i++) {
       args[_i - 2] = arguments[_i];
@@ -1077,7 +1179,7 @@ var timeoutProvider = {
     }
     return setTimeout.apply(void 0, __spreadArray([handler, timeout2], __read(args)));
   }, "setTimeout"),
-  clearTimeout: /* @__PURE__ */ __name(function(handle) {
+  clearTimeout: /* @__PURE__ */ __name22(function(handle) {
     var delegate = timeoutProvider.delegate;
     return ((delegate === null || delegate === void 0 ? void 0 : delegate.clearTimeout) || clearTimeout)(handle);
   }, "clearTimeout"),
@@ -1094,9 +1196,13 @@ function reportUnhandledError(err) {
   });
 }
 __name(reportUnhandledError, "reportUnhandledError");
+__name2(reportUnhandledError, "reportUnhandledError");
+__name22(reportUnhandledError, "reportUnhandledError");
 function noop() {
 }
 __name(noop, "noop");
+__name2(noop, "noop");
+__name22(noop, "noop");
 var COMPLETE_NOTIFICATION = (function() {
   return createNotification("C", void 0, void 0);
 })();
@@ -1104,10 +1210,14 @@ function errorNotification(error) {
   return createNotification("E", void 0, error);
 }
 __name(errorNotification, "errorNotification");
+__name2(errorNotification, "errorNotification");
+__name22(errorNotification, "errorNotification");
 function nextNotification(value) {
   return createNotification("N", value, void 0);
 }
 __name(nextNotification, "nextNotification");
+__name2(nextNotification, "nextNotification");
+__name22(nextNotification, "nextNotification");
 function createNotification(kind, value, error) {
   return {
     kind,
@@ -1116,6 +1226,8 @@ function createNotification(kind, value, error) {
   };
 }
 __name(createNotification, "createNotification");
+__name2(createNotification, "createNotification");
+__name22(createNotification, "createNotification");
 var context = null;
 function errorContext(cb) {
   if (config.useDeprecatedSynchronousErrorHandling) {
@@ -1136,6 +1248,8 @@ function errorContext(cb) {
   }
 }
 __name(errorContext, "errorContext");
+__name2(errorContext, "errorContext");
+__name22(errorContext, "errorContext");
 function captureError(err) {
   if (config.useDeprecatedSynchronousErrorHandling && context) {
     context.errorThrown = true;
@@ -1143,6 +1257,8 @@ function captureError(err) {
   }
 }
 __name(captureError, "captureError");
+__name2(captureError, "captureError");
+__name22(captureError, "captureError");
 var Subscriber = (function(_super) {
   __extends(Subscriber2, _super);
   function Subscriber2(destination) {
@@ -1159,6 +1275,8 @@ var Subscriber = (function(_super) {
     return _this;
   }
   __name(Subscriber2, "Subscriber2");
+  __name2(Subscriber2, "Subscriber2");
+  __name22(Subscriber2, "Subscriber2");
   Subscriber2.create = function(next, error, complete) {
     return new SafeSubscriber(next, error, complete);
   };
@@ -1216,11 +1334,15 @@ function bind(fn, thisArg) {
   return _bind.call(fn, thisArg);
 }
 __name(bind, "bind");
+__name2(bind, "bind");
+__name22(bind, "bind");
 var ConsumerObserver = (function() {
   function ConsumerObserver2(partialObserver) {
     this.partialObserver = partialObserver;
   }
   __name(ConsumerObserver2, "ConsumerObserver2");
+  __name2(ConsumerObserver2, "ConsumerObserver2");
+  __name22(ConsumerObserver2, "ConsumerObserver2");
   ConsumerObserver2.prototype.next = function(value) {
     var partialObserver = this.partialObserver;
     if (partialObserver.next) {
@@ -1286,6 +1408,8 @@ var SafeSubscriber = (function(_super) {
     return _this;
   }
   __name(SafeSubscriber2, "SafeSubscriber2");
+  __name2(SafeSubscriber2, "SafeSubscriber2");
+  __name22(SafeSubscriber2, "SafeSubscriber2");
   return SafeSubscriber2;
 })(Subscriber);
 function handleUnhandledError(error) {
@@ -1296,10 +1420,14 @@ function handleUnhandledError(error) {
   }
 }
 __name(handleUnhandledError, "handleUnhandledError");
+__name2(handleUnhandledError, "handleUnhandledError");
+__name22(handleUnhandledError, "handleUnhandledError");
 function defaultErrorHandler(err) {
   throw err;
 }
 __name(defaultErrorHandler, "defaultErrorHandler");
+__name2(defaultErrorHandler, "defaultErrorHandler");
+__name22(defaultErrorHandler, "defaultErrorHandler");
 function handleStoppedNotification(notification, subscriber) {
   var onStoppedNotification = config.onStoppedNotification;
   onStoppedNotification && timeoutProvider.setTimeout(function() {
@@ -1307,6 +1435,8 @@ function handleStoppedNotification(notification, subscriber) {
   });
 }
 __name(handleStoppedNotification, "handleStoppedNotification");
+__name2(handleStoppedNotification, "handleStoppedNotification");
+__name22(handleStoppedNotification, "handleStoppedNotification");
 var EMPTY_OBSERVER = {
   closed: true,
   next: noop,
@@ -1320,6 +1450,8 @@ function identity(x) {
   return x;
 }
 __name(identity, "identity");
+__name2(identity, "identity");
+__name22(identity, "identity");
 function pipe() {
   var fns = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -1328,6 +1460,8 @@ function pipe() {
   return pipeFromArray(fns);
 }
 __name(pipe, "pipe");
+__name2(pipe, "pipe");
+__name22(pipe, "pipe");
 function pipeFromArray(fns) {
   if (fns.length === 0) {
     return identity;
@@ -1335,13 +1469,15 @@ function pipeFromArray(fns) {
   if (fns.length === 1) {
     return fns[0];
   }
-  return /* @__PURE__ */ __name(function piped(input) {
+  return /* @__PURE__ */ __name22(/* @__PURE__ */ __name2(/* @__PURE__ */ __name(function piped(input) {
     return fns.reduce(function(prev, fn) {
       return fn(prev);
     }, input);
-  }, "piped");
+  }, "piped"), "piped"), "piped");
 }
 __name(pipeFromArray, "pipeFromArray");
+__name2(pipeFromArray, "pipeFromArray");
+__name22(pipeFromArray, "pipeFromArray");
 var Observable = (function() {
   function Observable2(subscribe) {
     if (subscribe) {
@@ -1349,6 +1485,8 @@ var Observable = (function() {
     }
   }
   __name(Observable2, "Observable2");
+  __name2(Observable2, "Observable2");
+  __name22(Observable2, "Observable2");
   Observable2.prototype.lift = function(operator) {
     var observable2 = new Observable2();
     observable2.source = this;
@@ -1376,7 +1514,7 @@ var Observable = (function() {
     promiseCtor = getPromiseCtor(promiseCtor);
     return new promiseCtor(function(resolve, reject) {
       var subscriber = new SafeSubscriber({
-        next: /* @__PURE__ */ __name(function(value) {
+        next: /* @__PURE__ */ __name22(function(value) {
           try {
             next(value);
           } catch (err) {
@@ -1428,18 +1566,26 @@ function getPromiseCtor(promiseCtor) {
   return (_a = promiseCtor !== null && promiseCtor !== void 0 ? promiseCtor : config.Promise) !== null && _a !== void 0 ? _a : Promise;
 }
 __name(getPromiseCtor, "getPromiseCtor");
+__name2(getPromiseCtor, "getPromiseCtor");
+__name22(getPromiseCtor, "getPromiseCtor");
 function isObserver(value) {
   return value && isFunction(value.next) && isFunction(value.error) && isFunction(value.complete);
 }
 __name(isObserver, "isObserver");
+__name2(isObserver, "isObserver");
+__name22(isObserver, "isObserver");
 function isSubscriber(value) {
   return value && value instanceof Subscriber || isObserver(value) && isSubscription(value);
 }
 __name(isSubscriber, "isSubscriber");
+__name2(isSubscriber, "isSubscriber");
+__name22(isSubscriber, "isSubscriber");
 function hasLift(source2) {
   return isFunction(source2 === null || source2 === void 0 ? void 0 : source2.lift);
 }
 __name(hasLift, "hasLift");
+__name2(hasLift, "hasLift");
+__name22(hasLift, "hasLift");
 function operate(init) {
   return function(source2) {
     if (hasLift(source2)) {
@@ -1455,10 +1601,14 @@ function operate(init) {
   };
 }
 __name(operate, "operate");
+__name2(operate, "operate");
+__name22(operate, "operate");
 function createOperatorSubscriber(destination, onNext, onComplete, onError, onFinalize) {
   return new OperatorSubscriber(destination, onNext, onComplete, onError, onFinalize);
 }
 __name(createOperatorSubscriber, "createOperatorSubscriber");
+__name2(createOperatorSubscriber, "createOperatorSubscriber");
+__name22(createOperatorSubscriber, "createOperatorSubscriber");
 var OperatorSubscriber = (function(_super) {
   __extends(OperatorSubscriber2, _super);
   function OperatorSubscriber2(destination, onNext, onComplete, onError, onFinalize, shouldUnsubscribe) {
@@ -1493,6 +1643,8 @@ var OperatorSubscriber = (function(_super) {
     return _this;
   }
   __name(OperatorSubscriber2, "OperatorSubscriber2");
+  __name2(OperatorSubscriber2, "OperatorSubscriber2");
+  __name22(OperatorSubscriber2, "OperatorSubscriber2");
   OperatorSubscriber2.prototype.unsubscribe = function() {
     var _a;
     if (!this.shouldUnsubscribe || this.shouldUnsubscribe()) {
@@ -1504,11 +1656,11 @@ var OperatorSubscriber = (function(_super) {
   return OperatorSubscriber2;
 })(Subscriber);
 var ObjectUnsubscribedError = createErrorClass(function(_super) {
-  return /* @__PURE__ */ __name(function ObjectUnsubscribedErrorImpl() {
+  return /* @__PURE__ */ __name22(/* @__PURE__ */ __name2(/* @__PURE__ */ __name(function ObjectUnsubscribedErrorImpl() {
     _super(this);
     this.name = "ObjectUnsubscribedError";
     this.message = "object unsubscribed";
-  }, "ObjectUnsubscribedErrorImpl");
+  }, "ObjectUnsubscribedErrorImpl"), "ObjectUnsubscribedErrorImpl"), "ObjectUnsubscribedErrorImpl");
 });
 var Subject = (function(_super) {
   __extends(Subject2, _super);
@@ -1523,6 +1675,8 @@ var Subject = (function(_super) {
     return _this;
   }
   __name(Subject2, "Subject2");
+  __name2(Subject2, "Subject2");
+  __name22(Subject2, "Subject2");
   Subject2.prototype.lift = function(operator) {
     var subject = new AnonymousSubject(this, this);
     subject.operator = operator;
@@ -1591,7 +1745,7 @@ var Subject = (function(_super) {
     this.observers = this.currentObservers = null;
   };
   Object.defineProperty(Subject2.prototype, "observed", {
-    get: /* @__PURE__ */ __name(function() {
+    get: /* @__PURE__ */ __name22(function() {
       var _a;
       return ((_a = this.observers) === null || _a === void 0 ? void 0 : _a.length) > 0;
     }, "get"),
@@ -1647,6 +1801,8 @@ var AnonymousSubject = (function(_super) {
     return _this;
   }
   __name(AnonymousSubject2, "AnonymousSubject2");
+  __name2(AnonymousSubject2, "AnonymousSubject2");
+  __name22(AnonymousSubject2, "AnonymousSubject2");
   AnonymousSubject2.prototype.next = function(value) {
     var _a, _b;
     (_b = (_a = this.destination) === null || _a === void 0 ? void 0 : _a.next) === null || _b === void 0 ? void 0 : _b.call(_a, value);
@@ -1666,7 +1822,7 @@ var AnonymousSubject = (function(_super) {
   return AnonymousSubject2;
 })(Subject);
 var dateTimestampProvider = {
-  now: /* @__PURE__ */ __name(function() {
+  now: /* @__PURE__ */ __name22(function() {
     return (dateTimestampProvider.delegate || Date).now();
   }, "now"),
   delegate: void 0
@@ -1695,6 +1851,8 @@ var ReplaySubject = (function(_super) {
     return _this;
   }
   __name(ReplaySubject2, "ReplaySubject2");
+  __name2(ReplaySubject2, "ReplaySubject2");
+  __name22(ReplaySubject2, "ReplaySubject2");
   ReplaySubject2.prototype.next = function(value) {
     var _a = this, isStopped = _a.isStopped, _buffer = _a._buffer, _infiniteTimeWindow = _a._infiniteTimeWindow, _timestampProvider = _a._timestampProvider, _windowTime = _a._windowTime;
     if (!isStopped) {
@@ -1737,6 +1895,8 @@ var Action = (function(_super) {
     return _super.call(this) || this;
   }
   __name(Action2, "Action2");
+  __name2(Action2, "Action2");
+  __name22(Action2, "Action2");
   Action2.prototype.schedule = function(state, delay2) {
     if (delay2 === void 0) {
       delay2 = 0;
@@ -1746,7 +1906,7 @@ var Action = (function(_super) {
   return Action2;
 })(Subscription);
 var intervalProvider = {
-  setInterval: /* @__PURE__ */ __name(function(handler, timeout2) {
+  setInterval: /* @__PURE__ */ __name22(function(handler, timeout2) {
     var args = [];
     for (var _i = 2; _i < arguments.length; _i++) {
       args[_i - 2] = arguments[_i];
@@ -1757,7 +1917,7 @@ var intervalProvider = {
     }
     return setInterval.apply(void 0, __spreadArray([handler, timeout2], __read(args)));
   }, "setInterval"),
-  clearInterval: /* @__PURE__ */ __name(function(handle) {
+  clearInterval: /* @__PURE__ */ __name22(function(handle) {
     var delegate = intervalProvider.delegate;
     return ((delegate === null || delegate === void 0 ? void 0 : delegate.clearInterval) || clearInterval)(handle);
   }, "clearInterval"),
@@ -1773,6 +1933,8 @@ var AsyncAction = (function(_super) {
     return _this;
   }
   __name(AsyncAction2, "AsyncAction2");
+  __name2(AsyncAction2, "AsyncAction2");
+  __name22(AsyncAction2, "AsyncAction2");
   AsyncAction2.prototype.schedule = function(state, delay2) {
     var _a;
     if (delay2 === void 0) {
@@ -1861,6 +2023,8 @@ var Scheduler = (function() {
     this.now = now;
   }
   __name(Scheduler2, "Scheduler2");
+  __name2(Scheduler2, "Scheduler2");
+  __name22(Scheduler2, "Scheduler2");
   Scheduler2.prototype.schedule = function(work, delay2, state) {
     if (delay2 === void 0) {
       delay2 = 0;
@@ -1882,6 +2046,8 @@ var AsyncScheduler = (function(_super) {
     return _this;
   }
   __name(AsyncScheduler2, "AsyncScheduler2");
+  __name2(AsyncScheduler2, "AsyncScheduler2");
+  __name22(AsyncScheduler2, "AsyncScheduler2");
   AsyncScheduler2.prototype.flush = function(action) {
     var actions = this.actions;
     if (this._active) {
@@ -1914,37 +2080,53 @@ function isScheduler(value) {
   return value && isFunction(value.schedule);
 }
 __name(isScheduler, "isScheduler");
+__name2(isScheduler, "isScheduler");
+__name22(isScheduler, "isScheduler");
 function last(arr) {
   return arr[arr.length - 1];
 }
 __name(last, "last");
+__name2(last, "last");
+__name22(last, "last");
 function popScheduler(args) {
   return isScheduler(last(args)) ? args.pop() : void 0;
 }
 __name(popScheduler, "popScheduler");
+__name2(popScheduler, "popScheduler");
+__name22(popScheduler, "popScheduler");
 function popNumber(args, defaultValue) {
   return typeof last(args) === "number" ? args.pop() : defaultValue;
 }
 __name(popNumber, "popNumber");
-var isArrayLike = /* @__PURE__ */ __name(function(x) {
+__name2(popNumber, "popNumber");
+__name22(popNumber, "popNumber");
+var isArrayLike = /* @__PURE__ */ __name22(function(x) {
   return x && typeof x.length === "number" && typeof x !== "function";
 }, "isArrayLike");
 function isPromise(value) {
   return isFunction(value === null || value === void 0 ? void 0 : value.then);
 }
 __name(isPromise, "isPromise");
+__name2(isPromise, "isPromise");
+__name22(isPromise, "isPromise");
 function isInteropObservable(input) {
   return isFunction(input[observable]);
 }
 __name(isInteropObservable, "isInteropObservable");
+__name2(isInteropObservable, "isInteropObservable");
+__name22(isInteropObservable, "isInteropObservable");
 function isAsyncIterable(obj) {
   return Symbol.asyncIterator && isFunction(obj === null || obj === void 0 ? void 0 : obj[Symbol.asyncIterator]);
 }
 __name(isAsyncIterable, "isAsyncIterable");
+__name2(isAsyncIterable, "isAsyncIterable");
+__name22(isAsyncIterable, "isAsyncIterable");
 function createInvalidObservableTypeError(input) {
   return new TypeError("You provided " + (input !== null && typeof input === "object" ? "an invalid object" : "'" + input + "'") + " where a stream was expected. You can provide an Observable, Promise, ReadableStream, Array, AsyncIterable, or Iterable.");
 }
 __name(createInvalidObservableTypeError, "createInvalidObservableTypeError");
+__name2(createInvalidObservableTypeError, "createInvalidObservableTypeError");
+__name22(createInvalidObservableTypeError, "createInvalidObservableTypeError");
 function getSymbolIterator() {
   if (typeof Symbol !== "function" || !Symbol.iterator) {
     return "@@iterator";
@@ -1952,13 +2134,17 @@ function getSymbolIterator() {
   return Symbol.iterator;
 }
 __name(getSymbolIterator, "getSymbolIterator");
+__name2(getSymbolIterator, "getSymbolIterator");
+__name22(getSymbolIterator, "getSymbolIterator");
 var iterator = getSymbolIterator();
 function isIterable(input) {
   return isFunction(input === null || input === void 0 ? void 0 : input[iterator]);
 }
 __name(isIterable, "isIterable");
+__name2(isIterable, "isIterable");
+__name22(isIterable, "isIterable");
 function readableStreamLikeToAsyncGenerator(readableStream) {
-  return __asyncGenerator(this, arguments, /* @__PURE__ */ __name(function readableStreamLikeToAsyncGenerator_1() {
+  return __asyncGenerator(this, arguments, /* @__PURE__ */ __name22(/* @__PURE__ */ __name2(/* @__PURE__ */ __name(function readableStreamLikeToAsyncGenerator_1() {
     var reader, _a, value, done;
     return __generator(this, function(_b) {
       switch (_b.label) {
@@ -1993,13 +2179,17 @@ function readableStreamLikeToAsyncGenerator(readableStream) {
           return [2];
       }
     });
-  }, "readableStreamLikeToAsyncGenerator_1"));
+  }, "readableStreamLikeToAsyncGenerator_1"), "readableStreamLikeToAsyncGenerator_1"), "readableStreamLikeToAsyncGenerator_1"));
 }
 __name(readableStreamLikeToAsyncGenerator, "readableStreamLikeToAsyncGenerator");
+__name2(readableStreamLikeToAsyncGenerator, "readableStreamLikeToAsyncGenerator");
+__name22(readableStreamLikeToAsyncGenerator, "readableStreamLikeToAsyncGenerator");
 function isReadableStreamLike(obj) {
   return isFunction(obj === null || obj === void 0 ? void 0 : obj.getReader);
 }
 __name(isReadableStreamLike, "isReadableStreamLike");
+__name2(isReadableStreamLike, "isReadableStreamLike");
+__name22(isReadableStreamLike, "isReadableStreamLike");
 function innerFrom(input) {
   if (input instanceof Observable) {
     return input;
@@ -2027,6 +2217,8 @@ function innerFrom(input) {
   throw createInvalidObservableTypeError(input);
 }
 __name(innerFrom, "innerFrom");
+__name2(innerFrom, "innerFrom");
+__name22(innerFrom, "innerFrom");
 function fromInteropObservable(obj) {
   return new Observable(function(subscriber) {
     var obs = obj[observable]();
@@ -2037,6 +2229,8 @@ function fromInteropObservable(obj) {
   });
 }
 __name(fromInteropObservable, "fromInteropObservable");
+__name2(fromInteropObservable, "fromInteropObservable");
+__name22(fromInteropObservable, "fromInteropObservable");
 function fromArrayLike(array) {
   return new Observable(function(subscriber) {
     for (var i = 0; i < array.length && !subscriber.closed; i++) {
@@ -2046,6 +2240,8 @@ function fromArrayLike(array) {
   });
 }
 __name(fromArrayLike, "fromArrayLike");
+__name2(fromArrayLike, "fromArrayLike");
+__name22(fromArrayLike, "fromArrayLike");
 function fromPromise(promise) {
   return new Observable(function(subscriber) {
     promise.then(function(value) {
@@ -2059,6 +2255,8 @@ function fromPromise(promise) {
   });
 }
 __name(fromPromise, "fromPromise");
+__name2(fromPromise, "fromPromise");
+__name22(fromPromise, "fromPromise");
 function fromIterable(iterable) {
   return new Observable(function(subscriber) {
     var e_1, _a;
@@ -2083,6 +2281,8 @@ function fromIterable(iterable) {
   });
 }
 __name(fromIterable, "fromIterable");
+__name2(fromIterable, "fromIterable");
+__name22(fromIterable, "fromIterable");
 function fromAsyncIterable(asyncIterable) {
   return new Observable(function(subscriber) {
     process2(asyncIterable, subscriber).catch(function(err) {
@@ -2091,10 +2291,14 @@ function fromAsyncIterable(asyncIterable) {
   });
 }
 __name(fromAsyncIterable, "fromAsyncIterable");
+__name2(fromAsyncIterable, "fromAsyncIterable");
+__name22(fromAsyncIterable, "fromAsyncIterable");
 function fromReadableStreamLike(readableStream) {
   return fromAsyncIterable(readableStreamLikeToAsyncGenerator(readableStream));
 }
 __name(fromReadableStreamLike, "fromReadableStreamLike");
+__name2(fromReadableStreamLike, "fromReadableStreamLike");
+__name22(fromReadableStreamLike, "fromReadableStreamLike");
 function process2(asyncIterable, subscriber) {
   var asyncIterable_1, asyncIterable_1_1;
   var e_2, _a;
@@ -2145,7 +2349,9 @@ function process2(asyncIterable, subscriber) {
     });
   });
 }
-__name(process2, "process");
+__name(process2, "process2");
+__name2(process2, "process2");
+__name22(process2, "process");
 function executeSchedule(parentSubscription, scheduler, work, delay2, repeat) {
   if (delay2 === void 0) {
     delay2 = 0;
@@ -2167,6 +2373,8 @@ function executeSchedule(parentSubscription, scheduler, work, delay2, repeat) {
   }
 }
 __name(executeSchedule, "executeSchedule");
+__name2(executeSchedule, "executeSchedule");
+__name22(executeSchedule, "executeSchedule");
 function observeOn(scheduler, delay2) {
   if (delay2 === void 0) {
     delay2 = 0;
@@ -2188,6 +2396,8 @@ function observeOn(scheduler, delay2) {
   });
 }
 __name(observeOn, "observeOn");
+__name2(observeOn, "observeOn");
+__name22(observeOn, "observeOn");
 function subscribeOn(scheduler, delay2) {
   if (delay2 === void 0) {
     delay2 = 0;
@@ -2199,14 +2409,20 @@ function subscribeOn(scheduler, delay2) {
   });
 }
 __name(subscribeOn, "subscribeOn");
+__name2(subscribeOn, "subscribeOn");
+__name22(subscribeOn, "subscribeOn");
 function scheduleObservable(input, scheduler) {
   return innerFrom(input).pipe(subscribeOn(scheduler), observeOn(scheduler));
 }
 __name(scheduleObservable, "scheduleObservable");
+__name2(scheduleObservable, "scheduleObservable");
+__name22(scheduleObservable, "scheduleObservable");
 function schedulePromise(input, scheduler) {
   return innerFrom(input).pipe(subscribeOn(scheduler), observeOn(scheduler));
 }
 __name(schedulePromise, "schedulePromise");
+__name2(schedulePromise, "schedulePromise");
+__name22(schedulePromise, "schedulePromise");
 function scheduleArray(input, scheduler) {
   return new Observable(function(subscriber) {
     var i = 0;
@@ -2223,6 +2439,8 @@ function scheduleArray(input, scheduler) {
   });
 }
 __name(scheduleArray, "scheduleArray");
+__name2(scheduleArray, "scheduleArray");
+__name22(scheduleArray, "scheduleArray");
 function scheduleIterable(input, scheduler) {
   return new Observable(function(subscriber) {
     var iterator2;
@@ -2251,6 +2469,8 @@ function scheduleIterable(input, scheduler) {
   });
 }
 __name(scheduleIterable, "scheduleIterable");
+__name2(scheduleIterable, "scheduleIterable");
+__name22(scheduleIterable, "scheduleIterable");
 function scheduleAsyncIterable(input, scheduler) {
   if (!input) {
     throw new Error("Iterable cannot be null");
@@ -2271,10 +2491,14 @@ function scheduleAsyncIterable(input, scheduler) {
   });
 }
 __name(scheduleAsyncIterable, "scheduleAsyncIterable");
+__name2(scheduleAsyncIterable, "scheduleAsyncIterable");
+__name22(scheduleAsyncIterable, "scheduleAsyncIterable");
 function scheduleReadableStreamLike(input, scheduler) {
   return scheduleAsyncIterable(readableStreamLikeToAsyncGenerator(input), scheduler);
 }
 __name(scheduleReadableStreamLike, "scheduleReadableStreamLike");
+__name2(scheduleReadableStreamLike, "scheduleReadableStreamLike");
+__name22(scheduleReadableStreamLike, "scheduleReadableStreamLike");
 function scheduled(input, scheduler) {
   if (input != null) {
     if (isInteropObservable(input)) {
@@ -2299,10 +2523,14 @@ function scheduled(input, scheduler) {
   throw createInvalidObservableTypeError(input);
 }
 __name(scheduled, "scheduled");
+__name2(scheduled, "scheduled");
+__name22(scheduled, "scheduled");
 function from(input, scheduler) {
   return scheduler ? scheduled(input, scheduler) : innerFrom(input);
 }
 __name(from, "from");
+__name2(from, "from");
+__name22(from, "from");
 function of() {
   var args = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -2312,23 +2540,25 @@ function of() {
   return from(args, scheduler);
 }
 __name(of, "of");
+__name2(of, "of");
+__name22(of, "of");
 var EmptyError = createErrorClass(function(_super) {
-  return /* @__PURE__ */ __name(function EmptyErrorImpl() {
+  return /* @__PURE__ */ __name22(/* @__PURE__ */ __name2(/* @__PURE__ */ __name(function EmptyErrorImpl() {
     _super(this);
     this.name = "EmptyError";
     this.message = "no elements in sequence";
-  }, "EmptyErrorImpl");
+  }, "EmptyErrorImpl"), "EmptyErrorImpl"), "EmptyErrorImpl");
 });
 function firstValueFrom(source2, config2) {
   var hasConfig = typeof config2 === "object";
   return new Promise(function(resolve, reject) {
     var subscriber = new SafeSubscriber({
-      next: /* @__PURE__ */ __name(function(value) {
+      next: /* @__PURE__ */ __name22(function(value) {
         resolve(value);
         subscriber.unsubscribe();
       }, "next"),
       error: reject,
-      complete: /* @__PURE__ */ __name(function() {
+      complete: /* @__PURE__ */ __name22(function() {
         if (hasConfig) {
           resolve(config2.defaultValue);
         } else {
@@ -2340,10 +2570,14 @@ function firstValueFrom(source2, config2) {
   });
 }
 __name(firstValueFrom, "firstValueFrom");
+__name2(firstValueFrom, "firstValueFrom");
+__name22(firstValueFrom, "firstValueFrom");
 function isValidDate(value) {
   return value instanceof Date && !isNaN(value);
 }
 __name(isValidDate, "isValidDate");
+__name2(isValidDate, "isValidDate");
+__name22(isValidDate, "isValidDate");
 function map(project, thisArg) {
   return operate(function(source2, subscriber) {
     var index = 0;
@@ -2353,32 +2587,38 @@ function map(project, thisArg) {
   });
 }
 __name(map, "map");
+__name2(map, "map");
+__name22(map, "map");
 var isArray = Array.isArray;
 function callOrApply(fn, args) {
   return isArray(args) ? fn.apply(void 0, __spreadArray([], __read(args))) : fn(args);
 }
 __name(callOrApply, "callOrApply");
+__name2(callOrApply, "callOrApply");
+__name22(callOrApply, "callOrApply");
 function mapOneOrManyArgs(fn) {
   return map(function(args) {
     return callOrApply(fn, args);
   });
 }
 __name(mapOneOrManyArgs, "mapOneOrManyArgs");
+__name2(mapOneOrManyArgs, "mapOneOrManyArgs");
+__name22(mapOneOrManyArgs, "mapOneOrManyArgs");
 var objectProto = Object.prototype;
 function mergeInternals(source2, subscriber, project, concurrent, onBeforeNext, expand, innerSubScheduler, additionalFinalizer) {
   var buffer = [];
   var active = 0;
   var index = 0;
   var isComplete = false;
-  var checkComplete = /* @__PURE__ */ __name(function() {
+  var checkComplete = /* @__PURE__ */ __name22(function() {
     if (isComplete && !buffer.length && !active) {
       subscriber.complete();
     }
   }, "checkComplete");
-  var outerNext = /* @__PURE__ */ __name(function(value) {
+  var outerNext = /* @__PURE__ */ __name22(function(value) {
     return active < concurrent ? doInnerSub(value) : buffer.push(value);
   }, "outerNext");
-  var doInnerSub = /* @__PURE__ */ __name(function(value) {
+  var doInnerSub = /* @__PURE__ */ __name22(function(value) {
     expand && subscriber.next(value);
     active++;
     var innerComplete = false;
@@ -2395,7 +2635,7 @@ function mergeInternals(source2, subscriber, project, concurrent, onBeforeNext, 
       if (innerComplete) {
         try {
           active--;
-          var _loop_1 = /* @__PURE__ */ __name(function() {
+          var _loop_1 = /* @__PURE__ */ __name22(function() {
             var bufferedValue = buffer.shift();
             if (innerSubScheduler) {
               executeSchedule(subscriber, innerSubScheduler, function() {
@@ -2424,6 +2664,8 @@ function mergeInternals(source2, subscriber, project, concurrent, onBeforeNext, 
   };
 }
 __name(mergeInternals, "mergeInternals");
+__name2(mergeInternals, "mergeInternals");
+__name22(mergeInternals, "mergeInternals");
 function mergeMap(project, resultSelector, concurrent) {
   if (concurrent === void 0) {
     concurrent = Infinity;
@@ -2442,6 +2684,8 @@ function mergeMap(project, resultSelector, concurrent) {
   });
 }
 __name(mergeMap, "mergeMap");
+__name2(mergeMap, "mergeMap");
+__name22(mergeMap, "mergeMap");
 function mergeAll(concurrent) {
   if (concurrent === void 0) {
     concurrent = Infinity;
@@ -2449,10 +2693,14 @@ function mergeAll(concurrent) {
   return mergeMap(identity, concurrent);
 }
 __name(mergeAll, "mergeAll");
+__name2(mergeAll, "mergeAll");
+__name22(mergeAll, "mergeAll");
 function concatAll() {
   return mergeAll(1);
 }
 __name(concatAll, "concatAll");
+__name2(concatAll, "concatAll");
+__name22(concatAll, "concatAll");
 function concat() {
   var args = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -2461,12 +2709,16 @@ function concat() {
   return concatAll()(from(args, popScheduler(args)));
 }
 __name(concat, "concat");
+__name2(concat, "concat");
+__name22(concat, "concat");
 function defer(observableFactory) {
   return new Observable(function(subscriber) {
     innerFrom(observableFactory()).subscribe(subscriber);
   });
 }
 __name(defer, "defer");
+__name2(defer, "defer");
+__name22(defer, "defer");
 var nodeEventEmitterMethods = ["addListener", "removeListener"];
 var eventTargetMethods = ["addEventListener", "removeEventListener"];
 var jqueryMethods = ["on", "off"];
@@ -2494,7 +2746,7 @@ function fromEvent(target, eventName, options, resultSelector) {
     throw new TypeError("Invalid event target");
   }
   return new Observable(function(subscriber) {
-    var handler = /* @__PURE__ */ __name(function() {
+    var handler = /* @__PURE__ */ __name22(function() {
       var args = [];
       for (var _i = 0; _i < arguments.length; _i++) {
         args[_i] = arguments[_i];
@@ -2508,6 +2760,8 @@ function fromEvent(target, eventName, options, resultSelector) {
   });
 }
 __name(fromEvent, "fromEvent");
+__name2(fromEvent, "fromEvent");
+__name22(fromEvent, "fromEvent");
 function toCommonHandlerRegistry(target, eventName) {
   return function(methodName) {
     return function(handler) {
@@ -2516,18 +2770,26 @@ function toCommonHandlerRegistry(target, eventName) {
   };
 }
 __name(toCommonHandlerRegistry, "toCommonHandlerRegistry");
+__name2(toCommonHandlerRegistry, "toCommonHandlerRegistry");
+__name22(toCommonHandlerRegistry, "toCommonHandlerRegistry");
 function isNodeStyleEventEmitter(target) {
   return isFunction(target.addListener) && isFunction(target.removeListener);
 }
 __name(isNodeStyleEventEmitter, "isNodeStyleEventEmitter");
+__name2(isNodeStyleEventEmitter, "isNodeStyleEventEmitter");
+__name22(isNodeStyleEventEmitter, "isNodeStyleEventEmitter");
 function isJQueryStyleEventEmitter(target) {
   return isFunction(target.on) && isFunction(target.off);
 }
 __name(isJQueryStyleEventEmitter, "isJQueryStyleEventEmitter");
+__name2(isJQueryStyleEventEmitter, "isJQueryStyleEventEmitter");
+__name22(isJQueryStyleEventEmitter, "isJQueryStyleEventEmitter");
 function isEventTarget(target) {
   return isFunction(target.addEventListener) && isFunction(target.removeEventListener);
 }
 __name(isEventTarget, "isEventTarget");
+__name2(isEventTarget, "isEventTarget");
+__name22(isEventTarget, "isEventTarget");
 function timer(dueTime, intervalOrScheduler, scheduler) {
   if (dueTime === void 0) {
     dueTime = 0;
@@ -2562,6 +2824,8 @@ function timer(dueTime, intervalOrScheduler, scheduler) {
   });
 }
 __name(timer, "timer");
+__name2(timer, "timer");
+__name22(timer, "timer");
 function merge() {
   var args = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -2573,12 +2837,16 @@ function merge() {
   return !sources.length ? EMPTY : sources.length === 1 ? innerFrom(sources[0]) : mergeAll(concurrent)(from(sources, scheduler));
 }
 __name(merge, "merge");
+__name2(merge, "merge");
+__name22(merge, "merge");
 var NEVER = new Observable(noop);
 var isArray3 = Array.isArray;
 function argsOrArgArray(args) {
   return args.length === 1 && isArray3(args[0]) ? args[0] : args;
 }
 __name(argsOrArgArray, "argsOrArgArray");
+__name2(argsOrArgArray, "argsOrArgArray");
+__name22(argsOrArgArray, "argsOrArgArray");
 function filter(predicate, thisArg) {
   return operate(function(source2, subscriber) {
     var index = 0;
@@ -2588,6 +2856,8 @@ function filter(predicate, thisArg) {
   });
 }
 __name(filter, "filter");
+__name2(filter, "filter");
+__name22(filter, "filter");
 function race() {
   var sources = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -2597,10 +2867,12 @@ function race() {
   return sources.length === 1 ? innerFrom(sources[0]) : new Observable(raceInit(sources));
 }
 __name(race, "race");
+__name2(race, "race");
+__name22(race, "race");
 function raceInit(sources) {
   return function(subscriber) {
     var subscriptions = [];
-    var _loop_1 = /* @__PURE__ */ __name(function(i2) {
+    var _loop_1 = /* @__PURE__ */ __name22(function(i2) {
       subscriptions.push(innerFrom(sources[i2]).subscribe(createOperatorSubscriber(subscriber, function(value) {
         if (subscriptions) {
           for (var s = 0; s < subscriptions.length; s++) {
@@ -2617,6 +2889,8 @@ function raceInit(sources) {
   };
 }
 __name(raceInit, "raceInit");
+__name2(raceInit, "raceInit");
+__name22(raceInit, "raceInit");
 function catchError(selector) {
   return operate(function(source2, subscriber) {
     var innerSub = null;
@@ -2640,6 +2914,8 @@ function catchError(selector) {
   });
 }
 __name(catchError, "catchError");
+__name2(catchError, "catchError");
+__name22(catchError, "catchError");
 function defaultIfEmpty(defaultValue) {
   return operate(function(source2, subscriber) {
     var hasValue = false;
@@ -2655,6 +2931,8 @@ function defaultIfEmpty(defaultValue) {
   });
 }
 __name(defaultIfEmpty, "defaultIfEmpty");
+__name2(defaultIfEmpty, "defaultIfEmpty");
+__name22(defaultIfEmpty, "defaultIfEmpty");
 function take(count) {
   return count <= 0 ? function() {
     return EMPTY;
@@ -2671,12 +2949,16 @@ function take(count) {
   });
 }
 __name(take, "take");
+__name2(take, "take");
+__name22(take, "take");
 function ignoreElements() {
   return operate(function(source2, subscriber) {
     source2.subscribe(createOperatorSubscriber(subscriber, noop));
   });
 }
 __name(ignoreElements, "ignoreElements");
+__name2(ignoreElements, "ignoreElements");
+__name22(ignoreElements, "ignoreElements");
 function throwIfEmpty(errorFactory) {
   if (errorFactory === void 0) {
     errorFactory = defaultErrorFactory;
@@ -2692,10 +2974,14 @@ function throwIfEmpty(errorFactory) {
   });
 }
 __name(throwIfEmpty, "throwIfEmpty");
+__name2(throwIfEmpty, "throwIfEmpty");
+__name22(throwIfEmpty, "throwIfEmpty");
 function defaultErrorFactory() {
   return new EmptyError();
 }
 __name(defaultErrorFactory, "defaultErrorFactory");
+__name2(defaultErrorFactory, "defaultErrorFactory");
+__name22(defaultErrorFactory, "defaultErrorFactory");
 function first(predicate, defaultValue) {
   var hasDefaultValue = arguments.length >= 2;
   return function(source2) {
@@ -2707,6 +2993,8 @@ function first(predicate, defaultValue) {
   };
 }
 __name(first, "first");
+__name2(first, "first");
+__name22(first, "first");
 function mergeScan(accumulator, seed, concurrent) {
   if (concurrent === void 0) {
     concurrent = Infinity;
@@ -2723,6 +3011,8 @@ function mergeScan(accumulator, seed, concurrent) {
   });
 }
 __name(mergeScan, "mergeScan");
+__name2(mergeScan, "mergeScan");
+__name22(mergeScan, "mergeScan");
 function raceWith() {
   var otherSources = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -2733,6 +3023,8 @@ function raceWith() {
   });
 }
 __name(raceWith, "raceWith");
+__name2(raceWith, "raceWith");
+__name22(raceWith, "raceWith");
 function retry(configOrCount) {
   if (configOrCount === void 0) {
     configOrCount = Infinity;
@@ -2749,7 +3041,7 @@ function retry(configOrCount) {
   return count <= 0 ? identity : operate(function(source2, subscriber) {
     var soFar = 0;
     var innerSub;
-    var subscribeForRetry = /* @__PURE__ */ __name(function() {
+    var subscribeForRetry = /* @__PURE__ */ __name22(function() {
       var syncUnsub = false;
       innerSub = source2.subscribe(createOperatorSubscriber(subscriber, function(value) {
         if (resetOnSuccess) {
@@ -2758,7 +3050,7 @@ function retry(configOrCount) {
         subscriber.next(value);
       }, void 0, function(err) {
         if (soFar++ < count) {
-          var resub_1 = /* @__PURE__ */ __name(function() {
+          var resub_1 = /* @__PURE__ */ __name22(function() {
             if (innerSub) {
               innerSub.unsubscribe();
               innerSub = null;
@@ -2793,6 +3085,8 @@ function retry(configOrCount) {
   });
 }
 __name(retry, "retry");
+__name2(retry, "retry");
+__name22(retry, "retry");
 function startWith() {
   var values = [];
   for (var _i = 0; _i < arguments.length; _i++) {
@@ -2804,12 +3098,14 @@ function startWith() {
   });
 }
 __name(startWith, "startWith");
+__name2(startWith, "startWith");
+__name22(startWith, "startWith");
 function switchMap(project, resultSelector) {
   return operate(function(source2, subscriber) {
     var innerSubscriber = null;
     var index = 0;
     var isComplete = false;
-    var checkComplete = /* @__PURE__ */ __name(function() {
+    var checkComplete = /* @__PURE__ */ __name22(function() {
       return isComplete && !innerSubscriber && subscriber.complete();
     }, "checkComplete");
     source2.subscribe(createOperatorSubscriber(subscriber, function(value) {
@@ -2829,6 +3125,8 @@ function switchMap(project, resultSelector) {
   });
 }
 __name(switchMap, "switchMap");
+__name2(switchMap, "switchMap");
+__name22(switchMap, "switchMap");
 function takeUntil(notifier) {
   return operate(function(source2, subscriber) {
     innerFrom(notifier).subscribe(createOperatorSubscriber(subscriber, function() {
@@ -2838,6 +3136,8 @@ function takeUntil(notifier) {
   });
 }
 __name(takeUntil, "takeUntil");
+__name2(takeUntil, "takeUntil");
+__name22(takeUntil, "takeUntil");
 function tap(observerOrNext, error, complete) {
   var tapObserver = isFunction(observerOrNext) || error || complete ? { next: observerOrNext, error, complete } : observerOrNext;
   return tapObserver ? operate(function(source2, subscriber) {
@@ -2868,21 +3168,15 @@ function tap(observerOrNext, error, complete) {
   }) : identity;
 }
 __name(tap, "tap");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/util.js
+__name2(tap, "tap");
+__name22(tap, "tap");
 init_version();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/assert.js
-var assert = /* @__PURE__ */ __name((value, message) => {
+var assert = /* @__PURE__ */ __name22((value, message) => {
   if (!value) {
     throw new Error(message);
   }
 }, "assert");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/environment.js
 var isNode = !!(typeof process !== "undefined" && process.version);
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/Debug.js
 var debugModule = null;
 async function importDebug() {
   if (!debugModule) {
@@ -2891,7 +3185,9 @@ async function importDebug() {
   return debugModule;
 }
 __name(importDebug, "importDebug");
-var debug = /* @__PURE__ */ __name((prefix) => {
+__name2(importDebug, "importDebug");
+__name22(importDebug, "importDebug");
+var debug = /* @__PURE__ */ __name22((prefix) => {
   if (isNode) {
     return async (...logArgs) => {
       if (captureLogs) {
@@ -2913,10 +3209,10 @@ var debug = /* @__PURE__ */ __name((prefix) => {
     }
     const everythingShouldBeLogged = debugLevel === "*";
     const prefixMatchesDebugLevel = everythingShouldBeLogged || /**
-     * If the debug level is `foo*`, that means we match any prefix that
-     * starts with `foo`. If the level is `foo`, we match only the prefix
-     * `foo`.
-     */
+    * If the debug level is `foo*`, that means we match any prefix that
+    * starts with `foo`. If the level is `foo`, we match only the prefix
+    * `foo`.
+    */
     (debugLevel.endsWith("*") ? prefix.startsWith(debugLevel) : prefix === debugLevel);
     if (!prefixMatchesDebugLevel) {
       return;
@@ -2926,11 +3222,15 @@ var debug = /* @__PURE__ */ __name((prefix) => {
 }, "debug");
 var capturedLogs = [];
 var captureLogs = false;
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/Errors.js
 var PuppeteerError = class extends Error {
   static {
     __name(this, "PuppeteerError");
+  }
+  static {
+    __name2(this, "PuppeteerError");
+  }
+  static {
+    __name22(this, "PuppeteerError");
   }
   /**
    * @internal
@@ -2950,10 +3250,22 @@ var TimeoutError = class extends PuppeteerError {
   static {
     __name(this, "TimeoutError");
   }
+  static {
+    __name2(this, "TimeoutError");
+  }
+  static {
+    __name22(this, "TimeoutError");
+  }
 };
 var ProtocolError = class extends PuppeteerError {
   static {
     __name(this, "ProtocolError");
+  }
+  static {
+    __name2(this, "ProtocolError");
+  }
+  static {
+    __name22(this, "ProtocolError");
   }
   #code;
   #originalMessage = "";
@@ -2982,14 +3294,24 @@ var UnsupportedOperation = class extends PuppeteerError {
   static {
     __name(this, "UnsupportedOperation");
   }
+  static {
+    __name2(this, "UnsupportedOperation");
+  }
+  static {
+    __name22(this, "UnsupportedOperation");
+  }
 };
 var TargetCloseError = class extends ProtocolError {
   static {
     __name(this, "TargetCloseError");
   }
+  static {
+    __name2(this, "TargetCloseError");
+  }
+  static {
+    __name22(this, "TargetCloseError");
+  }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/PDFOptions.js
 var paperFormats = {
   letter: { width: 8.5, height: 11 },
   legal: { width: 8.5, height: 14 },
@@ -3003,14 +3325,18 @@ var paperFormats = {
   a5: { width: 5.83, height: 8.27 },
   a6: { width: 4.13, height: 5.83 }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/util.js
 var debugError = debug("puppeteer:error");
 var DEFAULT_VIEWPORT = Object.freeze({ width: 800, height: 600 });
 var SOURCE_URL = /* @__PURE__ */ Symbol("Source URL for Puppeteer evaluation scripts");
 var PuppeteerURL = class _PuppeteerURL {
   static {
-    __name(this, "PuppeteerURL");
+    __name(this, "_PuppeteerURL");
+  }
+  static {
+    __name2(this, "_PuppeteerURL");
+  }
+  static {
+    __name22(this, "PuppeteerURL");
   }
   static INTERNAL_URL = "pptr:internal";
   static fromCallSite(functionName, site) {
@@ -3019,7 +3345,7 @@ var PuppeteerURL = class _PuppeteerURL {
     url.#siteString = site.toString();
     return url;
   }
-  static parse = /* @__PURE__ */ __name((url) => {
+  static parse = /* @__PURE__ */ __name22((url) => {
     url = url.slice("pptr:".length);
     const [functionName = "", siteString = ""] = url.split(";");
     const puppeteerUrl = new _PuppeteerURL();
@@ -3027,7 +3353,7 @@ var PuppeteerURL = class _PuppeteerURL {
     puppeteerUrl.#siteString = decodeURIComponent(siteString);
     return puppeteerUrl;
   }, "parse");
-  static isPuppeteerURL = /* @__PURE__ */ __name((url) => {
+  static isPuppeteerURL = /* @__PURE__ */ __name22((url) => {
     return url.startsWith("pptr:");
   }, "isPuppeteerURL");
   #functionName;
@@ -3045,7 +3371,7 @@ var PuppeteerURL = class _PuppeteerURL {
     ].join(";")}`;
   }
 };
-var withSourcePuppeteerURLIfNone = /* @__PURE__ */ __name((functionName, object) => {
+var withSourcePuppeteerURLIfNone = /* @__PURE__ */ __name22((functionName, object) => {
   if (Object.prototype.hasOwnProperty.call(object, SOURCE_URL)) {
     return object;
   }
@@ -3059,16 +3385,16 @@ var withSourcePuppeteerURLIfNone = /* @__PURE__ */ __name((functionName, object)
     [SOURCE_URL]: PuppeteerURL.fromCallSite(functionName, site)
   });
 }, "withSourcePuppeteerURLIfNone");
-var getSourcePuppeteerURLIfAvailable = /* @__PURE__ */ __name((object) => {
+var getSourcePuppeteerURLIfAvailable = /* @__PURE__ */ __name22((object) => {
   if (Object.prototype.hasOwnProperty.call(object, SOURCE_URL)) {
     return object[SOURCE_URL];
   }
   return void 0;
 }, "getSourcePuppeteerURLIfAvailable");
-var isString = /* @__PURE__ */ __name((obj) => {
+var isString = /* @__PURE__ */ __name22((obj) => {
   return typeof obj === "string" || obj instanceof String;
 }, "isString");
-var isNumber = /* @__PURE__ */ __name((obj) => {
+var isNumber = /* @__PURE__ */ __name22((obj) => {
   return typeof obj === "number" || obj instanceof Number;
 }, "isNumber");
 function evaluationString(fun, ...args) {
@@ -3083,10 +3409,14 @@ function evaluationString(fun, ...args) {
     return JSON.stringify(arg);
   }
   __name(serializeArgument, "serializeArgument");
+  __name2(serializeArgument, "serializeArgument");
+  __name22(serializeArgument, "serializeArgument");
   const script = `(${fun})(${args.map(serializeArgument).join(",")})`;
   return globalThis.navigator?.userAgent === "Cloudflare-Workers" ? `((__name => (${script}))(t => t))` : script;
 }
 __name(evaluationString, "evaluationString");
+__name2(evaluationString, "evaluationString");
+__name22(evaluationString, "evaluationString");
 var fs = null;
 async function importFSPromises() {
   if (!fs) {
@@ -3102,6 +3432,8 @@ async function importFSPromises() {
   return fs;
 }
 __name(importFSPromises, "importFSPromises");
+__name2(importFSPromises, "importFSPromises");
+__name22(importFSPromises, "importFSPromises");
 async function getReadableAsBuffer(readable, path) {
   const buffers = [];
   const reader = readable.getReader();
@@ -3124,6 +3456,8 @@ async function getReadableAsBuffer(readable, path) {
   }
 }
 __name(getReadableAsBuffer, "getReadableAsBuffer");
+__name2(getReadableAsBuffer, "getReadableAsBuffer");
+__name22(getReadableAsBuffer, "getReadableAsBuffer");
 async function getReadableFromProtocolStream(client, handle) {
   return new ReadableStream({
     async pull(controller) {
@@ -3140,6 +3474,8 @@ async function getReadableFromProtocolStream(client, handle) {
         return encoder.encode(data2);
       }
       __name(getUnit8Array, "getUnit8Array");
+      __name2(getUnit8Array, "getUnit8Array");
+      __name22(getUnit8Array, "getUnit8Array");
       const { data, base64Encoded, eof } = await client.send("IO.read", {
         handle
       });
@@ -3152,6 +3488,8 @@ async function getReadableFromProtocolStream(client, handle) {
   });
 }
 __name(getReadableFromProtocolStream, "getReadableFromProtocolStream");
+__name2(getReadableFromProtocolStream, "getReadableFromProtocolStream");
+__name22(getReadableFromProtocolStream, "getReadableFromProtocolStream");
 function validateDialogType(type) {
   let dialogType = null;
   const validDialogTypes = /* @__PURE__ */ new Set([
@@ -3167,18 +3505,24 @@ function validateDialogType(type) {
   return dialogType;
 }
 __name(validateDialogType, "validateDialogType");
+__name2(validateDialogType, "validateDialogType");
+__name22(validateDialogType, "validateDialogType");
 function timeout(ms, cause) {
   return ms === 0 ? NEVER : timer(ms).pipe(map(() => {
     throw new TimeoutError(`Timed out after waiting ${ms}ms`, { cause });
   }));
 }
 __name(timeout, "timeout");
+__name2(timeout, "timeout");
+__name22(timeout, "timeout");
 var UTILITY_WORLD_NAME = "__puppeteer_utility_world__" + packageVersion;
 var SOURCE_URL_REGEX = /^[\040\t]*\/\/[@#] sourceURL=\s*(\S*?)\s*$/m;
 function getSourceUrlComment(url) {
   return `//# sourceURL=${url}`;
 }
 __name(getSourceUrlComment, "getSourceUrlComment");
+__name2(getSourceUrlComment, "getSourceUrlComment");
+__name22(getSourceUrlComment, "getSourceUrlComment");
 var NETWORK_IDLE_TIME = 500;
 function parsePDFOptions(options = {}, lengthUnit = "in") {
   const defaults = {
@@ -3224,6 +3568,8 @@ function parsePDFOptions(options = {}, lengthUnit = "in") {
   };
 }
 __name(parsePDFOptions, "parsePDFOptions");
+__name2(parsePDFOptions, "parsePDFOptions");
+__name22(parsePDFOptions, "parsePDFOptions");
 var unitToPixels = {
   px: 1,
   in: 96,
@@ -3256,9 +3602,11 @@ function convertPrintParameterToInches(parameter, lengthUnit = "in") {
   return pixels / unitToPixels[lengthUnit];
 }
 __name(convertPrintParameterToInches, "convertPrintParameterToInches");
+__name2(convertPrintParameterToInches, "convertPrintParameterToInches");
+__name22(convertPrintParameterToInches, "convertPrintParameterToInches");
 function fromEmitterEvent(emitter, eventName) {
   return new Observable((subscriber) => {
-    const listener = /* @__PURE__ */ __name((event) => {
+    const listener = /* @__PURE__ */ __name22((event) => {
       subscriber.next(event);
     }, "listener");
     emitter.on(eventName, listener);
@@ -3268,6 +3616,8 @@ function fromEmitterEvent(emitter, eventName) {
   });
 }
 __name(fromEmitterEvent, "fromEmitterEvent");
+__name2(fromEmitterEvent, "fromEmitterEvent");
+__name22(fromEmitterEvent, "fromEmitterEvent");
 function fromAbortSignal(signal, cause) {
   return signal ? fromEvent(signal, "abort").pipe(map(() => {
     if (signal.reason instanceof Error) {
@@ -3278,6 +3628,8 @@ function fromAbortSignal(signal, cause) {
   })) : NEVER;
 }
 __name(fromAbortSignal, "fromAbortSignal");
+__name2(fromAbortSignal, "fromAbortSignal");
+__name22(fromAbortSignal, "fromAbortSignal");
 function filterAsync(predicate) {
   return mergeMap((value) => {
     return from(Promise.resolve(predicate(value))).pipe(filter((isMatch) => {
@@ -3288,16 +3640,16 @@ function filterAsync(predicate) {
   });
 }
 __name(filterAsync, "filterAsync");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/third_party/mitt/mitt.js
+__name2(filterAsync, "filterAsync");
+__name22(filterAsync, "filterAsync");
 function mitt_default(n) {
-  return { all: n = n || /* @__PURE__ */ new Map(), on: /* @__PURE__ */ __name(function(t, e) {
+  return { all: n = n || /* @__PURE__ */ new Map(), on: /* @__PURE__ */ __name22(function(t, e) {
     var i = n.get(t);
     i ? i.push(e) : n.set(t, [e]);
-  }, "on"), off: /* @__PURE__ */ __name(function(t, e) {
+  }, "on"), off: /* @__PURE__ */ __name22(function(t, e) {
     var i = n.get(t);
     i && (e ? i.splice(i.indexOf(e) >>> 0, 1) : n.set(t, []));
-  }, "off"), emit: /* @__PURE__ */ __name(function(t, e) {
+  }, "off"), emit: /* @__PURE__ */ __name22(function(t, e) {
     var i = n.get(t);
     i && i.slice().map(function(n2) {
       n2(e);
@@ -3307,15 +3659,21 @@ function mitt_default(n) {
   }, "emit") };
 }
 __name(mitt_default, "mitt_default");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/disposable.js
+__name2(mitt_default, "mitt_default");
+__name22(mitt_default, "mitt_default");
 Symbol.dispose ??= /* @__PURE__ */ Symbol("dispose");
 Symbol.asyncDispose ??= /* @__PURE__ */ Symbol("asyncDispose");
 var disposeSymbol = Symbol.dispose;
 var asyncDisposeSymbol = Symbol.asyncDispose;
 var DisposableStack = class _DisposableStack {
   static {
-    __name(this, "DisposableStack");
+    __name(this, "_DisposableStack");
+  }
+  static {
+    __name2(this, "_DisposableStack");
+  }
+  static {
+    __name22(this, "DisposableStack");
   }
   #disposed = false;
   #stack = [];
@@ -3422,7 +3780,13 @@ var DisposableStack = class _DisposableStack {
 };
 var AsyncDisposableStack = class _AsyncDisposableStack {
   static {
-    __name(this, "AsyncDisposableStack");
+    __name(this, "_AsyncDisposableStack");
+  }
+  static {
+    __name2(this, "_AsyncDisposableStack");
+  }
+  static {
+    __name22(this, "AsyncDisposableStack");
   }
   #disposed = false;
   #stack = [];
@@ -3527,11 +3891,15 @@ var AsyncDisposableStack = class _AsyncDisposableStack {
   [asyncDisposeSymbol] = this.dispose;
   [Symbol.toStringTag] = "AsyncDisposableStack";
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/EventEmitter.js
 var EventEmitter = class {
   static {
     __name(this, "EventEmitter");
+  }
+  static {
+    __name2(this, "EventEmitter");
+  }
+  static {
+    __name22(this, "EventEmitter");
   }
   #emitter;
   #handlers = /* @__PURE__ */ new Map();
@@ -3598,7 +3966,7 @@ var EventEmitter = class {
    * @returns `this` to enable you to chain method calls.
    */
   once(type, handler) {
-    const onceHandler = /* @__PURE__ */ __name((eventData) => {
+    const onceHandler = /* @__PURE__ */ __name22((eventData) => {
       handler(eventData);
       this.off(type, onceHandler);
     }, "onceHandler");
@@ -3643,6 +4011,12 @@ var EventSubscription = class {
   static {
     __name(this, "EventSubscription");
   }
+  static {
+    __name2(this, "EventSubscription");
+  }
+  static {
+    __name22(this, "EventSubscription");
+  }
   #target;
   #type;
   #handler;
@@ -3656,8 +4030,6 @@ var EventSubscription = class {
     this.#target.off(this.#type, this.#handler);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Browser.js
 var WEB_PERMISSION_TO_PROTOCOL_PERMISSION = /* @__PURE__ */ new Map([
   ["geolocation", "geolocation"],
   ["midi", "midi"],
@@ -3684,6 +4056,12 @@ var WEB_PERMISSION_TO_PROTOCOL_PERMISSION = /* @__PURE__ */ new Map([
 var Browser = class extends EventEmitter {
   static {
     __name(this, "Browser");
+  }
+  static {
+    __name2(this, "Browser");
+  }
+  static {
+    __name22(this, "Browser");
   }
   /**
    * @internal
@@ -3767,8 +4145,6 @@ var Browser = class extends EventEmitter {
     throw new Error("Not implemented");
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/CDPSession.js
 var CDPSessionEvent;
 (function(CDPSessionEvent2) {
   CDPSessionEvent2.Disconnected = /* @__PURE__ */ Symbol("CDPSession.Disconnected");
@@ -3780,6 +4156,12 @@ var CDPSessionEvent;
 var CDPSession = class extends EventEmitter {
   static {
     __name(this, "CDPSession");
+  }
+  static {
+    __name2(this, "CDPSession");
+  }
+  static {
+    __name22(this, "CDPSession");
   }
   /**
    * @internal
@@ -3796,11 +4178,15 @@ var CDPSession = class extends EventEmitter {
     return void 0;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/Deferred.js
 var Deferred = class _Deferred {
   static {
-    __name(this, "Deferred");
+    __name(this, "_Deferred");
+  }
+  static {
+    __name2(this, "_Deferred");
+  }
+  static {
+    __name22(this, "Deferred");
   }
   static create(opts) {
     return new _Deferred(opts);
@@ -3884,15 +4270,25 @@ var Deferred = class _Deferred {
     return this.#promise;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/Mutex.js
 var Mutex = class _Mutex {
   static {
-    __name(this, "Mutex");
+    __name(this, "_Mutex");
+  }
+  static {
+    __name2(this, "_Mutex");
+  }
+  static {
+    __name22(this, "Mutex");
   }
   static Guard = class Guard {
     static {
       __name(this, "Guard");
+    }
+    static {
+      __name2(this, "Guard");
+    }
+    static {
+      __name22(this, "Guard");
     }
     #mutex;
     #onRelease;
@@ -3927,11 +4323,15 @@ var Mutex = class _Mutex {
     resolve();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/BrowserContext.js
 var BrowserContext = class extends EventEmitter {
   static {
     __name(this, "BrowserContext");
+  }
+  static {
+    __name2(this, "BrowserContext");
+  }
+  static {
+    __name22(this, "BrowserContext");
   }
   /**
    * @internal
@@ -4012,9 +4412,7 @@ var BrowserContext = class extends EventEmitter {
     return this.close();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/BrowserContext.js
-var __addDisposableResource = function(env, value, async2) {
+var __addDisposableResource = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -4032,7 +4430,7 @@ var __addDisposableResource = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource");
 var __disposeResources = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -4040,6 +4438,8 @@ var __disposeResources = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -4056,6 +4456,8 @@ var __disposeResources = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -4065,6 +4467,12 @@ var __disposeResources = /* @__PURE__ */ (function(SuppressedError2) {
 var CdpBrowserContext = class extends BrowserContext {
   static {
     __name(this, "CdpBrowserContext");
+  }
+  static {
+    __name2(this, "CdpBrowserContext");
+  }
+  static {
+    __name22(this, "CdpBrowserContext");
   }
   #connection;
   #browser;
@@ -4135,8 +4543,6 @@ var CdpBrowserContext = class extends BrowserContext {
     await this.#browser._disposeContext(this.#id);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Target.js
 var TargetType;
 (function(TargetType2) {
   TargetType2["PAGE"] = "page";
@@ -4151,6 +4557,12 @@ var TargetType;
 var Target = class {
   static {
     __name(this, "Target");
+  }
+  static {
+    __name2(this, "Target");
+  }
+  static {
+    __name22(this, "Target");
   }
   /**
    * @internal
@@ -4171,18 +4583,20 @@ var Target = class {
     return null;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/ErrorLike.js
 function isErrorLike(obj) {
   return typeof obj === "object" && obj !== null && "name" in obj && "message" in obj;
 }
 __name(isErrorLike, "isErrorLike");
+__name2(isErrorLike, "isErrorLike");
+__name22(isErrorLike, "isErrorLike");
 function rewriteError(error, message, originalMessage) {
   error.message = message;
   error.originalMessage = originalMessage ?? error.originalMessage;
   return error;
 }
 __name(rewriteError, "rewriteError");
+__name2(rewriteError, "rewriteError");
+__name22(rewriteError, "rewriteError");
 function createProtocolErrorMessage(object) {
   let message = object.error.message;
   if (object.error && typeof object.error === "object" && "data" in object.error) {
@@ -4191,11 +4605,17 @@ function createProtocolErrorMessage(object) {
   return message;
 }
 __name(createProtocolErrorMessage, "createProtocolErrorMessage");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/CallbackRegistry.js
+__name2(createProtocolErrorMessage, "createProtocolErrorMessage");
+__name22(createProtocolErrorMessage, "createProtocolErrorMessage");
 var CallbackRegistry = class {
   static {
     __name(this, "CallbackRegistry");
+  }
+  static {
+    __name2(this, "CallbackRegistry");
+  }
+  static {
+    __name22(this, "CallbackRegistry");
   }
   #callbacks = /* @__PURE__ */ new Map();
   #idGenerator = createIncrementalIdGenerator();
@@ -4263,6 +4683,12 @@ var Callback = class {
   static {
     __name(this, "Callback");
   }
+  static {
+    __name2(this, "Callback");
+  }
+  static {
+    __name22(this, "Callback");
+  }
   #id;
   #error = new ProtocolError();
   #deferred = Deferred.create();
@@ -4305,11 +4731,17 @@ function createIncrementalIdGenerator() {
   };
 }
 __name(createIncrementalIdGenerator, "createIncrementalIdGenerator");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/CDPSession.js
+__name2(createIncrementalIdGenerator, "createIncrementalIdGenerator");
+__name22(createIncrementalIdGenerator, "createIncrementalIdGenerator");
 var CdpCDPSession = class extends CDPSession {
   static {
     __name(this, "CdpCDPSession");
+  }
+  static {
+    __name2(this, "CdpCDPSession");
+  }
+  static {
+    __name22(this, "CdpCDPSession");
   }
   #sessionId;
   #targetType;
@@ -4408,12 +4840,16 @@ var CdpCDPSession = class extends CDPSession {
     return this.#callbacks.getPendingProtocolErrors();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/TimeoutSettings.js
 var DEFAULT_TIMEOUT = 3e4;
 var TimeoutSettings = class {
   static {
     __name(this, "TimeoutSettings");
+  }
+  static {
+    __name2(this, "TimeoutSettings");
+  }
+  static {
+    __name22(this, "TimeoutSettings");
   }
   #defaultTimeout;
   #defaultNavigationTimeout;
@@ -4443,9 +4879,7 @@ var TimeoutSettings = class {
     return DEFAULT_TIMEOUT;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/decorators.js
-var __addDisposableResource2 = function(env, value, async2) {
+var __addDisposableResource2 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -4463,7 +4897,7 @@ var __addDisposableResource2 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource2");
 var __disposeResources2 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -4471,6 +4905,8 @@ var __disposeResources2 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -4487,6 +4923,8 @@ var __disposeResources2 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -4527,6 +4965,8 @@ function moveable(Class, _) {
   return Class;
 }
 __name(moveable, "moveable");
+__name2(moveable, "moveable");
+__name22(moveable, "moveable");
 function throwIfDisposed(message = (value) => {
   return `Attempted to use disposed ${value.constructor.name}.`;
 }) {
@@ -4540,6 +4980,8 @@ function throwIfDisposed(message = (value) => {
   };
 }
 __name(throwIfDisposed, "throwIfDisposed");
+__name2(throwIfDisposed, "throwIfDisposed");
+__name22(throwIfDisposed, "throwIfDisposed");
 function invokeAtMostOnceForArguments(target, _) {
   const cache = /* @__PURE__ */ new WeakMap();
   let cacheDepth = -1;
@@ -4568,6 +5010,8 @@ function invokeAtMostOnceForArguments(target, _) {
   };
 }
 __name(invokeAtMostOnceForArguments, "invokeAtMostOnceForArguments");
+__name2(invokeAtMostOnceForArguments, "invokeAtMostOnceForArguments");
+__name22(invokeAtMostOnceForArguments, "invokeAtMostOnceForArguments");
 function guarded(getKey = function() {
   return this;
 }) {
@@ -4596,9 +5040,9 @@ function guarded(getKey = function() {
   };
 }
 __name(guarded, "guarded");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/locators/locators.js
-var __addDisposableResource3 = function(env, value, async2) {
+__name2(guarded, "guarded");
+__name22(guarded, "guarded");
+var __addDisposableResource3 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -4616,7 +5060,7 @@ var __addDisposableResource3 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource3");
 var __disposeResources3 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -4624,6 +5068,8 @@ var __disposeResources3 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -4640,6 +5086,8 @@ var __disposeResources3 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -4653,6 +5101,12 @@ var LocatorEvent;
 var Locator = class extends EventEmitter {
   static {
     __name(this, "Locator");
+  }
+  static {
+    __name2(this, "Locator");
+  }
+  static {
+    __name22(this, "Locator");
   }
   /**
    * Creates a race between multiple locators trying to locate elements in
@@ -4678,14 +5132,14 @@ var Locator = class extends EventEmitter {
    * @internal
    */
   operators = {
-    conditions: /* @__PURE__ */ __name((conditions, signal) => {
+    conditions: /* @__PURE__ */ __name22((conditions, signal) => {
       return mergeMap((handle) => {
         return merge(...conditions.map((condition) => {
           return condition(handle, signal);
         })).pipe(defaultIfEmpty(handle));
       });
     }, "conditions"),
-    retryAndRaceWithSignalAndTimer: /* @__PURE__ */ __name((signal, cause) => {
+    retryAndRaceWithSignalAndTimer: /* @__PURE__ */ __name22((signal, cause) => {
       const candidates = [];
       if (signal) {
         candidates.push(fromAbortSignal(signal, cause));
@@ -4771,7 +5225,7 @@ var Locator = class extends EventEmitter {
    * If the element has a "disabled" property, wait for the element to be
    * enabled.
    */
-  #waitForEnabledIfNeeded = /* @__PURE__ */ __name((handle, signal) => {
+  #waitForEnabledIfNeeded = /* @__PURE__ */ __name22((handle, signal) => {
     if (!this.#waitForEnabled) {
       return EMPTY;
     }
@@ -4797,7 +5251,7 @@ var Locator = class extends EventEmitter {
    * Compares the bounding box of the element for two consecutive animation
    * frames and waits till they are the same.
    */
-  #waitForStableBoundingBoxIfNeeded = /* @__PURE__ */ __name((handle) => {
+  #waitForStableBoundingBoxIfNeeded = /* @__PURE__ */ __name22((handle) => {
     if (!this.#waitForStableBoundingBox) {
       return EMPTY;
     }
@@ -4833,7 +5287,7 @@ var Locator = class extends EventEmitter {
   /**
    * Checks if the element is in the viewport and auto-scrolls it if it is not.
    */
-  #ensureElementIsInTheViewportIfNeeded = /* @__PURE__ */ __name((handle) => {
+  #ensureElementIsInTheViewportIfNeeded = /* @__PURE__ */ __name22((handle) => {
     if (!this.#ensureElementIsInTheViewport) {
       return EMPTY;
     }
@@ -5087,7 +5541,13 @@ var Locator = class extends EventEmitter {
 };
 var FunctionLocator = class _FunctionLocator extends Locator {
   static {
-    __name(this, "FunctionLocator");
+    __name(this, "_FunctionLocator");
+  }
+  static {
+    __name2(this, "_FunctionLocator");
+  }
+  static {
+    __name22(this, "FunctionLocator");
   }
   static create(pageOrFrame, func) {
     return new _FunctionLocator(pageOrFrame, func).setTimeout("getDefaultTimeout" in pageOrFrame ? pageOrFrame.getDefaultTimeout() : pageOrFrame.page().getDefaultTimeout());
@@ -5115,6 +5575,12 @@ var FunctionLocator = class _FunctionLocator extends Locator {
 var DelegatedLocator = class extends Locator {
   static {
     __name(this, "DelegatedLocator");
+  }
+  static {
+    __name2(this, "DelegatedLocator");
+  }
+  static {
+    __name22(this, "DelegatedLocator");
   }
   #delegate;
   constructor(delegate) {
@@ -5153,7 +5619,13 @@ var DelegatedLocator = class extends Locator {
 };
 var FilteredLocator = class _FilteredLocator extends DelegatedLocator {
   static {
-    __name(this, "FilteredLocator");
+    __name(this, "_FilteredLocator");
+  }
+  static {
+    __name2(this, "_FilteredLocator");
+  }
+  static {
+    __name22(this, "FilteredLocator");
   }
   #predicate;
   constructor(base, predicate) {
@@ -5175,7 +5647,13 @@ var FilteredLocator = class _FilteredLocator extends DelegatedLocator {
 };
 var MappedLocator = class _MappedLocator extends DelegatedLocator {
   static {
-    __name(this, "MappedLocator");
+    __name(this, "_MappedLocator");
+  }
+  static {
+    __name2(this, "_MappedLocator");
+  }
+  static {
+    __name22(this, "MappedLocator");
   }
   #mapper;
   constructor(base, mapper) {
@@ -5193,7 +5671,13 @@ var MappedLocator = class _MappedLocator extends DelegatedLocator {
 };
 var NodeLocator = class _NodeLocator extends Locator {
   static {
-    __name(this, "NodeLocator");
+    __name(this, "_NodeLocator");
+  }
+  static {
+    __name2(this, "_NodeLocator");
+  }
+  static {
+    __name22(this, "NodeLocator");
   }
   static create(pageOrFrame, selector) {
     return new _NodeLocator(pageOrFrame, selector).setTimeout("getDefaultTimeout" in pageOrFrame ? pageOrFrame.getDefaultTimeout() : pageOrFrame.page().getDefaultTimeout());
@@ -5211,7 +5695,7 @@ var NodeLocator = class _NodeLocator extends Locator {
    * than 'hidden' or 'collapse' and non-empty bounding box. visibility ===
    * 'hidden' means the opposite of that.
    */
-  #waitForVisibilityIfNeeded = /* @__PURE__ */ __name((handle) => {
+  #waitForVisibilityIfNeeded = /* @__PURE__ */ __name22((handle) => {
     if (!this.visibility) {
       return EMPTY;
     }
@@ -5253,9 +5737,17 @@ function checkLocatorArray(locators) {
   return locators;
 }
 __name(checkLocatorArray, "checkLocatorArray");
+__name2(checkLocatorArray, "checkLocatorArray");
+__name22(checkLocatorArray, "checkLocatorArray");
 var RaceLocator = class _RaceLocator extends Locator {
   static {
-    __name(this, "RaceLocator");
+    __name(this, "_RaceLocator");
+  }
+  static {
+    __name2(this, "_RaceLocator");
+  }
+  static {
+    __name22(this, "RaceLocator");
   }
   static create(locators) {
     const array = checkLocatorArray(locators);
@@ -5278,21 +5770,21 @@ var RaceLocator = class _RaceLocator extends Locator {
   }
 };
 var RETRY_DELAY = 100;
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Page.js
-var __runInitializers = function(thisArg, initializers, value) {
+var __runInitializers = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers");
+var __esDecorate = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -5319,8 +5811,8 @@ var __esDecorate = function(ctor, descriptorIn, decorators, contextIn, initializ
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
-var __addDisposableResource4 = function(env, value, async2) {
+}, "__esDecorate");
+var __addDisposableResource4 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -5338,7 +5830,7 @@ var __addDisposableResource4 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource4");
 var __disposeResources4 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -5346,6 +5838,8 @@ var __disposeResources4 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -5362,6 +5856,8 @@ var __disposeResources4 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -5378,6 +5874,8 @@ function setDefaultScreenshotOptions(options) {
   options.captureBeyondViewport ??= true;
 }
 __name(setDefaultScreenshotOptions, "setDefaultScreenshotOptions");
+__name2(setDefaultScreenshotOptions, "setDefaultScreenshotOptions");
+__name22(setDefaultScreenshotOptions, "setDefaultScreenshotOptions");
 var Page = (() => {
   let _classSuper = EventEmitter;
   let _instanceExtraInitializers = [];
@@ -5387,8 +5885,14 @@ var Page = (() => {
       __name(this, "Page");
     }
     static {
+      __name2(this, "Page");
+    }
+    static {
+      __name22(this, "Page");
+    }
+    static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
-      __esDecorate(this, null, _screenshot_decorators, { kind: "method", name: "screenshot", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "screenshot" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.screenshot, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate(this, null, _screenshot_decorators, { kind: "method", name: "screenshot", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "screenshot" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.screenshot, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
     }
     /**
@@ -5454,7 +5958,7 @@ var Page = (() => {
       }
       let wrapper = this.#requestHandlers.get(handler);
       if (wrapper === void 0) {
-        wrapper = /* @__PURE__ */ __name((event) => {
+        wrapper = /* @__PURE__ */ __name22((event) => {
           event.enqueueInterceptAction(() => {
             return handler(event);
           });
@@ -5864,7 +6368,7 @@ var Page = (() => {
       const { timeout: ms = this._timeoutSettings.timeout(), signal } = options;
       if (typeof urlOrPredicate === "string") {
         const url = urlOrPredicate;
-        urlOrPredicate = /* @__PURE__ */ __name((request) => {
+        urlOrPredicate = /* @__PURE__ */ __name22((request) => {
           return request.url() === url;
         }, "urlOrPredicate");
       }
@@ -5912,7 +6416,7 @@ var Page = (() => {
       const { timeout: ms = this._timeoutSettings.timeout(), signal } = options;
       if (typeof urlOrPredicate === "string") {
         const url = urlOrPredicate;
-        urlOrPredicate = /* @__PURE__ */ __name((response) => {
+        urlOrPredicate = /* @__PURE__ */ __name22((response) => {
           return response.url() === url;
         }, "urlOrPredicate");
       }
@@ -5971,7 +6475,7 @@ var Page = (() => {
     async waitForFrame(urlOrPredicate, options = {}) {
       const { timeout: ms = this.getDefaultTimeout(), signal } = options;
       if (isString(urlOrPredicate)) {
-        urlOrPredicate = /* @__PURE__ */ __name((frame) => {
+        urlOrPredicate = /* @__PURE__ */ __name22((frame) => {
           return urlOrPredicate === frame.url();
         }, "urlOrPredicate");
       }
@@ -6612,6 +7116,8 @@ function normalizeRectangle(clip) {
   };
 }
 __name(normalizeRectangle, "normalizeRectangle");
+__name2(normalizeRectangle, "normalizeRectangle");
+__name22(normalizeRectangle, "normalizeRectangle");
 function roundRectangle(clip) {
   const x = Math.round(clip.x);
   const y = Math.round(clip.y);
@@ -6620,11 +7126,17 @@ function roundRectangle(clip) {
   return { ...clip, x, y, width, height };
 }
 __name(roundRectangle, "roundRectangle");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/ConsoleMessage.js
+__name2(roundRectangle, "roundRectangle");
+__name22(roundRectangle, "roundRectangle");
 var ConsoleMessage = class {
   static {
     __name(this, "ConsoleMessage");
+  }
+  static {
+    __name2(this, "ConsoleMessage");
+  }
+  static {
+    __name22(this, "ConsoleMessage");
   }
   #type;
   #text;
@@ -6670,11 +7182,15 @@ var ConsoleMessage = class {
     return this.#stackTraceLocations;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/FileChooser.js
 var FileChooser = class {
   static {
     __name(this, "FileChooser");
+  }
+  static {
+    __name2(this, "FileChooser");
+  }
+  static {
+    __name22(this, "FileChooser");
   }
   #element;
   #multiple;
@@ -6719,8 +7235,6 @@ var FileChooser = class {
     });
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/NetworkManagerEvents.js
 var NetworkManagerEvent;
 (function(NetworkManagerEvent2) {
   NetworkManagerEvent2.Request = /* @__PURE__ */ Symbol("NetworkManager.Request");
@@ -6729,21 +7243,21 @@ var NetworkManagerEvent;
   NetworkManagerEvent2.RequestFailed = /* @__PURE__ */ Symbol("NetworkManager.RequestFailed");
   NetworkManagerEvent2.RequestFinished = /* @__PURE__ */ Symbol("NetworkManager.RequestFinished");
 })(NetworkManagerEvent || (NetworkManagerEvent = {}));
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/JSHandle.js
-var __runInitializers2 = function(thisArg, initializers, value) {
+var __runInitializers2 = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate2 = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers2");
+var __esDecorate2 = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -6770,8 +7284,8 @@ var __esDecorate2 = function(ctor, descriptorIn, decorators, contextIn, initiali
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
-var __addDisposableResource5 = function(env, value, async2) {
+}, "__esDecorate2");
+var __addDisposableResource5 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -6789,7 +7303,7 @@ var __addDisposableResource5 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource5");
 var __disposeResources5 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -6797,6 +7311,8 @@ var __disposeResources5 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -6813,6 +7329,8 @@ var __disposeResources5 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -6829,15 +7347,21 @@ var JSHandle = (() => {
   let _getProperties_decorators;
   var JSHandle2 = class {
     static {
-      __name(this, "JSHandle");
+      __name(this, "JSHandle2");
+    }
+    static {
+      __name2(this, "JSHandle2");
+    }
+    static {
+      __name22(this, "JSHandle");
     }
     static {
       _classThis = this;
     }
     static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? /* @__PURE__ */ Object.create(null) : void 0;
-      __esDecorate2(this, null, _getProperty_decorators, { kind: "method", name: "getProperty", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "getProperty" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.getProperty, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate2(this, null, _getProperties_decorators, { kind: "method", name: "getProperties", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "getProperties" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.getProperties, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate2(this, null, _getProperty_decorators, { kind: "method", name: "getProperty", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "getProperty" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.getProperty, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate2(this, null, _getProperties_decorators, { kind: "method", name: "getProperties", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "getProperties" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.getProperties, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate2(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
       JSHandle2 = _classThis = _classDescriptor.value;
       if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
@@ -6932,9 +7456,7 @@ var JSHandle = (() => {
   };
   return JSHandle2 = _classThis;
 })();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Binding.js
-var __addDisposableResource6 = function(env, value, async2) {
+var __addDisposableResource6 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -6952,7 +7474,7 @@ var __addDisposableResource6 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource6");
 var __disposeResources6 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -6960,6 +7482,8 @@ var __disposeResources6 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -6976,6 +7500,8 @@ var __disposeResources6 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -6985,6 +7511,12 @@ var __disposeResources6 = /* @__PURE__ */ (function(SuppressedError2) {
 var Binding = class {
   static {
     __name(this, "Binding");
+  }
+  static {
+    __name2(this, "Binding");
+  }
+  static {
+    __name22(this, "Binding");
   }
   #name;
   #fn;
@@ -7066,13 +7598,17 @@ var Binding = class {
     }
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Connection.js
 var debugProtocolSend = debug("puppeteer:protocol:SEND \u25BA");
 var debugProtocolReceive = debug("puppeteer:protocol:RECV \u25C0");
 var Connection = class extends EventEmitter {
   static {
     __name(this, "Connection");
+  }
+  static {
+    __name2(this, "Connection");
+  }
+  static {
+    __name22(this, "Connection");
   }
   #url;
   #transport;
@@ -7264,11 +7800,17 @@ function isTargetClosedError(error) {
   return error instanceof TargetCloseError;
 }
 __name(isTargetClosedError, "isTargetClosedError");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Coverage.js
+__name2(isTargetClosedError, "isTargetClosedError");
+__name22(isTargetClosedError, "isTargetClosedError");
 var Coverage = class {
   static {
     __name(this, "Coverage");
+  }
+  static {
+    __name2(this, "Coverage");
+  }
+  static {
+    __name22(this, "Coverage");
   }
   #jsCoverage;
   #cssCoverage;
@@ -7336,6 +7878,12 @@ var Coverage = class {
 var JSCoverage = class {
   static {
     __name(this, "JSCoverage");
+  }
+  static {
+    __name2(this, "JSCoverage");
+  }
+  static {
+    __name22(this, "JSCoverage");
   }
   #client;
   #enabled = false;
@@ -7442,6 +7990,12 @@ var JSCoverage = class {
 var CSSCoverage = class {
   static {
     __name(this, "CSSCoverage");
+  }
+  static {
+    __name2(this, "CSSCoverage");
+  }
+  static {
+    __name22(this, "CSSCoverage");
   }
   #client;
   #enabled = false;
@@ -7575,11 +8129,17 @@ function convertToDisjointRanges(nestedRanges) {
   });
 }
 __name(convertToDisjointRanges, "convertToDisjointRanges");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Dialog.js
+__name2(convertToDisjointRanges, "convertToDisjointRanges");
+__name22(convertToDisjointRanges, "convertToDisjointRanges");
 var Dialog = class {
   static {
     __name(this, "Dialog");
+  }
+  static {
+    __name2(this, "Dialog");
+  }
+  static {
+    __name22(this, "Dialog");
   }
   #type;
   #message;
@@ -7641,11 +8201,15 @@ var Dialog = class {
     });
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Dialog.js
 var CdpDialog = class extends Dialog {
   static {
     __name(this, "CdpDialog");
+  }
+  static {
+    __name2(this, "CdpDialog");
+  }
+  static {
+    __name22(this, "CdpDialog");
   }
   #client;
   constructor(client, type, message, defaultValue = "") {
@@ -7659,21 +8223,21 @@ var CdpDialog = class extends Dialog {
     });
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/EmulationManager.js
-var __runInitializers3 = function(thisArg, initializers, value) {
+var __runInitializers3 = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate3 = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers3");
+var __esDecorate3 = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -7700,14 +8264,20 @@ var __esDecorate3 = function(ctor, descriptorIn, decorators, contextIn, initiali
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
-var __setFunctionName = function(f, name, prefix) {
+}, "__esDecorate3");
+var __setFunctionName = /* @__PURE__ */ __name2(function(f, name, prefix) {
   if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
   return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
-};
+}, "__setFunctionName");
 var EmulatedState = class {
   static {
     __name(this, "EmulatedState");
+  }
+  static {
+    __name2(this, "EmulatedState");
+  }
+  static {
+    __name22(this, "EmulatedState");
   }
   #state;
   #clientProvider;
@@ -7758,6 +8328,12 @@ var EmulationManager = (() => {
       __name(this, "EmulationManager");
     }
     static {
+      __name2(this, "EmulationManager");
+    }
+    static {
+      __name22(this, "EmulationManager");
+    }
+    static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? /* @__PURE__ */ Object.create(null) : void 0;
       _private_applyViewport_decorators = [invokeAtMostOnceForArguments];
       _private_emulateIdleState_decorators = [invokeAtMostOnceForArguments];
@@ -7804,7 +8380,7 @@ var EmulationManager = (() => {
             enabled: hasTouch
           })
         ]);
-      }, "#applyViewport") }, _private_applyViewport_decorators, { kind: "method", name: "#applyViewport", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #applyViewport in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#applyViewport, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#applyViewport") }, _private_applyViewport_decorators, { kind: "method", name: "#applyViewport", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #applyViewport in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#applyViewport, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_emulateIdleState_descriptor = { value: __setFunctionName(async function(client, idleStateState) {
         if (!idleStateState.active) {
           return;
@@ -7817,7 +8393,7 @@ var EmulationManager = (() => {
         } else {
           await client.send("Emulation.clearIdleOverride");
         }
-      }, "#emulateIdleState") }, _private_emulateIdleState_decorators, { kind: "method", name: "#emulateIdleState", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #emulateIdleState in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#emulateIdleState, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#emulateIdleState") }, _private_emulateIdleState_decorators, { kind: "method", name: "#emulateIdleState", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #emulateIdleState in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#emulateIdleState, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_emulateTimezone_descriptor = { value: __setFunctionName(async function(client, timezoneState) {
         if (!timezoneState.active) {
           return;
@@ -7832,7 +8408,7 @@ var EmulationManager = (() => {
           }
           throw error;
         }
-      }, "#emulateTimezone") }, _private_emulateTimezone_decorators, { kind: "method", name: "#emulateTimezone", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #emulateTimezone in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#emulateTimezone, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#emulateTimezone") }, _private_emulateTimezone_decorators, { kind: "method", name: "#emulateTimezone", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #emulateTimezone in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#emulateTimezone, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_emulateVisionDeficiency_descriptor = { value: __setFunctionName(async function(client, visionDeficiency) {
         if (!visionDeficiency.active) {
           return;
@@ -7840,7 +8416,7 @@ var EmulationManager = (() => {
         await client.send("Emulation.setEmulatedVisionDeficiency", {
           type: visionDeficiency.visionDeficiency || "none"
         });
-      }, "#emulateVisionDeficiency") }, _private_emulateVisionDeficiency_decorators, { kind: "method", name: "#emulateVisionDeficiency", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #emulateVisionDeficiency in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#emulateVisionDeficiency, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#emulateVisionDeficiency") }, _private_emulateVisionDeficiency_decorators, { kind: "method", name: "#emulateVisionDeficiency", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #emulateVisionDeficiency in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#emulateVisionDeficiency, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_emulateCpuThrottling_descriptor = { value: __setFunctionName(async function(client, state) {
         if (!state.active) {
           return;
@@ -7848,7 +8424,7 @@ var EmulationManager = (() => {
         await client.send("Emulation.setCPUThrottlingRate", {
           rate: state.factor ?? 1
         });
-      }, "#emulateCpuThrottling") }, _private_emulateCpuThrottling_decorators, { kind: "method", name: "#emulateCpuThrottling", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #emulateCpuThrottling in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#emulateCpuThrottling, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#emulateCpuThrottling") }, _private_emulateCpuThrottling_decorators, { kind: "method", name: "#emulateCpuThrottling", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #emulateCpuThrottling in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#emulateCpuThrottling, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_emulateMediaFeatures_descriptor = { value: __setFunctionName(async function(client, state) {
         if (!state.active) {
           return;
@@ -7856,7 +8432,7 @@ var EmulationManager = (() => {
         await client.send("Emulation.setEmulatedMedia", {
           features: state.mediaFeatures
         });
-      }, "#emulateMediaFeatures") }, _private_emulateMediaFeatures_decorators, { kind: "method", name: "#emulateMediaFeatures", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #emulateMediaFeatures in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#emulateMediaFeatures, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#emulateMediaFeatures") }, _private_emulateMediaFeatures_decorators, { kind: "method", name: "#emulateMediaFeatures", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #emulateMediaFeatures in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#emulateMediaFeatures, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_emulateMediaType_descriptor = { value: __setFunctionName(async function(client, state) {
         if (!state.active) {
           return;
@@ -7864,7 +8440,7 @@ var EmulationManager = (() => {
         await client.send("Emulation.setEmulatedMedia", {
           media: state.type || ""
         });
-      }, "#emulateMediaType") }, _private_emulateMediaType_decorators, { kind: "method", name: "#emulateMediaType", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #emulateMediaType in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#emulateMediaType, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#emulateMediaType") }, _private_emulateMediaType_decorators, { kind: "method", name: "#emulateMediaType", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #emulateMediaType in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#emulateMediaType, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_setGeolocation_descriptor = { value: __setFunctionName(async function(client, state) {
         if (!state.active) {
           return;
@@ -7874,7 +8450,7 @@ var EmulationManager = (() => {
           latitude: state.geoLocation.latitude,
           accuracy: state.geoLocation.accuracy
         } : void 0);
-      }, "#setGeolocation") }, _private_setGeolocation_decorators, { kind: "method", name: "#setGeolocation", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #setGeolocation in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#setGeolocation, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#setGeolocation") }, _private_setGeolocation_decorators, { kind: "method", name: "#setGeolocation", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #setGeolocation in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#setGeolocation, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_setDefaultBackgroundColor_descriptor = { value: __setFunctionName(async function(client, state) {
         if (!state.active) {
           return;
@@ -7882,7 +8458,7 @@ var EmulationManager = (() => {
         await client.send("Emulation.setDefaultBackgroundColorOverride", {
           color: state.color
         });
-      }, "#setDefaultBackgroundColor") }, _private_setDefaultBackgroundColor_decorators, { kind: "method", name: "#setDefaultBackgroundColor", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #setDefaultBackgroundColor in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#setDefaultBackgroundColor, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#setDefaultBackgroundColor") }, _private_setDefaultBackgroundColor_decorators, { kind: "method", name: "#setDefaultBackgroundColor", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #setDefaultBackgroundColor in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#setDefaultBackgroundColor, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate3(this, _private_setJavaScriptEnabled_descriptor = { value: __setFunctionName(async function(client, state) {
         if (!state.active) {
           return;
@@ -7890,7 +8466,7 @@ var EmulationManager = (() => {
         await client.send("Emulation.setScriptExecutionDisabled", {
           value: !state.javaScriptEnabled
         });
-      }, "#setJavaScriptEnabled") }, _private_setJavaScriptEnabled_decorators, { kind: "method", name: "#setJavaScriptEnabled", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #setJavaScriptEnabled in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#setJavaScriptEnabled, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#setJavaScriptEnabled") }, _private_setJavaScriptEnabled_decorators, { kind: "method", name: "#setJavaScriptEnabled", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #setJavaScriptEnabled in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#setJavaScriptEnabled, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
     }
     #client = __runInitializers3(this, _instanceExtraInitializers);
@@ -8101,11 +8677,15 @@ var EmulationManager = (() => {
     }
   };
 })();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/FirefoxTargetManager.js
 var FirefoxTargetManager = class extends EventEmitter {
   static {
     __name(this, "FirefoxTargetManager");
+  }
+  static {
+    __name2(this, "FirefoxTargetManager");
+  }
+  static {
+    __name22(this, "FirefoxTargetManager");
   }
   #connection;
   /**
@@ -8146,14 +8726,14 @@ var FirefoxTargetManager = class extends EventEmitter {
     this.setupAttachmentListeners(this.#connection);
   }
   setupAttachmentListeners(session) {
-    const listener = /* @__PURE__ */ __name((event) => {
+    const listener = /* @__PURE__ */ __name22((event) => {
       return this.#onAttachedToTarget(session, event);
     }, "listener");
     assert(!this.#attachedToTargetListenersBySession.has(session));
     this.#attachedToTargetListenersBySession.set(session, listener);
     session.on("Target.attachedToTarget", listener);
   }
-  #onSessionDetached = /* @__PURE__ */ __name((session) => {
+  #onSessionDetached = /* @__PURE__ */ __name22((session) => {
     this.removeSessionListeners(session);
     this.#availableTargetsBySessionId.delete(session.id());
   }, "#onSessionDetached");
@@ -8181,7 +8761,7 @@ var FirefoxTargetManager = class extends EventEmitter {
     this.#targetsIdsForInit = new Set(this.#discoveredTargetsByTargetId.keys());
     await this.#initializeDeferred.valueOrThrow();
   }
-  #onTargetCreated = /* @__PURE__ */ __name(async (event) => {
+  #onTargetCreated = /* @__PURE__ */ __name22(async (event) => {
     if (this.#discoveredTargetsByTargetId.has(event.targetInfo.targetId)) {
       return;
     }
@@ -8203,7 +8783,7 @@ var FirefoxTargetManager = class extends EventEmitter {
     this.emit("targetAvailable", target);
     this.#finishInitializationIfReady(target._targetId);
   }, "#onTargetCreated");
-  #onTargetDestroyed = /* @__PURE__ */ __name((event) => {
+  #onTargetDestroyed = /* @__PURE__ */ __name22((event) => {
     this.#discoveredTargetsByTargetId.delete(event.targetId);
     this.#finishInitializationIfReady(event.targetId);
     const target = this.#availableTargetsByTargetId.get(event.targetId);
@@ -8212,7 +8792,7 @@ var FirefoxTargetManager = class extends EventEmitter {
       this.#availableTargetsByTargetId.delete(event.targetId);
     }
   }, "#onTargetDestroyed");
-  #onAttachedToTarget = /* @__PURE__ */ __name(async (parentSession, event) => {
+  #onAttachedToTarget = /* @__PURE__ */ __name22(async (parentSession, event) => {
     const targetInfo = event.targetInfo;
     const session = this.#connection.session(event.sessionId);
     if (!session) {
@@ -8232,13 +8812,9 @@ var FirefoxTargetManager = class extends EventEmitter {
     }
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/ElementHandleSymbol.js
 var _isElementHandle = /* @__PURE__ */ Symbol("_isElementHandle");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/Function.js
 var createdFunctions = /* @__PURE__ */ new Map();
-var createFunction = /* @__PURE__ */ __name((functionValue) => {
+var createFunction = /* @__PURE__ */ __name22((functionValue) => {
   let fn = createdFunctions.get(functionValue);
   if (fn) {
     return fn;
@@ -8257,7 +8833,9 @@ function stringifyFunction(fn) {
   return value;
 }
 __name(stringifyFunction, "stringifyFunction");
-var interpolateFunction = /* @__PURE__ */ __name((fn, replacements) => {
+__name2(stringifyFunction, "stringifyFunction");
+__name22(stringifyFunction, "stringifyFunction");
+var interpolateFunction = /* @__PURE__ */ __name22((fn, replacements) => {
   let value = stringifyFunction(fn);
   for (const [name, jsValue] of Object.entries(replacements)) {
     value = value.replace(
@@ -8270,9 +8848,7 @@ var interpolateFunction = /* @__PURE__ */ __name((fn, replacements) => {
   }
   return createFunction(value);
 }, "interpolateFunction");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/HandleIterator.js
-var __addDisposableResource7 = function(env, value, async2) {
+var __addDisposableResource7 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -8290,7 +8866,7 @@ var __addDisposableResource7 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource7");
 var __disposeResources7 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -8298,6 +8874,8 @@ var __disposeResources7 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -8314,6 +8892,8 @@ var __disposeResources7 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -8362,6 +8942,8 @@ async function* fastTransposeIteratorHandle(iterator2, size) {
   }
 }
 __name(fastTransposeIteratorHandle, "fastTransposeIteratorHandle");
+__name2(fastTransposeIteratorHandle, "fastTransposeIteratorHandle");
+__name22(fastTransposeIteratorHandle, "fastTransposeIteratorHandle");
 async function* transposeIteratorHandle(iterator2) {
   let size = DEFAULT_BATCH_SIZE;
   while (!(yield* fastTransposeIteratorHandle(iterator2, size))) {
@@ -8369,6 +8951,8 @@ async function* transposeIteratorHandle(iterator2) {
   }
 }
 __name(transposeIteratorHandle, "transposeIteratorHandle");
+__name2(transposeIteratorHandle, "transposeIteratorHandle");
+__name22(transposeIteratorHandle, "transposeIteratorHandle");
 async function* transposeIterableHandle(handle) {
   const env_3 = { stack: [], error: void 0, hasError: false };
   try {
@@ -8386,13 +8970,19 @@ async function* transposeIterableHandle(handle) {
   }
 }
 __name(transposeIterableHandle, "transposeIterableHandle");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/LazyArg.js
+__name2(transposeIterableHandle, "transposeIterableHandle");
+__name22(transposeIterableHandle, "transposeIterableHandle");
 var LazyArg = class _LazyArg {
   static {
-    __name(this, "LazyArg");
+    __name(this, "_LazyArg");
   }
-  static create = /* @__PURE__ */ __name((get) => {
+  static {
+    __name2(this, "_LazyArg");
+  }
+  static {
+    __name22(this, "LazyArg");
+  }
+  static create = /* @__PURE__ */ __name22((get) => {
     return new _LazyArg(get);
   }, "create");
   #get;
@@ -8403,9 +8993,7 @@ var LazyArg = class _LazyArg {
     return await this.#get(context2);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/QueryHandler.js
-var __addDisposableResource8 = function(env, value, async2) {
+var __addDisposableResource8 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -8423,7 +9011,7 @@ var __addDisposableResource8 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource8");
 var __disposeResources8 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -8431,6 +9019,8 @@ var __disposeResources8 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -8447,6 +9037,8 @@ var __disposeResources8 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -8456,6 +9048,12 @@ var __disposeResources8 = /* @__PURE__ */ (function(SuppressedError2) {
 var QueryHandler = class {
   static {
     __name(this, "QueryHandler");
+  }
+  static {
+    __name2(this, "QueryHandler");
+  }
+  static {
+    __name22(this, "QueryHandler");
   }
   // Either one of these may be implemented, but at least one must be.
   static querySelectorAll;
@@ -8604,11 +9202,15 @@ var QueryHandler = class {
     }
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/util/AsyncIterableUtil.js
 var AsyncIterableUtil = class {
   static {
     __name(this, "AsyncIterableUtil");
+  }
+  static {
+    __name2(this, "AsyncIterableUtil");
+  }
+  static {
+    __name22(this, "AsyncIterableUtil");
   }
   static async *map(iterable, map2) {
     for await (const value of iterable) {
@@ -8634,16 +9236,14 @@ var AsyncIterableUtil = class {
     return;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/AriaQueryHandler.js
-var isKnownAttribute = /* @__PURE__ */ __name((attribute) => {
+var isKnownAttribute = /* @__PURE__ */ __name22((attribute) => {
   return ["name", "role"].includes(attribute);
 }, "isKnownAttribute");
-var normalizeValue = /* @__PURE__ */ __name((value) => {
+var normalizeValue = /* @__PURE__ */ __name22((value) => {
   return value.replace(/ +/g, " ").trim();
 }, "normalizeValue");
 var ATTRIBUTE_REGEXP = /\[\s*(?<attribute>\w+)\s*=\s*(?<quote>"|')(?<value>\\.|.*?(?=\k<quote>))\k<quote>\s*\]/g;
-var parseARIASelector = /* @__PURE__ */ __name((selector) => {
+var parseARIASelector = /* @__PURE__ */ __name22((selector) => {
   const queryOptions = {};
   const defaultName = selector.replace(ATTRIBUTE_REGEXP, (_, attribute, __, value) => {
     attribute = attribute.trim();
@@ -8660,38 +9260,50 @@ var ARIAQueryHandler = class extends QueryHandler {
   static {
     __name(this, "ARIAQueryHandler");
   }
-  static querySelector = /* @__PURE__ */ __name(async (node, selector, { ariaQuerySelector }) => {
+  static {
+    __name2(this, "ARIAQueryHandler");
+  }
+  static {
+    __name22(this, "ARIAQueryHandler");
+  }
+  static querySelector = /* @__PURE__ */ __name22(async (node, selector, { ariaQuerySelector }) => {
     return await ariaQuerySelector(node, selector);
   }, "querySelector");
   static async *queryAll(element, selector) {
     const { name, role } = parseARIASelector(selector);
     yield* element.queryAXTree(name, role);
   }
-  static queryOne = /* @__PURE__ */ __name(async (element, selector) => {
+  static queryOne = /* @__PURE__ */ __name22(async (element, selector) => {
     return await AsyncIterableUtil.first(this.queryAll(element, selector)) ?? null;
   }, "queryOne");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/CSSQueryHandler.js
 var CSSQueryHandler = class extends QueryHandler {
   static {
     __name(this, "CSSQueryHandler");
   }
-  static querySelector = /* @__PURE__ */ __name((element, selector, { cssQuerySelector }) => {
+  static {
+    __name2(this, "CSSQueryHandler");
+  }
+  static {
+    __name22(this, "CSSQueryHandler");
+  }
+  static querySelector = /* @__PURE__ */ __name22((element, selector, { cssQuerySelector }) => {
     return cssQuerySelector(element, selector);
   }, "querySelector");
-  static querySelectorAll = /* @__PURE__ */ __name((element, selector, { cssQuerySelectorAll }) => {
+  static querySelectorAll = /* @__PURE__ */ __name22((element, selector, { cssQuerySelectorAll }) => {
     return cssQuerySelectorAll(element, selector);
   }, "querySelectorAll");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/generated/injected.js
 var source = '"use strict";var g=Object.defineProperty;var X=Object.getOwnPropertyDescriptor;var B=Object.getOwnPropertyNames;var Y=Object.prototype.hasOwnProperty;var l=(t,e)=>{for(var r in e)g(t,r,{get:e[r],enumerable:!0})},G=(t,e,r,o)=>{if(e&&typeof e=="object"||typeof e=="function")for(let n of B(e))!Y.call(t,n)&&n!==r&&g(t,n,{get:()=>e[n],enumerable:!(o=X(e,n))||o.enumerable});return t};var J=t=>G(g({},"__esModule",{value:!0}),t);var pe={};l(pe,{default:()=>he});module.exports=J(pe);var N=class extends Error{constructor(e,r){super(e,r),this.name=this.constructor.name}get[Symbol.toStringTag](){return this.constructor.name}},p=class extends N{};var c=class t{static create(e){return new t(e)}static async race(e){let r=new Set;try{let o=e.map(n=>n instanceof t?(n.#n&&r.add(n),n.valueOrThrow()):n);return await Promise.race(o)}finally{for(let o of r)o.reject(new Error("Timeout cleared"))}}#e=!1;#r=!1;#o;#t;#a=new Promise(e=>{this.#t=e});#n;#i;constructor(e){e&&e.timeout>0&&(this.#i=new p(e.message),this.#n=setTimeout(()=>{this.reject(this.#i)},e.timeout))}#l(e){clearTimeout(this.#n),this.#o=e,this.#t()}resolve(e){this.#r||this.#e||(this.#e=!0,this.#l(e))}reject(e){this.#r||this.#e||(this.#r=!0,this.#l(e))}resolved(){return this.#e}finished(){return this.#e||this.#r}value(){return this.#o}#s;valueOrThrow(){return this.#s||(this.#s=(async()=>{if(await this.#a,this.#r)throw this.#o;return this.#o})()),this.#s}};var L=new Map,F=t=>{let e=L.get(t);return e||(e=new Function(`return ${t}`)(),L.set(t,e),e)};var x={};l(x,{ariaQuerySelector:()=>z,ariaQuerySelectorAll:()=>b});var z=(t,e)=>globalThis.__ariaQuerySelector(t,e),b=async function*(t,e){yield*await globalThis.__ariaQuerySelectorAll(t,e)};var E={};l(E,{cssQuerySelector:()=>K,cssQuerySelectorAll:()=>Z});var K=(t,e)=>t.querySelector(e),Z=function(t,e){return t.querySelectorAll(e)};var A={};l(A,{customQuerySelectors:()=>P});var v=class{#e=new Map;register(e,r){if(!r.queryOne&&r.queryAll){let o=r.queryAll;r.queryOne=(n,i)=>{for(let s of o(n,i))return s;return null}}else if(r.queryOne&&!r.queryAll){let o=r.queryOne;r.queryAll=(n,i)=>{let s=o(n,i);return s?[s]:[]}}else if(!r.queryOne||!r.queryAll)throw new Error("At least one query method must be defined.");this.#e.set(e,{querySelector:r.queryOne,querySelectorAll:r.queryAll})}unregister(e){this.#e.delete(e)}get(e){return this.#e.get(e)}clear(){this.#e.clear()}},P=new v;var R={};l(R,{pierceQuerySelector:()=>ee,pierceQuerySelectorAll:()=>te});var ee=(t,e)=>{let r=null,o=n=>{let i=document.createTreeWalker(n,NodeFilter.SHOW_ELEMENT);do{let s=i.currentNode;s.shadowRoot&&o(s.shadowRoot),!(s instanceof ShadowRoot)&&s!==n&&!r&&s.matches(e)&&(r=s)}while(!r&&i.nextNode())};return t instanceof Document&&(t=t.documentElement),o(t),r},te=(t,e)=>{let r=[],o=n=>{let i=document.createTreeWalker(n,NodeFilter.SHOW_ELEMENT);do{let s=i.currentNode;s.shadowRoot&&o(s.shadowRoot),!(s instanceof ShadowRoot)&&s!==n&&s.matches(e)&&r.push(s)}while(i.nextNode())};return t instanceof Document&&(t=t.documentElement),o(t),r};var u=(t,e)=>{if(!t)throw new Error(e)};var y=class{#e;#r;#o;#t;constructor(e,r){this.#e=e,this.#r=r}async start(){let e=this.#t=c.create(),r=await this.#e();if(r){e.resolve(r);return}this.#o=new MutationObserver(async()=>{let o=await this.#e();o&&(e.resolve(o),await this.stop())}),this.#o.observe(this.#r,{childList:!0,subtree:!0,attributes:!0})}async stop(){u(this.#t,"Polling never started."),this.#t.finished()||this.#t.reject(new Error("Polling stopped")),this.#o&&(this.#o.disconnect(),this.#o=void 0)}result(){return u(this.#t,"Polling never started."),this.#t.valueOrThrow()}},w=class{#e;#r;constructor(e){this.#e=e}async start(){let e=this.#r=c.create(),r=await this.#e();if(r){e.resolve(r);return}let o=async()=>{if(e.finished())return;let n=await this.#e();if(!n){window.requestAnimationFrame(o);return}e.resolve(n),await this.stop()};window.requestAnimationFrame(o)}async stop(){u(this.#r,"Polling never started."),this.#r.finished()||this.#r.reject(new Error("Polling stopped"))}result(){return u(this.#r,"Polling never started."),this.#r.valueOrThrow()}},T=class{#e;#r;#o;#t;constructor(e,r){this.#e=e,this.#r=r}async start(){let e=this.#t=c.create(),r=await this.#e();if(r){e.resolve(r);return}this.#o=setInterval(async()=>{let o=await this.#e();o&&(e.resolve(o),await this.stop())},this.#r)}async stop(){u(this.#t,"Polling never started."),this.#t.finished()||this.#t.reject(new Error("Polling stopped")),this.#o&&(clearInterval(this.#o),this.#o=void 0)}result(){return u(this.#t,"Polling never started."),this.#t.valueOrThrow()}};var _={};l(_,{PCombinator:()=>H,pQuerySelector:()=>fe,pQuerySelectorAll:()=>$});var a=class{static async*map(e,r){for await(let o of e)yield await r(o)}static async*flatMap(e,r){for await(let o of e)yield*r(o)}static async collect(e){let r=[];for await(let o of e)r.push(o);return r}static async first(e){for await(let r of e)return r}};var C={};l(C,{textQuerySelectorAll:()=>m});var re=new Set(["checkbox","image","radio"]),oe=t=>t instanceof HTMLSelectElement||t instanceof HTMLTextAreaElement||t instanceof HTMLInputElement&&!re.has(t.type),ne=new Set(["SCRIPT","STYLE"]),f=t=>!ne.has(t.nodeName)&&!document.head?.contains(t),I=new WeakMap,j=t=>{for(;t;)I.delete(t),t instanceof ShadowRoot?t=t.host:t=t.parentNode},W=new WeakSet,se=new MutationObserver(t=>{for(let e of t)j(e.target)}),d=t=>{let e=I.get(t);if(e||(e={full:"",immediate:[]},!f(t)))return e;let r="";if(oe(t))e.full=t.value,e.immediate.push(t.value),t.addEventListener("input",o=>{j(o.target)},{once:!0,capture:!0});else{for(let o=t.firstChild;o;o=o.nextSibling){if(o.nodeType===Node.TEXT_NODE){e.full+=o.nodeValue??"",r+=o.nodeValue??"";continue}r&&e.immediate.push(r),r="",o.nodeType===Node.ELEMENT_NODE&&(e.full+=d(o).full)}r&&e.immediate.push(r),t instanceof Element&&t.shadowRoot&&(e.full+=d(t.shadowRoot).full),W.has(t)||(se.observe(t,{childList:!0,characterData:!0,subtree:!0}),W.add(t))}return I.set(t,e),e};var m=function*(t,e){let r=!1;for(let o of t.childNodes)if(o instanceof Element&&f(o)){let n;o.shadowRoot?n=m(o.shadowRoot,e):n=m(o,e);for(let i of n)yield i,r=!0}r||t instanceof Element&&f(t)&&d(t).full.includes(e)&&(yield t)};var O={};l(O,{checkVisibility:()=>le,pierce:()=>S,pierceAll:()=>k});var ie=["hidden","collapse"],le=(t,e)=>{if(!t)return e===!1;if(e===void 0)return t;let r=t.nodeType===Node.TEXT_NODE?t.parentElement:t,o=window.getComputedStyle(r),n=o&&!ie.includes(o.visibility)&&!ae(r);return e===n?t:!1};function ae(t){let e=t.getBoundingClientRect();return e.width===0||e.height===0}var ce=t=>"shadowRoot"in t&&t.shadowRoot instanceof ShadowRoot;function*S(t){ce(t)?yield t.shadowRoot:yield t}function*k(t){t=S(t).next().value,yield t;let e=[document.createTreeWalker(t,NodeFilter.SHOW_ELEMENT)];for(let r of e){let o;for(;o=r.nextNode();)o.shadowRoot&&(yield o.shadowRoot,e.push(document.createTreeWalker(o.shadowRoot,NodeFilter.SHOW_ELEMENT)))}}var Q={};l(Q,{xpathQuerySelectorAll:()=>q});var q=function*(t,e,r=-1){let n=(t.ownerDocument||document).evaluate(e,t,null,XPathResult.ORDERED_NODE_ITERATOR_TYPE),i=[],s;for(;(s=n.iterateNext())&&(i.push(s),!(r&&i.length===r)););for(let h=0;h<i.length;h++)s=i[h],yield s,delete i[h]};var ue=/[-\\w\\P{ASCII}*]/,H=(r=>(r.Descendent=">>>",r.Child=">>>>",r))(H||{}),V=t=>"querySelectorAll"in t,M=class{#e;#r=[];#o=void 0;elements;constructor(e,r){this.elements=[e],this.#e=r,this.#t()}async run(){if(typeof this.#o=="string")switch(this.#o.trimStart()){case":scope":this.#t();break}for(;this.#o!==void 0;this.#t()){let e=this.#o;typeof e=="string"?e[0]&&ue.test(e[0])?this.elements=a.flatMap(this.elements,async function*(r){V(r)&&(yield*r.querySelectorAll(e))}):this.elements=a.flatMap(this.elements,async function*(r){if(!r.parentElement){if(!V(r))return;yield*r.querySelectorAll(e);return}let o=0;for(let n of r.parentElement.children)if(++o,n===r)break;yield*r.parentElement.querySelectorAll(`:scope>:nth-child(${o})${e}`)}):this.elements=a.flatMap(this.elements,async function*(r){switch(e.name){case"text":yield*m(r,e.value);break;case"xpath":yield*q(r,e.value);break;case"aria":yield*b(r,e.value);break;default:let o=P.get(e.name);if(!o)throw new Error(`Unknown selector type: ${e.name}`);yield*o.querySelectorAll(r,e.value)}})}}#t(){if(this.#r.length!==0){this.#o=this.#r.shift();return}if(this.#e.length===0){this.#o=void 0;return}let e=this.#e.shift();switch(e){case">>>>":{this.elements=a.flatMap(this.elements,S),this.#t();break}case">>>":{this.elements=a.flatMap(this.elements,k),this.#t();break}default:this.#r=e,this.#t();break}}},D=class{#e=new WeakMap;calculate(e,r=[]){if(e===null)return r;e instanceof ShadowRoot&&(e=e.host);let o=this.#e.get(e);if(o)return[...o,...r];let n=0;for(let s=e.previousSibling;s;s=s.previousSibling)++n;let i=this.calculate(e.parentNode,[n]);return this.#e.set(e,i),[...i,...r]}},U=(t,e)=>{if(t.length+e.length===0)return 0;let[r=-1,...o]=t,[n=-1,...i]=e;return r===n?U(o,i):r<n?-1:1},de=async function*(t){let e=new Set;for await(let o of t)e.add(o);let r=new D;yield*[...e.values()].map(o=>[o,r.calculate(o)]).sort(([,o],[,n])=>U(o,n)).map(([o])=>o)},$=function(t,e){let r=JSON.parse(e);if(r.some(o=>{let n=0;return o.some(i=>(typeof i=="string"?++n:n=0,n>1))}))throw new Error("Multiple deep combinators found in sequence.");return de(a.flatMap(r,o=>{let n=new M(t,o);return n.run(),n.elements}))},fe=async function(t,e){for await(let r of $(t,e))return r;return null};var me=Object.freeze({...x,...A,...R,..._,...C,...O,...Q,...E,Deferred:c,createFunction:F,createTextContent:d,IntervalPoller:T,isSuitableNodeForTextMatching:f,MutationPoller:y,RAFPoller:w}),he=me;\n';
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/ScriptInjector.js
 var ScriptInjector = class {
   static {
     __name(this, "ScriptInjector");
+  }
+  static {
+    __name2(this, "ScriptInjector");
+  }
+  static {
+    __name22(this, "ScriptInjector");
   }
   #updated = false;
   #amendments = /* @__PURE__ */ new Set();
@@ -8728,11 +9340,15 @@ var ScriptInjector = class {
   }
 };
 var scriptInjector = new ScriptInjector();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/CustomQueryHandler.js
 var CustomQueryHandlerRegistry = class {
   static {
     __name(this, "CustomQueryHandlerRegistry");
+  }
+  static {
+    __name2(this, "CustomQueryHandlerRegistry");
+  }
+  static {
+    __name22(this, "CustomQueryHandlerRegistry");
   }
   #handlers = /* @__PURE__ */ new Map();
   get(name) {
@@ -8765,6 +9381,12 @@ var CustomQueryHandlerRegistry = class {
     const Handler = class extends QueryHandler {
       static {
         __name(this, "Handler");
+      }
+      static {
+        __name2(this, "Handler");
+      }
+      static {
+        __name22(this, "Handler");
       }
       static querySelectorAll = interpolateFunction((node, selector, PuppeteerUtil) => {
         return PuppeteerUtil.customQuerySelectors.get(PLACEHOLDER("name")).querySelectorAll(node, selector);
@@ -8817,34 +9439,40 @@ var CustomQueryHandlerRegistry = class {
   }
 };
 var customQueryHandlers = new CustomQueryHandlerRegistry();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/PierceQueryHandler.js
 var PierceQueryHandler = class extends QueryHandler {
   static {
     __name(this, "PierceQueryHandler");
   }
-  static querySelector = /* @__PURE__ */ __name((element, selector, { pierceQuerySelector }) => {
+  static {
+    __name2(this, "PierceQueryHandler");
+  }
+  static {
+    __name22(this, "PierceQueryHandler");
+  }
+  static querySelector = /* @__PURE__ */ __name22((element, selector, { pierceQuerySelector }) => {
     return pierceQuerySelector(element, selector);
   }, "querySelector");
-  static querySelectorAll = /* @__PURE__ */ __name((element, selector, { pierceQuerySelectorAll }) => {
+  static querySelectorAll = /* @__PURE__ */ __name22((element, selector, { pierceQuerySelectorAll }) => {
     return pierceQuerySelectorAll(element, selector);
   }, "querySelectorAll");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/PQueryHandler.js
 var PQueryHandler = class extends QueryHandler {
   static {
     __name(this, "PQueryHandler");
   }
-  static querySelectorAll = /* @__PURE__ */ __name((element, selector, { pQuerySelectorAll }) => {
+  static {
+    __name2(this, "PQueryHandler");
+  }
+  static {
+    __name22(this, "PQueryHandler");
+  }
+  static querySelectorAll = /* @__PURE__ */ __name22((element, selector, { pQuerySelectorAll }) => {
     return pQuerySelectorAll(element, selector);
   }, "querySelectorAll");
-  static querySelector = /* @__PURE__ */ __name((element, selector, { pQuerySelector }) => {
+  static querySelector = /* @__PURE__ */ __name22((element, selector, { pQuerySelector }) => {
     return pQuerySelector(element, selector);
   }, "querySelector");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/third_party/parsel-js/parsel-js.js
 var TOKENS = {
   attribute: /\[\s*(?:(?<namespace>\*|[-\w\P{ASCII}]*)\|)?(?<name>[-\w\P{ASCII}]+)\s*(?:(?<operator>\W?=)\s*(?<value>.+?)\s*(\s(?<caseSensitive>[iIsS]))?\s*)?\]/gu,
   id: /#(?<name>[-\w\P{ASCII}]+)/gu,
@@ -8858,7 +9486,7 @@ var TOKENS = {
   // this must be last
 };
 var TRIM_TOKENS = /* @__PURE__ */ new Set(["combinator", "comma"]);
-var getArgumentPatternByType = /* @__PURE__ */ __name((type) => {
+var getArgumentPatternByType = /* @__PURE__ */ __name22((type) => {
   switch (type) {
     case "pseudo-element":
     case "pseudo-class":
@@ -8888,6 +9516,8 @@ function gobbleParens(text, offset) {
   return result;
 }
 __name(gobbleParens, "gobbleParens");
+__name2(gobbleParens, "gobbleParens");
+__name22(gobbleParens, "gobbleParens");
 function tokenizeBy(text, grammar = TOKENS) {
   if (!text) {
     return [];
@@ -8940,6 +9570,8 @@ function tokenizeBy(text, grammar = TOKENS) {
   return tokens;
 }
 __name(tokenizeBy, "tokenizeBy");
+__name2(tokenizeBy, "tokenizeBy");
+__name22(tokenizeBy, "tokenizeBy");
 var STRING_PATTERN = /(['"])([^\\\n]+?)\1/g;
 var ESCAPE_PATTERN = /\\./g;
 function tokenize(selector, grammar = TOKENS) {
@@ -8997,6 +9629,8 @@ function tokenize(selector, grammar = TOKENS) {
   return tokens;
 }
 __name(tokenize, "tokenize");
+__name2(tokenize, "tokenize");
+__name22(tokenize, "tokenize");
 function* flatten(node, parent) {
   switch (node.type) {
     case "list":
@@ -9016,6 +9650,8 @@ function* flatten(node, parent) {
   }
 }
 __name(flatten, "flatten");
+__name2(flatten, "flatten");
+__name22(flatten, "flatten");
 function stringify(listOrNode) {
   let tokens;
   if (Array.isArray(listOrNode)) {
@@ -9026,12 +9662,12 @@ function stringify(listOrNode) {
   return tokens.map((token) => token.content).join("");
 }
 __name(stringify, "stringify");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/PSelectorParser.js
+__name2(stringify, "stringify");
+__name22(stringify, "stringify");
 TOKENS["nesting"] = /&/g;
 TOKENS["combinator"] = /\s*(>>>>?|[\s>+~])\s*/g;
 var ESCAPE_REGEXP = /\\[\s\S]/g;
-var unquote = /* @__PURE__ */ __name((text) => {
+var unquote = /* @__PURE__ */ __name22((text) => {
   if (text.length <= 1) {
     return text;
   }
@@ -9125,34 +9761,42 @@ function parsePSelectors(selector) {
   return [selectors, isPureCSS, hasPseudoClasses, hasAria];
 }
 __name(parsePSelectors, "parsePSelectors");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/TextQueryHandler.js
+__name2(parsePSelectors, "parsePSelectors");
+__name22(parsePSelectors, "parsePSelectors");
 var TextQueryHandler = class extends QueryHandler {
   static {
     __name(this, "TextQueryHandler");
   }
-  static querySelectorAll = /* @__PURE__ */ __name((element, selector, { textQuerySelectorAll }) => {
+  static {
+    __name2(this, "TextQueryHandler");
+  }
+  static {
+    __name22(this, "TextQueryHandler");
+  }
+  static querySelectorAll = /* @__PURE__ */ __name22((element, selector, { textQuerySelectorAll }) => {
     return textQuerySelectorAll(element, selector);
   }, "querySelectorAll");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/XPathQueryHandler.js
 var XPathQueryHandler = class extends QueryHandler {
   static {
     __name(this, "XPathQueryHandler");
   }
-  static querySelectorAll = /* @__PURE__ */ __name((element, selector, { xpathQuerySelectorAll }) => {
+  static {
+    __name2(this, "XPathQueryHandler");
+  }
+  static {
+    __name22(this, "XPathQueryHandler");
+  }
+  static querySelectorAll = /* @__PURE__ */ __name22((element, selector, { xpathQuerySelectorAll }) => {
     return xpathQuerySelectorAll(element, selector);
   }, "querySelectorAll");
-  static querySelector = /* @__PURE__ */ __name((element, selector, { xpathQuerySelectorAll }) => {
+  static querySelector = /* @__PURE__ */ __name22((element, selector, { xpathQuerySelectorAll }) => {
     for (const result of xpathQuerySelectorAll(element, selector, 1)) {
       return result;
     }
     return null;
   }, "querySelector");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/GetQueryHandler.js
 var BUILTIN_QUERY_HANDLERS = {
   aria: ARIAQueryHandler,
   pierce: PierceQueryHandler,
@@ -9204,21 +9848,23 @@ function getQueryHandlerAndSelector(selector) {
   }
 }
 __name(getQueryHandlerAndSelector, "getQueryHandlerAndSelector");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Frame.js
-var __runInitializers4 = function(thisArg, initializers, value) {
+__name2(getQueryHandlerAndSelector, "getQueryHandlerAndSelector");
+__name22(getQueryHandlerAndSelector, "getQueryHandlerAndSelector");
+var __runInitializers4 = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate4 = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers4");
+var __esDecorate4 = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -9245,8 +9891,8 @@ var __esDecorate4 = function(ctor, descriptorIn, decorators, contextIn, initiali
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
-var __addDisposableResource9 = function(env, value, async2) {
+}, "__esDecorate4");
+var __addDisposableResource9 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -9264,7 +9910,7 @@ var __addDisposableResource9 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource9");
 var __disposeResources9 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -9272,6 +9918,8 @@ var __disposeResources9 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -9288,6 +9936,8 @@ var __disposeResources9 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -9334,6 +9984,12 @@ var Frame = (() => {
       __name(this, "Frame");
     }
     static {
+      __name2(this, "Frame");
+    }
+    static {
+      __name22(this, "Frame");
+    }
+    static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
       _frameElement_decorators = [throwIfDetached];
       _evaluateHandle_decorators = [throwIfDetached];
@@ -9355,26 +10011,26 @@ var Frame = (() => {
       _tap_decorators = [throwIfDetached];
       _type_decorators = [throwIfDetached];
       _title_decorators = [throwIfDetached];
-      __esDecorate4(this, null, _frameElement_decorators, { kind: "method", name: "frameElement", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "frameElement" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.frameElement, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _evaluateHandle_decorators, { kind: "method", name: "evaluateHandle", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "evaluateHandle" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.evaluateHandle, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _evaluate_decorators, { kind: "method", name: "evaluate", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "evaluate" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.evaluate, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _locator_decorators, { kind: "method", name: "locator", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "locator" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.locator, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _$_decorators, { kind: "method", name: "$", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "$" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _$$_decorators, { kind: "method", name: "$$", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "$$" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.$$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _$eval_decorators, { kind: "method", name: "$eval", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "$eval" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.$eval, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _$$eval_decorators, { kind: "method", name: "$$eval", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "$$eval" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.$$eval, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _waitForSelector_decorators, { kind: "method", name: "waitForSelector", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "waitForSelector" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.waitForSelector, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _waitForFunction_decorators, { kind: "method", name: "waitForFunction", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "waitForFunction" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.waitForFunction, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _content_decorators, { kind: "method", name: "content", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "content" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.content, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _addScriptTag_decorators, { kind: "method", name: "addScriptTag", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "addScriptTag" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.addScriptTag, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _addStyleTag_decorators, { kind: "method", name: "addStyleTag", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "addStyleTag" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.addStyleTag, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _click_decorators, { kind: "method", name: "click", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "click" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.click, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _focus_decorators, { kind: "method", name: "focus", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "focus" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.focus, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _hover_decorators, { kind: "method", name: "hover", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "hover" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.hover, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _select_decorators, { kind: "method", name: "select", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "select" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.select, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _tap_decorators, { kind: "method", name: "tap", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "tap" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.tap, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _type_decorators, { kind: "method", name: "type", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "type" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.type, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate4(this, null, _title_decorators, { kind: "method", name: "title", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "title" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.title, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _frameElement_decorators, { kind: "method", name: "frameElement", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "frameElement" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.frameElement, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _evaluateHandle_decorators, { kind: "method", name: "evaluateHandle", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "evaluateHandle" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.evaluateHandle, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _evaluate_decorators, { kind: "method", name: "evaluate", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "evaluate" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.evaluate, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _locator_decorators, { kind: "method", name: "locator", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "locator" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.locator, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _$_decorators, { kind: "method", name: "$", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "$" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _$$_decorators, { kind: "method", name: "$$", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "$$" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.$$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _$eval_decorators, { kind: "method", name: "$eval", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "$eval" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.$eval, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _$$eval_decorators, { kind: "method", name: "$$eval", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "$$eval" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.$$eval, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _waitForSelector_decorators, { kind: "method", name: "waitForSelector", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "waitForSelector" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.waitForSelector, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _waitForFunction_decorators, { kind: "method", name: "waitForFunction", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "waitForFunction" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.waitForFunction, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _content_decorators, { kind: "method", name: "content", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "content" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.content, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _addScriptTag_decorators, { kind: "method", name: "addScriptTag", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "addScriptTag" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.addScriptTag, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _addStyleTag_decorators, { kind: "method", name: "addStyleTag", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "addStyleTag" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.addStyleTag, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _click_decorators, { kind: "method", name: "click", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "click" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.click, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _focus_decorators, { kind: "method", name: "focus", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "focus" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.focus, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _hover_decorators, { kind: "method", name: "hover", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "hover" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.hover, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _select_decorators, { kind: "method", name: "select", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "select" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.select, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _tap_decorators, { kind: "method", name: "tap", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "tap" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.tap, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _type_decorators, { kind: "method", name: "type", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "type" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.type, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate4(this, null, _title_decorators, { kind: "method", name: "title", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "title" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.title, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
     }
     /**
@@ -10002,11 +10658,15 @@ var Frame = (() => {
     }
   };
 })();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/CdpPreloadScript.js
 var CdpPreloadScript = class {
   static {
     __name(this, "CdpPreloadScript");
+  }
+  static {
+    __name2(this, "CdpPreloadScript");
+  }
+  static {
+    __name22(this, "CdpPreloadScript");
   }
   /**
    * This is the ID of the preload script returned by
@@ -10037,11 +10697,15 @@ var CdpPreloadScript = class {
     this.#frameToId.set(frame, identifier);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/DeviceRequestPrompt.js
 var DeviceRequestPromptDevice = class {
   static {
     __name(this, "DeviceRequestPromptDevice");
+  }
+  static {
+    __name2(this, "DeviceRequestPromptDevice");
+  }
+  static {
+    __name22(this, "DeviceRequestPromptDevice");
   }
   /**
    * Device id during a prompt.
@@ -10062,6 +10726,12 @@ var DeviceRequestPromptDevice = class {
 var DeviceRequestPrompt = class {
   static {
     __name(this, "DeviceRequestPrompt");
+  }
+  static {
+    __name2(this, "DeviceRequestPrompt");
+  }
+  static {
+    __name22(this, "DeviceRequestPrompt");
   }
   #client;
   #timeoutSettings;
@@ -10156,6 +10826,12 @@ var DeviceRequestPromptManager = class {
   static {
     __name(this, "DeviceRequestPromptManager");
   }
+  static {
+    __name2(this, "DeviceRequestPromptManager");
+  }
+  static {
+    __name22(this, "DeviceRequestPromptManager");
+  }
   #client;
   #timeoutSettings;
   #deviceRequestPrompDeferreds = /* @__PURE__ */ new Set();
@@ -10214,21 +10890,21 @@ var DeviceRequestPromptManager = class {
     this.#deviceRequestPrompDeferreds.clear();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/ElementHandle.js
-var __runInitializers5 = function(thisArg, initializers, value) {
+var __runInitializers5 = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate5 = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers5");
+var __esDecorate5 = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -10255,8 +10931,8 @@ var __esDecorate5 = function(ctor, descriptorIn, decorators, contextIn, initiali
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
-var __addDisposableResource10 = function(env, value, async2) {
+}, "__esDecorate5");
+var __addDisposableResource10 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -10274,7 +10950,7 @@ var __addDisposableResource10 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource10");
 var __disposeResources10 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -10282,6 +10958,8 @@ var __disposeResources10 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -10298,16 +10976,18 @@ var __disposeResources10 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
   var e = new Error(message);
   return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
-var __setFunctionName2 = function(f, name, prefix) {
+var __setFunctionName2 = /* @__PURE__ */ __name2(function(f, name, prefix) {
   if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
   return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
-};
+}, "__setFunctionName2");
 var ElementHandle = (() => {
   var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5;
   let _classSuper = JSHandle;
@@ -10346,7 +11026,13 @@ var ElementHandle = (() => {
   let _scrollIntoView_decorators;
   return class ElementHandle2 extends _classSuper {
     static {
-      __name(this, "ElementHandle");
+      __name(this, "ElementHandle2");
+    }
+    static {
+      __name2(this, "ElementHandle2");
+    }
+    static {
+      __name22(this, "ElementHandle");
     }
     static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
@@ -10381,39 +11067,39 @@ var ElementHandle = (() => {
       _screenshot_decorators = [throwIfDisposed(), (_3 = ElementHandle2).bindIsolatedHandle.bind(_3)];
       _isIntersectingViewport_decorators = [throwIfDisposed(), (_4 = ElementHandle2).bindIsolatedHandle.bind(_4)];
       _scrollIntoView_decorators = [throwIfDisposed(), (_5 = ElementHandle2).bindIsolatedHandle.bind(_5)];
-      __esDecorate5(this, null, _getProperty_decorators, { kind: "method", name: "getProperty", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "getProperty" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.getProperty, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _getProperties_decorators, { kind: "method", name: "getProperties", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "getProperties" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.getProperties, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _jsonValue_decorators, { kind: "method", name: "jsonValue", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "jsonValue" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.jsonValue, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _$_decorators, { kind: "method", name: "$", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "$" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _$$_decorators, { kind: "method", name: "$$", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "$$" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.$$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _getProperty_decorators, { kind: "method", name: "getProperty", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "getProperty" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.getProperty, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _getProperties_decorators, { kind: "method", name: "getProperties", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "getProperties" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.getProperties, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _jsonValue_decorators, { kind: "method", name: "jsonValue", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "jsonValue" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.jsonValue, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _$_decorators, { kind: "method", name: "$", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "$" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _$$_decorators, { kind: "method", name: "$$", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "$$" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.$$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       __esDecorate5(this, _private_$$_descriptor = { value: __setFunctionName2(async function(selector) {
         return await this.#$$impl(selector);
-      }, "#$$") }, _private_$$_decorators, { kind: "method", name: "#$$", static: false, private: true, access: { has: /* @__PURE__ */ __name((obj) => #$$ in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.#$$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _waitForSelector_decorators, { kind: "method", name: "waitForSelector", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "waitForSelector" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.waitForSelector, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _isVisible_decorators, { kind: "method", name: "isVisible", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "isVisible" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.isVisible, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _isHidden_decorators, { kind: "method", name: "isHidden", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "isHidden" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.isHidden, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _toElement_decorators, { kind: "method", name: "toElement", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "toElement" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.toElement, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _clickablePoint_decorators, { kind: "method", name: "clickablePoint", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "clickablePoint" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.clickablePoint, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _hover_decorators, { kind: "method", name: "hover", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "hover" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.hover, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _click_decorators, { kind: "method", name: "click", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "click" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.click, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _drag_decorators, { kind: "method", name: "drag", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "drag" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.drag, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _dragEnter_decorators, { kind: "method", name: "dragEnter", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "dragEnter" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.dragEnter, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _dragOver_decorators, { kind: "method", name: "dragOver", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "dragOver" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.dragOver, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _drop_decorators, { kind: "method", name: "drop", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "drop" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.drop, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _dragAndDrop_decorators, { kind: "method", name: "dragAndDrop", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "dragAndDrop" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.dragAndDrop, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _select_decorators, { kind: "method", name: "select", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "select" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.select, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _tap_decorators, { kind: "method", name: "tap", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "tap" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.tap, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _touchStart_decorators, { kind: "method", name: "touchStart", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "touchStart" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.touchStart, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _touchMove_decorators, { kind: "method", name: "touchMove", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "touchMove" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.touchMove, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _touchEnd_decorators, { kind: "method", name: "touchEnd", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "touchEnd" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.touchEnd, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _focus_decorators, { kind: "method", name: "focus", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "focus" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.focus, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _type_decorators, { kind: "method", name: "type", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "type" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.type, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _press_decorators, { kind: "method", name: "press", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "press" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.press, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _boundingBox_decorators, { kind: "method", name: "boundingBox", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "boundingBox" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.boundingBox, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _boxModel_decorators, { kind: "method", name: "boxModel", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "boxModel" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.boxModel, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _screenshot_decorators, { kind: "method", name: "screenshot", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "screenshot" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.screenshot, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _isIntersectingViewport_decorators, { kind: "method", name: "isIntersectingViewport", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "isIntersectingViewport" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.isIntersectingViewport, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate5(this, null, _scrollIntoView_decorators, { kind: "method", name: "scrollIntoView", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "scrollIntoView" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.scrollIntoView, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      }, "#$$") }, _private_$$_decorators, { kind: "method", name: "#$$", static: false, private: true, access: { has: /* @__PURE__ */ __name22((obj) => #$$ in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.#$$, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _waitForSelector_decorators, { kind: "method", name: "waitForSelector", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "waitForSelector" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.waitForSelector, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _isVisible_decorators, { kind: "method", name: "isVisible", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "isVisible" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.isVisible, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _isHidden_decorators, { kind: "method", name: "isHidden", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "isHidden" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.isHidden, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _toElement_decorators, { kind: "method", name: "toElement", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "toElement" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.toElement, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _clickablePoint_decorators, { kind: "method", name: "clickablePoint", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "clickablePoint" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.clickablePoint, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _hover_decorators, { kind: "method", name: "hover", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "hover" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.hover, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _click_decorators, { kind: "method", name: "click", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "click" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.click, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _drag_decorators, { kind: "method", name: "drag", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "drag" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.drag, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _dragEnter_decorators, { kind: "method", name: "dragEnter", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "dragEnter" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.dragEnter, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _dragOver_decorators, { kind: "method", name: "dragOver", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "dragOver" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.dragOver, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _drop_decorators, { kind: "method", name: "drop", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "drop" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.drop, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _dragAndDrop_decorators, { kind: "method", name: "dragAndDrop", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "dragAndDrop" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.dragAndDrop, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _select_decorators, { kind: "method", name: "select", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "select" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.select, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _tap_decorators, { kind: "method", name: "tap", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "tap" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.tap, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _touchStart_decorators, { kind: "method", name: "touchStart", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "touchStart" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.touchStart, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _touchMove_decorators, { kind: "method", name: "touchMove", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "touchMove" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.touchMove, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _touchEnd_decorators, { kind: "method", name: "touchEnd", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "touchEnd" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.touchEnd, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _focus_decorators, { kind: "method", name: "focus", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "focus" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.focus, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _type_decorators, { kind: "method", name: "type", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "type" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.type, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _press_decorators, { kind: "method", name: "press", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "press" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.press, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _boundingBox_decorators, { kind: "method", name: "boundingBox", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "boundingBox" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.boundingBox, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _boxModel_decorators, { kind: "method", name: "boxModel", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "boxModel" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.boxModel, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _screenshot_decorators, { kind: "method", name: "screenshot", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "screenshot" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.screenshot, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _isIntersectingViewport_decorators, { kind: "method", name: "isIntersectingViewport", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "isIntersectingViewport" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.isIntersectingViewport, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate5(this, null, _scrollIntoView_decorators, { kind: "method", name: "scrollIntoView", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "scrollIntoView" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.scrollIntoView, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
     }
     /**
@@ -11279,6 +11965,8 @@ var ElementHandle = (() => {
           ];
         }
         __name(transformQuadWithOffsets, "transformQuadWithOffsets");
+        __name2(transformQuadWithOffsets, "transformQuadWithOffsets");
+        __name22(transformQuadWithOffsets, "transformQuadWithOffsets");
       });
       if (!model) {
         return null;
@@ -11471,8 +12159,8 @@ function intersectBoundingBox(box, width, height) {
   box.height = Math.max(box.y >= 0 ? Math.min(height - box.y, box.height) : Math.min(height, box.height + box.y), 0);
 }
 __name(intersectBoundingBox, "intersectBoundingBox");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/utils.js
+__name2(intersectBoundingBox, "intersectBoundingBox");
+__name22(intersectBoundingBox, "intersectBoundingBox");
 function createEvaluationError(details) {
   let name;
   let message;
@@ -11509,7 +12197,9 @@ function createEvaluationError(details) {
   return error;
 }
 __name(createEvaluationError, "createEvaluationError");
-var getErrorDetails = /* @__PURE__ */ __name((details) => {
+__name2(createEvaluationError, "createEvaluationError");
+__name22(createEvaluationError, "createEvaluationError");
+var getErrorDetails = /* @__PURE__ */ __name22((details) => {
   let name = "";
   let message;
   const lines = details.exception?.description?.split("\n    at ") ?? [];
@@ -11554,6 +12244,8 @@ function createClientError(details) {
   return error;
 }
 __name(createClientError, "createClientError");
+__name2(createClientError, "createClientError");
+__name22(createClientError, "createClientError");
 function valueFromRemoteObject(remoteObject) {
   assert(!remoteObject.objectId, "Cannot extract value when objectId is given");
   if (remoteObject.unserializableValue) {
@@ -11576,6 +12268,8 @@ function valueFromRemoteObject(remoteObject) {
   return remoteObject.value;
 }
 __name(valueFromRemoteObject, "valueFromRemoteObject");
+__name2(valueFromRemoteObject, "valueFromRemoteObject");
+__name22(valueFromRemoteObject, "valueFromRemoteObject");
 function addPageBinding(type, name, prefix) {
   if (globalThis[name]) {
     return;
@@ -11613,16 +12307,24 @@ function addPageBinding(type, name, prefix) {
   });
 }
 __name(addPageBinding, "addPageBinding");
+__name2(addPageBinding, "addPageBinding");
+__name22(addPageBinding, "addPageBinding");
 var CDP_BINDING_PREFIX = "puppeteer_";
 function pageBindingInitString(type, name) {
   return evaluationString(addPageBinding, type, name, CDP_BINDING_PREFIX);
 }
 __name(pageBindingInitString, "pageBindingInitString");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/JSHandle.js
+__name2(pageBindingInitString, "pageBindingInitString");
+__name22(pageBindingInitString, "pageBindingInitString");
 var CdpJSHandle = class extends JSHandle {
   static {
     __name(this, "CdpJSHandle");
+  }
+  static {
+    __name2(this, "CdpJSHandle");
+  }
+  static {
+    __name22(this, "CdpJSHandle");
   }
   #disposed = false;
   #remoteObject;
@@ -11704,21 +12406,23 @@ async function releaseObject(client, remoteObject) {
   });
 }
 __name(releaseObject, "releaseObject");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/ElementHandle.js
-var __runInitializers6 = function(thisArg, initializers, value) {
+__name2(releaseObject, "releaseObject");
+__name22(releaseObject, "releaseObject");
+var __runInitializers6 = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate6 = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers6");
+var __esDecorate6 = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -11745,7 +12449,7 @@ var __esDecorate6 = function(ctor, descriptorIn, decorators, contextIn, initiali
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
+}, "__esDecorate6");
 var NON_ELEMENT_NODE_ROLES = /* @__PURE__ */ new Set(["StaticText", "InlineTextBox"]);
 var CdpElementHandle = (() => {
   var _a, _b;
@@ -11760,15 +12464,21 @@ var CdpElementHandle = (() => {
       __name(this, "CdpElementHandle");
     }
     static {
+      __name2(this, "CdpElementHandle");
+    }
+    static {
+      __name22(this, "CdpElementHandle");
+    }
+    static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
       _contentFrame_decorators = [throwIfDisposed()];
       _scrollIntoView_decorators = [throwIfDisposed(), (_a = ElementHandle).bindIsolatedHandle.bind(_a)];
       _uploadFile_decorators = [throwIfDisposed(), (_b = ElementHandle).bindIsolatedHandle.bind(_b)];
       _autofill_decorators = [throwIfDisposed()];
-      __esDecorate6(this, null, _contentFrame_decorators, { kind: "method", name: "contentFrame", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "contentFrame" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.contentFrame, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate6(this, null, _scrollIntoView_decorators, { kind: "method", name: "scrollIntoView", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "scrollIntoView" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.scrollIntoView, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate6(this, null, _uploadFile_decorators, { kind: "method", name: "uploadFile", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "uploadFile" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.uploadFile, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate6(this, null, _autofill_decorators, { kind: "method", name: "autofill", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "autofill" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.autofill, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate6(this, null, _contentFrame_decorators, { kind: "method", name: "contentFrame", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "contentFrame" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.contentFrame, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate6(this, null, _scrollIntoView_decorators, { kind: "method", name: "scrollIntoView", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "scrollIntoView" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.scrollIntoView, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate6(this, null, _uploadFile_decorators, { kind: "method", name: "uploadFile", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "uploadFile" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.uploadFile, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate6(this, null, _autofill_decorators, { kind: "method", name: "autofill", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "autofill" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.autofill, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
     }
     constructor(world, remoteObject) {
@@ -11884,9 +12594,7 @@ var CdpElementHandle = (() => {
     }
   };
 })();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/ExecutionContext.js
-var __addDisposableResource11 = function(env, value, async2) {
+var __addDisposableResource11 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -11904,7 +12612,7 @@ var __addDisposableResource11 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource11");
 var __disposeResources11 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -11912,6 +12620,8 @@ var __disposeResources11 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -11928,6 +12638,8 @@ var __disposeResources11 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -11954,6 +12666,12 @@ var ariaQuerySelectorAllBinding = new Binding(
 var ExecutionContext = class extends EventEmitter {
   static {
     __name(this, "ExecutionContext");
+  }
+  static {
+    __name2(this, "ExecutionContext");
+  }
+  static {
+    __name22(this, "ExecutionContext");
   }
   #client;
   #world;
@@ -12268,13 +12986,15 @@ ${sourceUrlComment}
       return { value: arg };
     }
     __name(convertArgument, "convertArgument");
+    __name2(convertArgument, "convertArgument");
+    __name22(convertArgument, "convertArgument");
   }
   [disposeSymbol]() {
     this.#disposables.dispose();
     this.emit("disposed", void 0);
   }
 };
-var rewriteError2 = /* @__PURE__ */ __name((error) => {
+var rewriteError2 = /* @__PURE__ */ __name22((error) => {
   if (error.message.includes("Object reference chain is too long")) {
     return { result: { type: "undefined" } };
   }
@@ -12286,11 +13006,15 @@ var rewriteError2 = /* @__PURE__ */ __name((error) => {
   }
   throw error;
 }, "rewriteError");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Accessibility.js
 var Accessibility = class {
   static {
     __name(this, "Accessibility");
+  }
+  static {
+    __name2(this, "Accessibility");
+  }
+  static {
+    __name22(this, "Accessibility");
   }
   #realm;
   /**
@@ -12397,7 +13121,13 @@ var Accessibility = class {
 };
 var AXNode = class _AXNode {
   static {
-    __name(this, "AXNode");
+    __name(this, "_AXNode");
+  }
+  static {
+    __name2(this, "_AXNode");
+  }
+  static {
+    __name22(this, "AXNode");
   }
   payload;
   children = [];
@@ -12558,7 +13288,7 @@ var AXNode = class _AXNode {
     }
     const node = {
       role: this.#role,
-      elementHandle: /* @__PURE__ */ __name(async () => {
+      elementHandle: /* @__PURE__ */ __name22(async () => {
         if (!this.payload.backendDOMNodeId) {
           return null;
         }
@@ -12573,7 +13303,7 @@ var AXNode = class _AXNode {
       "roledescription",
       "valuetext"
     ];
-    const getUserStringPropertyValue = /* @__PURE__ */ __name((key) => {
+    const getUserStringPropertyValue = /* @__PURE__ */ __name22((key) => {
       return properties.get(key);
     }, "getUserStringPropertyValue");
     for (const userStringProperty of userStringProperties) {
@@ -12593,7 +13323,7 @@ var AXNode = class _AXNode {
       "required",
       "selected"
     ];
-    const getBooleanPropertyValue = /* @__PURE__ */ __name((key) => {
+    const getBooleanPropertyValue = /* @__PURE__ */ __name22((key) => {
       return properties.get(key);
     }, "getBooleanPropertyValue");
     for (const booleanProperty of booleanProperties) {
@@ -12619,7 +13349,7 @@ var AXNode = class _AXNode {
       "valuemax",
       "valuemin"
     ];
-    const getNumericalPropertyValue = /* @__PURE__ */ __name((key) => {
+    const getNumericalPropertyValue = /* @__PURE__ */ __name22((key) => {
       return properties.get(key);
     }, "getNumericalPropertyValue");
     for (const numericalProperty of numericalProperties) {
@@ -12634,7 +13364,7 @@ var AXNode = class _AXNode {
       "invalid",
       "orientation"
     ];
-    const getTokenPropertyValue = /* @__PURE__ */ __name((key) => {
+    const getTokenPropertyValue = /* @__PURE__ */ __name22((key) => {
       return properties.get(key);
     }, "getTokenPropertyValue");
     for (const tokenProperty of tokenProperties) {
@@ -12662,8 +13392,6 @@ var AXNode = class _AXNode {
     return nodeById.values().next().value;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/FrameManagerEvents.js
 var FrameManagerEvent;
 (function(FrameManagerEvent2) {
   FrameManagerEvent2.FrameAttached = /* @__PURE__ */ Symbol("FrameManager.FrameAttached");
@@ -12675,11 +13403,15 @@ var FrameManagerEvent;
   FrameManagerEvent2.ConsoleApiCalled = /* @__PURE__ */ Symbol("FrameManager.ConsoleApiCalled");
   FrameManagerEvent2.BindingCalled = /* @__PURE__ */ Symbol("FrameManager.BindingCalled");
 })(FrameManagerEvent || (FrameManagerEvent = {}));
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/WaitTask.js
 var WaitTask = class {
   static {
     __name(this, "WaitTask");
+  }
+  static {
+    __name2(this, "WaitTask");
+  }
+  static {
+    __name22(this, "WaitTask");
   }
   #world;
   #polling;
@@ -12828,6 +13560,12 @@ var TaskManager = class {
   static {
     __name(this, "TaskManager");
   }
+  static {
+    __name2(this, "TaskManager");
+  }
+  static {
+    __name22(this, "TaskManager");
+  }
   #tasks = /* @__PURE__ */ new Set();
   add(task) {
     this.#tasks.add(task);
@@ -12847,11 +13585,15 @@ var TaskManager = class {
     }));
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Realm.js
 var Realm = class {
   static {
     __name(this, "Realm");
+  }
+  static {
+    __name2(this, "Realm");
+  }
+  static {
+    __name22(this, "Realm");
   }
   timeoutSettings;
   taskManager = new TaskManager();
@@ -12885,11 +13627,15 @@ var Realm = class {
     this.dispose();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/IsolatedWorld.js
 var IsolatedWorld = class extends Realm {
   static {
     __name(this, "IsolatedWorld");
+  }
+  static {
+    __name2(this, "IsolatedWorld");
+  }
+  static {
+    __name22(this, "IsolatedWorld");
   }
   #context;
   #emitter = new EventEmitter();
@@ -13017,12 +13763,8 @@ var IsolatedWorld = class extends Realm {
     this.#emitter.removeAllListeners();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/IsolatedWorlds.js
 var MAIN_WORLD = /* @__PURE__ */ Symbol("mainWorld");
 var PUPPETEER_WORLD = /* @__PURE__ */ Symbol("puppeteerWorld");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/LifecycleWatcher.js
 var puppeteerToProtocolLifecycle = /* @__PURE__ */ new Map([
   ["load", "load"],
   ["domcontentloaded", "DOMContentLoaded"],
@@ -13032,6 +13774,12 @@ var puppeteerToProtocolLifecycle = /* @__PURE__ */ new Map([
 var LifecycleWatcher = class {
   static {
     __name(this, "LifecycleWatcher");
+  }
+  static {
+    __name2(this, "LifecycleWatcher");
+  }
+  static {
+    __name22(this, "LifecycleWatcher");
   }
   #expectedLifecycle;
   #frame;
@@ -13163,27 +13911,29 @@ var LifecycleWatcher = class {
       return true;
     }
     __name(checkLifecycle, "checkLifecycle");
+    __name2(checkLifecycle, "checkLifecycle");
+    __name22(checkLifecycle, "checkLifecycle");
   }
   dispose() {
     this.#subscriptions.dispose();
     this.#terminationDeferred.resolve(new Error("LifecycleWatcher disposed"));
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Frame.js
-var __runInitializers7 = function(thisArg, initializers, value) {
+var __runInitializers7 = /* @__PURE__ */ __name2(function(thisArg, initializers, value) {
   var useValue = arguments.length > 2;
   for (var i = 0; i < initializers.length; i++) {
     value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
   }
   return useValue ? value : void 0;
-};
-var __esDecorate7 = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+}, "__runInitializers7");
+var __esDecorate7 = /* @__PURE__ */ __name2(function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
   function accept(f) {
     if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected");
     return f;
   }
   __name(accept, "accept");
+  __name2(accept, "accept");
+  __name22(accept, "accept");
   var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
   var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
   var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
@@ -13210,7 +13960,7 @@ var __esDecorate7 = function(ctor, descriptorIn, decorators, contextIn, initiali
   }
   if (target) Object.defineProperty(target, contextIn.name, descriptor);
   done = true;
-};
+}, "__esDecorate7");
 var CdpFrame = (() => {
   let _classSuper = Frame;
   let _instanceExtraInitializers = [];
@@ -13226,14 +13976,20 @@ var CdpFrame = (() => {
       __name(this, "CdpFrame");
     }
     static {
+      __name2(this, "CdpFrame");
+    }
+    static {
+      __name22(this, "CdpFrame");
+    }
+    static {
       const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
-      __esDecorate7(this, null, _goto_decorators, { kind: "method", name: "goto", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "goto" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.goto, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate7(this, null, _waitForNavigation_decorators, { kind: "method", name: "waitForNavigation", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "waitForNavigation" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.waitForNavigation, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate7(this, null, _setContent_decorators, { kind: "method", name: "setContent", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "setContent" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.setContent, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate7(this, null, _addPreloadScript_decorators, { kind: "method", name: "addPreloadScript", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "addPreloadScript" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.addPreloadScript, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate7(this, null, _addExposedFunctionBinding_decorators, { kind: "method", name: "addExposedFunctionBinding", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "addExposedFunctionBinding" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.addExposedFunctionBinding, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate7(this, null, _removeExposedFunctionBinding_decorators, { kind: "method", name: "removeExposedFunctionBinding", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "removeExposedFunctionBinding" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.removeExposedFunctionBinding, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
-      __esDecorate7(this, null, _waitForDevicePrompt_decorators, { kind: "method", name: "waitForDevicePrompt", static: false, private: false, access: { has: /* @__PURE__ */ __name((obj) => "waitForDevicePrompt" in obj, "has"), get: /* @__PURE__ */ __name((obj) => obj.waitForDevicePrompt, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _goto_decorators, { kind: "method", name: "goto", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "goto" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.goto, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _waitForNavigation_decorators, { kind: "method", name: "waitForNavigation", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "waitForNavigation" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.waitForNavigation, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _setContent_decorators, { kind: "method", name: "setContent", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "setContent" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.setContent, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _addPreloadScript_decorators, { kind: "method", name: "addPreloadScript", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "addPreloadScript" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.addPreloadScript, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _addExposedFunctionBinding_decorators, { kind: "method", name: "addExposedFunctionBinding", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "addExposedFunctionBinding" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.addExposedFunctionBinding, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _removeExposedFunctionBinding_decorators, { kind: "method", name: "removeExposedFunctionBinding", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "removeExposedFunctionBinding" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.removeExposedFunctionBinding, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
+      __esDecorate7(this, null, _waitForDevicePrompt_decorators, { kind: "method", name: "waitForDevicePrompt", static: false, private: false, access: { has: /* @__PURE__ */ __name22((obj) => "waitForDevicePrompt" in obj, "has"), get: /* @__PURE__ */ __name22((obj) => obj.waitForDevicePrompt, "get") }, metadata: _metadata }, null, _instanceExtraInitializers);
       if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
     }
     #url = (__runInitializers7(this, _instanceExtraInitializers), "");
@@ -13346,6 +14102,8 @@ var CdpFrame = (() => {
         }
       }
       __name(navigate, "navigate");
+      __name2(navigate, "navigate");
+      __name22(navigate, "navigate");
     }
     async waitForNavigation(options = {}) {
       const { waitUntil = ["load"], timeout: timeout2 = this._frameManager.timeoutSettings.navigationTimeout() } = options;
@@ -13483,11 +14241,15 @@ var CdpFrame = (() => {
     }
   };
 })();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/FrameTree.js
 var FrameTree = class {
   static {
     __name(this, "FrameTree");
+  }
+  static {
+    __name2(this, "FrameTree");
+  }
+  static {
+    __name22(this, "FrameTree");
   }
   #frames = /* @__PURE__ */ new Map();
   // frameID -> parentFrameID
@@ -13561,11 +14323,15 @@ var FrameTree = class {
     return parentId ? this.getById(parentId) : void 0;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/HTTPRequest.js
 var HTTPRequest = class {
   static {
     __name(this, "HTTPRequest");
+  }
+  static {
+    __name2(this, "HTTPRequest");
+  }
+  static {
+    __name22(this, "HTTPRequest");
   }
   /**
    * @internal
@@ -13869,6 +14635,8 @@ function headersArray(headers) {
   return result;
 }
 __name(headersArray, "headersArray");
+__name2(headersArray, "headersArray");
+__name22(headersArray, "headersArray");
 var STATUS_TEXTS = {
   "100": "Continue",
   "101": "Switching Protocols",
@@ -13958,11 +14726,17 @@ function handleError(error) {
   debugError(error);
 }
 __name(handleError, "handleError");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/HTTPRequest.js
+__name2(handleError, "handleError");
+__name22(handleError, "handleError");
 var CdpHTTPRequest = class extends HTTPRequest {
   static {
     __name(this, "CdpHTTPRequest");
+  }
+  static {
+    __name2(this, "CdpHTTPRequest");
+  }
+  static {
+    __name22(this, "CdpHTTPRequest");
   }
   id;
   #client;
@@ -14117,11 +14891,15 @@ var CdpHTTPRequest = class extends HTTPRequest {
     }).catch(handleError);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/HTTPResponse.js
 var HTTPResponse = class {
   static {
     __name(this, "HTTPResponse");
+  }
+  static {
+    __name2(this, "HTTPResponse");
+  }
+  static {
+    __name22(this, "HTTPResponse");
   }
   /**
    * @internal
@@ -14155,11 +14933,15 @@ var HTTPResponse = class {
     return JSON.parse(content);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/SecurityDetails.js
 var SecurityDetails = class {
   static {
     __name(this, "SecurityDetails");
+  }
+  static {
+    __name2(this, "SecurityDetails");
+  }
+  static {
+    __name22(this, "SecurityDetails");
   }
   #subjectName;
   #issuer;
@@ -14217,11 +14999,15 @@ var SecurityDetails = class {
     return this.#sanList;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/HTTPResponse.js
 var CdpHTTPResponse = class extends HTTPResponse {
   static {
     __name(this, "CdpHTTPResponse");
+  }
+  static {
+    __name2(this, "CdpHTTPResponse");
+  }
+  static {
+    __name22(this, "CdpHTTPResponse");
   }
   #client;
   #request;
@@ -14332,11 +15118,15 @@ var CdpHTTPResponse = class extends HTTPResponse {
     return this.#request.frame();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/NetworkEventManager.js
 var NetworkEventManager = class {
   static {
     __name(this, "NetworkEventManager");
+  }
+  static {
+    __name2(this, "NetworkEventManager");
+  }
+  static {
+    __name22(this, "NetworkEventManager");
   }
   /**
    * There are four possible orders of events:
@@ -14456,11 +15246,15 @@ var NetworkEventManager = class {
     this.#queuedEventGroupMap.delete(networkRequestId);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/NetworkManager.js
 var NetworkManager = class extends EventEmitter {
   static {
     __name(this, "NetworkManager");
+  }
+  static {
+    __name2(this, "NetworkManager");
+  }
+  static {
+    __name22(this, "NetworkManager");
   }
   #frameManager;
   #networkEventManager = new NetworkEventManager();
@@ -14863,12 +15657,16 @@ var NetworkManager = class extends EventEmitter {
     this.emit(NetworkManagerEvent.RequestFailed, request);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/FrameManager.js
 var TIME_FOR_WAITING_FOR_SWAP = 100;
 var FrameManager = class extends EventEmitter {
   static {
     __name(this, "FrameManager");
+  }
+  static {
+    __name2(this, "FrameManager");
+  }
+  static {
+    __name22(this, "FrameManager");
   }
   #page;
   #networkManager;
@@ -15251,11 +16049,15 @@ var FrameManager = class extends EventEmitter {
     frame.emit(FrameEvent.FrameDetached, frame);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/Input.js
 var Keyboard = class {
   static {
     __name(this, "Keyboard");
+  }
+  static {
+    __name2(this, "Keyboard");
+  }
+  static {
+    __name22(this, "Keyboard");
   }
   /**
    * @internal
@@ -15274,6 +16076,12 @@ var Mouse = class {
   static {
     __name(this, "Mouse");
   }
+  static {
+    __name2(this, "Mouse");
+  }
+  static {
+    __name22(this, "Mouse");
+  }
   /**
    * @internal
    */
@@ -15283,6 +16091,12 @@ var Mouse = class {
 var Touchscreen = class {
   static {
     __name(this, "Touchscreen");
+  }
+  static {
+    __name2(this, "Touchscreen");
+  }
+  static {
+    __name22(this, "Touchscreen");
   }
   /**
    * @internal
@@ -15299,8 +16113,6 @@ var Touchscreen = class {
     await this.touchEnd();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/USKeyboardLayout.js
 var _keyDefinitions = {
   "0": { keyCode: 48, key: "0", code: "Digit0" },
   "1": { keyCode: 49, key: "1", code: "Digit1" },
@@ -15686,11 +16498,15 @@ var _keyDefinitions = {
   },
   VolumeUp: { keyCode: 183, key: "VolumeUp", code: "VolumeUp", location: 4 }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Input.js
 var CdpKeyboard = class extends Keyboard {
   static {
     __name(this, "CdpKeyboard");
+  }
+  static {
+    __name2(this, "CdpKeyboard");
+  }
+  static {
+    __name22(this, "CdpKeyboard");
   }
   #client;
   #pressedKeys = /* @__PURE__ */ new Set();
@@ -15828,7 +16644,7 @@ var CdpKeyboard = class extends Keyboard {
     await this.up(key);
   }
 };
-var getFlag = /* @__PURE__ */ __name((button) => {
+var getFlag = /* @__PURE__ */ __name22((button) => {
   switch (button) {
     case MouseButton.Left:
       return 1;
@@ -15842,7 +16658,7 @@ var getFlag = /* @__PURE__ */ __name((button) => {
       return 16;
   }
 }, "getFlag");
-var getButtonFromPressedButtons = /* @__PURE__ */ __name((buttons) => {
+var getButtonFromPressedButtons = /* @__PURE__ */ __name22((buttons) => {
   if (buttons & 1) {
     return MouseButton.Left;
   } else if (buttons & 2) {
@@ -15859,6 +16675,12 @@ var getButtonFromPressedButtons = /* @__PURE__ */ __name((buttons) => {
 var CdpMouse = class extends Mouse {
   static {
     __name(this, "CdpMouse");
+  }
+  static {
+    __name2(this, "CdpMouse");
+  }
+  static {
+    __name22(this, "CdpMouse");
   }
   #client;
   #keyboard;
@@ -15882,14 +16704,14 @@ var CdpMouse = class extends Mouse {
   #createTransaction() {
     const transaction = {};
     this.#transactions.push(transaction);
-    const popTransaction = /* @__PURE__ */ __name(() => {
+    const popTransaction = /* @__PURE__ */ __name22(() => {
       this.#transactions.splice(this.#transactions.indexOf(transaction), 1);
     }, "popTransaction");
     return {
-      update: /* @__PURE__ */ __name((updates) => {
+      update: /* @__PURE__ */ __name22((updates) => {
         Object.assign(transaction, updates);
       }, "update"),
-      commit: /* @__PURE__ */ __name(() => {
+      commit: /* @__PURE__ */ __name22(() => {
         this.#_state = { ...this.#_state, ...transaction };
         popTransaction();
       }, "commit"),
@@ -16090,6 +16912,12 @@ var CdpTouchscreen = class extends Touchscreen {
   static {
     __name(this, "CdpTouchscreen");
   }
+  static {
+    __name2(this, "CdpTouchscreen");
+  }
+  static {
+    __name22(this, "CdpTouchscreen");
+  }
   #client;
   #keyboard;
   constructor(client, keyboard) {
@@ -16138,11 +16966,15 @@ var CdpTouchscreen = class extends Touchscreen {
     });
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Tracing.js
 var Tracing = class {
   static {
     __name(this, "Tracing");
+  }
+  static {
+    __name2(this, "Tracing");
+  }
+  static {
+    __name22(this, "Tracing");
   }
   #client;
   #recording = false;
@@ -16228,11 +17060,15 @@ var Tracing = class {
     return await contentDeferred.valueOrThrow();
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/api/WebWorker.js
 var WebWorker = class extends EventEmitter {
   static {
     __name(this, "WebWorker");
+  }
+  static {
+    __name2(this, "WebWorker");
+  }
+  static {
+    __name22(this, "WebWorker");
   }
   /**
    * @internal
@@ -16303,11 +17139,15 @@ var WebWorker = class extends EventEmitter {
     throw new UnsupportedOperation("WebWorker.close() is not supported");
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/WebWorker.js
 var CdpWebWorker = class extends WebWorker {
   static {
     __name(this, "CdpWebWorker");
+  }
+  static {
+    __name2(this, "CdpWebWorker");
+  }
+  static {
+    __name22(this, "CdpWebWorker");
   }
   #world;
   #client;
@@ -16362,9 +17202,7 @@ var CdpWebWorker = class extends WebWorker {
     }
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Page.js
-var __addDisposableResource12 = function(env, value, async2) {
+var __addDisposableResource12 = /* @__PURE__ */ __name2(function(env, value, async2) {
   if (value !== null && value !== void 0) {
     if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
     var dispose;
@@ -16382,7 +17220,7 @@ var __addDisposableResource12 = function(env, value, async2) {
     env.stack.push({ async: true });
   }
   return value;
-};
+}, "__addDisposableResource12");
 var __disposeResources12 = /* @__PURE__ */ (function(SuppressedError2) {
   return function(env) {
     function fail(e) {
@@ -16390,6 +17228,8 @@ var __disposeResources12 = /* @__PURE__ */ (function(SuppressedError2) {
       env.hasError = true;
     }
     __name(fail, "fail");
+    __name2(fail, "fail");
+    __name22(fail, "fail");
     function next() {
       while (env.stack.length) {
         var rec = env.stack.pop();
@@ -16406,6 +17246,8 @@ var __disposeResources12 = /* @__PURE__ */ (function(SuppressedError2) {
       if (env.hasError) throw env.error;
     }
     __name(next, "next");
+    __name2(next, "next");
+    __name22(next, "next");
     return next();
   };
 })(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
@@ -16421,9 +17263,17 @@ function convertConsoleMessageLevel(method) {
   }
 }
 __name(convertConsoleMessageLevel, "convertConsoleMessageLevel");
+__name2(convertConsoleMessageLevel, "convertConsoleMessageLevel");
+__name22(convertConsoleMessageLevel, "convertConsoleMessageLevel");
 var CdpPage = class _CdpPage extends Page {
   static {
-    __name(this, "CdpPage");
+    __name(this, "_CdpPage");
+  }
+  static {
+    __name2(this, "_CdpPage");
+  }
+  static {
+    __name22(this, "CdpPage");
   }
   static async _create(client, target, defaultViewport) {
     const page = new _CdpPage(client, target);
@@ -16630,7 +17480,7 @@ var CdpPage = class _CdpPage extends Page {
       this.#primaryTargetClient.on(eventName, handler);
     }
   }
-  #onDetachedFromTarget = /* @__PURE__ */ __name((target) => {
+  #onDetachedFromTarget = /* @__PURE__ */ __name22((target) => {
     const sessionId = target._session()?.id();
     const worker = this.#workers.get(sessionId);
     if (!worker) {
@@ -16639,7 +17489,7 @@ var CdpPage = class _CdpPage extends Page {
     this.#workers.delete(sessionId);
     this.emit("workerdestroyed", worker);
   }, "#onDetachedFromTarget");
-  #onAttachedToTarget = /* @__PURE__ */ __name((session) => {
+  #onAttachedToTarget = /* @__PURE__ */ __name22((session) => {
     assert(session instanceof CdpCDPSession);
     this.#frameManager.onAttachedToTarget(session._target());
     if (session._target()._getTargetInfo().type === "worker") {
@@ -16810,7 +17660,7 @@ var CdpPage = class _CdpPage extends Page {
       urls: urls.length ? urls : [this.url()]
     })).cookies;
     const unsupportedCookieAttributes = ["sourcePort"];
-    const filterUnsupportedAttributes = /* @__PURE__ */ __name((cookie) => {
+    const filterUnsupportedAttributes = /* @__PURE__ */ __name22((cookie) => {
       for (const attr of unsupportedCookieAttributes) {
         delete cookie[attr];
       }
@@ -17216,8 +18066,8 @@ function getIntersectionRect(clip, viewport) {
   };
 }
 __name(getIntersectionRect, "getIntersectionRect");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Target.js
+__name2(getIntersectionRect, "getIntersectionRect");
+__name22(getIntersectionRect, "getIntersectionRect");
 var InitializationStatus;
 (function(InitializationStatus2) {
   InitializationStatus2["SUCCESS"] = "success";
@@ -17226,6 +18076,12 @@ var InitializationStatus;
 var CdpTarget = class extends Target {
   static {
     __name(this, "CdpTarget");
+  }
+  static {
+    __name2(this, "CdpTarget");
+  }
+  static {
+    __name22(this, "CdpTarget");
   }
   #browserContext;
   #session;
@@ -17364,7 +18220,13 @@ var CdpTarget = class extends Target {
 };
 var PageTarget = class _PageTarget extends CdpTarget {
   static {
-    __name(this, "PageTarget");
+    __name(this, "_PageTarget");
+  }
+  static {
+    __name2(this, "_PageTarget");
+  }
+  static {
+    __name22(this, "PageTarget");
   }
   #defaultViewport;
   pagePromise;
@@ -17422,10 +18284,22 @@ var DevToolsTarget = class extends PageTarget {
   static {
     __name(this, "DevToolsTarget");
   }
+  static {
+    __name2(this, "DevToolsTarget");
+  }
+  static {
+    __name22(this, "DevToolsTarget");
+  }
 };
 var WorkerTarget = class extends CdpTarget {
   static {
     __name(this, "WorkerTarget");
+  }
+  static {
+    __name2(this, "WorkerTarget");
+  }
+  static {
+    __name22(this, "WorkerTarget");
   }
   #workerPromise;
   async worker() {
@@ -17455,16 +18329,28 @@ var OtherTarget = class extends CdpTarget {
   static {
     __name(this, "OtherTarget");
   }
+  static {
+    __name2(this, "OtherTarget");
+  }
+  static {
+    __name22(this, "OtherTarget");
+  }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/ChromeTargetManager.js
 function isPageTargetBecomingPrimary(target, newTargetInfo) {
   return Boolean(target._subtype()) && !newTargetInfo.subtype;
 }
 __name(isPageTargetBecomingPrimary, "isPageTargetBecomingPrimary");
+__name2(isPageTargetBecomingPrimary, "isPageTargetBecomingPrimary");
+__name22(isPageTargetBecomingPrimary, "isPageTargetBecomingPrimary");
 var ChromeTargetManager = class extends EventEmitter {
   static {
     __name(this, "ChromeTargetManager");
+  }
+  static {
+    __name2(this, "ChromeTargetManager");
+  }
+  static {
+    __name22(this, "ChromeTargetManager");
   }
   #connection;
   /**
@@ -17512,7 +18398,7 @@ var ChromeTargetManager = class extends EventEmitter {
     this.#connection.on(CDPSessionEvent.SessionDetached, this.#onSessionDetached);
     this.#setupAttachmentListeners(this.#connection);
   }
-  #storeExistingTargetsForInit = /* @__PURE__ */ __name(() => {
+  #storeExistingTargetsForInit = /* @__PURE__ */ __name22(() => {
     if (!this.#waitForInitiallyDiscoveredTargets) {
       return;
     }
@@ -17559,13 +18445,13 @@ var ChromeTargetManager = class extends EventEmitter {
     return this.#attachedTargetsByTargetId;
   }
   #setupAttachmentListeners(session) {
-    const listener = /* @__PURE__ */ __name((event) => {
+    const listener = /* @__PURE__ */ __name22((event) => {
       void this.#onAttachedToTarget(session, event);
     }, "listener");
     assert(!this.#attachedToTargetListenersBySession.has(session));
     this.#attachedToTargetListenersBySession.set(session, listener);
     session.on("Target.attachedToTarget", listener);
-    const detachedListener = /* @__PURE__ */ __name((event) => {
+    const detachedListener = /* @__PURE__ */ __name22((event) => {
       return this.#onDetachedFromTarget(session, event);
     }, "detachedListener");
     assert(!this.#detachedFromTargetListenersBySession.has(session));
@@ -17583,10 +18469,10 @@ var ChromeTargetManager = class extends EventEmitter {
       this.#detachedFromTargetListenersBySession.delete(session);
     }
   }
-  #onSessionDetached = /* @__PURE__ */ __name((session) => {
+  #onSessionDetached = /* @__PURE__ */ __name22((session) => {
     this.#removeAttachmentListeners(session);
   }, "#onSessionDetached");
-  #onTargetCreated = /* @__PURE__ */ __name(async (event) => {
+  #onTargetCreated = /* @__PURE__ */ __name22(async (event) => {
     this.#discoveredTargetsByTargetId.set(event.targetInfo.targetId, event.targetInfo);
     this.emit("targetDiscovered", event.targetInfo);
     if (event.targetInfo.type === "browser" && event.targetInfo.attached) {
@@ -17598,7 +18484,7 @@ var ChromeTargetManager = class extends EventEmitter {
       this.#attachedTargetsByTargetId.set(event.targetInfo.targetId, target);
     }
   }, "#onTargetCreated");
-  #onTargetDestroyed = /* @__PURE__ */ __name((event) => {
+  #onTargetDestroyed = /* @__PURE__ */ __name22((event) => {
     const targetInfo = this.#discoveredTargetsByTargetId.get(event.targetId);
     this.#discoveredTargetsByTargetId.delete(event.targetId);
     this.#finishInitializationIfReady(event.targetId);
@@ -17610,7 +18496,7 @@ var ChromeTargetManager = class extends EventEmitter {
       }
     }
   }, "#onTargetDestroyed");
-  #onTargetInfoChanged = /* @__PURE__ */ __name((event) => {
+  #onTargetInfoChanged = /* @__PURE__ */ __name22((event) => {
     this.#discoveredTargetsByTargetId.set(event.targetInfo.targetId, event.targetInfo);
     if (this.#ignoredTargets.has(event.targetInfo.targetId) || !this.#attachedTargetsByTargetId.has(event.targetInfo.targetId) || !event.targetInfo.attached) {
       return;
@@ -17635,13 +18521,13 @@ var ChromeTargetManager = class extends EventEmitter {
       });
     }
   }, "#onTargetInfoChanged");
-  #onAttachedToTarget = /* @__PURE__ */ __name(async (parentSession, event) => {
+  #onAttachedToTarget = /* @__PURE__ */ __name22(async (parentSession, event) => {
     const targetInfo = event.targetInfo;
     const session = this.#connection.session(event.sessionId);
     if (!session) {
       throw new Error(`Session ${event.sessionId} was not created.`);
     }
-    const silentDetach = /* @__PURE__ */ __name(async () => {
+    const silentDetach = /* @__PURE__ */ __name22(async () => {
       await session.send("Runtime.runIfWaitingForDebugger").catch(debugError);
       await parentSession.send("Target.detachFromTarget", {
         sessionId: session.id()
@@ -17703,7 +18589,7 @@ var ChromeTargetManager = class extends EventEmitter {
       this.#initializeDeferred.resolve();
     }
   }
-  #onDetachedFromTarget = /* @__PURE__ */ __name((parentSession, event) => {
+  #onDetachedFromTarget = /* @__PURE__ */ __name22((parentSession, event) => {
     const target = this.#attachedTargetsBySessionId.get(event.sessionId);
     this.#attachedTargetsBySessionId.delete(event.sessionId);
     if (!target) {
@@ -17716,11 +18602,15 @@ var ChromeTargetManager = class extends EventEmitter {
     this.emit("targetGone", target);
   }, "#onDetachedFromTarget");
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/Browser.js
 var CdpBrowser = class _CdpBrowser extends Browser {
   static {
-    __name(this, "CdpBrowser");
+    __name(this, "_CdpBrowser");
+  }
+  static {
+    __name2(this, "_CdpBrowser");
+  }
+  static {
+    __name22(this, "CdpBrowser");
   }
   protocol = "cdp";
   static async _create(product, connection, contextIds, ignoreHTTPSErrors, defaultViewport, process3, closeCallback, targetFilterCallback, isPageTargetCallback, waitForInitiallyDiscoveredTargets = true, sessionId) {
@@ -17766,7 +18656,7 @@ var CdpBrowser = class _CdpBrowser extends Browser {
     }
     this.#sessionId = sessionId || "unknown";
   }
-  #emitDisconnected = /* @__PURE__ */ __name(() => {
+  #emitDisconnected = /* @__PURE__ */ __name22(() => {
     this.emit("disconnected", void 0);
   }, "#emitDisconnected");
   async _attach() {
@@ -17823,13 +18713,13 @@ var CdpBrowser = class _CdpBrowser extends Browser {
     });
     this.#contexts.delete(contextId);
   }
-  #createTarget = /* @__PURE__ */ __name((targetInfo, session) => {
+  #createTarget = /* @__PURE__ */ __name22((targetInfo, session) => {
     const { browserContextId } = targetInfo;
     const context2 = browserContextId && this.#contexts.has(browserContextId) ? this.#contexts.get(browserContextId) : this.#defaultContext;
     if (!context2) {
       throw new Error("Missing browser context");
     }
-    const createSession = /* @__PURE__ */ __name((isAutoAttachEmulated) => {
+    const createSession = /* @__PURE__ */ __name22((isAutoAttachEmulated) => {
       return this.#connection._createSession(targetInfo, isAutoAttachEmulated);
     }, "createSession");
     const otherTarget = new OtherTarget(targetInfo, session, context2, this.#targetManager, createSession);
@@ -17844,13 +18734,13 @@ var CdpBrowser = class _CdpBrowser extends Browser {
     }
     return otherTarget;
   }, "#createTarget");
-  #onAttachedToTarget = /* @__PURE__ */ __name(async (target) => {
+  #onAttachedToTarget = /* @__PURE__ */ __name22(async (target) => {
     if (target._isTargetExposed() && await target._initializedDeferred.valueOrThrow() === InitializationStatus.SUCCESS) {
       this.emit("targetcreated", target);
       target.browserContext().emit("targetcreated", target);
     }
   }, "#onAttachedToTarget");
-  #onDetachedFromTarget = /* @__PURE__ */ __name(async (target) => {
+  #onDetachedFromTarget = /* @__PURE__ */ __name22(async (target) => {
     target._initializedDeferred.resolve(InitializationStatus.ABORTED);
     target._isClosedDeferred.resolve();
     if (target._isTargetExposed() && await target._initializedDeferred.valueOrThrow() === InitializationStatus.SUCCESS) {
@@ -17858,11 +18748,11 @@ var CdpBrowser = class _CdpBrowser extends Browser {
       target.browserContext().emit("targetdestroyed", target);
     }
   }, "#onDetachedFromTarget");
-  #onTargetChanged = /* @__PURE__ */ __name(({ target }) => {
+  #onTargetChanged = /* @__PURE__ */ __name22(({ target }) => {
     this.emit("targetchanged", target);
     target.browserContext().emit("targetchanged", target);
   }, "#onTargetChanged");
-  #onTargetDiscovered = /* @__PURE__ */ __name((targetInfo) => {
+  #onTargetDiscovered = /* @__PURE__ */ __name22((targetInfo) => {
     this.emit("targetdiscovered", targetInfo);
   }, "#onTargetDiscovered");
   wsEndpoint() {
@@ -17943,8 +18833,6 @@ var CdpBrowser = class _CdpBrowser extends Browser {
     return this.#sessionId;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cdp/BrowserConnector.js
 async function _connectToCdpBrowser(connectionTransport, url, options) {
   const { ignoreHTTPSErrors = false, defaultViewport = DEFAULT_VIEWPORT, targetFilter, _isPageTarget: isPageTarget, slowMo = 0, protocolTimeout } = options;
   const connection = new Connection(url, connectionTransport, slowMo, protocolTimeout);
@@ -17957,9 +18845,9 @@ async function _connectToCdpBrowser(connectionTransport, url, options) {
   return browser;
 }
 __name(_connectToCdpBrowser, "_connectToCdpBrowser");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/BrowserConnector.js
-var getWebSocketTransportClass = /* @__PURE__ */ __name(async () => {
+__name2(_connectToCdpBrowser, "_connectToCdpBrowser");
+__name22(_connectToCdpBrowser, "_connectToCdpBrowser");
+var getWebSocketTransportClass = /* @__PURE__ */ __name22(async () => {
   return isNode ? (await Promise.resolve().then(() => (init_NodeWebSocketTransport(), NodeWebSocketTransport_exports))).NodeWebSocketTransport : (await Promise.resolve().then(() => (init_BrowserWebSocketTransport(), BrowserWebSocketTransport_exports))).BrowserWebSocketTransport;
 }, "getWebSocketTransportClass");
 async function _connectToBrowser(options) {
@@ -17968,6 +18856,8 @@ async function _connectToBrowser(options) {
   return cdpBrowser;
 }
 __name(_connectToBrowser, "_connectToBrowser");
+__name2(_connectToBrowser, "_connectToBrowser");
+__name22(_connectToBrowser, "_connectToBrowser");
 async function getConnectionTransport(options) {
   const { browserWSEndpoint, browserURL, transport, headers = {} } = options;
   assert(Number(!!browserWSEndpoint) + Number(!!browserURL) + Number(!!transport) === 1, "Exactly one of browserWSEndpoint, browserURL or transport must be passed to puppeteer.connect");
@@ -17992,6 +18882,8 @@ async function getConnectionTransport(options) {
   throw new Error("Invalid connection options");
 }
 __name(getConnectionTransport, "getConnectionTransport");
+__name2(getConnectionTransport, "getConnectionTransport");
+__name22(getConnectionTransport, "getConnectionTransport");
 async function getWSEndpoint(browserURL) {
   const endpointURL = new URL("/json/version", browserURL);
   try {
@@ -18011,11 +18903,17 @@ async function getWSEndpoint(browserURL) {
   }
 }
 __name(getWSEndpoint, "getWSEndpoint");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/Puppeteer.js
+__name2(getWSEndpoint, "getWSEndpoint");
+__name22(getWSEndpoint, "getWSEndpoint");
 var Puppeteer = class {
   static {
     __name(this, "Puppeteer");
+  }
+  static {
+    __name2(this, "Puppeteer");
+  }
+  static {
+    __name22(this, "Puppeteer");
   }
   /**
    * Operations for {@link CustomQueryHandler | custom query handlers}. See
@@ -18094,8 +18992,6 @@ var Puppeteer = class {
     return _connectToBrowser(options);
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cloudflare/utils.js
 var DEFAULT_VIEWPORT2 = Object.freeze({ width: 800, height: 600 });
 async function connectToCDPBrowser(connectionTransport, options) {
   const { ignoreHTTPSErrors = false, defaultViewport = DEFAULT_VIEWPORT2, targetFilter, _isPageTarget: isPageTarget, slowMo = 0, protocolTimeout, sessionId = "unknown" } = options;
@@ -18109,6 +19005,8 @@ async function connectToCDPBrowser(connectionTransport, options) {
   return browser;
 }
 __name(connectToCDPBrowser, "connectToCDPBrowser");
+__name2(connectToCDPBrowser, "connectToCDPBrowser");
+__name22(connectToCDPBrowser, "connectToCDPBrowser");
 var GUARDRAILS_HEADER = "cf-brapi-guardrails";
 function encodeGuardrailsHeader(policy) {
   const bytes = new TextEncoder().encode(JSON.stringify(policy));
@@ -18119,13 +19017,19 @@ function encodeGuardrailsHeader(policy) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 __name(encodeGuardrailsHeader, "encodeGuardrailsHeader");
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cloudflare/WorkersWebSocketTransport.js
+__name2(encodeGuardrailsHeader, "encodeGuardrailsHeader");
+__name22(encodeGuardrailsHeader, "encodeGuardrailsHeader");
 init_version();
 var FAKE_HOST = "https://fake.host";
 var WorkersWebSocketTransport = class _WorkersWebSocketTransport {
   static {
-    __name(this, "WorkersWebSocketTransport");
+    __name(this, "_WorkersWebSocketTransport");
+  }
+  static {
+    __name2(this, "_WorkersWebSocketTransport");
+  }
+  static {
+    __name22(this, "WorkersWebSocketTransport");
   }
   ws;
   onmessage;
@@ -18168,12 +19072,16 @@ var WorkersWebSocketTransport = class _WorkersWebSocketTransport {
     return this.sessionId ?? "unknown";
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/cloudflare/PuppeteerWorkers.js
 var FAKE_HOST2 = "https://fake.host";
 var PuppeteerWorkers = class extends Puppeteer {
   static {
     __name(this, "PuppeteerWorkers");
+  }
+  static {
+    __name2(this, "PuppeteerWorkers");
+  }
+  static {
+    __name22(this, "PuppeteerWorkers");
   }
   constructor() {
     super({ isPuppeteerCore: false });
@@ -18312,11 +19220,7 @@ var PuppeteerWorkers = class extends Puppeteer {
     return response;
   }
 };
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/common.js
 init_BrowserWebSocketTransport();
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/common/Device.js
 var knownDevices = [
   {
     name: "Blackberry PlayBook",
@@ -19896,50 +20800,56 @@ for (const device of knownDevices) {
   knownDevicesByName[device.name] = device;
 }
 var KnownDevices = Object.freeze(knownDevicesByName);
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/revisions.js
 var PUPPETEER_REVISIONS = Object.freeze({
   chrome: "126.0.6478.182",
   "chrome-headless-shell": "126.0.6478.182",
   firefox: "latest"
 });
-
-// node_modules/@cloudflare/puppeteer/lib/esm/puppeteer/puppeteer-cloudflare.js
 var puppeteer = new PuppeteerWorkers();
 var { connect, history, launch, limits, sessions, acquire } = puppeteer;
 var puppeteer_cloudflare_default = puppeteer;
-
-// publish-worker-src.js
 var ZENODO = "https://zenodo.org/api/deposit/depositions";
 function json(data, status) {
   if (status === void 0) status = 200;
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
 __name(json, "json");
+__name2(json, "json");
+__name22(json, "json");
 function authorized(request, env) {
   if (!env.ERRATA_TOKEN) return false;
   return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
 }
 __name(authorized, "authorized");
+__name2(authorized, "authorized");
+__name22(authorized, "authorized");
 function doiToRecordId(doi) {
   const m = (doi || "").match(/zenodo\.(\d+)/);
   return m ? m[1] : null;
 }
 __name(doiToRecordId, "doiToRecordId");
+__name2(doiToRecordId, "doiToRecordId");
+__name22(doiToRecordId, "doiToRecordId");
 function r2Prefix(paper) {
   const raw = paper && (paper.r2_path || paper.r2_key) || "";
   let p = raw.replace(/^qnfo-releases\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
   return p ? p + "/" : "";
 }
 __name(r2Prefix, "r2Prefix");
+__name2(r2Prefix, "r2Prefix");
+__name22(r2Prefix, "r2Prefix");
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 __name(esc, "esc");
+__name2(esc, "esc");
+__name22(esc, "esc");
 function inline(s) {
   return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*(.+?)\*/g, "<em>$1</em>");
 }
 __name(inline, "inline");
+__name2(inline, "inline");
+__name22(inline, "inline");
 function markdownToHtml(md) {
   const body = (md || "").replace(/^---\n[\s\S]*?\n---\n?/, "");
   const lines = body.split("\n");
@@ -19992,6 +20902,8 @@ function markdownToHtml(md) {
   return head + content + "</body></html>";
 }
 __name(markdownToHtml, "markdownToHtml");
+__name2(markdownToHtml, "markdownToHtml");
+__name22(markdownToHtml, "markdownToHtml");
 async function renderPdf(env, html) {
   const browser = await puppeteer_cloudflare_default.launch(env.BROWSER);
   try {
@@ -20004,6 +20916,8 @@ async function renderPdf(env, html) {
   }
 }
 __name(renderPdf, "renderPdf");
+__name2(renderPdf, "renderPdf");
+__name22(renderPdf, "renderPdf");
 async function zenodo(env, path, opts) {
   const sep = path.indexOf("?") >= 0 ? "&" : "?";
   const url = ZENODO + path + sep + "access_token=" + env.ZENODO_TOKEN;
@@ -20025,6 +20939,8 @@ async function zenodo(env, path, opts) {
   return d;
 }
 __name(zenodo, "zenodo");
+__name2(zenodo, "zenodo");
+__name22(zenodo, "zenodo");
 async function publishNewVersion(env, action, paper) {
   const recordId = doiToRecordId(paper.doi || action.paper_doi);
   if (!recordId) throw new Error("cannot derive record id from " + (paper.doi || action.paper_doi));
@@ -20094,14 +21010,19 @@ async function publishNewVersion(env, action, paper) {
       });
       if (!dup) merged.push(pc);
     }
-    if (merged.length) metaClean.related_identifiers = merged;
+    if (merged.length) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Sources: " + merged.map(function(m) {
+      return m.identifier;
+    }).join(", ");
   } catch (e) {
   }
+  delete metaClean.related_identifiers;
   await zenodo(env, "/" + draftId, { method: "PUT", jsonBody: { metadata: metaClean } });
   const pub = await zenodo(env, "/" + draftId + "/actions/publish", { method: "POST" });
   return { newDoi: pub.doi, newRecordId: pub.id, conceptrecid: pub.conceptrecid, version: action.version_to, pdf, pdfError };
 }
 __name(publishNewVersion, "publishNewVersion");
+__name2(publishNewVersion, "publishNewVersion");
+__name22(publishNewVersion, "publishNewVersion");
 async function repointStores(env, action, paper, pub) {
   if (!pub.newDoi) throw new Error("publish response missing doi; aborting store re-point");
   const status = {};
@@ -20146,6 +21067,8 @@ async function repointStores(env, action, paper, pub) {
   return status;
 }
 __name(repointStores, "repointStores");
+__name2(repointStores, "repointStores");
+__name22(repointStores, "repointStores");
 async function notifyUser(env, action, paper, pub, err) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
   try {
@@ -20159,6 +21082,8 @@ async function notifyUser(env, action, paper, pub, err) {
   }
 }
 __name(notifyUser, "notifyUser");
+__name2(notifyUser, "notifyUser");
+__name22(notifyUser, "notifyUser");
 async function publishAction(env, action) {
   const paper = await env.PAPERS_DB.prepare(
     "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
@@ -20195,6 +21120,8 @@ async function publishAction(env, action) {
   return { action_id: action.id, slug: paper.slug, published: pub, repoint, notify };
 }
 __name(publishAction, "publishAction");
+__name2(publishAction, "publishAction");
+__name22(publishAction, "publishAction");
 async function runPublish(env, mode) {
   const dry = mode === "dry";
   if (!dry) {
@@ -20228,9 +21155,11 @@ async function runPublish(env, mode) {
       results.push({ action_id: a.id, error: e.message });
     }
   }
-  return { ok: true, worker: "qnfo-errata-publish", version: "0.7.0", dry, processed: rows.length, results };
+  return { ok: true, worker: "qnfo-errata-publish", version: "0.7.1-relid-fix", dry, processed: rows.length, results };
 }
 __name(runPublish, "runPublish");
+__name2(runPublish, "runPublish");
+__name22(runPublish, "runPublish");
 var publish_worker_src_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -20238,7 +21167,7 @@ var publish_worker_src_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-publish", version: "0.7.0", bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
+      return json({ ok: true, worker: "qnfo-errata-publish", version: "0.7.1-relid-fix", bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
     }
     if (url.pathname === "/debug/pdf") {
       try {
@@ -20419,4 +21348,6 @@ export {
    * SPDX-License-Identifier: Apache-2.0
    *)
 */
-//# sourceMappingURL=publish-worker-src.js.map
+//# sourceMappingURL=deployed-current.worker.js.map
+
+--acaaee90a8bd68ab0697be092f7f21f96f51070a13b57a5b1abbab8b6978--
