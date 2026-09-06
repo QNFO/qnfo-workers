@@ -1,0 +1,22 @@
+name = "qnfo-paper-reviser"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# Secrets (persist across deploys; set once):
+#   REVISER_TOKEN - X-Reviser-Token bearer auth
+
+[[d1_databases]]
+binding = "PAPERS_DB"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[d1_databases]]
+binding = "WATCH_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[ai]
+binding = "AI"
+
+[triggers]
+crons = ["37 */4 * * *"]
