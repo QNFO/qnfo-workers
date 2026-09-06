@@ -1,12 +1,13 @@
 // qnfo-error-selfheal — autonomous fleet error detection + deterministic self-correction.
-// VERSION 1.0.1 (2026-09-06). Canonical repo: QNFO/qnfo-workers/qnfo-error-selfheal.
+// VERSION 1.0.2 (2026-09-06). Canonical repo: QNFO/qnfo-workers/qnfo-error-selfheal.
+// v1.0.2: scanAlertStorms() polices the alert stream (dup>3 or flood>8 per 60m -> one open issue per source+class).
 // Purpose: hourly cloud-cron watcher that (1) queries CF GraphQL workersInvocationsAdaptive for
 // NEW uncaught worker exceptions in the last 60 min, (2) queries Log Explorer zone http_requests
 // for 5xx edges, (3) files deduped agent_issues + alerts for any new spike, (4) deterministically
 // auto-re-arms the now-fixed Zenodo legacy related_identifiers failure class (errata_actions
 // status='error' risk='low' -> 'drafted', bounded <=3/day/action) so the errata-publish worker
 // v0.7.1+ retries and publishes. Self-docs /health per FLEET-SELF-DOC-1.
-const VERSION = "1.0.1"; // 2026-09-06 Log Explorer 60m 5xx filter fix (was epoch-ms no-op)
+const VERSION = "1.0.2"; // 2026-09-06 v1.0.1 5xx ISO-filter fix; v1.0.2 alert-storm watchdog
 const WORKER = "qnfo-error-selfheal";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const ZONE = "84e9dc1d7fb72629ccdbe3174ed24420"; // qnfo.org
@@ -65,6 +66,45 @@ async function recoverErrata(env) {
     rearmed++;
   }
   return rearmed;
+}
+
+async function scanAlertStorms(env) {
+  // v1.0.2: self-correcting oversight over the ALERT STREAM itself. Reads newest 500 alert rows
+  // (id order is format-independent; created_at mixes ISO-T and space formats - never string-range compare),
+  // detects duplicate-message floods (>3 identical/60m) and source floods (>8 alerts/60m), files ONE
+  // open agent_issue per source+class. Polices every alert writer, incl. this worker.
+  const rows = await env.QNFO_AUDIT.prepare(
+    "SELECT id, source, message, created_at FROM alerts ORDER BY id DESC LIMIT 500"
+  ).all();
+  const list = rows && rows.results ? rows.results : [];
+  const now = Date.now();
+  const byMsg = {};
+  const bySrc = {};
+  for (const r of list) {
+    const t = new Date(String(r.created_at || "").replace(" ", "T").replace("Z", "") + "Z").getTime();
+    if (!t || now - t > 60 * 60000) continue;
+    const key = (r.source || "?") + "||" + (r.message || "");
+    byMsg[key] = (byMsg[key] || 0) + 1;
+    bySrc[r.source || "?"] = (bySrc[r.source || "?"] || 0) + 1;
+  }
+  const storms = [];
+  for (const k of Object.keys(byMsg)) if (byMsg[k] > 3) storms.push({ source: k.split("||")[0], kind: "dup", count: byMsg[k] });
+  for (const s of Object.keys(bySrc)) if (bySrc[s] > 8) storms.push({ source: s, kind: "flood", count: bySrc[s] });
+  const filed = [];
+  for (const st of storms) {
+    if (filed.some((f) => f.source === st.source && f.kind === st.kind)) continue;
+    const title = "ALERT-STORM-DETECTED " + st.source + " (" + st.kind + ")";
+    const dup = await env.QNFO_AUDIT.prepare(
+      "SELECT id FROM agent_issues WHERE title=? AND (status IS NULL OR status NOT IN ('closed','done','resolved')) LIMIT 1"
+    ).bind(title).first();
+    if (!dup) {
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+      ).bind(title, "qnfo-error-selfheal detected " + st.count + " " + st.kind + " alerts from " + st.source + " in the trailing 60 min. Root-cause the alert source emit cadence/dedup per RECURRENCE-ZERO-1; verify quieter after fix.", WORKER, "infra", "medium", "open", nowIso(), nowIso()).run();
+      filed.push(st);
+    }
+  }
+  return { storms: storms.slice(0, 8), filed: filed };
 }
 
 async function scan(env) {
@@ -140,6 +180,7 @@ async function scan(env) {
     }
   } catch (e) { out.log_explorer_error = String(e.message || e).slice(0, 150); }
   out.errata_rearmed = await recoverErrata(env);
+  out.alert_storms = await scanAlertStorms(env);
   out.ok = true;
   return out;
 }
