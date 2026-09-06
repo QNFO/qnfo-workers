@@ -1,0 +1,10 @@
+name = "qnfo-citation-watch"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "obsidian-vault"
+
+[triggers]
+crons = ["0 11 1,15 * *"]
