@@ -1,12 +1,12 @@
-// qnfo-research-supervisor v1.0.0 -- durable supervisor over the research-publication pipeline.
-// Purpose: single scheduled Workflow that surveys pipeline queues and remediates conservative
-// stalls so task completion advances without manual prompting. D1-only (no auth, no services).
-// Bindings: QNFO_AUDIT (D1 qnfo-audit), LIVING_PAPER (D1 living-paper).
-// Workflow binding: RESEARCH_SUPERVISOR -> research-supervisor (ResearchSupervisor), schedule */15 * * * *.
+// qnfo-research-supervisor v1.1.0 -- durable supervisor + driver over the research-publication pipeline.
+// v1.1.0 (2026-09-06): added RESEARCH_EXEC service binding + halt-aware 'drive' step.
+//   survey -> remediate (stale claims / stale 'publishing') -> drive (research /run x2 + v2 drain) -> record.
+// Purpose: make task completion move automatically through the pipeline on a 15-min durable cadence.
+// D1 + one service binding (no auth secrets). Schedule rides the [[workflows]] binding.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 function json(data, status) {
   if (status === void 0) status = 200;
@@ -24,6 +24,11 @@ async function firstRows(env, sql, max) {
   return (r.results || []).slice(0, max || 20);
 }
 
+async function countWhere(env, sql) {
+  const r = await env.QNFO_AUDIT.prepare(sql).first();
+  return (r && r.n) || 0;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -32,7 +37,7 @@ export default {
         ok: true,
         worker: "qnfo-research-supervisor",
         version: VERSION,
-        bindings: { workflow: !!env.RESEARCH_SUPERVISOR, audit: !!env.QNFO_AUDIT, living: !!env.LIVING_PAPER },
+        bindings: { workflow: !!env.RESEARCH_SUPERVISOR, audit: !!env.QNFO_AUDIT, living: !!env.LIVING_PAPER, researchExec: !!env.RESEARCH_EXEC },
         workflowClass: "ResearchSupervisor"
       });
     }
@@ -89,12 +94,51 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
       return { actions: actions, acted: actions.length };
     });
 
+    const drive = await step.do("drive", { retries: retry, timeout: "600 seconds" }, async function () {
+      if (!env.RESEARCH_EXEC) return { skipped: "no-service-binding", calls: 0 };
+      const haltRow = await env.QNFO_AUDIT.prepare("SELECT id FROM cloud_ops_events WHERE job='qnfo-research-exec' AND kind='halt' AND ts >= datetime('now','-60 minutes') LIMIT 1").first();
+      if (haltRow) return { skipped: "research-halted", calls: 0 };
+      const rq = await countWhere(env, "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching')");
+      const vq = await countWhere(env, "SELECT COUNT(*) AS n FROM version_queue WHERE status IN ('drafted','publishing')");
+      const calls = [];
+      if (rq > 0) {
+        for (let i = 0; i < 2; i++) {
+          let res;
+          try {
+            res = await env.RESEARCH_EXEC.fetch("https://RESEARCH_EXEC/run", { method: "POST" });
+          } catch (e) {
+            calls.push({ kind: "research", error: String(e && e.message || e).slice(0, 200) });
+            break;
+          }
+          let body = null;
+          try { body = await res.json(); } catch (e) {}
+          const o = (body && body.out) || {};
+          calls.push({ kind: "research", status: res.status, outStatus: o.status || null, claimed: o.claimed !== void 0 ? o.claimed : null });
+          if (o.claimed === 0 || o.status === "error") break;
+        }
+      }
+      if (vq > 0) {
+        let res;
+        try {
+          res = await env.RESEARCH_EXEC.fetch("https://RESEARCH_EXEC/run/drain-v2", { method: "POST" });
+        } catch (e) {
+          calls.push({ kind: "drain-v2", error: String(e && e.message || e).slice(0, 200) });
+          return { skipped: "", calls: calls, backlog: { research: rq, version: vq } };
+        }
+        let body = null;
+        try { body = await res.json(); } catch (e) {}
+        calls.push({ kind: "drain-v2", status: res.status, drained: body && Array.isArray(body.drained) ? body.drained.length : null });
+      }
+      return { skipped: "", calls: calls, backlog: { research: rq, version: vq } };
+    });
+
     const record = await step.do("record", { retries: retry, timeout: "30 seconds" }, async function () {
       const text = JSON.stringify({
         rq: survey.rq, vq: survey.vq, st: survey.st, prl: survey.prl,
         staleClaims: survey.staleClaims.length, stalePublishing: survey.stalePublishing.length,
         publishedTotal: survey.publishedTotal, published24h: survey.published24h,
-        actions: remediate.actions
+        actions: remediate.actions,
+        drive: drive
       });
       const id = "spv-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
       await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind(id, new Date().toISOString(), "pipeline-supervisor", String(text).slice(0, 2000), "{}", "qnfo-research-supervisor", "ok").run();
@@ -115,7 +159,8 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
         publishedTotal: survey.publishedTotal,
         published24h: survey.published24h
       },
-      remediate: remediate
+      remediate: remediate,
+      drive: drive
     };
   }
 }

@@ -4,16 +4,21 @@ compatibility_date = "2026-08-10"
 workers_dev = true
 usage_model = "standard"
 
-# v1.0.0 (2026-09-06): durable supervisor over the research-publication pipeline.
-# Surveys research_queue / version_queue / social_threads / paper_revision_log and remediates
-# conservative stalls (stale research-exec claims, stale version_queue 'publishing').
-# D1-only (no auth, no service bindings). Schedule rides the [[workflows]] binding.
+# v1.1.0 (2026-09-06): durable supervisor + driver over the research-publication pipeline.
+# Survey + remediate stalls (stale research-exec claims, stale version_queue 'publishing'),
+# then DRIVE the research cycle (research-exec /run) and v2 publish drain (/run/drain-v2)
+# when backlog exists. Halt-aware: skips driving if research-exec logged a RESEARCH_HALT
+# event in the last 60 minutes. D1 + one service binding (no auth secrets).
 
 [[workflows]]
 name = "research-supervisor"
 binding = "RESEARCH_SUPERVISOR"
 class_name = "ResearchSupervisor"
 schedules = ["*/15 * * * *"]
+
+[[services]]
+binding = "RESEARCH_EXEC"
+service = "qnfo-research-exec"
 
 [[d1_databases]]
 binding = "QNFO_AUDIT"
