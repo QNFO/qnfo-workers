@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.14-drain-route";
+var VERSION = "0.5.15-atomic-drain";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"]; // v0.5.12-full-package: glm-5.2 second model (verified live in idea-triage) + note gateway fallback
 var MAX_NOTE = 4e3;
@@ -555,7 +555,8 @@ async function drainV2(env) {
   var results = [];
   for (var i = 0; i < (rows.results || []).length; i++) {
     var r = rows.results[i];
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='publishing', updated_at=datetime('now') WHERE id=?").bind(r.id).run();
+    var claim = await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='publishing', updated_at=datetime('now') WHERE id=? AND (status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')))").bind(r.id).run();
+    if (!claim || !claim.meta || !claim.meta.changes) continue;
     try { results.push(await publishV2(env, r)); } catch (e) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(r.id).run();
       results.push({ ok: false, stage: "v2", error: String(e && e.message || e).slice(0, 200) });
@@ -634,4 +635,5 @@ var worker_default = {
 };
 export {
   worker_default as default
-};
+};
+

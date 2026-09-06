@@ -1,12 +1,16 @@
-// qnfo-research-supervisor v1.1.0 -- durable supervisor + driver over the research-publication pipeline.
-// v1.1.0 (2026-09-06): added RESEARCH_EXEC service binding + halt-aware 'drive' step.
-//   survey -> remediate (stale claims / stale 'publishing') -> drive (research /run x2 + v2 drain) -> record.
-// Purpose: make task completion move automatically through the pipeline on a 15-min durable cadence.
-// D1 + one service binding (no auth secrets). Schedule rides the [[workflows]] binding.
+// qnfo-research-supervisor v1.1.1 -- durable supervisor + v2-drain driver over the research-publication pipeline.
+// v1.0.0 (2026-09-06): survey + remediate stalls + record.
+// v1.1.0 (2026-09-06): added RESEARCH_EXEC service binding + drive step.
+// v1.1.1 (2026-09-06): drive step = SAFE v2 publish drain ONLY (research-exec drainV2 claim is now an
+//   atomic lease in research-exec v0.5.15, so concurrent drainers cannot double-publish). Research-cycle
+//   /run driving is DEFERRED: research-exec run() stage selection (researching+note/draft) is not yet
+//   atomically claimed, so a second driver could double-generate an in-flight item. Do NOT add a research
+//   /run loop until run() gets atomic stage claims.
+// Steps: survey -> remediate (stale claims / stale 'publishing') -> drive (v2 drain) -> record.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 
 function json(data, status) {
   if (status === void 0) status = 200;
@@ -94,42 +98,25 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
       return { actions: actions, acted: actions.length };
     });
 
-    const drive = await step.do("drive", { retries: retry, timeout: "600 seconds" }, async function () {
+    const drive = await step.do("drive", { retries: retry, timeout: "300 seconds" }, async function () {
       if (!env.RESEARCH_EXEC) return { skipped: "no-service-binding", calls: 0 };
       const haltRow = await env.QNFO_AUDIT.prepare("SELECT id FROM cloud_ops_events WHERE job='qnfo-research-exec' AND kind='halt' AND ts >= datetime('now','-60 minutes') LIMIT 1").first();
       if (haltRow) return { skipped: "research-halted", calls: 0 };
-      const rq = await countWhere(env, "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching')");
       const vq = await countWhere(env, "SELECT COUNT(*) AS n FROM version_queue WHERE status IN ('drafted','publishing')");
       const calls = [];
-      if (rq > 0) {
-        for (let i = 0; i < 2; i++) {
-          let res;
-          try {
-            res = await env.RESEARCH_EXEC.fetch("https://RESEARCH_EXEC/run", { method: "POST" });
-          } catch (e) {
-            calls.push({ kind: "research", error: String(e && e.message || e).slice(0, 200) });
-            break;
-          }
-          let body = null;
-          try { body = await res.json(); } catch (e) {}
-          const o = (body && body.out) || {};
-          calls.push({ kind: "research", status: res.status, outStatus: o.status || null, claimed: o.claimed !== void 0 ? o.claimed : null });
-          if (o.claimed === 0 || o.status === "error") break;
-        }
-      }
       if (vq > 0) {
         let res;
         try {
           res = await env.RESEARCH_EXEC.fetch("https://RESEARCH_EXEC/run/drain-v2", { method: "POST" });
         } catch (e) {
           calls.push({ kind: "drain-v2", error: String(e && e.message || e).slice(0, 200) });
-          return { skipped: "", calls: calls, backlog: { research: rq, version: vq } };
+          return { skipped: "", calls: calls, backlog: { version: vq } };
         }
         let body = null;
         try { body = await res.json(); } catch (e) {}
         calls.push({ kind: "drain-v2", status: res.status, drained: body && Array.isArray(body.drained) ? body.drained.length : null });
       }
-      return { skipped: "", calls: calls, backlog: { research: rq, version: vq } };
+      return { skipped: "", calls: calls, backlog: { version: vq } };
     });
 
     const record = await step.do("record", { retries: retry, timeout: "30 seconds" }, async function () {

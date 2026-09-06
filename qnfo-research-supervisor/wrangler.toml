@@ -4,11 +4,11 @@ compatibility_date = "2026-08-10"
 workers_dev = true
 usage_model = "standard"
 
-# v1.1.0 (2026-09-06): durable supervisor + driver over the research-publication pipeline.
+# v1.1.1 (2026-09-06): durable supervisor + v2-drain driver over the research-publication pipeline.
 # Survey + remediate stalls (stale research-exec claims, stale version_queue 'publishing'),
-# then DRIVE the research cycle (research-exec /run) and v2 publish drain (/run/drain-v2)
-# when backlog exists. Halt-aware: skips driving if research-exec logged a RESEARCH_HALT
-# event in the last 60 minutes. D1 + one service binding (no auth secrets).
+# then DRIVE the v2 publish drain (/run/drain-v2, atomic-lease since research-exec v0.5.15)
+# when backlog exists. Halt-aware. Research-cycle /run driving DEFERRED (run() stage claims
+# are not yet atomic - see worker.js header). D1 + one service binding (no auth secrets).
 
 [[workflows]]
 name = "research-supervisor"
