@@ -13,7 +13,7 @@
 // DEPLOY: wrangler deploy (secrets: QNFO_ROUTER_KEY, OPS_KEY, PT_KEY, DEEPSEEK_KEY, CF_API_TOKEN)
 // CANONICAL SOURCE: qnfo-workers/qnfo-ai-calibration (FLEET-SELF-DOC-1)
 // ROUTES: GET /health | GET /manifest | POST /run (auth) | GET /results (auth) | GET /
-var VERSION = "1.1.1";
+var VERSION = "1.1.2"; // GW-FAIL-DEDUP-1 (2026-09-06): respect prior dispositions - skip re-filing gw-fail when a wontfix/closed/resolved ticket already exists for the model (stops the 5-ticket-per-sweep regeneration loop)
 // GW-WATCH-1 2026-09-05: autonomous AI Gateway failure sweep (detect -> D1 -> issue -> auto-close) // SVC-BINDING-1: same-account workers.dev fetches 404 at the edge from inside a Worker (verified live 2026-09-04) - internal probes use service bindings (QNFO_AI/QNFO_OPS/PT_API); DeepSeek/catalog stay public
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var OPS = "https://qnfo-ops.q08.workers.dev";
@@ -322,6 +322,8 @@ async function gatewayFailureSweep(env, t0) {
     parts.push(b.status + " " + b.model + " x" + b.count + " [" + clsLabel + "]");
     var title = "[gw-fail] " + b.status + " " + b.model;
     try {
+      var dispo = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status IN ('wontfix','closed','resolved') LIMIT 1").bind("%" + b.model + "%").first();
+      if (dispo) continue;
       var prev = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND status = ?2 AND ts < ?3 AND ts > ?4").bind(b.model, b.status, lastTs, lastTs - 45 * 60 * 1000).first();
       var prevCount = prev ? Number(prev.c || 0) : 0;
       if (b.count >= 2 || prevCount > 0) {
