@@ -1,0 +1,23 @@
+name = "jnl-referee"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "jnl-audit"
+database_id = "8be80cdb-979d-401f-b3ab-6a16869473ec"
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "0cf89b469bcb47058e343611d9117897"
+
+[triggers]
+crons = ["23 */2 * * *"]
+
+[vars]
+JNL_MODELS = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct"
+JNL_DAILY_CAP = "60"
+
