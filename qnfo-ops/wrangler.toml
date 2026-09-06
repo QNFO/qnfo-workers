@@ -3,6 +3,16 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
+# CPU-BUDGET-1 (2026-09-06): raise the per-request CPU ceiling from the platform default (30s)
+# to the 5-minute max so the 180s soft wall budget (OPS_LOOP_DEADLINE_MS, OPS-TIME-BUDGET-1) is
+# the binding constraint - NOT Cloudflare's default 30s active-CPU limit (Error 1102 exceededCpu).
+# Context: developers.cloudflare.com/workers/platform/limits - HTTP wall time is Unlimited while
+# streaming (heartbeats keep the client connected); active CPU is the real per-request ceiling and
+# counts run_code executions + per-round JSON.stringify/truncateToContext, NOT I/O waits (DeepSeek
+# fetch, D1/R2/Vectorize). Cost: 30M CPU-ms/mo included on Standard; $90/30d spend guard applies.
+[limits]
+cpu_ms = 300000
+
 # ============================================================
 # qnfo-ops v1.0.0 — OPS/INFRASTRUCTURE AI EXECUTION ENDPOINT
 # Purpose: OpenAI-compatible ops agent (DeepChat + ChatBox) that

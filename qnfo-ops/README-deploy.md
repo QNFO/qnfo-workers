@@ -99,6 +99,11 @@ prompt is preserved; a compact ops-tool context is appended to it.
   reached its time budget after N tool call(s)" dead-end stub. Now when the budget is spent the
   runner stops requesting MORE tools and lets the next no-tools round produce the final answer
   at full answerCap (with the existing LENGTH-EMPTY-RETRY-1 safety net).
+- CPU-BUDGET-1 2026-09-06 - [limits] cpu_ms = 300000 in wrangler.toml: Cloudflare HTTP wall time
+  is Unlimited while streaming (heartbeats keep the client connected), but the default active-CPU
+  ceiling is 30s/request (Error 1102 exceededCpu). The 180s soft wall budget only binds if CPU is
+  raised too - run_code executions + per-round JSON work count as active CPU; DeepSeek/D1/R2 I/O
+  does not. Source: developers.cloudflare.com/workers/platform/limits.
 - v2.0.0 2026-09-05 — CTX-TRUNC-1 server-side history truncation to model context.
 
 ## URL routing & client-404 diagnostic lesson (URL-PATH-404-DIAGNOSTIC-1, 2026-09-04)

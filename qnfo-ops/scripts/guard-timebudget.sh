@@ -26,5 +26,8 @@ echo "repo VERSION=$REPO_VER live=$LIVE_VER"
 if [ -n "$LIVE_VER" ] && [ "$LIVE_VER" != "$REPO_VER" ]; then
   echo "FAIL: live version $LIVE_VER != repo $REPO_VER (deploy drift)"; FAIL=1
 fi
+if ! grep -qE "^cpu_ms = 300000" "$DIR/wrangler.toml"; then
+  echo "FAIL: [limits] cpu_ms not 300000 in wrangler.toml (CPU-BUDGET-1 - default 30s CPU kills run_code-heavy loops via Error 1102)"; FAIL=1
+fi
 if [ "$FAIL" -eq 0 ]; then echo "GUARD PASS"; else echo "GUARD FAIL"; fi
 exit $FAIL
