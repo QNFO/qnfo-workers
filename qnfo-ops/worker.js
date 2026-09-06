@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // ai_queries / chatbox_conversations / intent_express_log. The intent orchestrator is
 // called ONLY by the research_queue tool (user-invoked RESEARCH ideas) - never by
 // ops-command auto-express -> the ideas stream stays free of ops clutter.
-var VERSION = "2.3.0"; // OPS-DURABLE-3 (2026-09-06): reconcile-on-Get (GET /v1/jobs/:id syncs ops_jobs.status with the Workflow instance - DELETE-race + drift fix), x-ops-async parity on /v1/responses, scheduled ops_jobs TTL + stuck-queued sweeper (30m grace / 14d retention). // OPS-DURABLE-2 (2026-09-06): durable-job cost from real DeepSeek usage (upUsage accumulator + costUsdCalc), queue DLQ (qnfo-ops-jobs-dlq) + idempotent workflow create on redelivery, job lifecycle endpoints (GET /v1/jobs list, DELETE /v1/jobs/:id terminate), OPS_JOBS_DAILY_CAP guard, manifest capability async-jobs. // OPS-DURABLE-1 (2026-09-06): async/durable ops-exec jobs (POST /v1/jobs or x-ops-async:1 -> Queue qnfo-ops-jobs -> OpsExecWorkflow durable executor -> qnfo-audit.ops_jobs + ops_ai_log strategy=job-workflow). Interactive chat stays request-scoped (v2.0.1 OPS-TIME-BUDGET-1 soft loop). // OPS-TIME-BUDGET-1 (2026-09-06): tool-loop time budget is SOFT + default raised 30s->180s (OPS_LOOP_DEADLINE_MS); once spent the runner stops requesting more tools and answers at full answerCap - removes the 1200-token panic stub. // TOOL-CALL-GROUP-1 (2026-09-05): normalizeResponsesInput coalesces consecutive function_call items into ONE assistant tool_calls message (parallel tool-call round [fcA,fcB,fcoA,fcoB] was emitted as assistant[A],assistant[B],tool[A],tool[B] by v1.9.6 -> DeepSeek 400 "insufficient tool messages following tool_calls message" -> Bad Gateway; canonical 1MB+ ua=node /v1/responses x3 at 20:51, repro HTTP 502). // RESPONSES-TOOL-ID-1 (2026-09-05): /v1/responses normalizeResponsesInput now resolves function_call identity as call_id || id (ai-sdk echoes id without call_id -> random id mismatch -> DeepSeek 400 "assistant tool_calls must be followed by tool messages" -> client "Request failed / Bad Gateway"; canonical 855KB ua=node history 3x 20:35) + defers function_calls lacking both and pairs to the next output call_id + keeps chat-style tool_calls on assistant message items. // F4-F5-RESOLVE-1 (2026-09-05): /v1/responses stream emits the item-level SSE sequence (output_item.added -> output_text/function_call_arguments delta+done -> output_item.done) before response.completed so strict Responses clients reconstruct function_call items (was completed-only) + adaptive tool-round cap scales with context (estTokens*0.2 max 8000) so thinking-mode reasoning_content no longer exhausts the 2000 default on large prompts (v1.9.3 length-retry stays as safety net). // RESPONSES-TOOLS-1 (2026-09-05): pass client tools through /v1/responses (Responses tools -> chat tools) + convert chat tool_calls -> Responses function_call output items (status=requires_action) so the DeepChat main agent keeps its native toolchain through the Responses API. // LENGTH-EMPTY-RETRY-1 (2026-09-05): retry the answer round on finish_reason="length" even when content is EMPTY (deepseek-v4-flash thinking mode can spend the 2000-token tool-round cap on reasoning_content and return empty content -> ai-sdk client saw "Provider stopped the response for an unspecified reason"; canonical /v1/responses 46K-token prompt, completion_tokens=2000, response empty). // REASONING-CONTENT-1 (2026-09-05): preserve reasoning_content on assistant tool-call messages in normalizeMessages + inline work-build + agent-loop work.push + clientHandoff - DeepSeek thinking mode returns 400 "reasoning_content must be passed back" on the 2nd+ tool-loop iteration, which made the server agent loop (strategy=agent) fail 3/3 while chat/agent-tools/hybrid/relay passed. // analytics GraphQL fix: workersInvocationsAdaptive (was nonexistent ...Groups field returning 0 requests) // HYBRID-MODEL-1 + ANSWER-ROUND-1 + STREAM-FINAL-1 + FLEET-COMPACT-1 + RELAY-COST-1 + PARAM-TUNE-1 (2026-09-04): merged hybrid tool loop for tool-carrying clients (client-native tools preserved + server ops tools; client wins name collisions; ChatBox keeps pure server loop); no-tools answer round at full cap (fleet truncation fix); token-streamed final answers + heartbeats; parallel+compact fleet probe; relay cost tracking via include_usage tee; env-tunable production knobs. // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
+var VERSION = "2.4.0"; // OPS-AGENT-1 (2026-09-06): 100% server-side autonomous code-agent tools - web_fetch/web_search (SSRF-guarded), github_repo_read/github_file_write/github_pr (GitHub REST; write gated on GITHUB_TOKEN), workspace_write/read/list/delete (R2 virtual FS). T1 of T3 (Workers-native now; T2 real-executor spec follows). // OPS-DURABLE-3 (2026-09-06): reconcile-on-Get (GET /v1/jobs/:id syncs ops_jobs.status with the Workflow instance - DELETE-race + drift fix), x-ops-async parity on /v1/responses, scheduled ops_jobs TTL + stuck-queued sweeper (30m grace / 14d retention). // OPS-DURABLE-2 (2026-09-06): durable-job cost from real DeepSeek usage (upUsage accumulator + costUsdCalc), queue DLQ (qnfo-ops-jobs-dlq) + idempotent workflow create on redelivery, job lifecycle endpoints (GET /v1/jobs list, DELETE /v1/jobs/:id terminate), OPS_JOBS_DAILY_CAP guard, manifest capability async-jobs. // OPS-DURABLE-1 (2026-09-06): async/durable ops-exec jobs (POST /v1/jobs or x-ops-async:1 -> Queue qnfo-ops-jobs -> OpsExecWorkflow durable executor -> qnfo-audit.ops_jobs + ops_ai_log strategy=job-workflow). Interactive chat stays request-scoped (v2.0.1 OPS-TIME-BUDGET-1 soft loop). // OPS-TIME-BUDGET-1 (2026-09-06): tool-loop time budget is SOFT + default raised 30s->180s (OPS_LOOP_DEADLINE_MS); once spent the runner stops requesting more tools and answers at full answerCap - removes the 1200-token panic stub. // TOOL-CALL-GROUP-1 (2026-09-05): normalizeResponsesInput coalesces consecutive function_call items into ONE assistant tool_calls message (parallel tool-call round [fcA,fcB,fcoA,fcoB] was emitted as assistant[A],assistant[B],tool[A],tool[B] by v1.9.6 -> DeepSeek 400 "insufficient tool messages following tool_calls message" -> Bad Gateway; canonical 1MB+ ua=node /v1/responses x3 at 20:51, repro HTTP 502). // RESPONSES-TOOL-ID-1 (2026-09-05): /v1/responses normalizeResponsesInput now resolves function_call identity as call_id || id (ai-sdk echoes id without call_id -> random id mismatch -> DeepSeek 400 "assistant tool_calls must be followed by tool messages" -> client "Request failed / Bad Gateway"; canonical 855KB ua=node history 3x 20:35) + defers function_calls lacking both and pairs to the next output call_id + keeps chat-style tool_calls on assistant message items. // F4-F5-RESOLVE-1 (2026-09-05): /v1/responses stream emits the item-level SSE sequence (output_item.added -> output_text/function_call_arguments delta+done -> output_item.done) before response.completed so strict Responses clients reconstruct function_call items (was completed-only) + adaptive tool-round cap scales with context (estTokens*0.2 max 8000) so thinking-mode reasoning_content no longer exhausts the 2000 default on large prompts (v1.9.3 length-retry stays as safety net). // RESPONSES-TOOLS-1 (2026-09-05): pass client tools through /v1/responses (Responses tools -> chat tools) + convert chat tool_calls -> Responses function_call output items (status=requires_action) so the DeepChat main agent keeps its native toolchain through the Responses API. // LENGTH-EMPTY-RETRY-1 (2026-09-05): retry the answer round on finish_reason="length" even when content is EMPTY (deepseek-v4-flash thinking mode can spend the 2000-token tool-round cap on reasoning_content and return empty content -> ai-sdk client saw "Provider stopped the response for an unspecified reason"; canonical /v1/responses 46K-token prompt, completion_tokens=2000, response empty). // REASONING-CONTENT-1 (2026-09-05): preserve reasoning_content on assistant tool-call messages in normalizeMessages + inline work-build + agent-loop work.push + clientHandoff - DeepSeek thinking mode returns 400 "reasoning_content must be passed back" on the 2nd+ tool-loop iteration, which made the server agent loop (strategy=agent) fail 3/3 while chat/agent-tools/hybrid/relay passed. // analytics GraphQL fix: workersInvocationsAdaptive (was nonexistent ...Groups field returning 0 requests) // HYBRID-MODEL-1 + ANSWER-ROUND-1 + STREAM-FINAL-1 + FLEET-COMPACT-1 + RELAY-COST-1 + PARAM-TUNE-1 (2026-09-04): merged hybrid tool loop for tool-carrying clients (client-native tools preserved + server ops tools; client wins name collisions; ChatBox keeps pure server loop); no-tools answer round at full cap (fleet truncation fix); token-streamed final answers + heartbeats; parallel+compact fleet probe; relay cost tracking via include_usage tee; env-tunable production knobs. // NOLOG-1 2026-09-04: logOps skips QNFO-AI-Calibration UA - calibration probes no longer write ops_ai_log rows or consume the daily 250-cap // REGISTRY-PRESERVE-1 (2026-09-04): CF-API existence pass in registryRefresh is now INSERT OR IGNORE (add-if-missing) - it no longer wipes self-registered rich entries (capabilities/routes/tools) on the 30-min sweep; self-registered workers keep their machine-readable self-doc // TELEMETRY-SELF-HEAL-1 (2026-09-04): endpoint observes its own tool-failure telemetry (cloud_ops_events job=qnfo-ops), distinguishes persistent vs self-recovered failures, auto-files agent_issues fix tickets (dedupe by open title) - a system-level self-improving feedback loop; /telemetry report + /telemetry/analyze // SELF-DOC-ACCURACY-1 (2026-09-04): /health capabilities single-sourced from manifest() - stale research-feed name removed, added queue-query/analytics/self-registration caps // REGISTRY-TOKEN-AUTH-1 (2026-09-04): /registry/register + /registry/refresh accept dedicated REGISTRY_TOKEN (shared fleet self-registration secret) in addition to the OPS key - third-party workers can self-register without holding the user ops key // DISCOVERY-2 + ANALYTICS-1 (2026-09-04): /registry/register self-registration (push-based self-doc), cf_analytics + /analytics (CF GraphQL AI neurons/cost + worker invocations), backlog_status tool, registry auto-refresh cron (*/30) self-heal // DISCOVERY-1 + QUEUE-QUERY-1 (2026-09-04): machine-readable service registry (D1 service_registry + /registry + /registry/:service + /registry/refresh + /manifest) for cross-service discovery (never rely on memory); queue-and-query ops model (research_queue -> intent orchestrator -> autonomous backend batch execution, NOT inline research); intents_query / candidates_query / service_discover tools // OPS-TOOLSAFE-1 2026-09-03: corrupted keyword regex -> word-set + history-wide intent; relay safety net falls through to server loop // REDTEAM-2026-09-03 SOFT: /health advertises loader binding // CROSS-APP-1 fix: ops-intent detection normalizes punctuation/underscores (fleet_status no longer misses fleet word boundary) + matches any OPS_TOOLS server-tool name found in the prompt // CROSS-APP-1 2026-09-03: client-tools relay only for external-only tools + no ops intent; ChatBox ai-sdk injected tools no longer hijack ops prompts - server-side ops agent loop runs (fleet/run_code/code exec work on DeepChat + ChatBox Desktop + Android) // RUN_CODE-1 impl: run_code executes via Dynamic Workers LOADER (compile at load; no eval; globalOutbound null = network cut) // OPS-LATENCY-1 + RUN_CODE-1 2026-09-03: agent-tool loop 20s deadline + per-iter token budget (1500) + 8192 answer cap (was 16k -> 80s requests -> client TIMEOUT/connection abort); new run_code server tool executes pure JS directly on Cloudflare (isolated compute, no bindings/secrets) // STREAM-TOOL-INDEX-1 2026-09-03: client-tools stream/non-stream tool_calls carry numeric index // TOOLCALL-2 2026-09-03: client-supplied tools passthrough (body.tools -> DeepSeek, tool_calls relayed; server-tool loop bypassed) + tool-loop history preserved (tool_calls/tool_call_id no longer stripped) - fixes empty/truncated tool responses for external clients // cost route + guarded email_mark/email_respond (WHAT-ELSE P1-3/P1-4 2026-09-03) // AUDIT-HARD-1 2026-09-03: d1 read-only guard hardened (mutation keywords blocked anywhere) + daily cap + capability advertisement // HARD-1 fix: user-affirmation gate + DATA-ONLY tool boundary (red-team 2026-09-03)
 var WORKER = "qnfo-ops";
 // 1.8.0 (2026-09-04) RELAY-MODEL-1: model=deepseek-v4-flash is a PURE pass-through relay (no OPS
 // prompt injection, no ops-intent server loop, no 8192 clamp; real upstream SSE streaming when
@@ -224,6 +224,16 @@ var OPS_TOOLS = [
   { name: "email_respond", description: "Send a REPLY inside an existing inbound thread (reply_to_id from email_check). Requires explicit user affirmation in the latest message; replies only - never cold sends. Subject must not contain spam-trip tokens.", parameters: { type: "object", properties: { reply_to_id: { type: "number", description: "inbound message id being replied to" }, subject: { type: "string", description: "reply subject" }, body: { type: "string", description: "plain-text reply body" } }, required: ["reply_to_id", "body"], additionalProperties: false } }
 ,
   { name: "run_code", description: "Execute pure-JavaScript code directly on Cloudflare (isolated compute only: no network, filesystem, secrets, or worker bindings; math/verification/data transforms). Provide finite code that returns a value or uses console.log. Never fabricate results - if the tool errors, report the error.", parameters: { type: "object", properties: { code: { type: "string", description: "JavaScript code to execute. Use return to emit a value, or console.log() for text output." } }, required: ["code"], additionalProperties: false } }
+,
+  { name: "web_fetch", description: "Fetch a public http/https URL and return its readable text (HTML stripped). SSRF-guarded: private/internal/link-local hosts are blocked. Returns up to maxChars of text.", parameters: { type: "object", properties: { url: { type: "string", description: "full http(s) URL to fetch" }, maxChars: { type: "number", description: "max chars to return (default 8000, max 30000)" } }, required: ["url"], additionalProperties: false } },
+  { name: "web_search", description: "Search the web (DuckDuckGo HTML, no key). Returns up to k results with title/url/snippet.", parameters: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "results 1-10 (default 5)" } }, required: ["q"], additionalProperties: false } },
+  { name: "github_repo_read", description: "Read a file (text) or list a directory from a GitHub repo (owner/name) via the REST API. Works unauthenticated for public repos (rate-limited); set GITHUB_TOKEN for private repos.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name e.g. QNFO/qnfo-workers" }, path: { type: "string", description: "file or directory path relative to repo root (empty = root)" }, ref: { type: "string", description: "branch/tag/SHA (optional)" }, maxChars: { type: "number", description: "max chars of file content (default 20000)" } }, required: ["repo"], additionalProperties: false } },
+  { name: "github_file_write", description: "Create or update a file in a GitHub repo (owner/name) via the REST API. Requires the GITHUB_TOKEN secret on qnfo-ops. Pass sha (from github_repo_read) to update an existing file.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, path: { type: "string", description: "file path" }, content: { type: "string", description: "full new file content" }, message: { type: "string", description: "commit message" }, branch: { type: "string", description: "branch to commit to (optional, default repo default branch)" }, sha: { type: "string", description: "current blob sha (required to update an existing file)" } }, required: ["repo", "path", "content"], additionalProperties: false } },
+  { name: "github_pr", description: "Open a pull request in a GitHub repo (owner/name) via the REST API. Requires the GITHUB_TOKEN secret.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, title: { type: "string", description: "PR title" }, head: { type: "string", description: "head branch" }, base: { type: "string", description: "base branch (default main)" }, body: { type: "string", description: "PR body (optional)" } }, required: ["repo", "head"], additionalProperties: false } },
+  { name: "workspace_write", description: "Write a text file to the server-side ops-workspace (R2-backed virtual filesystem, key ops-workspace/<path>). Server-side persistence for multi-step code tasks.", parameters: { type: "object", properties: { path: { type: "string", description: "relative file path" }, content: { type: "string", description: "file content" } }, required: ["path", "content"], additionalProperties: false } },
+  { name: "workspace_read", description: "Read a text file from the server-side ops-workspace (R2-backed virtual filesystem).", parameters: { type: "object", properties: { path: { type: "string", description: "relative file path" }, maxChars: { type: "number", description: "max chars (default 20000, max 100000)" } }, required: ["path"], additionalProperties: false } },
+  { name: "workspace_list", description: "List files under a prefix in the server-side ops-workspace (R2-backed virtual filesystem).", parameters: { type: "object", properties: { prefix: { type: "string", description: "path prefix (empty = root)" }, limit: { type: "number", description: "max keys (default 50, max 500)" } }, additionalProperties: false } },
+  { name: "workspace_delete", description: "Delete a file from the server-side ops-workspace (R2-backed virtual filesystem).", parameters: { type: "object", properties: { path: { type: "string", description: "relative file path" } }, required: ["path"], additionalProperties: false } }
 ];
 function toolsPayload() {
   return OPS_TOOLS.map(function (t) { return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }; });
@@ -678,6 +688,194 @@ async function telemetryReport(env, hours) {
   return out;
 }
 
+// ================================================================ OPS-AGENT-1 (2026-09-06)
+// 100% server-side autonomous code-agent primitives (T1 of T3). web/git/filesystem tools so the
+// durable OpsExecWorkflow (server-only, never hands off to a client) can do real code work.
+function isPrivateHost(host) {
+  const h = String(host || "").toLowerCase().replace(/^\[|\]$/g, "");
+  if (!h) return true;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h === "0.0.0.0" || h === "::1" || h === "metadata.google.internal" || h === "instance-data" || h === "169.254.169.254") return true;
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const a = parseInt(v4[1], 10), b = parseInt(v4[2], 10);
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+  }
+  return false;
+}
+function stripHtml(html) {
+  let s = String(html || "");
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
+  s = s.replace(/<[^>]+>/g, " ");
+  s = s.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, function (m, d) { try { return String.fromCharCode(parseInt(d, 10)); } catch (e) { return m; } });
+  return s.replace(/\s+/g, " ").trim();
+}
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(String(str));
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = i + 1 < bytes.length ? bytes[i + 1] : null, b2 = i + 2 < bytes.length ? bytes[i + 2] : null;
+    out += chars[b0 >> 2];
+    out += chars[((b0 & 3) << 4) | (b1 != null ? b1 >> 4 : 0)];
+    out += b1 != null ? chars[((b1 & 15) << 2) | (b2 != null ? b2 >> 6 : 0)] : "=";
+    out += b2 != null ? chars[b2 & 63] : "=";
+  }
+  return out;
+}
+function decodeBase64(b64) {
+  const clean = String(b64 || "").replace(/\s+/g, "");
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let bits = ""; const bytes = [];
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean.charAt(i);
+    if (c === "=") break;
+    const idx = chars.indexOf(c);
+    if (idx < 0) continue;
+    bits += idx.toString(2).padStart(6, "0");
+  }
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+async function githubApi(env, method, path, body) {
+  const tok = env.GITHUB_TOKEN;
+  const headers = { "User-Agent": "QNFO-ops", "Accept": "application/vnd.github+json" };
+  if (tok) headers["Authorization"] = "Bearer " + tok;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const r = await fetch("https://api.github.com" + path, { method: method, headers: headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const text = await r.text();
+  let j = null; try { j = text ? JSON.parse(text) : null; } catch (e) {}
+  return { status: r.status, json: j, text: text };
+}
+async function webFetchTool(env, args) {
+  const url = String((args && args.url) || "").trim();
+  if (!url) return { ok: false, error: "url required" };
+  let u; try { u = new URL(url); } catch (e) { return { ok: false, error: "invalid url" }; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "only http/https supported" };
+  if (isPrivateHost(u.hostname)) return { ok: false, error: "blocked host (private/internal): " + u.hostname };
+  const max = Math.max(500, Math.min(parseInt(args && args.maxChars, 10) || 8000, 30000));
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-ops/2.4)" }, redirect: "follow" });
+    const ct = String(r.headers.get("Content-Type") || "");
+    if (!r.ok) return { ok: false, error: "HTTP " + r.status };
+    const text = await r.text();
+    const isHtml = ct.indexOf("html") >= 0 || text.slice(0, 200).toLowerCase().indexOf("<html") >= 0 || (text.indexOf("<") >= 0 && text.indexOf(">") >= 0);
+    const out = isHtml ? stripHtml(text) : text;
+    return { ok: true, url: url, status: r.status, text: out.slice(0, max) };
+  } catch (e) { return { ok: false, error: "fetch failed: " + ((e && e.message) || String(e)) }; }
+}
+async function webSearchTool(env, args) {
+  const q = String((args && args.q) || "").trim();
+  if (!q) return { ok: false, error: "q required" };
+  const k = Math.max(1, Math.min(parseInt(args && args.k, 10) || 5, 10));
+  try {
+    const r = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q), { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }, redirect: "follow" });
+    if (!r.ok) return { ok: false, error: "search HTTP " + r.status };
+    const html = await r.text();
+    const results = [];
+    const re = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+    let m; let guard = 0;
+    while ((m = re.exec(html)) && guard < k) {
+      const raw = m[1] || "";
+      const href = raw.indexOf("uddg=") >= 0 ? decodeURIComponent(raw.split("uddg=")[1].split("&")[0]) : raw;
+      results.push({ title: stripHtml(m[2]), url: href, snippet: stripHtml(m[3]).slice(0, 300) });
+      guard++;
+    }
+    if (!results.length) return { ok: true, results: [], note: "no results parsed (DDG may have rate-limited or changed markup)" };
+    return { ok: true, results: results };
+  } catch (e) { return { ok: false, error: "search failed: " + ((e && e.message) || String(e)) }; }
+}
+
+async function githubRepoRead(env, args) {
+  const repo = String((args && args.repo) || "").trim();
+  const path = String((args && args.path) || "").replace(/^\/+/, "");
+  const ref = args && args.ref ? String(args.ref) : null;
+  if (!repo || repo.indexOf("/") <= 0) return { ok: false, error: "repo must be owner/name" };
+  const qp = ref ? "?ref=" + encodeURIComponent(ref) : "";
+  const res = await githubApi(env, "GET", "/repos/" + encodeURIComponent(repo) + "/contents/" + encodeURIComponent(path) + qp);
+  if (res.status === 404) return { ok: false, error: "path not found: " + path };
+  if (res.status === 403 && !env.GITHUB_TOKEN) return { ok: false, error: "GitHub rate-limited (unauthenticated); set GITHUB_TOKEN secret" };
+  if (res.status !== 200) return { ok: false, error: "GitHub " + res.status + ": " + String((res.json && res.json.message) || res.text).slice(0, 300) };
+  if (Array.isArray(res.json)) return { ok: true, repo: repo, path: path, type: "dir", entries: res.json.map(function (e) { return e.name; }).slice(0, 100) };
+  if (res.json && res.json.type === "file") {
+    let content = "";
+    if (res.json.encoding === "base64") { try { content = decodeBase64(res.json.content); } catch (e) {} }
+    const mc = parseInt(args && args.maxChars, 10) || 20000;
+    return { ok: true, repo: repo, path: path, type: "file", size: res.json.size, sha: res.json.sha, content: content.slice(0, mc) };
+  }
+  return { ok: false, error: "unsupported content type: " + (res.json && res.json.type) };
+}
+async function githubFileWrite(env, args) {
+  const repo = String((args && args.repo) || "").trim();
+  const path = String((args && args.path) || "").replace(/^\/+/, "");
+  const content = String((args && args.content) || "");
+  const message = String((args && args.message) || ("update " + path));
+  const branch = args && args.branch ? String(args.branch) : null;
+  const sha = args && args.sha ? String(args.sha) : null;
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret missing on qnfo-ops (required for write)" };
+  if (!repo || repo.indexOf("/") <= 0 || !path) return { ok: false, error: "repo (owner/name) + path required" };
+  const body = { message: message, content: b64encode(content) };
+  if (branch) body.branch = branch;
+  if (sha) body.sha = sha;
+  const res = await githubApi(env, "PUT", "/repos/" + encodeURIComponent(repo) + "/contents/" + encodeURIComponent(path), body);
+  if (res.status === 201 || res.status === 200) return { ok: true, repo: repo, path: path, commit: (res.json && res.json.commit && res.json.commit.sha), url: (res.json && res.json.content && res.json.content.html_url) };
+  return { ok: false, error: "GitHub " + res.status + ": " + String((res.json && res.json.message) || res.text).slice(0, 300) };
+}
+async function githubPr(env, args) {
+  const repo = String((args && args.repo) || "").trim();
+  const title = String((args && args.title) || "Automated PR");
+  const head = String((args && args.head) || "").trim();
+  const base = String((args && args.base) || "main");
+  const body = String((args && args.body) || "");
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret missing on qnfo-ops (required for write)" };
+  if (!repo || repo.indexOf("/") <= 0 || !head) return { ok: false, error: "repo + head required" };
+  const res = await githubApi(env, "POST", "/repos/" + encodeURIComponent(repo) + "/pulls", { title: title, head: head, base: base, body: body });
+  if (res.status === 201) return { ok: true, repo: repo, number: res.json.number, url: res.json.html_url };
+  return { ok: false, error: "GitHub " + res.status + ": " + String((res.json && res.json.message) || res.text).slice(0, 300) };
+}
+function wsKey(path) { return "ops-workspace/" + String(path || "").replace(/^\/+/, "").replace(/\.\./g, ""); }
+async function workspaceWrite(env, args) {
+  const path = String((args && args.path) || "").trim();
+  const content = String((args && args.content) || "");
+  if (!path) return { ok: false, error: "path required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  try { await env.BACKUPS_R2.put(wsKey(path), content); return { ok: true, path: path, bytes: new TextEncoder().encode(content).length }; }
+  catch (e) { return { ok: false, error: "write failed: " + ((e && e.message) || String(e)) }; }
+}
+async function workspaceRead(env, args) {
+  const path = String((args && args.path) || "").trim();
+  if (!path) return { ok: false, error: "path required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const max = Math.max(1000, Math.min(parseInt(args && args.maxChars, 10) || 20000, 100000));
+  try {
+    const obj = await env.BACKUPS_R2.get(wsKey(path));
+    if (!obj) return { ok: false, error: "not found: " + path };
+    const text = await obj.text();
+    return { ok: true, path: path, size: obj.size, content: text.slice(0, max) };
+  } catch (e) { return { ok: false, error: "read failed: " + ((e && e.message) || String(e)) }; }
+}
+async function workspaceList(env, args) {
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const prefix = "ops-workspace/" + String((args && args.prefix) || "").replace(/^\/+/, "").replace(/\.\./g, "");
+  const limit = Math.max(1, Math.min(parseInt(args && args.limit, 10) || 50, 500));
+  try {
+    const listed = await env.BACKUPS_R2.list({ prefix: prefix, limit: limit });
+    const keys = (listed.objects || []).map(function (o) { return o.key.replace(/^ops-workspace\//, ""); });
+    return { ok: true, prefix: prefix, keys: keys, truncated: !!listed.truncated };
+  } catch (e) { return { ok: false, error: "list failed: " + ((e && e.message) || String(e)) }; }
+}
+async function workspaceDelete(env, args) {
+  const path = String((args && args.path) || "").trim();
+  if (!path) return { ok: false, error: "path required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  try { await env.BACKUPS_R2.delete(wsKey(path)); return { ok: true, path: path }; }
+  catch (e) { return { ok: false, error: "delete failed: " + ((e && e.message) || String(e)) }; }
+}
+
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
   try { args = JSON.parse(rawArgs || "{}"); } catch (e) { args = { _parseError: String((e && e.message) || e) }; }
@@ -706,6 +904,15 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "email_respond") res = await emailRespond(env, args, userText);
     else if (name === "ops_fleet_log") res = await recentOpsLog(env, args);
     else if (name === "run_code") res = await runCodeTool(env, args);
+    else if (name === "web_fetch") res = await webFetchTool(env, args);
+    else if (name === "web_search") res = await webSearchTool(env, args);
+    else if (name === "github_repo_read") res = await githubRepoRead(env, args);
+    else if (name === "github_file_write") res = await githubFileWrite(env, args);
+    else if (name === "github_pr") res = await githubPr(env, args);
+    else if (name === "workspace_write") res = await workspaceWrite(env, args);
+    else if (name === "workspace_read") res = await workspaceRead(env, args);
+    else if (name === "workspace_list") res = await workspaceList(env, args);
+    else if (name === "workspace_delete") res = await workspaceDelete(env, args);
     else res = { ok: false, error: "unknown tool: " + name };
   } catch (e) { res = { ok: false, error: "tool crashed: " + (e && e.message ? e.message : String(e)) }; }
   const ms = Date.now() - t0;
@@ -1528,6 +1735,7 @@ export default {
       bindings.intent_token = !!env.INTENT_TOKEN;
       bindings.cf_api_token = !!env.CF_API_TOKEN;
       bindings.registry_token = !!env.REGISTRY_TOKEN;
+      bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.ai = !!env.WAI;
       return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings: bindings, generatedAt: iso() });
     }
