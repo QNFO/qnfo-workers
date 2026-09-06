@@ -4,9 +4,10 @@ compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-# qnfo-code-orchestrator v0.1.0 -- integration slice: reads repos via qnfo-code-agent
-# (GitHub tool server) and runs Python in its OWN Cloudflare Container. v0.2 adds the
-# LLM plan loop (DeepSeek via AI Gateway) + edit/PR against code-agent.
+# qnfo-code-orchestrator v0.1.1 -- integration slice: reads repos via qnfo-code-agent
+# (GitHub tool server) and runs Python in its OWN Cloudflare Container.
+# v0.1.1 = red-team remediation: read-error propagation, honest capabilities, output caps,
+#          AUDIT_DB cloud_ops_events logging. v0.2 adds the LLM plan loop + edit/PR.
 [[containers]]
 class_name = "PyContainer"
 image = "docker.io/library/python:3.12-slim"
@@ -20,6 +21,11 @@ class_name = "PyContainer"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["PyContainer"]
+
+[[d1_databases]]
+binding = "AUDIT_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 # Secrets (fail-closed):
 #   ORCH_TOKEN      -- bearer auth for /task + /exec
