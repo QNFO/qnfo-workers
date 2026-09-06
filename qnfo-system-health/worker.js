@@ -1,44 +1,60 @@
 // qnfo-system-health - daily fleet endpoint watcher.
-// VERSION 1.0.1 (2026-09-06). Canonical repo: QNFO/qnfo-workers/qnfo-system-health (re-homed from deployed bundle 2026-09-06; FLEET-SELF-DOC-1).
-// v1.0.1: added gateway (qnfo.org) + error-selfheal endpoints; honest UP/DOWN labels (500/530 no longer labelled UP).
+// VERSION 1.0.2 (2026-09-06). Canonical repo: QNFO/qnfo-workers/qnfo-system-health.
+// v1.0.2: core workers probed via [[services]] service bindings (public *.q08.workers.dev fetches
+// from another Worker returned 404 platform-side; custom-domain qnfo.org endpoints stay URL-fetch).
+// v1.0.1: added gateway + error-selfheal; honest UP/DOWN labels.
 const UA = "Mozilla/5.0 (QNFO system-health)";
-const ENDPOINTS = [
-  { name: "qnfo-ai", url: "https://qnfo-ai.q08.workers.dev/health" },
-  { name: "personal-api", url: "https://personal-api.q08.workers.dev/health" },
-  { name: "cloud-ops", url: "https://qnfo-cloud-ops.q08.workers.dev/health" },
-  { name: "kaizen", url: "https://qnfo-kaizen.q08.workers.dev/health" },
+// URL endpoints (custom domains, reachable from Workers)
+const URL_ENDPOINTS = [
   { name: "research-radar", url: "https://qnfo-research-radar.qnfo.org/health" },
   { name: "citation-watch", url: "https://qnfo-citation-watch.qnfo.org/health" },
-  { name: "paper-indexer", url: "https://qnfo-paper-indexer.q08.workers.dev/health" },
-  { name: "gateway", url: "https://qnfo.org/health" },
-  { name: "error-selfheal", url: "https://qnfo-error-selfheal.q08.workers.dev/health" }
+  { name: "gateway", url: "https://qnfo.org/health" }
+];
+// Service-binding endpoints (env.<BINDING> must exist in wrangler.toml)
+const SVC_ENDPOINTS = [
+  { name: "qnfo-ai", binding: "QNFO_AI" },
+  { name: "personal-api", binding: "PERSONAL_API" },
+  { name: "cloud-ops", binding: "CLOUD_OPS" },
+  { name: "kaizen", binding: "KAIZEN" },
+  { name: "paper-indexer", binding: "PAPER_INDEXER" },
+  { name: "error-selfheal", binding: "ERROR_SELFHEAL" }
 ];
 function pad(n) { return String(n).padStart(2, "0"); }
 async function run(env) {
   const lines = [];
   let up = 0;
-  for (const e of ENDPOINTS) {
+  const check = async (name, probe) => {
     try {
       const t0 = Date.now();
-      const r = await fetch(e.url, { headers: { "User-Agent": UA } });
+      const r = await probe();
       const ms = Date.now() - t0;
       const healthy = r.ok;
       const ok = healthy ? "UP" : "DOWN(" + r.status + ")";
       if (healthy) up++;
-      lines.push("- " + e.name + " | " + ok + " | " + ms + "ms");
+      lines.push("- " + name + " | " + ok + " | " + ms + "ms");
     } catch (e) {
-      lines.push("- " + e.name + " | DOWN | " + String((e && e.message) || e).slice(0, 80));
+      lines.push("- " + name + " | DOWN | " + String((e && e.message) || e).slice(0, 80));
     }
+  };
+  for (const e of URL_ENDPOINTS) {
+    await check(e.name, () => fetch(e.url, { headers: { "User-Agent": UA } }));
+  }
+  for (const e of SVC_ENDPOINTS) {
+    await check(e.name, () => {
+      const svc = env[e.binding];
+      if (!svc) throw new Error("missing binding " + e.binding);
+      return svc.fetch("https://internal/health", { headers: { "User-Agent": UA } });
+    });
   }
   const d = new Date();
   const ymd = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
   const key = "notes/v1/" + d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + ymd + "/_system-health-" + ymd + ".md";
-  const body = "# System Health Check " + ymd + "\n\nEndpoints: " + up + "/" + ENDPOINTS.length + " healthy\n\n" + lines.join("\n") + "\n";
+  const body = "# System Health Check " + ymd + "\n\nEndpoints: " + up + "/" + (URL_ENDPOINTS.length + SVC_ENDPOINTS.length) + " healthy\n\n" + lines.join("\n") + "\n";
   let wrote = false;
   try {
     if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); wrote = true; }
   } catch (e) {}
-  return { status: "ok", up: up, total: ENDPOINTS.length, noteKey: key, wrote: wrote };
+  return { status: "ok", up: up, total: URL_ENDPOINTS.length + SVC_ENDPOINTS.length, noteKey: key, wrote: wrote };
 }
 export default {
   async scheduled(event, env, ctx) {
@@ -52,7 +68,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-system-health", version: "1.0.1" }), { headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-system-health", version: "1.0.2" }), { headers: { "Content-Type": "application/json" } });
     }
     if (url.pathname === "/run") {
       const out = await run(env);
