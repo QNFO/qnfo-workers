@@ -1,12 +1,12 @@
 // qnfo-error-selfheal — autonomous fleet error detection + deterministic self-correction.
-// VERSION 1.0.0 (2026-09-05). Canonical repo: QNFO/qnfo-workers/qnfo-error-selfheal.
+// VERSION 1.0.1 (2026-09-06). Canonical repo: QNFO/qnfo-workers/qnfo-error-selfheal.
 // Purpose: hourly cloud-cron watcher that (1) queries CF GraphQL workersInvocationsAdaptive for
 // NEW uncaught worker exceptions in the last 60 min, (2) queries Log Explorer zone http_requests
 // for 5xx edges, (3) files deduped agent_issues + alerts for any new spike, (4) deterministically
 // auto-re-arms the now-fixed Zenodo legacy related_identifiers failure class (errata_actions
 // status='error' risk='low' -> 'drafted', bounded <=3/day/action) so the errata-publish worker
 // v0.7.1+ retries and publishes. Self-docs /health per FLEET-SELF-DOC-1.
-const VERSION = "1.0.0";
+const VERSION = "1.0.1"; // 2026-09-06 Log Explorer 60m 5xx filter fix (was epoch-ms no-op)
 const WORKER = "qnfo-error-selfheal";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const ZONE = "84e9dc1d7fb72629ccdbe3174ed24420"; // qnfo.org
@@ -100,7 +100,8 @@ async function scan(env) {
   }
   out.workers_with_exceptions = exceptions;
   try {
-    const sql = "SELECT COUNT(*) AS c FROM http_requests WHERE EdgeResponseStatus >= 500 AND edgeendtimestamp >= " + (Date.now() - 60 * 60000);
+    // v1.0.1: ISO-8601 timestamp filter (epoch-ms numeric compare was silent no-op -> retention-total ~440, not a 60m count)
+    const sql = "SELECT COUNT(*) AS c FROM http_requests WHERE EdgeResponseStatus >= 500 AND EdgeEndTimestamp >= '" + winStart + "'";
     const le = await fetch("https://api.cloudflare.com/client/v4/zones/" + ZONE + "/logs/explorer/query/sql?query=" + encodeURIComponent(sql), {
       headers: { "Authorization": "Bearer " + env.CF_API_TOKEN }
     });
@@ -108,10 +109,34 @@ async function scan(env) {
     const edge5xx = (lj.result && lj.result[0] && lj.result[0].c) || 0;
     out.edge_5xx_60m = edge5xx;
     if (edge5xx > 20) {
-      await env.QNFO_AUDIT.prepare(
-        "INSERT INTO alerts (source, level, message, created_at) VALUES (?,?,?,?)"
-      ).bind(WORKER, "warning", "http_requests 5xx spike: " + edge5xx + " in 60m (qnfo.org)", nowIso()).run();
-      out.edge_spike = true;
+      const lastSpike = await env.QNFO_AUDIT.prepare(
+        "SELECT message, created_at FROM alerts WHERE source=? AND message LIKE 'http_requests 5xx spike%' ORDER BY id DESC LIMIT 1"
+      ).bind(WORKER).first();
+      let prevN = 0, lastTs = 0;
+      if (lastSpike && lastSpike.message) {
+        const m = lastSpike.message.match(/(d+)s+ins+60m/);
+        if (m) prevN = parseInt(m[1], 10);
+        if (lastSpike.created_at) lastTs = new Date(lastSpike.created_at).getTime() || 0;
+      }
+      const cooldownOk = !lastTs || (Date.now() - lastTs) > 6 * 3600 * 1000;
+      const growthOk = edge5xx >= prevN * 1.5;
+      if (prevN === 0 || cooldownOk || growthOk) {
+        if (prevN === 0) {
+          const dupTitle = "HTTP-5XX-ELEVATED qnfo.org (http_requests 5xx)";
+          const dup = await env.QNFO_AUDIT.prepare(
+            "SELECT id FROM agent_issues WHERE title=? AND (status IS NULL OR status NOT IN ('closed','done','resolved')) LIMIT 1"
+          ).bind(dupTitle).first();
+          if (!dup) {
+            await env.QNFO_AUDIT.prepare(
+              "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+            ).bind(dupTitle, "qnfo-error-selfheal measured " + edge5xx + " edge 5xx in 60m on qnfo.org (ISO-filtered Log Explorer count). Root-cause the 504/D1 class per RECURRENCE-ZERO-1.", WORKER, "infra", "medium", "open", nowIso(), nowIso()).run();
+          }
+        }
+        await env.QNFO_AUDIT.prepare(
+          "INSERT INTO alerts (source, level, message, created_at) VALUES (?,?,?,?)"
+        ).bind(WORKER, "warning", "http_requests 5xx spike: " + edge5xx + " in 60m (qnfo.org)", nowIso()).run();
+        out.edge_spike = true;
+      }
     }
   } catch (e) { out.log_explorer_error = String(e.message || e).slice(0, 150); }
   out.errata_rearmed = await recoverErrata(env);
