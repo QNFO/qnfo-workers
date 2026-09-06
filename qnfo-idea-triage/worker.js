@@ -9,12 +9,19 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0-robust-scoring";
 const MODELS = {
-  a: "@cf/zai-org/glm-5.2",
+  a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
   tiebreak: "@cf/qwen/qwen3-30b-a3b-fp8",
 };
+const MODEL_CHAIN = [
+  "@cf/zai-org/glm-5.3-flash",
+  "@cf/zai-org/glm-5.3",
+  "@cf/deepseek-ai/deepseek-v4-flash-0731",
+  "@cf/qwen/qwen3-30b-a3b-fp8",
+  "@cf/zai-org/glm-5.2",
+];
 const ACCEPT_MIN = 0.7;
 const FEAS_MIN = 0.5;
 const RISK_MAX = 0.4;
@@ -62,25 +69,40 @@ const SCORECARD_PROMPT = "You are QNFO's research-idea merit reviewer. Score the
 "Scoring guide: technical_merit = depth of technical content + verifiability; impact_potential = significance if proven; exposure_potential = breadth of audience/attention it can attract (social, media, cross-field); risk = probability of producing nothing citable (1 = near-certain dead end). IMPORTANT: feasibility means feasibility of the THEORETICAL/COMPUTATIONAL research itself (can the derivation, simulation, formal analysis, and computational verification be carried out by the QNFO autonomous pipeline) — NOT experimental testability. QNFO has no laboratory; an idea is feasible if its mathematics/computation can be executed and verified in silico, even if a confirming experiment would require external labs years away. Do NOT mark a theoretical physics idea infeasible merely because no experiment currently exists.\n" +
 "IDEA: ";
 
+function extractText(r) {
+  if (!r) return "";
+  const ch = r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content;
+  if (ch) return String(ch);
+  const c2 = r.result && r.result.choices && r.result.choices[0] && r.result.choices[0].message && r.result.choices[0].message.content;
+  if (c2) return String(c2);
+  if (typeof r.response === "string") return r.response;
+  if (r.result && typeof r.result.response === "string") return r.result.response;
+  if (r.result && typeof r.result === "object") { const s = JSON.stringify(r.result); if (s && s.length > 2) return s; }
+  if (r.data && typeof r.data === "object") {
+    const c3 = r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content;
+    if (c3) return String(c3);
+    if (typeof r.data.response === "string") return r.data.response;
+  }
+  return "";
+}
 async function runModel(env, name, prompt) {
-  const r = await env.AI.run(name, {
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 500,
-    temperature: 0.2,
-  });
-  const text = r && (r.response || r.result) ? String(r.response || r.result) : "";
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try {
-    const p = JSON.parse(m[0]);
-    const keys = ["novelty", "technical_merit", "impact_potential", "exposure_potential", "feasibility", "risk"];
-    for (const k of keys) {
-      const v = parseFloat(p[k]);
-      if (!isFinite(v)) return null;
-      p[k] = Math.max(0, Math.min(1, v));
-    }
-    return { card: p, model: name };
-  } catch (e) { return null; }
+  let lastErr = "";
+  const chain = [name].concat(MODEL_CHAIN.filter(function(x){ return x !== name; })).slice(0, 4);
+  for (const model of chain) {
+    try {
+      const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: 700, temperature: 0.2 });
+      const text = extractText(r);
+      const mm = text && text.match(/\{[\s\S]*\}/);
+      if (!mm) { lastErr = model + ": no JSON in output"; continue; }
+      const parsed = JSON.parse(mm[0]);
+      const keys = ["novelty","technical_merit","impact_potential","exposure_potential","feasibility","risk"];
+      let ok = true;
+      for (const k of keys) { const v = parseFloat(parsed[k]); if (!isFinite(v)) { ok = false; break; } parsed[k] = Math.max(0, Math.min(1, v)); }
+      if (!ok) { lastErr = model + ": invalid scorecard fields"; continue; }
+      return { card: parsed, model: model };
+    } catch (e) { lastErr = model + ": " + (e && e.message || e); continue; }
+  }
+  return { error: "all scoring models failed: " + lastErr };
 }
 
 function composite(c) {
@@ -89,35 +111,31 @@ function composite(c) {
 
 async function scoreIdea(env, desire) {
   const prompt = SCORECARD_PROMPT + String(desire || "").slice(0, 3000);
-  const [a, b] = await Promise.all([runModel(env, MODELS.a, prompt), runModel(env, MODELS.b, prompt)]);
+  const [ra, rb] = await Promise.all([runModel(env, MODELS.a, prompt), runModel(env, MODELS.b, prompt)]);
+  const a = ra && ra.card ? ra : null;
+  const b = rb && rb.card ? rb : null;
   let card = null, models = [];
   if (a && b) {
-    const keys = ["novelty", "technical_merit", "impact_potential", "exposure_potential", "feasibility", "risk"];
+    const keys = ["novelty","technical_merit","impact_potential","exposure_potential","feasibility","risk"];
     card = {};
     for (const k of keys) card[k] = (a.card[k] + b.card[k]) / 2;
     card.rationale = a.card.rationale || "";
     card.hook = a.card.hook || "";
-    models = [MODELS.a, MODELS.b];
-    const std = Math.sqrt(keys.map((k) => Math.pow(a.card[k] - b.card[k], 2)).reduce((x, y) => x + y, 0) / keys.length);
+    models = [a.model, b.model];
+    const std = Math.sqrt(keys.map(function(k){ return Math.pow(a.card[k] - b.card[k], 2); }).reduce(function(x,y){ return x + y; }, 0) / keys.length);
     if (std > STD_TIE) {
       const t = await runModel(env, MODELS.tiebreak, prompt);
-      if (t) {
-        for (const k of keys) card[k] = (a.card[k] + b.card[k] + t.card[k]) / 3;
-        models.push(MODELS.tiebreak);
-      }
+      if (t && t.card) { for (const k of keys) card[k] = (a.card[k] + b.card[k] + t.card[k]) / 3; models.push(t.model); }
     }
-  } else if (a) { card = a.card; models = [MODELS.a]; }
-  else if (b) { card = b.card; models = [MODELS.b]; }
-  else return { error: "all scoring models failed" };
+  } else if (a) { card = a.card; models = [a.model]; }
+  else if (b) { card = b.card; models = [b.model]; }
+  else { const detail = [ra && ra.error, rb && rb.error].filter(Boolean).join(" | "); return { error: "all scoring models failed: " + detail }; }
   const c = composite(card);
   const decision = c >= ACCEPT_MIN && card.feasibility >= FEAS_MIN && card.risk <= RISK_MAX ? "ACCEPT" : "HOLD";
-  return {
-    score: Math.round(c * 1000) / 1000,
-    decision,
+  return { score: Math.round(c * 1000) / 1000, decision,
     novelty: card.novelty, technical_merit: card.technical_merit, impact_potential: card.impact_potential,
     exposure_potential: card.exposure_potential, feasibility: card.feasibility, risk: card.risk,
-    rationale: card.rationale, hook: card.hook, model: models.join("+"),
-  };
+    rationale: card.rationale, hook: card.hook, model: models.join("+") };
 }
 
 // v1.1.0: noise + question pre-filters (save model spend, keep the queue clean)
