@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.13.2"; // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.13.4"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -25,9 +25,10 @@ const NL = String.fromCharCode(10);
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   const adm = env.OPS_ADMIN_TOKEN;
+  const reg = env.REGISTRY_TOKEN;
   if (!token) return false;
   const ok = (k) => { const a = new TextEncoder().encode(token); const b = new TextEncoder().encode(k || ""); if (a.byteLength !== b.byteLength) return false; let d = 0; for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i]; return d === 0; };
-  return ok(exp) || ok(adm);
+  return ok(exp) || ok(adm) || ok(reg);
 }
 
 // ---------- audit log ----------
@@ -1705,7 +1706,7 @@ async function selfRegister(env) {
     base_url: 'https://qnfo-cloud-ops.q08.workers.dev',
     purpose: 'scheduled QNFO visibility: weekly digest + P7 scorecard + outreach legacy-drain gate + AI-endpoint health + SEO discoverability health',
     capabilities: ['scheduled', 'weekly-visibility-digest', 'p7-scorecard', 'outreach-drain-gate', 'ai-endpoint-health', 'seo-health', 'job-runner'],
-    routes: ['/health', '/run', '/search'],
+    routes: ['/health', '/run', '/search', '/record'],
     tools: [], models: [], deps: ['qnfo-audit D1', 'qnfo-infra', 'qnfo-graph', 'living-paper', 'portfolio-state', 'qnfo-outreach', 'qnfo-email', 'send_email', 'VAULT R2']
   };
   const resp = await env.QNFO_OPS.fetch('https://qnfo-ops.internal/registry/register', {
@@ -1835,6 +1836,19 @@ export default {
       return new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", ...CORS } });
     }
 
+    if (path === "/record" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const kind = String(body.kind || "guard-result").slice(0, 40);
+        const text = String(body.text || body.name || body.source || "guard result").slice(0, 2000);
+        const id = "rec-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+        const meta = Object.assign({}, body.meta || {}, { job: String(body.job || "guard-client").slice(0, 40), status: String(body.status || "ok").slice(0, 20) });
+        await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), kind, text, JSON.stringify(meta).slice(0, 1500), meta.job, meta.status).run();
+        return new Response(JSON.stringify({ ok: true, id, recorded: true }), { headers: { "Content-Type": "application/json", ...CORS } });
+      } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: String(e && e.message || e) }), { status: 400, headers: { "Content-Type": "application/json", ...CORS } });
+      }
+    }
     return new Response("not found", { status: 404, headers: CORS });
   }
 };
