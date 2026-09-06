@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.5.15-atomic-drain";
+var VERSION = "0.5.16-v2drain-only";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
 var MAX_NOTE = 4e3;
@@ -883,6 +883,15 @@ async function drainV2(env) {
     if (!claim || !claim.meta || !claim.meta.changes) continue;
     try {
       results.push(await publishV2(env, r));
+      var pv2 = results[results.length - 1];
+      if (pv2 && pv2.ok) {
+        try {
+          var prlDoi = String(pv2.doi || r.new_doi || "");
+          var Q = String.fromCharCode(39);
+          var prlSql = "UPDATE paper_revision_log SET status=" + Q + "published" + Q + ", new_doi=?, updated_at=datetime(" + Q + "now" + Q + ") WHERE slug=? AND status=" + Q + "queued" + Q + " AND COALESCE(version_to," + Q + "2.0.0" + Q + ")=? " ;
+          await env.QNFO_AUDIT.prepare(prlSql).bind(prlDoi, String(r.slug || ""), String(r.version_to || "2.0.0")).run();
+        } catch (ePrl) {}
+      }
     } catch (e) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(r.id).run();
       results.push({ ok: false, stage: "v2", error: String(e && e.message || e).slice(0, 200) });
@@ -933,30 +942,20 @@ async function run(env) {
 __name(run, "run");
 __name2(run, "run");
 var worker_default = {
-  async scheduled(event, env, ctx) {
+    async scheduled(event, env, ctx) {
+    // v0.5.16-v2drain-only: research-exec OWNS version_queue v2-drain ONLY.
+    // research_queue stage machine (note->draft->review->publish) is owned by
+    // qnfo-idea-triage + agent-orchestrator. Previous versions ALSO ran run() here,
+    // a DUPLICATE consumer that raced triage on the same rows and failed papers.
     ctx.waitUntil((async function() {
       try {
         var drained = await drainV2(env);
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");
       } catch (e) {
+        await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
-      if (env.RESEARCH_HALT === "1") {
-        await logEvent(env, "halt", "research halted by RESEARCH_HALT kill-switch");
-        return;
-      }
-      var stallResolve;
-      var stallPromise = new Promise(function(res) {
-        stallResolve = res;
-      });
-      var stallTimer = setTimeout(function() {
-        stallResolve("STALL");
-      }, 42e4);
-      var winner = await Promise.race([run(env), stallPromise]);
-      if (winner === "STALL") await logEvent(env, "stall-guard", "run exceeded 7min deadline; fire released");
-      clearTimeout(stallTimer);
     })());
-  },
-  async fetch(request, env) {
+  },  async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
     if (url.pathname === "/run" && request.method === "POST") {

@@ -9,7 +9,7 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-const VERSION = "1.3.0-robust-scoring";
+const VERSION = "1.3.4-orch-custom-route";
 const MODELS = {
   a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -26,8 +26,16 @@ const ACCEPT_MIN = 0.7;
 const FEAS_MIN = 0.5;
 const RISK_MAX = 0.4;
 const STD_TIE = 0.25;
-const AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
-const MAX_REVISE = 2;
+const AGENT_ORCH_PUBLIC = "https://agent-orchestrator.qnfo.org";
+const AGENT_ORCH_SVC = "https://AGENT_ORCH"; // service binding (internal, fallback)
+
+function orchBase(env) {
+  // Prefer the custom-route hostname (agent-orchestrator.qnfo.org). A custom zone route is
+  // reliably fetchable from other Workers, unlike a bare workers.dev subdomain (which
+  // intermittently 404s on internal fetch) and unlike a service binding (1003 subrequest
+  // block). Canonical fix 2026-09-06.
+  return AGENT_ORCH_PUBLIC;
+}const MAX_REVISE = 2;
 const MAX_STAGE_ATTEMPTS = 3;
 const MAX_ACTIVE = 1;
 const OUTREACH_CAP = 12;
@@ -375,27 +383,31 @@ async function dispatchStage(env, row, slug) {
   if (!env.DISPATCH_TOKEN) return { error: "DISPATCH_TOKEN not configured" };
   const body = { prompt: b.prompt, max_steps: b.maxSteps };
   if (b.maxTokens) body.max_tokens = b.maxTokens;
-  const r = await fetch(AGENT_ORCH + "/task", {
+  const base = orchBase(env);
+  const r = await fetch(base + "/task", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Sync-Token": env.DISPATCH_TOKEN },
     body: JSON.stringify(body),
   });
-  if (!r.ok) return { error: "agent-http-" + r.status };
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.text()).slice(0, 200); } catch (eD) {}
+    console.log("[qnfo-idea-triage] dispatch fail", r.status, base, detail);
+    return { error: "agent-http-" + r.status, detail: detail };
+  }
   const j = await r.json().catch(() => ({}));
   if (!j.task_id) return { error: "agent-no-task-id" };
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET agent_task_id=?1 WHERE id=?2").bind(j.task_id, row.id).run();
   await logTask(env, row.id, row.stage, "dispatch", "ok", "task " + j.task_id + " steps=" + b.maxSteps);
   return { ok: true, task_id: j.task_id };
 }
-
 async function getTask(env, tid) {
   try {
-    const r = await fetch(AGENT_ORCH + "/task/" + tid, { headers: { "X-Sync-Token": env.DISPATCH_TOKEN || "" } });
+    const r = await fetch(orchBase(env) + "/task/" + tid, { headers: { "X-Sync-Token": env.DISPATCH_TOKEN || "" } });
     if (!r.ok) return { error: "http-" + r.status };
     return await r.json();
   } catch (e) { return { error: String(e && e.message || e).slice(0, 200) }; }
 }
-
 async function advance(env, row, result) {
   const ctx = tryJson(row.context) || {};
   const slug = slugify(row.summary || row.idea);

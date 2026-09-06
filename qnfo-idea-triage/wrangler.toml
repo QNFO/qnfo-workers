@@ -26,3 +26,8 @@ head_sampling_rate = 1
 
 [triggers]
 crons = ["0 * * * *", "*/10 * * * *"]
+
+[[services]]
+binding = "AGENT_ORCH"
+service = "qnfo-agent-orchestrator"
+environment = "production"

@@ -7,7 +7,7 @@
 //   so proposals stayed 'new' forever and NOTHING alerted. Now pipeline-ops alarms on this class in
 //   <=15 min, and auto-triggers a triage drain when the triage worker is reachable.
 
-var VERSION = "0.5.0-intake-watchdog";
+var VERSION = "0.5.1-intake-single-issue";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -56,10 +56,8 @@ async function health(env) {
 // NEW: detect intake stalls and trigger a triage drain
 async function intakeWatchdog(env) {
   const h = await health(env);
-  const out = { intake_new: h.intake_new, intake_oldest: h.intake_oldest, triggered_drain: false, action: "none" };
+  const out = { intake_new: h.intake_new, intake_oldest: h.intake_oldest, action: "none" };
   const stalledN = Number(h.intake_new) || 0;
-  if (stalledN === 0) return out;
-  // age of oldest stuck proposal
   let oldestAgeMin = null;
   if (h.intake_oldest) {
     const ms = Date.parse(String(h.intake_oldest).replace(" ", "T") + (String(h.intake_oldest).indexOf("Z") >= 0 ? "" : "Z"));
@@ -67,24 +65,23 @@ async function intakeWatchdog(env) {
   }
   const isStall = stalledN >= INTAKE_BACKLOG_ALERT_N && (oldestAgeMin === null || oldestAgeMin >= INTAKE_STALL_MIN);
   if (isStall) {
-    // escalate to an issue (deduped by open title) so it is never silent
-    const title = "INTAKE-STALL: " + stalledN + " idea_proposals stuck 'new'";
-    const desc = "idea_proposals backlog not being triaged: " + stalledN + " stuck status='new' (oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + " min old" : "unknown") + "). research_queue: queued=" + h.queued + " researching=" + h.researching + " published=" + h.published + ". Auto-remediation: triggering triage drain. If this recurs, check qnfo-idea-triage scoreIdea / Workers AI response envelope / model availability.";
+    const title = "INTAKE-STALL: idea_proposals stuck new (single-issue, self-closes on clear)";
+    const desc = "idea_proposals backlog not being triaged: " + stalledN + " stuck new; oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + "min" : "?") + "; queued=" + h.queued + " researching=" + h.researching + ". Auto-remediation: triage drain. Check qnfo-idea-triage scoreIdea if it recurs.";
     const r = await escIssue(env, title, desc, "research-intake", "high");
     out.action = "escalated";
-    // auto-trigger triage drain (best-effort; triage auth not needed for scheduled-path HTTP is token-gated so use fetch without token only if a public path exists - we call /health to confirm reachable)
+    try { const resp = await fetch(TRIAGE_URL + "/health"); out.triage_health = resp.status; } catch (e) {}
     try {
-      const resp = await fetch(TRIAGE_URL + "/health");
-      out.triage_health = resp.status;
-    } catch (e) { out.triage_health = "err:" + String(e.message).slice(0, 60); }
-    try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "INTAKE-STALL escalated -> agent_issues " + (r.inserted ? "ok" : "dup") + ": " + stalledN + " proposals stuck 'new' (oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + "min" : "?") + ")").run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "INTAKE-STALL escalated -> agent_issues " + (r.inserted ? "ok" : "dup") + ": " + stalledN + " proposals stuck new").run();
     } catch (e) {}
+  } else {
+    // stall cleared or not a stall - self-close any open INTAKE-STALL issue (single-issue lifecycle)
+    try {
+      await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=datetime('now') WHERE status='open' AND title LIKE 'INTAKE-STALL%'").run();
+      out.action = "cleared";
+    } catch (eC) {}
   }
   return out;
-}
-
-async function recoverStale(env) {
+}async function recoverStale(env) {
   const r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=NULL, error='stale-recovered', claimed_at=NULL, agent_task_id=NULL WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < datetime('now','-" + STALE_MIN + " minutes')").run();
   return (r && r.meta && r.meta.changes) || 0;
 }
