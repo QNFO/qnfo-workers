@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.1.1";
+var VERSION = "0.2.0";
 var MODELS_DEFAULT = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct";
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -173,11 +173,18 @@ function decisionFrom(parsedList, basis) {
   var decision;
   var minAvg = Math.min.apply(null, avgs);
   var maxAvg = Math.max.apply(null, avgs);
+  // Speculative-content guard (P3-CAL row 104, v0.2.0): a claim-heavy record that reviewers
+  // themselves flag as speculative / lacking empirical evidence must not PUBLISH, regardless of scores.
+  var speculative = parsedList.some(function (p) {
+    if (!p) return false;
+    var txt = arrOf(p.weaknesses).concat(arrOf(p.limitations_of_review), arrOf(p.fatal_flaws)).join(" ").toLowerCase();
+    return /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/.test(txt);
+  });
   if (fatal || avg < 4) decision = "REJECT";
   else if (basis !== "text") decision = "REVISE"; // metadata-only can never PUBLISH (anti rubber-stamp)
-  else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence) decision = "PUBLISH";
+  else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence && !speculative) decision = "PUBLISH";
   else decision = "REVISE";
-  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " basis=" + basis + " lowconf=" + anyLowConfidence };
+  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, speculative: speculative, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " speculative=" + speculative + " basis=" + basis + " lowconf=" + anyLowConfidence };
 }
 
 function buildReport(rec, parsedList, dec, modelsUsed, basis) {
