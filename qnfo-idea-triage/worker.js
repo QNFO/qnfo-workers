@@ -9,7 +9,7 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const MODELS = {
   a: "@cf/zai-org/glm-5.2",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -59,7 +59,7 @@ function tryJson(s) {
 // ── Triage (v1.0.0 core, kept) ────────────────────────────────────────────
 const SCORECARD_PROMPT = "You are QNFO's research-idea merit reviewer. Score the idea below for the QNFO autonomous research pipeline.\n" +
 "Return JSON ONLY: {\"novelty\":0-1,\"technical_merit\":0-1,\"impact_potential\":0-1,\"exposure_potential\":0-1,\"feasibility\":0-1,\"risk\":0-1,\"rationale\":\"<=120 chars\",\"hook\":\"<=90 chars, one-line public-facing hook\"}\n" +
-"Scoring guide: technical_merit = depth of technical content + verifiability; impact_potential = significance if proven; exposure_potential = breadth of audience/attention it can attract (social, media, cross-field); risk = probability of producing nothing citable (1 = near-certain dead end).\n" +
+"Scoring guide: technical_merit = depth of technical content + verifiability; impact_potential = significance if proven; exposure_potential = breadth of audience/attention it can attract (social, media, cross-field); risk = probability of producing nothing citable (1 = near-certain dead end). IMPORTANT: feasibility means feasibility of the THEORETICAL/COMPUTATIONAL research itself (can the derivation, simulation, formal analysis, and computational verification be carried out by the QNFO autonomous pipeline) — NOT experimental testability. QNFO has no laboratory; an idea is feasible if its mathematics/computation can be executed and verified in silico, even if a confirming experiment would require external labs years away. Do NOT mark a theoretical physics idea infeasible merely because no experiment currently exists.\n" +
 "IDEA: ";
 
 async function runModel(env, name, prompt) {
