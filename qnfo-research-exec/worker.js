@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.13-zenodo-fix";
+var VERSION = "0.5.14-drain-route";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"]; // v0.5.12-full-package: glm-5.2 second model (verified live in idea-triage) + note gateway fallback
 var MAX_NOTE = 4e3;
@@ -624,6 +624,10 @@ var worker_default = {
     if (url.pathname === "/run" && request.method === "POST") {
       const out = await run(env);
       return json({ ok: true, worker: WORKER, version: VERSION, out });
+    }
+    if (url.pathname === "/run/drain-v2" && request.method === "POST") {
+      const drained = await drainV2(env);
+      return json({ ok: true, worker: WORKER, version: VERSION, drained });
     }
     return json({ error: "not found" }, 404);
   }
