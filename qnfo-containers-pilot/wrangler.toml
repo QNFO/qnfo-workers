@@ -1,0 +1,23 @@
+name = "qnfo-containers-pilot"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# Cloudflare Containers pilot -- public python:3.12-slim image (no local Docker).
+# Each Durable Object instance controls one container instance (scale-to-zero on idle).
+[[containers]]
+class_name = "PyContainer"
+image = "docker.io/library/python:3.12-slim"
+instance_type = "lite"
+max_instances = 3
+
+[[durable_objects.bindings]]
+name = "PY_CONTAINER"
+class_name = "PyContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PyContainer"]
+
+# Fail-closed auth for /exec and /version. Set via: wrangler secret put PILOT_TOKEN
