@@ -1,9 +1,6 @@
-// jnl-zenodo v0.1.1 — publishes AI referee reports as linked Zenodo review records
+// jnl-zenodo v0.1.0 — publishes AI referee reports as linked Zenodo review records
 // and creates new-version revision drafts for self-owned (QNFO) papers.
-// Deployed: https://jnl-zenodo.q08.workers.dev
-// Stack: KV jnl-state (0cf89b469bcb47058e343611d9117897), service binding REFEREE -> jnl-referee
-// Secrets: ZENODO_TOKEN (Zenodo PAT), JNL_OPS_TOKEN (x-ops-token header)
-// Auth: POST endpoints require x-ops-token; read endpoints public.
+// Isolated: KV jnl-state only. Reads reports from jnl-referee public API.
 const REFEREE = null; // via service binding env.REFEREE
 const ZENODO_API = "https://zenodo.org/api";
 const OWNER_QNFO = 1328013;
@@ -23,8 +20,19 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     try {
+      if (path === "/diag") {
+        const probes = [];
+        for (const u of [`${REFEREE}/health`, `${REFEREE}/reviews?recid=21993116`, `${ZENODO_API}/records/21993116`, `https://example.com`]) {
+          try {
+            const res = await fetch(u, { headers: { "user-agent": UA, accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+            const txt = await res.text();
+            probes.push({ url: u, status: res.status, head: txt.slice(0, 160) });
+          } catch (e) { probes.push({ url: u, error: String(e && e.message || e) }); }
+        }
+        return json({ ok: true, version: "0.1.1-diag", probes });
+      }
       if (path === "/health") {
-        return json({ ok: true, service: "jnl-zenodo", version: "0.1.1", zenodo_token_set: !!env.ZENODO_TOKEN });
+        return json({ ok: true, service: "jnl-zenodo", version: "0.1.0", zenodo_token_set: !!env.ZENODO_TOKEN });
       }
       if (request.method !== "POST") return json({ ok: false, error: "method not allowed; POST only" }, 405);
       if (request.headers.get("x-ops-token") !== env.JNL_OPS_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
@@ -37,7 +45,7 @@ export default {
         const existing = await env.STATE.get(kvKey);
         if (existing) return json({ ok: true, already_published: JSON.parse(existing) });
 
-        // 1. referee report via service binding
+        // 1. referee report
         const rr = await (async () => { const res = await env.REFEREE.fetch(`https://jnl-referee/reviews?recid=${recid}`, { headers: { "user-agent": UA, accept: "application/json" } }); const txt = await res.text(); let b = null; try { b = txt ? JSON.parse(txt) : null; } catch (e) {} return { status: res.status, body: b }; })();
         if (rr.status !== 200 || !rr.body?.rows?.length) return json({ ok: false, error: `referee report not found (${rr.status})` }, 404);
         const review = rr.body.rows[0];
@@ -73,7 +81,7 @@ export default {
         const mr = await zfetch(`${ZENODO_API}/deposit/depositions/${draftId}`, { method: "PUT", body: JSON.stringify(meta) }, env.ZENODO_TOKEN);
         if (mr.status !== 200) return json({ ok: false, error: `metadata update failed (${mr.status})`, detail: mr.body }, 502);
 
-        // 5. upload report file (application/octet-stream; text/markdown is rejected 415)
+        // 5. upload report file
         const fname = `ai-referee-report-${recid}.md`;
         let ur = { status: 0 };
         try {
@@ -102,12 +110,13 @@ export default {
         const concept = paper.conceptrecid;
         if (!concept) return json({ ok: false, error: "no conceptrecid" }, 400);
 
-        // new version draft via LEGACY endpoint (the /records/{concept}/versions route 404s on Zenodo)
+        // new version draft
         const vr = await zfetch(`${ZENODO_API}/deposit/depositions/${recid}/actions/newversion`, { method: "POST", body: "{}" }, env.ZENODO_TOKEN);
         if (vr.status < 200 || vr.status >= 300) return json({ ok: false, error: `new version failed (${vr.status})`, detail: vr.body }, 502);
         const draft = vr.body;
         const draftId = draft.id;
         const bucket = draft.links?.bucket;
+        // copy current main md into the draft (content preserved; revision edit is a later explicit step)
         const mdFile = (paper.files || []).find((f) => /\.(md|txt|markdown)$/i.test(f.key));
         let copied = [];
         if (mdFile) {
@@ -118,7 +127,7 @@ export default {
             copied.push(mdFile.key);
           }
         }
-        const out = { draft_id: draftId, conceptrecid: concept, source_recid: recid, copied_files: copied, status: "draft-not-published" };
+        const out = { draft_id: draftId, conceptrecid: concept, source_recid: recid, copied_files: copied, next: `PUT ${ZENODO_API}/deposit/depositions/${draftId} to edit metadata; POST .../actions/publish to publish`, status: "draft-not-published" };
         await env.STATE.put(`zenodo:draft:${recid}`, JSON.stringify(out));
         return json({ ok: true, draft: out });
       }
