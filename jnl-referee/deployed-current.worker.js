@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.3.0";
+var VERSION = "0.4.0";
 var MODELS_DEFAULT = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct";
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -23,7 +23,10 @@ var DDL = [
     "id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, decision TEXT NOT NULL, " +
     "rationale TEXT, avg_score REAL, basis TEXT, created_at TEXT DEFAULT (datetime('now')))",
   "CREATE TABLE IF NOT EXISTS jnl_review_log (" +
-    "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), recid INTEGER, kind TEXT, detail TEXT)"
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), recid INTEGER, kind TEXT, detail TEXT)",
+  "CREATE TABLE IF NOT EXISTS jnl_submissions (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'queued', " +
+    "note TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))"
 ];
 
 function json(data, status) {
@@ -47,6 +50,45 @@ function log(env, recid, kind, detail) {
     return env.AUDIT.prepare("INSERT INTO jnl_review_log (recid, kind, detail) VALUES (?, ?, ?)")
       .bind(recid || null, kind, String(detail || "").slice(0, 1000)).run();
   } catch (e) { return null; }
+}
+
+// Submission-intake helpers (P9 anti-abuse, v0.4.0)
+function normalizeId(input) {
+  var s = String(input || "").trim();
+  var m = s.match(/[0-9]{5,9}/);
+  return m ? Number(m[0]) : 0;
+}
+async function whoHash(header) {
+  try {
+    var h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(header || "anon"));
+    var arr = new Uint8Array(h);
+    return Array.prototype.slice.call(arr, 0, 8).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  } catch (e) { return "anon"; }
+}
+async function submitRateOk(env, who) {
+  var cap = Number(env.JNL_SUBMIT_DAILY_CAP || 10);
+  var key = "submit:" + dateKey(new Date()) + ":" + who;
+  var cur = Number(await env.STATE.get(key) || 0);
+  return { ok: cur < cap, cur: cur, cap: cap, key: key };
+}
+async function submitBump(env, who) {
+  var key = "submit:" + dateKey(new Date()) + ":" + who;
+  var cur = Number(await env.STATE.get(key) || 0) + 1;
+  await env.STATE.put(key, String(cur), { expirationTtl: 90000 });
+  return cur;
+}
+async function submitNew(env, recid, note, who) {
+  await ensureSchema(env);
+  var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
+  var meta = rec.metadata || {};
+  var dup = await env.AUDIT.prepare("SELECT recid FROM jnl_submissions WHERE recid = ?").bind(recid).first();
+  var dupR = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE recid = ?").bind(recid).first();
+  if (dup || dupR) return { dup: true };
+  await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now')) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi").bind(rec.id, rec.conceptrecid || null, rec.doi || null, rec.conceptdoi || null, meta.version || null, meta.title || null).run();
+  await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_reviews (recid, status) VALUES (?, 'queued')").bind(recid).run();
+  await env.AUDIT.prepare("INSERT INTO jnl_submissions (recid, note, source, status) VALUES (?, ?, ?, 'queued')").bind(recid, String(note || "").slice(0, 300), String(who).slice(0, 40)).run();
+  await log(env, recid, "submitted", "author submission queued via intake (P9)");
+  return { dup: false, doi: rec.doi || null, title: meta.title || null };
 }
 
 async function zenodoGet(url) {
@@ -383,6 +425,11 @@ var index_default = {
           : await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions ORDER BY id DESC LIMIT ?").bind(limD).all();
         return json({ ok: true, count: rowsD.results.length, rows: rowsD.results });
       }
+      if (path === "/submissions") {
+        var limS = Math.min(Number(url.searchParams.get("limit") || 30), 100);
+        var subR = await env.AUDIT.prepare("SELECT recid, status, note, created_at FROM jnl_submissions ORDER BY id DESC LIMIT ?").bind(limS).all();
+        return json({ ok: true, count: subR.results.length, rows: subR.results });
+      }
       if (path === "/" || path === "/index.html") {
         var escH = function (s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
         var recParam = Number(url.searchParams.get("recid") || 0);
@@ -401,9 +448,24 @@ var index_default = {
         var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal — open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> — structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><p>Queue: " + (idxRows.results.length ? "" : "no decisions yet") + "</p><ul>" + cards + "</ul><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds · metadata-only reviews never PUBLISH · overlay-only (no Zenodo write-back).</footer></body></html>";
         return new Response(idxHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
       }
-      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal")) {
+      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit")) {
         var authed = await authOk(request, env);
         if (!authed) return json({ ok: false, error: "unauthorized" }, 401);
+        if (path === "/submit") {
+          var bodyS = {};
+          try { bodyS = await request.json(); } catch (e) {}
+          var recidS = normalizeId(bodyS.id || url.searchParams.get("id") || "");
+          if (!recidS) return json({ ok: false, error: "id required (recid, zenodo DOI, or zenodo URL)" }, 400);
+          var whoS = await whoHash(request.headers.get("x-jnl-token") || "");
+          var rlS = await submitRateOk(env, whoS);
+          if (!rlS.ok) return json({ ok: false, error: "submission rate limit reached", limit: rlS }, 429);
+          var resS;
+          try { resS = await submitNew(env, recidS, bodyS.note, whoS); }
+          catch (e2) { return json({ ok: false, error: "zenodo lookup failed: " + String(e2 && e2.message || e2).slice(0, 200) }, 502); }
+          if (resS.dup) return json({ ok: true, duplicate: true, recid: recidS, note: "already queued or reviewed" });
+          await submitBump(env, whoS);
+          return json({ ok: true, accepted: true, recid: recidS, doi: resS.doi, title: resS.title, note: "queued for AI referee; runs on the cron cycle (review is advisory)" });
+        }
         if (path === "/enqueue" || path === "/seed") {
           var body = {};
           try { body = await request.json(); } catch (e) {}
