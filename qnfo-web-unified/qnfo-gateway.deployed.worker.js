@@ -410,7 +410,8 @@ function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
     { icon: "\u2696\uFE0F", title: "License", desc: "QNFO Unified License Agreement v2.0 \u2014 open-science licensing with commercial protections.", href: "/legal" },
     { icon: "\u{1F5C4}\uFE0F", title: "Archive", desc: "Persistent archival storage with DOI registration and R2-redundant backup infrastructure.", href: "https://archive.qnfo.org" },
     { icon: "\u26A1", title: "QWAV Platform", desc: "Pre-commercial computing platform exploring p-adic ultrametric architectures benchmarked with JPCUB.", href: "https://qwav.org" },
-    { icon: "\u{1F50F}", title: "iPatent.me", desc: "Quantum technology patent disclosure framework for prior art documentation.", href: "https://ipatent.qnfo.org" }
+    { icon: "\u{1F50F}", title: "iPatent.me", desc: "Quantum technology patent disclosure framework for prior art documentation.", href: "https://ipatent.qnfo.org" },
+    { icon: "\u{1F4DC}", title: "AI-Reviewed Journal", desc: "A pilot overlay journal on the Zenodo aiscience community: every deposit receives an open AI-generated referee report \u2014 no gatekeepers, no paywalls, no human editorial board.", href: "https://jnl-referee.q08.workers.dev" }
   ];
   const cardsHtml = cards.map(
     (c) => '<a href="' + c.href + '" class="hub-card" style="text-decoration:none;color:inherit;display:block"><div class="card-icon">' + c.icon + "</div><h3>" + c.title + "</h3><p>" + c.desc + "</p></a>"
