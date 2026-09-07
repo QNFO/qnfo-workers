@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.13.4"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.13.5"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -185,6 +185,7 @@ const AMS_SCHEDULE = {
   "loose-threads-sweep": { times: ["07:00"], days: "1", fixed: null },
   "visibility":      { times: ["07:30"], days: "1", fixed: null },
   "engagement":      { times: ["07:15"], days: "1", fixed: null },
+  "radar":           { times: ["09:30"], days: "1-5", fixed: null },
 };
 
 // Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
@@ -1685,6 +1686,7 @@ const JOBS = {
   "loose-threads-sweep": jobLooseThreadsSweep,
   "visibility": jobVisibility,
   "engagement": jobEngagement,
+  "radar": jobRadar,
 };
 
 // cron -> job dispatch map for a given Amsterdam offset
@@ -1694,6 +1696,44 @@ function dispatchMap(offset) {
   return map;
 }
 
+// RADAR-1 (2026-09-07): read-only external-mentions radar (HN Algolia + Lobsters + StackExchange) for QNFO
+// mentions; INSERT OR IGNORE into qnfo-audit.external_mentions; outbound posting intentionally NOT implemented
+// (new channels require explicit go-ahead; established outreach regime covers amplification).
+async function jobRadar(env) {
+  const mentions = [];
+  const ua = { headers: { "User-Agent": "QNFO-radar/1.0" } };
+  try {
+    const r = await fetch("https://hn.algolia.com/api/v1/search?query=%22qnfo%22&hitsPerPage=30&tags=comment,story", ua);
+    const j = await r.json();
+    for (const h of (j.hits || [])) {
+      mentions.push({ source: "hn", title: String(h.title || h.story_title || "comment").slice(0, 180), url: h.story_url || h.url || ("https://news.ycombinator.com/item?id=" + h.objectID), author: h.author || "", score: h.points || 0, created: h.created_at || "" });
+    }
+  } catch (e) {}
+  try {
+    const r = await fetch("https://lobste.rs/search.json?q=qnfo", ua);
+    const j = await r.json();
+    const arr = Array.isArray(j) ? j : (j && Array.isArray(j.stories) ? j.stories : []);
+    for (const s of arr) {
+      mentions.push({ source: "lobsters", title: String(s.title || "").slice(0, 180), url: s.url || ("https://lobste.rs/s/" + (s.short_id || "")), author: (s.submitter_user && s.submitter_user.username) || "", score: s.score || 0, created: s.created_at || "" });
+    }
+  } catch (e) {}
+  try {
+    const r = await fetch("https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=activity&q=qnfo&site=stackoverflow&pagesize=20", ua);
+    const j = await r.json();
+    for (const it of (j.items || [])) {
+      mentions.push({ source: "stackexchange", title: String(it.title || "").slice(0, 180), url: it.link || "", author: (it.owner && it.owner.display_name) || "", score: it.score || 0, created: it.creation_date ? new Date(it.creation_date * 1000).toISOString() : "" });
+    }
+  } catch (e) {}
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS external_mentions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, title TEXT, url TEXT, author TEXT, score INTEGER, created TEXT, first_seen TEXT, UNIQUE(source, url))").run();
+  let added = 0;
+  for (const m of mentions) {
+    try {
+      const r = await env.AUDIT.prepare("INSERT OR IGNORE INTO external_mentions (ts, source, title, url, author, score, created, first_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(new Date().toISOString(), m.source, m.title, m.url, m.author, m.score, m.created, new Date().toISOString()).run();
+      if (r && r.meta && r.meta.changes) added += r.meta.changes;
+    } catch (e) {}
+  }
+  return { status: "ok", notes: { scanned: mentions.length, new_mentions: added } };
+}
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
