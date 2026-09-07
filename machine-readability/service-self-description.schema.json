@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qnfo.org/schemas/service-self-description-2026-09-07.json",
+  "title": "QNFO Service Self-Description",
+  "description": "Machine-readable self-description published by every QNFO service/worker at /.well-known/self.json. Single source of truth for registry enrichment, agent introspection and the Cloudflare capability advisor.",
+  "type": "object",
+  "required": ["id", "kind", "version", "purpose", "capabilities", "routes", "updatedAt"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "description": "Stable service id, e.g. qnfo-ops." },
+    "kind": { "type": "string", "enum": ["worker", "durable-object", "orchestrator", "front-end", "api", "indexer", "radar", "executor", "other"] },
+    "version": { "type": "string", "description": "Semver-ish version, e.g. 2.5.1." },
+    "purpose": { "type": "string", "description": "One-paragraph machine-readable statement of what this service does and when it runs." },
+    "purposeKeywords": { "type": "array", "items": { "type": "string" }, "description": "Lowercase keywords for matching." },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string", "description": "What this capability does, inputs -> outputs." },
+          "input": { "type": "string" },
+          "output": { "type": "string" },
+          "toolHint": { "type": "string", "description": "Suggested agent tool/route to invoke it." }
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "method", "purpose"],
+        "properties": {
+          "path": { "type": "string" },
+          "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "ALL"] },
+          "auth": { "type": "string" },
+          "purpose": { "type": "string" }
+        }
+      }
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "name"],
+        "properties": {
+          "type": { "type": "string", "enum": ["D1", "R2", "KV", "DO", "QUEUES", "AI", "VECTORIZE", "EMAIL", "BROWSER", "CACHE", "SECRETS", "SERVICE", "WORKFLOW"] },
+          "name": { "type": "string" },
+          "resource": { "type": "string" }
+        }
+      }
+    },
+    "cloudflareProducts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["product", "usage"],
+        "properties": {
+          "product": { "type": "string" },
+          "feature": { "type": "string" },
+          "usage": { "type": "string" },
+          "configRef": { "type": "string" }
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "endpoint": { "type": "string" },
+        "status": { "type": "string", "enum": ["ok", "degraded", "down", "unknown"] }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "properties": {
+        "readme": { "type": "string" },
+        "llmsTxt": { "type": "string" },
+        "agentSkills": { "type": "string" },
+        "openApi": { "type": "string" },
+        "changelog": { "type": "string" }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "url"],
+        "properties": { "name": { "type": "string" }, "url": { "type": "string" } }
+      }
+    },
+    "prompts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "purpose", "audience"],
+        "properties": {
+          "name": { "type": "string" },
+          "purpose": { "type": "string" },
+          "audience": { "type": "string", "enum": ["agent", "ops", "human", "all"] },
+          "url": { "type": "string" }
+        }
+      }
+    },
+    "owner": { "type": "string" },
+    "selfUrl": { "type": "string" },
+    "registryRef": { "type": "string" },
+    "updatedAt": { "type": "string", "description": "ISO8601 last-updated timestamp." }
+  }
+}
