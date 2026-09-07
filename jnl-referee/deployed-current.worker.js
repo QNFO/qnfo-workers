@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.4.0";
+var VERSION = "0.5.0";
 var MODELS_DEFAULT = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct";
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -26,7 +26,10 @@ var DDL = [
     "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), recid INTEGER, kind TEXT, detail TEXT)",
   "CREATE TABLE IF NOT EXISTS jnl_submissions (" +
     "id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'queued', " +
-    "note TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))"
+    "note TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS jnl_links (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, a INTEGER NOT NULL, b INTEGER NOT NULL, " +
+    "shared INTEGER DEFAULT 1, concepts TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(a, b))"
 ];
 
 function json(data, status) {
@@ -89,6 +92,51 @@ async function submitNew(env, recid, note, who) {
   await env.AUDIT.prepare("INSERT INTO jnl_submissions (recid, note, source, status) VALUES (?, ?, ?, 'queued')").bind(recid, String(note || "").slice(0, 300), String(who).slice(0, 40)).run();
   await log(env, recid, "submitted", "author submission queued via intake (P9)");
   return { dup: false, doi: rec.doi || null, title: meta.title || null };
+}
+
+function stopSet() {
+  return { the:1, of:1, and:1, a:1, an:1, for:1, in:1, on:1, to:1, from:1, by:1, with:1, at:1, or:1, as:1, into:1, its:1, their:1, this:1, that:1, is:1, are:1, be:1, was:1, were:1, not:1, no:1, how:1, what:1, why:1, when:1, which:1, via:1, per:1, under:1, over:1, between:1, across:1, new:1, one:1, two:1, three:1, model:1, models:1, study:1, studies:1, paper:1, using:1, use:1, used:1, first:1, second:1, case:1, cases:1, concept:1, concepts:1, towards:1, toward:1, framework:1, frameworks:1 };
+}
+function conceptsOf(title) {
+  var s = String(title || "").toLowerCase();
+  s = s.replace(/[^a-z0-9 ]/g, " ");
+  var toks = s.split(/ +/);
+  var stop = stopSet();
+  var acc = {};
+  for (var i = 0; i < toks.length; i++) {
+    var t = toks[i];
+    if (t.length < 3) continue;
+    if (stop[t]) continue;
+    acc[t] = 1;
+  }
+  return Object.keys(acc).sort();
+}
+function sharedConcepts(a, b) {
+  var i = 0; var j = 0; var shared = [];
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { shared.push(a[i]); i++; j++; }
+    else if (a[i] < b[j]) i++;
+    else j++;
+  }
+  return shared;
+}
+async function buildGraph(env) {
+  await ensureSchema(env);
+  var rows = await env.AUDIT.prepare("SELECT recid, title FROM jnl_records ORDER BY recid").all();
+  var recs = rows.results || [];
+  var concepts = {};
+  for (var r = 0; r < recs.length; r++) { concepts[recs[r].recid] = conceptsOf(recs[r].title); }
+  var added = 0;
+  for (var i = 0; i < recs.length; i++) {
+    for (var j = i + 1; j < recs.length; j++) {
+      var shared = sharedConcepts(concepts[recs[i].recid], concepts[recs[j].recid]);
+      if (!shared.length) continue;
+      await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_links (a, b, shared, concepts) VALUES (?, ?, ?, ?)")
+        .bind(recs[i].recid, recs[j].recid, shared.length, shared.join(",")).run();
+      added++;
+    }
+  }
+  return { nodes: recs.length, edges: added };
 }
 
 async function zenodoGet(url) {
@@ -425,6 +473,11 @@ var index_default = {
           : await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions ORDER BY id DESC LIMIT ?").bind(limD).all();
         return json({ ok: true, count: rowsD.results.length, rows: rowsD.results });
       }
+      if (path === "/graph") {
+        var gNodes = await env.AUDIT.prepare("SELECT recid, title FROM jnl_records ORDER BY recid").all();
+        var gEdges = await env.AUDIT.prepare("SELECT a, b, shared, concepts FROM jnl_links ORDER BY shared DESC LIMIT 300").all();
+        return json({ ok: true, node_count: gNodes.results.length, edge_count: gEdges.results.length, nodes: gNodes.results, edges: gEdges.results });
+      }
       if (path === "/submissions") {
         var limS = Math.min(Number(url.searchParams.get("limit") || 30), 100);
         var subR = await env.AUDIT.prepare("SELECT recid, status, note, created_at FROM jnl_submissions ORDER BY id DESC LIMIT ?").bind(limS).all();
@@ -448,9 +501,13 @@ var index_default = {
         var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal — open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> — structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><p>Queue: " + (idxRows.results.length ? "" : "no decisions yet") + "</p><ul>" + cards + "</ul><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds · metadata-only reviews never PUBLISH · overlay-only (no Zenodo write-back).</footer></body></html>";
         return new Response(idxHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
       }
-      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit")) {
+      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit" || path === "/rebuild-graph")) {
         var authed = await authOk(request, env);
         if (!authed) return json({ ok: false, error: "unauthorized" }, 401);
+        if (path === "/rebuild-graph") {
+          var gRes = await buildGraph(env);
+          return json({ ok: true, graph: gRes });
+        }
         if (path === "/submit") {
           var bodyS = {};
           try { bodyS = await request.json(); } catch (e) {}
@@ -535,3 +592,4 @@ var index_default = {
 };
 
 export { index_default as default };
+
