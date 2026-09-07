@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -265,13 +265,20 @@ async function buildState(env, ctx) {
     const rows = await d1all(env.AUDIT, 'SELECT slug, version_from, version_to, status, created_at FROM errata_actions ORDER BY created_at DESC LIMIT 2');
     push({ key: 'errata_actions', label: 'Errata actions', state: 'info', detail: JSON.stringify(g) + '; latest: ' + (rows.length ? rows[0].slug + ' v' + rows[0].version_from + '->v' + rows[0].version_to + ' ' + rows[0].status : 'none'), ts: rows.length ? rows[0].created_at : null });
   });
-  // 4 gateway failures
-  await safeAudit('ai_gateway_failures', 'AI gateway failures (24h)', async function () {
-    const f = await d1all(env.AUDIT, 'SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ?', [epoch24]);
-    const top = await d1all(env.AUDIT, 'SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? GROUP BY error_class ORDER BY c DESC LIMIT 4', [epoch24]);
+  // 4 gateway failures (user-facing only) + calibration observations (informational)
+  await safeAudit('ai_gateway_failures', 'AI gateway failures (24h, user-facing)', async function () {
+    const f = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source != 'qnfo-ai-calibration'", [epoch24]);
+    const top = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source != 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
     const total = f && f.length ? f[0].total : 0;
     const tc = top.map(function (r) { return r.error_class + ':' + r.c; }).join(', ');
-    push({ key: 'gw_failures', label: 'AI gateway failures (24h)', state: total > 0 ? 'err' : 'ok', detail: (total > 0 ? total + ' failure(s); ' + tc : '0 failures'), ts: f && f.length ? f[0].latest : null });
+    push({ key: 'gw_failures', label: 'AI gateway failures (24h, user-facing)', state: total > 0 ? 'err' : 'ok', detail: (total > 0 ? total + ' failure(s); ' + tc : '0 failures'), ts: f && f.length ? f[0].latest : null });
+  });
+  await safeAudit('gw_calibration', 'AI calibration probes (24h)', async function () {
+    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration'", [epoch24]);
+    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const ctotal = c && c.length ? c[0].total : 0;
+    const ctc = ct.map(function (r) { return r.error_class + ':' + r.c; }).join(', ');
+    push({ key: 'gw_calibration', label: 'AI calibration probes (24h)', state: 'info', detail: (ctotal > 0 ? ctotal + ' observations (deliberate); ' + ctc : '0 observations'), ts: c && c.length ? c[0].latest : null });
   });
   // 5 agent issues
   await safeAudit('agent_issues', 'Agent issues (open)', async function () {
