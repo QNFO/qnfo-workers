@@ -1,0 +1,39 @@
+{
+  "$schema": "https://qnfo.org/schemas/service-self-description-2026-09-07.json",
+  "id": "qnfo-ops",
+  "kind": "api",
+  "version": "2.5.1",
+  "purpose": "Ops-exec endpoint: fleet registry, agent issue backlog drain, email triage, telemetry self-heal, Cloudflare capability advisor for QNFO.",
+  "purposeKeywords": ["ops", "registry", "issues", "self-heal", "telemetry", "email", "advisor"],
+  "capabilities": [
+    { "name": "registryRefresh", "description": "Re-sync service_registry from repo + self.json documents; additive, preserves REGISTRY-PRESERVE-1.", "toolHint": "POST /registry/refresh" },
+    { "name": "issueDrain", "description": "Re-probe open agent_issues and auto-close health rows that pass; escalate failures.", "toolHint": "POST /issues/drain" },
+    { "name": "advisor", "description": "Map an issue/request to candidate Cloudflare products from cloudflare_capability_catalog; propose, do not auto-apply.", "toolHint": "POST /cloudflare/advise" }
+  ],
+  "routes": [
+    { "path": "/health", "method": "GET", "auth": "none", "purpose": "Liveness + open backlog count." },
+    { "path": "/registry/refresh", "method": "POST", "auth": "service-token", "purpose": "Registry enrichment from self.json." },
+    { "path": "/cloudflare/advise", "method": "POST", "auth": "service-token", "purpose": "Product recommendation decision gate." }
+  ],
+  "bindings": [
+    { "type": "D1", "name": "QNFO_AUDIT", "resource": "qnfo-audit" },
+    { "type": "R2", "name": "QNFO_AUDIT", "resource": "qnfo-audit" },
+    { "type": "KV", "name": "EQUATION_CACHE", "resource": "equation-cache" }
+  ],
+  "cloudflareProducts": [
+    { "product": "Workers", "feature": "ES modules worker", "usage": "Hosts the ops-exec endpoint.", "configRef": "qnfo-ops/wrangler.toml" },
+    { "product": "D1", "feature": "SQL analytics", "usage": "service_registry + agent_issues storage.", "configRef": "qnfo-ops/wrangler.toml" },
+    { "product": "R2", "feature": "audit object store", "usage": "Ops audit artifacts.", "configRef": "qnfo-ops/wrangler.toml" },
+    { "product": "KV", "feature": "cache", "usage": "equation-cache namespace.", "configRef": "qnfo-ops/wrangler.toml" }
+  ],
+  "health": { "endpoint": "/health", "status": "ok" },
+  "docs": { "readme": "qnfo-ops/README.md", "llmsTxt": "https://qnfo.org/llms.txt", "agentSkills": "/.well-known/agent-skills" },
+  "skills": [],
+  "prompts": [
+    { "name": "ops-exec-prompt", "purpose": "Drive registry/issue/advisor operations machine-first.", "audience": "agent", "url": "machine-readability/self-documentation.prompt.md" }
+  ],
+  "owner": "qnfo-infra",
+  "selfUrl": "https://ops.qnfo.org/.well-known/self.json",
+  "registryRef": "qnfo-ops",
+  "updatedAt": "2026-09-07T08:00:00Z"
+}
