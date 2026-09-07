@@ -1,0 +1,72 @@
+{
+  "schema": "qnfo.integration-state.v1",
+  "program": "cloudflare-self-knowledge + machine-readability expansion",
+  "date": "2026-09-07",
+  "lastVerifiedUtc": "2026-09-07T06:53:04Z",
+  "verification": {
+    "fleet": { "total": 71, "serviceBoundCoreHealthy": 12, "healthyCount": 12, "core": ["qnfo-ai 5.21.1", "qnfo-ai-search 1.0.2", "qnfo-archive 1.2-cors-fixed", "qnfo-backlog-exec 1.1.1", "qnfo-email 1.8", "qnfo-email-orchestrator 0.3.3-p1-p1", "qnfo-gateway 3.5.1-redteam-fixes", "qnfo-kaizen 0.3.0-p2", "qnfo-lifecycle 1.6.1-memory-maintain-fixed", "qnfo-memory-mcp 2.0.3", "qnfo-paper-indexer 2.2-scheduled-daily (count 527)", "qnfo-skill-sync v1.1.2"] },
+    "backlog": { "backlogExecHealth": { "http": 200, "openBacklog": 10 }, "d1GroundTruthOpen": 10, "d1Resolved": 31, "d1Closed": 211, "d1Wontfix": 252, "d1Total": 504 },
+    "email": { "total": 551, "last24h": 49, "byStatus": { "sent": 248, "spam": 167, "archived": 110, "processed": 14, "replied": 12 } },
+    "cfAnalytics30d": { "aiNeurons": 714045, "aiEstCostUsd": 7.85, "workerRequests": 227223, "workerErrors": 128 },
+    "registry": { "services": 76, "blankPurpose": 71, "blankCapabilities": 0, "blankRoutes": 0 }
+  },
+  "knownIssues": [
+    {
+      "id": "agent_issue-ops_issues_list-empty",
+      "title": "ops_issues_list returns count 0 for every status incl. all while D1 holds 504 rows (open 10)",
+      "severity": "high",
+      "status": "open",
+      "rootCause": "qnfo-ops/worker.js v2.5.1 listIssues() calls stmt.all() without await -> res.results undefined -> 0 rows",
+      "fix": "await env.QNFO_AUDIT.prepare(sql).bind(...).all() (one-line; see docs/FIX-2026-09-07-ops_issues_list-await.md)",
+      "evidence": ["ops_issues_list status=all -> count 0 (2026-09-07T06:53Z)", "backlog_exec /health openBacklog 10", "d1 GROUP BY status 10/31/211/252"],
+      "acceptanceCriteria": "open=10, closed=211, resolved=31, wontfix=252, all=504; priority composes; limit respected"
+    }
+  ],
+  "artifacts": {
+    "repo": "QNFO/qnfo-workers",
+    "branch": "main",
+    "capabilityIntegration": [
+      "qnfo-cloud-ops/migrations/2026-09-07-cf-capability-catalog.sql",
+      "docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md",
+      "docs/CLOUDFLARE-INTEGRATION-VERIFICATION-2026-09-07.md"
+    ],
+    "machineReadability": [
+      "machine-readability/README.md",
+      "machine-readability/service-self-description.schema.json",
+      "machine-readability/self-documentation.prompt.md",
+      "machine-readability/examples/qnfo-ops.self.json",
+      "machine-readability/examples/listIssues.self.js",
+      "qnfo-cloud-ops/migrations/2026-09-07b-machine-self-description.sql"
+    ],
+    "fixDocs": [
+      "docs/FIX-2026-09-07-ops_issues_list-await.md",
+      "docs/DEPLOY-RUNBOOK-2026-09-07.md"
+    ],
+    "serverWorkspace": "infra-audit/ (R2 ops-workspace): fleet audit, root-cause, verification followup, machine-readability executed log, final status"
+  },
+  "ownerActions": [
+    {
+      "order": 1,
+      "title": "Apply one-line await fix to listIssues() in qnfo-ops/worker.js and redeploy",
+      "gate": "wrangler deploy (qnfo-ops)",
+      "acceptance": "ops_issues_list status=open returns 10 rows; status=all returns 504"
+    },
+    {
+      "order": 2,
+      "title": "Run both committed D1 migrations against QNFO_AUDIT",
+      "gate": "wrangler d1 execute",
+      "files": ["qnfo-cloud-ops/migrations/2026-09-07-cf-capability-catalog.sql", "qnfo-cloud-ops/migrations/2026-09-07b-machine-self-description.sql"]
+    },
+    {
+      "order": 3,
+      "title": "Extend /registry/refresh enrichment: backfill purpose from /health + /.well-known/self.json (71/76 blank)",
+      "gate": "qnfo-ops worker change + deploy"
+    },
+    {
+      "order": 4,
+      "title": "Wire cf-capability-sync cron + advisor endpoint (proposed -> approved -> applied -> reverted via cf_advisory_decisions)",
+      "gate": "qnfo-cloud-ops worker change + deploy"
+    }
+  ],
+  "notDoneFromInterface": ["D1 writes (read-only tool)", "worker deploy", "cron wiring", "full-file worker rewrite (162KB single PUT risk)"]
+}
