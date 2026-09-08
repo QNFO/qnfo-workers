@@ -1,22 +1,24 @@
-const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
-const NOISE = /bounce|dmarcreport|dmarc|cfbounces|noreply|no-reply|sciforum|evalsignal|wildapricot|glintopenaccess|primeoa|esciencelibrary|premiersciencenetwork|theopenresearchnetwork|gitlab|soverin|microsoft\.com/i;
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// worker.js
+var MODEL = "@cf/zai-org/glm-5.3-flash";
+var NOISE = /bounce|dmarcreport|dmarc|cfbounces|noreply|no-reply|sciforum|evalsignal|wildapricot|glintopenaccess|primeoa|esciencelibrary|premiersciencenetwork|theopenresearchnetwork|gitlab|soverin|microsoft\.com/i;
 function json(data, status) {
   if (status === void 0) status = 200;
-  return new Response(JSON.stringify(data), { status: status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
-
+__name(json, "json");
 function authorized(request, env) {
-  // 0.2.1 (kaizen AUTH-FAIL-CLOSED-1): FAIL CLOSED — if the token binding is ever missing, reject all /run/* + /debug/*.
   if (!env.ERRATA_TOKEN) return false;
   return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
 }
-
+__name(authorized, "authorized");
 async function classifyErrata(env, email) {
   const prompt = [
     "You are QNFO's errata-detection assistant. Given an inbound email to the QNFO researcher (Rowan Brad Quni-Gudzinas), decide whether it requests or implies a correction/errata to one of QNFO's published papers.",
-    "Set errata=true when the sender (typically an author whose work QNFO cited, attributed, or engaged) indicates that a QNFO paper misrepresents, mis-attributes, miscites, or wrongly describes their own work. Key signals: \"this equation is nowhere mentioned in our work\", \"we never said/claimed this\", \"you attributed X to us but that is not ours\", \"that is incorrect\", \"please correct\", \"this does not appear in our paper\". An explicit request for a correction/errata is also errata=true.",
-    "Set errata=false for: polite acknowledgements (\"I will take a look\", \"thanks for sharing\"), scheduling/co-working, conference logistics, outreach declines, benchmark pitches, newsletters, bounces, DMARC reports, spam.",
+    'Set errata=true when the sender (typically an author whose work QNFO cited, attributed, or engaged) indicates that a QNFO paper misrepresents, mis-attributes, miscites, or wrongly describes their own work. Key signals: "this equation is nowhere mentioned in our work", "we never said/claimed this", "you attributed X to us but that is not ours", "that is incorrect", "please correct", "this does not appear in our paper". An explicit request for a correction/errata is also errata=true.',
+    'Set errata=false for: polite acknowledgements ("I will take a look", "thanks for sharing"), scheduling/co-working, conference logistics, outreach declines, benchmark pitches, newsletters, bounces, DMARC reports, spam.',
     "From: " + (email.sender || ""),
     "Subject: " + (email.subject || ""),
     "Body: " + (email.body_text || "").slice(0, 1500),
@@ -24,21 +26,29 @@ async function classifyErrata(env, email) {
   ].join("\n");
   const res = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }] }, { gateway: { id: "default" } });
   let text = "";
-  try { text = (res && (res.response || res.result || "")).toString(); } catch (e) { text = ""; }
+  try {
+    text = (res && (res.response || res.result || "")).toString();
+  } catch (e) {
+    text = "";
+  }
   text = text.trim();
   const a = text.indexOf("{");
   const b = text.lastIndexOf("}");
   if (a >= 0 && b > a) text = text.slice(a, b + 1);
-  try { return JSON.parse(text); } catch (e) { return { errata: false, paper_doi: null, claim: null, confidence: 0 }; }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { errata: false, paper_doi: null, claim: null, confidence: 0 };
+  }
 }
-
+__name(classifyErrata, "classifyErrata");
 async function runCheck(env, mode) {
   const dry = mode === "dry";
   const db = env.WATCH_DB;
   const w = await db.prepare("SELECT value FROM errata_watch WHERE key = 'last_email_id'").first();
   const lastId = w ? parseInt(w.value || "0", 10) : 0;
   const emails = await db.prepare("SELECT id, sender, recipient, subject, body_text, received_at FROM emails WHERE id > ? AND classification = 'personal' ORDER BY id ASC LIMIT 12").bind(lastId).all();
-  const rows = (emails && emails.results) || [];
+  const rows = emails && emails.results || [];
   let maxId = lastId, classified = 0;
   const detected = [];
   for (const e of rows) {
@@ -46,7 +56,11 @@ async function runCheck(env, mode) {
     if (NOISE.test(e.sender || "") || NOISE.test(e.subject || "")) continue;
     classified++;
     let cls;
-    try { cls = await classifyErrata(env, e); } catch (err) { cls = { errata: false, error: err.message }; }
+    try {
+      cls = await classifyErrata(env, e);
+    } catch (err) {
+      cls = { errata: false, error: err.message };
+    }
     if (cls && cls.errata) {
       let doi = cls.paper_doi || null;
       if (!doi) {
@@ -62,10 +76,10 @@ async function runCheck(env, mode) {
   if (!dry && maxId > lastId) {
     await db.prepare("INSERT INTO errata_watch (key, value) VALUES ('last_email_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(maxId)).run();
   }
-  return { ok: true, worker: "qnfo-errata-watch", version: "0.2.1", dry: dry, model: MODEL, lastEmailId: lastId, advancedTo: maxId, scanned: rows.length, classified: classified, detectedCount: detected.length, detected: detected };
+  return { ok: true, worker: "qnfo-errata-watch", version: "0.2.1", dry, model: MODEL, lastEmailId: lastId, advancedTo: maxId, scanned: rows.length, classified, detectedCount: detected.length, detected };
 }
-
-export default {
+__name(runCheck, "runCheck");
+var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if ((url.pathname.startsWith("/run/") || url.pathname.startsWith("/debug/")) && !authorized(request, env)) {
@@ -76,7 +90,11 @@ export default {
     }
     if (url.pathname === "/run/check") {
       const mode = url.searchParams.get("mode") || "dry";
-      try { return json(await runCheck(env, mode)); } catch (e) { return json({ ok: false, error: e.message }, 500); }
+      try {
+        return json(await runCheck(env, mode));
+      } catch (e) {
+        return json({ ok: false, error: e.message }, 500);
+      }
     }
     return json({ error: "not found" }, 404);
   },
@@ -84,6 +102,12 @@ export default {
     try {
       const r = await runCheck(env, "live");
       console.log("[qnfo-errata-watch] cron done:", JSON.stringify({ scanned: r.scanned, classified: r.classified, detected: r.detectedCount }));
-    } catch (e) { console.error("[qnfo-errata-watch] cron error:", e.message); }
+    } catch (e) {
+      console.error("[qnfo-errata-watch] cron error:", e.message);
+    }
   }
 };
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map

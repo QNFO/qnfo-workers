@@ -1,6 +1,3 @@
---90d68a4da6d33cfc21fc0f758d58a642556a756ea83c594bf1c75e48ada2
-Content-Disposition: form-data; name="deployed-current.worker.js"
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -21349,5 +21346,3 @@ export {
    *)
 */
 //# sourceMappingURL=deployed-current.worker.js.map
-
---90d68a4da6d33cfc21fc0f758d58a642556a756ea83c594bf1c75e48ada2--

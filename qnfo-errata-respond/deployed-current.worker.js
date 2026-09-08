@@ -1,21 +1,23 @@
-const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// worker.js
+var MODEL = "@cf/zai-org/glm-5.3-flash";
 function json(data, status) {
   if (status === void 0) status = 200;
-  return new Response(JSON.stringify(data), { status: status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
-
+__name(json, "json");
 function authorized(request, env) {
-  // 0.4.1 (kaizen AUTH-FAIL-CLOSED-1): FAIL CLOSED — if the token binding is ever missing, reject all /run/* + /debug/*.
   if (!env.ERRATA_TOKEN) return false;
   return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
 }
-
+__name(authorized, "authorized");
 function doiToRecordId(doi) {
   const m = (doi || "").match(/zenodo\.(\d+)/);
   return m ? m[1] : null;
 }
-
+__name(doiToRecordId, "doiToRecordId");
 async function resolvePaper(env, doi) {
   const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 LIMIT 1";
   const row = await env.PAPERS_DB.prepare(base).bind(doi).first();
@@ -23,9 +25,13 @@ async function resolvePaper(env, doi) {
   try {
     const recId = doiToRecordId(doi);
     if (!recId) return null;
-    const vresp = await fetch("https://zenodo.org/api/records/" + recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } }).then(function (r) { return r.json(); });
-    const hits = (vresp && vresp.hits && vresp.hits.hits) || [];
-    hits.sort(function (a, b) { return (b.created || "").localeCompare(a.created || ""); });
+    const vresp = await fetch("https://zenodo.org/api/records/" + recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } }).then(function(r) {
+      return r.json();
+    });
+    const hits = vresp && vresp.hits && vresp.hits.hits || [];
+    hits.sort(function(a, b) {
+      return (b.created || "").localeCompare(a.created || "");
+    });
     if (hits.length) {
       const headDoi = hits[0].doi || null;
       if (headDoi) {
@@ -33,10 +39,11 @@ async function resolvePaper(env, doi) {
         if (row2) return row2;
       }
     }
-  } catch (e) { }
+  } catch (e) {
+  }
   return null;
 }
-
+__name(resolvePaper, "resolvePaper");
 async function draftCorrection(env, item, paper) {
   const prompt = [
     "You are QNFO's errata-implementation assistant. Given (1) an errata email and (2) a QNFO published paper (markdown), produce a SURGICAL, MINIMAL correction.",
@@ -52,30 +59,38 @@ async function draftCorrection(env, item, paper) {
     "Body: " + (item.claim || item.subject || ""),
     "",
     "PAPER (markdown):",
-    (paper.body_md || "").slice(0, 9000),
+    (paper.body_md || "").slice(0, 9e3),
     "",
     'Respond with JSON only: {"risk":"low|high","clarification":"<1-3 sentences>","anchor":"<exact verbatim sentence from the paper>","position":"after|before","acknowledgement":"<1 sentence naming the correspondent>","changelog":"<1 line>","version":"<new version label e.g. 1.1>"}'
   ].join("\n");
   const res = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }] }, { gateway: { id: "default" } });
   let text = "";
-  try { text = (res && (res.response || res.result || "")).toString(); } catch (e) { text = ""; }
+  try {
+    text = (res && (res.response || res.result || "")).toString();
+  } catch (e) {
+    text = "";
+  }
   text = text.trim();
   const a = text.indexOf("{");
   const b = text.lastIndexOf("}");
   if (a >= 0 && b > a) text = text.slice(a, b + 1);
-  try { return JSON.parse(text); } catch (e) { return { risk: "high", clarification: null, anchor: null, position: "after", acknowledgement: null, changelog: null, version: null }; }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { risk: "high", clarification: null, anchor: null, position: "after", acknowledgement: null, changelog: null, version: null };
+  }
 }
-
+__name(draftCorrection, "draftCorrection");
 function insertClarification(md, corr) {
-  if (!corr.clarification || !corr.anchor) return { md: md, applied: false, reason: "no clarification or anchor" };
+  if (!corr.clarification || !corr.anchor) return { md, applied: false, reason: "no clarification or anchor" };
   const idx = md.indexOf(corr.anchor);
-  if (idx < 0) return { md: md, applied: false, reason: "anchor not found" };
+  if (idx < 0) return { md, applied: false, reason: "anchor not found" };
   const insertAt = corr.position === "before" ? idx : idx + corr.anchor.length;
   const insertText = "\n\n" + corr.clarification + "\n";
   const md2 = md.slice(0, insertAt) + insertText + md.slice(insertAt);
   return { md: md2, applied: true, reason: null };
 }
-
+__name(insertClarification, "insertClarification");
 function addAcknowledgementAndChangelog(md, corr) {
   let out = md;
   const block = [];
@@ -91,17 +106,19 @@ function addAcknowledgementAndChangelog(md, corr) {
   }
   return out;
 }
-
+__name(addAcknowledgementAndChangelog, "addAcknowledgementAndChangelog");
 function bumpVersion(md, version) {
   if (!version) return md;
   let out = md;
   out = out.replace(/\*\*Version:\*\*\s*[^\n]*/, "**Version:** " + version + " (this version).");
   if (/^version:/m.test(out)) {
-    out = out.replace(/^(version:\s*["']?)[\d.]+(["']?\s*)$/m, function(m, p1, p2) { return p1 + version + p2; });
+    out = out.replace(/^(version:\s*["']?)[\d.]+(["']?\s*)$/m, function(m, p1, p2) {
+      return p1 + version + p2;
+    });
   }
   return out;
 }
-
+__name(bumpVersion, "bumpVersion");
 function applyCorrection(paperMd, corr) {
   let md = paperMd;
   const applied = { clarification: false, acknowledgement: false, version: false };
@@ -112,9 +129,9 @@ function applyCorrection(paperMd, corr) {
   applied.acknowledgement = !!(corr.acknowledgement || corr.changelog);
   md = bumpVersion(md, corr.version);
   applied.version = !!corr.version;
-  return { md: md, applied: applied, anchor_error: r1.reason };
+  return { md, applied, anchor_error: r1.reason };
 }
-
+__name(applyCorrection, "applyCorrection");
 async function respondToItem(env, item) {
   const paper = await resolvePaper(env, item.paper_doi);
   if (!paper) {
@@ -124,13 +141,12 @@ async function respondToItem(env, item) {
   const corr = await draftCorrection(env, item, paper);
   const applied = applyCorrection(paper.body_md, corr);
   const risk = corr.risk || "high";
-  await env.WATCH_DB.prepare("INSERT INTO errata_actions (queue_id, email_id, paper_doi, slug, version_from, version_to, risk, clarification, acknowledgement, changelog, corrected_md, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'drafted', datetime('now'), datetime('now'))")
-    .bind(item.id, item.email_id, paper.doi || item.paper_doi, paper.slug, paper.version, corr.version, risk, corr.clarification || null, corr.acknowledgement || null, corr.changelog || null, applied.md).run();
+  await env.WATCH_DB.prepare("INSERT INTO errata_actions (queue_id, email_id, paper_doi, slug, version_from, version_to, risk, clarification, acknowledgement, changelog, corrected_md, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'drafted', datetime('now'), datetime('now'))").bind(item.id, item.email_id, paper.doi || item.paper_doi, paper.slug, paper.version, corr.version, risk, corr.clarification || null, corr.acknowledgement || null, corr.changelog || null, applied.md).run();
   await env.WATCH_DB.prepare("UPDATE errata_queue SET status='audited', updated_at=datetime('now') WHERE id=?").bind(item.id).run();
   const notify = await notifyUser(env, paper, corr, null);
-  return { item_id: item.id, slug: paper.slug, risk: risk, applied: applied.applied, anchor_error: applied.anchor_error, notify: notify };
+  return { item_id: item.id, slug: paper.slug, risk, applied: applied.applied, anchor_error: applied.anchor_error, notify };
 }
-
+__name(respondToItem, "respondToItem");
 async function notifyUser(env, paper, corr, action) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
   try {
@@ -147,26 +163,33 @@ async function notifyUser(env, paper, corr, action) {
       "",
       "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions) and is queued for publication."
     ].join("\n");
-    await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject: subject, text: text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
+    await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject, text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
   } catch (e) {
     return { sent: false, error: e.message };
   }
 }
-
+__name(notifyUser, "notifyUser");
 async function runRespond(env, mode) {
   const dry = mode === "dry";
   const items = await env.WATCH_DB.prepare("SELECT id, email_id, sender, subject, paper_doi, claim FROM errata_queue WHERE status='detected' ORDER BY id ASC LIMIT 5").all();
-  const rows = (items && items.results) || [];
+  const rows = items && items.results || [];
   const results = [];
   for (const it of rows) {
-    if (dry) { results.push({ item_id: it.id, dry: true }); continue; }
-    try { results.push(await respondToItem(env, it)); } catch (e) { results.push({ item_id: it.id, error: e.message }); }
+    if (dry) {
+      results.push({ item_id: it.id, dry: true });
+      continue;
+    }
+    try {
+      results.push(await respondToItem(env, it));
+    } catch (e) {
+      results.push({ item_id: it.id, error: e.message });
+    }
   }
-  return { ok: true, worker: "qnfo-errata-respond", version: "0.4.1", dry: dry, processed: rows.length, results: results };
+  return { ok: true, worker: "qnfo-errata-respond", version: "0.4.1", dry, processed: rows.length, results };
 }
-
-export default {
+__name(runRespond, "runRespond");
+var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if ((url.pathname.startsWith("/run/") || url.pathname.startsWith("/debug/")) && !authorized(request, env)) {
@@ -177,7 +200,7 @@ export default {
     }
     if (url.pathname === "/debug/zenodo") {
       const doi = url.searchParams.get("doi") || "";
-      const out = { doi: doi, recId: doiToRecordId(doi) };
+      const out = { doi, recId: doiToRecordId(doi) };
       try {
         const rec = await fetch("https://zenodo.org/api/records/" + out.recId, { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
         out.recStatus = rec.status;
@@ -186,22 +209,32 @@ export default {
         const vresp = await fetch("https://zenodo.org/api/records/" + out.recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
         out.versionsStatus = vresp.status;
         const vJson = await vresp.json();
-        const hits = (vJson.hits && vJson.hits.hits) || [];
-        out.hits = hits.map(function (h) { return { id: h.id, doi: h.doi, created: h.created }; });
+        const hits = vJson.hits && vJson.hits.hits || [];
+        out.hits = hits.map(function(h) {
+          return { id: h.id, doi: h.doi, created: h.created };
+        });
         out.hitsCount = out.hits.length;
-      } catch (e) { out.error = e.message; }
+      } catch (e) {
+        out.error = e.message;
+      }
       return json(out);
     }
     if (url.pathname === "/debug/resolve") {
       const doi = url.searchParams.get("doi") || "";
       try {
         const paper = await resolvePaper(env, doi);
-        return json({ ok: true, doi: doi, resolved: paper ? { slug: paper.slug, version: paper.version, doi: paper.doi, zenodo_doi: paper.zenodo_doi } : null, method: paper ? (paper.doi === doi || paper.zenodo_doi === doi ? "exact" : "concept-head") : null });
-      } catch (e) { return json({ ok: false, error: e.message }, 500); }
+        return json({ ok: true, doi, resolved: paper ? { slug: paper.slug, version: paper.version, doi: paper.doi, zenodo_doi: paper.zenodo_doi } : null, method: paper ? paper.doi === doi || paper.zenodo_doi === doi ? "exact" : "concept-head" : null });
+      } catch (e) {
+        return json({ ok: false, error: e.message }, 500);
+      }
     }
     if (url.pathname === "/run/respond") {
       const mode = url.searchParams.get("mode") || "dry";
-      try { return json(await runRespond(env, mode)); } catch (e) { return json({ ok: false, error: e.message }, 500); }
+      try {
+        return json(await runRespond(env, mode));
+      } catch (e) {
+        return json({ ok: false, error: e.message }, 500);
+      }
     }
     return json({ error: "not found" }, 404);
   },
@@ -214,3 +247,7 @@ export default {
     }
   }
 };
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map

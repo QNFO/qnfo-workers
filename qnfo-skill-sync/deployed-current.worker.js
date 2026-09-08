@@ -46,7 +46,7 @@ function normalizeTitle(t) {
   return s.slice(0, 500);
 }
 
-var EXTRACT_PROMPT = `You are the QNFO kaizen issue extractor. Analyze DeepChat session records and extract ONLY real, actionable issues, errors, or optimization opportunities.
+var EXTRACT_PROMPT = `Analyze DeepChat session records and extract ONLY real, actionable issues, errors, or optimization opportunities.
 
 Session record format:
 - title: the session's first user message (context only - a task prompt, NOT evidence of failure)

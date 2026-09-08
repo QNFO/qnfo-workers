@@ -1,7 +1,8 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.0)
-var VERSION = "0.3.0";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.1)
+var VERSION = "0.3.1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
+var FETCH_TIMEOUT_MS = 8000;
 var NO_SELF = ["qnfo-fleet-deploy"];
 function json(d, s) { return new Response(JSON.stringify(d), { status: s || 200, headers: { "Content-Type": "application/json" } }); }
 function versionOf(code) {
@@ -28,6 +29,13 @@ function newer(a, b) {
   for (var i = 0; i < len; i++) { var x = ap[i] || 0, y = bp[i] || 0; if (x !== y) return x > y; }
   return a > b;
 }
+function isModule(code) { return (code || "").indexOf("export default") >= 0 || (code || "").indexOf("export {") >= 0 || /^\s*import\s/.test(code || ""); }
+async function timedFetch(url, opts, ms) {
+  var ac = new AbortController();
+  var t = setTimeout(function () { ac.abort(); }, ms || FETCH_TIMEOUT_MS);
+  try { return await fetch(url, Object.assign({}, opts || {}, { signal: ac.signal })); }
+  finally { clearTimeout(t); }
+}
 async function sha256(str) { var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); return Array.from(new Uint8Array(d)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join(""); }
 async function stateGet(env, key, fb) { try { var r = await env.AUDIT.prepare("SELECT value FROM fleet_deploy_state WHERE key=?1").bind(key).first(); return r && r.value !== null && r.value !== undefined ? r.value : fb; } catch (e) { return fb; } }
 async function stateSet(env, key, value) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploy_state (key,value,updated_at) VALUES (?1,?2,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')").bind(key, String(value)).run(); } catch (e) {} }
@@ -44,14 +52,16 @@ async function canonical(worker) {
     cs.push("qnfo-ops/main/cloud/" + names[a] + "/deployed-current.worker.js");
   }
   for (var i = 0; i < cs.length; i++) {
-    var r = await fetch(GH + cs[i]);
-    if (r.ok) { var c = await r.text(); if (c && c.length > 0 && c.slice(0, 4) !== "404:") return { path: cs[i], code: c }; }
+    try {
+      var r = await timedFetch(GH + cs[i], { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+      if (r.ok) { var c = await r.text(); if (c && c.length > 0 && c.slice(0, 4) !== "404:") return { path: cs[i], code: c }; }
+    } catch (e) {}
   }
   return null;
 }
 async function deployedContent(env, worker) {
   try {
-    var r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content/v2", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } });
+    var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content/v2", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
     if (!r.ok) return null;
     return await r.text();
   } catch (e) { return null; }
@@ -79,8 +89,9 @@ async function redeploy(env, worker) {
     return { ok: true, status: 200, note: "no-op", from: depV, to: canV };
   }
   var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
+  var ctype = isModule(c.code) ? "application/javascript+module" : "application/javascript";
   var toSha = await sha256(c.code);
-  var r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/javascript+module" }, body: c.code });
+  var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": ctype }, body: c.code }, 20000);
   var j = null; try { j = await r.json(); } catch (e) {}
   var putOk = r.ok && !(j && j.success === false);
   var dep2 = await deployedContent(env, worker);
@@ -88,12 +99,12 @@ async function redeploy(env, worker) {
   var ok = putOk && depV2 === canV;
   var note = !putOk ? ("HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180)) : (ok ? ("redeployed " + depV + " -> " + canV) : ("PUT-ok but deployed still " + (depV2 || "?") + " (wrangler-managed no-op?)"));
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
-  return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, source: c.path, bytes: c.code.length };
+  return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, ctype: ctype, source: c.path, bytes: c.code.length };
 }
 async function scan(env, heal) {
   var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, details: [] };
   try {
-    var lr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } });
+    var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 20000);
     var lj = await lr.json();
     var names = (lj.result || []).map(function (x) { return x.id; });
     for (var i = 0; i < names.length; i++) {

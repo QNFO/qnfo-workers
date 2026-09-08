@@ -1,27 +1,14 @@
-// qnfo-intent-orchestrator v1.3.3 (2026-09-03): CAL_TOKEN auth header on calendar-api calls
-// v1.2.0 — unified intent layer + autonomous research triage
-// v1.2.0 (2026-09-02, R4): exact-match idempotency in handleIntent — an identical desire text
-//   (calendar/email templates embed occurrence-specific start ISO / sender+ts) returns the prior
-//   intent instead of inserting a duplicate row. Extends the research-only semantic dedupe to all types.
-// POST /intent {desire, source?, device?} -> classify -> route:
-//   note    -> embed + store in Vectorize (research: qnfo-ai-log, personal: personal-life)
-//   task/event/email/reminder/research -> queued with parsed metadata
-//   research -> async triage (ctx.waitUntil): noise filter, semantic dedup, AI merit scoring,
-//     promotion to research_candidates when score >= 60
-// GET /intents, GET /intents/stats, GET /digest, POST /digest/send (auth)
-// Triage surface (auth): POST /triage/run, GET /triage/candidates, GET /triage/stats,
-//   POST /triage/dispatch, POST /triage/sync, POST /triage/candidate
-// Scheduled: 06:00 digest email; 06:30 triage batch + task sync + auto-dispatch (1 active task)
-const NL = String.fromCharCode(10);
-const VERSION = '1.3.4'; // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN)
-const ROUTER = 'https://qnfo-ai.q08.workers.dev';
-const AGENT_ORCH = 'https://qnfo-agent-orchestrator.q08.workers.dev';
-const PROMOTE_THRESHOLD = 60;
-const DEDUP_SIM = 0.92;
-const TRIAGE_MODEL = 'deepseek-v4-flash';
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-function ok(id, data) { return { jsonrpc: '2.0', id: id, result: data }; }
-
+// worker.js
+var NL = String.fromCharCode(10);
+var VERSION = "1.3.4";
+var ROUTER = "https://qnfo-ai.q08.workers.dev";
+var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
+var PROMOTE_THRESHOLD = 60;
+var DEDUP_SIM = 0.92;
+var TRIAGE_MODEL = "deepseek-v4-flash";
 function auth(token, env) {
   const exp = env.INTENT_TOKEN;
   if (!exp || !token) return false;
@@ -32,207 +19,217 @@ function auth(token, env) {
   for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-
-function clamp(s, n) { return String(s || '').slice(0, n); }
-
+__name(auth, "auth");
+function clamp(s, n) {
+  return String(s || "").slice(0, n);
+}
+__name(clamp, "clamp");
 function classifyRules(desire) {
   const t = desire.toLowerCase();
-  let type = 'note', domain = 'general', priority = 'medium', due = null;
+  let type = "note", domain = "general", priority = "medium", due = null;
   if (/(\d{4}-\d{2}-\d{2})/.test(desire)) due = RegExp.$1;
   else if (/tomorrow/.test(t)) due = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
-  if (/(went to|attended|visited|took part|completed)/.test(t)) type = 'activity';
-  else if (/(remind|reminder|don't forget|do not forget)/.test(t)) type = 'reminder';
-  else if (/(meeting|appointment|schedule|calendar|event|call with|call on|book |reserve)/.test(t)) type = 'event';
-  else if (/(email|draft|send .*mail|reply to)/.test(t)) type = 'email';
-  else if (/(task|todo|to-do|need to|must |should |prepare|finish|complete|write up)/.test(t)) type = 'task';
-  else if (/(jot|note|idea|thought|remember this|write down)/.test(t)) type = 'note';
-  if (/(research|paper|arxiv|experiment|quantum|ultrametric|physics|theorem|proof|publication|manuscript)/.test(t)) domain = 'research';
-  else if (/(qwav|commercial|customer|client|lead|business|pricing|sales)/.test(t)) domain = 'qwav';
-  else if (/(personal|home|family|trip|holiday|health|gym|dinner|weekend|amsterdam)/.test(t)) domain = 'personal';
-  if (/(urgent|asap|today|immediately|critical|important)/.test(t)) priority = 'high';
-  if (/(someday|maybe|eventually|one day)/.test(t)) priority = 'low';
+  if (/(went to|attended|visited|took part|completed)/.test(t)) type = "activity";
+  else if (/(remind|reminder|don't forget|do not forget)/.test(t)) type = "reminder";
+  else if (/(meeting|appointment|schedule|calendar|event|call with|call on|book |reserve)/.test(t)) type = "event";
+  else if (/(email|draft|send .*mail|reply to)/.test(t)) type = "email";
+  else if (/(task|todo|to-do|need to|must |should |prepare|finish|complete|write up)/.test(t)) type = "task";
+  else if (/(jot|note|idea|thought|remember this|write down)/.test(t)) type = "note";
+  if (/(research|paper|arxiv|experiment|quantum|ultrametric|physics|theorem|proof|publication|manuscript)/.test(t)) domain = "research";
+  else if (/(qwav|commercial|customer|client|lead|business|pricing|sales)/.test(t)) domain = "qwav";
+  else if (/(personal|home|family|trip|holiday|health|gym|dinner|weekend|amsterdam)/.test(t)) domain = "personal";
+  if (/(urgent|asap|today|immediately|critical|important)/.test(t)) priority = "high";
+  if (/(someday|maybe|eventually|one day)/.test(t)) priority = "low";
   return { type, domain, priority, due };
 }
-
+__name(classifyRules, "classifyRules");
 function withTimeout(p, ms, label) {
   let timer;
-  return Promise.race([p, new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error((label || 'op') + ' timed out after ' + ms + 'ms')); }, ms); })]);
+  return Promise.race([p, new Promise(function(_, rej) {
+    timer = setTimeout(function() {
+      rej(new Error((label || "op") + " timed out after " + ms + "ms"));
+    }, ms);
+  })]);
 }
-
+__name(withTimeout, "withTimeout");
 async function recordClassify(env, model, ok, retry) {
   try {
-    await env.D1.prepare('INSERT INTO intent_classify_stats (ts, model, ok, retry) VALUES (?1,?2,?3,?4)').bind(new Date().toISOString(), model, ok ? 1 : 0, retry ? 1 : 0).run();
-  } catch (e) {}
+    await env.D1.prepare("INSERT INTO intent_classify_stats (ts, model, ok, retry) VALUES (?1,?2,?3,?4)").bind((/* @__PURE__ */ new Date()).toISOString(), model, ok ? 1 : 0, retry ? 1 : 0).run();
+  } catch (e) {
+  }
 }
-
-// QNFO.OPS.011E (v1.3.1): auto-switch primary classifier away from glm-5.2 when its
-// trailing-7d empty/error rate exceeds 5% (>=20 samples) - classifier empties silently
-// dropped calendar events 2026-09-02 (2/5 at 06:52).
+__name(recordClassify, "recordClassify");
 async function pickClassifier(env) {
   try {
     const cutoff = new Date(Date.now() - 7 * 864e5).toISOString();
     const row = await env.D1.prepare("SELECT COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) AS fails, COUNT(*) AS n FROM intent_classify_stats WHERE model='glm-5.2' AND ts>=?1").bind(cutoff).first();
-    const n = (row && row.n) || 0;
-    const fails = (row && row.fails) || 0;
-    if (n >= 20 && (fails / n) > 0.05) return 'glm-5.3-flash';
-  } catch (e) {}
-  return 'glm-5.2';
+    const n = row && row.n || 0;
+    const fails = row && row.fails || 0;
+    if (n >= 20 && fails / n > 0.05) return "glm-5.3-flash";
+  } catch (e) {
+  }
+  return "glm-5.2";
 }
-
+__name(pickClassifier, "pickClassifier");
 async function classifyAI(env, desire) {
   const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only. Do not fabricate fields or values the desire does not state; when ambiguous, classify type:"unknown" rather than guessing. ADVERSARIAL-REASONING-1 (label uncertainty, never invent a classification the text does not support).';
   const first = await pickClassifier(env);
-  const order = first === 'glm-5.3-flash' ? ['glm-5.3-flash', 'glm-5.2'] : ['glm-5.2', 'glm-5.3-flash'];
+  const order = first === "glm-5.3-flash" ? ["glm-5.3-flash", "glm-5.2"] : ["glm-5.2", "glm-5.3-flash"];
   for (let i = 0; i < order.length; i++) {
     const model = order[i];
     try {
-      // v1.3.1 timeout: a hung upstream classify previously left /intent + auto-express
-      // hanging forever (express log status null). max_tokens 300 avoids mid-JSON truncation.
-      const r = await withTimeout(env.QNFO_AI.fetch(ROUTER + '/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.RT },
+      const r = await withTimeout(env.QNFO_AI.fetch(ROUTER + "/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.RT },
         body: JSON.stringify({
           model,
           messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: clamp(desire, 1000) }
+            { role: "system", content: sys },
+            { role: "user", content: clamp(desire, 1e3) }
           ],
           max_tokens: 300
         })
-      }), 25000, 'classify-' + model);
+      }), 25e3, "classify-" + model);
       const j = await r.json();
-      const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '';
+      const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || "";
       const m = content.match(/\{[\s\S]*\}/);
-      if (!m) { await recordClassify(env, model, false, i > 0); continue; }
+      if (!m) {
+        await recordClassify(env, model, false, i > 0);
+        continue;
+      }
       const p = JSON.parse(m[0]);
-      if (p && typeof p.type === 'string') {
+      if (p && typeof p.type === "string") {
         await recordClassify(env, model, true, i > 0);
-        return { type: p.type, domain: p.domain || 'general', priority: p.priority || 'medium', summary: clamp(p.summary, 120), due: p.due || null };
+        return { type: p.type, domain: p.domain || "general", priority: p.priority || "medium", summary: clamp(p.summary, 120), due: p.due || null };
       }
       await recordClassify(env, model, false, i > 0);
-    } catch (e) { await recordClassify(env, model, false, i > 0); }
+    } catch (e) {
+      await recordClassify(env, model, false, i > 0);
+    }
   }
   return null;
 }
-
+__name(classifyAI, "classifyAI");
 async function storeNote(env, intent) {
   try {
     const text = intent.desire;
     const day = intent.created_at.slice(0, 10);
-    if (intent.domain === 'personal') {
-      const resp = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [clamp(text, 1000)] });
-      const v = (resp.data || []).find(x => Array.isArray(x) && x.length === 768);
-      if (v) await env.VZ_P.upsert([{ id: 'intent:' + intent.id, values: v, metadata: { doc: 'note', kind: 'intent', path: 'intents/' + day + '/' + intent.id + '.md', text: clamp(text, 800), ts: intent.created_at } }]);
+    if (intent.domain === "personal") {
+      const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
+      const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
+      if (v) await env.VZ_P.upsert([{ id: "intent:" + intent.id, values: v, metadata: { doc: "note", kind: "intent", path: "intents/" + day + "/" + intent.id + ".md", text: clamp(text, 800), ts: intent.created_at } }]);
     } else {
-      const resp = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [clamp(text, 1000)] });
-      const v = (resp.data || []).find(x => Array.isArray(x) && x.length === 768);
-      if (v) await env.VZ_R.upsert([{ id: 'intent:' + intent.id, values: v, metadata: { doc: 'note', kind: 'intent', path: 'intents/' + day + '/' + intent.id + '.md', text: clamp(text, 800), ts: intent.created_at } }]);
+      const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
+      const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
+      if (v) await env.VZ_R.upsert([{ id: "intent:" + intent.id, values: v, metadata: { doc: "note", kind: "intent", path: "intents/" + day + "/" + intent.id + ".md", text: clamp(text, 800), ts: intent.created_at } }]);
     }
-  } catch (e) {}
+  } catch (e) {
+  }
 }
-
+__name(storeNote, "storeNote");
 async function handleIntent(env, body, source, device) {
-  const desire = clamp(body.desire, 4000);
-  if (!desire) return { error: 'desire required' };
+  const desire = clamp(body.desire, 4e3);
+  if (!desire) return { error: "desire required" };
   const ai = await classifyAI(env, desire);
   const cls = ai || classifyRules(desire);
   if (!cls.summary) {
-    cls.summary = clamp(desire.replace(/^calendar event:\s*/i, '').trim(), 120);
+    cls.summary = clamp(desire.replace(/^calendar event:\s*/i, "").trim(), 120);
   }
-  const id = 'int-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
-  const now = new Date().toISOString();
-  const type = (['note', 'task', 'event', 'email', 'reminder', 'research', 'activity', 'unknown'].includes(cls.type) ? cls.type : 'note');
-  const domain = (['research', 'personal', 'qwav', 'general'].includes(cls.domain) ? cls.domain : 'general');
-  let status = type === 'note' ? 'done' : 'pending';
-  // v1.2.0 exact-match idempotency: identical desire (deterministic sync templates incl. occurrence
-  // start / sender+ts) => return the existing intent instead of duplicating (no re-embed, no re-digest).
+  const id = "int-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const type = ["note", "task", "event", "email", "reminder", "research", "activity", "unknown"].includes(cls.type) ? cls.type : "note";
+  const domain = ["research", "personal", "qwav", "general"].includes(cls.domain) ? cls.domain : "general";
+  let status = type === "note" ? "done" : "pending";
   const dupRow = await env.D1.prepare("SELECT id FROM intents WHERE desire = ?1 AND status NOT IN ('rejected','deduped') ORDER BY created_at ASC LIMIT 1").bind(desire).all().catch(() => null);
   if (dupRow && dupRow.results && dupRow.results.length) {
     return { id: dupRow.results[0].id, duplicate: true, dup_of: dupRow.results[0].id, type, domain, status };
   }
   await env.D1.prepare(
-    'INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)'
-  ).bind(id, desire, clamp(source, 60), clamp(device, 60), type, domain, cls.priority, cls.summary || '', cls.due || null, status, null, now, null).run();
-  const intent = { id, desire, source, device, type, domain, priority: cls.priority, summary: cls.summary || '', due: cls.due || null, status, created_at: now };
-  if (type === 'event') { await promoteCalendar(env, intent); }
-  if (type === 'note') {
+    "INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)"
+  ).bind(id, desire, clamp(source, 60), clamp(device, 60), type, domain, cls.priority, cls.summary || "", cls.due || null, status, null, now, null).run();
+  const intent = { id, desire, source, device, type, domain, priority: cls.priority, summary: cls.summary || "", due: cls.due || null, status, created_at: now };
+  if (type === "event") {
+    await promoteCalendar(env, intent);
+  }
+  if (type === "note") {
     await storeNote(env, intent);
     await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
-    intent.status = 'done';
+    intent.status = "done";
   }
-  if (type === 'activity') {
+  if (type === "activity") {
     try {
       const when = cls.due || now.slice(0, 10);
-      await env.PLS.fetch('https://personal-life-search.q08.workers.dev/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Index-Token': env.INDEX_TOKEN },
-        body: JSON.stringify({ items: [{ doc: 'activity', date: when, title: (cls.summary || desire.slice(0, 120)), category: domain === 'research' ? 'research' : 'other', venue: '', notes: desire.slice(0, 500) }] })
+      await env.PLS.fetch("https://personal-life-search.q08.workers.dev/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Index-Token": env.INDEX_TOKEN },
+        body: JSON.stringify({ items: [{ doc: "activity", date: when, title: cls.summary || desire.slice(0, 120), category: domain === "research" ? "research" : "other", venue: "", notes: desire.slice(0, 500) }] })
       });
-      status = 'done';
-      intent.status = 'done';
+      status = "done";
+      intent.status = "done";
       await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
-    } catch (e) {}
+    } catch (e) {
+    }
   }
   return intent;
 }
-
+__name(handleIntent, "handleIntent");
 async function promoteCalendar(env, intent) {
   try {
     if (!env.CAL_API) return;
-    const plane = intent.domain === 'personal' ? 'personal' : 'qnfo';
+    const plane = intent.domain === "personal" ? "personal" : "qnfo";
     const from = (intent.due || intent.created_at.slice(0, 10)).slice(0, 10);
-    const title = (intent.summary || intent.desire.slice(0, 120)).replace(/^calendar event:\s*/i, '').trim().slice(0, 300);
+    const title = (intent.summary || intent.desire.slice(0, 120)).replace(/^calendar event:\s*/i, "").trim().slice(0, 300);
     if (!title) return;
-    const authH = env.CAL_TOKEN ? { Authorization: 'Bearer ' + env.CAL_TOKEN } : {};
-    const ex = await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane + '&from=' + from + '&to=' + from, { headers: authH });
+    const authH = env.CAL_TOKEN ? { Authorization: "Bearer " + env.CAL_TOKEN } : {};
+    const ex = await env.CAL_API.fetch("https://calendar-api/events?plane=" + plane + "&from=" + from + "&to=" + from, { headers: authH });
     const ej = await ex.json();
-    const evs = (ej && ej.events) || [];
-    if (evs.some((e) => (e.title || '') === title && (e.dtstart || '') === from)) return;
-    await env.CAL_API.fetch('https://calendar-api/events?plane=' + plane, {
-      method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, authH),
-      body: JSON.stringify({ title, dtstart: from, dtend: from, source: 'intent-orchestrator', domain: intent.domain || null, status: 'confirmed' })
+    const evs = ej && ej.events || [];
+    if (evs.some((e) => (e.title || "") === title && (e.dtstart || "") === from)) return;
+    await env.CAL_API.fetch("https://calendar-api/events?plane=" + plane, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, authH),
+      body: JSON.stringify({ title, dtstart: from, dtend: from, source: "intent-orchestrator", domain: intent.domain || null, status: "confirmed" })
     });
-    await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(new Date().toISOString(), intent.id).run();
+    await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind((/* @__PURE__ */ new Date()).toISOString(), intent.id).run();
   } catch (e) {
-    console.log('calendar promote failed:', e && e.message || e);
+    console.log("calendar promote failed:", e && e.message || e);
   }
 }
-
+__name(promoteCalendar, "promoteCalendar");
 function digestLines(intents) {
   const out = [];
-  const notes = intents.filter(i => i.type === 'note');
-  const pending = intents.filter(i => i.type !== 'note');
-  out.push('QNFO intent digest - ' + new Date().toISOString().slice(0, 10));
-  out.push('');
-  if (notes.length) out.push('Captured notes: ' + notes.length + ' (stored in Vectorize)');
+  const notes = intents.filter((i) => i.type === "note");
+  const pending = intents.filter((i) => i.type !== "note");
+  out.push("QNFO intent digest - " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+  out.push("");
+  if (notes.length) out.push("Captured notes: " + notes.length + " (stored in Vectorize)");
   if (pending.length) {
-    out.push('Pending:');
-    for (const p of pending) out.push('- [' + p.type + '] ' + (p.summary || p.desire.slice(0, 80)) + (p.due ? ' (due ' + p.due + ')' : ''));
+    out.push("Pending:");
+    for (const p of pending) out.push("- [" + p.type + "] " + (p.summary || p.desire.slice(0, 80)) + (p.due ? " (due " + p.due + ")" : ""));
   }
-  if (!notes.length && !pending.length) out.push('No new intents.');
+  if (!notes.length && !pending.length) out.push("No new intents.");
   return out.join(NL);
 }
-
-var HUMAN_DOMAINS = new Set('outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com'.split(' '));
+__name(digestLines, "digestLines");
+var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 async function sendDigest(env, subject, text) {
-  const dom = String(env.DIGEST_TO || '').split('@')[1] || '';
-  if (HUMAN_DOMAINS.has(dom)) return { skipped: 'personal-domain', to: env.DIGEST_TO }; // user directive 2026-09-02
-  const r = await fetch('https://api.cloudflare.com/client/v4/accounts/' + env.CF_ACCOUNT + '/email/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.CF_TOKEN },
+  const dom = String(env.DIGEST_TO || "").split("@")[1] || "";
+  if (HUMAN_DOMAINS.has(dom)) return { skipped: "personal-domain", to: env.DIGEST_TO };
+  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.CF_TOKEN },
     body: JSON.stringify({
       personalization: [{ to: [{ email: env.DIGEST_TO }] }],
-      from: { email: env.DIGEST_FROM, name: 'QNFO Agent' },
-      subject: subject,
-      text: text
+      from: { email: env.DIGEST_FROM, name: "QNFO Agent" },
+      subject,
+      text
     })
   });
   const j = await r.json().catch(() => ({}));
   return { status: r.status, success: !!j.success, result: j.result || j.errors || null };
 }
-// ── v1.1: autonomous research triage ──────────────────────────────────────
-const NOISE_RE = [
+__name(sendDigest, "sendDigest");
+var NOISE_RE = [
   /^call (the )?[a-z_]+( tool)?(\s|$)/i,
   /(email_check|express_intent|intents_list|social_compose|search_research|search_papers tool)/i,
   /output the (complete )?raw json/i,
@@ -246,129 +243,147 @@ const NOISE_RE = [
   /wrapped in/i,
   /^ok$/i
 ];
-
 function isNoise(text) {
-  const t = String(text || '');
-  return NOISE_RE.some(function (re) { re.lastIndex = 0; return re.test(t); });
+  const t = String(text || "");
+  return NOISE_RE.some(function(re) {
+    re.lastIndex = 0;
+    return re.test(t);
+  });
 }
-
-let schemaReady = null;
+__name(isNoise, "isNoise");
+var schemaReady = null;
 function ensureSchema(env) {
   if (!schemaReady) {
     schemaReady = (async () => {
-      await env.D1.prepare('CREATE TABLE IF NOT EXISTS research_candidates (id TEXT PRIMARY KEY, cluster_key TEXT, question TEXT, merit INTEGER, impact INTEGER, novelty INTEGER, feasibility INTEGER, score INTEGER, intent_ids TEXT, status TEXT DEFAULT \'promoted\', agent_task_id TEXT, wbs_code TEXT, created_at TEXT, processed_at TEXT)').run();
-      await env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_rc_status ON research_candidates(status)').run();
-      await env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_rc_cluster ON research_candidates(cluster_key)').run();
-      await env.D1.prepare('CREATE TABLE IF NOT EXISTS intent_classify_stats (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, model TEXT, ok INTEGER DEFAULT 0, retry INTEGER DEFAULT 0)').run();
-      try { await env.D1.prepare('ALTER TABLE intents ADD COLUMN noise INTEGER DEFAULT 0').run(); } catch (e) {}
-      try { await env.D1.prepare('ALTER TABLE intents ADD COLUMN dup_of TEXT').run(); } catch (e) {}
-    })().catch(e => { schemaReady = null; console.log('schema err', e && e.message || e); });
+      await env.D1.prepare("CREATE TABLE IF NOT EXISTS research_candidates (id TEXT PRIMARY KEY, cluster_key TEXT, question TEXT, merit INTEGER, impact INTEGER, novelty INTEGER, feasibility INTEGER, score INTEGER, intent_ids TEXT, status TEXT DEFAULT 'promoted', agent_task_id TEXT, wbs_code TEXT, created_at TEXT, processed_at TEXT)").run();
+      await env.D1.prepare("CREATE INDEX IF NOT EXISTS idx_rc_status ON research_candidates(status)").run();
+      await env.D1.prepare("CREATE INDEX IF NOT EXISTS idx_rc_cluster ON research_candidates(cluster_key)").run();
+      await env.D1.prepare("CREATE TABLE IF NOT EXISTS intent_classify_stats (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, model TEXT, ok INTEGER DEFAULT 0, retry INTEGER DEFAULT 0)").run();
+      try {
+        await env.D1.prepare("ALTER TABLE intents ADD COLUMN noise INTEGER DEFAULT 0").run();
+      } catch (e) {
+      }
+      try {
+        await env.D1.prepare("ALTER TABLE intents ADD COLUMN dup_of TEXT").run();
+      } catch (e) {
+      }
+    })().catch((e) => {
+      schemaReady = null;
+      console.log("schema err", e && e.message || e);
+    });
   }
   return schemaReady;
 }
-
+__name(ensureSchema, "ensureSchema");
 async function triageAI(env, desire) {
   try {
-    const r = await env.QNFO_AI.fetch(ROUTER + '/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.RT },
+    const r = await env.QNFO_AI.fetch(ROUTER + "/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.RT },
       body: JSON.stringify({
         model: TRIAGE_MODEL,
         messages: [
-          { role: 'system', content: 'You are the QNFO idea-triage evaluator for an autonomous research pipeline. Evaluate the user idea. Reply with STRICT JSON only: {"is_noise":bool,"question":"normalized research question, max 140 chars","cluster_key":"short program tag: jpcub|ultrametric|qwav|platform|other","technical_merit":0-100,"impact_potential":0-100,"novelty":0-100,"feasibility":0-100}. technical_merit: scientific substance, precision, testability. impact_potential: likelihood to yield citable publications and visibility. novelty: distance from well-known results. feasibility: realistic for autonomous research in the QNFO program (quantum information, energy benchmarks, ultrametric physics, knowledge infrastructure). is_noise=true ONLY for agent tool-call instructions, meta-prompts, pipeline probes, or non-research chatter.' },
-          { role: 'user', content: clamp(desire, 1000) }
+          { role: "system", content: 'You are the QNFO idea-triage evaluator for an autonomous research pipeline. Evaluate the user idea. Reply with STRICT JSON only: {"is_noise":bool,"question":"normalized research question, max 140 chars","cluster_key":"short program tag: jpcub|ultrametric|qwav|platform|other","technical_merit":0-100,"impact_potential":0-100,"novelty":0-100,"feasibility":0-100}. technical_merit: scientific substance, precision, testability. impact_potential: likelihood to yield citable publications and visibility. novelty: distance from well-known results. feasibility: realistic for autonomous research in the QNFO program (quantum information, energy benchmarks, ultrametric physics, knowledge infrastructure). is_noise=true ONLY for agent tool-call instructions, meta-prompts, pipeline probes, or non-research chatter.' },
+          { role: "user", content: clamp(desire, 1e3) }
         ],
         max_tokens: 300
       })
     });
     const j = await r.json();
-    const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '';
+    const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || "";
     const m = content.match(/\{[\s\S]*\}/);
     if (!m) return null;
     const p = JSON.parse(m[0]);
-    const num = function (x, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(Number(x) || 0))); };
+    const num = /* @__PURE__ */ __name(function(x, lo, hi) {
+      return Math.max(lo, Math.min(hi, Math.round(Number(x) || 0)));
+    }, "num");
     return {
       is_noise: !!p.is_noise,
       question: clamp(String(p.question || desire).slice(0, 140), 140),
-      cluster_key: clamp(String(p.cluster_key || 'other').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40), 40) || 'other',
+      cluster_key: clamp(String(p.cluster_key || "other").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40), 40) || "other",
       merit: num(p.technical_merit, 0, 100),
       impact: num(p.impact_potential, 0, 100),
       novelty: num(p.novelty, 0, 100),
       feasibility: num(p.feasibility, 0, 100)
     };
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
-
-function scoreOf(t) { return Math.round(0.35 * t.merit + 0.35 * t.impact + 0.15 * t.novelty + 0.15 * t.feasibility); }
-
+__name(triageAI, "triageAI");
+function scoreOf(t) {
+  return Math.round(0.35 * t.merit + 0.35 * t.impact + 0.15 * t.novelty + 0.15 * t.feasibility);
+}
+__name(scoreOf, "scoreOf");
 async function storeIntentEmbed(env, row) {
   try {
-    const resp = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [clamp(row.desire, 1000)] });
-    const v = (resp.data || []).find(x => Array.isArray(x) && x.length === 768);
+    const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
+    const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
     if (!v) return;
-    const day = (row.created_at || '').slice(0, 10);
-    if (row.domain === 'personal') {
-      await env.VZ_P.upsert([{ id: 'intent:' + row.id, values: v, metadata: { doc: 'intent', kind: 'intent', path: 'intents/' + day + '/' + row.id + '.md', text: clamp(row.desire, 800), ts: row.created_at } }]);
+    const day = (row.created_at || "").slice(0, 10);
+    if (row.domain === "personal") {
+      await env.VZ_P.upsert([{ id: "intent:" + row.id, values: v, metadata: { doc: "intent", kind: "intent", path: "intents/" + day + "/" + row.id + ".md", text: clamp(row.desire, 800), ts: row.created_at } }]);
     } else {
-      await env.VZ_R.upsert([{ id: 'intent:' + row.id, values: v, metadata: { doc: 'intent', kind: 'intent', path: 'intents/' + day + '/' + row.id + '.md', text: clamp(row.desire, 800), ts: row.created_at } }]);
+      await env.VZ_R.upsert([{ id: "intent:" + row.id, values: v, metadata: { doc: "intent", kind: "intent", path: "intents/" + day + "/" + row.id + ".md", text: clamp(row.desire, 800), ts: row.created_at } }]);
     }
-  } catch (e) {}
+  } catch (e) {
+  }
 }
-
+__name(storeIntentEmbed, "storeIntentEmbed");
 async function findDuplicate(env, row) {
   try {
-    const resp = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [clamp(row.desire, 1000)] });
-    const v = (resp.data || []).find(x => Array.isArray(x) && x.length === 768);
+    const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
+    const v = (resp.data || []).find((x) => Array.isArray(x) && x.length === 768);
     if (!v) return null;
-    const q = await env.VZ_R.query(v, { topK: 1, returnMetadata: 'all' });
+    const q = await env.VZ_R.query(v, { topK: 1, returnMetadata: "all" });
     const m = (q.matches || [])[0];
-    if (m && typeof m.score === 'number' && m.score >= DEDUP_SIM && m.id && String(m.id).startsWith('intent:')) return String(m.id).slice(7);
-  } catch (e) {}
+    if (m && typeof m.score === "number" && m.score >= DEDUP_SIM && m.id && String(m.id).startsWith("intent:")) return String(m.id).slice(7);
+  } catch (e) {
+  }
   return null;
 }
-
+__name(findDuplicate, "findDuplicate");
 async function triageIntent(env, row) {
   const id = row.id;
   const lock = await env.D1.prepare("UPDATE intents SET status='triaging' WHERE id=? AND status='pending'").bind(id).run();
   if (!lock.meta.changes) return { id, skipped: true };
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   try {
     if (isNoise(row.desire)) {
       await env.D1.prepare("UPDATE intents SET status='rejected', noise=1, processed_at=? WHERE id=?").bind(now, id).run();
-      return { id, verdict: 'rejected' };
+      return { id, verdict: "rejected" };
     }
     const dup = await findDuplicate(env, row);
     if (dup) {
       await env.D1.prepare("UPDATE intents SET status='deduped', dup_of=?, processed_at=? WHERE id=?").bind(dup, now, id).run();
-      return { id, verdict: 'deduped', dup_of: dup };
+      return { id, verdict: "deduped", dup_of: dup };
     }
     const t = await triageAI(env, row.desire);
     if (t && t.is_noise) {
       await env.D1.prepare("UPDATE intents SET status='rejected', noise=1, processed_at=? WHERE id=?").bind(now, id).run();
-      return { id, verdict: 'rejected', by: 'ai' };
+      return { id, verdict: "rejected", by: "ai" };
     }
     if (!t) {
       await env.D1.prepare("UPDATE intents SET status='pending' WHERE id=? AND status='triaging'").bind(id).run();
-      return { id, verdict: 'deferred' };
+      return { id, verdict: "deferred" };
     }
     const score = scoreOf(t);
     if (score >= PROMOTE_THRESHOLD) {
-      const cid = 'cand-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
-      await env.D1.prepare('INSERT INTO research_candidates (id, cluster_key, question, merit, impact, novelty, feasibility, score, intent_ids, status, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)')
-        .bind(cid, t.cluster_key, t.question, t.merit, t.impact, t.novelty, t.feasibility, score, JSON.stringify([id]), 'promoted', now).run();
+      const cid = "cand-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+      await env.D1.prepare("INSERT INTO research_candidates (id, cluster_key, question, merit, impact, novelty, feasibility, score, intent_ids, status, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(cid, t.cluster_key, t.question, t.merit, t.impact, t.novelty, t.feasibility, score, JSON.stringify([id]), "promoted", now).run();
       await env.D1.prepare("UPDATE intents SET status='triaged', processed_at=? WHERE id=?").bind(now, id).run();
       await storeIntentEmbed(env, row);
-      return { id, verdict: 'promoted', candidate: cid, score, question: t.question };
+      return { id, verdict: "promoted", candidate: cid, score, question: t.question };
     }
     await env.D1.prepare("UPDATE intents SET status='triaged', processed_at=? WHERE id=?").bind(now, id).run();
     await storeIntentEmbed(env, row);
-    return { id, verdict: 'below-threshold', score };
+    return { id, verdict: "below-threshold", score };
   } catch (e) {
     await env.D1.prepare("UPDATE intents SET status='pending' WHERE id=? AND status='triaging'").bind(id).run();
-    return { id, verdict: 'error', error: String(e && e.message || e).slice(0, 200) };
+    return { id, verdict: "error", error: String(e && e.message || e).slice(0, 200) };
   }
 }
-
+__name(triageIntent, "triageIntent");
 async function runBatchTriage(env) {
   await ensureSchema(env);
   const rows = await env.D1.prepare("SELECT * FROM intents WHERE status='pending' AND type='research' ORDER BY created_at DESC LIMIT 40").all();
@@ -376,125 +391,134 @@ async function runBatchTriage(env) {
   for (const row of rows.results) out.push(await triageIntent(env, row));
   const counts = { scanned: out.length, promoted: 0, rejected: 0, deduped: 0, below: 0, deferred: 0, skipped: 0, errors: 0 };
   for (const o of out) {
-    if (o.verdict === 'promoted') counts.promoted++;
-    else if (o.verdict === 'rejected') counts.rejected++;
-    else if (o.verdict === 'deduped') counts.deduped++;
-    else if (o.verdict === 'below-threshold') counts.below++;
-    else if (o.verdict === 'deferred') counts.deferred++;
+    if (o.verdict === "promoted") counts.promoted++;
+    else if (o.verdict === "rejected") counts.rejected++;
+    else if (o.verdict === "deduped") counts.deduped++;
+    else if (o.verdict === "below-threshold") counts.below++;
+    else if (o.verdict === "deferred") counts.deferred++;
     else if (o.skipped) counts.skipped++;
     else counts.errors++;
   }
   return { counts, results: out };
 }
-
+__name(runBatchTriage, "runBatchTriage");
 function researchPrompt(c) {
   return [
-    'QNFO research brief - autonomous pipeline task.',
-    'Research question: ' + c.question,
-    '',
-    'Use your tools to gather primary evidence:',
-    '1) arxiv_search and web_search with at least 3 distinct query formulations.',
-    '2) query_graph (stats, neighbors) and get_paper_context for QNFO corpus prior work.',
-    '3) For quantitative questions, give estimates with stated assumptions and derivation steps.',
-    '',
-    'Deliverable (final result, scholarly prose):',
-    '- Current state of knowledge (3-8 sentences).',
-    '- Key quantitative estimates or bounds with assumptions.',
-    '- 2-5 open research questions this idea could answer.',
-    '- Top 5 citations (arXiv id / slug / DOI).',
-    'Use store_note for your findings. No meta-commentary about pipeline status.'
-  ].join('\n');
+    "QNFO research brief - autonomous pipeline task.",
+    "Research question: " + c.question,
+    "",
+    "Use your tools to gather primary evidence:",
+    "1) arxiv_search and web_search with at least 3 distinct query formulations.",
+    "2) query_graph (stats, neighbors) and get_paper_context for QNFO corpus prior work.",
+    "3) For quantitative questions, give estimates with stated assumptions and derivation steps.",
+    "",
+    "Deliverable (final result, scholarly prose):",
+    "- Current state of knowledge (3-8 sentences).",
+    "- Key quantitative estimates or bounds with assumptions.",
+    "- 2-5 open research questions this idea could answer.",
+    "- Top 5 citations (arXiv id / slug / DOI).",
+    "Use store_note for your findings. No meta-commentary about pipeline status."
+  ].join("\n");
 }
-
+__name(researchPrompt, "researchPrompt");
 async function dispatchCandidate(env, c) {
-  if (!env.DISPATCH_TOKEN) return { dispatched: false, error: 'DISPATCH_TOKEN not configured' };
-  const r = await fetch(AGENT_ORCH + '/task', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Sync-Token': env.DISPATCH_TOKEN },
+  if (!env.DISPATCH_TOKEN) return { dispatched: false, error: "DISPATCH_TOKEN not configured" };
+  const r = await fetch(AGENT_ORCH + "/task", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Sync-Token": env.DISPATCH_TOKEN },
     body: JSON.stringify({ prompt: researchPrompt(c), max_steps: 6 })
   });
-  if (!r.ok) return { dispatched: false, error: 'agent-http-' + r.status };
+  if (!r.ok) return { dispatched: false, error: "agent-http-" + r.status };
   const j = await r.json().catch(() => ({}));
   const tid = j.task_id || null;
-  if (!tid) return { dispatched: false, error: 'agent-no-task-id' };
-  const upd = await env.D1.prepare("UPDATE research_candidates SET status='dispatched', agent_task_id=?, processed_at=? WHERE id=? AND status='promoted'")
-    .bind(tid, new Date().toISOString(), c.id).run();
-  if (!upd.meta.changes) return { dispatched: false, error: 'candidate-not-promoted' };
-  return { dispatched: true, candidate: c.id, question: c.question, agent_task_id: tid, poll: '/task/' + tid };
+  if (!tid) return { dispatched: false, error: "agent-no-task-id" };
+  const upd = await env.D1.prepare("UPDATE research_candidates SET status='dispatched', agent_task_id=?, processed_at=? WHERE id=? AND status='promoted'").bind(tid, (/* @__PURE__ */ new Date()).toISOString(), c.id).run();
+  if (!upd.meta.changes) return { dispatched: false, error: "candidate-not-promoted" };
+  return { dispatched: true, candidate: c.id, question: c.question, agent_task_id: tid, poll: "/task/" + tid };
 }
-
+__name(dispatchCandidate, "dispatchCandidate");
 async function syncDispatched(env) {
   const rows = await env.D1.prepare("SELECT * FROM research_candidates WHERE status='dispatched'").all();
   const out = [];
   for (const c of rows.results) {
     if (!c.agent_task_id) continue;
     try {
-      const r = await fetch(AGENT_ORCH + '/task/' + c.agent_task_id);
-      if (!r.ok) { out.push({ id: c.id, task: c.agent_task_id, status: 'http-' + r.status }); continue; }
+      const r = await fetch(AGENT_ORCH + "/task/" + c.agent_task_id);
+      if (!r.ok) {
+        out.push({ id: c.id, task: c.agent_task_id, status: "http-" + r.status });
+        continue;
+      }
       const st = await r.json();
-      if (st.status === 'completed') {
-        await env.D1.prepare("UPDATE research_candidates SET status='research_completed', processed_at=? WHERE id=?").bind(new Date().toISOString(), c.id).run();
-        out.push({ id: c.id, task: c.agent_task_id, status: 'research_completed' });
-      } else if (st.status === 'failed') {
-        await env.D1.prepare("UPDATE research_candidates SET status='research_failed', processed_at=? WHERE id=?").bind(new Date().toISOString(), c.id).run();
-        out.push({ id: c.id, task: c.agent_task_id, status: 'research_failed' });
+      if (st.status === "completed") {
+        await env.D1.prepare("UPDATE research_candidates SET status='research_completed', processed_at=? WHERE id=?").bind((/* @__PURE__ */ new Date()).toISOString(), c.id).run();
+        out.push({ id: c.id, task: c.agent_task_id, status: "research_completed" });
+      } else if (st.status === "failed") {
+        await env.D1.prepare("UPDATE research_candidates SET status='research_failed', processed_at=? WHERE id=?").bind((/* @__PURE__ */ new Date()).toISOString(), c.id).run();
+        out.push({ id: c.id, task: c.agent_task_id, status: "research_failed" });
       } else {
         out.push({ id: c.id, task: c.agent_task_id, status: st.status });
       }
-    } catch (e) { out.push({ id: c.id, task: c.agent_task_id, error: String(e && e.message || e).slice(0, 120) }); }
+    } catch (e) {
+      out.push({ id: c.id, task: c.agent_task_id, error: String(e && e.message || e).slice(0, 120) });
+    }
   }
   return out;
 }
-
+__name(syncDispatched, "syncDispatched");
 async function autoDispatch(env) {
   const active = await env.D1.prepare("SELECT COUNT(*) AS n FROM research_candidates WHERE status='dispatched'").first();
-  if (active && active.n > 0) return { dispatched: false, reason: 'active-task-exists', active: active.n };
+  if (active && active.n > 0) return { dispatched: false, reason: "active-task-exists", active: active.n };
   const top = await env.D1.prepare("SELECT * FROM research_candidates WHERE status='promoted' ORDER BY score DESC LIMIT 1").first();
-  if (!top) return { dispatched: false, reason: 'no-promoted-candidates' };
+  if (!top) return { dispatched: false, reason: "no-promoted-candidates" };
   return dispatchCandidate(env, top);
 }
+__name(autoDispatch, "autoDispatch");
 async function selfRegister(env) {
   const manifest = {
-    service: 'qnfo-intent-orchestrator', kind: 'worker', version: VERSION,
-    base_url: 'https://qnfo-intent-orchestrator.q08.workers.dev',
-    purpose: 'intent orchestrator: classify/route/queue desires (notes, tasks, events, emails, research) + autonomous research triage/dispatch pipeline',
-    capabilities: ['intent-classify', 'intent-queue', 'exact-match-dedupe', 'semantic-dedupe', 'research-triage', 'research-dispatch', 'digest', 'calendar-promote'],
-    routes: ['/health', '/intent', '/intents', '/intents/stats', '/digest', '/digest/send', '/triage/run', '/triage/sync', '/triage/candidates', '/triage/stats', '/triage/dispatch', '/triage/candidate'],
-    tools: [], models: [], deps: ['qnfo-ai (router, RT)', 'D1 qnfo-audit', 'personal-life-search', 'calendar-api', 'AI (embeddings)', 'INTENT_TOKEN']
+    service: "qnfo-intent-orchestrator",
+    kind: "worker",
+    version: VERSION,
+    base_url: "https://qnfo-intent-orchestrator.q08.workers.dev",
+    purpose: "intent orchestrator: classify/route/queue desires (notes, tasks, events, emails, research) + autonomous research triage/dispatch pipeline",
+    capabilities: ["intent-classify", "intent-queue", "exact-match-dedupe", "semantic-dedupe", "research-triage", "research-dispatch", "digest", "calendar-promote"],
+    routes: ["/health", "/intent", "/intents", "/intents/stats", "/digest", "/digest/send", "/triage/run", "/triage/sync", "/triage/candidates", "/triage/stats", "/triage/dispatch", "/triage/candidate"],
+    tools: [],
+    models: [],
+    deps: ["qnfo-ai (router, RT)", "D1 qnfo-audit", "personal-life-search", "calendar-api", "AI (embeddings)", "INTENT_TOKEN"]
   };
-  const resp = await env.QNFO_OPS.fetch('https://qnfo-ops.internal/registry/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (env.REGISTRY_TOKEN || '') },
+  const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.REGISTRY_TOKEN || "") },
     body: JSON.stringify(manifest)
   });
   return resp.ok;
 }
-
-export default {
+__name(selfRegister, "selfRegister");
+var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === '0 6 * * *') {
-      const day = new Date().toISOString().slice(0, 10);
+    if (event.cron === "0 6 * * *") {
+      const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       const rows = await env.D1.prepare("SELECT * FROM intents WHERE substr(created_at,1,10) = ?1 AND status != 'done' AND status != 'rejected' AND status != 'deduped' AND status != 'triaged'").bind(day).all();
       const notes = await env.D1.prepare("SELECT COUNT(*) AS n FROM intents WHERE substr(created_at,1,10) = ?1 AND type='note'").bind(day).first();
-      const lines = ['QNFO intent digest - ' + day, ''];
-      if (notes && notes.n) lines.push('Captured notes: ' + notes.n + ' (stored in Vectorize)');
+      const lines = ["QNFO intent digest - " + day, ""];
+      if (notes && notes.n) lines.push("Captured notes: " + notes.n + " (stored in Vectorize)");
       if (rows.results.length) {
-        lines.push('Pending:');
-        for (const p of rows.results) lines.push('- [' + p.type + '] ' + (p.summary || p.desire.slice(0, 80)) + (p.due ? ' (due ' + p.due + ')' : ''));
+        lines.push("Pending:");
+        for (const p of rows.results) lines.push("- [" + p.type + "] " + (p.summary || p.desire.slice(0, 80)) + (p.due ? " (due " + p.due + ")" : ""));
       } else {
-        lines.push('No pending items.');
+        lines.push("No pending items.");
       }
-      await sendDigest(env, 'QNFO intent digest - ' + day, lines.join(NL));
+      await sendDigest(env, "QNFO intent digest - " + day, lines.join(NL));
     }
-    if (event.cron === '30 6 * * *') {
+    if (event.cron === "30 6 * * *") {
       try {
         await ensureSchema(env);
         const t = await runBatchTriage(env);
         const s = await syncDispatched(env);
         const d = await autoDispatch(env);
-        console.log('[triage-cron]', JSON.stringify({ counts: t.counts, sync: s.slice(0, 5), dispatch: d }).slice(0, 2500));
+        console.log("[triage-cron]", JSON.stringify({ counts: t.counts, sync: s.slice(0, 5), dispatch: d }).slice(0, 2500));
       } catch (e) {
-        console.log('[triage-cron] error:', e && e.message || e);
+        console.log("[triage-cron] error:", e && e.message || e);
       }
     }
   },
@@ -502,99 +526,112 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
-    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
-    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (path === '/health' && method === 'GET') {
+    const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" };
+    if (method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (path === "/health" && method === "GET") {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
-        ctx.waitUntil(selfRegister(env).catch(e => console.log('self-register err', e && e.message || e)));
+        ctx.waitUntil(selfRegister(env).catch((e) => console.log("self-register err", e && e.message || e)));
       }
-      return new Response(JSON.stringify({ ok: true, worker: 'qnfo-intent-orchestrator', version: VERSION }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    if (!auth(token, env)) return new Response('unauthorized', { status: 401, headers: cors });
-
-    if (path === '/intent' && method === 'POST') {
+    const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });
+    if (path === "/intent" && method === "POST") {
       let body;
-      try { body = await request.json(); } catch (e) { return new Response('bad json', { status: 400, headers: cors }); }
-      const source = url.searchParams.get('source') || body.source || 'unknown';
-      const device = url.searchParams.get('device') || body.device || 'unknown';
-      const intent = await handleIntent(env, body, source, device);
-      if (intent.error) return new Response(JSON.stringify(intent), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
-      if (intent.type === 'research' && ctx && ctx.waitUntil) {
-        ctx.waitUntil((async () => { await ensureSchema(env); await triageIntent(env, intent); })().catch(e => console.log('inline triage err', e && e.message || e)));
+      try {
+        body = await request.json();
+      } catch (e) {
+        return new Response("bad json", { status: 400, headers: cors });
       }
-      return new Response(JSON.stringify(intent), { status: 201, headers: { 'Content-Type': 'application/json', ...cors } });
+      const source = url.searchParams.get("source") || body.source || "unknown";
+      const device = url.searchParams.get("device") || body.device || "unknown";
+      const intent = await handleIntent(env, body, source, device);
+      if (intent.error) return new Response(JSON.stringify(intent), { status: 400, headers: { "Content-Type": "application/json", ...cors } });
+      if (intent.type === "research" && ctx && ctx.waitUntil) {
+        ctx.waitUntil((async () => {
+          await ensureSchema(env);
+          await triageIntent(env, intent);
+        })().catch((e) => console.log("inline triage err", e && e.message || e)));
+      }
+      return new Response(JSON.stringify(intent), { status: 201, headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/intents' && method === 'GET') {
-      const status = url.searchParams.get('status') || '';
-      const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 100);
-      const rows = status
-        ? await env.D1.prepare('SELECT * FROM intents WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2').bind(status, limit).all()
-        : await env.D1.prepare('SELECT * FROM intents ORDER BY created_at DESC LIMIT ?1').bind(limit).all();
-      return new Response(JSON.stringify({ count: rows.results.length, intents: rows.results }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (path === "/intents" && method === "GET") {
+      const status = url.searchParams.get("status") || "";
+      const limit = Math.min(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 100);
+      const rows = status ? await env.D1.prepare("SELECT * FROM intents WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2").bind(status, limit).all() : await env.D1.prepare("SELECT * FROM intents ORDER BY created_at DESC LIMIT ?1").bind(limit).all();
+      return new Response(JSON.stringify({ count: rows.results.length, intents: rows.results }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/intents/stats' && method === 'GET') {
-      const rows = await env.D1.prepare('SELECT type, domain, status, COUNT(*) AS n FROM intents GROUP BY type, domain, status').all();
-      return new Response(JSON.stringify({ stats: rows.results }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (path === "/intents/stats" && method === "GET") {
+      const rows = await env.D1.prepare("SELECT type, domain, status, COUNT(*) AS n FROM intents GROUP BY type, domain, status").all();
+      return new Response(JSON.stringify({ stats: rows.results }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/digest' && method === 'GET') {
-      const days = Math.max(parseInt(url.searchParams.get('days') || '1', 10) || 1, 1);
+    if (path === "/digest" && method === "GET") {
+      const days = Math.max(parseInt(url.searchParams.get("days") || "1", 10) || 1, 1);
       const from = new Date(Date.now() - days * 864e5).toISOString();
-      const rows = await env.D1.prepare('SELECT * FROM intents WHERE created_at >= ?1 ORDER BY created_at DESC LIMIT 50').bind(from).all();
-      return new Response(JSON.stringify({ count: rows.results.length, digest: digestLines(rows.results) }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      const rows = await env.D1.prepare("SELECT * FROM intents WHERE created_at >= ?1 ORDER BY created_at DESC LIMIT 50").bind(from).all();
+      return new Response(JSON.stringify({ count: rows.results.length, digest: digestLines(rows.results) }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/digest/send' && method === 'POST') {
-      const rows = await env.D1.prepare("SELECT * FROM intents WHERE status != ?1 ORDER BY created_at DESC LIMIT 50").bind('done').all();
+    if (path === "/digest/send" && method === "POST") {
+      const rows = await env.D1.prepare("SELECT * FROM intents WHERE status != ?1 ORDER BY created_at DESC LIMIT 50").bind("done").all();
       const text = digestLines(rows.results);
-      const r = await sendDigest(env, 'QNFO intent digest - ' + new Date().toISOString().slice(0, 10), text);
-      return new Response(JSON.stringify(r), { headers: { 'Content-Type': 'application/json', ...cors } });
+      const r = await sendDigest(env, "QNFO intent digest - " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), text);
+      return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/triage/run' && method === 'POST') {
+    if (path === "/triage/run" && method === "POST") {
       try {
         const r = await runBatchTriage(env);
-        return new Response(JSON.stringify(r), { headers: { 'Content-Type': 'application/json', ...cors } });
+        return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json", ...cors } });
       } catch (e) {
-        return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
+        return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...cors } });
       }
     }
-    if (path === '/triage/sync' && method === 'POST') {
+    if (path === "/triage/sync" && method === "POST") {
       const r = await syncDispatched(env);
-      return new Response(JSON.stringify({ synced: r }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify({ synced: r }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/triage/candidates' && method === 'GET') {
-      const status = url.searchParams.get('status') || '';
-      const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 100);
-      const rows = status
-        ? await env.D1.prepare('SELECT * FROM research_candidates WHERE status = ?1 ORDER BY score DESC LIMIT ?2').bind(status, limit).all()
-        : await env.D1.prepare('SELECT * FROM research_candidates ORDER BY score DESC LIMIT ?1').bind(limit).all();
-      return new Response(JSON.stringify({ count: rows.results.length, candidates: rows.results }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (path === "/triage/candidates" && method === "GET") {
+      const status = url.searchParams.get("status") || "";
+      const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 100);
+      const rows = status ? await env.D1.prepare("SELECT * FROM research_candidates WHERE status = ?1 ORDER BY score DESC LIMIT ?2").bind(status, limit).all() : await env.D1.prepare("SELECT * FROM research_candidates ORDER BY score DESC LIMIT ?1").bind(limit).all();
+      return new Response(JSON.stringify({ count: rows.results.length, candidates: rows.results }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/triage/stats' && method === 'GET') {
-      const rc = await env.D1.prepare('SELECT status, COUNT(*) AS n FROM research_candidates GROUP BY status').all();
+    if (path === "/triage/stats" && method === "GET") {
+      const rc = await env.D1.prepare("SELECT status, COUNT(*) AS n FROM research_candidates GROUP BY status").all();
       const ic = await env.D1.prepare("SELECT status, COUNT(*) AS n FROM intents WHERE type='research' GROUP BY status").all();
-      return new Response(JSON.stringify({ candidates: rc.results, research_intents: ic.results, promote_threshold: PROMOTE_THRESHOLD }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify({ candidates: rc.results, research_intents: ic.results, promote_threshold: PROMOTE_THRESHOLD }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/triage/dispatch' && method === 'POST') {
+    if (path === "/triage/dispatch" && method === "POST") {
       let body = {};
-      try { body = await request.json(); } catch (e) {}
+      try {
+        body = await request.json();
+      } catch (e) {
+      }
       let out;
       if (body.candidate_id) {
-        const c = await env.D1.prepare('SELECT * FROM research_candidates WHERE id = ?1').bind(body.candidate_id).first();
-        if (!c) return new Response(JSON.stringify({ error: 'candidate not found' }), { status: 404, headers: { 'Content-Type': 'application/json', ...cors } });
+        const c = await env.D1.prepare("SELECT * FROM research_candidates WHERE id = ?1").bind(body.candidate_id).first();
+        if (!c) return new Response(JSON.stringify({ error: "candidate not found" }), { status: 404, headers: { "Content-Type": "application/json", ...cors } });
         out = await dispatchCandidate(env, c);
       } else {
         out = await autoDispatch(env);
       }
-      return new Response(JSON.stringify(out), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    if (path === '/triage/candidate' && method === 'POST') {
+    if (path === "/triage/candidate" && method === "POST") {
       let body;
-      try { body = await request.json(); } catch (e) { return new Response('bad json', { status: 400, headers: cors }); }
-      const allowed = ['promoted', 'dispatched', 'research_completed', 'research_failed', 'published', 'dismissed'];
-      if (!body.candidate_id || !allowed.includes(body.status)) return new Response(JSON.stringify({ error: 'candidate_id and valid status required', allowed }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
-      const upd = await env.D1.prepare('UPDATE research_candidates SET status=?, processed_at=? WHERE id=?').bind(body.status, new Date().toISOString(), body.candidate_id).run();
-      return new Response(JSON.stringify({ ok: upd.meta.changes > 0, candidate_id: body.candidate_id, status: body.status }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      try {
+        body = await request.json();
+      } catch (e) {
+        return new Response("bad json", { status: 400, headers: cors });
+      }
+      const allowed = ["promoted", "dispatched", "research_completed", "research_failed", "published", "dismissed"];
+      if (!body.candidate_id || !allowed.includes(body.status)) return new Response(JSON.stringify({ error: "candidate_id and valid status required", allowed }), { status: 400, headers: { "Content-Type": "application/json", ...cors } });
+      const upd = await env.D1.prepare("UPDATE research_candidates SET status=?, processed_at=? WHERE id=?").bind(body.status, (/* @__PURE__ */ new Date()).toISOString(), body.candidate_id).run();
+      return new Response(JSON.stringify({ ok: upd.meta.changes > 0, candidate_id: body.candidate_id, status: body.status }), { headers: { "Content-Type": "application/json", ...cors } });
     }
-    return new Response('not found', { status: 404, headers: cors });
+    return new Response("not found", { status: 404, headers: cors });
   }
 };
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map

@@ -5,6 +5,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 import { DurableObject } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var __defProp22 = Object.defineProperty;
+var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var ARXIV_API = "https://export.arxiv.org/api/query";
 function isPrivateHost(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
@@ -13,9 +15,11 @@ function isPrivateHost(host) {
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
   return false;
 }
+__name(isPrivateHost, "isPrivateHost");
 function cleanText(html) {
   return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 }
+__name(cleanText, "cleanText");
 async function arxivSearch(query, maxResults) {
   const n = Math.min(Math.max(Number(maxResults) || 5, 1), 10);
   const q = encodeURIComponent("all:" + String(query || ""));
@@ -27,17 +31,18 @@ async function arxivSearch(query, maxResults) {
   let m;
   while ((m = entryRe.exec(xml)) && entries.length < n) {
     const e = m[1];
-    const grab = (tag) => {
+    const grab = /* @__PURE__ */ __name((tag) => {
       const re = new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">");
       const mm = re.exec(e);
       return mm ? cleanText(mm[1]).slice(0, 500) : "";
-    };
+    }, "grab");
     const idm = /<id>([\s\S]*?)<\/id>/.exec(e);
     const arxivId = idm ? idm[1].replace(/^.*\/(abs\/)?/, "").replace(/v\d+$/, "") : "";
     entries.push({ id: arxivId, title: grab("title"), summary: grab("summary"), authors: e.split("<author>").slice(1).map((a) => cleanText((/<name>([\s\S]*?)<\/name>/.exec(a) || [])[1] || "")).filter(Boolean).join(", "), published: grab("published"), link: idm ? idm[1] : "" });
   }
   return { count: entries.length, entries };
 }
+__name(arxivSearch, "arxivSearch");
 async function ddgSearch(query, limit) {
   const qq = encodeURIComponent(String(query || ""));
   const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept": "text/html" };
@@ -63,7 +68,8 @@ async function ddgSearch(query, limit) {
             const u = new URL(href, "https://duckduckgo.com");
             const tgt = u.searchParams.get("uddg");
             if (tgt) href = tgt;
-          } catch (e) {}
+          } catch (e) {
+          }
           if (/^https?:/i.test(href)) results.push({ title: cleanText(rm[2]).slice(0, 200), url: href.slice(0, 500), snippet: (snips[i] || "").slice(0, 300) });
           i++;
         }
@@ -76,15 +82,18 @@ async function ddgSearch(query, limit) {
             const u = new URL(href, "https://duckduckgo.com");
             const tgt = u.searchParams.get("uddg");
             if (tgt) href = tgt;
-          } catch (e) {}
+          } catch (e) {
+          }
           if (/^https?:/i.test(href) && href.indexOf("duckduckgo.com") === -1) results.push({ title: cleanText(rm[2]).slice(0, 200), url: href.slice(0, 500), snippet: "" });
         }
       }
       if (results.length) return { engine: isLite ? "duckduckgo-lite" : "duckduckgo", results };
-    } catch (e) {}
+    } catch (e) {
+    }
   }
   return { error: "search engine unreachable" };
 }
+__name(ddgSearch, "ddgSearch");
 async function fetchCleanText(url, maxChars) {
   const u = new URL(url);
   if (!/^https?:$/i.test(u.protocol)) return { error: "only http(s) URLs" };
@@ -98,9 +107,11 @@ async function fetchCleanText(url, maxChars) {
   const cap = Math.max(Number(maxChars) || 6e3, 500);
   return { url: u.toString(), text: text.slice(0, cap), truncated: text.length > cap };
 }
+__name(fetchCleanText, "fetchCleanText");
 function slugify(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "note";
 }
+__name(slugify, "slugify");
 async function githubPublish(token, repo, path, content, message) {
   if (!token) return { error: "GITHUB_TOKEN not configured" };
   try {
@@ -108,27 +119,28 @@ async function githubPublish(token, repo, path, content, message) {
     const r = await fetch("https://api.github.com/repos/" + repo + "/contents/" + path, {
       method: "PUT",
       headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json", "User-Agent": "qnfo-agent-orchestrator", "X-GitHub-Api-Version": "2022-11-28" },
-      body: JSON.stringify({ message: message, content: b64, branch: "main" })
+      body: JSON.stringify({ message, content: b64, branch: "main" })
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) return { error: "github HTTP " + r.status + " " + (j.message || "") };
-    return { ok: true, repo, path, sha: (j.content && j.content.sha) || null, commit: (j.commit && j.commit.sha) || null };
+    return { ok: true, repo, path, sha: j.content && j.content.sha || null, commit: j.commit && j.commit.sha || null };
   } catch (e) {
     return { error: "github publish failed: " + (e && e.message || e) };
   }
 }
+__name(githubPublish, "githubPublish");
 var ZENODO = "https://zenodo.org/api/deposit/depositions";
 async function zenodoPublish(token, opts) {
   if (!token) return { error: "ZENODO_TOKEN not configured" };
-  const title = String((opts && opts.title) || "").slice(0, 500);
+  const title = String(opts && opts.title || "").slice(0, 500);
   if (!title) return { error: "title required" };
-  const authors = String((opts && opts.authors) || "Rowan Brad Quni-Gudzinas").slice(0, 500);
-  const slug = String((opts && opts.slug) || "paper").slice(0, 80);
-  const description = String((opts && opts.description) || "").slice(0, 5000);
-  const body = String((opts && opts.body_md) || "");
+  const authors = String(opts && opts.authors || "Rowan Brad Quni-Gudzinas").slice(0, 500);
+  const slug = String(opts && opts.slug || "paper").slice(0, 80);
+  const description = String(opts && opts.description || "").slice(0, 5e3);
+  const body = String(opts && opts.body_md || "");
   let keywords = [];
   if (Array.isArray(opts && opts.keywords)) keywords = opts.keywords.map((k) => String(k).slice(0, 50)).slice(0, 10);
-  const q = (path) => path + (path.indexOf("?") >= 0 ? "&" : "?") + "access_token=" + token;
+  const q = /* @__PURE__ */ __name((path) => path + (path.indexOf("?") >= 0 ? "&" : "?") + "access_token=" + token, "q");
   const headers = { "User-Agent": "qnfo-agent-orchestrator/1.1", "Content-Type": "application/json" };
   try {
     const d = await fetch(q(ZENODO), {
@@ -143,18 +155,18 @@ async function zenodoPublish(token, opts) {
           publication_type: "other",
           access_right: "open",
           license: "cc-by-4.0",
-          publication_date: new Date().toISOString().slice(0, 10),
+          publication_date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
           keywords
         }
       })
     });
     const draft = await d.json();
-    if (!d.ok) return { error: "zenodo create HTTP " + d.status + " " + ((draft && draft.message) || "") };
+    if (!d.ok) return { error: "zenodo create HTTP " + d.status + " " + (draft && draft.message || "") };
     const depId = draft.id;
-    const preDoi = (draft.metadata && draft.metadata.prereserve_doi && draft.metadata.prereserve_doi.doi) || null;
+    const preDoi = draft.metadata && draft.metadata.prereserve_doi && draft.metadata.prereserve_doi.doi || null;
     let fileOk = true;
     if (body) {
-      const bucket = (draft.links && draft.links.bucket) || null;
+      const bucket = draft.links && draft.links.bucket || null;
       if (!bucket) {
         await fetch(q(ZENODO + "/" + depId), { method: "DELETE", headers });
         return { error: "zenodo draft missing bucket link" };
@@ -162,7 +174,7 @@ async function zenodoPublish(token, opts) {
       const f = await fetch(q(bucket + "/" + encodeURIComponent(slug + ".md")), {
         method: "PUT",
         headers: { "User-Agent": "qnfo-agent-orchestrator/1.1", "Content-Type": "application/octet-stream" },
-        body: body.slice(0, 500000)
+        body: body.slice(0, 5e5)
       });
       fileOk = f.ok;
       if (!f.ok) {
@@ -172,10 +184,10 @@ async function zenodoPublish(token, opts) {
     }
     const p = await fetch(q(ZENODO + "/" + depId + "/actions/publish"), { method: "POST", headers });
     const pub = await p.json();
-    if (!p.ok) return { error: "zenodo publish HTTP " + p.status + " " + ((pub && pub.message) || "") };
+    if (!p.ok) return { error: "zenodo publish HTTP " + p.status + " " + (pub && pub.message || "") };
     return {
       ok: true,
-      doi: pub.doi || (pub.metadata && pub.metadata.doi) || preDoi,
+      doi: pub.doi || pub.metadata && pub.metadata.doi || preDoi,
       record_id: pub.id || depId,
       conceptrecid: pub.conceptrecid || null,
       url: "https://zenodo.org/record/" + (pub.id || depId),
@@ -185,6 +197,7 @@ async function zenodoPublish(token, opts) {
     return { error: "zenodo publish failed: " + (e && e.message || e) };
   }
 }
+__name(zenodoPublish, "zenodoPublish");
 var SYSTEM_PROMPT = `You are a research assistant operating on the QNFO knowledge infrastructure: the living-paper corpus (D1 + Vectorize semantic index), the knowledge graph (D1), and the R2 projects store.
 
 PRIORITIES (attention selectivity)
@@ -212,7 +225,7 @@ TOOLS
 - search_papers(query, limit?): semantic search across the QWAV research corpus. Returns paper slugs, scores, and metadata.
 - get_paper_context(slug): full body text of a specific paper.
 - query_graph(sql): read-only SQL against the QNFO knowledge graph. Tables: nodes(id, name, label, properties), edges(source_id, target_id, label, properties).
-- arxiv_search(query, max_results?): search arXiv (live external API) — returns paper ids, titles, summaries, authors, links.
+- arxiv_search(query, max_results?): search arXiv (live external API) \u2014 returns paper ids, titles, summaries, authors, links.
 - web_search(query, limit?): live web search (DuckDuckGo) for current events and external sources.
 - web_fetch(url, max_chars?): fetch a web page and return its readable text.
 - store_note(key, content): persist a research note to the QNFO R2 projects store.
@@ -267,8 +280,7 @@ var TOOLS = [
         required: ["sql"]
       }
     }
-  }
-,
+  },
   {
     type: "function",
     function: {
@@ -328,9 +340,7 @@ var TOOLS = [
         required: ["key", "content"]
       }
     }
-  }
-
-,
+  },
   {
     type: "function",
     function: {
@@ -384,20 +394,18 @@ var TOOLS = [
         required: ["path", "content"]
       }
     }
-  }
-
-,
+  },
   {
     type: "function",
     function: {
       name: "zenodo_publish",
-      description: "Publish the result to Zenodo (permanent DOI, mirroring the existing QNFO pipeline). The qnfo-social autoScan detects Zenodo records by creator name — keep 'Quni-Gudzinas' in the authors.",
+      description: "Publish the result to Zenodo (permanent DOI, mirroring the existing QNFO pipeline). The qnfo-social autoScan detects Zenodo records by creator name \u2014 keep 'Quni-Gudzinas' in the authors.",
       parameters: {
         type: "object",
         properties: {
           slug: { type: "string", description: "Paper slug" },
           title: { type: "string", description: "Publication title" },
-          authors: { type: "string", description: "Author names (default 'Rowan Brad Quni-Gudzinas' — autoScan matches this name)" },
+          authors: { type: "string", description: "Author names (default 'Rowan Brad Quni-Gudzinas' \u2014 autoScan matches this name)" },
           description: { type: "string", description: "Abstract/description" },
           body_md: { type: "string", description: "Body content uploaded as {slug}.md" },
           keywords: { type: "array", items: { type: "string" }, description: "Keywords (optional)" }
@@ -406,7 +414,6 @@ var TOOLS = [
       }
     }
   }
-
 ];
 var AgentTask = class extends DurableObject {
   static {
@@ -414,6 +421,9 @@ var AgentTask = class extends DurableObject {
   }
   static {
     __name2(this, "AgentTask");
+  }
+  static {
+    __name22(this, "AgentTask");
   }
   constructor(ctx, env) {
     super(ctx, env);
@@ -472,7 +482,7 @@ var AgentTask = class extends DurableObject {
       if (!this.env.GITHUB_TOKEN) return;
       const base = "_agent-results/" + taskId + "/";
       await githubPublish(this.env.GITHUB_TOKEN, "QNFO/qnfo-research", base + "result.json", JSON.stringify(state, null, 2), "agent result " + taskId);
-      const md = "# " + String(state.prompt || "Agent task").slice(0, 120) + "\n\n## Result\n\n" + String(state.result || "(no result)").slice(0, 20000);
+      const md = "# " + String(state.prompt || "Agent task").slice(0, 120) + "\n\n## Result\n\n" + String(state.result || "(no result)").slice(0, 2e4);
       await githubPublish(this.env.GITHUB_TOKEN, "QNFO/qnfo-research", base + "result.md", md, "agent result md " + taskId);
     } catch (e) {
       console.log("autoPublish error:", e && e.message || e);
@@ -667,7 +677,7 @@ var AgentTask = class extends DurableObject {
         const slug = slugify(args.slug || args.title || "paper");
         const title = String(args.title || "").slice(0, 500);
         if (!title) return JSON.stringify({ error: "title required" });
-        await this.env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO papers (identifier, slug, title, authors, abstract, body_md, doi, published, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'published',datetime('now'),datetime('now'))").bind(slug, slug, title, String(args.authors || "QNFO Research").slice(0, 500), String(args.abstract || "").slice(0, 3000), String(args.body_md || "").slice(0, 100000), args.doi || null, new Date().toISOString().slice(0, 10)).run();
+        await this.env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO papers (identifier, slug, title, authors, abstract, body_md, doi, published, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'published',datetime('now'),datetime('now'))").bind(slug, slug, title, String(args.authors || "QNFO Research").slice(0, 500), String(args.abstract || "").slice(0, 3e3), String(args.body_md || "").slice(0, 1e5), args.doi || null, (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).run();
         return JSON.stringify({ ok: true, slug, published: true, note: "in living-paper corpus; searchable via search_papers/get_paper_context" });
       }
       case "social_promote": {
@@ -679,7 +689,7 @@ var AgentTask = class extends DurableObject {
         if (!posts.length) return JSON.stringify({ error: "posts required" });
         const existing = await this.env.QNFO_AUDIT.prepare("SELECT id FROM social_threads WHERE slug = ?1 LIMIT 1").bind(slug).first();
         if (existing) return JSON.stringify({ ok: true, slug, queued_posts: 0, note: "already queued for this slug (dedup)" });
-        await this.env.QNFO_AUDIT.prepare("INSERT INTO social_threads (slug, title, posts, status, doi, abstract) VALUES (?1,?2,?3,'queued',?4,?5)").bind(slug, String(args.title || "").slice(0, 500), JSON.stringify(posts), args.doi ? String(args.doi).slice(0, 200) : null, args.abstract ? String(args.abstract).slice(0, 3000) : null).run();
+        await this.env.QNFO_AUDIT.prepare("INSERT INTO social_threads (slug, title, posts, status, doi, abstract) VALUES (?1,?2,?3,'queued',?4,?5)").bind(slug, String(args.title || "").slice(0, 500), JSON.stringify(posts), args.doi ? String(args.doi).slice(0, 200) : null, args.abstract ? String(args.abstract).slice(0, 3e3) : null).run();
         return JSON.stringify({ ok: true, slug, queued_posts: posts.length, note: "queued in social_threads; qnfo-social cron posts to Bluesky" });
       }
       case "github_publish": {
@@ -705,7 +715,7 @@ var agent_orchestrator_default = {
     const method = request.method;
     if (method === "POST" || method === "PATCH") {
       const auth = request.headers.get("X-Sync-Token");
-      const authOk = (env.SYNC_TOKEN && auth === env.SYNC_TOKEN) || (env.TEST_TOKEN && auth === env.TEST_TOKEN) || (env.DISPATCH_TOKEN && auth === env.DISPATCH_TOKEN);
+      const authOk = env.SYNC_TOKEN && auth === env.SYNC_TOKEN || env.TEST_TOKEN && auth === env.TEST_TOKEN || env.DISPATCH_TOKEN && auth === env.DISPATCH_TOKEN;
       if (!auth || !authOk) {
         return Response.json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, { status: 401 });
       }
