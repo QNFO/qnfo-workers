@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.2.0)
-var VERSION = "0.2.0";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.2.1)
+var VERSION = "0.2.1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var NO_SELF = ["qnfo-fleet-deploy"];
@@ -28,7 +28,13 @@ async function autoHeal(env) { return (await stateGet(env, "auto_heal", "0")) ==
 async function audit(env, w, actor, from, to, src, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
 async function canonical(worker) {
-  var cs = ["qnfo-workers/main/" + worker + "/deployed-current.worker.js", "qnfo-ops/main/cloud/" + worker + "/deployed-current.worker.js"];
+  var names = [worker];
+  if (worker.indexOf("qnfo-") === 0) names.push(worker.slice(5));
+  var cs = [];
+  for (var a = 0; a < names.length; a++) {
+    cs.push("qnfo-workers/main/" + names[a] + "/deployed-current.worker.js");
+    cs.push("qnfo-ops/main/cloud/" + names[a] + "/deployed-current.worker.js");
+  }
   for (var i = 0; i < cs.length; i++) {
     var r = await fetch(GH + cs[i]);
     if (r.ok) { var c = await r.text(); if (c && c.length > 0 && c.slice(0, 4) !== "404:") return { path: cs[i], code: c }; }
