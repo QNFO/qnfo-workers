@@ -4,7 +4,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.5.15-atomic-drain";
+var __defProp22 = Object.defineProperty;
+var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+var VERSION = "0.5.17-research-restored";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
 var MAX_NOTE = 4e3;
@@ -18,16 +20,19 @@ function json(data, status) {
 }
 __name(json, "json");
 __name2(json, "json");
+__name22(json, "json");
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 __name(nowIso, "nowIso");
 __name2(nowIso, "nowIso");
+__name22(nowIso, "nowIso");
 function slugify(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "paper";
 }
 __name(slugify, "slugify");
 __name2(slugify, "slugify");
+__name22(slugify, "slugify");
 async function logEvent(env, kind, text, status) {
   try {
     const id = "re-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
@@ -37,6 +42,7 @@ async function logEvent(env, kind, text, status) {
 }
 __name(logEvent, "logEvent");
 __name2(logEvent, "logEvent");
+__name22(logEvent, "logEvent");
 async function runModel(env, prompt, maxTokens) {
   for (let i = 0; i < MODELS.length; i++) {
     const model = MODELS[i];
@@ -66,6 +72,7 @@ async function runModel(env, prompt, maxTokens) {
 }
 __name(runModel, "runModel");
 __name2(runModel, "runModel");
+__name22(runModel, "runModel");
 async function gatewayPaper(env, prompt) {
   if (!env.ROUTER_TOKEN) {
     await logEvent(env, "ai-error", "gateway: no ROUTER_TOKEN");
@@ -95,6 +102,7 @@ async function gatewayPaper(env, prompt) {
 }
 __name(gatewayPaper, "gatewayPaper");
 __name2(gatewayPaper, "gatewayPaper");
+__name22(gatewayPaper, "gatewayPaper");
 var NOTE_PROMPT = [
   "Write a focused research note. Output ONLY the note markdown, starting with '## Problem statement'.",
   "Sections: '## Problem statement', '## Prior work' (cite real papers with arXiv IDs or DOIs only, never fabricate), '## Core claim', '## Method', '## Expected result', '## Open questions'.",
@@ -116,6 +124,7 @@ function cleanTitle(md) {
 }
 __name(cleanTitle, "cleanTitle");
 __name2(cleanTitle, "cleanTitle");
+__name22(cleanTitle, "cleanTitle");
 function cleanAbstract(md) {
   const m = String(md || "").match(/##\s*Abstract\s*\n\s*([\s\S]{60,2000})/i);
   if (!m) return "";
@@ -125,16 +134,19 @@ function cleanAbstract(md) {
 }
 __name(cleanAbstract, "cleanAbstract");
 __name2(cleanAbstract, "cleanAbstract");
+__name22(cleanAbstract, "cleanAbstract");
 function reasoningPreamble(md) {
   return /^(Let me|The user|First, let|Okay|Alright|Here's|I'll|I need)/i.test(String(md || "").trim());
 }
 __name(reasoningPreamble, "reasoningPreamble");
 __name2(reasoningPreamble, "reasoningPreamble");
+__name22(reasoningPreamble, "reasoningPreamble");
 async function markError(env, row, msg) {
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
 }
 __name(markError, "markError");
 __name2(markError, "markError");
+__name22(markError, "markError");
 async function zenodo(env, method, path, body, attempt) {
   const sep = path.indexOf("?") >= 0 ? "&" : "?";
   const url = "https://zenodo.org/api/deposit/depositions" + path + sep + "access_token=" + env.ZENODO_TOKEN;
@@ -166,12 +178,14 @@ async function zenodo(env, method, path, body, attempt) {
 }
 __name(zenodo, "zenodo");
 __name2(zenodo, "zenodo");
+__name22(zenodo, "zenodo");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
   });
 }
 __name(bibEsc, "bibEsc");
+__name2(bibEsc, "bibEsc");
 function parseRefLine(raw) {
   var s = String(raw || "").replace(/^\s*\d+[.)]\s*/, "").trim();
   var aEnd = s.indexOf("(");
@@ -194,11 +208,13 @@ function parseRefLine(raw) {
   return { authors, year, title, rest, arxiv, doi };
 }
 __name(parseRefLine, "parseRefLine");
+__name2(parseRefLine, "parseRefLine");
 function refKey(p, i) {
   var a = (p.authors || "").replace(/[^A-Za-z]/g, "").slice(0, 14) || "ref";
   return (a + (p.year || "")).toLowerCase() + "_" + i;
 }
 __name(refKey, "refKey");
+__name2(refKey, "refKey");
 function buildProvenance(bodyMd, title, slug) {
   var body = String(bodyMd || "");
   var lines = body.split(/\r?\n/);
@@ -248,6 +264,7 @@ function buildProvenance(bodyMd, title, slug) {
   ] };
 }
 __name(buildProvenance, "buildProvenance");
+__name2(buildProvenance, "buildProvenance");
 async function publishToZenodo(env, title, abstract, bodyMd, slug) {
   if (!env.ZENODO_TOKEN) return { ok: false, error: "no ZENODO_TOKEN" };
   var pkg = buildProvenance(bodyMd, title, slug);
@@ -318,6 +335,7 @@ async function publishToZenodo(env, title, abstract, bodyMd, slug) {
 }
 __name(publishToZenodo, "publishToZenodo");
 __name2(publishToZenodo, "publishToZenodo");
+__name22(publishToZenodo, "publishToZenodo");
 async function genNote(env, row) {
   let note = await runModel(env, NOTE_PROMPT + "\n\n" + (row.idea || row.summary), MAX_NOTE);
   if (!note) note = await gatewayPaper(env, NOTE_PROMPT + "\n\n" + (row.idea || row.summary));
@@ -330,6 +348,7 @@ async function genNote(env, row) {
 }
 __name(genNote, "genNote");
 __name2(genNote, "genNote");
+__name22(genNote, "genNote");
 async function genPaper(env, row) {
   const note = row.context || row.idea || row.summary;
   const prompt = PAPER_PROMPT + "\n\n" + (row.idea || row.summary) + "\n\nNOTE:\n" + note;
@@ -353,6 +372,7 @@ async function genPaper(env, row) {
 }
 __name(genPaper, "genPaper");
 __name2(genPaper, "genPaper");
+__name22(genPaper, "genPaper");
 async function publishStage(env, row) {
   const slug = row.paper_slug;
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
@@ -379,6 +399,7 @@ async function publishStage(env, row) {
 }
 __name(publishStage, "publishStage");
 __name2(publishStage, "publishStage");
+__name22(publishStage, "publishStage");
 async function latestRecord(env, recId) {
   try {
     var r = await fetch("https://zenodo.org/api/records/" + recId + "/latest", { headers: { "User-Agent": "QNFO-research-exec/0.5.1" } });
@@ -388,6 +409,7 @@ async function latestRecord(env, recId) {
   return null;
 }
 __name(latestRecord, "latestRecord");
+__name2(latestRecord, "latestRecord");
 function mdToLatex(md) {
   var body = String(md).replace(/^\uFEFF/, "");
   var fm = {};
@@ -410,6 +432,7 @@ function mdToLatex(md) {
     }
   }
   __name(flush, "flush");
+  __name2(flush, "flush");
   for (var i = 0; i < sl.length; i++) {
     var ln2 = sl[i];
     var h = ln2.match(/^(#{1,4})\s+(.*)$/);
@@ -480,6 +503,7 @@ function mdToLatex(md) {
     O.push("");
   }
   __name(tbl, "tbl");
+  __name2(tbl, "tbl");
   for (var b = 0; b < blocks.length; b++) {
     var blk = blocks[b];
     if (blk.type === "h") {
@@ -580,10 +604,12 @@ function mdToLatex(md) {
   return out.join("\n");
 }
 __name(mdToLatex, "mdToLatex");
+__name2(mdToLatex, "mdToLatex");
 function esc(s) {
   return String(s).replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}").replace(/\^/g, "\\textasciicircum{}");
 }
 __name(esc, "esc");
+__name2(esc, "esc");
 function inl(s) {
   var str = String(s);
   var math = [];
@@ -592,16 +618,19 @@ function inl(s) {
     return "\0" + (math.length - 1) + "";
   }
   __name(pm, "pm");
+  __name2(pm, "pm");
   function pc() {
     return "" + (cmd.length - 1) + "";
   }
   __name(pc, "pc");
+  __name2(pc, "pc");
   function rs(x) {
     return String(x).replace(/\x00(\d+)\x01/g, function(m, k) {
       return math[Number(k)];
     });
   }
   __name(rs, "rs");
+  __name2(rs, "rs");
   str = str.replace(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+)\s*\^\s*(\d+)/g, function(m, a, b, c) {
     math.push("$" + a + "\\times " + b + "^{" + c + "}$");
     return pm();
@@ -658,6 +687,7 @@ function inl(s) {
   return str;
 }
 __name(inl, "inl");
+__name2(inl, "inl");
 async function latexCompile(tex) {
   var fd = new FormData();
   fd.append("engine", "pdflatex");
@@ -671,6 +701,7 @@ async function latexCompile(tex) {
   return { ok: false, err: "non-pdf " + ct, log: String(await r.text()).slice(0, 1200) };
 }
 __name(latexCompile, "latexCompile");
+__name2(latexCompile, "latexCompile");
 async function publishV2(env, row) {
   var recId = String(row.paper_doi || "").split("zenodo.").pop() || "";
   if (!recId) {
@@ -874,6 +905,7 @@ async function publishV2(env, row) {
   return { ok: true, stage: "v2", doi: newDoi };
 }
 __name(publishV2, "publishV2");
+__name2(publishV2, "publishV2");
 async function drainV2(env) {
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
   var results = [];
@@ -883,6 +915,16 @@ async function drainV2(env) {
     if (!claim || !claim.meta || !claim.meta.changes) continue;
     try {
       results.push(await publishV2(env, r));
+      var pv2 = results[results.length - 1];
+      if (pv2 && pv2.ok) {
+        try {
+          var prlDoi = String(pv2.doi || r.new_doi || "");
+          var Q = String.fromCharCode(39);
+          var prlSql = "UPDATE paper_revision_log SET status=" + Q + "published" + Q + ", new_doi=?, updated_at=datetime(" + Q + "now" + Q + ") WHERE slug=? AND status=" + Q + "queued" + Q + " AND COALESCE(version_to," + Q + "2.0.0" + Q + ")=? ";
+          await env.QNFO_AUDIT.prepare(prlSql).bind(prlDoi, String(r.slug || ""), String(r.version_to || "2.0.0")).run();
+        } catch (ePrl) {
+        }
+      }
     } catch (e) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(r.id).run();
       results.push({ ok: false, stage: "v2", error: String(e && e.message || e).slice(0, 200) });
@@ -891,6 +933,7 @@ async function drainV2(env) {
   return results;
 }
 __name(drainV2, "drainV2");
+__name2(drainV2, "drainV2");
 async function run(env) {
   await logEvent(env, "heartbeat", "run");
   try {
@@ -932,6 +975,7 @@ async function run(env) {
 }
 __name(run, "run");
 __name2(run, "run");
+__name22(run, "run");
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
@@ -939,21 +983,14 @@ var worker_default = {
         var drained = await drainV2(env);
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");
       } catch (e) {
+        await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
-      if (env.RESEARCH_HALT === "1") {
-        await logEvent(env, "halt", "research halted by RESEARCH_HALT kill-switch");
-        return;
+      if (env.RESEARCH_HALT === "1") return;
+      try {
+        await run(env);
+      } catch (e) {
+        await logEvent(env, "error", "run threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
-      var stallResolve;
-      var stallPromise = new Promise(function(res) {
-        stallResolve = res;
-      });
-      var stallTimer = setTimeout(function() {
-        stallResolve("STALL");
-      }, 42e4);
-      var winner = await Promise.race([run(env), stallPromise]);
-      if (winner === "STALL") await logEvent(env, "stall-guard", "run exceeded 7min deadline; fire released");
-      clearTimeout(stallTimer);
     })());
   },
   async fetch(request, env) {

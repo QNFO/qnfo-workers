@@ -1,37 +1,30 @@
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// worker.js
 import { connect } from "cloudflare:sockets";
-// qnfo-cloud-ops v1.4.0 — Cloud scheduler (Workers Cron Triggers)
-// Replaces the local DeepChat scheduled-task fleet with cloud-only execution.
-// Jobs dispatched by cron string (UTC; Amsterdam wall-clock preserved via DST sync).
-// v1.4.0: zenodo-stats carries the ADR-014 attribution audit (creators + related_identifiers
-// captured per record; creator violations flagged; sole-author mandate held) and weekly-ops
-// carries SEO discoverability health (papers/qnfo/qwav/qwav.tech: status + title + JSON-LD).
-// v1.11.0: jobVisibility adds an outreach section (qnfo-outreach funnel_daily + submissions via
-// OUTREACH binding) - closes the P7 scorecard loop for the outreach/submission engine.
-// v1.10.0: jobEngagement (weekly Mon 07:15 AMS) collects Bluesky + Buffer per-post engagement
-// into qnfo-audit.social_engagements; jobVisibility digest adds citation + engagement sections.
-// v1.2.0+: vectorized event store (OPS_VZ, doc=cloud-ops) + SILENCE POLICY — no
-// automated email to personal inboxes except: briefing with decision items,
-// job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
-// Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
-
-const VERSION = "1.13.4"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
-const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
-const WORKER_NAME = "qnfo-cloud-ops";
-const EMAIL_BASE = "https://qnfo-email.internal";
-const NL = String.fromCharCode(10);
-
-// ---------- auth ----------
+var VERSION = "1.13.5";
+var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
+var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
+var WORKER_NAME = "qnfo-cloud-ops";
+var EMAIL_BASE = "https://qnfo-email.internal";
+var NL = String.fromCharCode(10);
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   const adm = env.OPS_ADMIN_TOKEN;
   const reg = env.REGISTRY_TOKEN;
   if (!token) return false;
-  const ok = (k) => { const a = new TextEncoder().encode(token); const b = new TextEncoder().encode(k || ""); if (a.byteLength !== b.byteLength) return false; let d = 0; for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i]; return d === 0; };
+  const ok = /* @__PURE__ */ __name((k) => {
+    const a = new TextEncoder().encode(token);
+    const b = new TextEncoder().encode(k || "");
+    if (a.byteLength !== b.byteLength) return false;
+    let d = 0;
+    for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i];
+    return d === 0;
+  }, "ok");
   return ok(exp) || ok(adm) || ok(reg);
 }
-
-// ---------- audit log ----------
+__name(auth, "auth");
 async function logRun(env, job, status, notes) {
   try {
     await env.AUDIT.prepare(
@@ -39,36 +32,39 @@ async function logRun(env, job, status, notes) {
     ).bind(
       "cloud-ops-" + job + "-" + Date.now().toString(36),
       "qnfo-cloud-ops",
-      new Date().toISOString(),
-      new Date().toISOString(),
+      (/* @__PURE__ */ new Date()).toISOString(),
+      (/* @__PURE__ */ new Date()).toISOString(),
       status === "ok" ? 1 : 0,
       1,
       JSON.stringify({ job, status, ...notes }).slice(0, 500)
     ).run();
-  } catch (e) { /* audit write is best-effort */ }
+  } catch (e) {
+  }
 }
-
-// ---------- scheduler state (D1 qnfo-audit.scheduler_state) ----------
+__name(logRun, "logRun");
 async function stateGet(env, key, fallback) {
   try {
     const r = await env.AUDIT.prepare("SELECT value FROM scheduler_state WHERE key = ?1").bind(key).first();
-    return (r && r.value !== null && r.value !== undefined) ? r.value : fallback;
-  } catch (e) { return fallback; }
+    return r && r.value !== null && r.value !== void 0 ? r.value : fallback;
+  } catch (e) {
+    return fallback;
+  }
 }
+__name(stateGet, "stateGet");
 async function stateSet(env, key, value) {
   try {
     await env.AUDIT.prepare(
       "INSERT INTO scheduler_state (key, value, updated_at) VALUES (?1,?2, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')"
     ).bind(key, String(value)).run();
-  } catch (e) { /* best-effort */ }
+  } catch (e) {
+  }
 }
-
-// ---------- email digest ----------
+__name(stateSet, "stateSet");
 async function sendDigest(env, subject, text, toOverride) {
   if (!env.SEND_EMAIL) return { error: "SEND_EMAIL binding missing" };
   const toRaw = toOverride || env.DIGEST_TO || env.ALERT_EMAIL_TO || "";
-  const dom = String(toRaw).split('@')[1] || '';
-  if (HUMAN_DOMAINS.has(dom)) return { skipped: 'personal-domain', to: toRaw }; // user directive 2026-09-02: never auto-email personal inboxes
+  const dom = String(toRaw).split("@")[1] || "";
+  if (HUMAN_DOMAINS.has(dom)) return { skipped: "personal-domain", to: toRaw };
   const to = toRaw;
   try {
     const r = await env.SEND_EMAIL.send({ to, from: { email: "alerts@qnfo.org", name: "QNFO Ops" }, subject, text });
@@ -77,13 +73,8 @@ async function sendDigest(env, subject, text, toOverride) {
     return { error: String(e && e.message || e), to };
   }
 }
-
-// ---------- vectorized event store (OPS_VZ) + silent digest ----------
+__name(sendDigest, "sendDigest");
 async function embedText(env, text) {
-  // GW-ERROR-SELFHEAL-1 (2026-09-05): bge-base-en-v1.5 through the default AI Gateway rate-limits
-  // at ~50 req/min (AiError 429). Batch/digest recorders that embed many items in a row previously
-  // 429'd the whole tail (~245/day at 03:00 UTC). Retry with small backoff so transient quota blips
-  // self-heal instead of silently dropping vector rows.
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const resp = await env.AI.run(EMBED_MODEL, { text: [String(text).slice(0, 1800)] }, { gateway: { id: "default" } });
@@ -101,105 +92,111 @@ async function embedText(env, text) {
   }
   return null;
 }
-
+__name(embedText, "embedText");
 async function recordEvent(env, kind, id, text, meta) {
   const m = Object.assign({}, meta || {});
   try {
-    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)")
-      .bind(id, new Date().toISOString(), kind, String(text).slice(0, 2000), JSON.stringify(m).slice(0, 1500), m.job || null, m.status || null).run();
-  } catch (e) {}
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), kind, String(text).slice(0, 2e3), JSON.stringify(m).slice(0, 1500), m.job || null, m.status || null).run();
+  } catch (e) {
+  }
   try {
     if (env.OPS_VZ) {
       const v = await embedText(env, kind + ": " + text);
       if (v) {
-        await env.OPS_VZ.upsert([{ id, values: v, metadata: { doc: "cloud-ops", kind, ts: new Date().toISOString(), text: String(text).slice(0, 1500), ...m } }]);
+        await env.OPS_VZ.upsert([{ id, values: v, metadata: { doc: "cloud-ops", kind, ts: (/* @__PURE__ */ new Date()).toISOString(), text: String(text).slice(0, 1500), ...m } }]);
       }
     }
-  } catch (e) {}
+  } catch (e) {
+  }
   return { stored: true, id };
 }
-
+__name(recordEvent, "recordEvent");
 async function storeDigest(env, job, subject, text) {
   return recordEvent(env, "digest", "dg-" + job + "-" + Date.now().toString(36), subject + NL + text, { job });
 }
-
-// ---------- qnfo-email service ----------
+__name(storeDigest, "storeDigest");
 async function cfEmail(env, path, opts = {}) {
   const url = new URL(EMAIL_BASE + path);
   const headers = { Authorization: "Bearer " + (env.EMAIL_API_KEY || "") };
   if (opts.body) headers["Content-Type"] = "application/json";
-  const resp = await env.EMAIL.fetch(url.toString(), { method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const resp = await env.EMAIL.fetch(url.toString(), { method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : void 0 });
   let j = null;
-  try { j = await resp.json(); } catch (e) { j = null; }
-  if (!resp.ok) return { error: (j && j.error) || "email svc HTTP " + resp.status };
+  try {
+    j = await resp.json();
+  } catch (e) {
+    j = null;
+  }
+  if (!resp.ok) return { error: j && j.error || "email svc HTTP " + resp.status };
   return j;
 }
-
-// ---------- GitHub helpers ----------
-function ghHeaders(env, extra) { return { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, Accept: "application/vnd.github+json", ...(extra || {}) }; }
+__name(cfEmail, "cfEmail");
+function ghHeaders(env, extra) {
+  return { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, Accept: "application/vnd.github+json", ...extra || {} };
+}
+__name(ghHeaders, "ghHeaders");
 async function ghGet(env, path) {
   const r = await fetch("https://api.github.com" + path, { headers: ghHeaders(env) });
   const txt = await r.text().catch(() => "");
   let j = null;
-  try { j = JSON.parse(txt); } catch (e) { j = null; }
+  try {
+    j = JSON.parse(txt);
+  } catch (e) {
+    j = null;
+  }
   return { status: r.status, body: j, raw: txt.slice(0, 200) };
 }
-async function ghPost(env, path, body) {
-  const r = await fetch("https://api.github.com" + path, { method: "POST", headers: ghHeaders(env), body: JSON.stringify(body || {}) });
-  const j = await r.json().catch(() => null);
-  return { status: r.status, body: j };
-}
+__name(ghGet, "ghGet");
 async function ghPut(env, path, body) {
   const r = await fetch("https://api.github.com" + path, { method: "PUT", headers: ghHeaders(env), body: JSON.stringify(body || {}) });
   const j = await r.json().catch(() => null);
   return { status: r.status, body: j };
 }
-
-// ---------- Cloudflare API (for DST schedule rebuild) ----------
+__name(ghPut, "ghPut");
 async function cfApi(env, path, method, body) {
   const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + path, {
     method: method || "GET",
     headers: { Authorization: "Bearer " + (env.CF_TOKEN || ""), "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (qnfo-cloud-ops)" },
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : void 0
   });
   const j = await r.json().catch(() => null);
   return { status: r.status, body: j };
 }
-
-// ---------- Amsterdam schedule model (canonical wall-clock times) ----------
-const AMS_SCHEDULE = {
-  "release-check":  { times: ["06:15"], days: "*",   fixed: null },
-  "email-triage":   { times: ["08:00", "14:00"], days: "1-5", fixed: null },
-  "briefing":       { times: ["08:30"], days: "1-5", fixed: null },
-  "gmail-triage":   { times: ["09:00", "15:00"], days: "1-5", fixed: null },
-  "research-scan":  { times: ["10:00"], days: "1-5", fixed: null },
-  "weekly":         { times: ["17:00"], days: "5",   fixed: null },
-  "weekly-ops":     { times: ["06:00"], days: "7",   fixed: null },
-  "portfolio-sync": { times: ["08:00"], days: "1",   fixed: null },
-  "zenodo-stats":   { times: ["09:00"], days: "7",   fixed: null },
-  "board-sync":     { times: ["08:00"], days: "6",   fixed: null },
-  "outreach":       { times: ["11:00"], days: "1-5", fixed: null },
-  "nlnet":          { times: ["11:00"], days: null,  fixed: { dom: 3, mon: 9 } },
-  "worker-health":  { times: ["05:05", "17:05"], days: "*",   fixed: null },
-  "sitemap-ping":   { times: ["06:00"], days: null,  fixed: { dom: 1, mon: "*" } },
+__name(cfApi, "cfApi");
+var AMS_SCHEDULE = {
+  "release-check": { times: ["06:15"], days: "*", fixed: null },
+  "email-triage": { times: ["08:00", "14:00"], days: "1-5", fixed: null },
+  "briefing": { times: ["08:30"], days: "1-5", fixed: null },
+  "gmail-triage": { times: ["09:00", "15:00"], days: "1-5", fixed: null },
+  "research-scan": { times: ["10:00"], days: "1-5", fixed: null },
+  "weekly": { times: ["17:00"], days: "5", fixed: null },
+  "weekly-ops": { times: ["06:00"], days: "7", fixed: null },
+  "portfolio-sync": { times: ["08:00"], days: "1", fixed: null },
+  "zenodo-stats": { times: ["09:00"], days: "7", fixed: null },
+  "board-sync": { times: ["08:00"], days: "6", fixed: null },
+  "outreach": { times: ["11:00"], days: "1-5", fixed: null },
+  "nlnet": { times: ["11:00"], days: null, fixed: { dom: 3, mon: 9 } },
+  "worker-health": { times: ["05:05", "17:05"], days: "*", fixed: null },
+  "sitemap-ping": { times: ["06:00"], days: null, fixed: { dom: 1, mon: "*" } },
   "loose-threads-sweep": { times: ["07:00"], days: "1", fixed: null },
-  "visibility":      { times: ["07:30"], days: "1", fixed: null },
-  "engagement":      { times: ["07:15"], days: "1", fixed: null },
+  "visibility": { times: ["07:30"], days: "1", fixed: null },
+  "engagement": { times: ["07:15"], days: "1", fixed: null },
+  "radar": { times: ["09:30"], days: "1-5", fixed: null },
+  "gtd-reconcile": { times: ["05:30"], days: "1", fixed: null }
 };
-
-// Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
 function buildCrons(offset) {
   const crons = [];
   for (const [job, s] of Object.entries(AMS_SCHEDULE)) {
     if (s.fixed) {
       const [hh, mm] = s.times[0].split(":").map(Number);
-      let u = hh - offset; if (u < 0) u += 24;
+      let u = hh - offset;
+      if (u < 0) u += 24;
       crons.push({ job, cron: mm + " " + u + " " + s.fixed.dom + " " + s.fixed.mon + " *" });
     } else {
       const byMinute = {};
       for (const t of s.times) {
         const [hh, mm] = t.split(":").map(Number);
-        let u = hh - offset; if (u < 0) u += 24;
+        let u = hh - offset;
+        if (u < 0) u += 24;
         (byMinute[mm] = byMinute[mm] || []).push(u);
       }
       for (const [mm, hours] of Object.entries(byMinute)) {
@@ -210,23 +207,24 @@ function buildCrons(offset) {
   }
   return crons;
 }
-
-// Current Europe/Amsterdam UTC offset in hours for a given instant.
+__name(buildCrons, "buildCrons");
 function amsOffset(instant) {
   try {
     const dtf = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Amsterdam", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    const parts = dtf.formatToParts(instant || new Date());
-    const m = {}; for (const p of parts) m[p.type] = p.value;
+    const parts = dtf.formatToParts(instant || /* @__PURE__ */ new Date());
+    const m = {};
+    for (const p of parts) m[p.type] = p.value;
     const asUTC = Date.UTC(Number(m.year), Number(m.month) - 1, Number(m.day), Number(m.hour), Number(m.minute), Number(m.second));
-    const t = (instant || new Date()).getTime();
-    const raw = (asUTC - t) / 3600000;
-    return Math.round(raw * 2) / 2; // Amsterdam offsets are whole hours; round away ms-truncation noise
-  } catch (e) { return 2; }
+    const t = (instant || /* @__PURE__ */ new Date()).getTime();
+    const raw = (asUTC - t) / 36e5;
+    return Math.round(raw * 2) / 2;
+  } catch (e) {
+    return 2;
+  }
 }
-
-// Rebuild all cron triggers to preserve Amsterdam firing instants at the current offset.
+__name(amsOffset, "amsOffset");
 async function syncSchedules(env, force) {
-  const off = amsOffset(new Date());
+  const off = amsOffset(/* @__PURE__ */ new Date());
   const stored = await stateGet(env, "cron_offset", String(off));
   if (!force && String(off) === String(stored)) return { changed: false, offset: off };
   const crons = buildCrons(off);
@@ -235,12 +233,8 @@ async function syncSchedules(env, force) {
   if (ok) await stateSet(env, "cron_offset", String(off));
   return { changed: true, ok, offset: off, crons: crons.map((c) => c.cron), status: r.status };
 }
-
-// ================= PART 2: IMAP client + Gmail GTD triage + email triage =================
-
-// ---------- minimal IMAP client over Workers TCP (TLS) ----------
+__name(syncSchedules, "syncSchedules");
 function decodeHeader(s) {
-  // RFC 2047 =?charset?B?base64?= / =?charset?Q?quoted?=
   let out = String(s || "");
   out = out.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (m, cs, enc, data) => {
     try {
@@ -248,31 +242,42 @@ function decodeHeader(s) {
         return decodeURIComponent(escape(atob(data.replace(/\s/g, ""))));
       }
       return decodeURIComponent(data.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (mm, hx) => String.fromCharCode(parseInt(hx, 16))));
-    } catch (e) { return data; }
+    } catch (e) {
+      return data;
+    }
   });
   return out.trim();
 }
-
+__name(decodeHeader, "decodeHeader");
 async function imapOpen(env) {
   const host = "imap.gmail.com", port = 993;
   const socket = connect({ hostname: host, port }, { secureTransport: "on", allowHalfOpen: false });
-  const watchdog = setTimeout(() => { try { socket.close(); } catch (e) {} }, 90000);
+  const watchdog = setTimeout(() => {
+    try {
+      socket.close();
+    } catch (e) {
+    }
+  }, 9e4);
   const reader = socket.readable.getReader();
   const writer = socket.writable.getWriter();
   const enc = new TextEncoder();
   const dec = new TextDecoder();
   let buf = "";
   let tagSeq = 0;
-
   async function readLine() {
     while (true) {
       const idx = buf.indexOf("\r\n");
-      if (idx >= 0) { const line = buf.slice(0, idx); buf = buf.slice(idx + 2); return line; }
+      if (idx >= 0) {
+        const line = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        return line;
+      }
       const { value, done } = await reader.read();
       if (done) return null;
       buf += dec.decode(value, { stream: true });
     }
   }
+  __name(readLine, "readLine");
   async function readLiteral(n) {
     while (buf.length < n) {
       const { value, done } = await reader.read();
@@ -280,11 +285,12 @@ async function imapOpen(env) {
       buf += dec.decode(value, { stream: true });
     }
     const lit = buf.slice(0, n);
-    buf = buf.slice(n); // do NOT consume the 2 framing bytes; the continuation is part of the stream
+    buf = buf.slice(n);
     return lit;
   }
+  __name(readLiteral, "readLiteral");
   async function cmd(command) {
-    const tag = "a" + (++tagSeq);
+    const tag = "a" + ++tagSeq;
     await writer.write(enc.encode(tag + " " + command + "\r\n"));
     const lines = [];
     let ok = false;
@@ -305,22 +311,33 @@ async function imapOpen(env) {
       }
     }
   }
+  __name(cmd, "cmd");
   async function close() {
-    try { clearTimeout(watchdog); } catch (e) {}
-    try { await writer.write(enc.encode("aZ LOGOUT\r\n")); } catch (e) {}
-    try { writer.close(); reader.cancel(); socket.close(); } catch (e) {}
+    try {
+      clearTimeout(watchdog);
+    } catch (e) {
+    }
+    try {
+      await writer.write(enc.encode("aZ LOGOUT\r\n"));
+    } catch (e) {
+    }
+    try {
+      writer.close();
+      reader.cancel();
+      socket.close();
+    } catch (e) {
+    }
   }
+  __name(close, "close");
   return { cmd, close };
 }
-
-// Classification: faithful port of gmail-gtd-triage.py classify() (QNFO 2026-08).
-const BULK_DOMAINS = new Set("github.com gitlab.com bitbucket.org cloudflare.com vercel.com netlify.com twitter.com x.com linkedin.com facebook.com instagram.com youtube.com reddit.com quora.com medium.com substack.com wordpress.com tumblr.com spotify.com netflix.com disneyplus.com hulu.com twitch.tv discord.com telegram.org whatsapp.com tiktok.com pinterest.com snapchat.com booking.com airbnb.com expedia.com tripadvisor.com skyscanner.net ebay.com etsy.com aliexpress.com temu.com shein.com wish.com shopify.com mailchimp.com sendinblue.com brevo.com hubspot.com salesforce.com klaviyo.com constantcontact.com campaignmonitor.com mailerlite.com convertkit.com beehiiv.com adobe.com dropbox.com notion.so slack.com zoom.us godaddy.com namecheap.com wix.com squarespace.com hostinger.com google.com googlemail.com microsoft.com apple.com amazon.com amazonaws.com npmjs.com pypi.org crates.io docker.com stackoverflow.com arxiv.org researchgate.net academia.edu orcid.org paypal.com stripe.com klarna.com afterpay.com revolut.com".split(" "));
-const FINANCIAL_DOMAINS = new Set("chase.com bankofamerica.com wellsfargo.com citibank.com citi.com capitalone.com americanexpress.com amex.com discover.com usbank.com ally.com sofi.com chime.com ing.com rabobank.nl abnamro.nl ing.nl bunq.com n26.com wise.com transferwise.com payoneer.com vanguard.com fidelity.com schwab.com etrade.com traderepublic.com degiro.nl ibkr.com interactivebrokers.com".split(" "));
-const HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
-const QNFO_DOMAINS = new Set(["qnfo.org", "qwav.org", "qwav.tech", "qnfo.io"]);
-const WITHDRAWN_CONTEXTS = { "cwi.nl": ["summer school", "poster", "slides", "practical information"] };
-
-const RX = {
+__name(imapOpen, "imapOpen");
+var BULK_DOMAINS = new Set("github.com gitlab.com bitbucket.org cloudflare.com vercel.com netlify.com twitter.com x.com linkedin.com facebook.com instagram.com youtube.com reddit.com quora.com medium.com substack.com wordpress.com tumblr.com spotify.com netflix.com disneyplus.com hulu.com twitch.tv discord.com telegram.org whatsapp.com tiktok.com pinterest.com snapchat.com booking.com airbnb.com expedia.com tripadvisor.com skyscanner.net ebay.com etsy.com aliexpress.com temu.com shein.com wish.com shopify.com mailchimp.com sendinblue.com brevo.com hubspot.com salesforce.com klaviyo.com constantcontact.com campaignmonitor.com mailerlite.com convertkit.com beehiiv.com adobe.com dropbox.com notion.so slack.com zoom.us godaddy.com namecheap.com wix.com squarespace.com hostinger.com google.com googlemail.com microsoft.com apple.com amazon.com amazonaws.com npmjs.com pypi.org crates.io docker.com stackoverflow.com arxiv.org researchgate.net academia.edu orcid.org paypal.com stripe.com klarna.com afterpay.com revolut.com".split(" "));
+var FINANCIAL_DOMAINS = new Set("chase.com bankofamerica.com wellsfargo.com citibank.com citi.com capitalone.com americanexpress.com amex.com discover.com usbank.com ally.com sofi.com chime.com ing.com rabobank.nl abnamro.nl ing.nl bunq.com n26.com wise.com transferwise.com payoneer.com vanguard.com fidelity.com schwab.com etrade.com traderepublic.com degiro.nl ibkr.com interactivebrokers.com".split(" "));
+var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
+var QNFO_DOMAINS = /* @__PURE__ */ new Set(["qnfo.org", "qwav.org", "qwav.tech", "qnfo.io"]);
+var WITHDRAWN_CONTEXTS = { "cwi.nl": ["summer school", "poster", "slides", "practical information"] };
+var RX = {
   receipt: /receipt|invoice|statement|payment (received|confirmed)|order confirmation|confirmation of order|your order|shipping confirmation|tracking (number|#)|delivery (update|confirm)|tax (receipt|statement)|transaction (receipt|confirm)|payment method|practical information|bevestiging|bestelling|factuur|betaling|purchase (confirmed|confirmation)/i,
   waiting: /application (received|submitted|is under)|received your (submission|paper)|submission received|your submission|we (received|got) your|ticket[ #]?\d|case[ #]?\d|support (request|ticket)|under review|in review|we'll (get back|follow)|will (get back|follow up)|status update|awaiting|aanvraag/i,
   sysnotice: /profile activat|account activat|welcome to|your (account|profile) is (now )?(active|ready)|getting started/i,
@@ -331,11 +348,15 @@ const RX = {
   marketing: /sale|discount|promo|offer|limited time|deal of|% off|free shipping|don't miss|act now|final hours|survey|feedback|rate your|tell us about your|share your (opinion|experience|mening)|deel je mening|mening delen|hear about your/i,
   security: /security alert|fraud alert|unusual activity|sign-in (alert|attempt)|new device|password (reset|changed)|2fa|two-factor/i,
   jobalert: /job (alert|opening)|vacature|are hiring|are looking for|great companies/i,
-  volunteer: /vrijwilliger|volunteer/i,
+  volunteer: /vrijwilliger|volunteer/i
 };
-
-function domIn(dom, set) { if (!dom) return false; if (set.has(dom)) return true; for (const b of set) if (dom.endsWith("." + b)) return true; return false; }
-
+function domIn(dom, set) {
+  if (!dom) return false;
+  if (set.has(dom)) return true;
+  for (const b of set) if (dom.endsWith("." + b)) return true;
+  return false;
+}
+__name(domIn, "domIn");
 function classify(sender, subject, ageDays) {
   const dom = (sender || "").trim().toLowerCase().split("@").pop() || "";
   if (domIn(dom, FINANCIAL_DOMAINS)) {
@@ -357,13 +378,13 @@ function classify(sender, subject, ageDays) {
     return "ACTION";
   }
   if (domIn(dom, BULK_DOMAINS)) {
-    if (RX.security.test(subject)) return (domIn(dom, new Set(["cloudflare.com", "microsoft.com", "google.com"]))) ? "ACTION" : "WAITING";
+    if (RX.security.test(subject)) return domIn(dom, /* @__PURE__ */ new Set(["cloudflare.com", "microsoft.com", "google.com"])) ? "ACTION" : "WAITING";
     if (RX.receipt.test(subject)) return "REFERENCE";
     if (RX.waiting.test(subject)) return "WAITING";
     if (RX.sysnotice.test(subject)) return "NOISE";
     if (RX.action.test(subject)) return "ACTION";
     if (RX.someday.test(subject)) return "SOMEDAY";
-    if (RX.code.test(subject)) return (ageDays < 1) ? "REFERENCE" : "NOISE";
+    if (RX.code.test(subject)) return ageDays < 1 ? "REFERENCE" : "NOISE";
     if (RX.newsletter.test(subject) || RX.marketing.test(subject)) return "NOISE";
     return "NOISE";
   }
@@ -379,9 +400,10 @@ function classify(sender, subject, ageDays) {
   if ((sender || "").toLowerCase().startsWith("noreply") || (sender || "").toLowerCase().startsWith("no-reply")) return "NOISE";
   return "ACTION";
 }
-
-const F_WAITING = "GTD-Waiting For", F_SOMEDAY = "GTD-Someday Maybe", F_REF = "GTD-Reference";
-
+__name(classify, "classify");
+var F_WAITING = "GTD-Waiting For";
+var F_SOMEDAY = "GTD-Someday Maybe";
+var F_REF = "GTD-Reference";
 async function jobGmailTriage(env) {
   if (!env.GMAIL_PASS) return { status: "error", notes: { error: "GMAIL_PASS secret missing" } };
   const out = { checked: 0, counts: { ACTION: 0, WAITING: 0, SOMEDAY: 0, REFERENCE: 0, NOISE: 0 }, moved: 0, actions: [], waiting: [] };
@@ -394,21 +416,29 @@ async function jobGmailTriage(env) {
     if (!sel.ok) throw new Error("gmail SELECT INBOX failed");
     const search = await imap.cmd("UID SEARCH ALL");
     const searchLine = search.lines.find((l) => l.startsWith("* SEARCH"));
-    const uids = searchLine ? searchLine.replace("* SEARCH", "").trim().split(/\s+/).filter(Boolean).slice(0, 1000) : [];
+    const uids = searchLine ? searchLine.replace("* SEARCH", "").trim().split(/\s+/).filter(Boolean).slice(0, 1e3) : [];
     out.checked = uids.length;
-    // create labels (idempotent; NO on exists is fine)
-    for (const l of [F_WAITING, F_SOMEDAY, F_REF]) { try { await imap.cmd('CREATE "' + l + '"'); } catch (e) {} }
+    for (const l of [F_WAITING, F_SOMEDAY, F_REF]) {
+      try {
+        await imap.cmd('CREATE "' + l + '"');
+      } catch (e) {
+      }
+    }
     const now = Date.now();
     const plan = [];
     for (let i = 0; i < uids.length; i += 25) {
       const batch = uids.slice(i, i + 25);
       const fet = await imap.cmd("UID FETCH " + batch.join(",") + " (UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])");
-      // parse: attribute lines "* N FETCH (UID u ..." followed by literal header bytes
       let cur = null;
       for (const ln of fet.lines) {
         const mm = ln.match(/^\* \d+ FETCH \(UID (\d+) /);
-        if (mm) { cur = mm[1]; continue; }
-        if (ln.startsWith("* ") && / FETCH /.test(ln)) { continue; }
+        if (mm) {
+          cur = mm[1];
+          continue;
+        }
+        if (ln.startsWith("* ") && / FETCH /.test(ln)) {
+          continue;
+        }
         if (cur !== null) {
           const hdr = ln;
           const fromM = hdr.match(/^From:\s*(.+)$/mi);
@@ -417,7 +447,10 @@ async function jobGmailTriage(env) {
           const sender = (fromM ? fromM[1] : "").replace(/<[^>]*>/g, "").trim() || ((fromM && fromM[1].match(/<([^>]+)>/) || [])[1] || "");
           const subject = decodeHeader(subjM ? subjM[1] : "");
           let ageDays = 0;
-          if (dateM) { const d = new Date(dateM[1]); if (!isNaN(d)) ageDays = Math.floor((now - d.getTime()) / 86400000); }
+          if (dateM) {
+            const d2 = new Date(dateM[1]);
+            if (!isNaN(d2)) ageDays = Math.floor((now - d2.getTime()) / 864e5);
+          }
           const cls = classify(sender, subject, ageDays);
           out.counts[cls] = (out.counts[cls] || 0) + 1;
           const rec = { uid: cur, cls, sender: sender.slice(0, 60), subject: subject.slice(0, 90) };
@@ -428,58 +461,87 @@ async function jobGmailTriage(env) {
         }
       }
     }
-    // ---- v1.5.1: grouped batched moves + deadline-aware checkpoint (red-team CONCERN B).
-    // Before: ~2 commands per message (~400+ vs 90s watchdog), hard cap 200, no resume.
-    // Now: one UID STORE/COPY per 25-UID batch; loop stops at 80s; remaining UIDs stay
-    // in INBOX so the next run resumes naturally (moved messages leave INBOX anyway).
     const startMs = Date.now();
     const groups = { ACTION: [], WAITING: [], SOMEDAY: [], REFERENCE: [], NOISE: [] };
     for (const p of plan) {
-      if (groups[p.cls] === undefined) groups[p.cls] = [];
+      if (groups[p.cls] === void 0) groups[p.cls] = [];
       groups[p.cls].push(p.uid);
     }
-    const deadlineHit = () => (Date.now() - startMs > 80000);
-    const applyBatch = async (uids2, label) => {
-      let timedOut = false;
+    const deadlineHit = /* @__PURE__ */ __name(() => Date.now() - startMs > 8e4, "deadlineHit");
+    const applyBatch = /* @__PURE__ */ __name(async (uids2, label) => {
+      let timedOut2 = false;
       for (let i = 0; i < uids2.length; i += 25) {
-        if (deadlineHit()) { timedOut = true; out.partial = true; break; }
+        if (deadlineHit()) {
+          timedOut2 = true;
+          out.partial = true;
+          break;
+        }
         const part = uids2.slice(i, i + 25).join(",");
         try {
-          if (label) { try { await imap.cmd('UID COPY ' + part + ' "' + label + '"'); } catch (e) {} }
+          if (label) {
+            try {
+              await imap.cmd("UID COPY " + part + ' "' + label + '"');
+            } catch (e) {
+            }
+          }
           await imap.cmd("UID STORE " + part + " +FLAGS (\\Deleted)");
           out.moved += Math.min(25, uids2.length - i);
-        } catch (e) { /* per-batch failures tolerated */ }
+        } catch (e) {
+        }
       }
-      return timedOut;
-    };
-    // ACTION: flag + unread, stay in INBOX (batched, no \Deleted)
+      return timedOut2;
+    }, "applyBatch");
     for (let i = 0; i < groups.ACTION.length; i += 25) {
-      if (deadlineHit()) { out.partial = true; break; }
+      if (deadlineHit()) {
+        out.partial = true;
+        break;
+      }
       const part = groups.ACTION.slice(i, i + 25).join(",");
-      try { await imap.cmd("UID STORE " + part + " +FLAGS (\\Flagged)"); } catch (e) {}
-      try { await imap.cmd("UID STORE " + part + " -FLAGS (\\Seen)"); } catch (e) {}
+      try {
+        await imap.cmd("UID STORE " + part + " +FLAGS (\\Flagged)");
+      } catch (e) {
+      }
+      try {
+        await imap.cmd("UID STORE " + part + " -FLAGS (\\Seen)");
+      } catch (e) {
+      }
     }
     let timedOut = await applyBatch(groups.WAITING, F_WAITING);
     if (!timedOut) timedOut = await applyBatch(groups.SOMEDAY, F_SOMEDAY);
     if (!timedOut) timedOut = await applyBatch(groups.REFERENCE, F_REF);
-    if (!timedOut) timedOut = await applyBatch(groups.NOISE, null); // \Deleted only -> Trash (recoverable)
-    if (out.moved > 0) { try { await imap.cmd("EXPUNGE"); } catch (e) {} }
+    if (!timedOut) timedOut = await applyBatch(groups.NOISE, null);
+    if (out.moved > 0) {
+      try {
+        await imap.cmd("EXPUNGE");
+      } catch (e) {
+      }
+    }
     await imap.close();
   } catch (e) {
-    if (imap) { try { await imap.close(); } catch (e2) {} }
+    if (imap) {
+      try {
+        await imap.close();
+      } catch (e2) {
+      }
+    }
     return { status: "error", notes: { error: String(e && e.message || e), ...out } };
   }
-  // persist state for PDB + Friday review (incl. partial flag for resume observability)
-  await stateSet(env, "gmail_triage_state", JSON.stringify({ ts: new Date().toISOString(), counts: out.counts, moved: out.moved, partial: !!out.partial, actions: out.actions.slice(0, 20), waiting: out.waiting.slice(0, 20) }));
-  const L = ["QNFO Gmail GTD triage \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  await stateSet(env, "gmail_triage_state", JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), counts: out.counts, moved: out.moved, partial: !!out.partial, actions: out.actions.slice(0, 20), waiting: out.waiting.slice(0, 20) }));
+  const L = ["QNFO Gmail GTD triage \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   L.push("INBOX " + out.checked + " msgs: " + JSON.stringify(out.counts) + " moved=" + out.moved + ".");
-  if (out.actions.length) { L.push("", "ACTION (stay in INBOX):"); for (const a of out.actions.slice(0, 10)) L.push("- " + a.sender + " | " + a.subject); }
-  if (out.waiting.length) { L.push("", "WAITING:"); for (const w of out.waiting.slice(0, 5)) L.push("- " + w.sender + " | " + w.subject); }
+  if (out.actions.length) {
+    L.push("", "ACTION (stay in INBOX):");
+    for (const a of out.actions.slice(0, 10)) L.push("- " + a.sender + " | " + a.subject);
+  }
+  if (out.waiting.length) {
+    L.push("", "WAITING:");
+    for (const w of out.waiting.slice(0, 5)) L.push("- " + w.sender + " | " + w.subject);
+  }
   if (!out.actions.length && !out.waiting.length) L.push("", "No actionable inbox mail.");
-  const d = await storeDigest(env, "gmail-triage", "QNFO Gmail GTD triage \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  const d = await storeDigest(env, "gmail-triage", "QNFO Gmail GTD triage \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
   return { status: "ok", notes: { ...out, digest: d } };
 }
-
+__name(jobGmailTriage, "jobGmailTriage");
 async function jobEmailTriage(env) {
   const recent = await cfEmail(env, "/emails/recent?limit=30&status=processed");
   if (recent.error) return { status: "error", notes: { error: recent.error } };
@@ -490,16 +552,26 @@ async function jobEmailTriage(env) {
   for (const e of emails) {
     const s = String(e.sender || "");
     const subj = String(e.subject || "");
-    if (SPAM_SENDERS.some((x) => s.includes(x))) { noise.push(e); continue; }
-    if (SYS_PAT.test(s)) { noise.push(e); continue; }
-    if (/^srs/i.test(s)) { noise.push(e); continue; }
+    if (SPAM_SENDERS.some((x) => s.includes(x))) {
+      noise.push(e);
+      continue;
+    }
+    if (SYS_PAT.test(s)) {
+      noise.push(e);
+      continue;
+    }
+    if (/^srs/i.test(s)) {
+      noise.push(e);
+      continue;
+    }
     action.push(e);
   }
   for (const e of noise) {
-    try { await cfEmail(env, "/emails/status", { method: "PATCH", body: { id: e.id, status: "spam" } }); } catch (err) {}
+    try {
+      await cfEmail(env, "/emails/status", { method: "PATCH", body: { id: e.id, status: "spam" } });
+    } catch (err) {
+    }
   }
-  // ---- outreach reply detection (v1.3.1): an inbound email from a contacted address
-  // marks that outreach_log row 'replied' so follow-ups skip it. Deterministic, idempotent.
   try {
     const contacted = await env.AUDIT.prepare("SELECT DISTINCT lower(email) AS em FROM outreach_log WHERE status IN ('sent','followup')").all();
     const set = new Set((contacted.results || []).map((r) => r.em).filter(Boolean));
@@ -514,8 +586,9 @@ async function jobEmailTriage(env) {
         }
       }
     }
-  } catch (e) {}
-  const L = ["QNFO email triage \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  } catch (e) {
+  }
+  const L = ["QNFO email triage \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   L.push("Checked " + emails.length + " processed emails: " + action.length + " actionable, " + noise.length + " noise (marked spam).");
   if (action.length) {
     L.push("", "ACTIONABLE:");
@@ -525,28 +598,38 @@ async function jobEmailTriage(env) {
   } else {
     L.push("", "No actionable inbound email.");
   }
-  const d = await storeDigest(env, "email-triage", "QNFO email triage \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  const d = await storeDigest(env, "email-triage", "QNFO email triage \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
   return { status: "ok", notes: { checked: emails.length, actionable: action.length, noise: noise.length, digest: d } };
 }
-
-// ================= PART 3: research-scan (AI GTD extract) + briefing + release-check + weekly =================
-
-const REGISTER_R2_KEY = "obsidian/notes/v1/_personal-gtd.md";
-const CLOUD_APPEND_R2_KEY = "obsidian/notes/v1/_gtd-cloud-append.md";
-const AI_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
-
+__name(jobEmailTriage, "jobEmailTriage");
+var REGISTER_R2_KEY = "obsidian/notes/v1/_personal-gtd.md";
+var CLOUD_APPEND_R2_KEY = "obsidian/notes/v1/_gtd-cloud-append.md";
+var AI_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 async function r2GetText(env, key) {
   try {
     const obj = await env.VAULT.get(key);
     if (!obj) return null;
     return await obj.text();
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
+__name(r2GetText, "r2GetText");
 async function r2PutText(env, key, text) {
-  try { await env.VAULT.put(key, text); return true; } catch (e) { return false; }
+  try {
+    await env.VAULT.put(key, text);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
-
-// ---------- research scan: arXiv query -> archive D1 -> AI GTD extraction -> D1 register + R2 append ----------
+__name(r2PutText, "r2PutText");
+function h32(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = h * 31 + s.charCodeAt(i) | 0;
+  return "scan" + (h >>> 0).toString(36) + s.length.toString(36);
+}
+__name(h32, "h32");
 async function jobResearchScan(env) {
   const q = encodeURIComponent('(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" OR all:"ZBW" OR all:"quantum thermodynamics") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)');
   let hits = [];
@@ -568,23 +651,30 @@ async function jobResearchScan(env) {
   } catch (e) {
     hits = [{ error: e.message }];
   }
-
-  // archive to D1 (machine-only)
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS research_scan_log (id TEXT PRIMARY KEY, ts TEXT, job TEXT, payload TEXT)").run();
-    await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1,?2,?3,?4)").bind("scan-" + Date.now().toString(36), new Date().toISOString(), "research-scan", JSON.stringify(hits).slice(0, 3000)).run();
-  } catch (e) {}
-
-  // AI GTD extraction: papers are never shown to the user; only actionable items surface
+    await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1,?2,?3,?4)").bind("scan-" + Date.now().toString(36), (/* @__PURE__ */ new Date()).toISOString(), "research-scan", JSON.stringify(hits).slice(0, 3e3)).run();
+  } catch (e) {
+  }
+  try {
+    for (const h of hits.filter((x) => !x.error).slice(0, 5)) {
+      const hkey = "scan-" + String(h.id || "").slice(0, 80);
+      const hh = h32(hkey);
+      const dup = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE ip_hash = ?").bind(hh).first();
+      if (dup && dup.n > 0) continue;
+      await env.AUDIT.prepare(
+        "INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?, ?, '', 'new', ?, ?)"
+      ).bind("auto-scan", String(h.title || "").slice(0, 300) + " \u2014 arXiv " + String(h.id || "") + ". Auto-candidate from daily research scan; triage for QNFO research fit.", hh, (/* @__PURE__ */ new Date()).toISOString()).run();
+    }
+  } catch (e) {
+  }
   let extracted = { gtd_lines: [], outreach: [], must_read: [] };
   const real = hits.filter((h) => !h.error);
   if (real.length && env.AI) {
     try {
-      const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" +
-        real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") +
-        "\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates — a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads — papers directly relevant to JPCUB/joules-per-solution or ultrametric physics that Rowan should read; (3) dated register lines — anything with a deadline or action date.\nReply with STRICT JSON only: {\"gtd_lines\":[{\"date\":\"YYYY-MM-DD\",\"text\":\"one short action line\"}],\"outreach\":[{\"paper_id\":\"\",\"reason\":\"one line\"}],\"must_read\":[{\"paper_id\":\"\",\"reason\":\"one line\"}]}. Empty arrays are fine. No prose.";
+      const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" + real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") + '\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates \u2014 a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads \u2014 papers directly relevant to JPCUB/joules-per-solution or ultrametric physics that Rowan should read; (3) dated register lines \u2014 anything with a deadline or action date.\nReply with STRICT JSON only: {"gtd_lines":[{"date":"YYYY-MM-DD","text":"one short action line"}],"outreach":[{"paper_id":"","reason":"one line"}],"must_read":[{"paper_id":"","reason":"one line"}]}. Empty arrays are fine. No prose.';
       const resp = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
-      const content = (resp && (resp.response || (resp.result && resp.result.response))) || "";
+      const content = resp && (resp.response || resp.result && resp.result.response) || "";
       const m = content.match(/\{[\s\S]*\}/);
       if (m) {
         const p = JSON.parse(m[0]);
@@ -594,87 +684,85 @@ async function jobResearchScan(env) {
       extracted = { gtd_lines: [], outreach: [], must_read: [], error: String(e && e.message || e) };
     }
   }
-
-  // persist: D1 gtd_register + outreach_queue; R2 cloud-append file
   const addedLines = [];
   for (const gl of (extracted.gtd_lines || []).slice(0, 5)) {
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(gl.date || "") ? gl.date : new Date().toISOString().slice(0, 10);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(gl.date || "") ? gl.date : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const text = String(gl.text || "").slice(0, 300);
     if (!text) continue;
     try {
       await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("NEXT STEPS", text, date, "research-scan").run();
       addedLines.push({ date, text });
       await recordEvent(env, "gtd-line", "gtd-" + date + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), date + " \u2014 " + text, { job: "research-scan" });
-    } catch (e) {}
+    } catch (e) {
+    }
   }
   for (const oc of (extracted.outreach || []).slice(0, 4)) {
     try {
       await env.AUDIT.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,NULL,?4,'pending', datetime('now'))").bind("oq-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), String(oc.paper_id || "").slice(0, 40), "", String(oc.reason || "").slice(0, 300)).run();
       await recordEvent(env, "outreach", "oq-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), String(oc.paper_id || "") + " \u2014 " + String(oc.reason || "").slice(0, 300), { job: "research-scan" });
-    } catch (e) {}
+    } catch (e) {
+    }
   }
   for (const mr of (extracted.must_read || []).slice(0, 3)) {
     try {
-      await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("NEXT STEPS", "Read " + String(mr.paper_id || "").slice(0, 40) + " \u2014 " + String(mr.reason || "").slice(0, 200), new Date().toISOString().slice(0, 10), "research-scan").run();
-    } catch (e) {}
+      await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("NEXT STEPS", "Read " + String(mr.paper_id || "").slice(0, 40) + " \u2014 " + String(mr.reason || "").slice(0, 200), (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), "research-scan").run();
+    } catch (e) {
+    }
   }
   if (addedLines.length) {
-    const block = "\n<!-- cloud-scan " + new Date().toISOString() + " -->\n" + addedLines.map((l) => "- [ ] " + l.date + " \u2014 " + l.text + " (via research scan)").join("\n") + "\n";
-    const existing = (await r2GetText(env, CLOUD_APPEND_R2_KEY)) || "";
-    await r2PutText(env, CLOUD_APPEND_R2_KEY, (existing + block).slice(-20000));
+    const block = "\n<!-- cloud-scan " + (/* @__PURE__ */ new Date()).toISOString() + " -->\n" + addedLines.map((l) => "- [ ] " + l.date + " \u2014 " + l.text + " (via research scan)").join("\n") + "\n";
+    const existing = await r2GetText(env, CLOUD_APPEND_R2_KEY) || "";
+    await r2PutText(env, CLOUD_APPEND_R2_KEY, (existing + block).slice(-2e4));
   }
-
-  // digest: counts only (papers never listed)
-  const L = ["QNFO research scan \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  const L = ["QNFO research scan \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   L.push("arXiv matches: " + real.length + " (archived to D1).");
   L.push("GTD actions extracted: " + addedLines.length + " register lines, " + (extracted.outreach || []).length + " outreach candidates, " + (extracted.must_read || []).length + " must-reads.");
   if (extracted.error) L.push("AI extraction: " + extracted.error);
   if (!addedLines.length && !(extracted.outreach || []).length && !(extracted.must_read || []).length) L.push("No actionable items today.");
-  const d = await storeDigest(env, "research-scan", "QNFO research scan \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  const d = await storeDigest(env, "research-scan", "QNFO research scan \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
   return { status: "ok", notes: { hits: real.length, added_lines: addedLines.length, outreach: (extracted.outreach || []).length, must_read: (extracted.must_read || []).length, digest: d } };
 }
-
-// ---------- briefing (President's Daily Briefing, cloud) ----------
+__name(jobResearchScan, "jobResearchScan");
 async function jobBriefing(env) {
-  const L = ["QNFO briefing \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  const L = ["QNFO briefing \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   let items = 0;
-
-  // 1. GTD register open next-actions (local mirror + cloud canonical)
   try {
     const regText = await r2GetText(env, REGISTER_R2_KEY);
     if (regText) {
-      const now = new Date();
+      const now = /* @__PURE__ */ new Date();
       const due = [];
       const re = /^- \[ \] (\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?.*? — (.+)$/gm;
       let m;
       while ((m = re.exec(regText)) !== null) {
-        const d = new Date(m[1] + "T00:00:00Z");
-        const days = Math.floor((d.getTime() - now.getTime()) / 86400000);
+        const d2 = /* @__PURE__ */ new Date(m[1] + "T00:00:00Z");
+        const days = Math.floor((d2.getTime() - now.getTime()) / 864e5);
         if (days <= 14) due.push({ date: m[1], days, text: m[2].slice(0, 110) });
       }
-      due.sort((a, b) => (a.date < b.date ? -1 : 1));
+      due.sort((a, b) => a.date < b.date ? -1 : 1);
       if (due.length) {
         items += due.length;
         L.push("Open next-actions due <=14d (" + due.length + "):");
         for (const x of due.slice(0, 12)) L.push("- " + x.date + (x.days < 0 ? " (overdue)" : " (in " + x.days + "d)") + " \u2014 " + x.text);
       }
     }
-  } catch (e) { L.push("register read error: " + e.message); }
-
-  // 2. cloud-added register lines (D1)
+  } catch (e) {
+    L.push("register read error: " + e.message);
+  }
   try {
     const rows = await env.AUDIT.prepare("SELECT line, line_date FROM gtd_register WHERE done=0 ORDER BY line_date ASC LIMIT 10").all();
     if (rows.results && rows.results.length) {
-      const fresh = rows.results.filter((r) => { const d = new Date((r.line_date || "").slice(0, 10) + "T00:00:00Z"); return !isNaN(d); });
+      const fresh = rows.results.filter((r) => {
+        const d2 = /* @__PURE__ */ new Date((r.line_date || "").slice(0, 10) + "T00:00:00Z");
+        return !isNaN(d2);
+      });
       if (fresh.length) {
         items += fresh.length;
         L.push("", "Cloud-registered actions (" + fresh.length + "):");
         for (const r of fresh.slice(0, 8)) L.push("- " + (r.line_date || "").slice(0, 10) + " \u2014 " + String(r.line || "").slice(0, 100));
       }
     }
-  } catch (e) {}
-
-  // 3. qnfo.org emails needing attention
+  } catch (e) {
+  }
   try {
     const rows = await env.AUDIT.prepare("SELECT id, sender, recipient, subject, status FROM emails WHERE status IN ('processed','read') AND received_at > datetime('now','-24 hours') ORDER BY id DESC LIMIT 15").all();
     const real = (rows.results || []).filter((e) => !/dmarc|srs0|bounce|cf-bounce|rspamd/i.test(String(e.sender || "")));
@@ -683,9 +771,9 @@ async function jobBriefing(env) {
       L.push("", "Email needing attention (" + real.length + "):");
       for (const e of real.slice(0, 8)) L.push("- id " + e.id + " | " + e.sender + " | " + String(e.subject || "").slice(0, 80));
     }
-  } catch (e) { L.push("email query error: " + e.message); }
-
-  // 4. pending intents
+  } catch (e) {
+    L.push("email query error: " + e.message);
+  }
   try {
     const r = await env.AUDIT.prepare("SELECT id, type, summary, due, status FROM intents WHERE status='pending' ORDER BY created_at DESC LIMIT 8").all();
     if (r.results && r.results.length) {
@@ -693,9 +781,8 @@ async function jobBriefing(env) {
       L.push("", "Pending intents (" + r.results.length + "):");
       for (const i of r.results) L.push("- [" + i.type + "] " + String(i.summary || "").slice(0, 80) + (i.due ? " (due " + i.due + ")" : ""));
     }
-  } catch (e) {}
-
-  // 5. outreach follow-ups awaiting reply >14d
+  } catch (e) {
+  }
   try {
     const r = await env.AUDIT.prepare("SELECT email, subject, sent_at FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') ORDER BY sent_at ASC LIMIT 5").all();
     if (r.results && r.results.length) {
@@ -703,21 +790,16 @@ async function jobBriefing(env) {
       L.push("", "Outreach awaiting reply >14d (" + r.results.length + "):");
       for (const o of r.results) L.push("- " + o.email + " | " + String(o.subject || "").slice(0, 60) + " | " + (o.sent_at || "").slice(0, 10));
     }
-  } catch (e) {}
-
+  } catch (e) {
+  }
   if (!items) L.push("No decision items.");
-  const subject = "QNFO briefing \u2014 " + new Date().toISOString().slice(0, 10);
+  const subject = "QNFO briefing \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const text = L.join(NL);
-  // SILENCE POLICY: the personal inbox gets the briefing ONLY when there are decision items.
-  // A briefing with items requires clear-and-present attention (user directive 2026-08-28),
-  // so it overrides DIGEST_TO (alerts@qnfo.org) to the personal inbox; everything else stays archived.
-  const d = items > 0 ? (env.DIGEST_TO ? await sendDigest(env, subject, text, env.DIGEST_TO) : await storeDigest(env, "briefing", subject, text)) : await storeDigest(env, "briefing", subject, text);
+  const d = items > 0 ? env.DIGEST_TO ? await sendDigest(env, subject, text, env.DIGEST_TO) : await storeDigest(env, "briefing", subject, text) : await storeDigest(env, "briefing", subject, text);
   return { status: "ok", notes: { items, digest: d } };
 }
-
-// ---------- DeepChat release check (user mandate 2026-08-19) ----------
+__name(jobBriefing, "jobBriefing");
 async function jobReleaseCheck(env) {
-  // /releases/latest always returns the newest NON-prerelease release
   const r = await ghGet(env, "/repos/ThinkInAIXYZ/deepchat/releases/latest");
   const latest = r.body && r.body.tag_name ? r.body : null;
   const stored = await stateGet(env, "deepchat_stable", "");
@@ -740,13 +822,10 @@ async function jobReleaseCheck(env) {
   const d = await sendDigest(env, "DeepChat release \u2014 " + tag, L.join(NL));
   return { status: "ok", notes: { latest: tag, changed: true, digest: d } };
 }
-
-// ---------- sitemap ping (monthly, 1st 06:00 Amsterdam) ----------
-// Folded from local DeepChat one-shot 6eff3cad (qnfo-cloud-migration-2026-09-02 handoff).
-// Health-pings the published sitemaps; failures digest, successes stay silent.
-const SITEMAP_URLS = [
+__name(jobReleaseCheck, "jobReleaseCheck");
+var SITEMAP_URLS = [
   "https://rwnq8.github.io/sitemap.xml",
-  "https://qnfo-landing.pages.dev/sitemap.xml",
+  "https://qnfo-landing.pages.dev/sitemap.xml"
 ];
 async function jobSitemapPing(env) {
   const out = { ok: 0, fail: 0, urls: [] };
@@ -767,136 +846,127 @@ async function jobSitemapPing(env) {
       await recordEvent(env, "sitemap-ping", "sp-" + url.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) + "-" + Date.now().toString(36), "sitemap ERROR " + url + ": " + String(e && e.message || e), { job: "sitemap-ping", status: "error", url });
     }
   }
-  if (out.fail > 0) await sendDigest(env, "Sitemap ping failures — " + new Date().toISOString().slice(0, 10), out.urls.join(NL));
+  if (out.fail > 0) await sendDigest(env, "Sitemap ping failures \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), out.urls.join(NL));
   return { status: "ok", notes: out };
 }
-
-// ---------- loose threads sweep (weekly Monday 07:00 Amsterdam) ----------
-// Cloud-native standing sweep for unfinished WBS states / handoffs / tasks (user directive
-// 2026-09-02: periodic sweep to find loose threads). Digests decision items; silent when clean.
-// Resolution happens in the ops cycle that receives the digest (disposition markers in
-// phase_data.disposition_<date>, newer handoff rows, or task status updates).
+__name(jobSitemapPing, "jobSitemapPing");
 async function jobLooseThreadsSweep(env) {
   const GRACE_DAYS = 7;
   const out = { wbs_mid: 0, handoffs_open: 0, tasks_open: 0, items: [] };
   try {
     const wbs = await env.AUDIT.prepare(
-      "SELECT project_id, current_phase, total_phases, last_updated FROM wbs_state " +
-      "WHERE current_phase GLOB '[0-9]*' AND total_phases GLOB '[0-9]*' " +
-      "AND CAST(current_phase AS INTEGER) < CAST(total_phases AS INTEGER) " +
-      "AND (phase_data NOT LIKE '%disposition_%' OR phase_data = '{}') " +
-      "AND last_updated < datetime('now', '-7 days') " +
-      "ORDER BY last_updated ASC LIMIT 40"
+      "SELECT project_id, current_phase, total_phases, last_updated FROM wbs_state WHERE current_phase GLOB '[0-9]*' AND total_phases GLOB '[0-9]*' AND CAST(current_phase AS INTEGER) < CAST(total_phases AS INTEGER) AND (phase_data NOT LIKE '%disposition_%' OR phase_data = '{}') AND last_updated < datetime('now', '-7 days') ORDER BY last_updated ASC LIMIT 40"
     ).all();
     for (const r of wbs.results || []) {
       out.wbs_mid++;
       out.items.push("WBS " + r.project_id + " phase " + r.current_phase + "/" + r.total_phases + " (updated " + String(r.last_updated).slice(0, 19) + ")");
     }
-  } catch (e) { out.items.push("wbs query error: " + String(e && e.message || e)); }
+  } catch (e) {
+    out.items.push("wbs query error: " + String(e && e.message || e));
+  }
   try {
     const h = await env.AUDIT.prepare(
-      "SELECT h.project_id, h.pending_work, h.timestamp FROM handoffs h " +
-      "WHERE h.timestamp = (SELECT MAX(h2.timestamp) FROM handoffs h2 WHERE h2.project_id = h.project_id) " +
-      "AND h.pending_work IS NOT NULL AND TRIM(h.pending_work) != '' " +
-      "AND LOWER(TRIM(h.pending_work)) NOT LIKE 'none%' " +
-      "AND LOWER(TRIM(h.pending_work)) NOT LIKE 'zero deferred%' " +
-      "AND LOWER(TRIM(h.pending_work)) NOT LIKE '0 deferred%' " +
-      "AND h.timestamp < datetime('now', '-7 days') " +
-      "ORDER BY h.timestamp ASC LIMIT 40"
+      "SELECT h.project_id, h.pending_work, h.timestamp FROM handoffs h WHERE h.timestamp = (SELECT MAX(h2.timestamp) FROM handoffs h2 WHERE h2.project_id = h.project_id) AND h.pending_work IS NOT NULL AND TRIM(h.pending_work) != '' AND LOWER(TRIM(h.pending_work)) NOT LIKE 'none%' AND LOWER(TRIM(h.pending_work)) NOT LIKE 'zero deferred%' AND LOWER(TRIM(h.pending_work)) NOT LIKE '0 deferred%' AND h.timestamp < datetime('now', '-7 days') ORDER BY h.timestamp ASC LIMIT 40"
     ).all();
     for (const r of h.results || []) {
       out.handoffs_open++;
       out.items.push("HANDOFF " + r.project_id + " (" + String(r.timestamp).slice(0, 19) + "): " + String(r.pending_work).slice(0, 90));
     }
-  } catch (e) { out.items.push("handoffs query error: " + String(e && e.message || e)); }
+  } catch (e) {
+    out.items.push("handoffs query error: " + String(e && e.message || e));
+  }
   try {
     const t = await env.AUDIT.prepare(
-      "SELECT task_code, status, updated_at FROM tasks_wbs " +
-      "WHERE status IN ('pending','in_progress','blocked') " +
-      "AND updated_at < datetime('now', '-7 days') " +
-      "ORDER BY updated_at ASC LIMIT 40"
+      "SELECT task_code, status, updated_at FROM tasks_wbs WHERE status IN ('pending','in_progress','blocked') AND updated_at < datetime('now', '-7 days') ORDER BY updated_at ASC LIMIT 40"
     ).all();
     for (const r of t.results || []) {
       out.tasks_open++;
       out.items.push("TASK " + r.task_code + " [" + r.status + "] (updated " + String(r.updated_at).slice(0, 19) + ")");
     }
-  } catch (e) { out.items.push("tasks query error: " + String(e && e.message || e)); }
+  } catch (e) {
+    out.items.push("tasks query error: " + String(e && e.message || e));
+  }
   const total = out.wbs_mid + out.handoffs_open + out.tasks_open;
   await recordEvent(env, "job-run", "jr-loose-threads-" + Date.now().toString(36), "loose-threads-sweep: " + total + " items (wbs " + out.wbs_mid + ", handoffs " + out.handoffs_open + ", tasks " + out.tasks_open + ")", { job: "loose-threads-sweep", status: total ? "attention" : "ok" });
   if (!total) return { status: "ok", notes: { total: 0, silent: true } };
   const L = [
-    "Loose threads sweep \u2014 " + new Date().toISOString().slice(0, 10),
+    "Loose threads sweep \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
     "",
     "WBS mid-phase: " + out.wbs_mid + " | open handoffs: " + out.handoffs_open + " | open tasks: " + out.tasks_open,
-    "",
+    ""
   ].concat(out.items.slice(0, 25));
   if (out.items.length > 25) L.push("... truncated (" + out.items.length + " total items; resolve oldest first).");
   L.push("", "Resolution: disposition each item (complete / convert-to-schedule / delete-with-rationale) in the next ops cycle.");
   const d = await sendDigest(env, "Loose threads \u2014 " + total + " item(s) need disposition", L.join(NL));
   return { status: "ok", notes: { total, wbs_mid: out.wbs_mid, handoffs_open: out.handoffs_open, tasks_open: out.tasks_open, digest: d } };
 }
-
-// ---------- weekly (Friday 17:00 Amsterdam) ----------
+__name(jobLooseThreadsSweep, "jobLooseThreadsSweep");
 async function jobWeekly(env) {
-  const L = ["QNFO weekly summary \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  const L = ["QNFO weekly summary \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   try {
     const e = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM emails WHERE received_at > datetime('now','-7 days')").first();
     L.push("Emails (7d): " + (e && e.n || 0));
-  } catch (err) {}
+  } catch (err) {
+  }
   try {
     const q = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_queries WHERE ts > datetime('now','-7 days')").first();
     L.push("AI queries (7d): " + (q && q.n || 0));
-  } catch (err) {}
+  } catch (err) {
+  }
   try {
     const i = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM intents WHERE created_at > datetime('now','-7 days')").first();
     L.push("Intents (7d): " + (i && i.n || 0));
-  } catch (err) {}
+  } catch (err) {
+  }
   try {
     const g = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM gtd_register WHERE done=0").first();
     L.push("Open GTD register items (cloud): " + (g && g.n || 0));
-  } catch (err) {}
+  } catch (err) {
+  }
   try {
     if (env.QNFO_INFRA) {
       const r = await env.QNFO_INFRA.fetch("https://qnfo-infra.internal/records", { headers: { Authorization: "Bearer " + env.INFRA_TOKEN } });
       const j = await r.json();
       if (j && j.papers != null) L.push("Records: papers " + j.papers + ", KG " + (j.kg && j.kg.nodes || "?") + " nodes");
     }
-  } catch (err) {}
-  // ---- P9.1 weekly review (v1.5.0): vault delta + register sweep + portfolio triage.
-  // Cloud-able surface of local cronjob 382376cd (full LLM fold-in + ignorance audit = v2).
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  } catch (err) {
+  }
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const review = { vault_delta: [], register_open: 0, triage: { closeout: [], stale: [], skip: [] }, published: null };
-  // 1. vault delta: R2 mirror (d-drive obsidian/) notes newer than 7 days ago
   try {
     const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
     const prefix = "obsidian/notes/v1/" + since.slice(0, 4) + "/" + since.slice(5, 7) + "/";
     let cursor;
     let seen = 0;
     do {
-      const page = await env.VAULT.list({ prefix, cursor, limit: 1000 });
+      const page = await env.VAULT.list({ prefix, cursor, limit: 1e3 });
       for (const o of page.objects || []) {
         if (!o.key.endsWith(".md")) continue;
         const m = o.key.match(/obsidian\/notes\/v1\/(\d{4})\/(\d{2})\/(\d{2})\/(?:.*\/)?([^/]+\.md)$/);
         if (m) {
-          const d = m[1] + "-" + m[2] + "-" + m[3];
-          if (d >= since) { review.vault_delta.push({ date: d, note: m[4] }); seen++; }
+          const d2 = m[1] + "-" + m[2] + "-" + m[3];
+          if (d2 >= since) {
+            review.vault_delta.push({ date: d2, note: m[4] });
+            seen++;
+          }
         }
       }
       cursor = page.truncated ? page.cursor : null;
     } while (cursor && seen < 500);
-  } catch (e) { L.push("vault delta error: " + (e && e.message)); }
-  // 2. register sweep (open items)
+  } catch (e) {
+    L.push("vault delta error: " + (e && e.message));
+  }
   try {
     const r = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM gtd_register WHERE done=0").first();
-    review.register_open = (r && r.n) || 0;
-  } catch (e) {}
-  // 3. portfolio triage heuristics (deterministic; SELECT * for column resilience)
+    review.register_open = r && r.n || 0;
+  } catch (e) {
+  }
   try {
     const rows = await env.PORTFOLIO.prepare("SELECT * FROM program_registry ORDER BY wbs_order").all();
     for (const p of rows.results || []) {
       const ph = String(p.phase || p.current_phase || "").replace(/^P/i, "");
       const st = String(p.status || "");
-      const upd = new Date(String(p.updated_at || "").replace(" ", "T") + "Z").getTime();
+      const upd = (/* @__PURE__ */ new Date(String(p.updated_at || "").replace(" ", "T") + "Z")).getTime();
       const ageDays = isNaN(upd) ? 0 : Math.floor((Date.now() - upd) / 864e5);
       const code = String(p.wbs_code || p.code || "");
       const name = String(p.name || p.title || "").slice(0, 50);
@@ -904,8 +974,9 @@ async function jobWeekly(env) {
       else if (ageDays > 90 && !/completed/i.test(st)) review.triage.stale.push((code || "?") + " " + name + " [" + ageDays + "d]");
       else review.triage.skip.push((code || "?") + " " + name);
     }
-  } catch (e) { L.push("triage error: " + (e && e.message)); }
-  // 4. publish review note to R2 (GTD-visible record) + D1 register line + vectorize
+  } catch (e) {
+    L.push("triage error: " + (e && e.message));
+  }
   const noteKey = "obsidian/notes/v1/_weekly-review-" + today + ".md";
   const lines = ["# Weekly Review \u2014 " + today, "", "Auto-generated by qnfo-cloud-ops (Workers cron). Vault-delta + register + portfolio triage.", ""];
   lines.push("Vault notes (7d): " + review.vault_delta.length);
@@ -918,32 +989,32 @@ async function jobWeekly(env) {
   lines.push("", "Active / current (" + review.triage.skip.length + "):");
   for (const s of review.triage.skip.slice(0, 10)) lines.push("- " + s);
   lines.push("", "Decisions: PDB surfaces actionable items; this note is the GTD-visible record.");
-  try { await r2PutText(env, noteKey, lines.join(NL)); review.published = noteKey; } catch (e) { L.push("publish error: " + (e && e.message)); }
   try {
-    await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))")
-      .bind("WEEKLY REVIEW", "Review weekly-review-" + today + " triage (closeout " + review.triage.closeout.length + ", stale " + review.triage.stale.length + ")", today, "weekly-review").run();
-  } catch (e) {}
+    await r2PutText(env, noteKey, lines.join(NL));
+    review.published = noteKey;
+  } catch (e) {
+    L.push("publish error: " + (e && e.message));
+  }
+  try {
+    await env.AUDIT.prepare("INSERT INTO gtd_register (section, line, done, line_date, source, updated_at) VALUES (?1,?2,0,?3,?4, datetime('now'))").bind("WEEKLY REVIEW", "Review weekly-review-" + today + " triage (closeout " + review.triage.closeout.length + ", stale " + review.triage.stale.length + ")", today, "weekly-review").run();
+  } catch (e) {
+  }
   await recordEvent(env, "weekly-review", "wr-" + today.replace(/-/g, ""), "Weekly review " + today + ": vault " + review.vault_delta.length + ", register " + review.register_open + ", closeout " + review.triage.closeout.length + ", stale " + review.triage.stale.length, { job: "weekly", date: today });
   await stateSet(env, "weekly_review_last", today);
   L.push("Vault notes (7d): " + review.vault_delta.length + " | closeout candidates: " + review.triage.closeout.length + " | stale: " + review.triage.stale.length);
   const d = await storeDigest(env, "weekly", "QNFO weekly summary \u2014 " + today, L.join(NL));
   return { status: "ok", notes: { digest: d, review: { vault_delta: review.vault_delta.length, register_open: review.register_open, closeout: review.triage.closeout.length, stale: review.triage.stale.length, published: review.published } } };
 }
-
-// ================= PART 4: weekly-ops (DST sync) + portfolio-sync + zenodo-stats + board-sync + nlnet =================
-
+__name(jobWeekly, "jobWeekly");
 async function jobWeeklyOps(env) {
-  const L = ["QNFO cloud ops audit \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  const L = ["QNFO cloud ops audit \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   let cost = 0;
-
-  // DST self-adjust: rebuild cron triggers when the Amsterdam offset changes
   const dst = await syncSchedules(env, false);
   if (dst.changed) {
     L.push("DST re-sync: offset=" + dst.offset + ", schedules " + (dst.ok ? "updated" : "UPDATE FAILED (status " + dst.status + ")"));
   } else {
     L.push("Schedules: 11 cron triggers, Amsterdam offset +" + dst.offset + ".");
   }
-
   try {
     if (env.QNFO_INFRA) {
       const an = await env.QNFO_INFRA.fetch("https://qnfo-infra.internal/analytics", { headers: { Authorization: "Bearer " + env.INFRA_TOKEN } }).then((r) => r.json());
@@ -964,8 +1035,8 @@ async function jobWeeklyOps(env) {
   try {
     const z = await env.AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw FROM zenodo_stats").first();
     if (z) L.push("Zenodo stats table: " + z.n + " DOIs, " + z.dl + " downloads, " + z.vw + " views (cumulative).");
-  } catch (e) {}
-  // ---- SEO discoverability health (v1.4.0): status + title + JSON-LD on the public surfaces
+  } catch (e) {
+  }
   try {
     const seo = [];
     const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
@@ -977,46 +1048,67 @@ async function jobWeeklyOps(env) {
         const ld = html.includes("application/ld+json");
         const ok = r.status === 200 && !!title.trim() && ld;
         seo.push({ name, status: r.status, title: !!title.trim(), jsonld: ld, ok });
-      } catch (e) { seo.push({ name, error: String(e && e.message || e), ok: false }); }
+      } catch (e) {
+        seo.push({ name, error: String(e && e.message || e), ok: false });
+      }
     }
     const bad = seo.filter((s) => !s.ok);
-    L.push("SEO health: " + seo.map((s) => s.name + "=" + (s.ok ? "OK" : (s.status || "ERR"))).join(", "));
+    L.push("SEO health: " + seo.map((s) => s.name + "=" + (s.ok ? "OK" : s.status || "ERR")).join(", "));
     if (bad.length) {
       L.push("SEO FAIL: " + bad.map((s) => s.name + " (" + (s.status || s.error) + (s.title === false ? " no-title" : "") + (s.jsonld === false ? " no-jsonld" : "") + ")").join("; "));
       await recordEvent(env, "seo-fail", "seo-" + Date.now().toString(36), "SEO health failure: " + JSON.stringify(bad), { job: "weekly-ops" });
     }
-  } catch (e) { L.push("SEO check error: " + (e && e.message)); }
+  } catch (e) {
+    L.push("SEO check error: " + (e && e.message));
+  }
   if (cost > 90) L.push("", "\u26A0 COST ALERT: est. 30d Workers AI cost $" + cost + " exceeds $90/30d spend-limit gate (rule 6f5c29f8).");
-  const subject = "QNFO cloud ops audit \u2014 " + new Date().toISOString().slice(0, 10);
+  const subject = "QNFO cloud ops audit \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const text = L.join(NL);
-  const alert = cost > 90 || (dst.changed && !dst.ok);
-  // SILENCE POLICY: email only on cost alert or a failed DST schedule rebuild.
+  const alert = cost > 90 || dst.changed && !dst.ok;
   const d = alert ? await sendDigest(env, subject, text) : await storeDigest(env, "weekly-ops", subject, text);
   return { status: "ok", notes: { est_cost_30d: cost, dst: dst.changed, digest: d } };
 }
-
-// ---------- portfolio sync: real PORTFOLIO-STATUS.md regeneration + GitHub PR ----------
+__name(jobWeeklyOps, "jobWeeklyOps");
 async function jobPortfolioSync(env) {
   const out = {};
-  try { out.papers = ((await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers").first()) || {}).n || 0; } catch (e) { out.papers = -1; }
-  try { out.published = ((await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN ('published','distributed')").first()) || {}).n || 0; } catch (e) {}
+  try {
+    out.papers = (await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers").first() || {}).n || 0;
+  } catch (e) {
+    out.papers = -1;
+  }
+  try {
+    out.published = (await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN ('published','distributed')").first() || {}).n || 0;
+  } catch (e) {
+  }
   try {
     const r = await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE updated_at > datetime('now','-7 days')").first();
-    out.recent7 = (r && r.n) || 0;
-  } catch (e) {}
-  try { out.programs = ((await env.PORTFOLIO.prepare("SELECT COUNT(*) AS n FROM program_registry").first()) || {}).n || 0; } catch (e) { out.programs = -1; }
+    out.recent7 = r && r.n || 0;
+  } catch (e) {
+  }
+  try {
+    out.programs = (await env.PORTFOLIO.prepare("SELECT COUNT(*) AS n FROM program_registry").first() || {}).n || 0;
+  } catch (e) {
+    out.programs = -1;
+  }
   try {
     const g = await env.GRAPH.prepare("SELECT COUNT(*) AS n FROM nodes").first();
     const e2 = await env.GRAPH.prepare("SELECT COUNT(*) AS n FROM edges").first();
-    out.kgNodes = (g && g.n) || 0; out.kgEdges = (e2 && e2.n) || 0;
-  } catch (e) { out.kgNodes = -1; }
+    out.kgNodes = g && g.n || 0;
+    out.kgEdges = e2 && e2.n || 0;
+  } catch (e) {
+    out.kgNodes = -1;
+  }
   try {
     const r = await ghGet(env, "/search/repositories?q=org:QNFO");
-    out.repos = (r.body && r.body.total_count) || 0;
-  } catch (e) { out.repos = -1; }
-  try { out.zenodoDOIs = ((await env.LIVING.prepare("SELECT COUNT(DISTINCT zenodo_doi) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != ''").first()) || {}).n || 0; } catch (e) {}
-
-  const now = new Date().toISOString();
+    out.repos = r.body && r.body.total_count || 0;
+  } catch (e) {
+    out.repos = -1;
+  }
+  try {
+    out.zenodoDOIs = (await env.LIVING.prepare("SELECT COUNT(DISTINCT zenodo_doi) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != ''").first() || {}).n || 0;
+  } catch (e) {
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   const md = [
     "# QNFO Portfolio Status",
     "",
@@ -1047,47 +1139,49 @@ async function jobPortfolioSync(env) {
     "## Schedule",
     "",
     "All scheduled tasks run cloud-based via Cloudflare Cron Triggers (qnfo-cloud-ops worker). No local processing.",
-    "",
+    ""
   ].join("\n");
-
-  // R2: fetch current main file + no-drift early return (direct-main update, no branch/PR churn)
   const cur = await ghGet(env, "/repos/QNFO/.github/contents/PORTFOLIO-STATUS.md");
   let curText = "";
   if (cur.status === 200 && cur.body && cur.body.content) {
-    try { curText = atob(cur.body.content.replace(/\s/g, "")); } catch (e) { curText = ""; }
+    try {
+      curText = atob(cur.body.content.replace(/\s/g, ""));
+    } catch (e) {
+      curText = "";
+    }
   }
   if (curText === md) {
-    await storeDigest(env, "portfolio-sync", "QNFO portfolio sync — " + now.slice(0, 10), "No drift — no update (silent).");
+    await storeDigest(env, "portfolio-sync", "QNFO portfolio sync \u2014 " + now.slice(0, 10), "No drift \u2014 no update (silent).");
     return { status: "ok", notes: { drift: false, ...out, digest: { stored: true } } };
   }
-  // direct main update (R2 fix 2026-09-02: branch/PR/merge churn caused 422 file-put; portfolio status is an auto-generated ledger committed by the automation token)
-  const sha = (cur.status === 200 && cur.body && cur.body.sha) ? cur.body.sha : undefined;
+  const sha = cur.status === 200 && cur.body && cur.body.sha ? cur.body.sha : void 0;
   const putBody = { message: "Portfolio status " + now.slice(0, 10), content: btoa(md) };
   if (sha) putBody.sha = sha;
   const putR = await ghPut(env, "/repos/QNFO/.github/contents/PORTFOLIO-STATUS.md", putBody);
   if (putR.status !== 200 && putR.status !== 201) return { status: "error", notes: { error: "file put failed " + putR.status + " " + (putR.body && putR.body.message ? putR.body.message : "") + " (R2 direct-main)", ...out } };
-  await storeDigest(env, "portfolio-sync", "QNFO portfolio sync — " + now.slice(0, 10), "Drift applied direct-to-main. " + JSON.stringify(out));
+  await storeDigest(env, "portfolio-sync", "QNFO portfolio sync \u2014 " + now.slice(0, 10), "Drift applied direct-to-main. " + JSON.stringify(out));
   return { status: "ok", notes: { drift: true, directMain: true, ...out } };
 }
-
-// ---------- zenodo stats delta ----------
+__name(jobPortfolioSync, "jobPortfolioSync");
 async function jobZenodoStats(env) {
   const corpus = await env.LIVING.prepare("SELECT zenodo_doi, slug FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != '' AND status IN ('published','distributed')").all();
   const byDoi = {};
   for (const row of corpus.results || []) {
-    const d = String(row.zenodo_doi || "").trim();
-    if (d && d !== "pending" && !byDoi[d]) byDoi[d] = row;
+    const d2 = String(row.zenodo_doi || "").trim();
+    if (d2 && d2 !== "pending" && !byDoi[d2]) byDoi[d2] = row;
   }
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
   const freshRows = await env.AUDIT.prepare("SELECT doi FROM zenodo_stats WHERE fetched_at LIKE ?1 || '%'").bind(today).all();
   const fresh = new Set((freshRows.results || []).map((r) => r.doi));
   const prevRows = await env.AUDIT.prepare("SELECT doi, downloads, views FROM zenodo_stats").all();
-  const prevMap = {}; let prevDl = 0, prevVw = 0;
+  const prevMap = {};
+  let prevDl = 0, prevVw = 0;
   for (const r of prevRows.results || []) {
     prevMap[r.doi] = r;
-    prevDl += Number(r.downloads || 0); prevVw += Number(r.views || 0);
+    prevDl += Number(r.downloads || 0);
+    prevVw += Number(r.views || 0);
   }
-  const todo = Object.keys(byDoi).filter((d) => !fresh.has(d));
+  const todo = Object.keys(byDoi).filter((d2) => !fresh.has(d2));
   let fetched = 0, errors = 0;
   const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
   const movers = [];
@@ -1096,19 +1190,22 @@ async function jobZenodoStats(env) {
     const rid = doi.split(".").pop();
     try {
       const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
-      if (!r.ok) { errors++; continue; }
-      const d = await r.json();
-      const st = d.stats || {};
+      if (!r.ok) {
+        errors++;
+        continue;
+      }
+      const d2 = await r.json();
+      const st = d2.stats || {};
       const rec = {
-        doi: d.doi || doi,
-        conceptdoi: d.conceptdoi || null,
-        title: String((d.metadata && d.metadata.title) || "").slice(0, 200),
-        slug: (byDoi[doi] && byDoi[doi].slug) || null,
+        doi: d2.doi || doi,
+        conceptdoi: d2.conceptdoi || null,
+        title: String(d2.metadata && d2.metadata.title || "").slice(0, 200),
+        slug: byDoi[doi] && byDoi[doi].slug || null,
         downloads: Number(st.downloads || 0),
         unique_downloads: Number(st.unique_downloads || 0),
         views: Number(st.views || 0),
         unique_views: Number(st.unique_views || 0),
-        version_downloads: Number(st.version_downloads || 0),
+        version_downloads: Number(st.version_downloads || 0)
       };
       const prev = prevMap[doi] || {};
       await env.AUDIT.prepare(
@@ -1117,19 +1214,17 @@ async function jobZenodoStats(env) {
       fetched++;
       const growth = rec.downloads - Number(prev.downloads || 0);
       if (growth > 0) movers.push({ doi, title: rec.title, g: growth });
-      // ---- ADR-014 attribution audit (v1.4.0): capture creators + related_identifiers,
-      // flag creator violations (sole human author = Rowan Brad Quni-Gudzinas; organizational
-      // bylines prohibited per ADR-014). obsoleted_ok is informational, not a violation.
       try {
-        const creators = ((d.metadata || {}).creators || []).map((c) => String(c.name || "")).filter(Boolean);
-        const rels = ((d.metadata || {}).related_identifiers || []).map((r) => String((r.relation_type && (r.relation_type.id || r.relation_type)) || "").toLowerCase() + ":" + String(r.identifier || "")).join(",");
+        const creators = ((d2.metadata || {}).creators || []).map((c) => String(c.name || "")).filter(Boolean);
+        const rels = ((d2.metadata || {}).related_identifiers || []).map((r2) => String(r2.relation_type && (r2.relation_type.id || r2.relation_type) || "").toLowerCase() + ":" + String(r2.identifier || "")).join(",");
         const creatorOk = creators.length > 0 && creators.some((n) => /Quni-Gudzinas/i.test(n));
         const hasObsoleted = /isobsoletedby|issupersededby/i.test(rels);
         await env.AUDIT.prepare(
           "INSERT INTO zenodo_attribution_audit (doi, creators, related, creator_ok, obsoleted_ok, audited_at) VALUES (?1,?2,?3,?4,?5, datetime('now')) ON CONFLICT(doi) DO UPDATE SET creators=excluded.creators, related=excluded.related, creator_ok=excluded.creator_ok, obsoleted_ok=excluded.obsoleted_ok, audited_at=datetime('now')"
         ).bind(rec.doi, creators.join("; ").slice(0, 500), rels.slice(0, 1500), creatorOk ? 1 : 0, hasObsoleted ? 1 : 0).run();
         if (!creatorOk) auditViolations.push({ doi: rec.doi, why: "creator", creators: creators.join("; ").slice(0, 120) });
-      } catch (e) {}
+      } catch (e) {
+      }
     } catch (e) {
       errors++;
     }
@@ -1137,7 +1232,7 @@ async function jobZenodoStats(env) {
   }
   const tot = await env.AUDIT.prepare("SELECT COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw, COUNT(*) AS n FROM zenodo_stats").first();
   movers.sort((a, b) => b.g - a.g);
-  const L = ["QNFO Zenodo stats delta \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  const L = ["QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + ".");
   L.push("downloads: " + prevDl + " -> " + (tot.dl || 0) + " (+" + ((tot.dl || 0) - prevDl) + ")");
   L.push("views:     " + prevVw + " -> " + (tot.vw || 0) + " (+" + ((tot.vw || 0) - prevVw) + ")");
@@ -1151,11 +1246,10 @@ async function jobZenodoStats(env) {
   } else {
     L.push("", "ADR-014 attribution audit: 0 creator violations (sole-author mandate holds).");
   }
-  const d = await storeDigest(env, "zenodo-stats", "QNFO Zenodo stats delta \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  const d = await storeDigest(env, "zenodo-stats", "QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
   return { status: fetched > 0 || errors === 0 ? "ok" : "error", notes: { fetched, errors, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d } };
 }
-
-// ---------- GitHub board sync v2 (mutations enabled, paginated) ----------
+__name(jobZenodoStats, "jobZenodoStats");
 async function jobBoardSync(env) {
   const out = { programs: 0, projects: 0, boardItems: 0, existing: 0, added: 0, skipped: 0, errors: [] };
   const canonical = [];
@@ -1164,15 +1258,18 @@ async function jobBoardSync(env) {
     for (const r of prog.results || []) {
       const c = String(r.wbs_code || "");
       const lvl = String(r.level || "").toLowerCase() === "program" ? "Program" : "Project";
-      if (lvl === "Program") out.programs++; else out.projects++;
-      canonical.push({ code: c, title: c + " — " + String(r.name || "").slice(0, 120), body: lvl + ". Repo: " + (r.github_repo || "—") + ". DOI: " + (r.zenodo_doi || "—") + ". Phase: " + (r.phase || "—") + ". Status: " + (r.status || "—") + ". Synced from Cloudflare canonical (portfolio-state).", level: lvl, status: (String(r.status || "") === "completed" || String(r.status || "") === "published") ? "Completed" : "Active" });
+      if (lvl === "Program") out.programs++;
+      else out.projects++;
+      canonical.push({ code: c, title: c + " \u2014 " + String(r.name || "").slice(0, 120), body: lvl + ". Repo: " + (r.github_repo || "\u2014") + ". DOI: " + (r.zenodo_doi || "\u2014") + ". Phase: " + (r.phase || "\u2014") + ". Status: " + (r.status || "\u2014") + ". Synced from Cloudflare canonical (portfolio-state).", level: lvl, status: String(r.status || "") === "completed" || String(r.status || "") === "published" ? "Completed" : "Active" });
     }
-  } catch (e) { out.errors.push("registry: " + String(e && e.message || e)); }
-  const gql = async (query) => {
+  } catch (e) {
+    out.errors.push("registry: " + String(e && e.message || e));
+  }
+  const gql = /* @__PURE__ */ __name(async (query) => {
     const r = await fetch("https://api.github.com/graphql", { method: "POST", headers: { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
     return r.json().catch(() => null);
-  };
-  const pageQ = (after) => '{ organization(login: "QNFO") { projectV2(number: 7) { id items(first: 100' + (after ? ', after: "' + after + '"' : '') + ') { totalCount pageInfo { hasNextPage endCursor } nodes { content { ... on DraftIssue { title } } } } fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } } } } }';
+  }, "gql");
+  const pageQ = /* @__PURE__ */ __name((after) => '{ organization(login: "QNFO") { projectV2(number: 7) { id items(first: 100' + (after ? ', after: "' + after + '"' : "") + ") { totalCount pageInfo { hasNextPage endCursor } nodes { content { ... on DraftIssue { title } } } } fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } } } } }", "pageQ");
   let j = await gql(pageQ(null));
   let pid = null, levelField = null, wbsField = null, stField = null;
   const existing = [];
@@ -1181,7 +1278,7 @@ async function jobBoardSync(env) {
     const p = j.data.organization && j.data.organization.projectV2;
     if (!p) break;
     pid = p.id;
-    out.boardItems = (p.items && p.items.totalCount) || out.boardItems;
+    out.boardItems = p.items && p.items.totalCount || out.boardItems;
     for (const n of p.items.nodes || []) if (n.content && n.content.title) existing.push(String(n.content.title));
     if (pages === 0) {
       const byName = {};
@@ -1196,58 +1293,95 @@ async function jobBoardSync(env) {
     j = await gql(pageQ(pg.endCursor));
   }
   if (j && j.errors && j.errors.length) out.errors.push("board: " + j.errors[0].message);
-  const optMap = (f) => { const m = {}; for (const o of (f && f.options) || []) m[o.name] = o.id; return m; };
+  const optMap = /* @__PURE__ */ __name((f) => {
+    const m = {};
+    for (const o of f && f.options || []) m[o.name] = o.id;
+    return m;
+  }, "optMap");
   const lvlOpts = optMap(levelField), wbsOpts = optMap(wbsField), stOpts = optMap(stField);
   const existingLower = new Set(existing.map((t) => t.toLowerCase()));
-  const haveCode = new Set();
-  for (const t of existing) { const m = t.match(/^([A-Z0-9.]+)—/); if (m) haveCode.add(m[1].trim()); }
-  const esc = (s) => String(s || "").replace(/\\/g, "").replace(/"/g, "'").replace(/\n/g, " ").replace(/\r/g, " ").slice(0, 400);
+  const haveCode = /* @__PURE__ */ new Set();
+  for (const t of existing) {
+    const m = t.match(/^([A-Z0-9.]+)—/);
+    if (m) haveCode.add(m[1].trim());
+  }
+  const esc = /* @__PURE__ */ __name((s) => String(s || "").replace(/\\/g, "").replace(/"/g, "'").replace(/\n/g, " ").replace(/\r/g, " ").slice(0, 400), "esc");
   let added = 0, skipped = 0;
   for (const it of canonical) {
-    if (existingLower.has(it.title.toLowerCase())) { skipped++; continue; }
-    if (it.code && haveCode.has(it.code)) { skipped++; continue; }
-    if (added >= 20) { out.errors.push("cap: max 20 adds/run"); break; }
-    if (!pid) { out.errors.push("no board pid"); break; }
+    if (existingLower.has(it.title.toLowerCase())) {
+      skipped++;
+      continue;
+    }
+    if (it.code && haveCode.has(it.code)) {
+      skipped++;
+      continue;
+    }
+    if (added >= 20) {
+      out.errors.push("cap: max 20 adds/run");
+      break;
+    }
+    if (!pid) {
+      out.errors.push("no board pid");
+      break;
+    }
     try {
       const addQ = 'mutation { addProjectV2DraftIssue(input: {projectId: "' + pid + '", title: "' + esc(it.title) + '", body: "' + esc(it.body) + '"}) { projectItem { id } } }';
       const aj = await gql(addQ);
-      if (aj && aj.errors && aj.errors.length) { out.errors.push("add " + it.code + ": " + aj.errors[0].message); continue; }
+      if (aj && aj.errors && aj.errors.length) {
+        out.errors.push("add " + it.code + ": " + aj.errors[0].message);
+        continue;
+      }
       const itemId = aj && aj.data && aj.data.addProjectV2DraftIssue && aj.data.addProjectV2DraftIssue.projectItem && aj.data.addProjectV2DraftIssue.projectItem.id;
-      if (!itemId) { out.errors.push("add " + it.code + ": no item id"); continue; }
-      const setField = async (fld, optId) => {
+      if (!itemId) {
+        out.errors.push("add " + it.code + ": no item id");
+        continue;
+      }
+      const setField = /* @__PURE__ */ __name(async (fld, optId) => {
         if (!fld || !optId) return;
         const uq = 'mutation { updateProjectV2ItemFieldValue(input: {projectId: "' + pid + '", itemId: "' + itemId + '", fieldId: "' + fld.id + '", value: {singleSelectOptionId: "' + optId + '"}}) { projectV2Item { id } } }';
         const uj = await gql(uq);
         if (uj && uj.errors && uj.errors.length) out.errors.push("field " + it.code + ": " + uj.errors[0].message);
-      };
+      }, "setField");
       await setField(levelField, lvlOpts[it.level]);
-      const wbsCode = it.level === "Program" ? it.code.split(".").pop() : (it.code.split(".").slice(0, -1).pop() || "RES");
+      const wbsCode = it.level === "Program" ? it.code.split(".").pop() : it.code.split(".").slice(0, -1).pop() || "RES";
       await setField(wbsField, wbsOpts[wbsCode] || wbsOpts[it.code.split(".")[0]]);
       await setField(stField, stOpts[it.status]);
       added++;
-    } catch (e) { out.errors.push("add " + it.code + ": " + String(e && e.message || e)); }
+    } catch (e) {
+      out.errors.push("add " + it.code + ": " + String(e && e.message || e));
+    }
   }
-  out.added = added; out.skipped = skipped; out.existing = existing.length;
-  const L = ["QNFO GitHub board sync v2 — " + new Date().toISOString().slice(0, 10), ""];
+  out.added = added;
+  out.skipped = skipped;
+  out.existing = existing.length;
+  const L = ["QNFO GitHub board sync v2 \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   L.push("Canonical: " + out.programs + " programs + " + out.projects + " projects (portfolio-state).");
   L.push("Board #7: " + out.boardItems + " existing items; added " + added + ", skipped " + skipped + ".");
   if (out.errors.length) L.push("Errors: " + out.errors.slice(0, 8).join(" | "));
   L.push("Mutation v2 active (idempotent upsert by WBS code; never deletes).");
-  const d = await storeDigest(env, "board-sync", "QNFO GitHub board sync — " + new Date().toISOString().slice(0, 10), L.join(NL));
+  const d = await storeDigest(env, "board-sync", "QNFO GitHub board sync \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
   const fatal = out.errors.some((x) => x.startsWith("registry") || x.startsWith("board:"));
   return { status: fatal ? "error" : "ok", notes: { ...out, digest: d } };
 }
-
-// ---------- NLnet NGI Zero submission (Sep 3 11:00 Amsterdam) ----------
+__name(jobBoardSync, "jobBoardSync");
 async function jobNlnet(env) {
-  const L = ["QNFO NLnet NGI Zero submission \u2014 " + new Date().toISOString().slice(0, 10), ""];
+  const L = ["QNFO NLnet NGI Zero submission \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
   let proposal = null, dossier = null;
   const p = await ghGet(env, "/repos/QNFO/qnfo-workers/contents/funding/NLNET_PROPOSAL.md");
-  if (p.status === 200 && p.body && p.body.content) { try { proposal = atob(p.body.content.replace(/\s/g, "")); } catch (e) {} }
+  if (p.status === 200 && p.body && p.body.content) {
+    try {
+      proposal = atob(p.body.content.replace(/\s/g, ""));
+    } catch (e) {
+    }
+  }
   const dd = await ghGet(env, "/repos/QNFO/qnfo-workers/contents/funding/DOSSIER.md");
-  if (dd.status === 200 && dd.body && dd.body.content) { try { dossier = atob(dd.body.content.replace(/\s/g, "")); } catch (e) {} }
+  if (dd.status === 200 && dd.body && dd.body.content) {
+    try {
+      dossier = atob(dd.body.content.replace(/\s/g, ""));
+    } catch (e) {
+    }
+  }
   L.push("Bundle: proposal " + (proposal ? proposal.length + " chars" : "FETCH FAILED") + ", dossier " + (dossier ? dossier.length + " chars" : "FETCH FAILED") + ".");
-  // NLnet uses an interactive form (captcha-gated). Attempt only a plain form POST if one exists; otherwise notify.
   let formResult = "not attempted";
   try {
     const page = await fetch("https://nlnet.nl/propose/", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
@@ -1257,16 +1391,16 @@ async function jobNlnet(env) {
     } else {
       formResult = "no captcha detected but NLnet submission requires the interactive form; autonomous browser submission deferred";
     }
-  } catch (e) { formResult = "page fetch error: " + e.message; }
+  } catch (e) {
+    formResult = "page fetch error: " + e.message;
+  }
   L.push("Submission: " + formResult + ".");
   L.push("Next step: user-submitted form at https://nlnet.nl/propose/ with the prepared bundle (deadline Nov 3 2026 12:00 CEST).");
-  await storeDigest(env, "nlnet", "QNFO NLnet NGI Zero submission \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
-  // one-shot: this single email IS an action item (user must submit the form).
-  const d = await sendDigest(env, "QNFO NLnet NGI Zero submission \u2014 " + new Date().toISOString().slice(0, 10), L.join(NL));
+  await storeDigest(env, "nlnet", "QNFO NLnet NGI Zero submission \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
+  const d = await sendDigest(env, "QNFO NLnet NGI Zero submission \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
   return { status: "ok", notes: { formResult, digest: d } };
 }
-
-// ---------- backfill: embed existing D1 rows into OPS_VZ (one-off; run via /run?job=backfill) ----------
+__name(jobNlnet, "jobNlnet");
 async function jobBackfill(env) {
   const out = { contacts: 0, gtd: 0, outreach: 0 };
   try {
@@ -1275,28 +1409,33 @@ async function jobBackfill(env) {
       await recordEvent(env, "contact", "ct-" + String(r.email).replace(/[^a-z0-9.@_-]/gi, ""), (r.name || "?") + " <" + r.email + ">", { job: "backfill" });
       out.contacts++;
     }
-  } catch (e) { out.contacts = -1; }
+  } catch (e) {
+    out.contacts = -1;
+  }
   try {
     const g = await env.AUDIT.prepare("SELECT id, line, line_date FROM gtd_register LIMIT 500").all();
     for (const r of g.results || []) {
       await recordEvent(env, "gtd-line", "gtd-bf-" + r.id, (r.line_date || "") + " \u2014 " + r.line, { job: "backfill" });
       out.gtd++;
     }
-  } catch (e) { out.gtd = -1; }
+  } catch (e) {
+    out.gtd = -1;
+  }
   try {
     const o = await env.AUDIT.prepare("SELECT id, paper_id, reason, status FROM outreach_queue LIMIT 200").all();
     for (const r of o.results || []) {
       await recordEvent(env, "outreach", "oq-bf-" + r.id, (r.paper_id || "") + " \u2014 " + (r.reason || "") + " [" + (r.status || "") + "]", { job: "backfill" });
       out.outreach++;
     }
-  } catch (e) { out.outreach = -1; }
+  } catch (e) {
+    out.outreach = -1;
+  }
   await recordEvent(env, "job-run", "jr-backfill-" + Date.now().toString(36), "backfill completed: " + JSON.stringify(out), { job: "backfill", status: "ok" });
   return { status: "ok", notes: out };
 }
-
-// ---------- outreach engine v1: queue -> verify (arXiv tarball) -> dedup -> send -> log ----------
-const OUTREACH_ACTIVATION_AT = Date.parse("2026-09-15T00:00:00Z");
-const EMAIL_VALID = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+__name(jobBackfill, "jobBackfill");
+var OUTREACH_ACTIVATION_AT = Date.parse("2026-09-15T00:00:00Z");
+var EMAIL_VALID = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 function validEmail(em) {
   if (!em || em.length > 254 || !EMAIL_VALID.test(em)) return false;
   if (/^[%@#]|\.\./.test(em)) return false;
@@ -1304,9 +1443,8 @@ function validEmail(em) {
   if (!d.includes(".")) return false;
   return true;
 }
-
-const OUTREACH_FROM = { email: "rowan.quni@qnfo.org", name: "Rowan Brad Quni-Gudzinas" };
-
+__name(validEmail, "validEmail");
+var OUTREACH_FROM = { email: "rowan.quni@qnfo.org", name: "Rowan Brad Quni-Gudzinas" };
 async function verifyArxivEmail(env, paperId) {
   const id = String(paperId || "").trim().replace(/^arXiv:/i, "").replace(/v\d+$/, "");
   if (!/^\d{4}\.\d{4,5}$/.test(id)) return null;
@@ -1323,53 +1461,71 @@ async function verifyArxivEmail(env, paperId) {
         const { value, done } = await reader.read();
         if (done) break;
         text += new TextDecoder().decode(value);
-        if (text.length > 5000000) break; // arXiv sources can be large; emails live in the .tex (anywhere in the tar)
+        if (text.length > 5e6) break;
       }
-    } catch (e) { text = new TextDecoder().decode(buf); }
+    } catch (e) {
+      text = new TextDecoder().decode(buf);
+    }
     const m = text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
     const junk = /noreply|no-reply|example|\.png|\.jpg|\.gif|arxiv|elsevier|springer|overleaf|latex|biblatex|hyperref/i;
     for (const em of m) if (!junk.test(em) && em.length < 80) return em;
     return null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
-
+__name(verifyArxivEmail, "verifyArxivEmail");
 async function jobOutreach(env) {
   const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, errors: [] };
   if (!env.SEND_EMAIL) return { status: "error", notes: { error: "SEND_EMAIL binding missing" } };
-  // OUTREACH-ENGINE-LIVE-1 activation gate (2026-09-03 red-team): legacy drain must NOT send
-  // external outreach before ACTIVATION_AT, and must honor the qnfo-outreach kill switch.
   try {
     const kill = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key = 'external_sends_enabled'").first();
     const canExternal = Date.now() >= OUTREACH_ACTIVATION_AT && kill && kill.value === "1";
     if (!canExternal) return { status: "gated", notes: { sent: 0, reason: "pre-activation or kill switch off (activation 2026-09-15)", kill: !!(kill && kill.value === "1") } };
-  } catch (e) { return { status: "gated", notes: { sent: 0, reason: "gate check failed", error: String(e && e.message || e) } }; }
-  const today = new Date().toISOString().slice(0, 10);
+  } catch (e) {
+    return { status: "gated", notes: { sent: 0, reason: "gate check failed", error: String(e && e.message || e) } };
+  }
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const sentKey = "outreach_sent_" + today;
   let sentToday = Number(await stateGet(env, sentKey, "0")) || 0;
   const CAP = 3;
   let rows;
   try {
     rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status='pending' ORDER BY created_at ASC LIMIT 10").all();
-  } catch (e) { return { status: "error", notes: { error: String(e && e.message || e) } }; }
+  } catch (e) {
+    return { status: "error", notes: { error: String(e && e.message || e) } };
+  }
   const pending = (rows.results || []).filter((r) => r.email || r.paper_id);
   out.pending = pending.length;
   for (const r of pending) {
-    if (sentToday >= CAP) { out.errors.push({ id: r.id, error: "daily cap reached" }); break; }
+    if (sentToday >= CAP) {
+      out.errors.push({ id: r.id, error: "daily cap reached" });
+      break;
+    }
     let email = r.email || null;
     try {
       if (!email) {
         email = await verifyArxivEmail(env, r.paper_id);
-        if (!email) { out.skipped_no_email++; continue; }
+        if (!email) {
+          out.skipped_no_email++;
+          continue;
+        }
         await env.AUDIT.prepare("UPDATE outreach_queue SET email=?1 WHERE id=?2").bind(email, r.id).run();
       }
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
-      if (dup) { out.skipped_dupe++; continue; }
-      if (!validEmail(email)) { out.errors.push({ id: r.id, error: "invalid email " + email }); continue; }
+      if (dup) {
+        out.skipped_dupe++;
+        continue;
+      }
+      if (!validEmail(email)) {
+        out.errors.push({ id: r.id, error: "invalid email " + email });
+        continue;
+      }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
       const body = [
         "Hello,",
         "",
-        "I am Rowan Brad Quni-Gudzinas, founder of QNFO, a research collective working on an open, reproducible, energy-first standard for quantum computing: the JPCub benchmark \u2014 \u201cwhat does a correct quantum answer cost in energy?\u201d (grounded in Landauer, Margolus\u2013Levitin, and Bremermann limits).",
+        "I am Rowan Brad Quni-Gudzinas, founder of QNFO, a research collective working on an open, reproducible, energy-first standard for quantum computing: the JPCub benchmark \u2014 \u201Cwhat does a correct quantum answer cost in energy?\u201D (grounded in Landauer, Margolus\u2013Levitin, and Bremermann limits).",
         "",
         r.paper_id ? "I came across your recent work (arXiv " + r.paper_id + (r.reason ? " \u2014 " + r.reason : "") + ") and it looks directly relevant to this program." : "I came across your recent work and it looks directly relevant to this program.",
         "",
@@ -1377,10 +1533,10 @@ async function jobOutreach(env) {
         "",
         "Best regards,",
         "Rowan Brad Quni-Gudzinas",
-        "QNFO",
+        "QNFO"
       ].join("\n");
       const res = await env.SEND_EMAIL.send({ to: email, from: OUTREACH_FROM, subject, text: body });
-      await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'sent')").bind(email, subject, (res && res.messageId) || "").run();
+      await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'sent')").bind(email, subject, res && res.messageId || "").run();
       await env.AUDIT.prepare("INSERT INTO contact_ledger (email, name, first_contact, last_contact, contact_count, status) VALUES (?1,?2,?3,?3,1,'outreach') ON CONFLICT(email) DO UPDATE SET last_contact=excluded.last_contact, contact_count=contact_count+1").bind(email, r.author || null, today).run();
       await env.AUDIT.prepare("UPDATE outreach_queue SET status='sent', sent_at=datetime('now') WHERE id=?1").bind(r.id).run();
       await recordEvent(env, "outreach", "oq-sent-" + Date.now().toString(36), "outreach sent to " + email + " re " + (r.paper_id || ""), { job: "outreach", email });
@@ -1391,14 +1547,10 @@ async function jobOutreach(env) {
       out.errors.push({ id: r.id, error: String(e && e.message || e) });
     }
   }
-  // ---- follow-up pass (v1.3.1): one follow-up, 14+ days after a send with no reply,
-  // never a second follow-up, shared daily cap.
   if (sentToday < CAP) {
     try {
       const fu = await env.AUDIT.prepare(
-        "SELECT email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') " +
-        "AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) " +
-        "ORDER BY sent_at ASC LIMIT 3"
+        "SELECT email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) ORDER BY sent_at ASC LIMIT 3"
       ).all();
       for (const f of fu.results || []) {
         if (sentToday >= CAP) break;
@@ -1411,10 +1563,10 @@ async function jobOutreach(env) {
             "",
             "Best regards,",
             "Rowan Brad Quni-Gudzinas",
-            "QNFO",
+            "QNFO"
           ].join("\n");
           const res = await env.SEND_EMAIL.send({ to: f.email, from: OUTREACH_FROM, subject, text: body });
-          await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'followup')").bind(f.email, subject, (res && res.messageId) || "").run();
+          await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'followup')").bind(f.email, subject, res && res.messageId || "").run();
           sentToday++;
           await stateSet(env, sentKey, String(sentToday));
           out.followups++;
@@ -1422,39 +1574,44 @@ async function jobOutreach(env) {
           out.errors.push({ id: "fu-" + f.email, error: String(e && e.message || e) });
         }
       }
-    } catch (e) {}
+    } catch (e) {
+    }
   }
   await recordEvent(env, "job-run", "jr-outreach-" + Date.now().toString(36), "outreach run: " + JSON.stringify(out), { job: "outreach", status: out.errors.length ? "partial" : "ok" });
   return { status: out.errors.length ? "error" : "ok", notes: out };
 }
-
-
-// ---------- AI endpoint health (every 30 min) ----------
+__name(jobOutreach, "jobOutreach");
 async function jobWorkerHealth(env) {
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
   const endpoints = [
-    { worker: "qnfo-ai",        binding: "QNFO_AI", url: "https://qnfo-ai.internal/health",               headers: { "User-Agent": UA } },
-    { worker: "personal-api",   binding: "PERSONAL_API", url: "https://personal-api.internal/health",      headers: { "User-Agent": UA } },
-    { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health",              headers: { "User-Agent": UA } },
-    { worker: "qnfo-ai-chat",   binding: "QNFO_AI", url: "https://qnfo-ai.internal/v1/chat/completions",  headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
+    { worker: "qnfo-ai", binding: "QNFO_AI", url: "https://qnfo-ai.internal/health", headers: { "User-Agent": UA } },
+    { worker: "personal-api", binding: "PERSONAL_API", url: "https://personal-api.internal/health", headers: { "User-Agent": UA } },
+    { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health", headers: { "User-Agent": UA } },
+    { worker: "qnfo-ai-chat", binding: "QNFO_AI", url: "https://qnfo-ai.internal/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
     { worker: "personal-api-chat", binding: "PERSONAL_API", url: "https://personal-api.internal/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
   ];
   const out = { checks: [], failed: [] };
-  const now = new Date().toISOString();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
   for (const ep of endpoints) {
     const t0 = Date.now();
     let status = 0, dur = 0, error = "", body = "";
     try {
-      const fetcher = ep.binding && env[ep.binding] && env[ep.binding].fetch
-        ? (u, o) => env[ep.binding].fetch(u, o)
-        : (u, o) => fetch(u, o);
-      const resp = await fetcher(ep.url, { method: ep.body ? "POST" : "GET", headers: ep.headers || {}, body: ep.body ? JSON.stringify(ep.body) : undefined, signal: AbortSignal.timeout(45000) });
+      const fetcher = ep.binding && env[ep.binding] && env[ep.binding].fetch ? (u, o) => env[ep.binding].fetch(u, o) : (u, o) => fetch(u, o);
+      const resp = await fetcher(ep.url, { method: ep.body ? "POST" : "GET", headers: ep.headers || {}, body: ep.body ? JSON.stringify(ep.body) : void 0, signal: AbortSignal.timeout(45e3) });
       status = resp.status;
       dur = Date.now() - t0;
-      try { body = (await resp.text()).slice(0, 200); } catch (e) { body = ""; }
-      if (status !== 200) { error = "HTTP " + status + " body:" + body.slice(0, 80); }
-      else {
-        if (ep.body && body.indexOf("error") === 0) { error = body.slice(0, 120); status = 0; }
+      try {
+        body = (await resp.text()).slice(0, 200);
+      } catch (e) {
+        body = "";
+      }
+      if (status !== 200) {
+        error = "HTTP " + status + " body:" + body.slice(0, 80);
+      } else {
+        if (ep.body && body.indexOf("error") === 0) {
+          error = body.slice(0, 120);
+          status = 0;
+        }
       }
     } catch (e) {
       dur = Date.now() - t0;
@@ -1462,9 +1619,9 @@ async function jobWorkerHealth(env) {
       status = 0;
     }
     try {
-      await env.AUDIT.prepare("INSERT INTO worker_invocations (worker_name, endpoint, status_code, duration_ms, created_at) VALUES (?1,?2,?3,?4,?5)")
-        .bind(ep.worker, ep.url, status, dur, now).run();
-    } catch (e) {}
+      await env.AUDIT.prepare("INSERT INTO worker_invocations (worker_name, endpoint, status_code, duration_ms, created_at) VALUES (?1,?2,?3,?4,?5)").bind(ep.worker, ep.url, status, dur, now).run();
+    } catch (e) {
+    }
     const ok = status === 200 && !error;
     out.checks.push({ worker: ep.worker, status, duration_ms: Math.round(dur), ok });
     if (!ok) out.failed.push({ worker: ep.worker, status, error });
@@ -1476,89 +1633,119 @@ async function jobWorkerHealth(env) {
     const subject = "QNFO AI endpoint health alert";
     const d = await sendDigest(env, subject, L.join(NL));
     try {
-      await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('worker-health', 'error', ?1, 1)")
-        .bind(L.join(NL).slice(0, 2000)).run();
-    } catch (e) {}
+      await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('worker-health', 'error', ?1, 1)").bind(L.join(NL).slice(0, 2e3)).run();
+    } catch (e) {
+    }
     await recordEvent(env, "job-run", "jr-worker-health-" + Date.now().toString(36), "worker-health FAILED " + JSON.stringify(out.failed), { job: "worker-health", status: "error" });
     return { status: "error", notes: out };
   }
   await recordEvent(env, "job-run", "jr-worker-health-" + Date.now().toString(36), "worker-health ok " + out.checks.length + " endpoints", { job: "worker-health", status: "ok" });
   return { status: "ok", notes: out };
 }
-
-
-// ---------- P7 visibility scorecard (weekly Monday) ----------
-// IMPRESSIONS-ZONE-NOT-WORKER-1: real web impressions live in CF GraphQL
-// httpRequests1dGroups for the qnfo.org zone (84e9dc1d7fb72629ccdbe3174ed24420);
-// worker_invocations are self-health only and are NEVER cited as external traffic.
+__name(jobWorkerHealth, "jobWorkerHealth");
 async function jobVisibility(env) {
   const ZONE = "84e9dc1d7fb72629ccdbe3174ed24420";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
   const out = { zone: ZONE, ts: today };
   const UA = { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + (env.CF_TOKEN || "") };
-  // 1) honest zone totals, last 7 days (httpRequests1dGroups)
   try {
     const q = ['query { viewer { zones(filter: {zoneTag: "', ZONE, '"}) { httpRequests1dGroups(limit: 7, filter: {date_geq: "', since, '", date_leq: "', today, '"}) { dimensions { date } sum { requests pageViews } uniq { uniques } } } } }'].join("");
     const r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { ...UA, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
     if (r.ok) {
-      const d = await r.json();
-      const days = (d.data && d.data.viewer && d.data.viewer.zones && d.data.viewer.zones[0] && d.data.viewer.zones[0].httpRequests1dGroups) || [];
+      const d2 = await r.json();
+      const days = d2.data && d2.data.viewer && d2.data.viewer.zones && d2.data.viewer.zones[0] && d2.data.viewer.zones[0].httpRequests1dGroups || [];
       let req = 0, pv = 0, uniq = 0;
-      for (const day of days) { req += (day.sum.requests || 0); pv += (day.sum.pageViews || 0); uniq += (day.uniq.uniques || 0); }
-      out.days = days.length; out.requests = req; out.pageviews = pv; out.uniques = uniq;
+      for (const day of days) {
+        req += day.sum.requests || 0;
+        pv += day.sum.pageViews || 0;
+        uniq += day.uniq.uniques || 0;
+      }
+      out.days = days.length;
+      out.requests = req;
+      out.pageviews = pv;
+      out.uniques = uniq;
     } else out.web_error = "HTTP " + r.status;
-  } catch (e) { out.web_error = String(e && e.message || e); }
-  // 2) zenodo_stats deltas (cumulative table updated daily by zenodo-stats job)
+  } catch (e) {
+    out.web_error = String(e && e.message || e);
+  }
   try {
     const agg = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(downloads),0) dl, COALESCE(SUM(views),0) vw, COALESCE(SUM(prev_downloads),0) pdl, COALESCE(SUM(prev_views),0) pvw FROM zenodo_stats").first();
-    if (agg) { out.dois = agg.n; out.zenodo_downloads = agg.dl; out.zenodo_views = agg.vw; out.dl_delta = agg.dl - agg.pdl; out.vw_delta = agg.vw - agg.pvw; }
+    if (agg) {
+      out.dois = agg.n;
+      out.zenodo_downloads = agg.dl;
+      out.zenodo_views = agg.vw;
+      out.dl_delta = agg.dl - agg.pdl;
+      out.vw_delta = agg.vw - agg.pvw;
+    }
     const mov = await env.AUDIT.prepare("SELECT doi, title, downloads, prev_downloads, views, prev_views FROM zenodo_stats WHERE updated_at >= datetime('now','-8 days') ORDER BY (downloads - prev_downloads) DESC LIMIT 10").all();
-    out.movers = ((mov.results || []).map(function (r) { return { doi: r.doi, title: String(r.title || "").slice(0, 50), dl_gain: (r.downloads || 0) - (r.prev_downloads || 0), vw_gain: (r.views || 0) - (r.prev_views || 0) }; })).filter(function (m) { return m.dl_gain > 0 || m.vw_gain > 0; });
-  } catch (e) { out.zs_error = String(e && e.message || e); }
-  // 3) new versions this week (living-paper published rows updated in last 7 days)
+    out.movers = (mov.results || []).map(function(r) {
+      return { doi: r.doi, title: String(r.title || "").slice(0, 50), dl_gain: (r.downloads || 0) - (r.prev_downloads || 0), vw_gain: (r.views || 0) - (r.prev_views || 0) };
+    }).filter(function(m) {
+      return m.dl_gain > 0 || m.vw_gain > 0;
+    });
+  } catch (e) {
+    out.zs_error = String(e && e.message || e);
+  }
   try {
     const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 19).replace("T", " ");
     const vs = await env.LIVING.prepare("SELECT title, version, zenodo_doi, updated_at FROM papers WHERE status IN ('published','distributed') AND zenodo_doi IS NOT NULL AND zenodo_doi != '' AND updated_at >= ?1 ORDER BY updated_at DESC LIMIT 12").bind(wk).all();
     out.new_versions = (vs.results || []).length;
-    out.versions = (vs.results || []).map(function (r) { return { title: String(r.title || "").slice(0, 50), ver: r.version, doi: r.zenodo_doi }; });
-  } catch (e) { out.lp_error = String(e && e.message || e); }
-  // 4) social threads created this week (qnfo-audit social_threads)
+    out.versions = (vs.results || []).map(function(r) {
+      return { title: String(r.title || "").slice(0, 50), ver: r.version, doi: r.zenodo_doi };
+    });
+  } catch (e) {
+    out.lp_error = String(e && e.message || e);
+  }
   try {
     const wk = new Date(Date.now() - 7 * 864e5).toISOString().replace("T", " ");
     const sc = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN status='posted' THEN 1 ELSE 0 END),0) posted FROM social_threads WHERE created_at >= ?1").bind(wk).first();
-    out.social_threads_7d = sc ? (sc.n || 0) : 0; out.social_posted_7d = sc ? (sc.posted || 0) : 0;
-  } catch (e) { out.soc_error = String(e && e.message || e); }
-  // 5) citations (citation_stats: openalex/crossref cited_by + totals)
+    out.social_threads_7d = sc ? sc.n || 0 : 0;
+    out.social_posted_7d = sc ? sc.posted || 0 : 0;
+  } catch (e) {
+    out.soc_error = String(e && e.message || e);
+  }
   try {
     const cit = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN metric='cited_by_count' THEN value ELSE 0 END),0) cited FROM citation_stats WHERE source IN ('openalex','crossref') AND collected_at >= datetime('now','-8 days')").first();
     const citedDois = await env.AUDIT.prepare("SELECT COUNT(DISTINCT doi) n FROM citation_stats WHERE metric='cited_by_count' AND value > 0").first();
-    out.citation_events = cit ? (cit.n || 0) : 0;
-    out.citation_count = cit ? (cit.cited || 0) : 0;
-    out.cited_dois = citedDois ? (citedDois.n || 0) : 0;
-  } catch (e) { out.cit_error = String(e && e.message || e); }
-  // 6) social engagement 7d (social_engagements)
+    out.citation_events = cit ? cit.n || 0 : 0;
+    out.citation_count = cit ? cit.cited || 0 : 0;
+    out.cited_dois = citedDois ? citedDois.n || 0 : 0;
+  } catch (e) {
+    out.cit_error = String(e && e.message || e);
+  }
   try {
     const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
     const eng = await env.AUDIT.prepare("SELECT platform, metric, SUM(value) v FROM social_engagements WHERE collected_at >= ?1 AND metric != 'auth_status' AND metric != 'reach' GROUP BY platform, metric ORDER BY platform, metric").bind(wk).all();
-    out.engagement = (eng.results || []).map(function (r) { return { platform: r.platform, metric: r.metric, value: r.v || 0 }; });
-  } catch (e) { out.eng_error = String(e && e.message || e); }
-  // 7) outreach funnel (qnfo-outreach D1: funnel_daily + submissions)
+    out.engagement = (eng.results || []).map(function(r) {
+      return { platform: r.platform, metric: r.metric, value: r.v || 0 };
+    });
+  } catch (e) {
+    out.eng_error = String(e && e.message || e);
+  }
   try {
     if (env.OUTREACH) {
       const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
       const f = await env.OUTREACH.prepare("SELECT COALESCE(SUM(mined),0) mined, COALESCE(SUM(drafted),0) drafted, COALESCE(SUM(sent),0) sent, COALESCE(SUM(replied),0) replied, COALESCE(SUM(bounced),0) bounced, COALESCE(SUM(opted_out),0) opted_out FROM funnel_daily WHERE day >= ?1").bind(wk).first();
       const sub = await env.OUTREACH.prepare("SELECT COUNT(*) n FROM submissions WHERE status IN ('submitted','accepted')").first();
       out.outreach = f ? { mined_7d: f.mined, drafted_7d: f.drafted, sent_7d: f.sent, replied_7d: f.replied, bounced_7d: f.bounced, opted_out_7d: f.opted_out } : {};
-      out.submissions_accepted = sub ? (sub.n || 0) : 0;
+      out.submissions_accepted = sub ? sub.n || 0 : 0;
     }
-  } catch (e) { out.outreach_error = String(e && e.message || e); }
-  const L = ["QNFO visibility scorecard — " + today, ""];
-  if (out.requests !== undefined) L.push("zone qnfo.org 7d: " + out.requests + " requests / " + out.pageviews + " pageviews / " + out.uniques + " unique visitors (" + out.days + " days)");
+  } catch (e) {
+    out.outreach_error = String(e && e.message || e);
+  }
+  const L = ["QNFO visibility scorecard \u2014 " + today, ""];
+  if (out.requests !== void 0) L.push("zone qnfo.org 7d: " + out.requests + " requests / " + out.pageviews + " pageviews / " + out.uniques + " unique visitors (" + out.days + " days)");
   else L.push("zone qnfo.org 7d: unavailable (" + (out.web_error || "no data") + ")");
-  L.push("zenodo: " + (out.dois || 0) + " records | downloads " + (out.zenodo_downloads || 0) + " (+Δ" + (out.dl_delta || 0) + ") | views " + (out.zenodo_views || 0) + " (+Δ" + (out.vw_delta || 0) + ")");
-  if (out.movers && out.movers.length) { L.push("", "zenodo top movers (7d):"); for (const m of out.movers.slice(0, 6)) L.push("- +" + m.dl_gain + " dl / +" + m.vw_gain + " vw  " + m.title + "  " + m.doi); }
-  if (out.new_versions !== undefined) { L.push("", "new versions this week: " + out.new_versions); for (const v of (out.versions || []).slice(0, 8)) L.push("- " + v.title + " " + v.ver + "  " + v.doi); }
+  L.push("zenodo: " + (out.dois || 0) + " records | downloads " + (out.zenodo_downloads || 0) + " (+\u0394" + (out.dl_delta || 0) + ") | views " + (out.zenodo_views || 0) + " (+\u0394" + (out.vw_delta || 0) + ")");
+  if (out.movers && out.movers.length) {
+    L.push("", "zenodo top movers (7d):");
+    for (const m of out.movers.slice(0, 6)) L.push("- +" + m.dl_gain + " dl / +" + m.vw_gain + " vw  " + m.title + "  " + m.doi);
+  }
+  if (out.new_versions !== void 0) {
+    L.push("", "new versions this week: " + out.new_versions);
+    for (const v of (out.versions || []).slice(0, 8)) L.push("- " + v.title + " " + v.ver + "  " + v.doi);
+  }
   L.push("", "social threads created 7d: " + (out.social_threads_7d || 0) + " (posted " + (out.social_posted_7d || 0) + ")");
   L.push("citations: " + (out.citation_count || 0) + " cited-by across " + (out.cited_dois || 0) + " DOIs (" + (out.citation_events || 0) + " events 7d)");
   if (out.engagement && out.engagement.length) {
@@ -1569,49 +1756,52 @@ async function jobVisibility(env) {
     L.push("", "outreach (7d): mined " + (out.outreach.mined_7d || 0) + " / drafted " + (out.outreach.drafted_7d || 0) + " / sent " + (out.outreach.sent_7d || 0) + " / replies " + (out.outreach.replied_7d || 0) + " / bounces " + (out.outreach.bounced_7d || 0) + " / opt-outs " + (out.outreach.opted_out_7d || 0));
     L.push("open submissions accepted: " + (out.submissions_accepted || 0));
   } else if (out.outreach_error) L.push("", "outreach (7d): unavailable (" + out.outreach_error + ")");
-  // 8) ops AI endpoint usage 7d (qnfo-ops: ops_ai_log + cloud_ops_events)
   try {
     const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
     const oa = await env.AUDIT.prepare("SELECT COUNT(*) n, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
     const ev = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END),0) ok FROM cloud_ops_events WHERE job='qnfo-ops' AND kind='ops_ai_tool' AND ts >= ?1").bind(wk).first();
     const dr = await env.AUDIT.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE job='qnfo-ops' AND text='ops_issue_run' AND status='ok' AND ts >= ?1").bind(wk).first();
-    out.ops_ai = { chats_7d: oa ? (oa.n || 0) : 0, cost_7d: oa ? (oa.cost || 0) : 0, tool_events_7d: ev ? (ev.n || 0) : 0, tool_ok_7d: ev ? (ev.ok || 0) : 0, drains_7d: dr ? (dr.n || 0) : 0 };
-  } catch (e) { out.ops_error = String(e && e.message || e); }
+    out.ops_ai = { chats_7d: oa ? oa.n || 0 : 0, cost_7d: oa ? oa.cost || 0 : 0, tool_events_7d: ev ? ev.n || 0 : 0, tool_ok_7d: ev ? ev.ok || 0 : 0, drains_7d: dr ? dr.n || 0 : 0 };
+  } catch (e) {
+    out.ops_error = String(e && e.message || e);
+  }
   if (out.ops_ai) L.push("", "ops AI (7d): " + out.ops_ai.chats_7d + " chats | $" + out.ops_ai.cost_7d + " | " + out.ops_ai.tool_events_7d + " tool events (" + out.ops_ai.tool_ok_7d + " ok) | drains " + out.ops_ai.drains_7d);
   else if (out.ops_error) L.push("", "ops AI (7d): unavailable (" + out.ops_error + ")");
-  const d = await storeDigest(env, "visibility", "QNFO visibility scorecard — " + today, L.join(NL));
+  const d = await storeDigest(env, "visibility", "QNFO visibility scorecard \u2014 " + today, L.join(NL));
   out.digest = d;
   return { status: "ok", notes: out };
 }
-
-
-// ---------- engagement collection (Bluesky + Buffer) ----------
+__name(jobVisibility, "jobVisibility");
 async function jobEngagement(env) {
-  const out = { ts: new Date().toISOString().slice(0, 10) };
+  const out = { ts: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
   const stmts = [];
-  const row = (platform, postId, metric, value, note) => {
+  const row = /* @__PURE__ */ __name((platform, postId, metric, value, note) => {
     stmts.push(env.AUDIT.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value, note=excluded.note").bind(platform, postId, metric, value, note || null, out.ts));
-  };
-  // 1) Bluesky (AT Protocol) - live
+  }, "row");
   try {
-    if (!env.BSKY_HANDLE || !env.BSKY_APP_PASS) { out.bsky = "no credentials"; }
-    else {
+    if (!env.BSKY_HANDLE || !env.BSKY_APP_PASS) {
+      out.bsky = "no credentials";
+    } else {
       const BS = "https://bsky.social/xrpc";
       const sessR = await fetch(BS + "/com.atproto.server.createSession", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ identifier: env.BSKY_HANDLE, password: env.BSKY_APP_PASS }) });
       const sess = await sessR.json();
-      if (!sessR.ok || !sess.accessJwt) { out.bsky = "session " + sessR.status; }
-      else {
+      if (!sessR.ok || !sess.accessJwt) {
+        out.bsky = "session " + sessR.status;
+      } else {
         const feedR = await fetch(BS + "/app.bsky.feed.getAuthorFeed?actor=" + encodeURIComponent(sess.did) + "&limit=30", { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
         const feed = await feedR.json();
-        const uris = ((feed && feed.feed) || []).map((f) => f.post && f.post.uri).filter(Boolean);
+        const uris = (feed && feed.feed || []).map((f) => f.post && f.post.uri).filter(Boolean);
         let likes = 0, reposts = 0, replies = 0, counted = 0;
         for (let i = 0; i < uris.length; i += 25) {
           const chunk = uris.slice(i, i + 25);
           const postsR = await fetch(BS + "/app.bsky.feed.getPosts?" + chunk.map((u) => "uris=" + encodeURIComponent(u)).join("&"), { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION, Authorization: "Bearer " + sess.accessJwt } });
           const posts = await postsR.json();
-          for (const p of (posts && posts.posts) || []) {
+          for (const p of posts && posts.posts || []) {
             const l = p.likeCount || 0, r = p.repostCount || 0, c = p.replyCount || 0;
-            likes += l; reposts += r; replies += c; counted++;
+            likes += l;
+            reposts += r;
+            replies += c;
+            counted++;
             row("bluesky", p.uri, "likes", l);
             row("bluesky", p.uri, "reposts", r);
             row("bluesky", p.uri, "replies", c);
@@ -1620,16 +1810,21 @@ async function jobEngagement(env) {
         out.bsky = { posts: counted, likes, reposts, replies };
       }
     }
-  } catch (e) { out.bsky_error = String(e && e.message || e); }
-  // 2) Buffer (Mastodon / LinkedIn / X) - token-gated, graceful 401
+  } catch (e) {
+    out.bsky_error = String(e && e.message || e);
+  }
   try {
-    if (!env.BUFFER_TOKEN) { out.buffer = "no token"; }
-    else {
+    if (!env.BUFFER_TOKEN) {
+      out.buffer = "no token";
+    } else {
       const B = "https://api.bufferapp.com/1";
       const pr = await fetch(B + "/profiles.json?access_token=" + env.BUFFER_TOKEN, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
-      if (pr.status === 401) { out.buffer = "unauthorized (reconnect required)"; row("buffer", "auth", "auth_status", 0, "401 unauthorized"); }
-      else if (!pr.ok) { out.buffer = "HTTP " + pr.status; }
-      else {
+      if (pr.status === 401) {
+        out.buffer = "unauthorized (reconnect required)";
+        row("buffer", "auth", "auth_status", 0, "401 unauthorized");
+      } else if (!pr.ok) {
+        out.buffer = "HTTP " + pr.status;
+      } else {
         const profiles = await pr.json();
         let likes = 0, comments = 0, shares = 0, reach = 0, counted = 0;
         for (const prof of (profiles || []).slice(0, 4)) {
@@ -1642,18 +1837,25 @@ async function jobEngagement(env) {
               if (!ir.ok) continue;
               const inter = await ir.json();
               const f = inter.favorites || 0, c = inter.comments || 0, rt = inter.retweets || 0, sh = inter.shares || 0, re = inter.reach || 0;
-              likes += f; comments += c; shares += rt + sh; reach += re; counted++;
+              likes += f;
+              comments += c;
+              shares += rt + sh;
+              reach += re;
+              counted++;
               row("buffer", String(u.id), "likes", f);
               row("buffer", String(u.id), "comments", c);
               row("buffer", String(u.id), "shares", rt + sh);
               row("buffer", String(u.id), "reach", re);
             }
-          } catch (e2) {}
+          } catch (e2) {
+          }
         }
         out.buffer = { updates: counted, likes, comments, shares, reach };
       }
     }
-  } catch (e) { out.buffer_error = String(e && e.message || e); }
+  } catch (e) {
+    out.buffer_error = String(e && e.message || e);
+  }
   try {
     if (stmts.length) {
       const batch = stmts.slice(0, 100);
@@ -1661,12 +1863,28 @@ async function jobEngagement(env) {
       out.rows_written = batch.length;
       out.rows_total = stmts.length;
     } else out.rows_written = 0;
-  } catch (e) { out.write_error = String(e && e.message || e); }
+  } catch (e) {
+    out.write_error = String(e && e.message || e);
+  }
   return { status: "ok", notes: out };
 }
-// ================= PART 5: registry + dispatch + handlers =================
-
-const JOBS = {
+__name(jobEngagement, "jobEngagement");
+async function jobGtdReconcile(env) {
+  try {
+    const open = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work").first();
+    const overdue = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work WHERE due < ?").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).first();
+    const human = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_waiting_on_human").first();
+    const noDod = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_open_tasks_no_dod").first();
+    const line = "GTD reconcile: open=" + (open && open.n || 0) + " overdue=" + (overdue && overdue.n || 0) + " waiting_on_human=" + (human && human.n || 0) + " no_dod=" + (noDod && noDod.n || 0);
+    await recordEvent(env, "gtd-reconcile", "gr-" + Date.now().toString(36), line, { job: "gtd-reconcile" });
+    return { status: "ok", open: open && open.n || 0, overdue: overdue && overdue.n || 0, waiting_on_human: human && human.n || 0, no_dod: noDod && noDod.n || 0 };
+  } catch (e) {
+    return { status: "error", error: String(e).slice(0, 200) };
+  }
+}
+__name(jobGtdReconcile, "jobGtdReconcile");
+var JOBS = {
+  "gtd-reconcile": jobGtdReconcile,
   "email-triage": jobEmailTriage,
   "gmail-triage": jobGmailTriage,
   "briefing": jobBriefing,
@@ -1685,39 +1903,81 @@ const JOBS = {
   "loose-threads-sweep": jobLooseThreadsSweep,
   "visibility": jobVisibility,
   "engagement": jobEngagement,
+  "radar": jobRadar
 };
-
-// cron -> job dispatch map for a given Amsterdam offset
 function dispatchMap(offset) {
   const map = {};
   for (const c of buildCrons(offset)) map[c.cron] = c.job;
   return map;
 }
-
-const CORS = {
+__name(dispatchMap, "dispatchMap");
+async function jobRadar(env) {
+  const mentions = [];
+  const ua = { headers: { "User-Agent": "QNFO-radar/1.0" } };
+  try {
+    const r = await fetch("https://hn.algolia.com/api/v1/search?query=%22qnfo%22&hitsPerPage=30&tags=comment,story", ua);
+    const j = await r.json();
+    for (const h of j.hits || []) {
+      mentions.push({ source: "hn", title: String(h.title || h.story_title || "comment").slice(0, 180), url: h.story_url || h.url || "https://news.ycombinator.com/item?id=" + h.objectID, author: h.author || "", score: h.points || 0, created: h.created_at || "" });
+    }
+  } catch (e) {
+  }
+  try {
+    const r = await fetch("https://lobste.rs/search.json?q=qnfo", ua);
+    const j = await r.json();
+    const arr = Array.isArray(j) ? j : j && Array.isArray(j.stories) ? j.stories : [];
+    for (const s of arr) {
+      mentions.push({ source: "lobsters", title: String(s.title || "").slice(0, 180), url: s.url || "https://lobste.rs/s/" + (s.short_id || ""), author: s.submitter_user && s.submitter_user.username || "", score: s.score || 0, created: s.created_at || "" });
+    }
+  } catch (e) {
+  }
+  try {
+    const r = await fetch("https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=activity&q=qnfo&site=stackoverflow&pagesize=20", ua);
+    const j = await r.json();
+    for (const it of j.items || []) {
+      mentions.push({ source: "stackexchange", title: String(it.title || "").slice(0, 180), url: it.link || "", author: it.owner && it.owner.display_name || "", score: it.score || 0, created: it.creation_date ? new Date(it.creation_date * 1e3).toISOString() : "" });
+    }
+  } catch (e) {
+  }
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS external_mentions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, title TEXT, url TEXT, author TEXT, score INTEGER, created TEXT, first_seen TEXT, UNIQUE(source, url))").run();
+  let added = 0;
+  for (const m of mentions) {
+    try {
+      const r = await env.AUDIT.prepare("INSERT OR IGNORE INTO external_mentions (ts, source, title, url, author, score, created, first_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), m.source, m.title, m.url, m.author, m.score, m.created, (/* @__PURE__ */ new Date()).toISOString()).run();
+      if (r && r.meta && r.meta.changes) added += r.meta.changes;
+    } catch (e) {
+    }
+  }
+  return { status: "ok", notes: { scanned: mentions.length, new_mentions: added } };
+}
+__name(jobRadar, "jobRadar");
+var CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization"
 };
-
 async function selfRegister(env) {
   const manifest = {
-    service: 'qnfo-cloud-ops', kind: 'worker', version: VERSION,
-    base_url: 'https://qnfo-cloud-ops.q08.workers.dev',
-    purpose: 'scheduled QNFO visibility: weekly digest + P7 scorecard + outreach legacy-drain gate + AI-endpoint health + SEO discoverability health',
-    capabilities: ['scheduled', 'weekly-visibility-digest', 'p7-scorecard', 'outreach-drain-gate', 'ai-endpoint-health', 'seo-health', 'job-runner'],
-    routes: ['/health', '/run', '/search', '/record'],
-    tools: [], models: [], deps: ['qnfo-audit D1', 'qnfo-infra', 'qnfo-graph', 'living-paper', 'portfolio-state', 'qnfo-outreach', 'qnfo-email', 'send_email', 'VAULT R2']
+    service: "qnfo-cloud-ops",
+    kind: "worker",
+    version: VERSION,
+    base_url: "https://qnfo-cloud-ops.q08.workers.dev",
+    purpose: "scheduled QNFO visibility: weekly digest + P7 scorecard + outreach legacy-drain gate + AI-endpoint health + SEO discoverability health",
+    capabilities: ["scheduled", "weekly-visibility-digest", "p7-scorecard", "outreach-drain-gate", "ai-endpoint-health", "seo-health", "job-runner"],
+    routes: ["/health", "/run", "/search", "/record"],
+    tools: [],
+    models: [],
+    deps: ["qnfo-audit D1", "qnfo-infra", "qnfo-graph", "living-paper", "portfolio-state", "qnfo-outreach", "qnfo-email", "send_email", "VAULT R2"]
   };
-  const resp = await env.QNFO_OPS.fetch('https://qnfo-ops.internal/registry/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (env.REGISTRY_TOKEN || '') },
+  const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.REGISTRY_TOKEN || "") },
     body: JSON.stringify(manifest)
   });
   return resp.ok;
 }
-
-export default {
+__name(selfRegister, "selfRegister");
+var worker_default = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
@@ -1738,38 +1998,46 @@ export default {
       console.error("cloud-ops", job, "error", String(e && e.message || e));
       try {
         await sendDigest(env, "QNFO cloud job failure \u2014 " + job, "Job " + job + " failed: " + String(e && e.message || e));
-      } catch (e2) {}
+      } catch (e2) {
+      }
     }
   },
-
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-
     if (path === "/health" && request.method === "GET") {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((err) => console.log("self-register err", err && err.message || err)));
       }
-      const off = amsOffset(new Date());
+      const off = amsOffset(/* @__PURE__ */ new Date());
       const crons = buildCrons(off).map((c) => c.cron + " -> " + c.job);
       return new Response(JSON.stringify({
-        ok: true, worker: WORKER_NAME, version: VERSION,
+        ok: true,
+        worker: WORKER_NAME,
+        version: VERSION,
         jobs: Object.keys(JOBS),
         ams_offset: off,
         crons,
         bindings: {
-          audit: !!env.AUDIT, portfolio: !!env.PORTFOLIO, living: !!env.LIVING, outreach: !!env.OUTREACH, graph: !!env.GRAPH,
-          email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY, qnfo_infra: !!env.QNFO_INFRA,
-          send_email: !!env.SEND_EMAIL, vault: !!env.VAULT, ai: !!env.AI, ops_vz: !!env.OPS_VZ,
+          audit: !!env.AUDIT,
+          portfolio: !!env.PORTFOLIO,
+          living: !!env.LIVING,
+          outreach: !!env.OUTREACH,
+          graph: !!env.GRAPH,
+          email: !!env.EMAIL,
+          email_key: !!env.EMAIL_API_KEY,
+          qnfo_infra: !!env.QNFO_INFRA,
+          send_email: !!env.SEND_EMAIL,
+          vault: !!env.VAULT,
+          ai: !!env.AI,
+          ops_vz: !!env.OPS_VZ,
           secrets: { gh: !!env.GH_TOKEN, gmail: !!env.GMAIL_PASS, cf: !!env.CF_TOKEN, admin: !!env.OPS_ADMIN_TOKEN, infra_token: !!env.INFRA_TOKEN }
         }
       }), { headers: { "Content-Type": "application/json", ...CORS } });
     }
-
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: CORS });
-
     if (path === "/run" && request.method === "POST") {
       const job = (url.searchParams.get("job") || "").trim();
       if (!job || !JOBS[job]) return new Response(JSON.stringify({ error: "unknown job: " + job + " (valid: " + Object.keys(JOBS).join(",") + ")" }), { status: 400, headers: { "Content-Type": "application/json", ...CORS } });
@@ -1782,7 +2050,6 @@ export default {
         return new Response(JSON.stringify({ ok: false, job, error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...CORS } });
       }
     }
-
     if (path === "/search" && request.method === "GET") {
       const q = (url.searchParams.get("q") || "").trim();
       if (!q) return new Response(JSON.stringify({ error: "q required" }), { status: 400, headers: { "Content-Type": "application/json", ...CORS } });
@@ -1800,12 +2067,10 @@ export default {
         return new Response(JSON.stringify({ error: "search failed: " + String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...CORS } });
       }
     }
-
     if (path === "/cron-rebuild" && request.method === "POST") {
       const r = await syncSchedules(env, true);
       return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json", ...CORS } });
     }
-
     if (path === "/register" && request.method === "GET") {
       const mode = url.searchParams.get("mode") || "d1";
       let out = {};
@@ -1818,7 +2083,6 @@ export default {
       }
       return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...CORS } });
     }
-
     if (path === "/auth/graph" && request.method === "GET") {
       const step = url.searchParams.get("step") || "";
       const info = {
@@ -1829,18 +2093,17 @@ export default {
           "2. API permissions: Microsoft Graph delegated -> Mail.ReadWrite, Calendars.ReadWrite, Tasks.ReadWrite, offline_access.",
           "3. Authentication -> Mobile and desktop applications -> enable https://login.microsoftonline.com/common/oauth2/nativeclient.",
           "4. Put the Application (client) ID into the worker secret MS_CLIENT_ID via PUT /accounts/{acct}/workers/scripts/qnfo-cloud-ops/secrets/MS_CLIENT_ID.",
-          "5. GET /auth/graph?step=device on this worker to start the device-code flow; the code is emailed to the digest address for one-time consent.",
+          "5. GET /auth/graph?step=device on this worker to start the device-code flow; the code is emailed to the digest address for one-time consent."
         ],
         device: step === "device" && env.MS_CLIENT_ID ? { note: "device flow starts once MS_CLIENT_ID is set" } : null
       };
       return new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", ...CORS } });
     }
-
     if (path === "/record" && request.method === "POST") {
       try {
         const body = await request.json();
         const kind = String(body.kind || "guard-result").slice(0, 40);
-        const text = String(body.text || body.name || body.source || "guard result").slice(0, 2000);
+        const text = String(body.text || body.name || body.source || "guard result").slice(0, 2e3);
         const id = "rec-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
         const meta = Object.assign({}, body.meta || {}, { job: String(body.job || "guard-client").slice(0, 40), status: String(body.status || "ok").slice(0, 20) });
         await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), kind, text, JSON.stringify(meta).slice(0, 1500), meta.job, meta.status).run();
@@ -1852,3 +2115,7 @@ export default {
     return new Response("not found", { status: 404, headers: CORS });
   }
 };
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map
