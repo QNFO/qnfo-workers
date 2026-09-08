@@ -18,25 +18,40 @@ function stripHtml(s) { return String(s || "").replace(/<[^>]*>/g, " ").replace(
 
 
 async function tryCommunitySubmission(draftId, token) {
+  // Modern InvenioRDM/Zenodo flow (empirically confirmed live 2026-09-08):
+  //   PUT  /api/records/{id}/draft/review {type:"community-submission", community}  -> creates review
+  //   POST /api/records/{id}/draft/actions/submit-review                             -> submits it
+  // Review creation is currently returning server-side 500 on Zenodo (platform-side);
+  // publish proceeds via the legacy metadata-inclusion fallback either way. Telemetry records it.
   const attempts = [];
   const bodies = [
-    { type: "community-submission", payload: { community: COMMUNITY_UUID }, topic: { deposit: String(draftId) } },
-    { type: "community-submission", payload: { community: COMMUNITY_UUID }, topic: { record: String(draftId) } }
+    { type: "community-submission", community: COMMUNITY_UUID },
+    { type: "community-submission", payload: { community: COMMUNITY_UUID } }
   ];
   for (const body of bodies) {
-    const topicKey = Object.keys(body.topic)[0];
+    const tag = body.payload ? "payload-shape" : "flat-shape";
     try {
-      const res = await fetch(ZENODO_API + "/requests", {
-        method: "POST",
+      const put = await fetch(ZENODO_API + "/records/" + draftId + "/draft/review", {
+        method: "PUT",
         headers: { authorization: "Bearer " + token, "content-type": "application/json", "user-agent": UA, accept: "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(60000)
       });
-      const txt = await res.text();
-      let parsed = null; try { parsed = txt ? JSON.parse(txt) : null; } catch (e) {}
-      attempts.push({ topic: topicKey, status: res.status, request_id: parsed && parsed.id || null, head: txt.slice(0, 120) });
-      if (res.ok && parsed && parsed.id) return { ok: true, attempts, request_id: parsed.id };
-    } catch (e) { attempts.push({ topic: topicKey, error: String(e && e.message || e) }); }
+      const pt = await put.text();
+      let parsed = null; try { parsed = pt ? JSON.parse(pt) : null; } catch (e) {}
+      attempts.push({ step: "review-put", shape: tag, status: put.status, request_id: parsed && parsed.id || null, head: pt.slice(0, 140) });
+      if (put.ok && parsed && parsed.id) {
+        const sub = await fetch(ZENODO_API + "/records/" + draftId + "/draft/actions/submit-review", {
+          method: "POST",
+          headers: { authorization: "Bearer " + token, "content-type": "application/json", "user-agent": UA, accept: "application/json" },
+          body: "{}",
+          signal: AbortSignal.timeout(60000)
+        });
+        const st = await sub.text();
+        attempts.push({ step: "submit-review", status: sub.status, head: st.slice(0, 140) });
+        if (sub.ok) return { ok: true, attempts, request_id: parsed.id };
+      }
+    } catch (e) { attempts.push({ step: "review-put", shape: tag, error: String(e && e.message || e) }); }
   }
   return { ok: false, attempts };
 }
@@ -64,7 +79,7 @@ export default {
         return json({ ok: true, count: out.length, submissions: out });
       }
       if (path === "/health") {
-        return json({ ok: true, service: "jnl-zenodo", version: "0.1.2", zenodo_token_set: !!env.ZENODO_TOKEN });
+        return json({ ok: true, service: "jnl-zenodo", version: "0.1.3", zenodo_token_set: !!env.ZENODO_TOKEN });
       }
       if (request.method !== "POST") return json({ ok: false, error: "method not allowed; POST only" }, 405);
       if (request.headers.get("x-ops-token") !== env.JNL_OPS_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
