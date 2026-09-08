@@ -31,7 +31,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     try {
-      if(path==="/health") return json({ok:true,service:"jnl-reviser",version:"0.1.0",model:MODEL,zenodo_token_set:!!env.ZENODO_TOKEN});
+      if(path==="/health") return json({ok:true,service:"jnl-reviser",version:"0.2.0",model:MODEL,zenodo_token_set:!!env.ZENODO_TOKEN});
       if(request.method!=="POST") return json({ok:false,error:"POST only"},405);
       if(request.headers.get("x-ops-token")!==env.JNL_OPS_TOKEN) return json({ok:false,error:"unauthorized"},401);
       const tok = await ensureToken(env);
