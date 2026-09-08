@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.0-p2"; // 2026-09-04: fix NaN in weekly report string (stray unary + between "## Ops AI Gateway" and "## Top 10" sections)
+var VERSION = "0.3.1"; // 2026-09-08: weekly candidate disposition pass in runScan (mature 'proposed' kaizen_candidates >7d -> 'promoted'; closes the register's "dispositioned in next kaizen report" contract that only the auditor's upsert path previously served)
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -151,12 +151,24 @@ async function runScan(env) {
     ).run();
   } catch (e) {
   }
+  // Weekly candidate disposition pass (register contract: "Dispositioned in next kaizen report").
+  // The auditor's upsertCandidate only promotes on re-upsert; quiet candidates would sit 'proposed' forever.
+  let disposed = 0;
+  try {
+    const matureCut = new Date(Date.now() - 7 * 864e5).toISOString();
+    const mature = await env.QNFO_AUDIT.prepare("SELECT id FROM kaizen_candidates WHERE status='proposed' AND created_at < ?1 LIMIT 20").bind(matureCut).all();
+    for (const m of (mature.results || [])) {
+      await env.QNFO_AUDIT.prepare("UPDATE kaizen_candidates SET status='promoted', updated_at=?1 WHERE id=?2").bind(new Date().toISOString(), m.id).run();
+      disposed++;
+    }
+  } catch (e) { }
   return {
     ok: true,
     worker: "qnfo-kaizen",
     version: VERSION,
     reportId,
     reportDate,
+    disposed,
     scanned: scored.length,
     flagged: flagged.length,
     elapsedMs: Date.now() - started,
