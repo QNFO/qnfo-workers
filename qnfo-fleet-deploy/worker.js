@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.1)
-var VERSION = "0.3.1";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.2)
+var VERSION = "0.3.2";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -43,7 +43,7 @@ async function enabled(env) { return (await stateGet(env, "enabled", "0")) === "
 async function autoHeal(env) { return (await stateGet(env, "auto_heal", "0")) === "1"; }
 async function audit(env, w, actor, from, to, src2, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src2 || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
-async function canonical(worker) {
+async function canonical(env, worker) {
   var names = [worker];
   if (worker.indexOf("qnfo-") === 0) names.push(worker.slice(5));
   var cs = [];
@@ -54,9 +54,21 @@ async function canonical(worker) {
   for (var i = 0; i < cs.length; i++) {
     try {
       var r = await timedFetch(GH + cs[i], { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
-      if (r.ok) { var c = await r.text(); if (c && c.length > 0 && c.slice(0, 4) !== "404:") return { path: cs[i], code: c }; }
+      if (r.ok) {
+        var c = await r.text();
+        if (c && c.length > 0 && c.slice(0, 4) !== "404:") {
+          try { if (env.CANONICAL) await env.CANONICAL.put(worker + ".js", c, { httpMetadata: { contentType: "text/plain" } }); } catch (e) {}
+          return { path: cs[i], code: c };
+        }
+      }
     } catch (e) {}
   }
+  try {
+    if (env.CANONICAL) {
+      var o = await env.CANONICAL.get(worker + ".js");
+      if (o) { var t = await o.text(); if (t && t.length > 0) return { path: "r2:qnfo-canonical/" + worker + ".js", code: t }; }
+    }
+  } catch (e) {}
   return null;
 }
 async function deployedContent(env, worker) {
@@ -78,7 +90,7 @@ async function redeploy(env, worker) {
   if (NO_SELF.indexOf(worker) >= 0) return { ok: false, status: 400, note: "self-redeploy refused" };
   if (!(await enabled(env))) return { ok: false, status: 403, note: "kill-switch closed" };
   if (await cooldown(env, worker)) return { ok: false, status: 429, note: "cooldown 60s" };
-  var c = await canonical(worker);
+  var c = await canonical(env, worker);
   if (!c) return { ok: false, status: 404, note: "no canonical source" };
   var canV = versionOf(c.code);
   if (!canV) return { ok: false, status: 422, note: "canonical has no VERSION marker" };
@@ -111,7 +123,7 @@ async function scan(env, heal) {
       var n = names[i];
       if (NO_SELF.indexOf(n) >= 0) continue;
       out.scanned++;
-      var c = await canonical(n);
+      var c = await canonical(env, n);
       if (!c) { out.errors++; continue; }
       var canV = versionOf(c.code);
       if (!canV) { out.errors++; continue; }
