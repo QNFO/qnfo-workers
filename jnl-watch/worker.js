@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
 var COMMUNITY = `https://zenodo.org/api/communities/${COMMUNITY_ID}/records`;
 var CURSOR_KEY = "cursor:lastModified";
-var VERSION = "0.1.7";
+var VERSION = "0.1.8";
 var PAGE_SIZE = 25;
 var MAX_PAGES = 40;
 var UA = "jnl-watch/0.1.6 (QNFO AI-referee overlay for Zenodo community aiscience)";
@@ -92,11 +92,15 @@ async function poll(env) {
   const { hits, total } = await zenodoRecords();
   const prev = await env.STATE.get(CURSOR_KEY);
   let newest = prev || "1970-01-01T00:00:00.000Z";
-  let newRecs = 0, updRecs = 0;
+  let newRecs = 0, updRecs = 0, skippedOwn = 0;
   for (const h of hits) {
     const mod = new Date(h.modified).toISOString();
     if (mod > newest) newest = mod;
     if (!prev || mod > prev) {
+      const hTitle = (h.metadata && h.metadata.title) || "";
+      const hCreators = ((h.metadata && h.metadata.creators) || []).map((c) => c.name || "");
+      const isOwnReview = hTitle.indexOf("AI Referee Report") === 0 || hCreators.indexOf("QNFO AI Referee") >= 0;
+      if (isOwnReview) { skippedOwn++; continue; }
       const existing = await env.AUDIT.prepare("SELECT recid FROM jnl_records WHERE recid = ?").bind(h.id).first();
       await env.AUDIT.prepare(
         `INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, last_checked)
@@ -109,7 +113,7 @@ async function poll(env) {
   }
   await env.STATE.put(CURSOR_KEY, newest);
   await env.AUDIT.prepare("INSERT INTO jnl_polls (fetched, new_records, updated_records, cursor) VALUES (?, ?, ?, ?)").bind(hits.length, newRecs, updRecs, newest).run();
-  return { ok: true, schema, community_total: total, fetched: hits.length, new_records: newRecs, updated_records: updRecs, cursor: newest, prev_cursor: prev };
+  return { ok: true, schema, community_total: total, fetched: hits.length, new_records: newRecs, updated_records: updRecs, skipped_own_reviews: skippedOwn, cursor: newest, prev_cursor: prev };
 }
 __name(poll, "poll");
 function json(data, status = 200) {
