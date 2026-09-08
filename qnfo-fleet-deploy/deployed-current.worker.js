@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.2.1)
-var VERSION = "0.2.1";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.0)
+var VERSION = "0.3.0";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var NO_SELF = ["qnfo-fleet-deploy"];
@@ -20,12 +20,20 @@ function versionOf(code) {
   }
   return null;
 }
+function newer(a, b) {
+  a = String(a || ""); b = String(b || "");
+  function num(s) { var m = s.split("-")[0]; var p = m.split("."); var n = []; for (var i = 0; i < p.length; i++) { var x = parseInt(p[i], 10); n.push(isNaN(x) ? 0 : x); } return n; }
+  var ap = num(a), bp = num(b);
+  var len = Math.max(ap.length, bp.length);
+  for (var i = 0; i < len; i++) { var x = ap[i] || 0, y = bp[i] || 0; if (x !== y) return x > y; }
+  return a > b;
+}
 async function sha256(str) { var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); return Array.from(new Uint8Array(d)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join(""); }
 async function stateGet(env, key, fb) { try { var r = await env.AUDIT.prepare("SELECT value FROM fleet_deploy_state WHERE key=?1").bind(key).first(); return r && r.value !== null && r.value !== undefined ? r.value : fb; } catch (e) { return fb; } }
 async function stateSet(env, key, value) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploy_state (key,value,updated_at) VALUES (?1,?2,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')").bind(key, String(value)).run(); } catch (e) {} }
 async function enabled(env) { return (await stateGet(env, "enabled", "0")) === "1"; }
 async function autoHeal(env) { return (await stateGet(env, "auto_heal", "0")) === "1"; }
-async function audit(env, w, actor, from, to, src, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
+async function audit(env, w, actor, from, to, src2, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src2 || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
 async function canonical(worker) {
   var names = [worker];
@@ -58,7 +66,7 @@ async function cooldown(env, worker) {
 async function redeploy(env, worker) {
   if (!/^[a-zA-Z0-9-]+$/.test(worker)) return { ok: false, status: 400, note: "invalid name" };
   if (NO_SELF.indexOf(worker) >= 0) return { ok: false, status: 400, note: "self-redeploy refused" };
-  if (!(await enabled(env))) return { ok: false, status: 403, note: "disabled (kill-switch)" };
+  if (!(await enabled(env))) return { ok: false, status: 403, note: "kill-switch closed" };
   if (await cooldown(env, worker)) return { ok: false, status: 429, note: "cooldown 60s" };
   var c = await canonical(worker);
   if (!c) return { ok: false, status: 404, note: "no canonical source" };
@@ -70,16 +78,20 @@ async function redeploy(env, worker) {
     await audit(env, worker, "deploy", depV, canV, c.path, true, "no-op version match");
     return { ok: true, status: 200, note: "no-op", from: depV, to: canV };
   }
+  var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
   var toSha = await sha256(c.code);
   var r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/javascript+module" }, body: c.code });
   var j = null; try { j = await r.json(); } catch (e) {}
-  var ok = r.ok && !(j && j.success === false);
-  var note = ok ? ("redeployed " + (depV || "?") + " -> " + canV) : ("HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180));
+  var putOk = r.ok && !(j && j.success === false);
+  var dep2 = await deployedContent(env, worker);
+  var depV2 = dep2 ? versionOf(dep2) : null;
+  var ok = putOk && depV2 === canV;
+  var note = !putOk ? ("HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180)) : (ok ? ("redeployed " + depV + " -> " + canV) : ("PUT-ok but deployed still " + (depV2 || "?") + " (wrangler-managed no-op?)"));
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
-  return { ok: ok, status: r.status, note: note, from: depV, to: canV, bytes: c.code.length, source: c.path, sha256: toSha.slice(0, 16) };
+  return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, source: c.path, bytes: c.code.length };
 }
 async function scan(env, heal) {
-  var out = { scanned: 0, drifted: 0, healed: 0, errors: 0, details: [] };
+  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, details: [] };
   try {
     var lr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } });
     var lj = await lr.json();
@@ -94,10 +106,17 @@ async function scan(env, heal) {
       if (!canV) { out.errors++; continue; }
       var dep = await deployedContent(env, n);
       var depV = dep ? versionOf(dep) : null;
-      if (depV === canV) continue;
+      if (!depV) { out.errors++; continue; }
+      if (depV === canV) { out.clean++; continue; }
+      if (newer(depV, canV)) {
+        out.ahead++;
+        out.details.push(n + ":ahead " + depV + ">" + canV);
+        await report(env, n, depV, canV, c.path, "deployed-ahead");
+        continue;
+      }
       out.drifted++;
-      out.details.push(n + ":" + (depV || "?") + "->" + canV);
-      await report(env, n, depV, canV, c.path, "drift");
+      out.details.push(n + ":behind " + depV + "->" + canV);
+      await report(env, n, depV, canV, c.path, "canonical-ahead");
       if (heal) { var res = await redeploy(env, n); if (res.ok) out.healed++; }
     }
   } catch (e) { out.errors++; out.note = String(e && e.message || e).slice(0, 120); }
@@ -124,11 +143,15 @@ export default {
       var res = await scan(env, false);
       return json({ ok: true, scan: res });
     }
+    if (p === "/scan-heal" && request.method === "POST" && admin) {
+      var res2 = await scan(env, true);
+      return json({ ok: true, scan: res2 });
+    }
     return json({ error: "not found" }, 404);
   },
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " drifted=" + res.drifted + " healed=" + res.healed + " errors=" + res.errors);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors);
   }
 };
