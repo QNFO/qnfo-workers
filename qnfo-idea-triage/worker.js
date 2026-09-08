@@ -9,7 +9,7 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-const VERSION = "1.3.4-orch-custom-route";
+const VERSION = "1.4.0-intake-only";
 const MODELS = {
   a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -632,12 +632,17 @@ export default {
       } catch (e) { console.log("[qnfo-idea-triage] triage cron error:", e.message); }
     }
     if (event.cron === "*/10 * * * *") {
+      // v1.4.0-intake-only: triage does NOT claim research_queue rows or dispatch to
+      // agent-orchestrator. Canonical 2026-09-06: that orchestrator path NEVER completed a
+      // paper (100% 60-min watchdog timeout) and raced qnfo-research-exec.run() (row 9ea237fc
+      // failed 20:21). research-exec.run() is the single research_queue stage-machine owner.
+      // triage runs intake (score/enqueue) only. /run/sync + /run/queue HTTP endpoints remain
+      // available for manual ops but are not auto-invoked.
       try {
         await ensureSchema(env);
-        const s = await syncStages(env);
-        const c = await claimNext(env);
-        console.log("[qnfo-idea-triage] stage cron:", JSON.stringify({ sync: s.slice(0, 3), claim: c.claimed ? c.queue_id : c.reason }));
-      } catch (e) { console.log("[qnfo-idea-triage] stage cron error:", e.message); }
+        const r = await runPending(env, true, 4);
+        console.log("[qnfo-idea-triage] intake cron:", JSON.stringify({ triaged: r.triaged.length, added: r.queue_added, errors: r.errors.length }));
+      } catch (e) { console.log("[qnfo-idea-triage] intake cron error:", e.message); }
     }
   },
   async fetch(request, env) {

@@ -2,8 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.1";
-var MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var VERSION = "1.0.3-deepseek-flash";
+var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
 var PROV_FILES = ["references.bib", "citation-audit.md", "DUE-DILIGENCE.md", "PROJECT-PLAN.md", "README.md", "LICENSE"];
@@ -143,12 +143,25 @@ async function aiText(env, prompt, model, maxTokens) {
   const res = await env.AI.run(m, { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens || 4096 }, { gateway: { id: "default" } });
   let text = "";
   try {
-    text = (res && (res.response || res.result || "")).toString();
+    // Envelope-agnostic extraction (2026-09-06): Workers AI may return choices[].message.content,
+    // result.response, response, or result. Legacy code read only res.response||res.result and
+    // silently lost text when the envelope was OpenAI-style choices[].
+    if (res) {
+      const ch = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
+      if (ch) { text = String(ch); }
+      else if (typeof res.response === "string") { text = res.response; }
+      else if (res.result && typeof res.result === "string") { text = res.result; }
+      else if (res.result && typeof res.result.response === "string") { text = res.result.response; }
+      else if (res.result && res.result.choices && res.result.choices[0] && res.result.choices[0].message) {
+        text = String(res.result.choices[0].message.content || "");
+      } else if (typeof res === "string") { text = res; }
+    }
   } catch (e) {
     text = "";
   }
   return text.trim();
 }
+
 __name(aiText, "aiText");
 function parseJsonObject(text) {
   const a = text.indexOf("{");

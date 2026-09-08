@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.5.16-v2drain-only";
+var VERSION = "0.5.17-research-restored";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
 var MAX_NOTE = 4e3;
@@ -943,16 +943,25 @@ __name(run, "run");
 __name2(run, "run");
 var worker_default = {
     async scheduled(event, env, ctx) {
-    // v0.5.16-v2drain-only: research-exec OWNS version_queue v2-drain ONLY.
-    // research_queue stage machine (note->draft->review->publish) is owned by
-    // qnfo-idea-triage + agent-orchestrator. Previous versions ALSO ran run() here,
-    // a DUPLICATE consumer that raced triage on the same rows and failed papers.
+    // v0.5.17-research-restored: research-exec is the SINGLE research_queue stage-machine
+    // owner (proven publisher: 09-03/09-04 note->draft->publish->published with real DOIs
+    // 22278600/22278842/22279728/22280745 via direct Workers-AI models). drainV2 (version_queue)
+    // then run() (research_queue). triage is intake-only (score/enqueue). Canonical 2026-09-06:
+    // the triage->agent-orchestrator dispatch path NEVER completed a paper (100% 60-min watchdog
+    // timeout, zero advance/publish actions in pipeline_tasks) and its claim+dispatch raced this
+    // worker (row 9ea237fc failed 20:21). run() honors RESEARCH_HALT kill-switch.
     ctx.waitUntil((async function() {
       try {
         var drained = await drainV2(env);
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");
       } catch (e) {
         await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
+      }
+      if (env.RESEARCH_HALT === "1") return;
+      try {
+        await run(env);
+      } catch (e) {
+        await logEvent(env, "error", "run threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
     })());
   },  async fetch(request, env) {

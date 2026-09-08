@@ -19,8 +19,8 @@
 //   /doc, /audit are read-only and open.
 // SAFETY: never sends external outreach in v0.3.x — candidates are queued
 //   with email_verified=0 and REQUIRE verification before any send.
-var MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
-var VERSION = "0.3.3-p1-p1";
+var MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit: triage+classification+outreach compose
+var VERSION = "0.3.4-glm53";
 var OUTREACH_MARKERS = ["primon","zeta partition","madelung","measurement","ultrametric","p-adic","adelic","identity, aggregation","empirical filter","pre-arithmetic","formalism 25","hierarchy distance","spectral statistics","landauer","exchange phase","logical scalar","laws of form","qudit","joules-per-solution","arxiv:","10.5281/zenodo","zenodo","qubit delusion","manifesto for honest computation","consilience","q-calculus","notation problem"];
 var QNFO_DOMAINS = ["qnfo.org","qwav.org","qwav.tech","qwav.net","qwav.uk","q-wave.tech","q08.org"];
 
@@ -38,7 +38,7 @@ var DOC = {
   },
   auth: "Bearer <EMAIL_API_KEY> or x-api-key on /run/*. Open: /health /doc /audit.",
   bindings: {
-    AI: "Workers AI (llama-3.1-8b-instruct-fp8) — triage + classification",
+    AI: "Workers AI (glm-5.3-flash) — triage + classification + outreach compose",
     AUDIT_DB: "D1 qnfo-audit (35e2e573...) — qnfo-email emails table + audit_sessions",
     DRY_RUN: "plain_text 'false' (live cron). true = detection-only, no receipt/D1 writes",
     EMAIL: "service binding -> qnfo-email (production). Host qnfo-email.internal",

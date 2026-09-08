@@ -30,13 +30,13 @@ database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 binding = "VZ"
 index_name = "personal-life"
 
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "personal-media"
+
 [[services]]
 binding = "CAL_API"
 service = "calendar-api"
 environment = "production"
-
-[[r2_buckets]]
-binding = "MEDIA"
-bucket_name = "personal-media"
 
 # Secrets (wrangler secret put): API_KEY, CAL_TOKEN, CF_TOKEN, INFRA_TOKEN
