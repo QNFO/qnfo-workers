@@ -1,6 +1,7 @@
-// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose.
+// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry + agent_issue escalation (was v0.5.1-failopen).
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN. D1: DB (qnfo-audit.social_threads). AI: env.AI.
 // Cron posts oldest queued thread. /compose drafts a thread from title+abstract (draft -> approve -> queued).
+var VERSION = '0.5.2-checker-heal';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 
@@ -11,12 +12,15 @@ function truncate(text, max) {
 }
 
 function auth(req, env) {
-  const exp = env.SOCIAL_TOKEN;
   const tok = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!exp || !tok || tok.length !== exp.length) return false;
-  let d = 0;
-  for (let i = 0; i < tok.length; i++) d |= tok.charCodeAt(i) ^ exp.charCodeAt(i);
-  return d === 0;
+  if (!tok) return false;
+  const check = (exp) => {
+    if (!exp || tok.length !== exp.length) return false;
+    let d = 0;
+    for (let i = 0; i < tok.length; i++) d |= tok.charCodeAt(i) ^ exp.charCodeAt(i);
+    return d === 0;
+  };
+  return (env.SOCIAL_TOKEN && check(env.SOCIAL_TOKEN)) || (env.GATEWAY_SOCIAL_TOKEN && check(env.GATEWAY_SOCIAL_TOKEN));
 }
 
 async function session(env) {
@@ -70,6 +74,72 @@ function extractText(ai) {
   return '';
 }
 
+async function checkThread(env, title, abstract, posts) {
+  const base = [
+    "Given a paper (title + abstract = ground truth) and a social media thread (candidate), list every claim in the thread that is NOT supported by the title or abstract.",
+    "Check for: invented numbers, invented statistics, invented findings, overclaiming, misattribution, unsupported claims of being 'new' or 'first'.",
+    "Ignore style: questions, hooks, calls to action, the DOI link, and generic phrases like 'read the paper'.",
+    "Output ONLY a JSON array of issues, e.g. [{\"post\": 2, \"issue\": \"...\"}]. Output [] if the thread is fully faithful.",
+    "PAPER: " + JSON.stringify({ title: title, abstract: abstract }),
+    "THREAD: " + JSON.stringify(posts)
+  ].join('\n');
+  function parseIssues(text) {
+    if (!text) return null;
+    const cleaned = String(text).replace(/```(?:json)?/g, '').trim();
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
+    } catch (e) {}
+    const lo = cleaned.indexOf('['), hi = cleaned.lastIndexOf(']');
+    if (lo >= 0 && hi > lo) {
+      try {
+        const parsed = JSON.parse(cleaned.slice(lo, hi + 1));
+        if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
+      } catch (e2) {}
+    }
+    return null;
+  }
+  let text = extractText(await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 1000 })).trim();
+  let issues = parseIssues(text);
+  if (issues === null) {
+    const retryText = extractText(await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 1000 })).trim();
+    issues = parseIssues(retryText);
+    if (issues === null) {
+      const sample = String(retryText || text || '').slice(0, 150);
+      await logAlert(env, 'checker', 'warn', 'checker output unusable after retry; posting without fact-check (fail-open): ' + sample);
+      try {
+        const dup = await env.DB.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND title LIKE 'SOCIAL-CHECKER-FAILOPEN%'").first();
+        if (!dup || Number(dup.n) === 0) {
+          const mx = await env.DB.prepare("SELECT COALESCE(MAX(id),0) m FROM agent_issues").first();
+          await env.DB.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind(Number(mx.m) + 1, 'SOCIAL-CHECKER-FAILOPEN: fact-checker unusable after retry', 'checker empty or unparseable: ' + sample, 'qnfo-social', 'fleet-self-improve', 'medium', 'open', null).run();
+        }
+      } catch (eE) {}
+      return [];
+    }
+  }
+  return issues;
+}
+
+async function logAlert(env, source, level, message) {
+  try {
+    await env.DB.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(source, level, String(message).slice(0, 500)).run();
+  } catch (e) {}
+}
+
+async function alertDigest(env) {
+  try {
+    const rows = await env.DB.prepare("SELECT id, source, level, message, created_at FROM alerts WHERE digested IS NULL ORDER BY id ASC LIMIT 100").all();
+    const items = rows.results || [];
+    if (!items.length) return;
+    const summary = 'QNFO alerts digest ' + new Date().toISOString() + ' - ' + items.length + ' alert(s): ' + items.map(function(a){ return '[' + a.level + '] ' + a.source + ': ' + a.message; }).join(' | ');
+    await env.DB.prepare("UPDATE alerts SET digested=1 WHERE id IN (SELECT id FROM alerts WHERE digested IS NULL ORDER BY id ASC LIMIT 100)").run();
+    await logAlert(env, 'digest', 'info', 'digest emitted ' + items.length + ' alert(s)');
+    console.log(summary);
+  } catch (e) {
+    await logAlert(env, 'digest', 'error', String(e).slice(0, 300));
+  }
+}
+
 async function autoScan(env) {
   try {
     const q = 'metadata.creators.person_or_org.name:"Quni-Gudzinas"';
@@ -94,7 +164,7 @@ async function autoScan(env) {
       const dup = await env.DB.prepare("SELECT id FROM social_threads WHERE doi=?").bind(doi).first();
       if (dup) continue;
       const prompt = [
-        "You are a promotion writer for QNFO, an open-science research org. Write a 5-post Bluesky thread that amplifies a research paper accurately.",
+        "Write a 5-post Bluesky thread that amplifies a research paper accurately.",
         "Rules:",
         "1. Post 1: a hook stating the core claim or a provocative question (why a reader should care).",
         "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
@@ -110,20 +180,25 @@ async function autoScan(env) {
       const ai = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
       const posts = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
       if (posts.length < 3) continue;
+      const issues = await checkThread(env, title, abstract, posts);
+      const status = issues.length === 0 ? 'queued' : 'draft';
       const slug = 'scan-' + (doi.split('/').pop() || Date.now().toString(36));
-      await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status) VALUES (?,?,?,?, 'draft')").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6))).run();
+      await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, issues.length ? JSON.stringify(issues) : null).run();
+      if (issues.length) await logAlert(env, 'scan', 'warning', 'draft flagged for review: ' + slug + ' (' + issues.length + ' issue(s))');
       drafted++;
       if (created > newest) newest = created;
     }
     await env.DB.prepare("INSERT INTO scan_state (key, value) VALUES ('last_scanned', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(newest).run();
     console.log('auto-scan: drafted', drafted, 'draft threads; last_scanned', newest);
   } catch (e) {
+    await logAlert(env, 'scan', 'error', String(e));
     console.error('auto-scan failed', String(e));
   }
 }
 
 export default {
   async scheduled(event, env) {
+    if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
     if (event.cron === '0 6 * * *') { await autoScan(env); return; }
     const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
     if (!row) return;
@@ -137,6 +212,7 @@ export default {
       console.log('cron posted thread', row.slug, uris[0]);
     } catch (e) {
       await env.DB.prepare("UPDATE social_threads SET status='failed', error=?, retry_count=retry_count+1 WHERE id=?").bind(String(e).slice(0, 300), row.id).run();
+      await logAlert(env, 'cron', 'error', 'cron post failed ' + row.slug + ': ' + String(e));
       console.error('cron post failed', row.slug, String(e));
     }
   },
@@ -145,7 +221,7 @@ export default {
     const p = url.pathname, m = request.method;
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     if (!auth(request, env)) return new Response('unauthorized', { status: 401, headers: cors });
     try {
       if (p === '/post' && m === 'POST') {
@@ -179,7 +255,7 @@ export default {
         const doi = String(b.doi || '');
         if (!title || !abstract) return new Response(JSON.stringify({ error: 'title and abstract required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
         const prompt = [
-          "You are a promotion writer for QNFO, an open-science research org. Write a 5-post Bluesky thread that amplifies a research paper accurately.",
+          "Write a 5-post Bluesky thread that amplifies a research paper accurately.",
           "Rules:",
           "1. Post 1: a hook stating the core claim or a provocative question (why a reader should care).",
           "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
@@ -197,8 +273,11 @@ export default {
         const posts = sanitizePosts(text.split("\n"));
         if (posts.length < 3) return new Response(JSON.stringify({ error: 'compose produced too few posts', raw: text.slice(0, 500) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
         const slug = String(b.slug || ('draft-' + Date.now().toString(36)));
-        await env.DB.prepare("INSERT INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'draft')").bind(slug, title, JSON.stringify(posts.slice(0, 6))).run();
-        return new Response(JSON.stringify({ ok: true, slug: slug, status: 'draft', posts: posts.slice(0, 6) }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        const issues = await checkThread(env, title, abstract, posts);
+        const status = issues.length === 0 ? 'queued' : 'draft';
+        await env.DB.prepare("INSERT INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, issues.length ? JSON.stringify(issues) : null).run();
+        if (issues.length) await logAlert(env, 'compose', 'warning', 'draft flagged for review: ' + slug + ' (' + issues.length + ' issue(s))');
+        return new Response(JSON.stringify({ ok: true, slug: slug, status: status, auto_approved: status === 'queued', issues: issues, posts: posts.slice(0, 6) }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/approve' && m === 'POST') {
         const b = await request.json();
@@ -222,6 +301,14 @@ export default {
         await autoScan(env);
         const drafts = await env.DB.prepare("SELECT id, slug, title, doi FROM social_threads WHERE status='draft' ORDER BY id DESC LIMIT 10").all();
         return new Response(JSON.stringify({ ok: true, drafted: (drafts.results || []).length, drafts: drafts.results || [] }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/alerts' && m === 'GET') {
+        const rows = await env.DB.prepare("SELECT id, source, level, message, created_at, digested FROM alerts ORDER BY id DESC LIMIT 50").all();
+        return new Response(JSON.stringify(rows.results || []), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/digest' && m === 'POST') {
+        await alertDigest(env);
+        return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       return new Response('not found', { status: 404, headers: cors });
     } catch (e) {
