@@ -186,6 +186,7 @@ const AMS_SCHEDULE = {
   "visibility":      { times: ["07:30"], days: "1", fixed: null },
   "engagement":      { times: ["07:15"], days: "1", fixed: null },
   "radar":           { times: ["09:30"], days: "1-5", fixed: null },
+  "gtd-reconcile":   { times: ["05:30"], days: "1",   fixed: null },
 };
 
 // Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
@@ -548,6 +549,11 @@ async function r2PutText(env, key, text) {
 }
 
 // ---------- research scan: arXiv query -> archive D1 -> AI GTD extraction -> D1 register + R2 append ----------
+function h32(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return "scan" + (h >>> 0).toString(36) + s.length.toString(36);
+}
 async function jobResearchScan(env) {
   const q = encodeURIComponent('(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" OR all:"ZBW" OR all:"quantum thermodynamics") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)');
   let hits = [];
@@ -574,6 +580,20 @@ async function jobResearchScan(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS research_scan_log (id TEXT PRIMARY KEY, ts TEXT, job TEXT, payload TEXT)").run();
     await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1,?2,?3,?4)").bind("scan-" + Date.now().toString(36), new Date().toISOString(), "research-scan", JSON.stringify(hits).slice(0, 3000)).run();
+  } catch (e) {}
+
+  // AUTO-CANDIDATES: feed top scan hits into idea_proposals as autonomous research fuel.
+  // (Triage scores them via its own cron; maxActive=1 caps research concurrency.)
+  try {
+    for (const h of hits.filter((x) => !x.error).slice(0, 5)) {
+      const hkey = "scan-" + String(h.id || "").slice(0, 80);
+      const hh = h32(hkey);
+      const dup = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE ip_hash = ?").bind(hh).first();
+      if (dup && dup.n > 0) continue;
+      await env.AUDIT.prepare(
+        "INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?, ?, '', 'new', ?, ?)"
+      ).bind("auto-scan", String(h.title || "").slice(0, 300) + " — arXiv " + String(h.id || "") + ". Auto-candidate from daily research scan; triage for QNFO research fit.", hh, new Date().toISOString()).run();
+    }
   } catch (e) {}
 
   // AI GTD extraction: papers are never shown to the user; only actionable items surface
@@ -1667,7 +1687,21 @@ async function jobEngagement(env) {
 }
 // ================= PART 5: registry + dispatch + handlers =================
 
+// ---------- weekly GTD/governance reconcile (register row 38) ----------
+async function jobGtdReconcile(env) {
+  try {
+    const open = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work").first();
+    const overdue = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work WHERE due < ?").bind(new Date().toISOString().slice(0, 10)).first();
+    const human = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_waiting_on_human").first();
+    const noDod = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_open_tasks_no_dod").first();
+    const line = "GTD reconcile: open=" + (open && open.n || 0) + " overdue=" + (overdue && overdue.n || 0) + " waiting_on_human=" + (human && human.n || 0) + " no_dod=" + (noDod && noDod.n || 0);
+    await recordEvent(env, "gtd-reconcile", "gr-" + Date.now().toString(36), line, { job: "gtd-reconcile" });
+    return { status: "ok", open: (open && open.n || 0), overdue: (overdue && overdue.n || 0), waiting_on_human: (human && human.n || 0), no_dod: (noDod && noDod.n || 0) };
+  } catch (e) { return { status: "error", error: String(e).slice(0, 200) }; }
+}
+
 const JOBS = {
+  "gtd-reconcile": jobGtdReconcile,
   "email-triage": jobEmailTriage,
   "gmail-triage": jobGmailTriage,
   "briefing": jobBriefing,
