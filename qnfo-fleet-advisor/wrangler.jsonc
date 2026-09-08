@@ -19,6 +19,8 @@
   "vars": {
     "CF_ACCOUNT_ID": "edb167b78c9fb901ea5bca3ce58ccc4b",
     "ADVISOR_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "REVIEW_MODEL": "@cf/openai/gpt-oss-120b",
+    "ADVISOR_ITERS": "3",
     "PROBE_WORKERS": "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-paper-reviser,qnfo-outreach,qnfo-research-exec,qnfo-error-selfheal,qnfo-fleet-calibrator,qnfo-auditor,qnfo-social,qnfo-intent-orchestrator,qnfo-cloud-ops,qnfo-gateway,qnfo-infra"
   }
 }

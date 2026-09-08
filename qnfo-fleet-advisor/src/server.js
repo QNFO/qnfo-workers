@@ -1,7 +1,14 @@
-// qnfo-fleet-advisor v0.2.1 - canonical autonomous Cloudflare fleet advisor.
+// qnfo-fleet-advisor v0.3.2 - canonical autonomous Cloudflare fleet advisor.
 // 100% server-side, 100% autonomous. Cron */20 + token-gated POST /run-audit.
-// v0.2.1: multi-host probe (q08 + qnfo.org), concurrent; no false WORKER-DOWN.
-const VERSION = "0.2.2";
+// v0.3.0: ENSEMBLE advice (primary llama proposes + gpt-oss-120b adversarially reviews
+// IMPROVE/ACCEPT -> consensus suggestion); gateway drift fixed to real fields only
+// (never reads nonexistent spend_limits); probe leg advisory-only (SVC-BINDING-1).
+// v0.3.1: MULTI-ITERATION (reviewer IMPROVE feeds back up to N rounds until ACCEPT)
+// + FEEDBACK-LOOP (prior-cycle open advisor issues injected into every proposal prompt).
+// v0.3.2: cron runs runAudit DIRECTLY (was token-gated DO path that 401'd silently -
+//   the DO env did not reliably see ADVISOR_TOKEN, so no advisor-audit events landed
+//   after 12:15 despite an armed */20 cron). Token gate remains only on POST /run-audit.
+const VERSION = "0.3.2";
 const WORKER = "qnfo-fleet-advisor";
 
 const nowIso = () => new Date().toISOString();
@@ -41,14 +48,53 @@ async function gatewayConfigAudit(env) {
     const list = (j && j.result) || [];
     const drift = [];
     for (const g of list) {
+      // v0.3.0: only real fields present on the gateway object - the gateway-list API
+      // response NEVER includes spend_limits (verified live 2026-09-08), so reading it
+      // always fired a false GATEWAY-DRIFT. Spend-guard state is checked separately
+      // via the billing/spending-limit endpoint (see spendGuardAudit).
       if (g.collect_logs !== true) drift.push(g.id + ":collect_logs!=true");
       if (g.authentication !== true) drift.push(g.id + ":authentication!=true");
-      const sl = g.spend_limits;
-      if (!sl || sl.enabled !== true) drift.push(g.id + ":spend_limits disabled");
       if (g.retry_max_attempts !== undefined && g.retry_max_attempts < 2) drift.push(g.id + ":retries<2");
     }
     return { skipped: false, gateways: list.map((g) => ({ id: g.id, cache_ttl: g.cache_ttl, collect_logs: g.collect_logs, retries: g.retry_max_attempts })), drift };
   } catch (e) { return { skipped: true, reason: String((e && e.message) || e).slice(0, 160) }; }
+}
+
+async function spendGuardAudit(env) {
+  // v0.3.0: truthfully read the live spend-guard state (billing/spending-limit endpoint).
+  // The gateway-list API never returns spend_limits (false-drift source fixed in v0.3.0).
+  if (!env.CF_API_TOKEN) return { skipped: true, reason: "no CF_API_TOKEN" };
+  try {
+    const url = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/ai-gateway/billing/spending-limit";
+    const resp = await fetch(url, { headers: { Authorization: "Bearer " + env.CF_API_TOKEN }, signal: AbortSignal.timeout(8000) });
+    const j = await resp.json();
+    const r = (j && j.result) || {};
+    const enabled = r.enabled === true;
+    const amt = (r.config && r.config.amount) || 0;
+    return { skipped: false, enabled, amount: amt, detail: "enabled=" + enabled + " amount=" + amt + " " + ((r.config && r.config.duration) || "") + " " + ((r.config && r.config.strategy) || "") };
+  } catch (e) { return { skipped: true, reason: String((e && e.message) || e).slice(0, 160) }; }
+}
+
+// v0.3.1 MULTI-ITERATION cap (tunable via ADVISOR_ITERS, max 5).
+const MAX_ADVISOR_ITERS = 3;
+
+// FEEDBACK-LOOP (v0.3.1): read the advisor's OWN prior-cycle state (last advisor-audit
+// cloud_ops_event) + still-open advisory issues, so every cycle re-examines what it already
+// filed (persistent signal -> the reviewer sees it flagged and proposes escalation/fix,
+// never a blind re-file of the same title).
+async function collectFeedback(env) {
+  const fb = { prior_findings: 0, prior_filed: 0, prior_suggestion: "", open_advisor_issues: [] };
+  try {
+    const last = await d1All(env, "SELECT text FROM cloud_ops_events WHERE kind='advisor-audit' AND job=? ORDER BY ts DESC LIMIT 1", [WORKER]);
+    if (last && last[0] && last[0].text) {
+      try { const st = JSON.parse(last[0].text); fb.prior_findings = st.findings || 0; fb.prior_filed = st.filed || 0; fb.prior_suggestion = st.suggestion || ""; } catch (e) {}
+    }
+  } catch (e) {}
+  try {
+    const open = await d1All(env, "SELECT title FROM agent_issues WHERE source=? AND status='open' ORDER BY updated_at DESC LIMIT 6", [WORKER]);
+    fb.open_advisor_issues = (open || []).map((o) => o.title);
+  } catch (e) {}
+  return fb;
 }
 
 async function runAudit(env) {
@@ -94,18 +140,55 @@ async function runAudit(env) {
   const gw = await gatewayConfigAudit(env);
   if (!gw.skipped && gw.drift && gw.drift.length) findings.push({ kind: "gateway-config", severity: "medium", title: "GATEWAY-DRIFT " + gw.drift.slice(0, 3).join(";"), detail: "drift: " + gw.drift.join(";") });
 
-  // 6. Synthesize advice
+  // 5b. Spend-guard truth (advisory-only; does not file - tracked as issue #540 owner qnfo-ops)
+  const sg = await spendGuardAudit(env);
+  let spend_guard = null;
+  if (!sg.skipped) spend_guard = sg.detail;
+
+  // 6. ENSEMBLE + MULTI-ITERATION + FEEDBACK-LOOP advice (v0.3.1): primary proposes,
+  //    reviewer adversarially audits each round (ACCEPT or IMPROVE); an IMPROVE verdict
+  //    feeds the improved text back as the next proposal up to MAX_ADVISOR_ITERS rounds.
+  //    Prior-cycle open advisor issues (FEEDBACK-LOOP) are injected into the proposal prompt.
   let suggestion = null;
-  const model = env.ADVISOR_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  let ensemble = null;
+  const NL = String.fromCharCode(10);
+  const modelP = env.ADVISOR_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const modelR = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
+  const iters = Math.min(parseInt(env.ADVISOR_ITERS || "", 10) || MAX_ADVISOR_ITERS, 5);
   if (findings.length && env.AI) {
     try {
-      const prompt = "You are the QNFO fleet advisor (adversarial, evidence-based). Audit findings:\n" +
-        findings.map((f) => "- [" + f.severity + "] " + f.title).join("\n") +
-        "\nPropose ONE concrete, falsifiable improvement action (owner + priority). Max 120 words, no preamble.";
-      const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: 350, temperature: 0.3 });
-      const content = (r && r.response) || (r && r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content);
-      suggestion = String(content || "").trim().slice(0, 800) || null;
-    } catch (e) { suggestion = null; }
+      const fb = await collectFeedback(env);
+      const promptLines = ["You are the QNFO fleet advisor (adversarial, evidence-based, no flattery). Audit findings:"];
+      findings.forEach((f) => promptLines.push("- [" + f.severity + "] " + f.title));
+      if (fb.open_advisor_issues.length) {
+        promptLines.push("Previously filed advisory issues STILL OPEN (re-examine: propose escalation or a concrete fix, never re-file the same title):");
+        fb.open_advisor_issues.forEach((t) => promptLines.push("  - " + t));
+      }
+      promptLines.push("Propose ONE concrete, falsifiable improvement action (owner + priority + the evidence that would close it). Max 120 words, no preamble.");
+      const prompt = promptLines.join(NL);
+      const rp = await env.AI.run(modelP, { messages: [{ role: "user", content: prompt }], max_tokens: 350, temperature: 0.3 });
+      const cp = (rp && rp.response) || (rp && rp.choices && rp.choices[0] && rp.choices[0].message && rp.choices[0].message.content);
+      let proposal = String(cp || "").trim().slice(0, 800);
+      let verdict = "";
+      let rounds = 0;
+      if (proposal) {
+        // MULTI-ITERATION: reviewer ACCEPT ends the loop; IMPROVE becomes the next proposal.
+        for (let i = 0; i < iters; i++) {
+          rounds = i + 1;
+          const rv = await env.AI.run(modelR, { messages: [{ role: "user", content: "Review this advisor action. If specific, falsifiable, high-value -> reply ACCEPT. Else reply IMPROVE then the improved action (owner + priority), max 120 words." + NL + "Proposal: " + proposal }], max_tokens: 350, temperature: 0.2 });
+          const cv = (rv && rv.response) || (rv && rv.choices && rv.choices[0] && rv.choices[0].message && rv.choices[0].message.content);
+          const review = String(cv || "").trim();
+          verdict = review.slice(0, 20).toUpperCase();
+          if (verdict.indexOf("ACCEPT") >= 0) break;
+          if (verdict.indexOf("IMPROVE") >= 0 && review.length > 20) {
+            const improved = review.replace(/^IMPROVE[\s:]*/i, "").trim();
+            if (improved) proposal = improved.slice(0, 800);
+          } else break;
+        }
+        suggestion = proposal;
+        ensemble = { proposer: modelP, reviewer: modelR, verdict: verdict.indexOf("IMPROVE") >= 0 ? "improved" : "accepted", iterations: rounds };
+      }
+    } catch (e) { suggestion = null; ensemble = null; }
   }
 
   // 7. File deduped advisory issues
@@ -121,7 +204,7 @@ async function runAudit(env) {
   }
 
   // 8. Audit event log
-  const state = { up: PROBES.length - down.length, down: down.length, findings: findings.length, filed, suggestion, gateway_drift: gw.skipped ? null : gw.drift, ts };
+  const state = { up: PROBES.length - down.length, down: down.length, findings: findings.length, filed, suggestion, gateway_drift: gw.skipped ? null : gw.drift, spend_guard, ensemble, ts };
   try {
     await d1Run(env, "INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?,?,?,?,?,?)",
       ["adv-" + Date.now().toString(36), ts, "advisor-audit", JSON.stringify(state).slice(0, 1800), WORKER, "ok"]);
@@ -158,8 +241,7 @@ export default {
     return new Response("not found", { status: 404 });
   },
   async scheduled(event, env, ctx) {
-    const id = env.FleetAdvisor.newUniqueId("fleet-advisor");
-    const agent = env.FleetAdvisor.get(id);
-    ctx.waitUntil(agent.fetch(new Request("https://internal/run-audit", { method: "POST", headers: { "x-advisor-token": env.ADVISOR_TOKEN || "" } })));
+    // v0.3.2: internal cron runs the audit directly - no token gate, no DO hop.
+    ctx.waitUntil(runAudit(env));
   },
 };
