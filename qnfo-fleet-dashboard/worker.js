@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.8';
+const VERSION = '1.0.9';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -376,7 +376,7 @@ async function buildState(env, ctx) {
   if (analytics.errWorkers.length) issues.push({ sev: 'err', text: analytics.errWorkers.length + ' worker(s) with 24h errors: ' + analytics.errWorkers.map(function (w) { return w.name + '(' + w.errors + ')'; }).join(', ') });
   if (analytics.error) issues.push({ sev: 'warn', text: 'analytics unavailable: ' + analytics.error });
   const noRun = scheduled.filter(function (s) { return s.status === 'NO-RUN'; });
-  if (noRun.length) issues.push({ sev: 'warn', text: noRun.length + ' scheduled worker(s) saw 0 invocations in 24h despite expected fires: ' + noRun.map(function (s) { return s.name; }).join(', ') });
+  if (noRun.length) issues.push({ sev: 'warn', text: noRun.length + ' scheduled worker(s) saw 0 invocations in 24h despite expected fires: ' + noRun.map(function (s) { return s.name; }).join(', ') + ' (adaptive-sampled data; low-volume workers undercount - verify via the worker\'s own logs before acting)' });
 
   return {
     generated_at: new Date().toISOString(),

@@ -7,7 +7,7 @@
 //   so proposals stayed 'new' forever and NOTHING alerted. Now pipeline-ops alarms on this class in
 //   <=15 min, and auto-triggers a triage drain when the triage worker is reachable.
 
-var VERSION = "0.5.1-intake-single-issue";
+var VERSION = "0.5.2-intake-alert-gate";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -161,8 +161,9 @@ async function run(env) {
   // NEW: intake stall watchdog (detect + alarm on untriaged proposal backlog)
   const intake = await intakeWatchdog(env);
   const stalled = h.researching + h.review;
-  if (h.failed > 0 || stalled > 0 || terminal.length > 0 || vErr.length > 0 || (intake && intake.action !== "none")) {
-    const level = terminal.length > 0 || (intake && intake.action !== "none") ? "critical" : (h.failed > 0 || vErr.length > 0 ? "warning" : "info");
+  const intakeEscalating = intake && intake.action === "escalated";
+  if (h.failed > 0 || stalled > 0 || terminal.length > 0 || vErr.length > 0 || intakeEscalating) {
+    const level = terminal.length > 0 || intakeEscalating ? "critical" : (h.failed > 0 || vErr.length > 0 ? "warning" : "info");
     const msg = "research pipeline: failed=" + h.failed + " stalled=" + stalled + " published=" + h.published + " recovered=" + recovered + " vqErr=" + vErr.length + " rearmed=" + rearmed + " rTerm=" + rearmedTerminal + " intake=" + (intake && intake.action !== "none" ? intake.action : "ok") + (terminal.length ? " terminal=" + terminal.length : "");
     try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, level, msg).run(); } catch (e) {}
   }
