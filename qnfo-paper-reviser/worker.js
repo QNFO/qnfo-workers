@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.3-deepseek-flash";
+var VERSION = "1.0.4-deepseek-flash";
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -178,7 +178,9 @@ __name(parseJsonObject, "parseJsonObject");
 async function selectCandidates(env, limit) {
   const rows = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != '' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
   const all = rows && rows.results || [];
-  const done = await env.WATCH_DB.prepare("SELECT slug FROM paper_revision_log GROUP BY slug").all();
+  // id 132 (2026-09-08): terminal dispositions only; every status below is terminal for the auto-loop.
+  // "needs-substantive-revision" and "stub-fragment" defer to the substantive-remediation loop (id 133).
+  const done = await env.WATCH_DB.prepare("SELECT slug FROM paper_revision_log WHERE status IN ('already-revised','flagged','queued','stub-fragment','needs-substantive-revision') GROUP BY slug").all();
   const doneSet = new Set((done && done.results || []).map(function(r) {
     return r.slug;
   }));
@@ -366,12 +368,14 @@ async function processPaper(env, paper, mode) {
   // found no genuine issues in, or for near-empty stub/fragment bodies. Log and skip.
   var bodyLen = String(paper.body_md || "").trim().length;
   var noRealIssues = !issues || issues.length === 0;
-  var isStub = bodyLen < 1500 || /^#{1,3} .{0,40}$/m.test(String(paper.body_md||"").trim());
+  // id 132 (2026-09-08): body is a fragment only when trivially short. The old regex matched any
+  // short heading-only line (## Abstract, ## References) and mislabeled 6-21k-char papers as stubs.
+  var isStub = bodyLen < 1500;
   if (isStub || noRealIssues) {
     if (!dry) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, 'already-revised', ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify({ zenodo_versions: 1, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ zenodo_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
     }
-    return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues", issues: auditSummary, body_len: bodyLen, doi };
+    return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
   }
   const versionTo = bumpVersion(paper.version);
   const edits = applyEdits(paper.body_md || "", low);
