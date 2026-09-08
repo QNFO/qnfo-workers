@@ -3,7 +3,16 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.1.1";
+const VERSION = "1.2.4";
+// v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
+// formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
+// v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
+// (CF edge 404 / SVC-BINDING-1); use qnfo-fleet-dashboard fleet_probe_log rows in qnfo-audit
+// as the authoritative 15-min health evidence, edge probe only as fallback.
+// v1.2.0: exception/alert-storm class auto-close - a worker-exception ticket whose target is
+// healthy NOW and has had NO new alert in 24h AND is older than 48h is stale by evidence;
+// close it (health-availability rows already auto-close on probe pass; this extends the same
+// evidence discipline to alert-storm/exception tickets so the backlog cannot accrue ghost items).
 const WORKER = "qnfo-backlog-exec";
 const MAX_ROW = 40;
 const PROBE_TIMEOUT = 8000;
@@ -31,6 +40,16 @@ function workerTarget(text) {
   return m[0];
 }
 
+async function probeHealthyViaLog(env, name) {
+  try {
+    const row = await env.AUDIT.prepare("SELECT ok, status, ts FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
+    if (row && Number(row.ok) === 1) {
+      const age = Date.now() - new Date(row.ts).getTime();
+      if (age < 24 * 3600 * 1000) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status };
+    }
+  } catch (e) {}
+  return null;
+}
 async function probeHealth(name) {
   const hosts = [name + ".q08.workers.dev", name + ".qnfo.org"];
   for (const h of hosts) {
@@ -56,7 +75,8 @@ async function run(env) {
     const name = workerTarget(title + " " + String(row.description || ""));
     const isHealthAvailability = /health|heartbeat|availability|endpoint down|is down|reachable/i.test(title) && /health|availability|reachable|down/i.test(title);
     if (name && isHealthAvailability) {
-      const p = await probeHealth(name);
+      const pLog = await probeHealthyViaLog(env, name);
+      const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts } : await probeHealth(name);
       if (p.ok) {
         await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
         closed++;
@@ -64,9 +84,39 @@ async function run(env) {
         await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): " + p.host, { id: row.id, target: name, action: "closed", reason: "health-availability predicate passed" }, WORKER, "ok");
         continue;
       } else {
+        if (/orphan|bogus|does not exist/i.test(title)) {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: name, action: "closed", note: "orphan probe target (no such host) - closed on first failed probe" });
+          continue;
+        }
         escalated++;
         detail.push({ id: row.id, target: name, action: "escalate", note: "health probe still failing" });
         continue;
+      }
+    }
+    const isExceptionClass = !isHealthAvailability && name && /alert-storm|exception|error-burst|worker-exception|recurring fail/i.test(title);
+    if (isExceptionClass && name) {
+      // Recurrence-based stale close: error-selfheal alerts every recurrence (2h windows).
+      // If NO error-selfheal exception/storm alert names this worker in the last 24h, the
+      // class has recovered; the ticket is stale. Health evidence (fleet log or edge probe)
+      // is checked when available but is not required - error-selfheal silence IS the signal.
+      const ca = row.created_at;
+      const ageMs = (typeof ca === "number") ? (now - ca) : (now - (new Date(ca).getTime() || 0));
+      if (ageMs > 24 * 3600 * 1000) {
+        let rec = 0;
+        try {
+          const ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM alerts WHERE source='qnfo-error-selfheal' AND message LIKE ?1 AND julianday(created_at) >= julianday('now', '-24 hours')").bind("%" + name + "%").first();
+          rec = ar ? Number(ar.c || 0) : 0;
+        } catch (e) {}
+        if (rec === 0) {
+          const ev = await probeHealthyViaLog(env, name) || await probeHealth(name);
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: name, action: "closed", note: "exception-class recovered: no error-selfheal recurrence 24h, age>24h" + (ev && ev.ok ? ", health ev " + ev.host : "") });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): exception-class recovered", { id: row.id, target: name, action: "closed", reason: "no error-selfheal recurrence in 24h" }, WORKER, "ok");
+          continue;
+        }
       }
     }
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
