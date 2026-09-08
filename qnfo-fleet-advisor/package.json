@@ -1,0 +1,16 @@
+{
+  "name": "qnfo-fleet-advisor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "agents": "^0.22.0",
+    "@cloudflare/think": "^0.17.0",
+    "workers-ai-provider": "^4.0.0",
+    "ai": "^7.0.93"
+  }
+}
