@@ -1,8 +1,9 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.2)
-var VERSION = "0.3.2";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.3)
+var VERSION = "0.3.3";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
+var FRESH_MS = 1800000;
 var NO_SELF = ["qnfo-fleet-deploy"];
 function json(d, s) { return new Response(JSON.stringify(d), { status: s || 200, headers: { "Content-Type": "application/json" } }); }
 function versionOf(code) {
@@ -43,7 +44,21 @@ async function enabled(env) { return (await stateGet(env, "enabled", "0")) === "
 async function autoHeal(env) { return (await stateGet(env, "auto_heal", "0")) === "1"; }
 async function audit(env, w, actor, from, to, src2, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src2 || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
+async function r2Read(env, worker) {
+  try {
+    if (!env.CANONICAL) return null;
+    var o = await env.CANONICAL.get(worker + ".js");
+    if (!o) return null;
+    var t = await o.text();
+    if (!t || t.length === 0) return null;
+    var ts = o.customMetadata && o.customMetadata.ts ? parseInt(o.customMetadata.ts, 10) : 0;
+    var age = isNaN(ts) ? FRESH_MS + 1 : (Date.now() - ts);
+    return { code: t, fresh: age < FRESH_MS, path: "r2:qnfo-canonical/" + worker + ".js" };
+  } catch (e) { return null; }
+}
 async function canonical(env, worker) {
+  var r2 = await r2Read(env, worker);
+  if (r2 && r2.fresh) return r2;
   var names = [worker];
   if (worker.indexOf("qnfo-") === 0) names.push(worker.slice(5));
   var cs = [];
@@ -57,18 +72,13 @@ async function canonical(env, worker) {
       if (r.ok) {
         var c = await r.text();
         if (c && c.length > 0 && c.slice(0, 4) !== "404:") {
-          try { if (env.CANONICAL) await env.CANONICAL.put(worker + ".js", c, { httpMetadata: { contentType: "text/plain" } }); } catch (e) {}
+          try { if (env.CANONICAL) await env.CANONICAL.put(worker + ".js", c, { httpMetadata: { contentType: "text/plain" }, customMetadata: { ts: String(Date.now()) } }); } catch (e) {}
           return { path: cs[i], code: c };
         }
       }
     } catch (e) {}
   }
-  try {
-    if (env.CANONICAL) {
-      var o = await env.CANONICAL.get(worker + ".js");
-      if (o) { var t = await o.text(); if (t && t.length > 0) return { path: "r2:qnfo-canonical/" + worker + ".js", code: t }; }
-    }
-  } catch (e) {}
+  if (r2) return r2;
   return null;
 }
 async function deployedContent(env, worker) {
