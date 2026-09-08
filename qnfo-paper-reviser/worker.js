@@ -2,8 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.2-envelope-safe";
-var MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var VERSION = "1.0.3-deepseek-flash";
+var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
 var PROV_FILES = ["references.bib", "citation-audit.md", "DUE-DILIGENCE.md", "PROJECT-PLAN.md", "README.md", "LICENSE"];

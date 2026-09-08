@@ -4,8 +4,8 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.5.0";
-var MODELS_DEFAULT = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct";
+var VERSION = "0.5.1";
+var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
 var TEXT_CAP = 18000;

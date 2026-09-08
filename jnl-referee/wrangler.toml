@@ -18,6 +18,6 @@ id = "0cf89b469bcb47058e343611d9117897"
 crons = ["23 */2 * * *"]
 
 [vars]
-JNL_MODELS = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-4-scout-17b-16e-instruct"
+JNL_MODELS = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"
 JNL_DAILY_CAP = "60"
 

@@ -1,10 +1,10 @@
-// jnl-reviser v0.1.0 — referee-driven revision loop for self-owned QNFO papers.
+// jnl-reviser v0.2.0 — referee-driven revision loop for self-owned QNFO papers.
 // Reads referee weaknesses -> model proposes targeted edits -> applies to staged new-version draft -> publishes.
 const REF = "jnl-referee"; // service binding
 const ZENODO = "https://zenodo.org/api";
 const OWNER_QNFO = 1328013;
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-const UA = "jnl-reviser/0.1 (QNFO AI-Reviewed Journal revision loop)";
+const MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit swap
+const UA = "jnl-reviser/0.2 (QNFO AI-Reviewed Journal revision loop)";
 const MAX_EDITS = 6;
 const MIN_FIND = 30;
 

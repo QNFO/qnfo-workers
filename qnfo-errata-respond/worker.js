@@ -1,4 +1,4 @@
-const MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
+const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 
 function json(data, status) {
   if (status === void 0) status = 200;
