@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.1"; // 2026-09-08: weekly candidate disposition pass in runScan (mature 'proposed' kaizen_candidates >7d -> 'promoted'; closes the register's "dispositioned in next kaizen report" contract that only the auditor's upsert path previously served)
+var VERSION = "0.3.2-glm53"; // 2026-09-08 model audit: glm-5.2 -> glm-5.3-flash (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -217,7 +217,7 @@ Rules:
 - Reject: vague opinions, questions, destructive edits, and any statement that would create a new skill.
 Existing skills: ` + skillNames.join(", ") + "\nDo not output reasoning or commentary. Output ONLY the JSON object, nothing before or after it.\n" + (hint ? hint + "\n" : "") + "META STATEMENT: " + String(desire || "").slice(0, 3e3);
   try {
-    const r = await env.AI.run("@cf/zai-org/glm-5.2", {
+    const r = await env.AI.run("@cf/zai-org/glm-5.3-flash", {
       messages: [{ role: "user", content: prompt }],
       max_tokens: 2500,
       temperature: 0.2
@@ -402,7 +402,7 @@ var worker_default = {
       if (p === "/test/ai") {
         const t = url.searchParams.get("text") || "reply with the word ok";
         try {
-          const model = url.searchParams.get("model") || "@cf/zai-org/glm-5.2";
+          const model = url.searchParams.get("model") || "@cf/zai-org/glm-5.3-flash";
           const r = await env.AI.run(model, { messages: [{ role: "user", content: t }], max_tokens: 2500, temperature: 0.2 });
           const t2 = r && r.choices && r.choices[0] && r.choices[0].message ? String(r.choices[0].message.content || r.choices[0].message.reasoning_content || "") : String(r && (r.response || r.result) || "");
           return json({ raw: t2.slice(0, 2500), keys: Object.keys(r || {}), shape: r && r.choices ? "openai" : "workers-ai" });

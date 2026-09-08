@@ -12,17 +12,17 @@ var MODEL_TIMEOUT_MS = 3e4;
 var EMBED_MODEL = "bge-base-en-v1.5";
 var MAX_EMBED_BATCH = 32;
 var CF_ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
-var MAX_TOKENS = 3200;
-var DEFAULT_MAX_TOKENS = 8192;
-var MAX_OUT_CAP = 2e5;
-var REASON_OUT_CAP = 16384;
+var MAX_TOKENS = 16384;
+var DEFAULT_MAX_TOKENS = 32768;
+var MAX_OUT_CAP = 200000; // MAXOUT-200K-1 (2026-09-08): restore chat/pro output cap 200000 (the 32K floor was misapplied as a ceiling); reason stays at REASON_OUT_CAP
+var REASON_OUT_CAP = 32768;
 function clampMaxTokens(requested, isReason) {
   let n = Number(requested);
   if (!Number.isFinite(n) || n <= 0) n = DEFAULT_MAX_TOKENS;
   return Math.min(Math.floor(n), isReason ? REASON_OUT_CAP : MAX_OUT_CAP);
 }
 __name(clampMaxTokens, "clampMaxTokens");
-var VERSION = "v3.2.0-reason-gptoss"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
+var VERSION = "v3.2.2-maxout200k"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
