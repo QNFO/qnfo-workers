@@ -4,6 +4,7 @@
 const REFEREE = null; // via service binding env.REFEREE
 const ZENODO_API = "https://zenodo.org/api";
 const OWNER_QNFO = 1328013;
+const COMMUNITY_UUID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
 const UA = "jnl-zenodo/0.1 (QNFO AI-Reviewed Journal overlay; contact qnfo.org)";
 
 function json(data, status = 200) { return new Response(JSON.stringify(data, null, 1), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } }); }
@@ -14,6 +15,31 @@ async function zfetch(url, opts = {}, token) {
   return { status: res.status, body };
 }
 function stripHtml(s) { return String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); }
+
+
+async function tryCommunitySubmission(draftId, token) {
+  const attempts = [];
+  const bodies = [
+    { type: "community-submission", payload: { community: COMMUNITY_UUID }, topic: { deposit: String(draftId) } },
+    { type: "community-submission", payload: { community: COMMUNITY_UUID }, topic: { record: String(draftId) } }
+  ];
+  for (const body of bodies) {
+    const topicKey = Object.keys(body.topic)[0];
+    try {
+      const res = await fetch(ZENODO_API + "/requests", {
+        method: "POST",
+        headers: { authorization: "Bearer " + token, "content-type": "application/json", "user-agent": UA, accept: "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60000)
+      });
+      const txt = await res.text();
+      let parsed = null; try { parsed = txt ? JSON.parse(txt) : null; } catch (e) {}
+      attempts.push({ topic: topicKey, status: res.status, request_id: parsed && parsed.id || null, head: txt.slice(0, 120) });
+      if (res.ok && parsed && parsed.id) return { ok: true, attempts, request_id: parsed.id };
+    } catch (e) { attempts.push({ topic: topicKey, error: String(e && e.message || e) }); }
+  }
+  return { ok: false, attempts };
+}
 
 export default {
   async fetch(request, env) {
@@ -31,8 +57,14 @@ export default {
         }
         return json({ ok: true, version: "0.1.1-diag", probes });
       }
+      if (path === "/submissions") {
+        const kvList = await env.STATE.list({ prefix: "zenodo:submission:" });
+        const out = [];
+        for (const k of kvList.keys) { const v = await env.STATE.get(k.name); try { out.push(JSON.parse(v)); } catch (e) {} }
+        return json({ ok: true, count: out.length, submissions: out });
+      }
       if (path === "/health") {
-        return json({ ok: true, service: "jnl-zenodo", version: "0.1.0", zenodo_token_set: !!env.ZENODO_TOKEN });
+        return json({ ok: true, service: "jnl-zenodo", version: "0.1.2", zenodo_token_set: !!env.ZENODO_TOKEN });
       }
       if (request.method !== "POST") return json({ ok: false, error: "method not allowed; POST only" }, 405);
       if (request.headers.get("x-ops-token") !== env.JNL_OPS_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
@@ -81,6 +113,9 @@ export default {
         const mr = await zfetch(`${ZENODO_API}/deposit/depositions/${draftId}`, { method: "PUT", body: JSON.stringify(meta) }, env.ZENODO_TOKEN);
         if (mr.status !== 200) return json({ ok: false, error: `metadata update failed (${mr.status})`, detail: mr.body }, 502);
 
+        // 4b. best-effort pre-publish community submission (curated listing fix)
+        const submit = await tryCommunitySubmission(draftId, env.ZENODO_TOKEN);
+        await env.STATE.put("zenodo:submission:" + recid, JSON.stringify({ recid, draft_id: draftId, ok: submit.ok, attempts: submit.attempts, at: new Date().toISOString() }));
         // 5. upload report file
         const fname = `ai-referee-report-${recid}.md`;
         let ur = { status: 0 };
@@ -94,7 +129,7 @@ export default {
         const pub = await zfetch(`${ZENODO_API}/deposit/depositions/${draftId}/actions/publish`, { method: "POST", body: "{}" }, env.ZENODO_TOKEN);
         if (pub.status < 200 || pub.status >= 300) return json({ ok: false, error: `publish failed (${pub.status})`, detail: pub.body }, 502);
         const rec = pub.body;
-        const out = { zenodo_recid: rec.id, conceptrecid: rec.conceptrecid, doi: rec.doi || rec.metadata?.doi, decision: review.decision, avg_score: review.avg_score, paper_recid: recid, paper_doi: paperDoi, published_at: new Date().toISOString() };
+        const out = { zenodo_recid: rec.id, submission: { attempted: true, ok: submit.ok, request_id: submit.request_id || null }, conceptrecid: rec.conceptrecid, doi: rec.doi || rec.metadata?.doi, decision: review.decision, avg_score: review.avg_score, paper_recid: recid, paper_doi: paperDoi, published_at: new Date().toISOString() };
         await env.STATE.put(kvKey, JSON.stringify(out));
         return json({ ok: true, published: out });
       }
