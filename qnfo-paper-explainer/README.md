@@ -16,7 +16,7 @@ the account that explains science to everyone.
 
 1. **Fetch** — arXiv API, most-recent 30 across accessible categories
    (cs.AI, cs.LG, cs.CL, cs.CV, cs.CY, cs.HC, physics.pop-ph, q-bio.NC, econ.GN, stat.ML).
-2. **Select + explain** — Workers AI (`@cf/deepseek-ai/deepseek-v4-flash-0731`) picks the
+2. **Select + explain** — Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`) picks the
    ONE paper most worth explaining to a general audience, then produces:
    - `headline` — plain-English rephrase of the title
    - `what_it_is` — 2–3 sentences, everyday analogy, no jargon/math
