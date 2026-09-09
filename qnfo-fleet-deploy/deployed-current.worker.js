@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.0)
-var VERSION = "0.4.0";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.1)
+var VERSION = "0.4.1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -46,10 +46,9 @@ async function audit(env, w, actor, from, to, src2, ok, note) { try { await env.
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
 async function improvement(env, source, target, kind, title, detail, priority) {
   try {
-    var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE target=?1 AND kind=?2 AND title=?3 AND status IN ('proposed','approved','in_progress','done') LIMIT 1").bind(target, kind, title).first();
-    if (ex) return ex.id;
-    var ins = await env.AUDIT.prepare("INSERT INTO fleet_improvements (source,target,kind,title,detail,priority,status) VALUES (?1,?2,?3,?4,?5,?6,'proposed')").bind(source, target, kind, title, String(detail || "").slice(0, 500), priority).run();
-    return ins.meta && ins.meta.last_row_id ? ins.meta.last_row_id : null;
+    var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO fleet_improvements (source,target,kind,title,detail,priority,status) VALUES (?1,?2,?3,?4,?5,?6,'proposed')").bind(source, target, kind, title, String(detail || "").slice(0, 500), priority).run();
+    var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE target=?1 AND kind=?2 AND title=?3 ORDER BY id DESC LIMIT 1").bind(target, kind, title).first();
+    return ex ? ex.id : (ins.meta && ins.meta.last_row_id ? ins.meta.last_row_id : null);
   } catch (e) { return null; }
 }
 async function healthProbe(env, n, out) {
