@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // src/server.js
-var VERSION = "0.3.2";
+var VERSION = "0.3.3";
 var WORKER = "qnfo-fleet-advisor";
 var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
 async function probeHealth(name) {
@@ -124,9 +124,13 @@ async function runAudit(env) {
   } catch (e) {
   }
   try {
-    const open = await d1All(env, "SELECT COUNT(*) AS n FROM agent_issues WHERE status='open'");
+    const open = await d1All(env, "SELECT COUNT(*) AS n FROM agent_issues WHERE status='open' AND title NOT LIKE 'OPEN-ISSUES%'");
     const n = open && open[0] ? open[0].n : 0;
-    if (n > 8) findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES " + n, detail: n + " open agent_issues" });
+    if (n > 8) findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES-BACKLOG", detail: n + " open agent_issues (excluding advisor OPEN-ISSUES tickets)" });
+  } catch (e) {
+  }
+  try {
+    await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='backlog' AND title LIKE 'OPEN-ISSUES %'", [ts, WORKER]);
   } catch (e) {
   }
   const gw = await gatewayConfigAudit(env);
@@ -181,7 +185,10 @@ async function runAudit(env) {
   for (const f of findings) {
     try {
       const existing = await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title = ?", [f.title]);
-      if (existing && existing.length) continue;
+      if (existing && existing.length) {
+        await d1Run(env, "UPDATE agent_issues SET description=?, updated_at=? WHERE id=?", ["[advisor] " + f.detail.slice(0, 600), ts, existing[0].id]);
+        continue;
+      }
       await d1Run(
         env,
         "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
