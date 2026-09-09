@@ -7,6 +7,7 @@ workers_dev = true
 #   BSKY_HANDLE    (qnfo.bsky.social — shared Bluesky account)
 #   BSKY_APP_PASS  (Bluesky app password)
 #   EXPLAIN_TOKEN  (HTTP endpoint auth for /run, /log, /state, /enable)
+#   BUFFER_TOKEN   (Buffer GraphQL API key -> Mastodon/LinkedIn/X cross-post)
 
 [ai]
 binding = "AI"

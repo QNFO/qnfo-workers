@@ -1,8 +1,9 @@
-// qnfo-paper-explainer v0.1.0
+// qnfo-paper-explainer v0.2.0
 // Daily autonomous science-translation pipeline (100% cloud, user-free):
 //   recent arXiv papers -> AI-select one accessible paper -> plain-English "what it is"
 //   + honest everyday-life "why it matters (or not)" -> fact-check -> 4-post Bluesky thread
-//   -> D1 audit log (paper_explain_log + cloud_ops_events).
+//   -> D1 audit log (paper_explain_log + cloud_ops_events) + Buffer cross-post
+//   (Mastodon/LinkedIn/X via GraphQL API, best-effort).
 // Goal: grow QNFO reach/awareness by being the account that explains science to everyone.
 // Bluesky account: qnfo.bsky.social (shared with qnfo-social). Posted via our own AT Protocol
 // session so the explainer keeps a guaranteed daily cadence, independent of the qnfo-social
@@ -16,7 +17,7 @@
 //   DAILY-CAP-1       max 1 thread/day (DAILY_CAP).
 //   KILL-SWITCH-1     paper_explain_state.enabled=0 halts posting (still logs dry runs).
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"; // non-reasoning, fp8-fast (24k ctx), fast + cheap
 const BSKY = "https://bsky.social/xrpc";
 const UA = "Mozilla/5.0 (qnfo-paper-explainer)";
@@ -129,6 +130,46 @@ async function bskyPostThread(s, posts) {
   return uris;
 }
 
+// ---------- Buffer cross-post (GraphQL API) ----------
+async function bufferGql(env, query) {
+  const r = await fetch("https://api.buffer.com", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.BUFFER_TOKEN || ""), "User-Agent": UA },
+    body: JSON.stringify({ query })
+  });
+  if (!r.ok) throw new Error("buffer gql " + r.status);
+  return r.json();
+}
+
+async function bufferPost(env, text) {
+  if (!env.BUFFER_TOKEN) return { skipped: "no BUFFER_TOKEN" };
+  const results = [];
+  try {
+    const orgRes = await bufferGql(env, "{ account { organizations { id } } }");
+    const orgs = (orgRes && orgRes.data && orgRes.data.account && orgRes.data.account.organizations) || [];
+    if (!orgs.length) return { error: "no buffer org" };
+    const orgId = orgs[0].id;
+    const chRes = await bufferGql(env, "{ channels(input: { organizationId: \"" + orgId + "\" }) { id service isDisconnected } }");
+    const channels = (chRes && chRes.data && chRes.data.channels) || [];
+    for (const svc of ["mastodon", "linkedin", "twitter"]) {
+      const ch = channels.find((c) => c.service === svc && !c.isDisconnected);
+      if (!ch) { results.push({ platform: svc, status: "no-channel" }); continue; }
+      try {
+        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(text) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: shareNow }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
+        const r = await bufferGql(env, mutation);
+        const cp = r && r.data && r.data.createPost;
+        if (cp && cp.post) results.push({ platform: svc, status: "ok", post_id: cp.post.id });
+        else results.push({ platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) });
+      } catch (e) {
+        results.push({ platform: svc, status: "error", error: String(e && e.message || e) });
+      }
+    }
+  } catch (e) {
+    results.push({ status: "error", error: String(e && e.message || e) });
+  }
+  return { results };
+}
+
 // ---------- AI select + explain ----------
 function parseJSON(text) {
   if (!text) return null;
@@ -149,7 +190,7 @@ async function selectAndExplain(env, papers) {
     "Step 2: for that ONE paper, write a plain-English explanation and a 4-post social thread.",
     "",
     "Reply with STRICT JSON only, exactly this shape:",
-    '{"arxiv_id":"...","headline":"...","what_it_is":"...","everyday_relevance":"...","relevance_label":"NOW","why_not":"...","posts":["p1","p2","p3","p4"]}',
+    '{"arxiv_id":"...","headline":"...","what_it_is":"...","everyday_relevance":"...","relevance_label":"NOW","why_not":"...","buffer_post":"...","posts":["p1","p2","p3","p4"]}',
     "",
     "Field rules:",
     "- headline: one short, plain-English rephrase of the title (no jargon).",
@@ -157,7 +198,8 @@ async function selectAndExplain(env, papers) {
     "- everyday_relevance: 1-2 sentences naming a CONCRETE way this could show up in a reader's daily life (a product, tool, habit, health choice, bill, or decision). If it cannot, say plainly it is foundational or not-yet-practical. Avoid vague words like 'implications for' or 'in complex environments'.",
     "- relevance_label: exactly one of NOW (affects daily life already), SOON (likely within ~2 years), YEARS (plausibly 5+ years out), NOT_YET (no foreseeable everyday impact).",
     "- why_not: if relevance_label is YEARS or NOT_YET, one honest sentence on why it does not touch daily life yet. Otherwise leave it an empty string.",
-    "- posts: exactly 4 posts, each under 280 characters, plain English, no exclamation marks, no emoji, no marketing hype, no invented numbers.",
+    "- buffer_post: ONE self-contained post (under 280 characters) for Mastodon/LinkedIn/X. Combine the plain-English claim, the everyday-life verdict, and the arxiv.org/abs/<id> link. Standalone, no thread, no jargon, no hype, no invented numbers.",
+    "- posts: exactly 4 posts, each under 280 characters, plain English, no exclamation marks, no emoji, no marketing hype, no invented numbers. Hedge forward-looking claims with could/might/may; never state a timeline or capability as fact unless the abstract does.",
     "  post[0]: hook - the plain-English claim as a hook.",
     "  post[1]: what it actually is, in plain language.",
     "  post[2]: why it matters for everyday life with ONE concrete example - or honestly why it does not yet. No vague 'implications'.",
@@ -167,17 +209,26 @@ async function selectAndExplain(env, papers) {
     papers.map((p) => p.id + " | " + p.title + " | " + p.authors.slice(0, 3).join(", ") + " | " + p.abstract.slice(0, 800)).join(NL + NL)
   ].join(NL);
 
-  const ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 2000 });
+  const ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 2500 });
   const raw = extractText(ai);
-  return { parsed: parseJSON(raw), raw };
+  let parsed = parseJSON(raw);
+  if (!parsed || !parsed.arxiv_id || !Array.isArray(parsed.posts) || parsed.posts.length < 3) {
+    const retry = await env.AI.run(MODEL, { messages: [{ role: "user", content: "Your previous reply was not valid JSON with arxiv_id and a 4-post array. Reply with ONLY the JSON object, nothing else.\n" + prompt }], max_tokens: 2500 });
+    const raw2 = extractText(retry);
+    const parsed2 = parseJSON(raw2);
+    if (parsed2 && parsed2.arxiv_id && Array.isArray(parsed2.posts) && parsed2.posts.length >= 3) {
+      return { parsed: parsed2, raw: raw2 };
+    }
+  }
+  return { parsed, raw };
 }
 
 // ---------- fact-check ----------
 async function checkFaithful(env, title, abstract, posts) {
   const base = [
     "Given a paper (title + abstract = ground truth) and a social thread (candidate), list every claim in the thread that is NOT supported by the title or abstract.",
-    "Check for: invented numbers, invented statistics, invented findings, overclaiming, misattribution, unsupported claims of being 'new' or 'first'.",
-    "Ignore style: questions, hooks, calls to action, the arXiv link, and generic phrases like 'read the paper'.",
+    "Check for ONLY hard factual errors: invented numbers, invented statistics, invented specific findings, misattribution, unsupported 'new'/'first'/'proven' claims, and UNHEDGED factual claims stated as fact (not as possibility).",
+    "Ignore style: questions, hooks, calls to action, the arXiv link, generic phrases like 'read the paper', and hedged speculative everyday-life framing using could/might/may/potentially/one day (that framing is expected and acceptable).",
     "Output ONLY a JSON array of issues, each with a post number and an issue string. Output [] if the thread is fully faithful.",
     "PAPER: " + JSON.stringify({ title, abstract }),
     "THREAD: " + JSON.stringify(posts)
@@ -223,7 +274,7 @@ async function stateGet(env, key, fallback) {
 
 async function alreadyExplained(env) {
   try {
-    const r = await env.DB.prepare("SELECT arxiv_id FROM paper_explain_log").all();
+    const r = await env.DB.prepare("SELECT arxiv_id FROM paper_explain_log WHERE status != 'failed'").all();
     const set = new Set((r.results || []).map((x) => x.arxiv_id));
     return set;
   } catch (e) { return new Set(); }
@@ -257,7 +308,7 @@ async function run(env, opts) {
     }
 
     const today = await countToday(env);
-    if (today >= DAILY_CAP && !opts.dry) {
+    if (today >= DAILY_CAP && !opts.dry && !opts.force) {
       out.status = "capped"; out.error = "daily cap " + DAILY_CAP + " reached (" + today + " today)"; return out;
     }
 
@@ -271,7 +322,7 @@ async function run(env, opts) {
     if (!fresh.length) { out.status = "no-fresh"; out.error = "all fetched papers already explained"; return out; }
 
     const selRes = await selectAndExplain(env, fresh.slice(0, 10));
-    out.raw = (selRes && selRes.raw ? String(selRes.raw).slice(0, 1200) : "");
+    out.raw = (selRes && selRes.raw ? String(selRes.raw).slice(0, 6000) : "");
     const sel = selRes && selRes.parsed;
     if (!sel || !sel.arxiv_id || !Array.isArray(sel.posts) || sel.posts.length < 3) {
       out.status = "no-selection"; out.error = "AI selection/explanation failed"; return out;
@@ -279,6 +330,7 @@ async function run(env, opts) {
 
     const paper = papers.find((p) => p.id === sel.arxiv_id) || fresh.find((p) => p.id === sel.arxiv_id);
     const posts = sanitizePosts(sel.posts).slice(0, 4);
+    const bufferText = truncate(String(sel.buffer_post || ""), 280);
     const title = (paper && paper.title) || sel.headline || "";
     const abstract = (paper && paper.abstract) || "";
     const headline = String(sel.headline || "").slice(0, 200);
@@ -292,10 +344,18 @@ async function run(env, opts) {
     out.degraded = !!chk.degraded;
     if (chk.degraded) {
       await recordEvent(env, "paper-explain fact-check degraded (fail-open): " + sel.arxiv_id, { status: "degraded", arxiv_id: sel.arxiv_id });
+      try {
+        const dup = await env.DB.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND title LIKE 'PAPER-EXPLAIN-CHECKER-FAILOPEN%'").first();
+        if (!dup || Number(dup.n) === 0) {
+          const mx = await env.DB.prepare("SELECT COALESCE(MAX(id),0) m FROM agent_issues").first();
+          await env.DB.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,datetime('now'),datetime('now'))").bind(Number(mx.m) + 1, "PAPER-EXPLAIN-CHECKER-FAILOPEN: fact-checker unusable after retry", "degraded fact-check; posted fail-open: " + sel.arxiv_id, "qnfo-paper-explainer", "fleet-self-improve", "medium", "open").run();
+        }
+      } catch (e2) {}
     }
     out.arxiv_id = sel.arxiv_id;
     out.selected = { arxiv_id: sel.arxiv_id, headline, relevance_label: label };
     out.posts = posts;
+    out.buffer_text = bufferText;
     out.explanation = { what_it_is: whatItIs, everyday_relevance: everyday, relevance_label: label, why_not: whyNot };
 
     if (out.issues.length) {
@@ -307,11 +367,25 @@ async function run(env, opts) {
     await logRow(env, { arxiv_id: sel.arxiv_id, headline, what_it_is: whatItIs, everyday_relevance: everyday, relevance_label: label, why_not: whyNot, posts, status: opts.dry ? "dry" : "queued", error: null });
 
     if (!opts.dry) {
-      const s = await bskySession(env);
-      const uris = await bskyPostThread(s, posts);
-      out.posted = true; out.uris = uris;
-      await env.DB.prepare("UPDATE paper_explain_log SET status='posted' WHERE arxiv_id=?1 AND status='queued'").bind(sel.arxiv_id).run();
-      await recordEvent(env, "paper-explain posted: " + sel.arxiv_id + " -> " + uris[0], { status: "posted", arxiv_id: sel.arxiv_id, relevance_label: label });
+      try {
+        const s = await bskySession(env);
+        const uris = await bskyPostThread(s, posts);
+        out.posted = true; out.uris = uris;
+        await env.DB.prepare("UPDATE paper_explain_log SET status='posted' WHERE arxiv_id=?1 AND status='queued'").bind(sel.arxiv_id).run();
+        await recordEvent(env, "paper-explain posted: " + sel.arxiv_id + " -> " + uris[0], { status: "posted", arxiv_id: sel.arxiv_id, relevance_label: label });
+      } catch (e) {
+        await env.DB.prepare("UPDATE paper_explain_log SET status='failed', error=?1 WHERE arxiv_id=?2 AND status='queued'").bind(String(e && e.message || e).slice(0, 300), sel.arxiv_id).run();
+        throw e;
+      }
+      if (bufferText) {
+        try {
+          const br = await bufferPost(env, bufferText);
+          out.buffer = br;
+          await recordEvent(env, "paper-explain buffer cross-post: " + sel.arxiv_id + " " + JSON.stringify(br).slice(0, 300), { status: "buffer", arxiv_id: sel.arxiv_id });
+        } catch (e) {
+          out.buffer = { error: String(e && e.message || e) };
+        }
+      }
     } else {
       await recordEvent(env, "paper-explain dry run: " + sel.arxiv_id + " (" + label + ")", { status: "dry", arxiv_id: sel.arxiv_id });
     }
@@ -340,7 +414,8 @@ export default {
     try {
       if (p === "/run" && m === "GET") {
         const dry = url.searchParams.get("post") !== "1";
-        const out = await run(env, { dry });
+        const force = url.searchParams.get("force") === "1";
+        const out = await run(env, { dry, force });
         return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...CORS } });
       }
       if (p === "/log" && m === "GET") {
