@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
-var VERSION = "0.4.8";
+var VERSION = "0.4.9";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -247,6 +247,35 @@ async function scan(env, heal) {
   } catch (e) { out.errors++; out.note = String(e && e.message || e).slice(0, 120); }
   return out;
 }
+async function registerWatch(env, horizonDays) {
+  try {
+    var out = { open: 0, done: 0, cancelled: 0, overdue: 0, dueSoon: 0, donePct: null, overdueRows: [], escalated: 0 };
+    var t = await env.AUDIT.prepare("SELECT COUNT(*) c FROM task_dod_register").first();
+    var d = await env.AUDIT.prepare("SELECT COUNT(*) c FROM task_dod_register WHERE status='done'").first();
+    var c0 = await env.AUDIT.prepare("SELECT COUNT(*) c FROM task_dod_register WHERE status='open'").first();
+    var cn = await env.AUDIT.prepare("SELECT COUNT(*) c FROM task_dod_register WHERE status IN ('cancelled','cancelled-with-monitor','wontfix')").first();
+    var od = await env.AUDIT.prepare("SELECT COUNT(*) c FROM task_dod_register WHERE status='open' AND due IS NOT NULL AND due < date('now')").first();
+    var ds = await env.AUDIT.prepare("SELECT COUNT(*) c FROM task_dod_register WHERE status='open' AND due >= date('now') AND due <= date('now','+' || ?1 || ' days')").bind(String(horizonDays || 7)).first();
+    var total = t ? t.c : 0;
+    out.open = c0 ? c0.c : 0;
+    out.done = d ? d.c : 0;
+    out.cancelled = cn ? cn.c : 0;
+    out.overdue = od ? od.c : 0;
+    out.dueSoon = ds ? ds.c : 0;
+    out.donePct = total > 0 ? Math.round(100 * out.done / total) : null;
+    var rows = await env.AUDIT.prepare("SELECT id, title, due, owner FROM task_dod_register WHERE status='open' AND due IS NOT NULL AND due < date('now') ORDER BY due LIMIT 20").all();
+    out.overdueRows = (rows.results || []).map(function (r) { return { id: r.id, due: r.due, owner: r.owner, title: String(r.title || "").slice(0, 60) }; });
+    for (var i = 0; i < out.overdueRows.length; i++) {
+      var rr = out.overdueRows[i];
+      var ex = await env.AUDIT.prepare("SELECT COUNT(*) c FROM fleet_improvements WHERE evidence LIKE ?1 AND status IN ('proposed','approved','in_progress')").bind('%register:' + rr.id + '%').first();
+      if (!ex || ex.c === 0) {
+        await improvement(env, "register", "row-" + rr.id, "hygiene", "Register row " + rr.id + " OVERDUE (due " + rr.due + ", owner " + rr.owner + ")", String(rr.title || "").slice(0, 120) + " [register:" + rr.id + "]", "P1");
+        out.escalated++;
+      }
+    }
+    return out;
+  } catch (e) { return { error: String(e && e.message || e).slice(0, 160) }; }
+}
 export default {
   async fetch(request, env) {
     var u = new URL(request.url);
@@ -290,7 +319,8 @@ export default {
       try {
         var krows = await env.AUDIT.prepare("SELECT * FROM fleet_improvements WHERE status IN ('proposed','approved','in_progress') ORDER BY CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END, id DESC LIMIT 100").all();
         var srows = await env.AUDIT.prepare("SELECT * FROM fleet_drift_report WHERE worker='SCAN' ORDER BY id DESC LIMIT 3").all();
-        return json({ ok: true, open_improvements: krows.results || [], recent_scans: srows.results || [] });
+        var rw3 = await registerWatch(env, 7);
+        return json({ ok: true, open_improvements: krows.results || [], recent_scans: srows.results || [], register: rw3 });
       } catch (e) { return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500); }
     }
     if (p === "/selfdoc-audit" && request.method === "POST" && admin) {
@@ -318,21 +348,28 @@ export default {
       }
       return json({ ok: true, report: out2 });
     }
+    if (p === "/register" && request.method === "GET" && (admin || sh)) {
+      try { return json({ ok: true, register: await registerWatch(env, 7) }); }
+      catch (e) { return json({ error: String(e && e.message || e).slice(0, 160) }, 500); }
+    }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
       await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds));
-      return json({ ok: true, scan: res });
+      var rw = await registerWatch(env, 7);
+      return json({ ok: true, scan: res, register: rw });
     }
     if (p === "/scan-heal" && request.method === "POST" && admin) {
       var res2 = await scan(env, true);
       await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
-      return json({ ok: true, scan: res2 });
+      var rw2 = await registerWatch(env, 7);
+      return json({ ok: true, scan: res2, register: rw2 });
     }
     return json({ error: "not found" }, 404);
   },
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds));
+    var rw = await registerWatch(env, 7);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
   }
 };
