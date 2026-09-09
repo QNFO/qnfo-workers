@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
-var VERSION = "0.4.7";
+var VERSION = "0.4.8";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -113,10 +113,10 @@ async function canonical(env, worker) {
   if (worker.indexOf("qnfo-") === 0) names.push(worker.slice(5));
   var cs = [];
   for (var a = 0; a < names.length; a++) {
-    cs.push("qnfo-workers/main/" + names[a] + "/worker.js");
-    cs.push("qnfo-ops/main/cloud/" + names[a] + "/worker.js");
     cs.push("qnfo-workers/main/" + names[a] + "/deployed-current.worker.js");
     cs.push("qnfo-ops/main/cloud/" + names[a] + "/deployed-current.worker.js");
+    cs.push("qnfo-workers/main/" + names[a] + "/worker.js");
+    cs.push("qnfo-ops/main/cloud/" + names[a] + "/worker.js");
   }
   for (var i = 0; i < cs.length; i++) {
     try {
