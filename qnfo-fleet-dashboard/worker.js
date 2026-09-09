@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.9';
+const VERSION = '1.0.10';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -231,6 +231,16 @@ const CLOSED = { closed: 1, done: 1, resolved: 1, completed: 1, cancelled: 1, ca
 function isOpenish(st) { return !CLOSED[String(st || '').toLowerCase()]; }
 function failish(st) { const s = String(st || '').toLowerCase(); return s.indexOf('fail') >= 0 || s === 'error' || s === 'err' || s === 'bounce' || s === 'rejected'; }
 
+async function liveScripts(env) {
+  try {
+    if (!env.CF_TOKEN) return null;
+    const resp = await fetch('https://api.cloudflare.com/client/v4/accounts/' + ACCOUNT + '/workers/scripts?per_page=100', { headers: { Authorization: 'Bearer ' + env.CF_TOKEN } });
+    if (!resp.ok) return null;
+    const j = await resp.json();
+    const list = (j && j.result) || [];
+    return list.length;
+  } catch (e) { return null; }
+}
 async function buildState(env, ctx) {
   const nowMs = Date.now();
   const audits = [];
@@ -343,6 +353,7 @@ async function buildState(env, ctx) {
   });
 
   const analytics = await analytics24(env);
+  const liveCount = await liveScripts(env);
   const lastRuns = await lastRuns30(env);
   const probes = await healthProbes(env);
 
@@ -383,7 +394,7 @@ async function buildState(env, ctx) {
     window: { hours: 24, end_iso: new Date().toISOString() },
     version: VERSION,
     fleet: {
-      workers: Object.keys(analytics.per).length,
+      workers: liveCount !== null ? liveCount : Object.keys(analytics.per).length,
       scheduled: scheduled.length,
       probes: probes.length,
       d1_databases: 9,
