@@ -14,6 +14,8 @@ var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
+var __defProp2222222 = Object.defineProperty;
+var __name2222222 = /* @__PURE__ */ __name222222((target, value) => __defProp2222222(target, "name", { value, configurable: true }), "__name");
 var COMMON_CSS = `:root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--live:#2f6d4f;--blue:var(--accent);--blue-dark:#1a2547;--blue-light:#d8dcef;--blue-subtle:var(--accent-soft);--text:var(--ink);--text-muted:var(--muted);--bg:var(--paper);--radius:10px;--radius-lg:14px}
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box}
@@ -110,6 +112,7 @@ __name222(stripFrontmatter, "stripFrontmatter");
 __name2222(stripFrontmatter, "stripFrontmatter");
 __name22222(stripFrontmatter, "stripFrontmatter");
 __name222222(stripFrontmatter, "stripFrontmatter");
+__name2222222(stripFrontmatter, "stripFrontmatter");
 function esc(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -121,6 +124,7 @@ __name222(esc, "esc");
 __name2222(esc, "esc");
 __name22222(esc, "esc");
 __name222222(esc, "esc");
+__name2222222(esc, "esc");
 function escAttr(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -132,6 +136,7 @@ __name222(escAttr, "escAttr");
 __name2222(escAttr, "escAttr");
 __name22222(escAttr, "escAttr");
 __name222222(escAttr, "escAttr");
+__name2222222(escAttr, "escAttr");
 function displayTitle(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -158,10 +163,12 @@ function displayTitle(t) {
   return s.trim();
 }
 __name(displayTitle, "displayTitle");
+__name2(displayTitle, "displayTitle");
 function looksLikeTeX(x) {
   return /\\[a-zA-Z]+/.test(x) || /[\\^{}_]/.test(x);
 }
 __name(looksLikeTeX, "looksLikeTeX");
+__name2(looksLikeTeX, "looksLikeTeX");
 function titleHTML(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -174,6 +181,7 @@ function titleHTML(t) {
   return s;
 }
 __name(titleHTML, "titleHTML");
+__name2(titleHTML, "titleHTML");
 function xmlEscape(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -185,6 +193,7 @@ __name222(xmlEscape, "xmlEscape");
 __name2222(xmlEscape, "xmlEscape");
 __name22222(xmlEscape, "xmlEscape");
 __name222222(xmlEscape, "xmlEscape");
+__name2222222(xmlEscape, "xmlEscape");
 function detectCategory(title, abstract) {
   const t = ((title || "") + " " + (abstract || "")).toLowerCase();
   if (t.includes("error correction") || t.includes("stabilizer") || t.includes("fault-tolerant") || t.includes("qec") || t.includes("ldpc") || t.includes("surface code")) return "qec";
@@ -200,11 +209,14 @@ __name222(detectCategory, "detectCategory");
 __name2222(detectCategory, "detectCategory");
 __name22222(detectCategory, "detectCategory");
 __name222222(detectCategory, "detectCategory");
+__name2222222(detectCategory, "detectCategory");
 var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number Theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
 function texSafe(s) {
   if (!s) return "";
   s = String(s);
-  s = s.replace(/(\\{2,})(?=[A-Za-z])/g, function (mm) { return "\\".repeat(Math.floor(mm.length / 2)); });
+  s = s.replace(/(\\{2,})(?=[A-Za-z])/g, function(mm) {
+    return "\\".repeat(Math.floor(mm.length / 2));
+  });
   s = s.replace(/\\left\s*</g, "\\left\\langle ");
   s = s.replace(/\\right\s*>/g, "\\right\\rangle ");
   s = s.replace(/<=/g, "\\leq ");
@@ -215,10 +227,12 @@ function texSafe(s) {
   return s;
 }
 __name(texSafe, "texSafe");
+__name2(texSafe, "texSafe");
 function cleanPunct(s) {
   return String(s || "").replace(/[ \t]+([,.!?;:])/g, "$1");
 }
 __name(cleanPunct, "cleanPunct");
+__name2(cleanPunct, "cleanPunct");
 function _mdInline(t) {
   t = String(t || "");
   var _math = [];
@@ -227,6 +241,7 @@ function _mdInline(t) {
     return "M" + (_math.length - 1) + "";
   }
   __name(saveMath, "saveMath");
+  __name2(saveMath, "saveMath");
   t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) {
     return saveMath(c, true);
   });
@@ -254,6 +269,7 @@ function _mdInline(t) {
   return t;
 }
 __name(_mdInline, "_mdInline");
+__name2(_mdInline, "_mdInline");
 function fixMojibake(s) {
   if (!s) return "";
   const map = [
@@ -303,6 +319,7 @@ __name2(fixMojibake, "fixMojibake");
 __name22(fixMojibake, "fixMojibake");
 __name222(fixMojibake, "fixMojibake");
 __name2222(fixMojibake, "fixMojibake");
+__name22222(fixMojibake, "fixMojibake");
 function renderMarkdown(md) {
   if (!md) return "";
   var m = String(md).replace(/\r\n?/g, "\n");
@@ -339,6 +356,7 @@ function renderMarkdown(md) {
     return /^\|?[\s:]*-{3,}[\s:]*\|/.test(s) && /-/.test(s);
   }
   __name(isTableSep, "isTableSep");
+  __name2(isTableSep, "isTableSep");
   function emitBlockText(text) {
     var parts = text.split(/(\u0001B\d+\u0001)/g), h = "", cur = "", k;
     for (k = 0; k < parts.length; k++) {
@@ -355,14 +373,17 @@ function renderMarkdown(md) {
     return h;
   }
   __name(emitBlockText, "emitBlockText");
+  __name2(emitBlockText, "emitBlockText");
   function isListStart(s) {
     return /^[-*+]\s/.test(s) || /^\d+[.)]\s/.test(s);
   }
   __name(isListStart, "isListStart");
+  __name2(isListStart, "isListStart");
   function isContinuation(s) {
     return /^[ \t]+\S/.test(s);
   }
   __name(isContinuation, "isContinuation");
+  __name2(isContinuation, "isContinuation");
   L = m.split("\n");
   i = 0;
   while (i < L.length) {
@@ -525,6 +546,7 @@ function renderMarkdown(md) {
   return o;
 }
 __name(renderMarkdown, "renderMarkdown");
+__name2(renderMarkdown, "renderMarkdown");
 function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
   const total = paperCount || (recentPapers ? recentPapers.length : 0);
   const kg = nodesCount ? nodesCount + "+" : "\u2014";
@@ -556,6 +578,7 @@ __name222(renderHubHTML, "renderHubHTML");
 __name2222(renderHubHTML, "renderHubHTML");
 __name22222(renderHubHTML, "renderHubHTML");
 __name222222(renderHubHTML, "renderHubHTML");
+__name2222222(renderHubHTML, "renderHubHTML");
 function renderPaperRow(p) {
   const cat = detectCategory(p.title, p.abstract);
   const cl = CATEGORY_LABELS[cat] || "";
@@ -564,6 +587,7 @@ function renderPaperRow(p) {
 }
 __name(renderPaperRow, "renderPaperRow");
 __name2(renderPaperRow, "renderPaperRow");
+__name22(renderPaperRow, "renderPaperRow");
 function renderIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery) {
   const fb = ["all", "qec", "number-theory", "physics", "computer-science", "other"].map((cat) => {
     const label = cat === "all" ? "All" : CATEGORY_LABELS[cat] || cat;
@@ -584,6 +608,7 @@ __name222(renderIndexHTML, "renderIndexHTML");
 __name2222(renderIndexHTML, "renderIndexHTML");
 __name22222(renderIndexHTML, "renderIndexHTML");
 __name222222(renderIndexHTML, "renderIndexHTML");
+__name2222222(renderIndexHTML, "renderIndexHTML");
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
@@ -619,6 +644,7 @@ function buildPaperJsonLd(paper) {
 }
 __name(buildPaperJsonLd, "buildPaperJsonLd");
 __name2(buildPaperJsonLd, "buildPaperJsonLd");
+__name22(buildPaperJsonLd, "buildPaperJsonLd");
 function citationAuthorsMeta(paper) {
   const rawAuth = paper.authors || "";
   let authors = [];
@@ -633,6 +659,7 @@ function citationAuthorsMeta(paper) {
 __name(citationAuthorsMeta, "citationAuthorsMeta");
 __name2(citationAuthorsMeta, "citationAuthorsMeta");
 __name22(citationAuthorsMeta, "citationAuthorsMeta");
+__name222(citationAuthorsMeta, "citationAuthorsMeta");
 function renderPaperHTML(paper) {
   const cleanMd = fixMojibake(stripFrontmatter(paper.body_md || ""));
   const md = cleanMd;
@@ -647,6 +674,7 @@ __name222(renderPaperHTML, "renderPaperHTML");
 __name2222(renderPaperHTML, "renderPaperHTML");
 __name22222(renderPaperHTML, "renderPaperHTML");
 __name222222(renderPaperHTML, "renderPaperHTML");
+__name2222222(renderPaperHTML, "renderPaperHTML");
 function json(data, status) {
   status = status || 200;
   return new Response(JSON.stringify(data, null, 2), {
@@ -661,6 +689,7 @@ __name222(json, "json");
 __name2222(json, "json");
 __name22222(json, "json");
 __name222222(json, "json");
+__name2222222(json, "json");
 async function handlePapers(request, env) {
   try {
     const u = new URL(request.url);
@@ -668,7 +697,7 @@ async function handlePapers(request, env) {
     const search = (u.searchParams.get("search") || "").trim();
     const limit = Math.min(Math.max(parseInt(u.searchParams.get("limit") || "50", 10), 1), 200);
     const offset = Math.max(parseInt(u.searchParams.get("offset") || "0", 10), 0);
-    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill')";
+    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')";
     const params = [];
     if (search) {
       sql += " AND (title LIKE ? OR abstract LIKE ? OR authors LIKE ?)";
@@ -705,12 +734,13 @@ __name222(handlePapers, "handlePapers");
 __name2222(handlePapers, "handlePapers");
 __name22222(handlePapers, "handlePapers");
 __name222222(handlePapers, "handlePapers");
+__name2222222(handlePapers, "handlePapers");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return json({ error: "Paper not found", slug }, 404);
     const accept = request.headers.get("Accept") || "";
@@ -731,11 +761,12 @@ __name222(handlePaperDetail, "handlePaperDetail");
 __name2222(handlePaperDetail, "handlePaperDetail");
 __name22222(handlePaperDetail, "handlePaperDetail");
 __name222222(handlePaperDetail, "handlePaperDetail");
+__name2222222(handlePaperDetail, "handlePaperDetail");
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC LIMIT 8").all(),
-      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill')").first(),
+      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 8").all(),
+      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first()
     ]);
     const paperCount = countRes ? countRes.cnt : 0;
@@ -756,10 +787,11 @@ __name222(handleHub, "handleHub");
 __name2222(handleHub, "handleHub");
 __name22222(handleHub, "handleHub");
 __name222222(handleHub, "handleHub");
+__name2222222(handleHub, "handleHub");
 async function handleAbout(env) {
   try {
     const [pc, nc, ec] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill')").first(),
+      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM edges").first()
     ]);
@@ -773,6 +805,7 @@ async function handleAbout(env) {
   }
 }
 __name(handleAbout, "handleAbout");
+__name2(handleAbout, "handleAbout");
 function renderAboutHTML(stats) {
   const pageCSS = COMMON_CSS + `
 .about-page{max-width:760px;margin:0 auto;padding:1.4rem 1.6rem 0}
@@ -792,9 +825,10 @@ function renderAboutHTML(stats) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>About QNFO \u2014 QNFO Research Foundation</title><meta name="description" content="What QNFO knows about itself: the thesis, the record, the pipeline, and the operator. Counts queried live."><meta property="og:title" content="About QNFO"><meta property="og:description" content="What QNFO knows about itself. Live record: ${stats.papers} papers, ${stats.nodes} graph nodes."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/about"><link rel="canonical" href="https://qnfo.org/about"><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='white' font-family='system-ui'>Q</text></svg>"><style>${pageCSS}</style></head><body><a href="#about-main" class="skip-link">Skip to main content</a><nav class="top-nav" role="navigation" aria-label="Main"><a class="brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a><a href="https://ipatent.qnfo.org">iPatent</a></nav><main id="about-main" class="about-page"><h1>About QNFO</h1><p class="meta-line">established 2025 \xB7 living record \xB7 modified 2026-09-03 \xB7 counts queried live</p><p class="lede">QNFO is a research foundation that publishes critical analyses of the quantum computing industry. This page is what QNFO knows about itself. It changes when the record changes.</p><h2>What QNFO is</h2><p>An open-science research collective working across p-adic mathematics, ultrametric geometry, topological quantum computation, and condensed-matter approaches. Publications carry Zenodo DOIs and are independently verifiable. The corpus is browsable on <a href="/papers">papers.qnfo.org</a> and mapped in the <a href="/graph">knowledge graph</a>.</p><p class="aside">QNFO is not an acronym. The name is the name.</p><h2>The thesis</h2><p>Computational advantage is measured in joules-per-solution, not qubit counts or press releases. The <a href="https://github.com/rwnq8/joules-per-compute-benchmark">joules-per-compute benchmark</a> formalizes the questions the industry prefers to defer: the Landauer floor for cryogenic controllers, the Margolus\u2013Levitin bound as a scheduling constraint, and the energy floor of surface-code error correction at a thousand logical qubits.</p><p class="aside">The current line of work is energy accounting for quantum hardware claims. Recent papers are listed on the front page.</p><h2>The record</h2><table class="record-table"><tbody><tr><td>Papers in the corpus</td><td>${stats.papers} \u2014 counted live</td></tr><tr><td>Knowledge graph</td><td>${stats.nodes} nodes, ${stats.edges} edges \u2014 counted live</td></tr><tr><td>Worker fleet</td><td>62</td></tr><tr><td>Databases, vector indexes, object buckets</td><td>8 \xB7 9 \xB7 17</td></tr><tr><td>Queries logged (2026-09-03)</td><td>1,983</td></tr><tr><td>Honest daily readership</td><td>~400 requests per day on /papers/*</td></tr></tbody></table><p class="record-note">The first two rows are queried live on every request. Fleet figures were counted by the operations agent on 2026-09-03. Roughly nine in ten requests to the zone are scanner noise; the readership figure excludes it.</p><h2>How QNFO runs</h2><p>A cloud-scheduled pipeline keeps the corpus alive: an arXiv radar at 08:30 UTC, a research brief at 06:00 UTC, an hourly errata watch that turns corrections into new versions of the same record, a citation watch, and a weekly visibility digest. Outreach is capped and opt-out.</p><p class="aside">If the laptop is off, the pipeline does not notice.</p><h2>How QNFO holds itself</h2><p>Every quantitative claim is computationally verified before publication, with the verification artifacts deposited beside the paper. Traffic is never fabricated. Disconfirmation criteria are stated in advance. Corrections ship as new versions of the same record.</p><p class="aside">The record is the record.</p><h2>The operator</h2><p>QNFO is operated by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a>). Contact: <a href="mailto:qnfo@qnfo.org">qnfo@qnfo.org</a>.</p><p class="aside">The corpus discloses its own construction. There is nothing else to disclose.</p><h2>Changelog</h2><table class="changelog"><tbody><tr><td>2026-09-03</td><td>This page, with hub record counts rendered live. Model-key guard on a thirty-minute scheduler cadence.</td></tr><tr><td>2026-09-02</td><td>Outreach engine live \u2014 capped and opt-out. Weekly scorecard publishing real traffic deltas. Website-sync gate fixed.</td></tr><tr><td>2026-08-29</td><td>Universal Ignorance Audit re-pointed to v0.4 (<a href="https://doi.org/10.5281/zenodo.22158133">10.5281/zenodo.22158133</a>).</td></tr><tr><td>2026-08-28</td><td>OSF pre-registrations placed; results attached as comments on frozen registrations.</td></tr><tr><td>2026-08-10</td><td>Email deliverability hardened: SPF, DKIM, DMARC at reject on every sending domain.</td></tr></tbody></table><h2>Colophon</h2><p>One design system across every QNFO surface: warm paper, ink, navy. This page is generated by the qnfo-gateway worker. No tracker is added by this page.</p></main><footer class="site-footer" role="contentinfo"><div class="footer-links"><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="/legal">License</a><a href="https://qwav.org">QWAV Platform</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">Privacy</a></div><p>Licensed under <a href="/legal">QNFO-ULA v2.0</a><br>\xA9 2025\u20132026 QNFO Research Foundation</p></footer></body></html>`;
 }
 __name(renderAboutHTML, "renderAboutHTML");
+__name2(renderAboutHTML, "renderAboutHTML");
 async function handleSitemap(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
     const base = "https://papers.qnfo.org";
     const all = [
       { loc: base + "/", priority: "1.0" },
@@ -821,6 +855,7 @@ __name222(handleSitemap, "handleSitemap");
 __name2222(handleSitemap, "handleSitemap");
 __name22222(handleSitemap, "handleSitemap");
 __name222222(handleSitemap, "handleSitemap");
+__name2222222(handleSitemap, "handleSitemap");
 function handlePapersRobots() {
   return new Response(
     "User-agent: *\nAllow: /\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
@@ -834,9 +869,10 @@ __name222(handlePapersRobots, "handlePapersRobots");
 __name2222(handlePapersRobots, "handlePapersRobots");
 __name22222(handlePapersRobots, "handlePapersRobots");
 __name222222(handlePapersRobots, "handlePapersRobots");
+__name2222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC LIMIT 200").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
     let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n\n## Papers\n\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (p.doi ? " (DOI: " + p.doi + ")" : "")).join("\n");
@@ -855,9 +891,10 @@ __name222(handleLlmsTxt, "handleLlmsTxt");
 __name2222(handleLlmsTxt, "handleLlmsTxt");
 __name22222(handleLlmsTxt, "handleLlmsTxt");
 __name222222(handleLlmsTxt, "handleLlmsTxt");
+__name2222222(handleLlmsTxt, "handleLlmsTxt");
 async function handleRss(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC LIMIT 50").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 50").all();
     const base = "https://papers.qnfo.org";
     const now = (/* @__PURE__ */ new Date()).toUTCString();
     const items = res.results.map((p) => {
@@ -885,8 +922,9 @@ __name222(handleRss, "handleRss");
 __name2222(handleRss, "handleRss");
 __name22222(handleRss, "handleRss");
 __name222222(handleRss, "handleRss");
+__name2222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.5.1-redteam-fixes" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: "3.5.3-quarantine-filter" });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -895,6 +933,7 @@ __name222(health, "health");
 __name2222(health, "health");
 __name22222(health, "health");
 __name222222(health, "health");
+__name2222222(health, "health");
 async function handleLegal(path, env) {
   try {
     const body = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "QNFO Unified License Agreement v2.0\nFull text at https://legal.qnfo.org");
@@ -916,6 +955,7 @@ __name222(handleLegal, "handleLegal");
 __name2222(handleLegal, "handleLegal");
 __name22222(handleLegal, "handleLegal");
 __name222222(handleLegal, "handleLegal");
+__name2222222(handleLegal, "handleLegal");
 async function handleAskAI(request, env) {
   if (!env.AI) return json({ error: "AI binding not configured" }, 503);
   const body = await request.json().catch(() => ({}));
@@ -924,17 +964,18 @@ async function handleAskAI(request, env) {
   try {
     let paperTitle = "", paperBody = "";
     if (slug) {
-      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill') LIMIT 1").bind(slug).first();
+      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1").bind(slug).first();
       if (paper) {
         paperTitle = paper.title || "";
         paperBody = (stripFrontmatter(paper.body_md) || paper.abstract || "").slice(0, 6e3);
       }
     }
-    const result = await env.AI.run("@cf/qwen/qwen3-30b-a3b-fp8", {
+    const result = await env.AI.run("@cf/zai-org/glm-5.3-flash", {
       messages: [
         { role: "system", content: 'You are a research assistant for a QNFO paper titled "' + paperTitle + '".' },
         { role: "user", content: question + "\n\nPaper content: " + paperBody }
-      ]
+      ],
+      max_tokens: 2048
     });
     return json({ answer: result?.response || "No response generated.", slug: slug || null });
   } catch (e) {
@@ -948,6 +989,7 @@ __name222(handleAskAI, "handleAskAI");
 __name2222(handleAskAI, "handleAskAI");
 __name22222(handleAskAI, "handleAskAI");
 __name222222(handleAskAI, "handleAskAI");
+__name2222222(handleAskAI, "handleAskAI");
 async function handleStats(env) {
   try {
     const [nc, ec, nl, et] = await Promise.all([
@@ -973,6 +1015,7 @@ __name222(handleStats, "handleStats");
 __name2222(handleStats, "handleStats");
 __name22222(handleStats, "handleStats");
 __name222222(handleStats, "handleStats");
+__name2222222(handleStats, "handleStats");
 function sjp(str) {
   if (!str) return {};
   try {
@@ -988,6 +1031,7 @@ __name222(sjp, "sjp");
 __name2222(sjp, "sjp");
 __name22222(sjp, "sjp");
 __name222222(sjp, "sjp");
+__name2222222(sjp, "sjp");
 async function handleNodesList(url, env) {
   const label = url.searchParams.get("label");
   const search = url.searchParams.get("search");
@@ -1018,6 +1062,7 @@ __name222(handleNodesList, "handleNodesList");
 __name2222(handleNodesList, "handleNodesList");
 __name22222(handleNodesList, "handleNodesList");
 __name222222(handleNodesList, "handleNodesList");
+__name2222222(handleNodesList, "handleNodesList");
 async function handleNodeGet(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label,properties FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1039,6 +1084,7 @@ __name222(handleNodeGet, "handleNodeGet");
 __name2222(handleNodeGet, "handleNodeGet");
 __name22222(handleNodeGet, "handleNodeGet");
 __name222222(handleNodeGet, "handleNodeGet");
+__name2222222(handleNodeGet, "handleNodeGet");
 async function handleNeighbors(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1058,6 +1104,7 @@ __name222(handleNeighbors, "handleNeighbors");
 __name2222(handleNeighbors, "handleNeighbors");
 __name22222(handleNeighbors, "handleNeighbors");
 __name222222(handleNeighbors, "handleNeighbors");
+__name2222222(handleNeighbors, "handleNeighbors");
 async function handleEdges(url, env) {
   const type = url.searchParams.get("type");
   const source = url.searchParams.get("source");
@@ -1093,6 +1140,7 @@ __name222(handleEdges, "handleEdges");
 __name2222(handleEdges, "handleEdges");
 __name22222(handleEdges, "handleEdges");
 __name222222(handleEdges, "handleEdges");
+__name2222222(handleEdges, "handleEdges");
 async function handleImpact(name, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(name, name).first();
   if (!node) return json({ error: "Node not found: " + name }, 404);
@@ -1126,6 +1174,7 @@ __name222(handleImpact, "handleImpact");
 __name2222(handleImpact, "handleImpact");
 __name22222(handleImpact, "handleImpact");
 __name222222(handleImpact, "handleImpact");
+__name2222222(handleImpact, "handleImpact");
 async function handleQuery(request, env) {
   const body = await request.json().catch(() => ({}));
   const { query, params: qParams } = body;
@@ -1146,6 +1195,7 @@ __name222(handleQuery, "handleQuery");
 __name2222(handleQuery, "handleQuery");
 __name22222(handleQuery, "handleQuery");
 __name222222(handleQuery, "handleQuery");
+__name2222222(handleQuery, "handleQuery");
 async function handleSync(request, env) {
   if (request.headers.get("X-Sync-Token") !== env.SYNC_TOKEN) {
     return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
@@ -1185,6 +1235,7 @@ __name222(handleSync, "handleSync");
 __name2222(handleSync, "handleSync");
 __name22222(handleSync, "handleSync");
 __name222222(handleSync, "handleSync");
+__name2222222(handleSync, "handleSync");
 var gateway_worker_default = {
   async fetch(request, env) {
     const u = new URL(request.url);
