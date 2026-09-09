@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
-var VERSION = "0.4.4";
+var VERSION = "0.4.6";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -113,6 +113,8 @@ async function canonical(env, worker) {
   if (worker.indexOf("qnfo-") === 0) names.push(worker.slice(5));
   var cs = [];
   for (var a = 0; a < names.length; a++) {
+    cs.push("qnfo-workers/main/" + names[a] + "/worker.js");
+    cs.push("qnfo-ops/main/cloud/" + names[a] + "/worker.js");
     cs.push("qnfo-workers/main/" + names[a] + "/deployed-current.worker.js");
     cs.push("qnfo-ops/main/cloud/" + names[a] + "/deployed-current.worker.js");
   }
@@ -136,6 +138,16 @@ async function deployedContent(env, worker) {
     var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content/v2", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
     if (!r.ok) return null;
     return await r.text();
+  } catch (e) { return null; }
+}
+async function probeVersion(env, worker) {
+  try {
+    var r = await env.AUDIT.prepare("SELECT body FROM fleet_probe_log WHERE ok=1 AND body LIKE '%\"worker\":\"' || ?1 || '\"%' ORDER BY id DESC LIMIT 1").bind(worker).first();
+    if (r && r.body) {
+      var m = r.body.match(/"version"\s*:\s*"([^"]{1,40})"/);
+      if (m) return m[1];
+    }
+    return null;
   } catch (e) { return null; }
 }
 async function cooldown(env, worker) {
@@ -174,7 +186,7 @@ async function redeploy(env, worker) {
   return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, ctype: ctype, source: c.path, bytes: c.code.length };
 }
 async function scan(env, heal) {
-  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, details: [] };
+  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
     var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 20000);
     var lj = await lr.json();
@@ -184,13 +196,35 @@ async function scan(env, heal) {
       if (NO_SELF.indexOf(n) >= 0) continue;
       out.scanned++;
       var c = await canonical(env, n);
-      if (!c) { out.errors++; if (out.details.length < 80) out.details.push(n + ":nocanon"); await scanErr(env, n, "nocanon", "", "", ""); continue; }
+      if (!c) { out.errors++; out.errKinds["nocanon"] = (out.errKinds["nocanon"] || 0) + 1; if (out.details.length < 80) out.details.push(n + ":nocanon"); await scanErr(env, n, "nocanon", "", "", ""); continue; }
       var canV = versionOf(c.code);
-      if (!canV) { out.errors++; if (out.details.length < 80) out.details.push(n + ":noVERSION"); await scanErr(env, n, "noVERSION", "", "", c.path); continue; }
+      var usedHealth = false;
+      if (!canV) {
+        var hv = await probeVersion(env, n);
+        if (hv) { canV = hv; usedHealth = true; }
+      }
+      if (!canV) {
+        var depHeal = await deployedContent(env, n);
+        var depHealV = depHeal ? versionOf(depHeal) : null;
+        if (depHealV) {
+          out.staleCanon++;
+          out.errKinds["stale-canon"] = (out.errKinds["stale-canon"] || 0) + 1;
+          if (out.details.length < 80) out.details.push(n + ":staleCanon->" + depHealV);
+          await scanErr(env, n, "stale-canon", depHealV, "", c.path);
+          try { if (env.CANONICAL) await env.CANONICAL.put(n + ".js", depHeal, { httpMetadata: { contentType: "text/plain" }, customMetadata: { ts: String(Date.now()) } }); } catch (e) {}
+          continue;
+        }
+        out.errors++; out.errKinds["noVERSION"] = (out.errKinds["noVERSION"] || 0) + 1; if (out.details.length < 80) out.details.push(n + ":noVERSION"); await scanErr(env, n, "noVERSION", "", "", c.path); continue;
+      }
       var dep = await deployedContent(env, n);
-      if (!dep) { out.errors++; if (out.details.length < 80) out.details.push(n + ":nodeployed"); await scanErr(env, n, "nodeployed", "", canV, c.path); continue; }
-      var depV = dep ? versionOf(dep) : null;
-      if (!depV) { out.errors++; if (out.details.length < 80) out.details.push(n + ":nodepV"); await scanErr(env, n, "nodepV", "", canV, c.path); continue; }
+      if (!dep) { out.errors++; out.errKinds["nodeployed"] = (out.errKinds["nodeployed"] || 0) + 1; if (out.details.length < 80) out.details.push(n + ":nodeployed"); await scanErr(env, n, "nodeployed", "", canV, c.path); continue; }
+      var depV = versionOf(dep);
+      if (!depV) {
+        var hv2 = await probeVersion(env, n);
+        if (hv2) { depV = hv2; usedHealth = true; }
+      }
+      if (!depV) { out.errors++; out.errKinds["nodepV"] = (out.errKinds["nodepV"] || 0) + 1; if (out.details.length < 80) out.details.push(n + ":nodepV"); await scanErr(env, n, "nodepV", "", canV, c.path); continue; }
+      if (usedHealth) { out.healthVer++; out.errKinds["health-ver"] = (out.errKinds["health-ver"] || 0) + 1; }
       if (depV === canV) { await clearScanErr(env, n); out.clean++; continue; }
       if (newer(depV, canV)) {
         out.ahead++;
@@ -203,7 +237,7 @@ async function scan(env, heal) {
       out.details.push(n + ":behind " + depV + "->" + canV);
       await clearScanErr(env, n);
       await report(env, n, depV, canV, c.path, "canonical-ahead");
-      if (heal) { var res = await redeploy(env, n); if (res.ok) out.healed++; }
+      if (heal && !usedHealth) { var res = await redeploy(env, n); if (res.ok) out.healed++; }
     }
   } catch (e) { out.errors++; out.note = String(e && e.message || e).slice(0, 120); }
   return out;
@@ -281,12 +315,12 @@ export default {
     }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
-      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors);
+      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds));
       return json({ ok: true, scan: res });
     }
     if (p === "/scan-heal" && request.method === "POST" && admin) {
       var res2 = await scan(env, true);
-      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors);
+      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
       return json({ ok: true, scan: res2 });
     }
     return json({ error: "not found" }, 404);
@@ -294,6 +328,6 @@ export default {
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds));
   }
 };
