@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.2)
-var VERSION = "0.4.2";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
+var VERSION = "0.4.3";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -50,23 +50,6 @@ async function improvement(env, source, target, kind, title, detail, priority) {
     var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE target=?1 AND kind=?2 AND title=?3 ORDER BY id DESC LIMIT 1").bind(target, kind, title).first();
     return ex ? ex.id : (ins.meta && ins.meta.last_row_id ? ins.meta.last_row_id : null);
   } catch (e) { return null; }
-}
-async function healthProbe(env, n, out) {
-  // ADVISORY-ONLY leg: same-account fetch of *.q08.workers.dev 404s from inside a Worker
-  // (SVC-BINDING-1 recurrence confirmed 2026-09-09: external 200 vs in-worker 404).
-  // Counters only; truthful signals come from the external prober via POST /health-report.
-  var hs = 0;
-  try {
-    var hr = await timedFetch("https://" + n + ".q08.workers.dev/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy-health)" } }, FETCH_TIMEOUT_MS);
-    hs = hr.status;
-  } catch (e) { hs = 0; }
-  if (hs === 200) { out.healthy++; return; }
-  if (hs >= 500 && hs !== 530) {
-    out.unhealthy++;
-    out.details.push(n + ":health-" + hs);
-    return;
-  }
-  out.noHealth++;
 }
 async function selfdocAudit(env) {
   var out = { checked: 0, with_readme: 0, missing: 0, rows: [] };
@@ -179,7 +162,7 @@ async function redeploy(env, worker) {
   return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, ctype: ctype, source: c.path, bytes: c.code.length };
 }
 async function scan(env, heal) {
-  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, healthy: 0, unhealthy: 0, noHealth: 0, details: [] };
+  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, details: [] };
   try {
     var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 20000);
     var lj = await lr.json();
@@ -206,13 +189,6 @@ async function scan(env, heal) {
       out.details.push(n + ":behind " + depV + "->" + canV);
       await report(env, n, depV, canV, c.path, "canonical-ahead");
       if (heal) { var res = await redeploy(env, n); if (res.ok) out.healed++; }
-    }
-    var hn = [];
-    for (var hi = 0; hi < names.length; hi++) { if (NO_SELF.indexOf(names[hi]) < 0) hn.push(names[hi]); }
-    var BATCH = 10;
-    for (var hb = 0; hb < hn.length; hb += BATCH) {
-      var chunk = hn.slice(hb, hb + BATCH);
-      await Promise.all(chunk.map(function (x) { return healthProbe(env, x, out); }));
     }
   } catch (e) { out.errors++; out.note = String(e && e.message || e).slice(0, 120); }
   return out;
@@ -290,12 +266,12 @@ export default {
     }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
-      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " healthy=" + res.healthy + " unhealthy=" + res.unhealthy + " noHealth=" + res.noHealth + " errors=" + res.errors);
+      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors);
       return json({ ok: true, scan: res });
     }
     if (p === "/scan-heal" && request.method === "POST" && admin) {
       var res2 = await scan(env, true);
-      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " healthy=" + res2.healthy + " unhealthy=" + res2.unhealthy + " noHealth=" + res2.noHealth + " errors=" + res2.errors);
+      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors);
       return json({ ok: true, scan: res2 });
     }
     return json({ error: "not found" }, 404);
@@ -303,6 +279,6 @@ export default {
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " healthy=" + res.healthy + " unhealthy=" + res.unhealthy + " noHealth=" + res.noHealth + " errors=" + res.errors);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors);
   }
 };
