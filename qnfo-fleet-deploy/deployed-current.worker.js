@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
-var VERSION = "0.4.6";
+var VERSION = "0.4.7";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -142,10 +142,15 @@ async function deployedContent(env, worker) {
 }
 async function probeVersion(env, worker) {
   try {
-    var r = await env.AUDIT.prepare("SELECT body FROM fleet_probe_log WHERE ok=1 AND body LIKE '%\"worker\":\"' || ?1 || '\"%' ORDER BY id DESC LIMIT 1").bind(worker).first();
-    if (r && r.body) {
-      var m = r.body.match(/"version"\s*:\s*"([^"]{1,40})"/);
-      if (m) return m[1];
+    var bodies = [];
+    var r = await env.AUDIT.prepare("SELECT body FROM fleet_probe_log WHERE ok=1 AND name=?1 ORDER BY id DESC LIMIT 1").bind(worker).first();
+    if (r && r.body) bodies.push(r.body);
+    var rs = await env.AUDIT.prepare("SELECT body FROM fleet_probe_log WHERE ok=1 AND body LIKE '%' || ?1 || '%' ORDER BY id DESC LIMIT 8").bind(worker).all();
+    for (var i = 0; i < (rs.results || []).length; i++) if (rs.results[i] && rs.results[i].body) bodies.push(rs.results[i].body);
+    for (var b = 0; b < bodies.length; b++) {
+      if (bodies[b].indexOf(worker) < 0) continue;
+      var m = bodies[b].match(/"version"\s*:\s*"([^"]{1,40})"/);
+      if (m && m[1]) return m[1];
     }
     return null;
   } catch (e) { return null; }
