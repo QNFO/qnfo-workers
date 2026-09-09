@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.13.5"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.14.0-quality-score"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -187,6 +187,7 @@ const AMS_SCHEDULE = {
   "engagement":      { times: ["07:15"], days: "1", fixed: null },
   "radar":           { times: ["09:30"], days: "1-5", fixed: null },
   "gtd-reconcile":   { times: ["05:30"], days: "1",   fixed: null },
+  "quality-score":  { times: ["06:20"], days: "*",   fixed: null },
 };
 
 // Build cron strings (UTC) for a given Amsterdam UTC offset in hours (+2 CEST, +1 CET).
@@ -1700,8 +1701,44 @@ async function jobGtdReconcile(env) {
   } catch (e) { return { status: "error", error: String(e).slice(0, 200) }; }
 }
 
+// QUALITY-SCORE-1 (2026-09-09): daily corpus quality sweep -> qnfo-audit.quality_scores + quarantine-candidate flags
+async function jobQualityScore(env) {
+  const NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
+  const litRe = new RegExp('#{1,4}[^' + NLc + ']*(prior work|related work|literature review)', 'i');
+  const doiRe = new RegExp('10[.][0-9]{4,9}/', 'g');
+  const axRe = new RegExp('(?:arxiv[.]org/|arXiv:[' + NLc + TBc + ' ]*[0-9]{4}[.][0-9]{4,5})', 'gi');
+  const tableRe = new RegExp('^[' + NLc + TBc + ' ]*[|][-:| ]+[|]', 'm');
+  try {
+    await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS quality_scores (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, slug TEXT, status TEXT, body_len INTEGER, refs INTEGER, lit INTEGER, verif INTEGER, score INTEGER, flag TEXT)').run();
+    const rows = await env.LIVING.prepare("SELECT slug, status, body_md FROM papers WHERE status='published'").all();
+    const list = rows && rows.results || [];
+    const stmts = [];
+    let flagged = 0;
+    for (const p of list) {
+      const md = String(p.body_md || '');
+      const len = md.length;
+      const lit = litRe.test(md) ? 1 : 0;
+      const refs = (md.match(doiRe) || []).length + (md.match(axRe) || []).length;
+      const verif = (md.indexOf(BQc + BQc + BQc) >= 0 || tableRe.test(md)) ? 1 : 0;
+      const score = Math.min(100, Math.min(len / 100, 40) + Math.min(refs * 3, 30) + lit * 15 + verif * 15);
+      const flag = score < 25 ? 'quarantine-candidate' : (score < 50 ? 'thin' : '');
+      if (flag === 'quarantine-candidate') flagged++;
+      stmts.push(env.AUDIT.prepare('INSERT INTO quality_scores (ts, slug, status, body_len, refs, lit, verif, score, flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(new Date().toISOString().slice(0, 10), p.slug, p.status, len, refs, lit, verif, score, flag));
+    }
+    let wrote = 0;
+    if (stmts.length) {
+      const batch = stmts.slice(0, 200);
+      await env.AUDIT.batch(batch);
+      wrote = batch.length;
+    }
+    await recordEvent(env, 'quality-score', 'qs-' + Date.now().toString(36), 'quality sweep: scanned=' + list.length + ' rows=' + wrote + ' quarantine_candidates=' + flagged, { job: 'quality-score' });
+    return { status: 'ok', scanned: list.length, rows: wrote, quarantine_candidates: flagged };
+  } catch (e) { return { status: 'error', error: String(e).slice(0, 200) }; }
+}
+
 const JOBS = {
   "gtd-reconcile": jobGtdReconcile,
+  "quality-score": jobQualityScore,
   "email-triage": jobEmailTriage,
   "gmail-triage": jobGmailTriage,
   "briefing": jobBriefing,
