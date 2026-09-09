@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
-var VERSION = "0.4.3";
+var VERSION = "0.4.4";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -44,6 +44,18 @@ async function enabled(env) { return (await stateGet(env, "enabled", "0")) === "
 async function autoHeal(env) { return (await stateGet(env, "auto_heal", "0")) === "1"; }
 async function audit(env, w, actor, from, to, src2, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src2 || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
+async function scanErr(env, w, reason, depV, canV, path) {
+  try {
+    var key = "scanerr:" + w;
+    var cur = await stateGet(env, key, "");
+    if (cur === reason) return;
+    await stateSet(env, key, reason);
+    await report(env, w, depV || "", canV || "", path || "", "scanerr:" + reason);
+  } catch (e) {}
+}
+async function clearScanErr(env, w) {
+  try { if (await stateGet(env, "scanerr:" + w, "")) await stateSet(env, "scanerr:" + w, ""); } catch (e) {}
+}
 async function improvement(env, source, target, kind, title, detail, priority) {
   try {
     var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO fleet_improvements (source,target,kind,title,detail,priority,status) VALUES (?1,?2,?3,?4,?5,?6,'proposed')").bind(source, target, kind, title, String(detail || "").slice(0, 500), priority).run();
@@ -172,21 +184,24 @@ async function scan(env, heal) {
       if (NO_SELF.indexOf(n) >= 0) continue;
       out.scanned++;
       var c = await canonical(env, n);
-      if (!c) { out.errors++; continue; }
+      if (!c) { out.errors++; if (out.details.length < 80) out.details.push(n + ":nocanon"); await scanErr(env, n, "nocanon", "", "", ""); continue; }
       var canV = versionOf(c.code);
-      if (!canV) { out.errors++; continue; }
+      if (!canV) { out.errors++; if (out.details.length < 80) out.details.push(n + ":noVERSION"); await scanErr(env, n, "noVERSION", "", "", c.path); continue; }
       var dep = await deployedContent(env, n);
+      if (!dep) { out.errors++; if (out.details.length < 80) out.details.push(n + ":nodeployed"); await scanErr(env, n, "nodeployed", "", canV, c.path); continue; }
       var depV = dep ? versionOf(dep) : null;
-      if (!depV) { out.errors++; continue; }
-      if (depV === canV) { out.clean++; continue; }
+      if (!depV) { out.errors++; if (out.details.length < 80) out.details.push(n + ":nodepV"); await scanErr(env, n, "nodepV", "", canV, c.path); continue; }
+      if (depV === canV) { await clearScanErr(env, n); out.clean++; continue; }
       if (newer(depV, canV)) {
         out.ahead++;
         out.details.push(n + ":ahead " + depV + ">" + canV);
+        await clearScanErr(env, n);
         await report(env, n, depV, canV, c.path, "deployed-ahead");
         continue;
       }
       out.drifted++;
       out.details.push(n + ":behind " + depV + "->" + canV);
+      await clearScanErr(env, n);
       await report(env, n, depV, canV, c.path, "canonical-ahead");
       if (heal) { var res = await redeploy(env, n); if (res.ok) out.healed++; }
     }
