@@ -289,6 +289,10 @@ async function run(env, opts) {
 
     const chk = await checkFaithful(env, title, abstract, posts);
     out.issues = chk.issues || [];
+    out.degraded = !!chk.degraded;
+    if (chk.degraded) {
+      await recordEvent(env, "paper-explain fact-check degraded (fail-open): " + sel.arxiv_id, { status: "degraded", arxiv_id: sel.arxiv_id });
+    }
     out.arxiv_id = sel.arxiv_id;
     out.selected = { arxiv_id: sel.arxiv_id, headline, relevance_label: label };
     out.posts = posts;
