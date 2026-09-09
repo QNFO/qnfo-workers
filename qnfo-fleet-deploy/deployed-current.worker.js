@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.3.3)
-var VERSION = "0.3.3";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.0)
+var VERSION = "0.4.0";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -44,6 +44,61 @@ async function enabled(env) { return (await stateGet(env, "enabled", "0")) === "
 async function autoHeal(env) { return (await stateGet(env, "auto_heal", "0")) === "1"; }
 async function audit(env, w, actor, from, to, src2, ok, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src2 || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run(); } catch (e) {} }
 async function report(env, w, depV, canV, path, note) { try { await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run(); } catch (e) {} }
+async function improvement(env, source, target, kind, title, detail, priority) {
+  try {
+    var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE target=?1 AND kind=?2 AND title=?3 AND status IN ('proposed','approved','in_progress','done') LIMIT 1").bind(target, kind, title).first();
+    if (ex) return ex.id;
+    var ins = await env.AUDIT.prepare("INSERT INTO fleet_improvements (source,target,kind,title,detail,priority,status) VALUES (?1,?2,?3,?4,?5,?6,'proposed')").bind(source, target, kind, title, String(detail || "").slice(0, 500), priority).run();
+    return ins.meta && ins.meta.last_row_id ? ins.meta.last_row_id : null;
+  } catch (e) { return null; }
+}
+async function healthProbe(env, n, out) {
+  var hs = 0;
+  try {
+    var hr = await timedFetch("https://" + n + ".q08.workers.dev/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy-health)" } }, FETCH_TIMEOUT_MS);
+    hs = hr.status;
+  } catch (e) { hs = 0; }
+  if (hs === 200) { out.healthy++; return; }
+  if (hs >= 500 && hs !== 530) {
+    out.unhealthy++;
+    out.details.push(n + ":health-" + hs);
+    await improvement(env, "scan", n, "health", n + " /health HTTP " + hs, "health probe returned HTTP " + hs, "P1");
+    return;
+  }
+  out.noHealth++;
+  await improvement(env, "scan", n, "coverage", n + " lacks 200 /health (observed " + (hs || "network-error") + ")", "no 200 from /health endpoint (FLEET-PROBE-COVERAGE-1)", "P3");
+}
+async function selfdocAudit(env) {
+  var out = { checked: 0, with_readme: 0, missing: 0, rows: [] };
+  try {
+    var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 20000);
+    var lj = await lr.json();
+    var names = (lj.result || []).map(function (x) { return x.id; });
+    for (var i = 0; i < names.length; i++) {
+      var n = names[i];
+      if (NO_SELF.indexOf(n) >= 0) continue;
+      out.checked++;
+      var cand = [n];
+      if (n.indexOf("qnfo-") === 0) cand.push(n.slice(5));
+      var found = false;
+      for (var a = 0; a < cand.length && !found; a++) {
+        var dirs = ["qnfo-workers/main/" + cand[a], "qnfo-ops/main/cloud/" + cand[a]];
+        for (var d = 0; d < dirs.length && !found; d++) {
+          try {
+            var r = await timedFetch(GH + dirs[d] + "/README.md", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+            if (r.ok) { var t = await r.text(); if (t && t.length > 0 && t.slice(0, 4) !== "404:") found = true; }
+          } catch (e) {}
+        }
+      }
+      if (found) { out.with_readme++; continue; }
+      out.missing++;
+      var iid = await improvement(env, "scan", n, "hygiene", n + " canonical dir lacks README.md", "no README.md in canonical repo dir (FLEET-SELF-DOC-1)", "P3");
+      out.rows.push({ worker: n, id: iid });
+    }
+  } catch (e) { out.error = String(e && e.message || e).slice(0, 120); }
+  return { ok: true, audit: out };
+}
+
 async function r2Read(env, worker) {
   try {
     if (!env.CANONICAL) return null;
@@ -124,7 +179,7 @@ async function redeploy(env, worker) {
   return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, ctype: ctype, source: c.path, bytes: c.code.length };
 }
 async function scan(env, heal) {
-  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, details: [] };
+  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, healthy: 0, unhealthy: 0, noHealth: 0, details: [] };
   try {
     var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 20000);
     var lj = await lr.json();
@@ -152,6 +207,13 @@ async function scan(env, heal) {
       await report(env, n, depV, canV, c.path, "canonical-ahead");
       if (heal) { var res = await redeploy(env, n); if (res.ok) out.healed++; }
     }
+    var hn = [];
+    for (var hi = 0; hi < names.length; hi++) { if (NO_SELF.indexOf(names[hi]) < 0) hn.push(names[hi]); }
+    var BATCH = 10;
+    for (var hb = 0; hb < hn.length; hb += BATCH) {
+      var chunk = hn.slice(hb, hb + BATCH);
+      await Promise.all(chunk.map(function (x) { return healthProbe(env, x, out); }));
+    }
   } catch (e) { out.errors++; out.note = String(e && e.message || e).slice(0, 120); }
   return out;
 }
@@ -172,12 +234,46 @@ export default {
       var res = await redeploy(env, String(w));
       return json(res, res.ok ? 200 : res.status);
     }
+    if (p === "/improvements" && request.method === "GET") {
+      try {
+        var irows = await env.AUDIT.prepare("SELECT * FROM fleet_improvements ORDER BY CASE status WHEN 'proposed' THEN 0 WHEN 'approved' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'done' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END, CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END, id DESC LIMIT 200").all();
+        var counts = { total: 0, proposed: 0, approved: 0, in_progress: 0, done: 0, rejected: 0 };
+        for (var ci = 0; ci < (irows.results || []).length; ci++) { var st = irows.results[ci].status; counts.total++; if (counts[st] !== undefined) counts[st]++; }
+        return json({ ok: true, counts: counts, rows: irows.results || [] });
+      } catch (e) { return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500); }
+    }
+    if (p === "/improvements" && request.method === "POST" && admin) {
+      var ib = {}; try { ib = await request.json(); } catch (e) {}
+      if (!ib.title) return json({ error: "title required" }, 400);
+      var iid2 = await improvement(env, ib.source || "manual", ib.target || "fleet", ib.kind || "enhancement", String(ib.title), ib.detail || "", ib.priority || "P2");
+      return json({ ok: true, id: iid2 });
+    }
+    if (p === "/improvements/resolve" && request.method === "POST" && admin) {
+      var rb = {}; try { rb = await request.json(); } catch (e) {}
+      if (!rb.id || !rb.status) return json({ error: "id and status required" }, 400);
+      try {
+        await env.AUDIT.prepare("UPDATE fleet_improvements SET status=?1, evidence=?2, updated_at=datetime('now') WHERE id=?3").bind(String(rb.status), String(rb.evidence || "").slice(0, 500), Number(rb.id)).run();
+        return json({ ok: true, id: rb.id, status: rb.status });
+      } catch (e) { return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500); }
+    }
+    if (p === "/kaizen" && request.method === "GET") {
+      try {
+        var krows = await env.AUDIT.prepare("SELECT * FROM fleet_improvements WHERE status IN ('proposed','approved','in_progress') ORDER BY CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END, id DESC LIMIT 100").all();
+        var srows = await env.AUDIT.prepare("SELECT * FROM fleet_drift_report WHERE worker='SCAN' ORDER BY id DESC LIMIT 3").all();
+        return json({ ok: true, open_improvements: krows.results || [], recent_scans: srows.results || [] });
+      } catch (e) { return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500); }
+    }
+    if (p === "/selfdoc-audit" && request.method === "POST" && admin) {
+      return json(await selfdocAudit(env));
+    }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
+      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " healthy=" + res.healthy + " unhealthy=" + res.unhealthy + " noHealth=" + res.noHealth + " errors=" + res.errors);
       return json({ ok: true, scan: res });
     }
     if (p === "/scan-heal" && request.method === "POST" && admin) {
       var res2 = await scan(env, true);
+      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " healthy=" + res2.healthy + " unhealthy=" + res2.unhealthy + " noHealth=" + res2.noHealth + " errors=" + res2.errors);
       return json({ ok: true, scan: res2 });
     }
     return json({ error: "not found" }, 404);
@@ -185,6 +281,6 @@ export default {
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " healthy=" + res.healthy + " unhealthy=" + res.unhealthy + " noHealth=" + res.noHealth + " errors=" + res.errors);
   }
 };
