@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.10)
-var VERSION = "0.4.10";
+var VERSION = "0.4.11";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -186,7 +186,7 @@ async function redeploy(env, worker) {
     // (fleet_deploys id 4, 2026-09-09 18:02:12). /content updates the
     // script body only, so bindings/settings are preserved.
     var fd = new FormData();
-    fd.append("metadata", new Blob([JSON.stringify({ main_module: "worker.js", body_part: "worker.js" })], { type: "application/json" }));
+    fd.append("metadata", new Blob([JSON.stringify({ main_module: "worker.js" })], { type: "application/json" }));
     fd.append("worker.js", new Blob([c.code], { type: "application/javascript+module" }), "worker.js");
     r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") }, body: fd }, 20000);
   } else {
