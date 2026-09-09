@@ -1,0 +1,24 @@
+name = "qnfo-chameleon"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# qnfo-chameleon M0 telemetry plane (2026-09-09). Canonical mirror of the live worker.
+# D1: personal-life = preference telemetry (pref_* tables via schema.sql, id e8d6c61a);
+#     qnfo-audit     = cloud_ops_events audit log (fleet convention, id 35e2e573).
+# Secrets: none required for M0. Optional EVENT_TOKEN gates POST /v1/events when set
+# (wrangler secret put EVENT_TOKEN) - recommended once render consumers attach (M2).
+
+[[d1_databases]]
+binding = "PREF"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
