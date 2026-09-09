@@ -75,11 +75,11 @@ code mode) keeps working. ChatBox keeps the pure server loop. The client's syste
 prompt is preserved; a compact ops-tool context is appended to it.
 
 ## Environment knobs (PARAM-TUNE-1)
-- OPS_ANSWER_CAP (16384) - final-answer token cap (hard cap DEFAULT_MAX_OUT)
-- OPS_TOOL_ROUND_MAX (2000) - per-tool-round token budget
-- OPS_LOOP_DEADLINE_MS (180000) - SOFT agent-tool loop wall budget (OPS-TIME-BUDGET-1 2026-09-06: raised 30s->180s; once spent the runner stops requesting more tool rounds and produces the final answer at full answerCap - no 1200-token panic stub)
+- OPS_ANSWER_CAP (65536) - final-answer token cap (hard cap DEFAULT_MAX_OUT; OUT-32K-1)
+- OPS_TOOL_ROUND_MAX (32768) - per-tool-round token budget (OUT-32K-1)
+- OPS_LOOP_DEADLINE_MS (300000) - SOFT agent-tool loop wall budget (TIMEOUT-MAX-1 2026-09-09: raised 180s->300s to match [limits] cpu_ms=300000 5-min CPU ceiling; once spent the runner stops requesting more tool rounds and produces the final answer at full answerCap - NEVER terminates a response)
 - OPS_MAX_TOOL_ITERS (8) - max tool rounds per request
-- OPS_TOOL_RESULT_CAP (16000) - tool-result text cap (chars)
+- OPS_TOOL_RESULT_CAP (32768) - tool-result text cap (chars; OUT-32K-1)
 - OPS_TEMPERATURE (0.5) / OPS_TOP_P (0.9) - defaults when the client sends none
 - OPS_DAILY_CAP (5000) - chats per UTC day
 
@@ -104,6 +104,7 @@ prompt is preserved; a compact ops-tool context is appended to it.
   ceiling is 30s/request (Error 1102 exceededCpu). The 180s soft wall budget only binds if CPU is
   raised too - run_code executions + per-round JSON work count as active CPU; DeepSeek/D1/R2 I/O
   does not. Source: developers.cloudflare.com/workers/platform/limits.
+- v2.8.0 2026-09-09 — TIMEOUT-MAX-1: fix "Request failed / provider stopped the response" with ops-exec. OPS_LOOP_DEADLINE_MS default 180s->300s (soft budget now matches the [limits] cpu_ms=300000 5-min CPU ceiling; the budget NEVER terminates a response - it only stops requesting more tool rounds). Durable Workflow step.do timeout "5 minutes"->"15 minutes" (matches Durable Object alarm-handler wall-time; I/O-bound LLM turns get 3x headroom). Cloudflare reality: interactive HTTP requests max 5 min ACTIVE CPU (unlimited wall-clock while streaming); 15 min is a Workflow/DO/Cron-trigger bound, not an interactive-request bound.
 - v2.0.0 2026-09-05 — CTX-TRUNC-1 server-side history truncation to model context.
 
 ## URL routing & client-404 diagnostic lesson (URL-PATH-404-DIAGNOSTIC-1, 2026-09-04)
