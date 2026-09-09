@@ -1,0 +1,23 @@
+name = "qnfo-paper-explainer"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Secrets (set via wrangler secret put):
+#   BSKY_HANDLE    (qnfo.bsky.social — shared Bluesky account)
+#   BSKY_APP_PASS  (Bluesky app password)
+#   EXPLAIN_TOKEN  (HTTP endpoint auth for /run, /log, /state, /enable)
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# Daily science-translation post (14:00 UTC = 16:00 Amsterdam CEST).
+# Posts directly to Bluesky via its own AT Protocol session so the explainer keeps a
+# guaranteed daily cadence independent of the qnfo-social Zenodo queue.
+[triggers]
+crons = ["0 14 * * *"]
