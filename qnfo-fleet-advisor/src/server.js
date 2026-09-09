@@ -1,4 +1,4 @@
-// qnfo-fleet-advisor v0.3.2 - canonical autonomous Cloudflare fleet advisor.
+// qnfo-fleet-advisor v0.3.3 - canonical autonomous Cloudflare fleet advisor.
 // 100% server-side, 100% autonomous. Cron */20 + token-gated POST /run-audit.
 // v0.3.0: ENSEMBLE advice (primary llama proposes + gpt-oss-120b adversarially reviews
 // IMPROVE/ACCEPT -> consensus suggestion); gateway drift fixed to real fields only
@@ -8,7 +8,11 @@
 // v0.3.2: cron runs runAudit DIRECTLY (was token-gated DO path that 401'd silently -
 //   the DO env did not reliably see ADVISOR_TOKEN, so no advisor-audit events landed
 //   after 12:15 despite an armed */20 cron). Token gate remains only on POST /run-audit.
-const VERSION = "0.3.2";
+// v0.3.3 FLOOD-FIX-1 (2026-09-09): backlog finding titled "OPEN-ISSUES <n>" embedded the
+//   live count, so step-7 open-title dedupe never matched -> a new ticket every */20 cron
+//   (~42 tickets in 21h, ALERT-STORM-DETECTED #522). Fix: stable title + refresh-in-place,
+//   count excludes OPEN-ISSUES* self-tickets, legacy spam auto-closed on first v0.3.3 run.
+const VERSION = "0.3.3";
 const WORKER = "qnfo-fleet-advisor";
 
 const nowIso = () => new Date().toISOString();
@@ -129,11 +133,21 @@ async function runAudit(env) {
     if (deg && deg.length) findings.push({ kind: "model-health", severity: "medium", title: "MODEL-DEGRADED " + deg.map((d) => d.model_id).slice(0, 4).join(","), detail: "degraded: " + deg.map((d) => d.model_id).join(",") });
   } catch (e) {}
 
-  // 4. Backlog pressure
+  // 4. Backlog pressure (v0.3.3 FLOOD-FIX-1): exclude this worker's own OPEN-ISSUES*
+  // tickets from the count (they self-inflated it -> n stayed >8 forever -> re-file every
+  // */20 cron) and use a STABLE title so step-7 open-title dedupe actually matches; the
+  // single ticket is refreshed in place (step 7), never re-filed.
   try {
-    const open = await d1All(env, "SELECT COUNT(*) AS n FROM agent_issues WHERE status='open'");
+    const open = await d1All(env, "SELECT COUNT(*) AS n FROM agent_issues WHERE status='open' AND title NOT LIKE 'OPEN-ISSUES%'");
     const n = open && open[0] ? open[0].n : 0;
-    if (n > 8) findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES " + n, detail: n + " open agent_issues" });
+    if (n > 8) findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES-BACKLOG", detail: n + " open agent_issues (excluding advisor OPEN-ISSUES tickets)" });
+  } catch (e) {}
+
+  // 4b. v0.3.3 FLOOD-FIX-1 cleanup: close the legacy per-run spam tickets ("OPEN-ISSUES <n>",
+  // one filed per cron run 09-08..09-09) superseded by the single refreshable
+  // OPEN-ISSUES-BACKLOG ticket. Runs every cycle; idempotent.
+  try {
+    await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='backlog' AND title LIKE 'OPEN-ISSUES %'", [ts, WORKER]);
   } catch (e) {}
 
   // 5. Gateway config drift (advisory)
@@ -191,12 +205,16 @@ async function runAudit(env) {
     } catch (e) { suggestion = null; ensemble = null; }
   }
 
-  // 7. File deduped advisory issues
+  // 7. File deduped advisory issues (v0.3.3: dedupe hit -> refresh in place, not skip,
+  //    so a stale open ticket's detail/updated_at stays current).
   let filed = 0;
   for (const f of findings) {
     try {
       const existing = await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title = ?", [f.title]);
-      if (existing && existing.length) continue;
+      if (existing && existing.length) {
+        await d1Run(env, "UPDATE agent_issues SET description=?, updated_at=? WHERE id=?", ["[advisor] " + f.detail.slice(0, 600), ts, existing[0].id]);
+        continue;
+      }
       await d1Run(env, "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
         [f.title.slice(0, 240), "[advisor] " + f.detail.slice(0, 600), WORKER, f.kind, f.severity, "open", ts, ts]);
       filed++;
