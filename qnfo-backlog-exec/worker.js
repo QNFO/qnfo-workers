@@ -1,4 +1,15 @@
-// qnfo-backlog-exec v1.2.5 - agent_issues backlog executor (cloud-native ops).
+// qnfo-backlog-exec v1.2.6 - agent_issues backlog executor (cloud-native ops).
+// v1.2.6 (red-team 2026-09-09): watchdog coverage + created_at normalizer.
+//  - Sweep predicate widened 'OPEN-ISSUES %' -> 'OPEN-ISSUES%': the qnfo-fleet-advisor watchdog
+//    row 'OPEN-ISSUES-BACKLOG' (re-filed every 20 min) has NO space after OPEN-ISSUES and so was
+//    never swept. Verified live: it was the only OPEN-ISSUES-class row still open (#626) while
+//    all numbered siblings had been closed by the sweep. Same self-referential snapshot class;
+//    the >3h age gate is unchanged, so a fresh watchdog row is never closed early.
+//  - createdAgeMs() normalizer: agent_issues.created_at mixes ISO-T ("2026-09-09T19:40:02"),
+//    space-separated ("2026-09-09 18:30:23"), and epoch-ms stored as TEXT ('1788964264232' -
+//    [ai-cal] roster-drift rows). new Date(text) on epoch-ms TEXT yields Invalid Date, so age
+//    math silently broke (age ~= now for the sweep / exception classes). Numeric TEXT is now
+//    parsed as epoch-ms; unparseable values default to age 0 (never age-close on an unknown date).
 // v1.2.5: advisor-noise sweep - qnfo-fleet-advisor files 'OPEN-ISSUES N' snapshot rows
 // every 20 min (self-referential backlog metrics masquerading as tickets). Those rows have
 // no probe target and no resolution predicate, so the drain only rechecked them, burning the
@@ -8,7 +19,7 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.2.5";
+const VERSION = "1.2.6";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -27,6 +38,20 @@ async function json(data, status) {
 }
 function ts() { return new Date().toISOString(); }
 function nowEpoch() { return Date.now(); }
+
+// v1.2.6: created_at normalizer. Writers store ISO-T, space-separated, or epoch-ms as TEXT.
+// Only number|Date-string handling made TEXT epoch-ms -> Invalid Date -> broken age math.
+// Unparseable -> 0 (age unknown, treated as fresh; never age-close on a date we cannot read).
+function createdAgeMs(ca, now) {
+  if (typeof ca === "number") return now - ca;
+  if (typeof ca === "string") {
+    const t = ca.trim();
+    if (/^\d{10,}$/.test(t)) return now - Number(t); // epoch-ms stored as TEXT
+    const d = new Date(t).getTime();
+    if (Number.isFinite(d)) return now - d;
+  }
+  return 0;
+}
 
 async function recordEvent(env, kind, text, meta, job, status) {
   try {
@@ -69,21 +94,23 @@ async function probeHealth(name) {
   return { ok: false, host: null, status: 0 };
 }
 
-// v1.2.5: advisor-noise sweep. 'OPEN-ISSUES N' rows are self-referential backlog snapshots
-// (emitted every 20 min by qnfo-fleet-advisor), not actionable tickets: no probe target, no
-// resolution predicate. Anything older than 3h is superseded noise -> close, keep history.
+// v1.2.5 + v1.2.6: advisor-noise sweep. 'OPEN-ISSUES N' AND 'OPEN-ISSUES-BACKLOG' rows are
+// self-referential backlog snapshots (emitted every 20 min by qnfo-fleet-advisor), not actionable
+// tickets: no probe target, no resolution predicate. Anything older than 3h is superseded noise
+// -> close, keep history. v1.2.6 widens the predicate to 'OPEN-ISSUES%' so the space-less
+// watchdog row is covered too.
 async function sweepAdvisorNoise(env) {
   let closed = 0;
+  const now = nowEpoch();
   try {
-    const noise = await env.AUDIT.prepare("SELECT id, title, created_at FROM agent_issues WHERE status='open' AND title LIKE 'OPEN-ISSUES %' ORDER BY id").all();
+    const noise = await env.AUDIT.prepare("SELECT id, title, created_at FROM agent_issues WHERE status='open' AND title LIKE 'OPEN-ISSUES%' ORDER BY id").all();
     const rows = noise.results || [];
     for (const r of rows) {
-      const ca = r.created_at;
-      const ageMs = (typeof ca === "number") ? (nowEpoch() - ca) : (nowEpoch() - (new Date(ca).getTime() || 0));
+      const ageMs = createdAgeMs(r.created_at, now);
       if (ageMs > 3 * 3600 * 1000) {
-        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(nowEpoch(), r.id).run();
+        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, r.id).run();
         closed++;
-        await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0,40) + "): superseded, age>3h", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.5" }, WORKER, "ok");
+        await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0,40) + "): superseded, age>3h", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.6" }, WORKER, "ok");
       }
     }
   } catch (e) {}
@@ -128,8 +155,7 @@ async function run(env) {
       // If NO error-selfheal exception/storm alert names this worker in the last 24h, the
       // class has recovered; the ticket is stale. Health evidence (fleet log or edge probe)
       // is checked when available but is not required - error-selfheal silence IS the signal.
-      const ca = row.created_at;
-      const ageMs = (typeof ca === "number") ? (now - ca) : (now - (new Date(ca).getTime() || 0));
+      const ageMs = createdAgeMs(row.created_at, now);
       if (ageMs > 24 * 3600 * 1000) {
         let rec = 0;
         try {
