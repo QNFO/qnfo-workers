@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.4-deepseek-flash";
+var VERSION = "1.1.0-depth-gate";
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -191,6 +191,10 @@ async function selectCandidates(env, limit) {
   const out = [];
   for (const p of all) {
     if (doneSet.has(p.slug) || pendSet.has(p.slug)) continue;
+    if (String(p.body_md || "").length < 8000) {
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.doi, p.title).run();
+      continue;
+    }
     out.push(p);
     if (out.length >= limit) break;
   }
@@ -218,8 +222,8 @@ __name(verifySingleVersion, "verifySingleVersion");
 function auditPrompt(paper) {
   return [
     "You are an ADVERSARIAL reviewer auditing a QNFO research preprint for concrete, correctable defects. You are hostile-but-honest: report ONLY issues that genuinely appear in the text; never invent issues.",
-    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names).",
-    "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution (requires human review).",
+    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
+    "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit).",
     "For each issue provide a SURGICAL edit: 'location' must be an EXACT verbatim substring copied from the paper; 'fix' is the replacement (for insertion, fix = location + inserted text; for deletion, fix = ''). If you cannot quote an exact substring, do NOT propose an edit.",
     'Output JSON only: {"issues":[{"severity":"low|high","category":"...","location":"exact verbatim substring","fix":"replacement","reason":"1 sentence"}]}. If no genuine issues, return {"issues":[]}.',
     "PAPER TITLE: " + (paper.title || ""),
