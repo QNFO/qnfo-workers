@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.1)
-var VERSION = "0.4.1";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.2)
+var VERSION = "0.4.2";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -52,6 +52,9 @@ async function improvement(env, source, target, kind, title, detail, priority) {
   } catch (e) { return null; }
 }
 async function healthProbe(env, n, out) {
+  // ADVISORY-ONLY leg: same-account fetch of *.q08.workers.dev 404s from inside a Worker
+  // (SVC-BINDING-1 recurrence confirmed 2026-09-09: external 200 vs in-worker 404).
+  // Counters only; truthful signals come from the external prober via POST /health-report.
   var hs = 0;
   try {
     var hr = await timedFetch("https://" + n + ".q08.workers.dev/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy-health)" } }, FETCH_TIMEOUT_MS);
@@ -61,11 +64,9 @@ async function healthProbe(env, n, out) {
   if (hs >= 500 && hs !== 530) {
     out.unhealthy++;
     out.details.push(n + ":health-" + hs);
-    await improvement(env, "scan", n, "health", n + " /health HTTP " + hs, "health probe returned HTTP " + hs, "P1");
     return;
   }
   out.noHealth++;
-  await improvement(env, "scan", n, "coverage", n + " lacks 200 /health (observed " + (hs || "network-error") + ")", "no 200 from /health endpoint (FLEET-PROBE-COVERAGE-1)", "P3");
 }
 async function selfdocAudit(env) {
   var out = { checked: 0, with_readme: 0, missing: 0, rows: [] };
@@ -264,6 +265,28 @@ export default {
     }
     if (p === "/selfdoc-audit" && request.method === "POST" && admin) {
       return json(await selfdocAudit(env));
+    }
+    if (p === "/health-report" && request.method === "POST" && admin) {
+      var pb = {}; try { pb = await request.json(); } catch (e) {}
+      var probes = Array.isArray(pb.probes) ? pb.probes : [];
+      var out2 = { healthy: 0, unhealthy: 0, coverage: 0, filed: [] };
+      for (var pi = 0; pi < probes.length; pi++) {
+        var pr = probes[pi];
+        var wname = String(pr && pr.worker || "");
+        if (!wname || NO_SELF.indexOf(wname) >= 0) continue;
+        var pst = Number(pr && pr.status || 0);
+        if (pst === 200) { out2.healthy++; continue; }
+        if (pst >= 500 && pst !== 530) {
+          out2.unhealthy++;
+          var hid = await improvement(env, "probe", wname, "health", wname + " /health HTTP " + pst, "external probe returned HTTP " + pst, "P1");
+          out2.filed.push({ worker: wname, id: hid });
+        } else {
+          out2.coverage++;
+          var cid = await improvement(env, "probe", wname, "coverage", wname + " lacks 200 /health (observed " + (pst || "network-error") + ")", "no 200 from /health endpoint (FLEET-PROBE-COVERAGE-1)", "P3");
+          out2.filed.push({ worker: wname, id: cid });
+        }
+      }
+      return json({ ok: true, report: out2 });
     }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
