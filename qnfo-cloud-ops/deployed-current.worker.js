@@ -1,9 +1,12 @@
+--75c3e06c5bc8c3b1f57419c665412e3fe5a6e889c944c94ff9de81b2036d
+Content-Disposition: form-data; name="worker.js"
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.13.5";
+var VERSION = "1.14.1-gtd-guard";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -181,7 +184,9 @@ var AMS_SCHEDULE = {
   "visibility": { times: ["07:30"], days: "1", fixed: null },
   "engagement": { times: ["07:15"], days: "1", fixed: null },
   "radar": { times: ["09:30"], days: "1-5", fixed: null },
-  "gtd-reconcile": { times: ["05:30"], days: "1", fixed: null }
+  "gtd-reconcile": { times: ["05:30"], days: "1", fixed: null },
+  "quality-score": { times: ["06:20"], days: "*", fixed: null },
+  "overdue-guard": { times: ["05:10"], days: "*", fixed: null }
 };
 function buildCrons(offset) {
   const crons = [];
@@ -1872,19 +1877,112 @@ __name(jobEngagement, "jobEngagement");
 async function jobGtdReconcile(env) {
   try {
     const open = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work").first();
-    const overdue = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work WHERE due < ?").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).first();
+    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const odRows = await env.AUDIT.prepare("SELECT id, owner, due FROM task_dod_register WHERE due IS NOT NULL AND due != '' AND due < ? AND status = 'open' AND owner IN ('agent','scheduled-runner','fleet') ORDER BY due LIMIT 80").bind(today).all();
+    const ods = odRows && odRows.results || [];
+    const tag = /* @__PURE__ */ __name(function(o) {
+      return o === "scheduled-runner" ? "sched" : o === "agent" ? "ag" : o;
+    }, "tag");
+    const ids = ods.map(function(r) {
+      return r.id + ":" + tag(String(r.owner || ""));
+    }).join(",");
+    const overdueTotal = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work WHERE due < ?").bind(today).first();
+    const overdueN = overdueTotal && overdueTotal.n || 0;
     const human = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_waiting_on_human").first();
     const noDod = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_open_tasks_no_dod").first();
-    const line = "GTD reconcile: open=" + (open && open.n || 0) + " overdue=" + (overdue && overdue.n || 0) + " waiting_on_human=" + (human && human.n || 0) + " no_dod=" + (noDod && noDod.n || 0);
+    const line = "GTD reconcile: open=" + (open && open.n || 0) + " overdue=" + overdueN + (ids ? " overdue_ids=" + ids : "") + " waiting_on_human=" + (human && human.n || 0) + " no_dod=" + (noDod && noDod.n || 0);
     await recordEvent(env, "gtd-reconcile", "gr-" + Date.now().toString(36), line, { job: "gtd-reconcile" });
-    return { status: "ok", open: open && open.n || 0, overdue: overdue && overdue.n || 0, waiting_on_human: human && human.n || 0, no_dod: noDod && noDod.n || 0 };
+    return { status: "ok", open: open && open.n || 0, overdue: overdueN, overdue_ids: ods.map(function(r) {
+      return r.id;
+    }), waiting_on_human: human && human.n || 0, no_dod: noDod && noDod.n || 0 };
   } catch (e) {
     return { status: "error", error: String(e).slice(0, 200) };
   }
 }
 __name(jobGtdReconcile, "jobGtdReconcile");
+async function jobQualityScore(env) {
+  const NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
+  const litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review)", "i");
+  const doiRe = new RegExp("10[.][0-9]{4,9}/", "g");
+  const axRe = new RegExp("(?:arxiv[.]org/|arXiv:[" + NLc + TBc + " ]*[0-9]{4}[.][0-9]{4,5})", "gi");
+  const tableRe = new RegExp("^[" + NLc + TBc + " ]*[|][-:| ]+[|]", "m");
+  try {
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS quality_scores (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, slug TEXT, status TEXT, body_len INTEGER, refs INTEGER, lit INTEGER, verif INTEGER, score INTEGER, flag TEXT)").run();
+    const rows = await env.LIVING.prepare("SELECT slug, status, body_md FROM papers WHERE status='published'").all();
+    const list = rows && rows.results || [];
+    const stmts = [];
+    let flagged = 0;
+    for (const p of list) {
+      const md = String(p.body_md || "");
+      const len = md.length;
+      const lit = litRe.test(md) ? 1 : 0;
+      const refs = (md.match(doiRe) || []).length + (md.match(axRe) || []).length;
+      const verif = md.indexOf(BQc + BQc + BQc) >= 0 || tableRe.test(md) ? 1 : 0;
+      const score = Math.min(100, Math.min(len / 100, 40) + Math.min(refs * 3, 30) + lit * 15 + verif * 15);
+      const flag = score < 25 ? "quarantine-candidate" : score < 50 ? "thin" : "";
+      if (flag === "quarantine-candidate") flagged++;
+      stmts.push(env.AUDIT.prepare("INSERT INTO quality_scores (ts, slug, status, body_len, refs, lit, verif, score, flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10), p.slug, p.status, len, refs, lit, verif, score, flag));
+    }
+    let wrote = 0;
+    if (stmts.length) {
+      const batch = stmts.slice(0, 200);
+      await env.AUDIT.batch(batch);
+      wrote = batch.length;
+    }
+    await recordEvent(env, "quality-score", "qs-" + Date.now().toString(36), "quality sweep: scanned=" + list.length + " rows=" + wrote + " quarantine_candidates=" + flagged, { job: "quality-score" });
+    return { status: "ok", scanned: list.length, rows: wrote, quarantine_candidates: flagged };
+  } catch (e) {
+    return { status: "error", error: String(e).slice(0, 200) };
+  }
+}
+__name(jobQualityScore, "jobQualityScore");
+async function jobGtdOverdueGuard(env) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const execCite = /\b(?:executor|worker)\s*=/i;
+  const runCite = /\b(?:job|cron|schedule|task)\s*=/i;
+  const agentCite = /executor=ops-session|owner=agent/i;
+  const out = { overdue: [], no_executor: [], agent_uncited: [] };
+  try {
+    const open = await env.AUDIT.prepare("SELECT id, due, owner, status, COALESCE(evidence_pointer,'') AS ev, COALESCE(source_table,'') AS st, COALESCE(source_row_id,'') AS srid FROM task_dod_register WHERE status='open' ORDER BY due").all();
+    const rows = open && open.results || [];
+    for (const r of rows) {
+      const ev = String(r.ev || "");
+      const ow = String(r.owner || "");
+      const due = String(r.due || "");
+      const overdue = !!due && due < today;
+      const item = { id: r.id, owner: ow, due: due || null, src: String(r.st || "") + "/" + String(r.srid || "") };
+      if (ow === "scheduled-runner" || ow === "fleet") {
+        if (!(execCite.test(ev) && runCite.test(ev))) out.no_executor.push(item);
+        else if (overdue) out.overdue.push(item);
+      } else if (ow === "agent") {
+        if (overdue) out.overdue.push(item);
+        else if (!ev.trim() || !agentCite.test(ev)) out.agent_uncited.push(item);
+      } else if (overdue) {
+        out.overdue.push(item);
+      }
+    }
+  } catch (e) {
+    return { status: "error", error: String(e).slice(0, 300) };
+  }
+  const alert = out.overdue.length > 0 || out.no_executor.length > 0;
+  const summary = "register guard: overdue=" + out.overdue.length + " scheduled_no_executor=" + out.no_executor.length + " agent_uncited=" + out.agent_uncited.length;
+  let mail = null;
+  if (alert) {
+    const text = "QNFO task_dod_register guard " + today + NL + "OVERDUE (" + out.overdue.length + "): " + out.overdue.map(function(x) {
+      return "#" + x.id + " " + x.owner + " due " + (x.due || "-");
+    }).slice(0, 30).join("; ") + NL + "SCHEDULED WITHOUT EXECUTOR CITATION (" + out.no_executor.length + "): " + out.no_executor.map(function(x) {
+      return "#" + x.id + " " + x.owner + " due " + (x.due || "-");
+    }).slice(0, 30).join("; ");
+    mail = await sendDigest(env, "QNFO register guard: " + out.overdue.length + " overdue / " + out.no_executor.length + " no-executor", text);
+  }
+  await recordEvent(env, "gtd-overdue-guard", "gog-" + Date.now().toString(36), summary + " " + JSON.stringify(out).slice(0, 1200), { job: "overdue-guard", status: alert ? "alerted" : "clean", mail: mail || {} });
+  return { status: "ok", today, overdue: out.overdue, no_executor: out.no_executor, agent_uncited: out.agent_uncited, alerted: alert, mail };
+}
+__name(jobGtdOverdueGuard, "jobGtdOverdueGuard");
 var JOBS = {
   "gtd-reconcile": jobGtdReconcile,
+  "overdue-guard": jobGtdOverdueGuard,
+  "quality-score": jobQualityScore,
   "email-triage": jobEmailTriage,
   "gmail-triage": jobGmailTriage,
   "briefing": jobBriefing,
@@ -2119,3 +2217,5 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
+--75c3e06c5bc8c3b1f57419c665412e3fe5a6e889c944c94ff9de81b2036d--
