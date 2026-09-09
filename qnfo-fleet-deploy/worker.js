@@ -1,5 +1,5 @@
-// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.3)
-var VERSION = "0.4.9";
+// qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.10)
+var VERSION = "0.4.10";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -178,9 +178,20 @@ async function redeploy(env, worker) {
     return { ok: true, status: 200, note: "no-op", from: depV, to: canV };
   }
   var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
-  var ctype = isModule(c.code) ? "application/javascript+module" : "application/javascript";
   var toSha = await sha256(c.code);
-  var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": ctype }, body: c.code }, 20000);
+  var r;
+  if (isModule(c.code)) {
+    // ES-module workers require multipart upload; a raw PUT with
+    // Content-Type application/javascript+module returns HTTP 415
+    // (fleet_deploys id 4, 2026-09-09 18:02:12). /content updates the
+    // script body only, so bindings/settings are preserved.
+    var fd = new FormData();
+    fd.append("metadata", new Blob([JSON.stringify({ main_module: "worker.js", body_part: "worker.js" })], { type: "application/json" }));
+    fd.append("worker.js", new Blob([c.code], { type: "application/javascript+module" }), "worker.js");
+    r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") }, body: fd }, 20000);
+  } else {
+    r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/javascript" }, body: c.code }, 20000);
+  }
   var j = null; try { j = await r.json(); } catch (e) {}
   var putOk = r.ok && !(j && j.success === false);
   var dep2 = await deployedContent(env, worker);
@@ -188,7 +199,7 @@ async function redeploy(env, worker) {
   var ok = putOk && depV2 === canV;
   var note = !putOk ? ("HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180)) : (ok ? ("redeployed " + depV + " -> " + canV) : ("PUT-ok but deployed still " + (depV2 || "?") + " (wrangler-managed no-op?)"));
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
-  return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, ctype: ctype, source: c.path, bytes: c.code.length };
+  return { ok: ok, status: ok ? 200 : 502, note: note, from: depV, to: canV, direction: direction, source: c.path, bytes: c.code.length };
 }
 async function scan(env, heal) {
   var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
