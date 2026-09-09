@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.7.0-quality-gate";
+var VERSION = "0.8.0-artifact-deposit";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
 var MAX_NOTE = 4e3;
@@ -649,7 +649,54 @@ function qualityGate(row, minLen, minRefs) {
 }
 __name(qualityGate, "qualityGate");
 
+async function depositToGithub(env, slug, title, md, doi) {
+  if (!env.GITHUB_TOKEN) return { ok: false, error: 'no github token' };
+  var owner = 'QNFO', repo = 'qnfo-research';
+  var prog = programFor(slug);
+  var dir = prog === 'papers' ? 'papers/' + slug : prog + '/' + slug;
+  var readme = '# ' + (title || slug) + NL + NL + 'DOI: ' + doi + NL + NL + 'Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)' + NL + 'License: CC BY 4.0' + NL + NL + 'Auto-deposited by qnfo-research-exec (artifact-deposition P3).';
+  var files = [['paper.md', md || ''], ['README.md', readme]];
+  var out = [];
+  for (var i = 0; i < files.length; i++) {
+    var name = files[i][0], content = files[i][1];
+    var path = dir + '/' + name;
+    var body = JSON.stringify({ message: 'auto-deposit: ' + slug + ' (' + (doi || 'no-doi') + ')', content: b64(content), branch: 'main' });
+    try {
+      var r = await fetch('https://api.github.com/repos/' + owner + '/' + repo + '/contents/' + path, { method: 'PUT', headers: { Authorization: 'Bearer ' + env.GITHUB_TOKEN, 'User-Agent': 'QNFO-research-exec/0.8.0', 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' }, body });
+      var j = await r.json();
+      out.push({ file: name, status: r.status, sha: j && j.content && j.content.sha || '' });
+      if (r.status === 201 || r.status === 200) {
+        try {
+          await env.QNFO_AUDIT.prepare('INSERT INTO publication_artifacts (publication_id, artifact_type, artifact_name, sha256, file_size_bytes, created_at) VALUES (?, ?, ?, ?, ?, datetime(now))').bind(doi || slug, 'github-md', path, String(j.content && j.content.sha || ''), String(content).length).run();
+        } catch (ePa) {}
+      }
+    } catch (e) {
+      out.push({ file: name, error: String(e && e.message || e).slice(0, 120) });
+    }
+  }
+  try {
+    await env.QNFO_AUDIT.prepare('INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime(now), artifact-deposit, qnfo-research-exec, ?)').bind((slug + ' -> github ' + JSON.stringify(out)).slice(0, 450)).run();
+  } catch (eL) {}
+  return { ok: out.some(function(o) { return o.status === 200 || o.status === 201; }), files: out };
+}
+__name(depositToGithub, 'depositToGithub');
+
+function programFor(slug) {
+  var x = String(slug || '');
+  if (x.indexOf('jpcub') >= 0 || x.indexOf('joules-per') >= 0 || x.indexOf('joules') >= 0) return 'joules-per-compute-benchmark';
+  if (x.indexOf('ultrametric') >= 0 || x.indexOf('silent-radix') >= 0 || x.indexOf('radix') >= 0) return 'silent-radix';
+  if (x.indexOf('helix') >= 0) return 'alpha-pi-helix';
+  if (x.indexOf('adelic') >= 0) return 'adelic-freedom';
+  if (x.indexOf('primon') >= 0 || x.indexOf('arithmetic-quantum') >= 0) return 'arithmetic-quantum-thermodynamics';
+  if (x.indexOf('margolus') >= 0) return 'margolus-levitin';
+  if (x.indexOf('topological-spin') >= 0) return 'topological-spin';
+  if (x.indexOf('landauer') >= 0 || x.indexOf('surface-code') >= 0 || x.indexOf('decoherence') >= 0 || x.indexOf('latency') >= 0) return 'jpcub-qec';
+  return 'papers';
+}
+__name(programFor, 'programFor');
+
 async function publishV2(env, row) {
+  var slug = row.slug || 'paper';
   var minLen = Number(env.QUALITY_MIN_LEN || 8000);
   var minRefs = Number(env.QUALITY_MIN_REFS || 5);
   if (String(env.QUALITY_GATE_OFF || "") !== "1") {
@@ -700,6 +747,7 @@ async function publishV2(env, row) {
       }
     }
     await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(adoptedDoi, row.id).run();
+    await depositToGithub(env, slug, row.title, row.corrected_md || "", adoptedDoi);
     return { ok: true, stage: "v2", doi: adoptedDoi, adopted: true };
   }
   var conceptRec = recId;
@@ -865,6 +913,7 @@ async function publishV2(env, row) {
     }
   }
   await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(newDoi, row.id).run();
+  await depositToGithub(env, slug, row.title, row.corrected_md || "", newDoi);
   return { ok: true, stage: "v2", doi: newDoi };
 }
 __name(publishV2, "publishV2");
@@ -914,7 +963,7 @@ var PILOT = "https://qnfo-containers-pilot.q08.workers.dev";
 var GH_API = "https://api.github.com";
 var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
-var PIPELINE_VERSION = "0.7.0-quality-gate";
+var PIPELINE_VERSION = "0.8.0-artifact-deposit";
 
 async function aiText(env, model, prompt, maxTokens) {
   try {
