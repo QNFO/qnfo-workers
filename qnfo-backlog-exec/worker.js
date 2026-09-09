@@ -1,9 +1,14 @@
-// qnfo-backlog-exec v1.1.1 - agent_issues backlog executor (cloud-native ops).
+// qnfo-backlog-exec v1.2.5 - agent_issues backlog executor (cloud-native ops).
+// v1.2.5: advisor-noise sweep - qnfo-fleet-advisor files 'OPEN-ISSUES N' snapshot rows
+// every 20 min (self-referential backlog metrics masquerading as tickets). Those rows have
+// no probe target and no resolution predicate, so the drain only rechecked them, burning the
+// 40-row budget and never closing them. Sweep closes any OPEN-ISSUES snapshot older than 3h
+// (superseded dozens of times; cadence is 20 min) BEFORE the drain selects its rows.
 // v1.1.1: drain ordering (priority, then least-recently-watched) so each daily run advances.
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.2.4";
+const VERSION = "1.2.5";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -64,7 +69,29 @@ async function probeHealth(name) {
   return { ok: false, host: null, status: 0 };
 }
 
+// v1.2.5: advisor-noise sweep. 'OPEN-ISSUES N' rows are self-referential backlog snapshots
+// (emitted every 20 min by qnfo-fleet-advisor), not actionable tickets: no probe target, no
+// resolution predicate. Anything older than 3h is superseded noise -> close, keep history.
+async function sweepAdvisorNoise(env) {
+  let closed = 0;
+  try {
+    const noise = await env.AUDIT.prepare("SELECT id, title, created_at FROM agent_issues WHERE status='open' AND title LIKE 'OPEN-ISSUES %' ORDER BY id").all();
+    const rows = noise.results || [];
+    for (const r of rows) {
+      const ca = r.created_at;
+      const ageMs = (typeof ca === "number") ? (nowEpoch() - ca) : (nowEpoch() - (new Date(ca).getTime() || 0));
+      if (ageMs > 3 * 3600 * 1000) {
+        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(nowEpoch(), r.id).run();
+        closed++;
+        await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0,40) + "): superseded, age>3h", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.5" }, WORKER, "ok");
+      }
+    }
+  } catch (e) {}
+  return closed;
+}
+
 async function run(env) {
+  const noiseClosed = await sweepAdvisorNoise(env);
   const rows = await env.AUDIT.prepare("SELECT id, title, description, source, category, priority, status, created_at, updated_at FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, updated_at ASC, id LIMIT ?1").bind(MAX_ROW).all();
   const items = rows.results || [];
   const now = nowEpoch();
@@ -123,9 +150,9 @@ async function run(env) {
     rechecked++;
     detail.push({ id: row.id, title: title.slice(0,60), action: "recheck", note: name ? ("probe target " + name) : "no probe target" });
   }
-  const summary = { processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
+  const summary = { noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
   if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter(d=>d.action==="escalate").map(d=>d.target).join(", "));
-  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
+  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
 }
 
