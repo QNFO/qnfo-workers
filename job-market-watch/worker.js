@@ -4,6 +4,14 @@ export default {
   async scheduled(event, env, ctx) {
     const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
     await env.JOB_MARKET_WATCH.create({ id: "cron-" + stamp, params: { trigger: "cron" } });
+  },
+  async fetch(request) {
+    // v1.1.0: health route (was missing -> HTTP probes 500/1101 on every fleet probe)
+    const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ ok: true, worker: "job-market-watch", version: "1.1.0" }), { headers: { "content-type": "application/json" } });
+    }
+    return new Response("not found", { status: 404 });
   }
 };
 
