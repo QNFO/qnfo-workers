@@ -2059,6 +2059,75 @@ async function runRefresh(env, ctx) {
   return inflight;
 }
 __name(runRefresh, "runRefresh");
+async function ensureReportCardTable(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS report_card_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, sai REAL, grade TEXT, scores_json TEXT, signals_json TEXT)").run();
+}
+__name(ensureReportCardTable, "ensureReportCardTable");
+function computeSai(st) {
+  const clamp = function (x) { return Math.max(0, Math.min(1, x)); };
+  const probes = st.probes || [];
+  const probeRatio = probes.length ? probes.filter(function (p) { return p.ok; }).length / probes.length : 0;
+  const issues = st.issues || [];
+  const nErr = issues.filter(function (i) { return i.sev === "err"; }).length;
+  const nWarn = issues.filter(function (i) { return i.sev === "warn"; }).length;
+  const chains = st.chains || [];
+  const chainRatio = chains.length ? chains.filter(function (c) { return c.state === "ok"; }).length / chains.length : 0;
+  const ig = st.integration || {};
+  const islands = ig.islands || [];
+  const drift = ig.drift || {};
+  const driftBad = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
+  const density = ig.density || 0;
+  const audits = {};
+  (st.audits || []).forEach(function (a) { if (a && a.key) audits[a.key] = a; });
+  let openIssues = -1, userWait = -1;
+  const aiDetail = ((audits.agent_issues || {}).detail) || "";
+  const m1 = aiDetail.match(/(\d+) open of/);
+  if (m1) openIssues = Number(m1[1]);
+  const regDetail = ((audits.register || {}).detail) || "";
+  const m2 = regDetail.match(/v_waiting_on_human=(\d+)/);
+  if (m2) userWait = Number(m2[1]);
+  const noRun = (st.scheduled || []).filter(function (s) { return s.status === "NO-RUN"; }).length;
+  const userFreedom = userWait === 0 ? 1 : userWait > 0 ? clamp(1 - 0.15 * userWait) : 1;
+  const loopHealth = 0.4 * probeRatio + 0.4 * chainRatio + 0.2 * (noRun === 0 ? 1 : 0.5);
+  const autonomy = Math.min(0.5 * userFreedom + 0.5 * loopHealth, 0.70);
+  const thinking = 0.5;
+  const decision = 0.25 * 0.95 + 0.25 * 0.70 + 0.25 * 0.40 + 0.25 * 0.90;
+  const kaizen = openIssues === 0 ? 1 : openIssues > 0 ? clamp(1 - 0.05 * openIssues) : 1;
+  const selfImprov = 0.3 * kaizen + 0.2 * 1 + 0.5 * 0.15;
+  const reliability = 0.5 * probeRatio + 0.3 * clamp(1 - 0.25 * nErr) + 0.2 * clamp(1 - 0.1 * nWarn);
+  const driftPen = clamp(1 - 0.05 * driftBad);
+  const islandPen = clamp(1 - 0.01 * islands.length);
+  const densityScore = clamp(density * 40);
+  const structural = 0.4 * chainRatio + 0.3 * (0.5 * driftPen + 0.5 * islandPen) + 0.3 * densityScore;
+  const sysInt = ig.system || {};
+  const sysScore = sysInt.score && typeof sysInt.score.total === "number" ? sysInt.score.total : null;
+  const integration = sysScore != null ? 0.6 * structural + 0.4 * clamp(sysScore / 100) : structural;
+  const governance = 0.5 * userFreedom + 0.5 * 0.80;
+  const scores = { autonomy: autonomy, thinking: thinking, decision: decision, self_improv: selfImprov, reliability: reliability, integration: integration, governance: governance };
+  const sai = 100 * (0.30 * scores.autonomy + 0.15 * scores.thinking + 0.15 * scores.decision + 0.15 * scores.self_improv + 0.10 * scores.reliability + 0.10 * scores.integration + 0.05 * scores.governance);
+  return { sai: Math.round(sai * 10) / 10, scores: scores, signals: { probe_ratio: probeRatio, chain_ratio: chainRatio, issues_err: nErr, issues_warn: nWarn, open_agent_issues: openIssues, user_wait: userWait, islands: islands.length, drift_bad: driftBad, density: density, no_run: noRun } };
+}
+__name(computeSai, "computeSai");
+async function persistWeeklyReportCard(env, st) {
+  try {
+    await ensureReportCardTable(env);
+    const now = new Date();
+    if (now.getUTCDay() !== 1 || now.getUTCHours() !== 6) return { weekly: false };
+    const iso = now.toISOString().slice(0, 10);
+    const prior = await env.AUDIT.prepare("SELECT id FROM report_card_history WHERE ts LIKE ?1").bind(iso + "%").first();
+    if (prior) return { weekly: false, dup: true };
+    const sai = computeSai(st);
+    const grade = sai.sai >= 85 ? "A" : sai.sai >= 75 ? "B" : sai.sai >= 65 ? "C" : sai.sai >= 55 ? "D" : "F";
+    await env.AUDIT.prepare("INSERT INTO report_card_history (ts, sai, grade, scores_json, signals_json) VALUES (?1, ?2, ?3, ?4, ?5)").bind(now.toISOString(), sai.sai, grade, JSON.stringify(sai.scores), JSON.stringify(sai.signals)).run();
+    try {
+      await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'report-card-weekly', ?3, ?4, 'qnfo-fleet-dashboard', 'ok')").bind("rc-weekly-" + iso, now.toISOString(), "Weekly SAI: " + sai.sai + " (" + grade + ")", JSON.stringify(sai)).run();
+    } catch (e) {}
+    return { weekly: true, sai: sai.sai };
+  } catch (e) {
+    return { weekly: false, error: String(e && e.message ? e.message : e).slice(0, 80) };
+  }
+}
+__name(persistWeeklyReportCard, "persistWeeklyReportCard");
 var worker_default = {
   async fetch(request, env, ctx) {
     try {
@@ -2070,6 +2139,7 @@ var worker_default = {
   async scheduled(controller, env, ctx) {
     try {
       const st = await runRefresh(env, ctx);
+      ctx.waitUntil(persistWeeklyReportCard(env, st));
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
     } catch (e) {
       return new Response("err " + String(e.message || e), { status: 500 });
