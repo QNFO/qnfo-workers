@@ -312,7 +312,7 @@ async function evolveApply(env, worker, candidateId, goal) {
 // The decide-loop: on each cron fire, propose + apply a self-improvement to one worker,
 // with snapshot + auto-revert. Round-robins SEED_WORKERS; verification ladder
 // (heartbeat -> custom-domain -> parse-only) decides whether a broken deploy is detected.
-const SEED_WORKERS = ['qnfo-citation-watch', 'qnfo-email', 'qnfo-search', 'obsidian-writer', 'qnfo-lifecycle'];
+const SEED_WORKERS = ['qnfo-citation-watch', 'qnfo-email', 'qnfo-ai-search', 'obsidian-writer', 'qnfo-lifecycle'];
 
 // PRECONDITION: cron fire (or manual /run/cycle). POSTCONDITION: one worker improved or reverted, recorded.
 async function autonomousApply(env) {
@@ -334,11 +334,43 @@ async function autonomousApply(env) {
   return result;
 }
 
+// E2 INDEPENDENT-THINKING LOOP (user-enabled 2026-09-10): the fleet generates its OWN
+// novel research questions instead of only executing a hardcoded seed list. This is the
+// "know thyself" rung: self-directedness, not just self-rewrite.
+async function thinkLoop(env) {
+  await ensureSchema(env);
+  await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)').run();
+  try {
+    const ai = await env.AI.run(EVOLVE_MODEL, {
+      messages: [
+        { role: 'system', content: 'You are the QNFO research collective. Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
+        { role: 'user', content: 'Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus.' },
+      ],
+      max_tokens: 256,
+    });
+    let text = '';
+    if (typeof ai === 'string') text = ai;
+    else if (ai && typeof ai.response === 'string') text = ai.response;
+    else text = JSON.stringify(ai || {});
+    let q = null;
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) { try { q = JSON.parse(m[0]); } catch (e) {} }
+    if (q && q.question) {
+      await env.AUDIT.prepare('INSERT INTO self_questions (ts, question, hypothesis, source, status) VALUES (?1, ?2, ?3, ?4, ?5)').bind(nowIso(), String(q.question).slice(0, 300), String(q.hypothesis || '').slice(0, 300), 'think-loop', 'open').run();
+      return { ok: true, question: q.question };
+    }
+    return { ok: false, why: 'no parseable question' };
+  } catch (e) {
+    return { ok: false, why: String(e && e.message ? e.message : e).slice(0, 120) };
+  }
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     await ensureSchema(env);
     ctx.waitUntil((async function () { try { await cycle(env); } catch (e) {} })());
     ctx.waitUntil((async function () { try { await autonomousApply(env); } catch (e) {} })());
+    ctx.waitUntil((async function () { try { await thinkLoop(env); } catch (e) {} })());
   },
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -367,6 +399,10 @@ export default {
     }
     if (p === '/run/apply' && request.method === 'POST') {
       const result = await autonomousApply(env);
+      return json({ ok: true, result: result });
+    }
+    if (p === '/run/think' && request.method === 'POST') {
+      const result = await thinkLoop(env);
       return json({ ok: true, result: result });
     }
     if (p === '/heartbeat' && request.method === 'POST') {
