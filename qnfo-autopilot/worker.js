@@ -141,6 +141,16 @@ async function publishReport(env) {
 const CF_API = 'https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b';
 const EVOLVE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
+// SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
+// Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
+const SERVICE_BINDINGS = {
+  'qnfo-citation-watch': 'SB_CITATION_WATCH',
+  'qnfo-email': 'SB_EMAIL',
+  'qnfo-ai-search': 'SB_AI_SEARCH',
+  'obsidian-writer': 'SB_OBSIDIAN',
+  'qnfo-lifecycle': 'SB_LIFECYCLE',
+};
+
 // PRECONDITION: multipart envelope from content/v2. POSTCONDITION: raw module code.
 function unwrap(raw) {
   if (!raw || raw.indexOf('Content-Disposition') < 0) return raw;
@@ -243,6 +253,17 @@ async function workerDomains(env, worker) {
 // PRECONDITION: worker deployed. POSTCONDITION: health verdict. Custom domains are authoritative
 // (workers.dev subdomains return 1042 from within Cloudflare egress - NOT a failure signal).
 async function verifyHealth(env, worker) {
+  const sbName = SERVICE_BINDINGS[worker];
+  if (sbName && env[sbName]) {
+    try {
+      const resp = await env[sbName].fetch('https://internal/health', { headers: { 'User-Agent': UA } });
+      const txt = await resp.text();
+      if (resp.status >= 500) return { ok: false, why: 'svc-binding http ' + resp.status + ' ' + txt.slice(0, 50) };
+      return { ok: true, why: 'svc-binding http ' + resp.status };
+    } catch (e) {
+      return { ok: false, why: 'svc-binding unreachable ' + String(e && e.message ? e.message : e).slice(0, 40) };
+    }
+  }
   try {
     const fresh = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const hb = await env.AUDIT.prepare('SELECT ok, ts FROM fleet_heartbeat WHERE worker = ?1').bind(worker).first();
@@ -298,7 +319,15 @@ async function evolveApply(env, worker, candidateId, goal) {
     await env.AUDIT.prepare("UPDATE evolve_candidates SET status = 'rejected-parse' WHERE sha256 = ?1").bind(await sha256hex(proposal)).run();
     return { ok: false, why: 'deploy rejected (parse): ' + put.why, reverted: false };
   }
+  // PROPAGATION-WAIT: service binding + subdomain hit STALE code for seconds after a deploy (verified 2026-09-10:
+  // the broken candidate's immediate verify returned 200 from the old code). Wait, then verify; also re-verify to catch delayed breakage.
+  await new Promise(function (r) { setTimeout(r, 10000); });
   const h = await verifyHealth(env, worker);
+  if (h.ok) {
+    await new Promise(function (r) { setTimeout(r, 8000); });
+    const h2 = await verifyHealth(env, worker);
+    if (!h2.ok) { h.ok = false; h.why = h2.why; }
+  }
   if (!h.ok) {
     const rb = await deployWorker(env, worker, current, isModule);
     await env.AUDIT.prepare("UPDATE evolve_candidates SET status = 'auto-reverted' WHERE sha256 = ?1").bind(await sha256hex(proposal)).run();

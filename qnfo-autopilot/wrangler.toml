@@ -19,3 +19,30 @@ crons = ["5 * * * *"]
 
 [ai]
 binding = "AI"
+
+# SERVICE-BINDING-1 (2026-09-10): synchronous runtime-verify for seed workers.
+# Service bindings bypass egress->workers.dev=1042 (same-account workers.dev fetch 404s from a Worker).
+[[services]]
+binding = "SB_CITATION_WATCH"
+service = "qnfo-citation-watch"
+environment = "production"
+
+[[services]]
+binding = "SB_EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[[services]]
+binding = "SB_AI_SEARCH"
+service = "qnfo-ai-search"
+environment = "production"
+
+[[services]]
+binding = "SB_OBSIDIAN"
+service = "obsidian-writer"
+environment = "production"
+
+[[services]]
+binding = "SB_LIFECYCLE"
+service = "qnfo-lifecycle"
+environment = "production"
