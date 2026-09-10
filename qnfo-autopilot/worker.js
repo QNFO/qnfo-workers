@@ -171,10 +171,10 @@ async function evolvePropose(env, worker, goal) {
     const raw = await resp.text();
     code = unwrap(raw);
   } catch (e) { return { ok: false, why: String(e && e.message ? e.message : e).slice(0, 80) }; }
-  const prompt = 'You are improving a Cloudflare Worker. Goal: ' + (goal || 'add a /version endpoint that returns JSON {ok:true,version}') + '. Here is the current module source:\n\n' + code.slice(0, 24000) + '\n\nReturn ONLY the complete modified source (JavaScript, valid module syntax).';
+  const prompt = 'You are improving a Cloudflare Worker. Goal: ' + (goal || 'add a /version endpoint that returns JSON {ok:true,version}') + '. Here is the current module source:\n\n' + code.slice(0, 16000) + '\n\nReturn ONLY the complete modified source (JavaScript, valid module syntax).';
   let proposal;
   try {
-    const out = await env.AI.run(EVOLVE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 24000 });
+    const out = await env.AI.run(EVOLVE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 4096 });
     proposal = typeof out === 'string' ? out : (out.response || JSON.stringify(out));
   } catch (e) { return { ok: false, why: 'AI ' + String(e && e.message ? e.message : e).slice(0, 80) }; }
   const hash = await sha256hex(proposal);
