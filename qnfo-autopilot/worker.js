@@ -346,7 +346,7 @@ async function thinkLoop(env) {
         { role: 'system', content: 'You are the QNFO research collective. Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
         { role: 'user', content: 'Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus.' },
       ],
-      max_tokens: 256,
+      max_tokens: 512,
     });
     let text = '';
     if (typeof ai === 'string') text = ai;
@@ -355,6 +355,10 @@ async function thinkLoop(env) {
     let q = null;
     const m = text.match(/\{[\s\S]*\}/);
     if (m) { try { q = JSON.parse(m[0]); } catch (e) {} }
+    if (!q || !q.question) {
+      const qm = text.match(/"question"\s*:\s*"([^"]+)"/);
+      if (qm) q = { question: qm[1], hypothesis: '' };
+    }
     if (q && q.question) {
       await env.AUDIT.prepare('INSERT INTO self_questions (ts, question, hypothesis, source, status) VALUES (?1, ?2, ?3, ?4, ?5)').bind(nowIso(), String(q.question).slice(0, 300), String(q.hypothesis || '').slice(0, 300), 'think-loop', 'open').run();
       return { ok: true, question: q.question };
