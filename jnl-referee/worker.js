@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.5.1";
+var VERSION = "0.7.2";
 var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -45,6 +45,8 @@ async function ensureSchema(env) {
     try { await env.AUDIT.prepare(DDL[i]).run(); out.push("ok"); }
     catch (e) { out.push(String(e && e.message || e)); }
   }
+  var mig = await migrate(env);
+  out.push("migrate:" + mig.join(","));
   return out;
 }
 
@@ -87,7 +89,12 @@ async function submitNew(env, recid, note, who) {
   var dup = await env.AUDIT.prepare("SELECT recid FROM jnl_submissions WHERE recid = ?").bind(recid).first();
   var dupR = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE recid = ?").bind(recid).first();
   if (dup || dupR) return { dup: true };
-  await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now')) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi").bind(rec.id, rec.conceptrecid || null, rec.doi || null, rec.conceptdoi || null, meta.version || null, meta.title || null).run();
+  var selfInfoS = isSelfRecord({ metadata: meta, id: rec.id });
+  await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked, self_authored, self_kind, creators) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi, self_authored=excluded.self_authored, self_kind=excluded.self_kind, creators=excluded.creators").bind(rec.id, rec.conceptrecid || null, rec.doi || null, rec.conceptdoi || null, meta.version || null, meta.title || null, selfInfoS.self ? 1 : 0, selfInfoS.kind, creatorsText({ metadata: meta })).run();
+  if (selfInfoS.self) {
+    await log(env, recid, "self_excluded", "intake refused review: " + selfInfoS.why);
+    return { dup: false, self: true, queued: false, recid: recid, doi: rec.doi || null, why: selfInfoS.why, note: "self-authored record recorded but NOT queued (JNL-SELF-EXCLUDE-1)" };
+  }
   await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_reviews (recid, status) VALUES (?, 'queued')").bind(recid).run();
   await env.AUDIT.prepare("INSERT INTO jnl_submissions (recid, note, source, status) VALUES (?, ?, ?, 'queued')").bind(recid, String(note || "").slice(0, 300), String(who).slice(0, 40)).run();
   await log(env, recid, "submitted", "author submission queued via intake (P9)");
@@ -341,8 +348,13 @@ async function runReview(env, recid, manual) {
     await env.AUDIT.prepare("INSERT INTO jnl_reviews (recid, status, basis, text_chars, error, ran_at) VALUES (?, 'error', ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET status='error', basis=excluded.basis, text_chars=excluded.text_chars, error=excluded.error, ran_at=excluded.ran_at").bind(recid, basis, rec.text_chars, "no model produced parseable JSON", nowIso).run();
     return { ok: false, recid: recid, error: "no model produced parseable JSON" };
   }
+  var NL = String.fromCharCode(10);
   var dec = decisionFrom(parsedList, basis);
+  var esc = await applySpecAckEscape(env, rec, dec, models, recid, basis);
+  dec = esc.dec;
+  var specPath = esc.specPath;
   var report = buildReport(rec, parsedList, dec, modelsUsed, basis);
+  if (specPath.used) report = report + specAckReportSection(specPath, NL);
   var p0 = parsedList[0] || {};
   var sound = Math.round(parsedList.map(function (p) { return clampScore(p.score_soundness); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
   var novel = Math.round(parsedList.map(function (p) { return clampScore(p.score_novelty); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
@@ -354,17 +366,18 @@ async function runReview(env, recid, manual) {
     "VALUES (?, 'done', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
     "ON CONFLICT(recid) DO UPDATE SET status='done', decision=excluded.decision, model=excluded.model, score_soundness=excluded.score_soundness, score_novelty=excluded.score_novelty, score_clarity=excluded.score_clarity, score_reproducibility=excluded.score_reproducibility, avg_score=excluded.avg_score, basis=excluded.basis, text_chars=excluded.text_chars, fatal_flaws=excluded.fatal_flaws, disagreement=excluded.disagreement, report_md=excluded.report_md, ran_at=excluded.ran_at, error=NULL"
   ).bind(recid, dec.decision, modelsUsed.join(","), sound, novel, clar, repro, dec.avg, basis, rec.text_chars, fatalCount, dec.disagreement ? 1 : 0, report, nowIso).run();
+  var selfRow = await env.AUDIT.prepare("SELECT COALESCE(self_authored,0) AS s FROM jnl_records WHERE recid = ?").bind(recid).first().catch(function () { return null; });
   await env.AUDIT.prepare(
-    "INSERT INTO jnl_decisions (recid, decision, rationale, avg_score, basis) VALUES (?, ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET decision=excluded.decision, rationale=excluded.rationale, avg_score=excluded.avg_score, basis=excluded.basis"
-  ).bind(recid, dec.decision, (dec.reason + " | " + (p0.rationale || "")).slice(0, 1500), dec.avg, basis).run();
+    "INSERT INTO jnl_decisions (recid, decision, rationale, avg_score, basis, speculative, spec_ack, self_review, path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET decision=excluded.decision, rationale=excluded.rationale, avg_score=excluded.avg_score, basis=excluded.basis, speculative=excluded.speculative, spec_ack=excluded.spec_ack, self_review=excluded.self_review, path=excluded.path"
+  ).bind(recid, dec.decision, (dec.reason + " | " + (p0.rationale || "")).slice(0, 1500), dec.avg, basis, dec.speculative ? 1 : 0, specPath.acknowledged ? 1 : 0, (selfRow && selfRow.s) ? 1 : 0, dec.path).run();
   await log(env, recid, "done", dec.decision + " avg=" + dec.avg + " basis=" + basis);
-  return { ok: true, recid: recid, decision: dec.decision, avg_score: dec.avg, basis: basis, text_chars: rec.text_chars, models: modelsUsed, fatal_flaws: fatalCount, disagreement: dec.disagreement };
+  return { ok: true, recid: recid, decision: dec.decision, avg_score: dec.avg, basis: basis, path: dec.path, speculative: dec.speculative, spec_ack: specPath.acknowledged, text_chars: rec.text_chars, models: modelsUsed, fatal_flaws: fatalCount, disagreement: dec.disagreement };
 }
 
 async function enqueueNew(env, limit) {
   var schema = await ensureSchema(env);
   var rows = await env.AUDIT.prepare(
-    "SELECT r.recid FROM jnl_records r LEFT JOIN jnl_reviews v ON v.recid = r.recid WHERE v.recid IS NULL ORDER BY r.modified DESC LIMIT ?"
+    "SELECT r.recid FROM jnl_records r LEFT JOIN jnl_reviews v ON v.recid = r.recid WHERE v.recid IS NULL AND COALESCE(r.self_authored,0) = 0 ORDER BY r.modified DESC LIMIT ?"
   ).bind(limit).all();
   var added = 0;
   for (var i = 0; i < rows.results.length; i++) {
@@ -377,7 +390,7 @@ async function enqueueNew(env, limit) {
 }
 
 async function pickQueued(env) {
-  var row = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE status='queued' OR (status='error' AND ran_at IS NOT NULL AND ran_at < datetime('now','-30 minutes')) ORDER BY id ASC LIMIT 1").first();
+  var row = await env.AUDIT.prepare("SELECT v.recid AS recid FROM jnl_reviews v LEFT JOIN jnl_records r ON r.recid = v.recid WHERE (v.status='queued' OR (v.status='error' AND v.ran_at IS NOT NULL AND v.ran_at < datetime('now','-30 minutes'))) AND COALESCE(r.self_authored,0) = 0 ORDER BY v.id ASC LIMIT 1").first();
   return row ? row.recid : null;
 }
 
@@ -450,8 +463,8 @@ var index_default = {
     try {
       if (path === "/health") {
         var schema = await ensureSchema(env);
-        var counts = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_reviews) AS reviews, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT MAX(ran_at) FROM jnl_reviews) AS last_run").first();
-        return json({ ok: true, service: "jnl-referee", version: VERSION, schema: schema, counts: counts, models: String(env.JNL_MODELS || MODELS_DEFAULT) });
+        var counts = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_reviews) AS reviews, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE speculative=1) AS speculative_flagged, (SELECT MAX(ran_at) FROM jnl_reviews) AS last_run").first();
+        return json({ ok: true, service: "jnl-referee", version: VERSION, build: BUILD, schema: schema, counts: counts, models: String(env.JNL_MODELS || MODELS_DEFAULT) });
       }
       if (path === "/queue") {
         var limitQ = Math.min(Number(url.searchParams.get("limit") || 20), 100);
@@ -477,6 +490,19 @@ var index_default = {
         var gNodes = await env.AUDIT.prepare("SELECT recid, title FROM jnl_records ORDER BY recid").all();
         var gEdges = await env.AUDIT.prepare("SELECT a, b, shared, concepts FROM jnl_links ORDER BY shared DESC LIMIT 300").all();
         return json({ ok: true, node_count: gNodes.results.length, edge_count: gEdges.results.length, nodes: gNodes.results, edges: gEdges.results });
+      }
+      if (path === "/self-audit") {
+        var sa = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE decision='PUBLISH') AS publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued").first();
+        var pct = function (a, b) { return b ? Math.round(1000 * a / b) / 10 + "%" : null; };
+        return json({ ok: true, service: "jnl-referee", version: VERSION, build: BUILD, counts: sa, contamination: { self_records_share: pct(sa.self_records, sa.records), self_review_decisions_share: pct(sa.self_review_decisions, sa.decisions) }, guard: "self-authored records are excluded from the review queue (JNL-SELF-EXCLUDE-1); historical decisions are flagged, never deleted" });
+      }
+      if (path === "/backfill-flags" && method === "POST") {
+        var authedF = await authOk(request, env);
+        if (!authedF) return json({ ok: false, error: "unauthorized" }, 401);
+        var f1 = await env.AUDIT.prepare("UPDATE jnl_decisions SET self_review = 1 WHERE recid IN (SELECT recid FROM jnl_records WHERE self_authored = 1)").run();
+        var f2 = await env.AUDIT.prepare("UPDATE jnl_decisions SET speculative = 1 WHERE rationale LIKE '%speculative=true%'").run();
+        var f3 = await env.AUDIT.prepare("UPDATE jnl_decisions SET path = 'threshold' WHERE path IS NULL").run();
+        return json({ ok: true, self_review_flagged: (f1.meta && f1.meta.changes) || 0, speculative_flagged: (f2.meta && f2.meta.changes) || 0, path_defaulted: (f3.meta && f3.meta.changes) || 0, build: BUILD });
       }
       if (path === "/submissions") {
         var limS = Math.min(Number(url.searchParams.get("limit") || 30), 100);
@@ -561,13 +587,16 @@ var index_default = {
           var bodyC = {};
           try { bodyC = await request.json(); } catch (e) {}
           var calTitle = String(bodyC.title || "calibration control").slice(0, 200);
-          var calText = String(bodyC.text || "").slice(0, 16000);
+          var calText = String(bodyC.text || "").slice(0, TEXT_CAP);
           if (!calText) return json({ ok: false, error: "text required" }, 400);
           var bCal = await dailyBudgetOk(env);
           if (!bCal.ok) return json({ ok: false, error: "daily budget reached", budget: bCal }, 429);
           var modelsC = String((env.JNL_MODELS || MODELS_DEFAULT)).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
-          var sysC = reviewerSystem("an adversarial calibration referee");
-          var usrC = "CALIBRATION CONTROL TITLE: " + calTitle + "\n\nFULL TEXT:\n" + calText + "\n\nDecide whether this submission would pass peer review. Produce the review JSON.";
+          // Calibration fidelity (v0.7.0): /cal uses the SAME system + user prompt as production,
+          // otherwise the harness calibrates a different decision path than the one it measures.
+          var recC = { recid: null, doi: String(bodyC.doi || "(calibration)"), conceptdoi: null, version: String(bodyC.version || "(calibration)"), title: calTitle, publication_date: null, license: null, creators: String(bodyC.creators || "(calibration control)"), description: calText.slice(0, 6000), keywords: String(bodyC.keywords || "(calibration)"), text: calText, text_chars: calText.length, fetched_key: "(calibration)" };
+          var sysC = reviewerSystem("an adversarial-but-fair referee");
+          var usrC = userPrompt(recC, true);
           var parsedC = [];
           var usedC = [];
           for (var ci = 0; ci < modelsC.length; ci++) {
@@ -579,9 +608,23 @@ var index_default = {
           }
           if (!parsedC.length) return json({ ok: false, error: "no model produced parseable JSON" }, 500);
           var decC = decisionFrom(parsedC, "text");
-          await log(env, null, "cal", decC.decision + " avg=" + decC.avg + " title=" + calTitle.slice(0, 80));
+          var ov = bodyC.dec_override || null;
+          if (ov && typeof ov === "object") {
+            decC = Object.assign({}, decC, {
+              avg: (typeof ov.avg === "number") ? ov.avg : decC.avg,
+              min_avg: (typeof ov.min_avg === "number") ? ov.min_avg : (typeof decC.min_avg === "number" ? decC.min_avg : decC.avg),
+              fatal: (typeof ov.fatal === "boolean") ? ov.fatal : decC.fatal,
+              speculative: (typeof ov.speculative === "boolean") ? ov.speculative : decC.speculative,
+              low_confidence: (typeof ov.low_confidence === "boolean") ? ov.low_confidence : decC.low_confidence,
+              decision: String(ov.decision || decC.decision),
+              reason: decC.reason + " | dec_override applied (decision-path calibration at a specified operating point)"
+            });
+          }
+          var escC = await applySpecAckEscape(env, { title: calTitle, text: calText, description: calText.slice(0, 4000), creators: "(calibration control)" }, decC, modelsC, null, "text");
+          decC = escC.dec;
+          await log(env, null, "cal", decC.decision + " avg=" + decC.avg + " path=" + decC.path + " title=" + calTitle.slice(0, 80));
           await bumpDaily(env);
-          return json({ ok: true, title: calTitle, decision: decC.decision, avg_score: decC.avg, models: usedC, reason: decC.reason });
+          return json({ ok: true, title: calTitle, decision: decC.decision, avg_score: decC.avg, models: usedC, reason: decC.reason, path: decC.path, speculative: decC.speculative, spec_ack: escC.specPath.acknowledged, spec_votes: escC.specPath.votes, spec_criteria: escC.specPath.criteria, spec_rationale: escC.specPath.rationale });
         }
       }
       return json({ ok: true, service: "jnl-referee", version: VERSION, path: path, method: method, endpoints: ["GET /health", "GET /queue", "GET /reviews?recid=", "GET /decisions?recid=", "POST /enqueue (x-jnl-token)", "POST /seed (x-jnl-token)", "POST /run {recid} (x-jnl-token)", "POST /run-next {n} (x-jnl-token)"], note: "AI referee overlay for Zenodo community aiscience; isolated jnl-* stack; overlay-only (no Zenodo write-back)" });
@@ -591,5 +634,109 @@ var index_default = {
   }
 };
 
+
+// ---- JNL-SELF-EXCLUDE-1 (row 125) + JNL-P3 speculative escape (row 124) -------
+var BUILD = 'specack-selfexclude-2026-09-10';
+var SELF_ORCIDS = ['0009-0002-4317-5604'];
+var SELF_NAME_PATTERNS = [/quni-?gudzinas/i, /rowan\s+brad\s+quni/i];
+var SELF_ORG_PATTERNS = [/qnfo\s+ai\s+referee/i];
+var OWN_REPORT_TITLE = 'AI Referee Report';
+function creatorList(h) {
+  var md = (h && h.metadata) || {};
+  var cr = md.creators || [];
+  var out = [];
+  for (var i = 0; i < cr.length; i++) {
+    out.push({ name: String(cr[i].name || ''), orcid: String(cr[i].orcid || ''), affiliation: String(cr[i].affiliation || (cr[i].affiliations && cr[i].affiliations[0] && cr[i].affiliations[0].name) || '') });
+  }
+  return out;
+}
+function isSelfRecord(h) {
+  var title = String((h && h.metadata && h.metadata.title) || '');
+  if (title.indexOf(OWN_REPORT_TITLE) === 0) return { self: true, kind: 'own-review-report', why: 'title prefix ' + OWN_REPORT_TITLE };
+  var cr = creatorList(h);
+  for (var i = 0; i < cr.length; i++) {
+    var c = cr[i];
+    if (c.orcid && SELF_ORCIDS.indexOf(c.orcid) >= 0) return { self: true, kind: 'self-authored', why: 'orcid ' + c.orcid };
+    for (var j = 0; j < SELF_NAME_PATTERNS.length; j++) if (SELF_NAME_PATTERNS[j].test(c.name)) return { self: true, kind: 'self-authored', why: 'creator ' + c.name };
+    for (var k = 0; k < SELF_ORG_PATTERNS.length; k++) if (SELF_ORG_PATTERNS[k].test(c.name) || SELF_ORG_PATTERNS[k].test(c.affiliation)) return { self: true, kind: 'own-review-report', why: 'org marker ' + (c.name || c.affiliation) };
+  }
+  return { self: false, kind: null, why: null };
+}
+function creatorsText(h) {
+  return creatorList(h).map(function (c) { return c.name + (c.orcid ? ' [' + c.orcid + ']' : ''); }).join('; ').slice(0, 900);
+}
+async function migrate(env) {
+  var adds = [
+    'ALTER TABLE jnl_records ADD COLUMN self_authored INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jnl_records ADD COLUMN self_kind TEXT',
+    'ALTER TABLE jnl_decisions ADD COLUMN speculative INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_decisions ADD COLUMN spec_ack INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_decisions ADD COLUMN self_review INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_decisions ADD COLUMN path TEXT'
+  ];
+  var out = [];
+  for (var i = 0; i < adds.length; i++) {
+    try { await env.AUDIT.prepare(adds[i]).run(); out.push('added'); }
+    catch (e) { out.push('exists'); }
+  }
+  return out;
+}
+function specAckSystem() {
+  return 'You are a second-pass reviewer for an open AI-reviewed journal whose stated ethos welcomes theoretical and philosophical work. ' +
+    'A first-pass review flagged this record as speculative or lacking empirical evidence, which alone blocks publication. ' +
+    'Your ONLY question: does the record handle its own speculation honestly and rigorously - does it state explicitly that its claims are theoretical/speculative, and does it offer falsifiable or disconfirming criteria a reader could actually test? ' +
+    'Do NOT judge whether the claims are true. Do NOT reward confident tone. Absence of empirical evidence is expected and is not by itself a reason to answer false. ' +
+    'Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: acknowledged (boolean), disconfirmation_criteria (array of strings quoted or paraphrased from the record; empty array if none), rationale (string), confidence (high|medium|low).';
+}
+async function speculationAckPass(env, rec, models) {
+  var sys = specAckSystem();
+  var usr = 'RECORD METADATA\ntitle: ' + (rec.title || '(none)') + '\ndoi: ' + (rec.doi || '(none)') + '\ncreators: ' + (rec.creators || '(none)') + '\n\nABSTRACT/DESCRIPTION:\n' + String(rec.description || '').slice(0, 4000) + '\n\nFULL TEXT (first ' + String(rec.text || '').length + ' chars):\n' + String(rec.text || '').slice(0, 12000) + '\n\nNow produce the acknowledgment JSON.';
+  var votes = [], modelsUsed = [], criteria = [], rationale = '';
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var outTxt = await aiRun(env, models[i], sys, usr);
+      var p = parseJsonObject(outTxt);
+      if (p) {
+        modelsUsed.push(models[i]);
+        votes.push(p.acknowledged === true);
+        var cc = arrOf(p.disconfirmation_criteria);
+        for (var j = 0; j < cc.length && criteria.length < 8; j++) criteria.push(cc[j]);
+        if (!rationale && p.rationale) rationale = String(p.rationale);
+      }
+    } catch (e) { }
+  }
+  var yes = votes.filter(function (x) { return x; }).length;
+  // Require BOTH a majority acknowledgment AND at least one falsifiable criterion actually extracted:
+  // a vote of "acknowledged" whose own rationale reports no testable criteria does not satisfy the standard.
+  var ack = votes.length > 0 && yes * 2 > votes.length && criteria.length > 0;
+  return { used: true, acknowledged: ack, votes: votes, models: modelsUsed, criteria: criteria, rationale: rationale || '(no second-pass model returned parseable JSON)' };
+}
+function specEscapeEligible(dec, basis) {
+  return !!(dec && dec.decision === "REVISE" && dec.speculative && !dec.fatal && basis === "text" && dec.avg >= 7.5 && (typeof dec.min_avg !== "number" || dec.min_avg >= 6) && !dec.low_confidence);
+}
+// Shared by runReview AND /cal so calibration measures the same decision path as production.
+async function applySpecAckEscape(env, rec, dec, models, recid, basis) {
+  var specPath = { used: false, acknowledged: false, votes: [], models: [], criteria: [], rationale: "" };
+  if (!specEscapeEligible(dec, basis)) { if (!dec.path) dec.path = "threshold"; return { dec: dec, specPath: specPath }; }
+  specPath = await speculationAckPass(env, rec, models);
+  if (specPath.acknowledged) {
+    dec = Object.assign({}, dec, { decision: "PUBLISH", path: "speculation-acknowledged", reason: dec.reason + " | escape: speculation acknowledged on second pass (" + String(specPath.rationale).slice(0, 200) + ")" });
+    await log(env, recid, "spec_ack", "speculation acknowledged -> PUBLISH (escape path)");
+  } else {
+    await log(env, recid, "spec_ack", "second pass did not acknowledge speculation; REVISE stands");
+  }
+  return { dec: dec, specPath: specPath };
+}
+function specAckReportSection(specPath, NL) {
+  var specLines = [];
+  specLines.push("");
+  specLines.push("## Second-pass check: speculation acknowledgment (escape path, register row 124)");
+  specLines.push("- The first pass flagged this record as speculative / lacking empirical evidence, which alone blocks publication. The second pass asked ONLY whether the record states its speculative status explicitly and offers falsifiable or disconfirming criteria. It did not judge whether the claims are true.");
+  specLines.push("- Second-pass models returning a parseable verdict: " + (specPath.models.join(", ") || "(none)") + "; votes=" + JSON.stringify(specPath.votes));
+  specLines.push("- Outcome: " + (specPath.acknowledged ? "acknowledged -> PUBLISH" : "not acknowledged -> REVISE stands"));
+  specLines.push("- Disconfirming criteria offered by the record: " + (specPath.criteria.length ? specPath.criteria.map(function (x) { return String(x).slice(0, 200); }).join(" | ") : "(none extracted)"));
+  specLines.push("- Second-pass rationale: " + String(specPath.rationale).slice(0, 700));
+  return specLines.join(NL) + NL;
+}
 export { index_default as default };
 

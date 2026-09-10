@@ -1,80 +1,87 @@
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+// jnl-referee v0.1.0 - AI referee + decision engine for the AI-reviewed journal overlay (isolated jnl-* stack).
+// Reviews Zenodo community records (aiscience), writes referee reports + deterministic decisions to D1 jnl-audit.
+// Overlay-only: never stores paper bodies; never writes back to Zenodo (P6 needs curator token).
+// PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
+// POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-// worker.js
-var VERSION = "0.5.1";
-var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct";
+var VERSION = "0.7.2";
+var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
-var FETCH_TIMEOUT_MS = 2e4;
-var TEXT_CAP = 18e3;
+var FETCH_TIMEOUT_MS = 20000;
+var TEXT_CAP = 18000;
 var MAX_TOKENS = 2400;
+
 var DDL = [
-  "CREATE TABLE IF NOT EXISTS jnl_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'queued', decision TEXT, model TEXT, score_soundness INTEGER, score_novelty INTEGER, score_clarity INTEGER, score_reproducibility INTEGER, avg_score REAL, basis TEXT, text_chars INTEGER, fatal_flaws INTEGER DEFAULT 0, disagreement INTEGER DEFAULT 0, report_md TEXT, error TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), ran_at TEXT)",
-  "CREATE TABLE IF NOT EXISTS jnl_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, decision TEXT NOT NULL, rationale TEXT, avg_score REAL, basis TEXT, created_at TEXT DEFAULT (datetime('now')))",
-  "CREATE TABLE IF NOT EXISTS jnl_review_log (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), recid INTEGER, kind TEXT, detail TEXT)",
-  "CREATE TABLE IF NOT EXISTS jnl_submissions (id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'queued', note TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))",
-  "CREATE TABLE IF NOT EXISTS jnl_links (id INTEGER PRIMARY KEY AUTOINCREMENT, a INTEGER NOT NULL, b INTEGER NOT NULL, shared INTEGER DEFAULT 1, concepts TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(a, b))"
+  "CREATE TABLE IF NOT EXISTS jnl_reviews (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, " +
+    "status TEXT NOT NULL DEFAULT 'queued', decision TEXT, model TEXT, " +
+    "score_soundness INTEGER, score_novelty INTEGER, score_clarity INTEGER, score_reproducibility INTEGER, " +
+    "avg_score REAL, basis TEXT, text_chars INTEGER, fatal_flaws INTEGER DEFAULT 0, disagreement INTEGER DEFAULT 0, " +
+    "report_md TEXT, error TEXT, created_at TEXT DEFAULT (datetime('now')), " +
+    "updated_at TEXT DEFAULT (datetime('now')), ran_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS jnl_decisions (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, decision TEXT NOT NULL, " +
+    "rationale TEXT, avg_score REAL, basis TEXT, created_at TEXT DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS jnl_review_log (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), recid INTEGER, kind TEXT, detail TEXT)",
+  "CREATE TABLE IF NOT EXISTS jnl_submissions (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'queued', " +
+    "note TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS jnl_links (" +
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, a INTEGER NOT NULL, b INTEGER NOT NULL, " +
+    "shared INTEGER DEFAULT 1, concepts TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(a, b))"
 ];
+
 function json(data, status) {
   return new Response(JSON.stringify(data, null, 1), {
     status: status || 200,
     headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" }
   });
 }
-__name(json, "json");
+
 async function ensureSchema(env) {
   var out = [];
   for (var i = 0; i < DDL.length; i++) {
-    try {
-      await env.AUDIT.prepare(DDL[i]).run();
-      out.push("ok");
-    } catch (e) {
-      out.push(String(e && e.message || e));
-    }
+    try { await env.AUDIT.prepare(DDL[i]).run(); out.push("ok"); }
+    catch (e) { out.push(String(e && e.message || e)); }
   }
+  var mig = await migrate(env);
+  out.push("migrate:" + mig.join(","));
   return out;
 }
-__name(ensureSchema, "ensureSchema");
+
 function log(env, recid, kind, detail) {
   try {
-    return env.AUDIT.prepare("INSERT INTO jnl_review_log (recid, kind, detail) VALUES (?, ?, ?)").bind(recid || null, kind, String(detail || "").slice(0, 1e3)).run();
-  } catch (e) {
-    return null;
-  }
+    return env.AUDIT.prepare("INSERT INTO jnl_review_log (recid, kind, detail) VALUES (?, ?, ?)")
+      .bind(recid || null, kind, String(detail || "").slice(0, 1000)).run();
+  } catch (e) { return null; }
 }
-__name(log, "log");
+
+// Submission-intake helpers (P9 anti-abuse, v0.4.0)
 function normalizeId(input) {
   var s = String(input || "").trim();
   var m = s.match(/[0-9]{5,9}/);
   return m ? Number(m[0]) : 0;
 }
-__name(normalizeId, "normalizeId");
 async function whoHash(header) {
   try {
     var h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(header || "anon"));
     var arr = new Uint8Array(h);
-    return Array.prototype.slice.call(arr, 0, 8).map(function(b) {
-      return b.toString(16).padStart(2, "0");
-    }).join("");
-  } catch (e) {
-    return "anon";
-  }
+    return Array.prototype.slice.call(arr, 0, 8).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  } catch (e) { return "anon"; }
 }
-__name(whoHash, "whoHash");
 async function submitRateOk(env, who) {
   var cap = Number(env.JNL_SUBMIT_DAILY_CAP || 10);
-  var key = "submit:" + dateKey(/* @__PURE__ */ new Date()) + ":" + who;
+  var key = "submit:" + dateKey(new Date()) + ":" + who;
   var cur = Number(await env.STATE.get(key) || 0);
-  return { ok: cur < cap, cur, cap, key };
+  return { ok: cur < cap, cur: cur, cap: cap, key: key };
 }
-__name(submitRateOk, "submitRateOk");
 async function submitBump(env, who) {
-  var key = "submit:" + dateKey(/* @__PURE__ */ new Date()) + ":" + who;
+  var key = "submit:" + dateKey(new Date()) + ":" + who;
   var cur = Number(await env.STATE.get(key) || 0) + 1;
-  await env.STATE.put(key, String(cur), { expirationTtl: 9e4 });
+  await env.STATE.put(key, String(cur), { expirationTtl: 90000 });
   return cur;
 }
-__name(submitBump, "submitBump");
 async function submitNew(env, recid, note, who) {
   await ensureSchema(env);
   var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
@@ -82,17 +89,21 @@ async function submitNew(env, recid, note, who) {
   var dup = await env.AUDIT.prepare("SELECT recid FROM jnl_submissions WHERE recid = ?").bind(recid).first();
   var dupR = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE recid = ?").bind(recid).first();
   if (dup || dupR) return { dup: true };
-  await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now')) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi").bind(rec.id, rec.conceptrecid || null, rec.doi || null, rec.conceptdoi || null, meta.version || null, meta.title || null).run();
+  var selfInfoS = isSelfRecord({ metadata: meta, id: rec.id });
+  await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked, self_authored, self_kind, creators) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi, self_authored=excluded.self_authored, self_kind=excluded.self_kind, creators=excluded.creators").bind(rec.id, rec.conceptrecid || null, rec.doi || null, rec.conceptdoi || null, meta.version || null, meta.title || null, selfInfoS.self ? 1 : 0, selfInfoS.kind, creatorsText({ metadata: meta })).run();
+  if (selfInfoS.self) {
+    await log(env, recid, "self_excluded", "intake refused review: " + selfInfoS.why);
+    return { dup: false, self: true, queued: false, recid: recid, doi: rec.doi || null, why: selfInfoS.why, note: "self-authored record recorded but NOT queued (JNL-SELF-EXCLUDE-1)" };
+  }
   await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_reviews (recid, status) VALUES (?, 'queued')").bind(recid).run();
   await env.AUDIT.prepare("INSERT INTO jnl_submissions (recid, note, source, status) VALUES (?, ?, ?, 'queued')").bind(recid, String(note || "").slice(0, 300), String(who).slice(0, 40)).run();
   await log(env, recid, "submitted", "author submission queued via intake (P9)");
   return { dup: false, doi: rec.doi || null, title: meta.title || null };
 }
-__name(submitNew, "submitNew");
+
 function stopSet() {
-  return { the: 1, of: 1, and: 1, a: 1, an: 1, for: 1, in: 1, on: 1, to: 1, from: 1, by: 1, with: 1, at: 1, or: 1, as: 1, into: 1, its: 1, their: 1, this: 1, that: 1, is: 1, are: 1, be: 1, was: 1, were: 1, not: 1, no: 1, how: 1, what: 1, why: 1, when: 1, which: 1, via: 1, per: 1, under: 1, over: 1, between: 1, across: 1, new: 1, one: 1, two: 1, three: 1, model: 1, models: 1, study: 1, studies: 1, paper: 1, using: 1, use: 1, used: 1, first: 1, second: 1, case: 1, cases: 1, concept: 1, concepts: 1, towards: 1, toward: 1, framework: 1, frameworks: 1 };
+  return { the:1, of:1, and:1, a:1, an:1, for:1, in:1, on:1, to:1, from:1, by:1, with:1, at:1, or:1, as:1, into:1, its:1, their:1, this:1, that:1, is:1, are:1, be:1, was:1, were:1, not:1, no:1, how:1, what:1, why:1, when:1, which:1, via:1, per:1, under:1, over:1, between:1, across:1, new:1, one:1, two:1, three:1, model:1, models:1, study:1, studies:1, paper:1, using:1, use:1, used:1, first:1, second:1, case:1, cases:1, concept:1, concepts:1, towards:1, toward:1, framework:1, frameworks:1 };
 }
-__name(stopSet, "stopSet");
 function conceptsOf(title) {
   var s = String(title || "").toLowerCase();
   s = s.replace(/[^a-z0-9 ]/g, " ");
@@ -107,105 +118,73 @@ function conceptsOf(title) {
   }
   return Object.keys(acc).sort();
 }
-__name(conceptsOf, "conceptsOf");
 function sharedConcepts(a, b) {
-  var i = 0;
-  var j = 0;
-  var shared = [];
+  var i = 0; var j = 0; var shared = [];
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      shared.push(a[i]);
-      i++;
-      j++;
-    } else if (a[i] < b[j]) i++;
+    if (a[i] === b[j]) { shared.push(a[i]); i++; j++; }
+    else if (a[i] < b[j]) i++;
     else j++;
   }
   return shared;
 }
-__name(sharedConcepts, "sharedConcepts");
 async function buildGraph(env) {
   await ensureSchema(env);
   var rows = await env.AUDIT.prepare("SELECT recid, title FROM jnl_records ORDER BY recid").all();
   var recs = rows.results || [];
   var concepts = {};
-  for (var r = 0; r < recs.length; r++) {
-    concepts[recs[r].recid] = conceptsOf(recs[r].title);
-  }
+  for (var r = 0; r < recs.length; r++) { concepts[recs[r].recid] = conceptsOf(recs[r].title); }
   var added = 0;
   for (var i = 0; i < recs.length; i++) {
     for (var j = i + 1; j < recs.length; j++) {
       var shared = sharedConcepts(concepts[recs[i].recid], concepts[recs[j].recid]);
       if (!shared.length) continue;
-      await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_links (a, b, shared, concepts) VALUES (?, ?, ?, ?)").bind(recs[i].recid, recs[j].recid, shared.length, shared.join(",")).run();
+      await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_links (a, b, shared, concepts) VALUES (?, ?, ?, ?)")
+        .bind(recs[i].recid, recs[j].recid, shared.length, shared.join(",")).run();
       added++;
     }
   }
   return { nodes: recs.length, edges: added };
 }
-__name(buildGraph, "buildGraph");
+
 async function zenodoGet(url) {
   var res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   var txt = await res.text();
   if (!res.ok) throw new Error("zenodo HTTP " + res.status + " :: " + txt.slice(0, 180));
   return JSON.parse(txt);
 }
-__name(zenodoGet, "zenodoGet");
+
 function stripHtml(s) {
   return String(s || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 }
-__name(stripHtml, "stripHtml");
+
 async function fetchRecord(recid) {
   var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
   var meta = rec.metadata || {};
   var desc = stripHtml(meta.description);
-  var creators = (meta.creators || []).map(function(c) {
-    return (c.name || "") + (c.affiliations && c.affiliations.length ? " (" + c.affiliations[0].name + ")" : "");
-  }).join("; ");
+  var creators = (meta.creators || []).map(function (c) { return (c.name || "") + (c.affiliations && c.affiliations.length ? " (" + c.affiliations[0].name + ")" : ""); }).join("; ");
   var files = rec.files || [];
   var text = "";
   var fetchedKey = null;
-  var textFiles = files.filter(function(f2) {
-    return /\.(md|markdown|txt|rst|tex|html?|json)$/i.test(f2.key || "");
-  }).sort(function(a, b) {
-    return (b.size || 0) - (a.size || 0);
-  });
+  var textFiles = files.filter(function (f) { return /\.(md|markdown|txt|rst|tex|html?|json)$/i.test(f.key || ""); })
+    .sort(function (a, b) { return (b.size || 0) - (a.size || 0); });
   if (textFiles.length) {
     var f = textFiles[0];
     try {
       var fres = await fetch(f.links && f.links.content ? f.links.content : f.links.self, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-      if (fres.ok) {
-        text = (await fres.text()).slice(0, TEXT_CAP);
-        fetchedKey = f.key;
-      }
-    } catch (e) {
-      text = "";
-    }
+      if (fres.ok) { text = (await fres.text()).slice(0, TEXT_CAP); fetchedKey = f.key; }
+    } catch (e) { text = ""; }
   }
-  var hasPdf = files.some(function(f2) {
-    return /\.pdf$/i.test(f2.key || "");
-  });
+  var hasPdf = files.some(function (f) { return /\.pdf$/i.test(f.key || ""); });
   return {
-    recid: rec.id,
-    doi: rec.doi || null,
-    conceptdoi: rec.conceptdoi || null,
-    version: meta.version || rec.metadata.version || null,
-    title: meta.title || null,
-    publication_date: meta.publication_date || null,
-    license: meta.license && meta.license.id || null,
-    creators,
-    description: desc,
-    keywords: (meta.keywords || []).join(", "),
-    file_keys: files.map(function(f2) {
-      return f2.key;
-    }),
-    text,
-    fetched_key: fetchedKey,
-    text_chars: text.length,
-    has_pdf: !!hasPdf,
-    raw_size_chars: JSON.stringify(rec).length
+    recid: rec.id, doi: rec.doi || null, conceptdoi: rec.conceptdoi || null,
+    version: meta.version || rec.metadata.version || null, title: meta.title || null,
+    publication_date: meta.publication_date || null, license: (meta.license && meta.license.id) || null,
+    creators: creators, description: desc, keywords: (meta.keywords || []).join(", "),
+    file_keys: files.map(function (f) { return f.key; }),
+    text: text, fetched_key: fetchedKey, text_chars: text.length, has_pdf: !!hasPdf, raw_size_chars: JSON.stringify(rec).length
   };
 }
-__name(fetchRecord, "fetchRecord");
+
 function extractText(out) {
   if (!out) return "";
   if (typeof out === "string") return out;
@@ -218,48 +197,52 @@ function extractText(out) {
   if (Array.isArray(out) && out[0] && out[0].response) return out[0].response;
   return "";
 }
-__name(extractText, "extractText");
+
 function parseJsonObject(s) {
   var txt = String(s || "").trim();
   var a = txt.indexOf("{");
   var b = txt.lastIndexOf("}");
   if (a < 0 || b <= a) return null;
   var cand = txt.slice(a, b + 1);
-  try {
-    return JSON.parse(cand);
-  } catch (e) {
+  try { return JSON.parse(cand); } catch (e) {
+    // last-resort brace repair attempt (unbalanced quotes rarely salvageable); return null to signal failure
     return null;
   }
 }
-__name(parseJsonObject, "parseJsonObject");
+
 function num(v, dflt) {
   var n = Number(v);
   return Number.isFinite(n) ? n : dflt;
 }
-__name(num, "num");
-function clampScore(v) {
-  return Math.max(1, Math.min(10, Math.round(num(v, 5))));
-}
-__name(clampScore, "clampScore");
-function arrOf(v) {
-  return Array.isArray(v) ? v.filter(function(x) {
-    return typeof x === "string" && x.trim();
-  }).map(function(x) {
-    return x.trim();
-  }) : [];
-}
-__name(arrOf, "arrOf");
+function clampScore(v) { return Math.max(1, Math.min(10, Math.round(num(v, 5)))); }
+function arrOf(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === "string" && x.trim(); }).map(function (x) { return x.trim(); }) : []; }
+
 async function aiRun(env, model, sys, usr) {
   var r = await env.AI.run(model, { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: MAX_TOKENS });
   return extractText(r);
 }
-__name(aiRun, "aiRun");
+
 function reviewerSystem(role) {
-  return "You are " + role + ' for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). You review ONLY the provided record content. Never fabricate quotes, citations, or external facts; quote only text present in the input and mark recalled items as uncertain. Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, novelty of framing, reproducibility, and honesty, not conformity to one field. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), confidence ("high"|"medium"|"low" with reason inside rationale), verdict ("PUBLISH"|"REVISE"|"REJECT"), rationale (string).';
+  return "You are " + role + " for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). " +
+    "You review ONLY the provided record content. Never fabricate quotes, citations, or external facts; quote only text present in the input and mark recalled items as uncertain. " +
+    "Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, novelty of framing, reproducibility, and honesty, not conformity to one field. " +
+    "Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: " +
+    "score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), " +
+    "strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), " +
+    "disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), " +
+    "confidence (\"high\"|\"medium\"|\"low\" with reason inside rationale), verdict (\"PUBLISH\"|\"REVISE\"|\"REJECT\"), rationale (string).";
 }
-__name(reviewerSystem, "reviewerSystem");
+
 function userPrompt(rec, withText) {
-  var head = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (rec.doi || "(none)") + "\nversion: " + (rec.version || "(none)") + "\npublication_date: " + (rec.publication_date || "(none)") + "\nlicense: " + (rec.license || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\nkeywords: " + (rec.keywords || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + (rec.description || "(none)").slice(0, 6e3) + "\n\n";
+  var head = "RECORD METADATA\n" +
+    "title: " + (rec.title || "(none)") + "\n" +
+    "doi: " + (rec.doi || "(none)") + "\n" +
+    "version: " + (rec.version || "(none)") + "\n" +
+    "publication_date: " + (rec.publication_date || "(none)") + "\n" +
+    "license: " + (rec.license || "(none)") + "\n" +
+    "creators: " + (rec.creators || "(none)") + "\n" +
+    "keywords: " + (rec.keywords || "(none)") + "\n\n" +
+    "ABSTRACT/DESCRIPTION:\n" + (rec.description || "(none)").slice(0, 6000) + "\n\n";
   if (withText && rec.text) {
     head = head + "FULL TEXT (file: " + (rec.fetched_key || "unknown") + ", first " + rec.text.length + " chars):\n" + rec.text + "\n\n";
   } else {
@@ -268,7 +251,7 @@ function userPrompt(rec, withText) {
   head = head + "Now produce the review JSON.";
   return head;
 }
-__name(userPrompt, "userPrompt");
+
 function decisionFrom(parsedList, basis) {
   var avgs = [];
   var fatal = false;
@@ -282,25 +265,25 @@ function decisionFrom(parsedList, basis) {
     if (String(p.confidence || "") === "low") anyLowConfidence = true;
   }
   if (!avgs.length) return { decision: "ERROR", avg: 0, fatal: false, disagreement: false, reason: "no model output parsed" };
-  var avg = avgs.reduce(function(a, b) {
-    return a + b;
-  }, 0) / avgs.length;
+  var avg = avgs.reduce(function (a, b) { return a + b; }, 0) / avgs.length;
   var disagreement = avgs.length > 1 && Math.abs(avgs[0] - avgs[1]) >= 2.5;
   var decision;
   var minAvg = Math.min.apply(null, avgs);
   var maxAvg = Math.max.apply(null, avgs);
-  var speculative = parsedList.some(function(p2) {
-    if (!p2) return false;
-    var txt = arrOf(p2.weaknesses).concat(arrOf(p2.limitations_of_review), arrOf(p2.fatal_flaws)).join(" ").toLowerCase();
+  // Speculative-content guard (P3-CAL row 104, v0.2.0): a claim-heavy record that reviewers
+  // themselves flag as speculative / lacking empirical evidence must not PUBLISH, regardless of scores.
+  var speculative = parsedList.some(function (p) {
+    if (!p) return false;
+    var txt = arrOf(p.weaknesses).concat(arrOf(p.limitations_of_review), arrOf(p.fatal_flaws)).join(" ").toLowerCase();
     return /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/.test(txt);
   });
   if (fatal || avg < 4) decision = "REJECT";
-  else if (basis !== "text") decision = "REVISE";
+  else if (basis !== "text") decision = "REVISE"; // metadata-only can never PUBLISH (anti rubber-stamp)
   else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence && !speculative) decision = "PUBLISH";
   else decision = "REVISE";
-  return { decision, avg: Math.round(avg * 100) / 100, fatal, disagreement, speculative, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " speculative=" + speculative + " basis=" + basis + " lowconf=" + anyLowConfidence };
+  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, speculative: speculative, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " speculative=" + speculative + " basis=" + basis + " lowconf=" + anyLowConfidence };
 }
-__name(decisionFrom, "decisionFrom");
+
 function buildReport(rec, parsedList, dec, modelsUsed, basis) {
   var lines = [];
   lines.push("# AI Referee Report");
@@ -317,36 +300,11 @@ function buildReport(rec, parsedList, dec, modelsUsed, basis) {
     lines.push("## Reviewer " + (i + 1) + " (" + (modelsUsed[i] || "model") + ")");
     lines.push("- Soundness " + clampScore(p.score_soundness) + " | Novelty " + clampScore(p.score_novelty) + " | Clarity " + clampScore(p.score_clarity) + " | Reproducibility " + clampScore(p.score_reproducibility) + " | Confidence " + (p.confidence || "n/a"));
     lines.push("- Verdict requested: " + (p.verdict || "n/a"));
-    if (arrOf(p.strengths).length) {
-      lines.push("- Strengths:");
-      arrOf(p.strengths).forEach(function(x) {
-        lines.push("  - " + x.slice(0, 400));
-      });
-    }
-    if (arrOf(p.weaknesses).length) {
-      lines.push("- Weaknesses:");
-      arrOf(p.weaknesses).forEach(function(x) {
-        lines.push("  - " + x.slice(0, 400));
-      });
-    }
-    if (arrOf(p.fatal_flaws).length) {
-      lines.push("- Fatal flaws:");
-      arrOf(p.fatal_flaws).forEach(function(x) {
-        lines.push("  - " + x.slice(0, 400));
-      });
-    }
-    if (arrOf(p.disconfirming_evidence).length) {
-      lines.push("- Disconfirming evidence sought/found:");
-      arrOf(p.disconfirming_evidence).forEach(function(x) {
-        lines.push("  - " + x.slice(0, 300));
-      });
-    }
-    if (arrOf(p.limitations_of_review).length) {
-      lines.push("- Limitations of this review:");
-      arrOf(p.limitations_of_review).forEach(function(x) {
-        lines.push("  - " + x.slice(0, 300));
-      });
-    }
+    if (arrOf(p.strengths).length) { lines.push("- Strengths:"); arrOf(p.strengths).forEach(function (x) { lines.push("  - " + x.slice(0, 400)); }); }
+    if (arrOf(p.weaknesses).length) { lines.push("- Weaknesses:"); arrOf(p.weaknesses).forEach(function (x) { lines.push("  - " + x.slice(0, 400)); }); }
+    if (arrOf(p.fatal_flaws).length) { lines.push("- Fatal flaws:"); arrOf(p.fatal_flaws).forEach(function (x) { lines.push("  - " + x.slice(0, 400)); }); }
+    if (arrOf(p.disconfirming_evidence).length) { lines.push("- Disconfirming evidence sought/found:"); arrOf(p.disconfirming_evidence).forEach(function (x) { lines.push("  - " + x.slice(0, 300)); }); }
+    if (arrOf(p.limitations_of_review).length) { lines.push("- Limitations of this review:"); arrOf(p.limitations_of_review).forEach(function (x) { lines.push("  - " + x.slice(0, 300)); }); }
     lines.push("- Rationale: " + String(p.rationale || "").slice(0, 1200));
     lines.push("");
   }
@@ -354,25 +312,22 @@ function buildReport(rec, parsedList, dec, modelsUsed, basis) {
   lines.push(dec.reason);
   lines.push("");
   lines.push("## Honesty notes");
-  lines.push('- These AI referee reports are advisory. They are not endorsements, certifications of correctness, or statements that a record is "proven". They are structured adversarial critiques produced by language models, with the failure modes each reviewer listed above.');
+  lines.push("- These AI referee reports are advisory. They are not endorsements, certifications of correctness, or statements that a record is \"proven\". They are structured adversarial critiques produced by language models, with the failure modes each reviewer listed above.");
   lines.push("- Review basis is disclosed: metadata-only reviews never receive PUBLISH.");
   lines.push("- The overlay does not store paper bodies and does not write to Zenodo (curator write-back requires separate authorization).");
   return lines.join("\n");
 }
-__name(buildReport, "buildReport");
+
 async function runReview(env, recid, manual) {
   var schema = await ensureSchema(env);
-  var models = String(env.JNL_MODELS || MODELS_DEFAULT).split(",").map(function(x) {
-    return x.trim();
-  }).filter(Boolean);
-  var nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  var models = String((env.JNL_MODELS || MODELS_DEFAULT)).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+  var nowIso = new Date().toISOString();
   var rec;
-  try {
-    rec = await fetchRecord(recid);
-  } catch (e) {
+  try { rec = await fetchRecord(recid); }
+  catch (e) {
     await env.AUDIT.prepare("INSERT INTO jnl_reviews (recid, status, error, ran_at) VALUES (?, 'error', ?, ?) ON CONFLICT(recid) DO UPDATE SET status='error', error=excluded.error, ran_at=excluded.ran_at").bind(recid, "record fetch failed: " + String(e && e.message || e).slice(0, 500), nowIso).run();
     await log(env, recid, "run", "record fetch failed");
-    return { ok: false, recid, error: String(e && e.message || e).slice(0, 300) };
+    return { ok: false, recid: recid, error: String(e && e.message || e).slice(0, 300) };
   }
   var basis = rec.text && rec.text.length >= 200 ? "text" : "metadata";
   var parsedList = [];
@@ -383,97 +338,79 @@ async function runReview(env, recid, manual) {
     try {
       var outTxt = await aiRun(env, models[i], sys, usr);
       var p = parseJsonObject(outTxt);
-      if (p) {
-        parsedList.push(p);
-        modelsUsed.push(models[i]);
-      } else {
-        await log(env, recid, "parse", "model " + models[i] + " returned non-JSON len=" + outTxt.length);
-      }
+      if (p) { parsedList.push(p); modelsUsed.push(models[i]); }
+      else { await log(env, recid, "parse", "model " + models[i] + " returned non-JSON len=" + outTxt.length); }
     } catch (e) {
       await log(env, recid, "model_error", "model " + models[i] + " :: " + String(e && e.message || e).slice(0, 300));
     }
   }
   if (!parsedList.length) {
     await env.AUDIT.prepare("INSERT INTO jnl_reviews (recid, status, basis, text_chars, error, ran_at) VALUES (?, 'error', ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET status='error', basis=excluded.basis, text_chars=excluded.text_chars, error=excluded.error, ran_at=excluded.ran_at").bind(recid, basis, rec.text_chars, "no model produced parseable JSON", nowIso).run();
-    return { ok: false, recid, error: "no model produced parseable JSON" };
+    return { ok: false, recid: recid, error: "no model produced parseable JSON" };
   }
+  var NL = String.fromCharCode(10);
   var dec = decisionFrom(parsedList, basis);
+  var esc = await applySpecAckEscape(env, rec, dec, models, recid, basis);
+  dec = esc.dec;
+  var specPath = esc.specPath;
   var report = buildReport(rec, parsedList, dec, modelsUsed, basis);
+  if (specPath.used) report = report + specAckReportSection(specPath, NL);
   var p0 = parsedList[0] || {};
-  var sound = Math.round(parsedList.map(function(p2) {
-    return clampScore(p2.score_soundness);
-  }).reduce(function(a, b) {
-    return a + b;
-  }, 0) / parsedList.length);
-  var novel = Math.round(parsedList.map(function(p2) {
-    return clampScore(p2.score_novelty);
-  }).reduce(function(a, b) {
-    return a + b;
-  }, 0) / parsedList.length);
-  var clar = Math.round(parsedList.map(function(p2) {
-    return clampScore(p2.score_clarity);
-  }).reduce(function(a, b) {
-    return a + b;
-  }, 0) / parsedList.length);
-  var repro = Math.round(parsedList.map(function(p2) {
-    return clampScore(p2.score_reproducibility);
-  }).reduce(function(a, b) {
-    return a + b;
-  }, 0) / parsedList.length);
-  var fatalCount = parsedList.map(function(p2) {
-    return arrOf(p2.fatal_flaws).length;
-  }).reduce(function(a, b) {
-    return a + b;
-  }, 0);
+  var sound = Math.round(parsedList.map(function (p) { return clampScore(p.score_soundness); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
+  var novel = Math.round(parsedList.map(function (p) { return clampScore(p.score_novelty); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
+  var clar = Math.round(parsedList.map(function (p) { return clampScore(p.score_clarity); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
+  var repro = Math.round(parsedList.map(function (p) { return clampScore(p.score_reproducibility); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
+  var fatalCount = parsedList.map(function (p) { return arrOf(p.fatal_flaws).length; }).reduce(function (a, b) { return a + b; }, 0);
   await env.AUDIT.prepare(
-    "INSERT INTO jnl_reviews (recid, status, decision, model, score_soundness, score_novelty, score_clarity, score_reproducibility, avg_score, basis, text_chars, fatal_flaws, disagreement, report_md, ran_at) VALUES (?, 'done', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET status='done', decision=excluded.decision, model=excluded.model, score_soundness=excluded.score_soundness, score_novelty=excluded.score_novelty, score_clarity=excluded.score_clarity, score_reproducibility=excluded.score_reproducibility, avg_score=excluded.avg_score, basis=excluded.basis, text_chars=excluded.text_chars, fatal_flaws=excluded.fatal_flaws, disagreement=excluded.disagreement, report_md=excluded.report_md, ran_at=excluded.ran_at, error=NULL"
+    "INSERT INTO jnl_reviews (recid, status, decision, model, score_soundness, score_novelty, score_clarity, score_reproducibility, avg_score, basis, text_chars, fatal_flaws, disagreement, report_md, ran_at) " +
+    "VALUES (?, 'done', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(recid) DO UPDATE SET status='done', decision=excluded.decision, model=excluded.model, score_soundness=excluded.score_soundness, score_novelty=excluded.score_novelty, score_clarity=excluded.score_clarity, score_reproducibility=excluded.score_reproducibility, avg_score=excluded.avg_score, basis=excluded.basis, text_chars=excluded.text_chars, fatal_flaws=excluded.fatal_flaws, disagreement=excluded.disagreement, report_md=excluded.report_md, ran_at=excluded.ran_at, error=NULL"
   ).bind(recid, dec.decision, modelsUsed.join(","), sound, novel, clar, repro, dec.avg, basis, rec.text_chars, fatalCount, dec.disagreement ? 1 : 0, report, nowIso).run();
+  var selfRow = await env.AUDIT.prepare("SELECT COALESCE(self_authored,0) AS s FROM jnl_records WHERE recid = ?").bind(recid).first().catch(function () { return null; });
   await env.AUDIT.prepare(
-    "INSERT INTO jnl_decisions (recid, decision, rationale, avg_score, basis) VALUES (?, ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET decision=excluded.decision, rationale=excluded.rationale, avg_score=excluded.avg_score, basis=excluded.basis"
-  ).bind(recid, dec.decision, (dec.reason + " | " + (p0.rationale || "")).slice(0, 1500), dec.avg, basis).run();
+    "INSERT INTO jnl_decisions (recid, decision, rationale, avg_score, basis, speculative, spec_ack, self_review, path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET decision=excluded.decision, rationale=excluded.rationale, avg_score=excluded.avg_score, basis=excluded.basis, speculative=excluded.speculative, spec_ack=excluded.spec_ack, self_review=excluded.self_review, path=excluded.path"
+  ).bind(recid, dec.decision, (dec.reason + " | " + (p0.rationale || "")).slice(0, 1500), dec.avg, basis, dec.speculative ? 1 : 0, specPath.acknowledged ? 1 : 0, (selfRow && selfRow.s) ? 1 : 0, dec.path).run();
   await log(env, recid, "done", dec.decision + " avg=" + dec.avg + " basis=" + basis);
-  return { ok: true, recid, decision: dec.decision, avg_score: dec.avg, basis, text_chars: rec.text_chars, models: modelsUsed, fatal_flaws: fatalCount, disagreement: dec.disagreement };
+  return { ok: true, recid: recid, decision: dec.decision, avg_score: dec.avg, basis: basis, path: dec.path, speculative: dec.speculative, spec_ack: specPath.acknowledged, text_chars: rec.text_chars, models: modelsUsed, fatal_flaws: fatalCount, disagreement: dec.disagreement };
 }
-__name(runReview, "runReview");
+
 async function enqueueNew(env, limit) {
   var schema = await ensureSchema(env);
   var rows = await env.AUDIT.prepare(
-    "SELECT r.recid FROM jnl_records r LEFT JOIN jnl_reviews v ON v.recid = r.recid WHERE v.recid IS NULL ORDER BY r.modified DESC LIMIT ?"
+    "SELECT r.recid FROM jnl_records r LEFT JOIN jnl_reviews v ON v.recid = r.recid WHERE v.recid IS NULL AND COALESCE(r.self_authored,0) = 0 ORDER BY r.modified DESC LIMIT ?"
   ).bind(limit).all();
   var added = 0;
   for (var i = 0; i < rows.results.length; i++) {
     try {
       await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_reviews (recid, status) VALUES (?, 'queued')").bind(rows.results[i].recid).run();
       added++;
-    } catch (e) {
-    }
+    } catch (e) { /* row exists */ }
   }
-  return { scanned: rows.results.length, added };
+  return { scanned: rows.results.length, added: added };
 }
-__name(enqueueNew, "enqueueNew");
+
 async function pickQueued(env) {
-  var row = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE status='queued' OR (status='error' AND ran_at IS NOT NULL AND ran_at < datetime('now','-30 minutes')) ORDER BY id ASC LIMIT 1").first();
+  var row = await env.AUDIT.prepare("SELECT v.recid AS recid FROM jnl_reviews v LEFT JOIN jnl_records r ON r.recid = v.recid WHERE (v.status='queued' OR (v.status='error' AND v.ran_at IS NOT NULL AND v.ran_at < datetime('now','-30 minutes'))) AND COALESCE(r.self_authored,0) = 0 ORDER BY v.id ASC LIMIT 1").first();
   return row ? row.recid : null;
 }
-__name(pickQueued, "pickQueued");
+
 function dateKey(d) {
   return d.toISOString().slice(0, 10);
 }
-__name(dateKey, "dateKey");
+
 async function dailyBudgetOk(env) {
-  var key = "referee:daily:" + dateKey(/* @__PURE__ */ new Date());
+  var key = "referee:daily:" + dateKey(new Date());
   var cap = Number(env.JNL_DAILY_CAP || 60);
   var cur = Number(await env.STATE.get(key) || 0);
-  return { ok: cur < cap, cur, cap, key };
+  return { ok: cur < cap, cur: cur, cap: cap, key: key };
 }
-__name(dailyBudgetOk, "dailyBudgetOk");
 async function bumpDaily(env) {
-  var key = "referee:daily:" + dateKey(/* @__PURE__ */ new Date());
+  var key = "referee:daily:" + dateKey(new Date());
   var cur = Number(await env.STATE.get(key) || 0) + 1;
   await env.STATE.put(key, String(cur), { expirationTtl: 172800 });
   return cur;
 }
-__name(bumpDaily, "bumpDaily");
+
 async function authOk(request, env) {
   var secret = env.JNL_TOKEN || "";
   if (!secret) return false;
@@ -488,11 +425,9 @@ async function authOk(request, env) {
     var diff = 0;
     for (var i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
     return diff === 0;
-  } catch (e) {
-    return false;
-  }
+  } catch (e) { return false; }
 }
-__name(authOk, "authOk");
+
 async function handleScheduled(env) {
   try {
     var schema = await ensureSchema(env);
@@ -507,15 +442,15 @@ async function handleScheduled(env) {
       if (!recid) break;
       var res = await runReview(env, recid, false);
       await bumpDaily(env);
-      ran.push({ recid, ok: !!res.ok, decision: res.decision || null });
+      ran.push({ recid: recid, ok: !!res.ok, decision: res.decision || null });
       processed++;
     }
-    return { ok: true, seeded, ran, budget };
+    return { ok: true, seeded: seeded, ran: ran, budget: budget };
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
 }
-__name(handleScheduled, "handleScheduled");
+
 var index_default = {
   async scheduled(event, env, ctx) {
     var r = await handleScheduled(env);
@@ -528,8 +463,8 @@ var index_default = {
     try {
       if (path === "/health") {
         var schema = await ensureSchema(env);
-        var counts = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_reviews) AS reviews, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT MAX(ran_at) FROM jnl_reviews) AS last_run").first();
-        return json({ ok: true, service: "jnl-referee", version: VERSION, schema, counts, models: String(env.JNL_MODELS || MODELS_DEFAULT) });
+        var counts = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_reviews) AS reviews, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE speculative=1) AS speculative_flagged, (SELECT MAX(ran_at) FROM jnl_reviews) AS last_run").first();
+        return json({ ok: true, service: "jnl-referee", version: VERSION, build: BUILD, schema: schema, counts: counts, models: String(env.JNL_MODELS || MODELS_DEFAULT) });
       }
       if (path === "/queue") {
         var limitQ = Math.min(Number(url.searchParams.get("limit") || 20), 100);
@@ -540,16 +475,15 @@ var index_default = {
         var rid = Number(url.searchParams.get("recid") || 0);
         var rowsR;
         if (rid) rowsR = await env.AUDIT.prepare("SELECT * FROM jnl_reviews WHERE recid = ?").bind(rid).all();
-        else {
-          var limR = Math.min(Number(url.searchParams.get("limit") || 20), 100);
-          rowsR = await env.AUDIT.prepare("SELECT recid, status, decision, avg_score, basis, model, created_at, ran_at FROM jnl_reviews ORDER BY id DESC LIMIT ?").bind(limR).all();
-        }
+        else { var limR = Math.min(Number(url.searchParams.get("limit") || 20), 100); rowsR = await env.AUDIT.prepare("SELECT recid, status, decision, avg_score, basis, model, created_at, ran_at FROM jnl_reviews ORDER BY id DESC LIMIT ?").bind(limR).all(); }
         return json({ ok: true, count: rowsR.results.length, rows: rowsR.results });
       }
       if (path === "/decisions") {
         var ridD = Number(url.searchParams.get("recid") || 0);
         var limD = Math.min(Number(url.searchParams.get("limit") || 20), 100);
-        var rowsD = ridD ? await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions WHERE recid = ?").bind(ridD).all() : await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions ORDER BY id DESC LIMIT ?").bind(limD).all();
+        var rowsD = ridD
+          ? await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions WHERE recid = ?").bind(ridD).all()
+          : await env.AUDIT.prepare("SELECT recid, decision, avg_score, basis, rationale, created_at FROM jnl_decisions ORDER BY id DESC LIMIT ?").bind(limD).all();
         return json({ ok: true, count: rowsD.results.length, rows: rowsD.results });
       }
       if (path === "/graph") {
@@ -557,29 +491,40 @@ var index_default = {
         var gEdges = await env.AUDIT.prepare("SELECT a, b, shared, concepts FROM jnl_links ORDER BY shared DESC LIMIT 300").all();
         return json({ ok: true, node_count: gNodes.results.length, edge_count: gEdges.results.length, nodes: gNodes.results, edges: gEdges.results });
       }
+      if (path === "/self-audit") {
+        var sa = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE decision='PUBLISH') AS publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued").first();
+        var pct = function (a, b) { return b ? Math.round(1000 * a / b) / 10 + "%" : null; };
+        return json({ ok: true, service: "jnl-referee", version: VERSION, build: BUILD, counts: sa, contamination: { self_records_share: pct(sa.self_records, sa.records), self_review_decisions_share: pct(sa.self_review_decisions, sa.decisions) }, guard: "self-authored records are excluded from the review queue (JNL-SELF-EXCLUDE-1); historical decisions are flagged, never deleted" });
+      }
+      if (path === "/backfill-flags" && method === "POST") {
+        var authedF = await authOk(request, env);
+        if (!authedF) return json({ ok: false, error: "unauthorized" }, 401);
+        var f1 = await env.AUDIT.prepare("UPDATE jnl_decisions SET self_review = 1 WHERE recid IN (SELECT recid FROM jnl_records WHERE self_authored = 1)").run();
+        var f2 = await env.AUDIT.prepare("UPDATE jnl_decisions SET speculative = 1 WHERE rationale LIKE '%speculative=true%'").run();
+        var f3 = await env.AUDIT.prepare("UPDATE jnl_decisions SET path = 'threshold' WHERE path IS NULL").run();
+        return json({ ok: true, self_review_flagged: (f1.meta && f1.meta.changes) || 0, speculative_flagged: (f2.meta && f2.meta.changes) || 0, path_defaulted: (f3.meta && f3.meta.changes) || 0, build: BUILD });
+      }
       if (path === "/submissions") {
         var limS = Math.min(Number(url.searchParams.get("limit") || 30), 100);
         var subR = await env.AUDIT.prepare("SELECT recid, status, note, created_at FROM jnl_submissions ORDER BY id DESC LIMIT ?").bind(limS).all();
         return json({ ok: true, count: subR.results.length, rows: subR.results });
       }
       if (path === "/" || path === "/index.html") {
-        var escH = /* @__PURE__ */ __name(function(s) {
-          return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }, "escH");
+        var escH = function (s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
         var recParam = Number(url.searchParams.get("recid") || 0);
         if (recParam) {
           var repR = await env.AUDIT.prepare("SELECT decision, avg_score, basis, report_md, created_at FROM jnl_reviews WHERE recid = ?").bind(recParam).first();
           if (!repR) return new Response("No review found for recid " + recParam, { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
-          var repHtml = "<!doctype html><html><head><meta charset='utf-8'><title>AI Referee Report " + recParam + "</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><p><a href='/'>\u2190 index</a></p><h1>AI Referee Report \u2014 Zenodo recid " + recParam + "</h1><p>Decision: <strong>" + escH(repR.decision) + "</strong> \xB7 avg " + escH(String(repR.avg_score)) + " \xB7 basis " + escH(repR.basis) + " \xB7 " + escH(repR.created_at) + "</p><p><a href='https://zenodo.org/records/" + recParam + "'>Zenodo record</a></p><pre style='white-space:pre-wrap;background:#f7f7f7;padding:1rem;border-radius:6px'>" + escH(repR.report_md) + "</pre><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Advisory AI referee report \u2014 not an endorsement or proof. Overlay stores no content.</footer></body></html>";
+          var repHtml = "<!doctype html><html><head><meta charset='utf-8'><title>AI Referee Report " + recParam + "</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><p><a href='/'>← index</a></p><h1>AI Referee Report — Zenodo recid " + recParam + "</h1><p>Decision: <strong>" + escH(repR.decision) + "</strong> · avg " + escH(String(repR.avg_score)) + " · basis " + escH(repR.basis) + " · " + escH(repR.created_at) + "</p><p><a href='https://zenodo.org/records/" + recParam + "'>Zenodo record</a></p><pre style='white-space:pre-wrap;background:#f7f7f7;padding:1rem;border-radius:6px'>" + escH(repR.report_md) + "</pre><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Advisory AI referee report — not an endorsement or proof. Overlay stores no content.</footer></body></html>";
           return new Response(repHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
         }
         var idxRows = await env.AUDIT.prepare("SELECT d.recid, d.decision, d.avg_score, d.basis, d.created_at, r.title, r.doi FROM jnl_decisions d LEFT JOIN jnl_records r ON r.recid = d.recid ORDER BY d.id DESC LIMIT 100").all();
         var cards = "";
         for (var xi = 0; xi < idxRows.results.length; xi++) {
           var xr = idxRows.results[xi];
-          cards = cards + "<li><a href='/?recid=" + xr.recid + "'>" + escH(xr.title || "recid " + xr.recid) + "</a> \u2014 <strong>" + escH(xr.decision) + "</strong> (avg " + escH(String(xr.avg_score)) + ", " + escH(xr.basis) + ", " + escH(xr.created_at) + ")" + (xr.doi ? " \xB7 <a href='https://doi.org/" + escH(xr.doi) + "'>DOI</a>" : "") + "</li>";
+          cards = cards + "<li><a href='/?recid=" + xr.recid + "'>" + escH(xr.title || ("recid " + xr.recid)) + "</a> — <strong>" + escH(xr.decision) + "</strong> (avg " + escH(String(xr.avg_score)) + ", " + escH(xr.basis) + ", " + escH(xr.created_at) + ")" + (xr.doi ? " · <a href='https://doi.org/" + escH(xr.doi) + "'>DOI</a>" : "") + "</li>";
         }
-        var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal \u2014 open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> \u2014 structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><p>Queue: " + (idxRows.results.length ? "" : "no decisions yet") + "</p><ul>" + cards + "</ul><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds \xB7 metadata-only reviews never PUBLISH \xB7 overlay-only (no Zenodo write-back).</footer></body></html>";
+        var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal — open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> — structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><p>Queue: " + (idxRows.results.length ? "" : "no decisions yet") + "</p><ul>" + cards + "</ul><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds · metadata-only reviews never PUBLISH · overlay-only (no Zenodo write-back).</footer></body></html>";
         return new Response(idxHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
       }
       if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit" || path === "/rebuild-graph")) {
@@ -591,41 +536,29 @@ var index_default = {
         }
         if (path === "/submit") {
           var bodyS = {};
-          try {
-            bodyS = await request.json();
-          } catch (e) {
-          }
+          try { bodyS = await request.json(); } catch (e) {}
           var recidS = normalizeId(bodyS.id || url.searchParams.get("id") || "");
           if (!recidS) return json({ ok: false, error: "id required (recid, zenodo DOI, or zenodo URL)" }, 400);
           var whoS = await whoHash(request.headers.get("x-jnl-token") || "");
           var rlS = await submitRateOk(env, whoS);
           if (!rlS.ok) return json({ ok: false, error: "submission rate limit reached", limit: rlS }, 429);
           var resS;
-          try {
-            resS = await submitNew(env, recidS, bodyS.note, whoS);
-          } catch (e2) {
-            return json({ ok: false, error: "zenodo lookup failed: " + String(e2 && e2.message || e2).slice(0, 200) }, 502);
-          }
+          try { resS = await submitNew(env, recidS, bodyS.note, whoS); }
+          catch (e2) { return json({ ok: false, error: "zenodo lookup failed: " + String(e2 && e2.message || e2).slice(0, 200) }, 502); }
           if (resS.dup) return json({ ok: true, duplicate: true, recid: recidS, note: "already queued or reviewed" });
           await submitBump(env, whoS);
           return json({ ok: true, accepted: true, recid: recidS, doi: resS.doi, title: resS.title, note: "queued for AI referee; runs on the cron cycle (review is advisory)" });
         }
         if (path === "/enqueue" || path === "/seed") {
           var body = {};
-          try {
-            body = await request.json();
-          } catch (e) {
-          }
+          try { body = await request.json(); } catch (e) {}
           var lim = path === "/seed" ? 200 : Math.min(Number(body.limit || 20), 200);
           var seedRes = await enqueueNew(env, lim);
           return json({ ok: true, seeded: seedRes });
         }
         if (path === "/run") {
           var bodyR = {};
-          try {
-            bodyR = await request.json();
-          } catch (e) {
-          }
+          try { bodyR = await request.json(); } catch (e) {}
           var recidR = Number(bodyR.recid || url.searchParams.get("recid") || 0);
           if (!recidR) return json({ ok: false, error: "recid required" }, 400);
           var budgetRun = await dailyBudgetOk(env);
@@ -636,18 +569,12 @@ var index_default = {
         }
         if (path === "/run-next") {
           var bodyN = {};
-          try {
-            bodyN = await request.json();
-          } catch (e) {
-          }
+          try { bodyN = await request.json(); } catch (e) {}
           var n = Math.min(Math.max(Number(bodyN.n || 1), 1), 3);
           var outN = [];
           for (var k = 0; k < n; k++) {
             var b2 = await dailyBudgetOk(env);
-            if (!b2.ok) {
-              outN.push({ skipped: "daily budget reached" });
-              break;
-            }
+            if (!b2.ok) { outN.push({ skipped: "daily budget reached" }); break; }
             var rec = await pickQueued(env);
             if (!rec) break;
             var rr = await runReview(env, rec, true);
@@ -658,48 +585,158 @@ var index_default = {
         }
         if (path === "/cal") {
           var bodyC = {};
-          try {
-            bodyC = await request.json();
-          } catch (e) {
-          }
+          try { bodyC = await request.json(); } catch (e) {}
           var calTitle = String(bodyC.title || "calibration control").slice(0, 200);
-          var calText = String(bodyC.text || "").slice(0, 16e3);
+          var calText = String(bodyC.text || "").slice(0, TEXT_CAP);
           if (!calText) return json({ ok: false, error: "text required" }, 400);
           var bCal = await dailyBudgetOk(env);
           if (!bCal.ok) return json({ ok: false, error: "daily budget reached", budget: bCal }, 429);
-          var modelsC = String(env.JNL_MODELS || MODELS_DEFAULT).split(",").map(function(x) {
-            return x.trim();
-          }).filter(Boolean);
-          var sysC = reviewerSystem("an adversarial calibration referee");
-          var usrC = "CALIBRATION CONTROL TITLE: " + calTitle + "\n\nFULL TEXT:\n" + calText + "\n\nDecide whether this submission would pass peer review. Produce the review JSON.";
+          var modelsC = String((env.JNL_MODELS || MODELS_DEFAULT)).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+          // Calibration fidelity (v0.7.0): /cal uses the SAME system + user prompt as production,
+          // otherwise the harness calibrates a different decision path than the one it measures.
+          var recC = { recid: null, doi: String(bodyC.doi || "(calibration)"), conceptdoi: null, version: String(bodyC.version || "(calibration)"), title: calTitle, publication_date: null, license: null, creators: String(bodyC.creators || "(calibration control)"), description: calText.slice(0, 6000), keywords: String(bodyC.keywords || "(calibration)"), text: calText, text_chars: calText.length, fetched_key: "(calibration)" };
+          var sysC = reviewerSystem("an adversarial-but-fair referee");
+          var usrC = userPrompt(recC, true);
           var parsedC = [];
           var usedC = [];
           for (var ci = 0; ci < modelsC.length; ci++) {
             try {
               var outCTxt = await aiRun(env, modelsC[ci], sysC, usrC);
               var pC = parseJsonObject(outCTxt);
-              if (pC) {
-                parsedC.push(pC);
-                usedC.push(modelsC[ci]);
-              }
-            } catch (e) {
-              await log(env, null, "cal_model_error", String(e && e.message || e).slice(0, 300));
-            }
+              if (pC) { parsedC.push(pC); usedC.push(modelsC[ci]); }
+            } catch (e) { await log(env, null, "cal_model_error", String(e && e.message || e).slice(0, 300)); }
           }
           if (!parsedC.length) return json({ ok: false, error: "no model produced parseable JSON" }, 500);
           var decC = decisionFrom(parsedC, "text");
-          await log(env, null, "cal", decC.decision + " avg=" + decC.avg + " title=" + calTitle.slice(0, 80));
+          var ov = bodyC.dec_override || null;
+          if (ov && typeof ov === "object") {
+            decC = Object.assign({}, decC, {
+              avg: (typeof ov.avg === "number") ? ov.avg : decC.avg,
+              min_avg: (typeof ov.min_avg === "number") ? ov.min_avg : (typeof decC.min_avg === "number" ? decC.min_avg : decC.avg),
+              fatal: (typeof ov.fatal === "boolean") ? ov.fatal : decC.fatal,
+              speculative: (typeof ov.speculative === "boolean") ? ov.speculative : decC.speculative,
+              low_confidence: (typeof ov.low_confidence === "boolean") ? ov.low_confidence : decC.low_confidence,
+              decision: String(ov.decision || decC.decision),
+              reason: decC.reason + " | dec_override applied (decision-path calibration at a specified operating point)"
+            });
+          }
+          var escC = await applySpecAckEscape(env, { title: calTitle, text: calText, description: calText.slice(0, 4000), creators: "(calibration control)" }, decC, modelsC, null, "text");
+          decC = escC.dec;
+          await log(env, null, "cal", decC.decision + " avg=" + decC.avg + " path=" + decC.path + " title=" + calTitle.slice(0, 80));
           await bumpDaily(env);
-          return json({ ok: true, title: calTitle, decision: decC.decision, avg_score: decC.avg, models: usedC, reason: decC.reason });
+          return json({ ok: true, title: calTitle, decision: decC.decision, avg_score: decC.avg, models: usedC, reason: decC.reason, path: decC.path, speculative: decC.speculative, spec_ack: escC.specPath.acknowledged, spec_votes: escC.specPath.votes, spec_criteria: escC.specPath.criteria, spec_rationale: escC.specPath.rationale });
         }
       }
-      return json({ ok: true, service: "jnl-referee", version: VERSION, path, method, endpoints: ["GET /health", "GET /queue", "GET /reviews?recid=", "GET /decisions?recid=", "POST /enqueue (x-jnl-token)", "POST /seed (x-jnl-token)", "POST /run {recid} (x-jnl-token)", "POST /run-next {n} (x-jnl-token)"], note: "AI referee overlay for Zenodo community aiscience; isolated jnl-* stack; overlay-only (no Zenodo write-back)" });
+      return json({ ok: true, service: "jnl-referee", version: VERSION, path: path, method: method, endpoints: ["GET /health", "GET /queue", "GET /reviews?recid=", "GET /decisions?recid=", "POST /enqueue (x-jnl-token)", "POST /seed (x-jnl-token)", "POST /run {recid} (x-jnl-token)", "POST /run-next {n} (x-jnl-token)"], note: "AI referee overlay for Zenodo community aiscience; isolated jnl-* stack; overlay-only (no Zenodo write-back)" });
     } catch (err) {
-      return json({ ok: false, path, error: String(err && err.message || err) }, 500);
+      return json({ ok: false, path: path, error: String(err && err.message || err) }, 500);
     }
   }
 };
-export {
-  index_default as default
-};
-//# sourceMappingURL=worker.js.map
+
+
+// ---- JNL-SELF-EXCLUDE-1 (row 125) + JNL-P3 speculative escape (row 124) -------
+var BUILD = 'specack-selfexclude-2026-09-10';
+var SELF_ORCIDS = ['0009-0002-4317-5604'];
+var SELF_NAME_PATTERNS = [/quni-?gudzinas/i, /rowan\s+brad\s+quni/i];
+var SELF_ORG_PATTERNS = [/qnfo\s+ai\s+referee/i];
+var OWN_REPORT_TITLE = 'AI Referee Report';
+function creatorList(h) {
+  var md = (h && h.metadata) || {};
+  var cr = md.creators || [];
+  var out = [];
+  for (var i = 0; i < cr.length; i++) {
+    out.push({ name: String(cr[i].name || ''), orcid: String(cr[i].orcid || ''), affiliation: String(cr[i].affiliation || (cr[i].affiliations && cr[i].affiliations[0] && cr[i].affiliations[0].name) || '') });
+  }
+  return out;
+}
+function isSelfRecord(h) {
+  var title = String((h && h.metadata && h.metadata.title) || '');
+  if (title.indexOf(OWN_REPORT_TITLE) === 0) return { self: true, kind: 'own-review-report', why: 'title prefix ' + OWN_REPORT_TITLE };
+  var cr = creatorList(h);
+  for (var i = 0; i < cr.length; i++) {
+    var c = cr[i];
+    if (c.orcid && SELF_ORCIDS.indexOf(c.orcid) >= 0) return { self: true, kind: 'self-authored', why: 'orcid ' + c.orcid };
+    for (var j = 0; j < SELF_NAME_PATTERNS.length; j++) if (SELF_NAME_PATTERNS[j].test(c.name)) return { self: true, kind: 'self-authored', why: 'creator ' + c.name };
+    for (var k = 0; k < SELF_ORG_PATTERNS.length; k++) if (SELF_ORG_PATTERNS[k].test(c.name) || SELF_ORG_PATTERNS[k].test(c.affiliation)) return { self: true, kind: 'own-review-report', why: 'org marker ' + (c.name || c.affiliation) };
+  }
+  return { self: false, kind: null, why: null };
+}
+function creatorsText(h) {
+  return creatorList(h).map(function (c) { return c.name + (c.orcid ? ' [' + c.orcid + ']' : ''); }).join('; ').slice(0, 900);
+}
+async function migrate(env) {
+  var adds = [
+    'ALTER TABLE jnl_records ADD COLUMN self_authored INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE jnl_records ADD COLUMN self_kind TEXT',
+    'ALTER TABLE jnl_decisions ADD COLUMN speculative INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_decisions ADD COLUMN spec_ack INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_decisions ADD COLUMN self_review INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_decisions ADD COLUMN path TEXT'
+  ];
+  var out = [];
+  for (var i = 0; i < adds.length; i++) {
+    try { await env.AUDIT.prepare(adds[i]).run(); out.push('added'); }
+    catch (e) { out.push('exists'); }
+  }
+  return out;
+}
+function specAckSystem() {
+  return 'You are a second-pass reviewer for an open AI-reviewed journal whose stated ethos welcomes theoretical and philosophical work. ' +
+    'A first-pass review flagged this record as speculative or lacking empirical evidence, which alone blocks publication. ' +
+    'Your ONLY question: does the record handle its own speculation honestly and rigorously - does it state explicitly that its claims are theoretical/speculative, and does it offer falsifiable or disconfirming criteria a reader could actually test? ' +
+    'Do NOT judge whether the claims are true. Do NOT reward confident tone. Absence of empirical evidence is expected and is not by itself a reason to answer false. ' +
+    'Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: acknowledged (boolean), disconfirmation_criteria (array of strings quoted or paraphrased from the record; empty array if none), rationale (string), confidence (high|medium|low).';
+}
+async function speculationAckPass(env, rec, models) {
+  var sys = specAckSystem();
+  var usr = 'RECORD METADATA\ntitle: ' + (rec.title || '(none)') + '\ndoi: ' + (rec.doi || '(none)') + '\ncreators: ' + (rec.creators || '(none)') + '\n\nABSTRACT/DESCRIPTION:\n' + String(rec.description || '').slice(0, 4000) + '\n\nFULL TEXT (first ' + String(rec.text || '').length + ' chars):\n' + String(rec.text || '').slice(0, 12000) + '\n\nNow produce the acknowledgment JSON.';
+  var votes = [], modelsUsed = [], criteria = [], rationale = '';
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var outTxt = await aiRun(env, models[i], sys, usr);
+      var p = parseJsonObject(outTxt);
+      if (p) {
+        modelsUsed.push(models[i]);
+        votes.push(p.acknowledged === true);
+        var cc = arrOf(p.disconfirmation_criteria);
+        for (var j = 0; j < cc.length && criteria.length < 8; j++) criteria.push(cc[j]);
+        if (!rationale && p.rationale) rationale = String(p.rationale);
+      }
+    } catch (e) { }
+  }
+  var yes = votes.filter(function (x) { return x; }).length;
+  // Require BOTH a majority acknowledgment AND at least one falsifiable criterion actually extracted:
+  // a vote of "acknowledged" whose own rationale reports no testable criteria does not satisfy the standard.
+  var ack = votes.length > 0 && yes * 2 > votes.length && criteria.length > 0;
+  return { used: true, acknowledged: ack, votes: votes, models: modelsUsed, criteria: criteria, rationale: rationale || '(no second-pass model returned parseable JSON)' };
+}
+function specEscapeEligible(dec, basis) {
+  return !!(dec && dec.decision === "REVISE" && dec.speculative && !dec.fatal && basis === "text" && dec.avg >= 7.5 && (typeof dec.min_avg !== "number" || dec.min_avg >= 6) && !dec.low_confidence);
+}
+// Shared by runReview AND /cal so calibration measures the same decision path as production.
+async function applySpecAckEscape(env, rec, dec, models, recid, basis) {
+  var specPath = { used: false, acknowledged: false, votes: [], models: [], criteria: [], rationale: "" };
+  if (!specEscapeEligible(dec, basis)) { if (!dec.path) dec.path = "threshold"; return { dec: dec, specPath: specPath }; }
+  specPath = await speculationAckPass(env, rec, models);
+  if (specPath.acknowledged) {
+    dec = Object.assign({}, dec, { decision: "PUBLISH", path: "speculation-acknowledged", reason: dec.reason + " | escape: speculation acknowledged on second pass (" + String(specPath.rationale).slice(0, 200) + ")" });
+    await log(env, recid, "spec_ack", "speculation acknowledged -> PUBLISH (escape path)");
+  } else {
+    await log(env, recid, "spec_ack", "second pass did not acknowledge speculation; REVISE stands");
+  }
+  return { dec: dec, specPath: specPath };
+}
+function specAckReportSection(specPath, NL) {
+  var specLines = [];
+  specLines.push("");
+  specLines.push("## Second-pass check: speculation acknowledgment (escape path, register row 124)");
+  specLines.push("- The first pass flagged this record as speculative / lacking empirical evidence, which alone blocks publication. The second pass asked ONLY whether the record states its speculative status explicitly and offers falsifiable or disconfirming criteria. It did not judge whether the claims are true.");
+  specLines.push("- Second-pass models returning a parseable verdict: " + (specPath.models.join(", ") || "(none)") + "; votes=" + JSON.stringify(specPath.votes));
+  specLines.push("- Outcome: " + (specPath.acknowledged ? "acknowledged -> PUBLISH" : "not acknowledged -> REVISE stands"));
+  specLines.push("- Disconfirming criteria offered by the record: " + (specPath.criteria.length ? specPath.criteria.map(function (x) { return String(x).slice(0, 200); }).join(" | ") : "(none extracted)"));
+  specLines.push("- Second-pass rationale: " + String(specPath.rationale).slice(0, 700));
+  return specLines.join(NL) + NL;
+}
+export { index_default as default };
+
