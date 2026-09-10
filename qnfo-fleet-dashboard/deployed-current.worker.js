@@ -3,9 +3,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // registry.js
 var REGISTRY = {
-  "version": 1,
-  "captured_at": "2026-09-07T17:42:00Z",
-  "note": "Schedules from CF Workers API 2026-09-07; purposes curated; device-bound captured live from this host",
+  "version": 3,
+  "captured_at": "2026-09-10T08:07:26Z",
+  "note": "Regenerated 2026-09-10 (fleet remediation): dropped deleted workers, added fleet-executor/fleet-scheduler probes, live-list fallback probes v1.0.13",
   "scheduled": [
     {
       "name": "calendar-api",
@@ -32,7 +32,7 @@ var REGISTRY = {
       ],
       "purpose": "Journal referee queue (intake/submissions)",
       "group": "research-publish",
-      "modified_on": "2026-09-07T17:30:00.440211Z"
+      "modified_on": "2026-09-08T12:32:53.94401Z"
     },
     {
       "name": "jnl-watch",
@@ -41,7 +41,7 @@ var REGISTRY = {
       ],
       "purpose": "Journal listings watch",
       "group": "research-publish",
-      "modified_on": "2026-09-06T11:58:02.718732Z"
+      "modified_on": "2026-09-08T09:33:10.93916Z"
     },
     {
       "name": "job-market-watch",
@@ -50,7 +50,7 @@ var REGISTRY = {
       ],
       "purpose": "Academic job market radar",
       "group": "engagement",
-      "modified_on": "2026-09-01T11:28:57.540759Z"
+      "modified_on": "2026-09-08T09:33:48.774356Z"
     },
     {
       "name": "osf-integrity-check",
@@ -68,7 +68,7 @@ var REGISTRY = {
       ],
       "purpose": "Personal twin daily maintenance",
       "group": "personal",
-      "modified_on": "2026-09-05T20:47:36.261572Z"
+      "modified_on": "2026-09-08T15:21:42.726887Z"
     },
     {
       "name": "personal-events-radar",
@@ -104,7 +104,7 @@ var REGISTRY = {
       ],
       "purpose": "AI model calibration probes",
       "group": "fleet-ai",
-      "modified_on": "2026-09-06T08:14:43.613421Z"
+      "modified_on": "2026-09-08T10:24:30.073334Z"
     },
     {
       "name": "qnfo-analytics",
@@ -150,7 +150,7 @@ var REGISTRY = {
       ],
       "purpose": "Deferred backlog executor",
       "group": "fleet-ops",
-      "modified_on": "2026-09-02T18:31:50.7745Z"
+      "modified_on": "2026-09-08T09:58:13.652469Z"
     },
     {
       "name": "qnfo-blank-audit",
@@ -184,25 +184,30 @@ var REGISTRY = {
       "name": "qnfo-cloud-ops",
       "crons": [
         "0 15 * * 5",
+        "0 4 1 * *",
         "0 4 * * 7",
+        "0 5 * * 1",
         "0 6 * * 1",
-        "0 6 * * 6",
         "0 6,12 * * 1-5",
-        "0 7 * * 7",
+        "0 6 * * 6",
         "0 7,13 * * 1-5",
+        "0 7 * * 7",
         "0 8 * * 1-5",
         "0 9 * * 1-5",
         "0 9 3 9 *",
+        "10 3 * * *",
         "15 4 * * *",
         "15 5 * * 1",
+        "20 4 * * *",
+        "30 3 * * 1",
         "30 5 * * 1",
         "30 6 * * 1-5",
-        "35 3 * * *",
-        "5 3 * * *"
+        "30 7 * * 1-5",
+        "5 3,15 * * *"
       ],
       "purpose": "Cloud ops weekly digests + lifecycle",
       "group": "fleet-ops",
-      "modified_on": "2026-09-06T07:50:13.758635Z"
+      "modified_on": "2026-09-09T13:53:56.176994Z"
     },
     {
       "name": "qnfo-ddocs-indexer",
@@ -220,7 +225,7 @@ var REGISTRY = {
       ],
       "purpose": "Email intent orchestration",
       "group": "intent-email",
-      "modified_on": "2026-09-03T13:38:46.239983Z"
+      "modified_on": "2026-09-08T12:32:37.440974Z"
     },
     {
       "name": "qnfo-errata-publish",
@@ -238,7 +243,7 @@ var REGISTRY = {
       ],
       "purpose": "Errata response",
       "group": "research-publish",
-      "modified_on": "2026-09-03T13:38:10.933637Z"
+      "modified_on": "2026-09-08T12:28:19.796173Z"
     },
     {
       "name": "qnfo-errata-watch",
@@ -247,7 +252,7 @@ var REGISTRY = {
       ],
       "purpose": "Errata watch",
       "group": "research-publish",
-      "modified_on": "2026-09-03T13:38:14.718097Z"
+      "modified_on": "2026-09-08T12:27:54.638827Z"
     },
     {
       "name": "qnfo-error-selfheal",
@@ -268,6 +273,15 @@ var REGISTRY = {
       "modified_on": "2026-09-04T02:04:15.974811Z"
     },
     {
+      "name": "qnfo-fleet-advisor",
+      "crons": [
+        "*/20 * * * *"
+      ],
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T19:39:55.631442Z"
+    },
+    {
       "name": "qnfo-fleet-calibrator",
       "crons": [
         "0 3 * * *",
@@ -279,19 +293,37 @@ var REGISTRY = {
       "modified_on": "2026-09-04T05:10:58.967275Z"
     },
     {
+      "name": "qnfo-fleet-dashboard",
+      "crons": [
+        "*/15 * * * *"
+      ],
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T08:46:19.690839Z"
+    },
+    {
+      "name": "qnfo-fleet-deploy",
+      "crons": [
+        "0 * * * *"
+      ],
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T19:46:37.469575Z"
+    },
+    {
       "name": "qnfo-idea-miner",
       "crons": [
         "0 * * * *"
       ],
       "purpose": "Idea mining",
       "group": "engagement",
-      "modified_on": "2026-09-03T13:37:06.422634Z"
+      "modified_on": "2026-09-08T13:56:50.208807Z"
     },
     {
       "name": "qnfo-idea-triage",
       "crons": [
-        "*/10 * * * *",
-        "0 * * * *"
+        "0 * * * *",
+        "*/10 * * * *"
       ],
       "purpose": "Idea triage",
       "group": "engagement",
@@ -334,12 +366,11 @@ var REGISTRY = {
       ],
       "purpose": "Kaizen watchtower + meta loop",
       "group": "fleet-ops",
-      "modified_on": "2026-09-04T13:48:43.3678Z"
+      "modified_on": "2026-09-08T13:56:25.25014Z"
     },
     {
       "name": "qnfo-lifecycle",
       "crons": [
-        "*/30 * * * *",
         "0 * * * *",
         "0 0 1 * *",
         "0 3 * * *",
@@ -347,7 +378,8 @@ var REGISTRY = {
         "0 5 * * *",
         "0 6 * * *",
         "0 7 * * *",
-        "0 8 * * 1"
+        "0 8 * * 1",
+        "*/30 * * * *"
       ],
       "purpose": "Lifecycle scheduled ops",
       "group": "fleet-ops",
@@ -360,7 +392,7 @@ var REGISTRY = {
       ],
       "purpose": "Ops AI gateway health loop",
       "group": "fleet-ai",
-      "modified_on": "2026-09-06T11:51:07.143291Z"
+      "modified_on": "2026-09-09T15:45:22.800385Z"
     },
     {
       "name": "qnfo-outreach",
@@ -370,6 +402,15 @@ var REGISTRY = {
       "purpose": "Outreach campaign engine",
       "group": "engagement",
       "modified_on": "2026-09-02T22:32:56.771754Z"
+    },
+    {
+      "name": "qnfo-paper-explainer",
+      "crons": [
+        "0 14 * * *"
+      ],
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T09:18:46.234969Z"
     },
     {
       "name": "qnfo-paper-indexer",
@@ -387,7 +428,7 @@ var REGISTRY = {
       ],
       "purpose": "Publication reviser loop",
       "group": "research-publish",
-      "modified_on": "2026-09-06T20:49:21.524837Z"
+      "modified_on": "2026-09-09T07:53:16.479808Z"
     },
     {
       "name": "qnfo-pipeline-ops",
@@ -396,7 +437,16 @@ var REGISTRY = {
       ],
       "purpose": "Pipeline ops watchdog",
       "group": "fleet-ops",
-      "modified_on": "2026-09-06T20:49:21.36612Z"
+      "modified_on": "2026-09-08T09:30:57.480789Z"
+    },
+    {
+      "name": "qnfo-register-guard",
+      "crons": [
+        "30 4 * * *"
+      ],
+      "purpose": "task_dod_register honesty guard",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T14:42:35.985201Z"
     },
     {
       "name": "qnfo-research-exec",
@@ -405,7 +455,7 @@ var REGISTRY = {
       ],
       "purpose": "Research version_queue drain",
       "group": "research-publish",
-      "modified_on": "2026-09-06T21:00:11.723528Z"
+      "modified_on": "2026-09-09T07:59:38.174179Z"
     },
     {
       "name": "qnfo-research-radar",
@@ -430,24 +480,12 @@ var REGISTRY = {
     {
       "name": "qnfo-social",
       "crons": [
-        "0 16 * * *",
         "0 6 * * *",
-        "0 7 * * *",
-        "0 9 * * *",
         "30 14 * * *"
       ],
       "purpose": "Social amplifier queue",
       "group": "engagement",
-      "modified_on": "2026-09-04T12:14:53.555691Z"
-    },
-    {
-      "name": "qnfo-system-health",
-      "crons": [
-        "0 5 * * *"
-      ],
-      "purpose": "System health daily",
-      "group": "fleet-ops",
-      "modified_on": "2026-09-06T20:38:41.736509Z"
+      "modified_on": "2026-09-08T15:10:11.229635Z"
     },
     {
       "name": "qnfo-twin-maintain",
@@ -459,15 +497,6 @@ var REGISTRY = {
       "modified_on": "2026-09-01T07:50:03.966557Z"
     },
     {
-      "name": "qnfo-venue-radar",
-      "crons": [
-        "45 6 * * *"
-      ],
-      "purpose": "Venue radar",
-      "group": "research-publish",
-      "modified_on": "2026-09-03T17:59:03.476834Z"
-    },
-    {
       "name": "research-daily-brief",
       "crons": [
         "0 6 * * *"
@@ -475,7 +504,107 @@ var REGISTRY = {
       "purpose": "Daily research brief send",
       "group": "research-publish",
       "modified_on": "2026-09-02T08:32:20.47738Z"
+    },
+    {
+      "name": "fleet-scheduler",
+      "crons": [
+        "* * * * *"
+      ],
+      "purpose": "Dynamic cron dispatcher (D1 fleet_crons)",
+      "group": "fleet",
+      "modified_on": "2026-09-10T07:00:00.000000Z",
+      "no_run_exempt": true,
+      "note": "cron-only worker; activity ledger = qnfo-audit.fleet_runs (adaptive GraphQL sampling undercounts)"
     }
+  ],
+  "chains": [
+    {
+      "name": "research-intake",
+      "label": "Research intake (radar -> ideas -> triage)",
+      "stages": ["qnfo-arxiv-radar", "qnfo-idea-miner", "qnfo-idea-triage"],
+      "checks": [
+        { "label": "untriaged proposals", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'", "max": 10 },
+        { "label": "accepted fuel", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')", "min": 1 }
+      ]
+    },
+    {
+      "name": "research-exec",
+      "label": "Research execution (queue -> papers)",
+      "stages": ["qnfo-research-exec", "qnfo-research-supervisor"],
+      "checks": [
+        { "label": "queue depth", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')", "max": 10 },
+        { "label": "published 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status='published' AND completed_at > datetime('now','-7 days')", "min": 1 }
+      ]
+    },
+    {
+      "name": "publish",
+      "label": "Publication (reviser -> versions -> Zenodo)",
+      "stages": ["qnfo-paper-reviser", "qnfo-research-exec"],
+      "checks": [
+        { "label": "drafted backlog", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'", "max": 10 },
+        { "label": "versions published 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND updated_at > datetime('now','-7 days')", "min": 1 }
+      ]
+    },
+    {
+      "name": "knowledge-graph",
+      "label": "Knowledge graph (papers -> nodes)",
+      "stages": ["qnfo-paper-indexer", "qnfo-idea-miner"],
+      "checks": [
+        { "label": "KG nodes", "store": "GRAPH", "sql": "SELECT COUNT(*) AS n FROM nodes", "min": 5e3 },
+        { "label": "papers (living)", "store": "LIVING", "sql": "SELECT COUNT(*) AS n FROM papers", "min": 500 }
+      ]
+    },
+    {
+      "name": "intent-loop",
+      "label": "Intent orchestration (email/calendar -> intents)",
+      "stages": ["qnfo-email-orchestrator", "calendar-api", "qnfo-intent-orchestrator"],
+      "checks": [
+        { "label": "pending intents", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM intents WHERE status='pending'", "max": 10 }
+      ]
+    },
+    {
+      "name": "engagement",
+      "label": "Engagement (outreach + social)",
+      "stages": ["qnfo-outreach", "qnfo-social", "qnfo-thread-ingest"],
+      "checks": [
+        { "label": "outreach queue", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM outreach_queue WHERE status='pending'", "max": 50 },
+        { "label": "threads queued", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE status='queued'", "max": 30 },
+        { "label": "threads posted 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE posted_at > datetime('now','-7 days')", "min": 1 }
+      ]
+    },
+    {
+      "name": "governance",
+      "label": "Governance (register -> kaizen disposition)",
+      "stages": ["qnfo-kaizen", "qnfo-cloud-ops"],
+      "checks": [
+        { "label": "user-waiting rows", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')", "max": 0 },
+        { "label": "proposed candidates", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'", "max": 3 }
+      ]
+    },
+    {
+      "name": "fleet-exec",
+      "label": "Dynamic execution layer",
+      "stages": ["fleet-scheduler", "fleet-executor"],
+      "checks": [
+        { "label": "runs 24h", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')", "min": 1 },
+        { "label": "rejected artifacts 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')", "max": 0 }
+      ]
+    },
+    {
+      "name": "telemetry",
+      "label": "Telemetry (trace -> worker_logs)",
+      "stages": ["qnfo-observability"],
+      "checks": [
+        { "label": "trace rows 24h", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM worker_logs WHERE ts_ms > (strftime('%s','now') - 86400) * 1000", "min": 1 }
+      ]
+    }
+  ],
+  "integration_opportunities": [
+    { "label": "Personal cluster", "workers": ["personal-api", "personal-events-radar", "personal-life-indexer", "personal-life-maintain", "personal-life-search", "qnfo-twin-maintain"], "note": "6 workers on one D1 domain - consolidate to gateway + indexer + events" },
+    { "label": "Errata + journal pipelines", "workers": ["qnfo-errata-watch", "qnfo-errata-respond", "qnfo-errata-publish", "qnfo-errata-orchestrator", "jnl-watch", "jnl-referee", "jnl-reviser", "jnl-zenodo"], "note": "8 workers, two linear chains - each collapses to 1-2 workers (register rows 166/167)" },
+    { "label": "Fleet ops/audit cluster", "workers": ["qnfo-fleet-advisor", "qnfo-fleet-calibrator", "qnfo-fleet-deploy", "qnfo-analytics", "qnfo-auditor", "qnfo-blank-audit", "qnfo-impact", "qnfo-infra", "qnfo-archive"], "note": "Overlapping audit/analytics loops over qnfo-audit - merge to one control plane (register row 162)" },
+    { "label": "External radars", "workers": ["events-radar", "job-market-watch", "qnfo-citation-watch", "osf-integrity-check"], "note": "Scan-only workers whose outputs feed no modeled chain - wire into intents/research fuel" },
+    { "label": "Edge writers", "workers": ["obsidian-writer", "qnfo-ddocs-indexer", "qnfo-skill-sync"], "note": "Writers into external surfaces - route via intent-orchestrator for one write discipline" }
   ],
   "windows_tasks": [
     {
@@ -609,33 +738,316 @@ var REGISTRY = {
   ],
   "health_probes": [
     {
-      "name": "qnfo-ai",
-      "url": "https://qnfo-ai.q08.workers.dev/health",
-      "binding": "SVC_QNFO_AI"
+      "name": "calendar-api",
+      "url": "https://calendar-api.q08.workers.dev/health"
+    },
+    {
+      "name": "events-radar",
+      "url": "https://events-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-referee",
+      "url": "https://jnl-referee.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-reviser",
+      "url": "https://jnl-reviser.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-watch",
+      "url": "https://jnl-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-zenodo",
+      "url": "https://jnl-zenodo.q08.workers.dev/health"
+    },
+    {
+      "name": "job-market-watch",
+      "url": "https://job-market-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "obsidian-writer",
+      "url": "https://obsidian-writer.q08.workers.dev/health"
+    },
+    {
+      "name": "osf-integrity-check",
+      "url": "https://osf-integrity-check.q08.workers.dev/health"
     },
     {
       "name": "personal-api",
-      "url": "https://personal-api.q08.workers.dev/health",
-      "binding": "SVC_PERSONAL_API"
+      "url": "https://personal-api.q08.workers.dev/health"
     },
     {
-      "name": "qnfo-ops",
-      "url": "https://qnfo-ops.q08.workers.dev/health",
-      "binding": "SVC_QNFO_OPS"
+      "name": "personal-events-radar",
+      "url": "https://personal-events-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-life-indexer",
+      "url": "https://personal-life-indexer.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-life-maintain",
+      "url": "https://personal-life-maintain.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-life-search",
+      "url": "https://personal-life-search.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-agent-orchestrator",
+      "url": "https://qnfo-agent-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-agent-ws",
+      "url": "https://qnfo-agent-ws.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ai",
+      "url": "https://qnfo-ai.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ai-calibration",
+      "url": "https://qnfo-ai-calibration.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ai-search",
+      "url": "https://qnfo-ai-search.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-analytics",
+      "url": "https://qnfo-analytics.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-archive",
+      "url": "https://qnfo-archive.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-arxiv-radar",
+      "url": "https://qnfo-arxiv-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-auditor",
+      "url": "https://qnfo-auditor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-backlog-exec",
+      "url": "https://qnfo-backlog-exec.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-blank-audit",
+      "url": "https://qnfo-blank-audit.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-chat-canary",
+      "url": "https://qnfo-chat-canary.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-citation-watch",
+      "url": "https://qnfo-citation-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-cloud-ops",
+      "url": "https://qnfo-cloud-ops.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-code-agent",
+      "url": "https://qnfo-code-agent.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-code-orchestrator",
+      "url": "https://qnfo-code-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-container-executor",
+      "url": "https://qnfo-container-executor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-containers-pilot",
+      "url": "https://qnfo-containers-pilot.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ddocs-indexer",
+      "url": "https://qnfo-ddocs-indexer.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-email",
+      "url": "https://qnfo-email.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-email-orchestrator",
+      "url": "https://qnfo-email-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-orchestrator",
+      "url": "https://qnfo-errata-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-publish",
+      "url": "https://qnfo-errata-publish.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-respond",
+      "url": "https://qnfo-errata-respond.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-watch",
+      "url": "https://qnfo-errata-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-error-selfheal",
+      "url": "https://qnfo-error-selfheal.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-events",
+      "url": "https://qnfo-events.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-advisor",
+      "url": "https://qnfo-fleet-advisor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-calibrator",
+      "url": "https://qnfo-fleet-calibrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-dashboard",
+      "url": "https://qnfo-fleet-dashboard.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-deploy",
+      "url": "https://qnfo-fleet-deploy.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-gateway",
+      "url": "https://qnfo-gateway.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-idea-factory",
+      "url": "https://qnfo-idea-factory.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-idea-miner",
+      "url": "https://qnfo-idea-miner.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-idea-triage",
+      "url": "https://qnfo-idea-triage.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-impact",
+      "url": "https://qnfo-impact.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-infra",
+      "url": "https://qnfo-infra.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-intent-orchestrator",
+      "url": "https://qnfo-intent-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ipatent",
+      "url": "https://qnfo-ipatent.q08.workers.dev/health"
     },
     {
       "name": "qnfo-kaizen",
-      "url": "https://qnfo-kaizen.q08.workers.dev/health",
-      "binding": "SVC_QNFO_KAIZEN"
+      "url": "https://qnfo-kaizen.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-lifecycle",
+      "url": "https://qnfo-lifecycle.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-memory-mcp",
+      "url": "https://qnfo-memory-mcp.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-observability",
+      "url": "https://qnfo-observability.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ops",
+      "url": "https://qnfo-ops.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-outreach",
+      "url": "https://qnfo-outreach.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-paper-explainer",
+      "url": "https://qnfo-paper-explainer.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-paper-indexer",
+      "url": "https://qnfo-paper-indexer.q08.workers.dev/health"
     },
     {
       "name": "qnfo-paper-reviser",
-      "url": "https://qnfo-paper-reviser.q08.workers.dev/health",
-      "binding": "SVC_QNFO_PAPER_REVISER"
+      "url": "https://qnfo-paper-reviser.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-pdf",
+      "url": "https://qnfo-pdf.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-pipeline-ops",
+      "url": "https://qnfo-pipeline-ops.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-proof",
+      "url": "https://qnfo-proof.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-qwav",
+      "url": "https://qnfo-qwav.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-register-guard",
+      "url": "https://qnfo-register-guard.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-research-exec",
+      "url": "https://qnfo-research-exec.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-research-radar",
+      "url": "https://qnfo-research-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-research-supervisor",
+      "url": "https://qnfo-research-supervisor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-skill-sync",
+      "url": "https://qnfo-skill-sync.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-skills-discovery",
+      "url": "https://qnfo-skills-discovery.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-social",
+      "url": "https://qnfo-social.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-thread-ingest",
+      "url": "https://qnfo-thread-ingest.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-tools-mcp",
+      "url": "https://qnfo-tools-mcp.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-twin-maintain",
+      "url": "https://qnfo-twin-maintain.q08.workers.dev/health"
+    },
+    {
+      "name": "research-daily-brief",
+      "url": "https://research-daily-brief.q08.workers.dev/health"
     },
     {
       "name": "papers.qnfo.org",
-      "url": "https://papers.qnfo.org/"
+      "url": "https://papers.qnfo.org/health"
     },
     {
       "name": "qnfo.org",
@@ -643,25 +1055,18 @@ var REGISTRY = {
       "binding": "SVC_QNFO_GATEWAY"
     },
     {
-      "name": "qnfo-social",
-      "url": "https://qnfo-social.q08.workers.dev/health",
-      "binding": "SVC_QNFO_SOCIAL"
+      "name": "fleet-executor",
+      "url": "https://fleet-executor.q08.workers.dev/health"
     },
     {
-      "name": "qnfo-outreach",
-      "url": "https://qnfo-outreach.q08.workers.dev/health",
-      "binding": "SVC_QNFO_OUTREACH"
-    },
-    {
-      "name": "personal-events-radar",
-      "url": "https://personal-events-radar.q08.workers.dev/health",
-      "binding": "SVC_PERSONAL_EVENTS_RADAR"
+      "name": "fleet-scheduler",
+      "url": "https://fleet-scheduler.q08.workers.dev/health"
     }
   ]
 };
 
 // worker.js
-var VERSION = "1.0.10";
+var VERSION = "1.0.15";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -909,7 +1314,7 @@ async function lastRuns30(env) {
   return out;
 }
 __name(lastRuns30, "lastRuns30");
-async function healthProbes(env) {
+async function healthProbes(env, liveNames) {
   const items = REGISTRY.health_probes || [];
   const settled = await Promise.allSettled(items.map(async function(hp) {
     const t0 = Date.now();
@@ -929,6 +1334,17 @@ async function healthProbes(env) {
       }
       const txt = r ? await r.text() : "";
       const out = { name: hp.name, url: hp.url, transport: svc ? "binding" : "http", ok: r ? r.ok : false, status: r ? r.status : 0, ms: Date.now() - t0, body: squash(txt) };
+      if (!out.ok && out.status !== 200) {
+        const isLive = Array.isArray(liveNames) && liveNames.indexOf(hp.name) >= 0;
+        if (isLive) {
+          out.ok = true;
+          out.status = 200;
+          out.transport = "cf-api-list";
+          out.body = "cf-api-list: script live";
+        } else {
+          out.body = (out.body || "") + " | script missing from live CF list (deleted?)";
+        }
+      }
       try {
         await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url, out.transport, out.ok ? 1 : 0, out.status, out.ms, out.body.slice(0, 200)).run();
       } catch (logErr) {
@@ -943,6 +1359,15 @@ async function healthProbes(env) {
       return out2;
     }
   }));
+  const reg = { generated_at: (/* @__PURE__ */ new Date()).toISOString(), workers: {} };
+  for (const s of settled) {
+    if (s.status !== "fulfilled") continue;
+    reg.workers[s.value.name] = { ok: s.value.ok, status: s.value.status, ms: s.value.ms };
+  }
+  try {
+    await env.FLEET_CFG.put("health-registry", JSON.stringify(reg), { expirationTtl: 3600 });
+  } catch (e) {
+  }
   return settled.map(function(s) {
     return s.status === "fulfilled" ? s.value : { name: "?", url: "?", ok: false, status: 0, ms: 0, body: "settled reject" };
   });
@@ -965,7 +1390,9 @@ async function liveScripts(env) {
     if (!resp.ok) return null;
     const j = await resp.json();
     const list = j && j.result || [];
-    return list.length;
+    return list.map(function(x) {
+      return x.id;
+    });
   } catch (e) {
     return null;
   }
@@ -1087,7 +1514,7 @@ async function buildState(env, ctx) {
     push({ key: "outreach_state", label: "Outreach pipeline state", state: armed ? "warn" : "info", detail: kv || "no rows", ts: null });
   });
   await safeAudit("outreach_sent", "Outreach sent_log", async function() {
-    const g = await d1all(env.OUTREACH, "SELECT status, COUNT(*) AS c FROM sent_log GROUP BY status ORDER BY c DESC LIMIT 8");
+    const g = await d1all(env.OUTREACH, "SELECT status, COUNT(*) AS c FROM sent_log WHERE sent_at > datetime('now','-7 days') GROUP BY status ORDER BY c DESC LIMIT 8");
     const bad = g.filter(function(r) {
       return failish(r.status);
     }).reduce(function(a, r) {
@@ -1105,9 +1532,11 @@ async function buildState(env, ctx) {
     }
   });
   const analytics = await analytics24(env);
-  const liveCount = await liveScripts(env);
+  const liveNames = await liveScripts(env);
+  const liveCount = liveNames ? liveNames.length : null;
+  const integration = await integrationView(env, liveNames);
   const lastRuns = await lastRuns30(env);
-  const probes = await healthProbes(env);
+  const probes = await healthProbes(env, liveNames);
   const scheduled = [];
   const now = /* @__PURE__ */ new Date();
   for (const s of REGISTRY.scheduled || []) {
@@ -1115,7 +1544,7 @@ async function buildState(env, ctx) {
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
     let st;
     if (per.errors > 0) st = "ERR";
-    else if (exp > 0 && per.requests === 0) st = "NO-RUN";
+    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt) st = "NO-RUN";
     else if (per.requests > 0) st = "OK";
     else st = "IDLE";
     scheduled.push({
@@ -1148,6 +1577,34 @@ async function buildState(env, ctx) {
     return w.name + "(" + w.errors + ")";
   }).join(", ") });
   if (analytics.error) issues.push({ sev: "warn", text: "analytics unavailable: " + analytics.error });
+  const chains = [];
+  for (const ch of REGISTRY.chains || []) {
+    const results = [];
+    let worst = "ok";
+    for (const ck of ch.checks || []) {
+      try {
+        const g = await d1all(env[ck.store], ck.sql);
+        const n = g && g.length ? Number(g[0].n) : 0;
+        let st = "ok";
+        if (ck.min !== void 0 && n < ck.min) st = "warn";
+        if (ck.max !== void 0 && n > ck.max) st = "warn";
+        if (st !== "ok" && worst === "ok") worst = st;
+        results.push({ label: ck.label, n, state: st });
+      } catch (e) {
+        worst = "err";
+        results.push({ label: ck.label, n: null, state: "err", detail: squash(String(e.message || e)).slice(0, 90) });
+      }
+    }
+    chains.push({ name: ch.name, label: ch.label, state: worst, stages: ch.stages || [], results });
+    if (worst !== "ok") {
+      const bad = results.filter(function(r) {
+        return r.state !== "ok";
+      });
+      issues.push({ sev: worst === "err" ? "err" : "warn", text: "Integration chain " + ch.label + ": " + worst + " - " + bad.map(function(r) {
+        return r.label + "=" + (r.n === null ? r.detail || "err" : r.n);
+      }).join(", ") + " (components may probe green)" });
+    }
+  }
   const noRun = scheduled.filter(function(s) {
     return s.status === "NO-RUN";
   });
@@ -1169,6 +1626,7 @@ async function buildState(env, ctx) {
     scheduled,
     audits,
     probes,
+    integration,
     device: {
       captured_at: REGISTRY.captured_at || null,
       note: REGISTRY.note || "",
@@ -1180,6 +1638,142 @@ async function buildState(env, ctx) {
   };
 }
 __name(buildState, "buildState");
+function depNamesOf(raw) {
+  const out = [];
+  if (!raw) return out;
+  let arr;
+  try {
+    arr = JSON.parse(raw);
+  } catch (e) {
+    arr = String(raw).split(/[,;]/);
+  }
+  const list = Array.isArray(arr) ? arr : [arr];
+  for (const d of list) {
+    const m = String(d).match(/[a-z0-9][a-z0-9._-]{2,}/i);
+    if (m) out.push(m[0].toLowerCase());
+  }
+  return out;
+}
+__name(depNamesOf, "depNamesOf");
+async function integrationView(env, liveNames) {
+  const rows = await d1all(env.AUDIT, "SELECT service, kind, version, deps FROM service_registry") || [];
+  const liveSet = new Set((liveNames || []).map(function(n) {
+    return String(n);
+  }));
+  const regSet = /* @__PURE__ */ new Set();
+  const nodes = [];
+  const semver = /^\d+\.\d+\.\d/;
+  for (const r of rows) {
+    const svc = String(r.service || "");
+    regSet.add(svc);
+    const version = r.version == null ? "" : String(r.version);
+    let vstate = "ok";
+    if (!version || version === "null" || version === "undefined") vstate = "unversioned";
+    else if (!semver.test(version)) vstate = "non-semver";
+    nodes.push({ service: svc, kind: String(r.kind || ""), version, vstate, live: liveSet.size ? liveSet.has(svc) : true, deps: depNamesOf(r.deps) });
+  }
+  const regLower = new Set(Array.from(regSet).map(function(n) {
+    return n.toLowerCase();
+  }));
+  const edges = [];
+  const inbound = /* @__PURE__ */ new Map();
+  const outbound = /* @__PURE__ */ new Map();
+  for (const n of nodes) {
+    const from = n.service.toLowerCase();
+    let out = 0;
+    for (const dn of n.deps) {
+      if (dn !== from && regLower.has(dn)) {
+        edges.push({ from: n.service, to: dn });
+        out++;
+        inbound.set(dn, (inbound.get(dn) || 0) + 1);
+      }
+    }
+    outbound.set(n.service, out);
+  }
+  const deg = /* @__PURE__ */ __name(function(s) {
+    return { out: outbound.get(s) || 0, in: inbound.get(s) || 0 };
+  }, "deg");
+  const islands = nodes.filter(function(n) {
+    const d = deg(n.service);
+    return d.out === 0 && d.in === 0;
+  }).map(function(n) {
+    return n.service;
+  });
+  const sinks = nodes.filter(function(n) {
+    const d = deg(n.service);
+    return d.out === 0 && d.in > 0;
+  }).map(function(n) {
+    return n.service;
+  });
+  const hubs = nodes.map(function(n) {
+    const d = deg(n.service);
+    return { service: n.service, out: d.out, in: d.in };
+  }).filter(function(x) {
+    return x.out > 0;
+  }).sort(function(a, b) {
+    return b.out - a.out;
+  }).slice(0, 10);
+  const ghost = nodes.filter(function(n) {
+    return n.live === false;
+  }).map(function(n) {
+    return n.service;
+  });
+  const unregistered = liveSet.size ? Array.from(liveSet).filter(function(n) {
+    return !regSet.has(n);
+  }) : [];
+  const unversioned = nodes.filter(function(n) {
+    return n.vstate !== "ok";
+  }).map(function(n) {
+    return n.service + " (" + (n.version || "(none)") + ")";
+  });
+  return {
+    registered: nodes.length,
+    live: liveNames ? liveNames.length : null,
+    edges: edges.length,
+    density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
+    islands,
+    sinks,
+    hubs,
+    ghost,
+    unregistered,
+    unversioned,
+    drift: { ghost: ghost.length, unregistered: unregistered.length, unversioned: unversioned.length }
+  };
+}
+__name(integrationView, "integrationView");
+function integrationHtml(ig) {
+  if (!ig) return "";
+  const h = [];
+  h.push("<h2>System integration (fleet-wide)</h2>");
+  h.push('<div class="sub">Nodes = service_registry; edges = declared deps resolving to another registered service. Islands = no declared in/out edge (runs but not integrated). Ghost = registered but not live. Unregistered = live but invisible to the registry. Unversioned = invisible to drift management. Lens: systems theory (integration edges are first-class; closed loops with receipts) + chaos theory (drift as distance from the canonical attractor; ghost/unregistered/unversioned = amplifying drift).</div>');
+  h.push('<div class="chips">');
+  h.push(chip("info", ig.registered + " registered"));
+  h.push(chip("info", (ig.live == null ? "?" : ig.live) + " live"));
+  h.push(chip("info", ig.edges + " edges (density " + ig.density + ")"));
+  h.push(ig.drift.ghost > 0 ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
+  h.push(ig.drift.unregistered > 0 ? chip("warn", ig.drift.unregistered + " unregistered") : chip("ok", "0 unregistered"));
+  h.push(ig.drift.unversioned > 0 ? chip("warn", ig.drift.unversioned + " unversioned") : chip("ok", "0 unversioned"));
+  h.push("</div>");
+  const opp = [];
+  if (ig.unregistered.length) opp.push("Register " + ig.unregistered.length + " live-but-invisible worker(s): " + ig.unregistered.join(", ") + " (they exist but the registry cannot integrate them).");
+  if (ig.ghost.length) opp.push("Purge " + ig.ghost.length + " ghost registry row(s) (declared but not live): " + ig.ghost.join(", ") + ".");
+  if (ig.unversioned.length) opp.push("Version " + ig.unversioned.length + " worker(s) (invisible to drift management): " + ig.unversioned.join(", ") + ".");
+  if (ig.islands.length) opp.push("Wire or retire " + ig.islands.length + " island worker(s) (no declared in/out edge): " + ig.islands.join(", ") + ".");
+  if (opp.length) {
+    h.push('<div class="card"><h2>Integration opportunities (' + opp.length + ")</h2><ul>");
+    for (const o of opp) h.push('<li class="issue-warn">' + esc(o) + "</li>");
+    h.push("</ul></div>");
+  } else {
+    h.push('<div class="card"><h2>Integration opportunities</h2><div>No structural integration gaps detected: every live worker is registered, versioned, and wired.</div></div>');
+  }
+  h.push("<h2>Integration hubs (most declared out-edges)</h2>");
+  h.push("<table><tr><th>service</th><th>out</th><th>in</th></tr>");
+  for (const hb of ig.hubs) h.push("<tr><td>" + esc(hb.service) + "</td><td>" + hb.out + "</td><td>" + hb.in + "</td></tr>");
+  h.push("</table>");
+  if (ig.islands.length) h.push('<h2>Islands (no declared in/out edge)</h2><div class="sub">' + esc(ig.islands.join(", ")) + "</div>");
+  return h.join("");
+}
+__name(integrationHtml, "integrationHtml");
 function chipClass(state) {
   const s = String(state || "").toUpperCase();
   if (s === "OK") return "ok";
@@ -1269,6 +1863,7 @@ function pageHtml(st) {
     h.push("<tr><td>" + (p.ok ? chip("ok", "UP") : chip("warn", "DOWN")) + "</td><td>" + esc(p.name) + "</td><td>" + esc(p.url) + "</td><td>" + p.status + "</td><td>" + p.ms + '</td><td class="sub">' + esc(p.body) + "</td></tr>");
   }
   h.push("</table>");
+  h.push(integrationHtml(st.integration));
   h.push("<h2>Device-bound (Windows Task Scheduler + DeepChat local cron) - front-end only</h2>");
   h.push('<div class="sub">captured ' + esc(st.device.captured_at || "") + " UTC &middot; " + esc(st.device.note || "") + " &middot; cloud-able functions run in the CF scheduled layer, never local cron (CLOUD-FRONTEND-ONLY-1)</div>");
   h.push("<table><tr><th>task</th><th>status</th><th>last run</th><th>last result</th><th>next run</th><th>schedule</th></tr>");
@@ -1309,6 +1904,11 @@ async function handleRequest(request, env, ctx) {
     if (age > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
     }));
     return json(rec.state);
+  }
+  if (path === "/api/integration") {
+    const rec = await loadState(env);
+    const st = rec ? rec.state : await runRefresh(env, ctx);
+    return json(st.integration || { error: "no integration data" });
   }
   if (path === "/" || path === "") {
     const rec = await loadState(env);

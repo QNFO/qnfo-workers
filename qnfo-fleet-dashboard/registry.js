@@ -515,6 +515,95 @@ export const REGISTRY = {
    "note": "cron-only worker; activity ledger = qnfo-audit.fleet_runs (adaptive GraphQL sampling undercounts)"
   }
  ],
+ "chains": [
+  {
+   "name": "research-intake",
+   "label": "Research intake (radar -> ideas -> triage)",
+   "stages": ["qnfo-arxiv-radar", "qnfo-idea-miner", "qnfo-idea-triage"],
+   "checks": [
+    { "label": "untriaged proposals", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'", "max": 10 },
+    { "label": "accepted fuel", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')", "min": 1 }
+   ]
+  },
+  {
+   "name": "research-exec",
+   "label": "Research execution (queue -> papers)",
+   "stages": ["qnfo-research-exec", "qnfo-research-supervisor"],
+   "checks": [
+    { "label": "queue depth", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')", "max": 10 },
+    { "label": "published 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status='published' AND completed_at > datetime('now','-7 days')", "min": 1 }
+   ]
+  },
+  {
+   "name": "publish",
+   "label": "Publication (reviser -> versions -> Zenodo)",
+   "stages": ["qnfo-paper-reviser", "qnfo-research-exec"],
+   "checks": [
+    { "label": "drafted backlog", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'", "max": 10 },
+    { "label": "versions published 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND updated_at > datetime('now','-7 days')", "min": 1 }
+   ]
+  },
+  {
+   "name": "knowledge-graph",
+   "label": "Knowledge graph (papers -> nodes)",
+   "stages": ["qnfo-paper-indexer", "qnfo-idea-miner"],
+   "checks": [
+    { "label": "KG nodes", "store": "GRAPH", "sql": "SELECT COUNT(*) AS n FROM nodes", "min": 5000 },
+    { "label": "papers (living)", "store": "LIVING", "sql": "SELECT COUNT(*) AS n FROM papers", "min": 500 }
+   ]
+  },
+  {
+   "name": "intent-loop",
+   "label": "Intent orchestration (email/calendar -> intents)",
+   "stages": ["qnfo-email-orchestrator", "calendar-api", "qnfo-intent-orchestrator"],
+   "checks": [
+    { "label": "pending intents", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM intents WHERE status='pending'", "max": 10 }
+   ]
+  },
+  {
+   "name": "engagement",
+   "label": "Engagement (outreach + social)",
+   "stages": ["qnfo-outreach", "qnfo-social", "qnfo-thread-ingest"],
+   "checks": [
+    { "label": "outreach queue", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM outreach_queue WHERE status='pending'", "max": 50 },
+    { "label": "threads queued", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE status='queued'", "max": 30 },
+    { "label": "threads posted 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE posted_at > datetime('now','-7 days')", "min": 1 }
+   ]
+  },
+  {
+   "name": "governance",
+   "label": "Governance (register -> kaizen disposition)",
+   "stages": ["qnfo-kaizen", "qnfo-cloud-ops"],
+   "checks": [
+    { "label": "user-waiting rows", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')", "max": 0 },
+    { "label": "proposed candidates", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'", "max": 3 }
+   ]
+  },
+  {
+   "name": "fleet-exec",
+   "label": "Dynamic execution layer",
+   "stages": ["fleet-scheduler", "fleet-executor"],
+   "checks": [
+    { "label": "runs 24h", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')", "min": 1 },
+    { "label": "rejected artifacts 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')", "max": 0 }
+   ]
+  },
+  {
+   "name": "telemetry",
+   "label": "Telemetry (trace -> worker_logs)",
+   "stages": ["qnfo-observability"],
+   "checks": [
+    { "label": "trace rows 24h", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM worker_logs WHERE ts_ms > (strftime('%s','now') - 86400) * 1000", "min": 1 }
+   ]
+  }
+ ],
+ "integration_opportunities": [
+  { "label": "Personal cluster", "workers": ["personal-api", "personal-events-radar", "personal-life-indexer", "personal-life-maintain", "personal-life-search", "qnfo-twin-maintain"], "note": "6 workers on one D1 domain - consolidate to gateway + indexer + events" },
+  { "label": "Errata + journal pipelines", "workers": ["qnfo-errata-watch", "qnfo-errata-respond", "qnfo-errata-publish", "qnfo-errata-orchestrator", "jnl-watch", "jnl-referee", "jnl-reviser", "jnl-zenodo"], "note": "8 workers, two linear chains - each collapses to 1-2 workers (register rows 166/167)" },
+  { "label": "Fleet ops/audit cluster", "workers": ["qnfo-fleet-advisor", "qnfo-fleet-calibrator", "qnfo-fleet-deploy", "qnfo-analytics", "qnfo-auditor", "qnfo-blank-audit", "qnfo-impact", "qnfo-infra", "qnfo-archive"], "note": "Overlapping audit/analytics loops over qnfo-audit - merge to one control plane (register row 162)" },
+  { "label": "External radars", "workers": ["events-radar", "job-market-watch", "qnfo-citation-watch", "osf-integrity-check"], "note": "Scan-only workers whose outputs feed no modeled chain - wire into intents/research fuel" },
+  { "label": "Edge writers", "workers": ["obsidian-writer", "qnfo-ddocs-indexer", "qnfo-skill-sync"], "note": "Writers into external surfaces - route via intent-orchestrator for one write discipline" }
+ ],
  "windows_tasks": [
   {
    "name": "QNFO-ModelKey-Guard",

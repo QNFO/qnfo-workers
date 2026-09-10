@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.14';
+const VERSION = '1.0.16';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -376,6 +376,7 @@ async function buildState(env, ctx) {
   const analytics = await analytics24(env);
   const liveNames = await liveScripts(env);
   const liveCount = liveNames ? liveNames.length : null;
+  const integration = await integrationView(env, liveNames);
   const lastRuns = await lastRuns30(env);
   const probes = await healthProbes(env, liveNames);
 
@@ -408,6 +409,31 @@ async function buildState(env, ctx) {
   }
   if (analytics.errWorkers.length) issues.push({ sev: 'err', text: analytics.errWorkers.length + ' worker(s) with 24h errors: ' + analytics.errWorkers.map(function (w) { return w.name + '(' + w.errors + ')'; }).join(', ') });
   if (analytics.error) issues.push({ sev: 'warn', text: 'analytics unavailable: ' + analytics.error });
+  // 16 SYSTEM INTEGRATION: chain health (components can probe green while a chain is broken - systems-theory: the system is its relations, not its parts)
+  const chains = [];
+  for (const ch of (REGISTRY.chains || [])) {
+    const results = [];
+    let worst = 'ok';
+    for (const ck of (ch.checks || [])) {
+      try {
+        const g = await d1all(env[ck.store], ck.sql);
+        const n = g && g.length ? Number(g[0].n) : 0;
+        let st = 'ok';
+        if (ck.min !== undefined && n < ck.min) st = 'warn';
+        if (ck.max !== undefined && n > ck.max) st = 'warn';
+        if (st !== 'ok' && worst === 'ok') worst = st;
+        results.push({ label: ck.label, n: n, state: st });
+      } catch (e) {
+        worst = 'err';
+        results.push({ label: ck.label, n: null, state: 'err', detail: squash(String(e.message || e)).slice(0, 90) });
+      }
+    }
+    chains.push({ name: ch.name, label: ch.label, state: worst, stages: ch.stages || [], results: results });
+    if (worst !== 'ok') {
+      const bad = results.filter(function (r) { return r.state !== 'ok'; });
+      issues.push({ sev: worst === 'err' ? 'err' : 'warn', text: 'Integration chain ' + ch.label + ': ' + worst + ' - ' + bad.map(function (r) { return r.label + '=' + (r.n === null ? (r.detail || 'err') : r.n); }).join(', ') + ' (components may probe green)' });
+    }
+  }
   const noRun = scheduled.filter(function (s) { return s.status === 'NO-RUN'; });
   if (noRun.length) issues.push({ sev: 'warn', text: noRun.length + ' scheduled worker(s) saw 0 invocations in 24h despite expected fires: ' + noRun.map(function (s) { return s.name; }).join(', ') + ' (adaptive-sampled data; low-volume workers undercount - verify via the worker\'s own logs before acting)' });
 
@@ -426,6 +452,8 @@ async function buildState(env, ctx) {
     scheduled: scheduled,
     audits: audits,
     probes: probes,
+    integration: integration,
+    chains: chains,
     device: {
       captured_at: REGISTRY.captured_at || null,
       note: REGISTRY.note || '',
@@ -435,6 +463,108 @@ async function buildState(env, ctx) {
     issues: issues,
     meta: { registry_captured_at: REGISTRY.captured_at || null, registry_version: REGISTRY.version }
   };
+}
+
+
+function depNamesOf(raw) {
+  const out = [];
+  if (!raw) return out;
+  let arr;
+  try { arr = JSON.parse(raw); } catch (e) { arr = String(raw).split(/[,;]/); }
+  const list = Array.isArray(arr) ? arr : [arr];
+  for (const d of list) {
+    const m = String(d).match(/[a-z0-9][a-z0-9._-]{2,}/i);
+    if (m) out.push(m[0].toLowerCase());
+  }
+  return out;
+}
+
+async function integrationView(env, liveNames) {
+  const rows = (await d1all(env.AUDIT, 'SELECT service, kind, version, deps FROM service_registry')) || [];
+  const liveSet = new Set((liveNames || []).map(function (n) { return String(n); }));
+  const regSet = new Set();
+  const nodes = [];
+  const semver = /^\d+\.\d+\.\d/;
+  for (const r of rows) {
+    const svc = String(r.service || '');
+    regSet.add(svc);
+    const version = r.version == null ? '' : String(r.version);
+    let vstate = 'ok';
+    if (!version || version === 'null' || version === 'undefined') vstate = 'unversioned';
+    else if (!semver.test(version)) vstate = 'non-semver';
+    nodes.push({ service: svc, kind: String(r.kind || ''), version: version, vstate: vstate, live: liveSet.size ? liveSet.has(svc) : true, deps: depNamesOf(r.deps) });
+  }
+  const regLower = new Set(Array.from(regSet).map(function (n) { return n.toLowerCase(); }));
+  const edges = [];
+  const inbound = new Map();
+  const outbound = new Map();
+  for (const n of nodes) {
+    const from = n.service.toLowerCase();
+    let out = 0;
+    for (const dn of n.deps) {
+      if (dn !== from && regLower.has(dn)) { edges.push({ from: n.service, to: dn }); out++; inbound.set(dn, (inbound.get(dn) || 0) + 1); }
+    }
+    outbound.set(n.service, out);
+  }
+  const deg = function (s) { return { out: outbound.get(s) || 0, in: inbound.get(s) || 0 }; };
+  const islands = nodes.filter(function (n) { const d = deg(n.service); return d.out === 0 && d.in === 0; }).map(function (n) { return n.service; });
+  const sinks = nodes.filter(function (n) { const d = deg(n.service); return d.out === 0 && d.in > 0; }).map(function (n) { return n.service; });
+  const hubs = nodes.map(function (n) { const d = deg(n.service); return { service: n.service, out: d.out, in: d.in }; }).filter(function (x) { return x.out > 0; }).sort(function (a, b) { return b.out - a.out; }).slice(0, 10);
+  const ghost = nodes.filter(function (n) { return n.live === false; }).map(function (n) { return n.service; });
+  const unregistered = liveSet.size ? Array.from(liveSet).filter(function (n) { return !regSet.has(n); }) : [];
+  const unversioned = nodes.filter(function (n) { return n.vstate !== 'ok'; }).map(function (n) { return n.service + ' (' + (n.version || '(none)') + ')'; });
+  return {
+    registered: nodes.length, live: liveNames ? liveNames.length : null,
+    edges: edges.length, density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
+    islands: islands, sinks: sinks, hubs: hubs,
+    ghost: ghost, unregistered: unregistered, unversioned: unversioned,
+    drift: { ghost: ghost.length, unregistered: unregistered.length, unversioned: unversioned.length }
+  };
+}
+
+function integrationHtml(ig) {
+  if (!ig) return '';
+  const h = [];
+  h.push('<h2>System integration (fleet-wide)</h2>');
+  h.push('<div class="sub">Nodes = service_registry; edges = declared deps resolving to another registered service. Islands = no declared in/out edge (runs but not integrated). Ghost = registered but not live. Unregistered = live but invisible to the registry. Unversioned = invisible to drift management. Lens: systems theory (integration edges are first-class; closed loops with receipts) + chaos theory (drift as distance from the canonical attractor; ghost/unregistered/unversioned = amplifying drift).</div>');
+  h.push('<div class="chips">');
+  h.push(chip('info', ig.registered + ' registered'));
+  h.push(chip('info', (ig.live == null ? '?' : ig.live) + ' live'));
+  h.push(chip('info', ig.edges + ' edges (density ' + ig.density + ')'));
+  h.push(ig.drift.ghost > 0 ? chip('warn', ig.drift.ghost + ' ghost') : chip('ok', '0 ghost'));
+  h.push(ig.drift.unregistered > 0 ? chip('warn', ig.drift.unregistered + ' unregistered') : chip('ok', '0 unregistered'));
+  h.push(ig.drift.unversioned > 0 ? chip('warn', ig.drift.unversioned + ' unversioned') : chip('ok', '0 unversioned'));
+  h.push('</div>');
+  const opp = [];
+  if (ig.unregistered.length) opp.push('Register ' + ig.unregistered.length + ' live-but-invisible worker(s): ' + ig.unregistered.join(', ') + ' (they exist but the registry cannot integrate them).');
+  if (ig.ghost.length) opp.push('Purge ' + ig.ghost.length + ' ghost registry row(s) (declared but not live): ' + ig.ghost.join(', ') + '.');
+  if (ig.unversioned.length) opp.push('Version ' + ig.unversioned.length + ' worker(s) (invisible to drift management): ' + ig.unversioned.join(', ') + '.');
+  if (ig.islands.length) opp.push('Wire or retire ' + ig.islands.length + ' island worker(s) (no declared in/out edge): ' + ig.islands.join(', ') + '.');
+  if (opp.length) {
+    h.push('<div class="card"><h2>Integration opportunities (' + opp.length + ')</h2><ul>');
+    for (const o of opp) h.push('<li class="issue-warn">' + esc(o) + '</li>');
+    h.push('</ul></div>');
+  } else {
+    h.push('<div class="card"><h2>Integration opportunities</h2><div>No structural integration gaps detected: every live worker is registered, versioned, and wired.</div></div>');
+  }
+  h.push('<h2>Integration hubs (most declared out-edges)</h2>');
+  h.push('<table><tr><th>service</th><th>out</th><th>in</th></tr>');
+  for (const hb of ig.hubs) h.push('<tr><td>' + esc(hb.service) + '</td><td>' + hb.out + '</td><td>' + hb.in + '</td></tr>');
+  h.push('</table>');
+  if (ig.islands.length) h.push('<h2>Islands (no declared in/out edge)</h2><div class="sub">' + esc(ig.islands.join(', ')) + '</div>');
+  h.push('<h2>Flow chains (transformation health)</h2>');
+  h.push('<table><tr><th>chain</th><th>state</th><th>signals</th></tr>');
+  for (const ch of (st.chains || [])) {
+    h.push('<tr><td><b>' + esc(ch.label) + '</b><div class="sub">' + esc((ch.stages || []).join(' -> ')) + '</div></td><td>' + chip(ch.state, ch.state) + '</td><td>' + ch.results.map(function (r) { return esc(r.label) + '=' + (r.n === null ? 'err' : r.n) + (r.state !== 'ok' ? ' <b style="color:#d29922">!</b>' : ''); }).join(' &middot; ') + '</td></tr>');
+  }
+  h.push('</table>');
+  const opp2 = st.integration_opportunities || [];
+  if (opp2.length) {
+    h.push('<h2>Consolidation roadmap (curated)</h2><ul>');
+    for (const o of opp2) h.push('<li><b>' + esc(o.label) + '</b> &mdash; ' + esc(o.note) + ' <span class="sub">[' + (o.workers || []).length + ' workers]</span></li>');
+    h.push('</ul>');
+  }
+  return h.join('');
 }
 
 function chipClass(state) {
@@ -514,6 +644,7 @@ function pageHtml(st) {
     h.push('<tr><td>' + (p.ok ? chip('ok', 'UP') : chip('warn', 'DOWN')) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.url) + '</td><td>' + p.status + '</td><td>' + p.ms + '</td><td class="sub">' + esc(p.body) + '</td></tr>');
   }
   h.push('</table>');
+  h.push(integrationHtml(st.integration));
   h.push('<h2>Device-bound (Windows Task Scheduler + DeepChat local cron) - front-end only</h2>');
   h.push('<div class="sub">captured ' + esc(st.device.captured_at || '') + ' UTC &middot; ' + esc(st.device.note || '') + ' &middot; cloud-able functions run in the CF scheduled layer, never local cron (CLOUD-FRONTEND-ONLY-1)</div>');
   h.push('<table><tr><th>task</th><th>status</th><th>last run</th><th>last result</th><th>next run</th><th>schedule</th></tr>');
@@ -551,6 +682,11 @@ async function handleRequest(request, env, ctx) {
     const age = Date.now() - new Date(rec.updatedAt).getTime();
     if (age > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function () { }));
     return json(rec.state);
+  }
+  if (path === '/api/integration') {
+    const rec = await loadState(env);
+    const st = rec ? rec.state : await runRefresh(env, ctx);
+    return json(st.integration || { error: 'no integration data' });
   }
   if (path === '/' || path === '') {
     const rec = await loadState(env);
