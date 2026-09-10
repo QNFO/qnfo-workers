@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.9.0";
+var VERSION = "0.9.1";
 var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -449,7 +449,17 @@ async function handleScheduled(env) {
         if (bd.ok) drift = await driftSample(env, 3);
       }
     } catch (e) { drift = { error: String(e && e.message || e).slice(0, 200) }; }
-    return { ok: true, seeded: seeded, ran: ran, budget: budget, drift: drift };
+    // JNL-P7 (row 102) autonomous citation refresh. Why: citation intelligence was gated on zero
+    // citations, and citationSample only probed never-checked records, so a citation appearing
+    // AFTER the first pass was never seen. Now every scheduled fire re-checks a bounded window
+    // (14-day staleness in citationSample), so the moment an external citation lands the graph
+    // upgrades from concept-overlap to citation-aware with no human action.
+    var citations = null;
+    try {
+      var wkN = (new Date().getUTCDay() === 1 && new Date().getUTCHours() === 3) ? 25 : 6;
+      citations = await citationSample(env, wkN);
+    } catch (e) { citations = { error: String(e && e.message || e).slice(0, 200) }; }
+    return { ok: true, seeded: seeded, ran: ran, budget: budget, drift: drift, citations: citations };
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
@@ -853,7 +863,7 @@ async function citationProbe(env, recid) {
 }
 // PRECONDITION: n >= 1. POSTCONDITION: up to n records probed for external citations.
 async function citationSample(env, n) {
-  var rows = await env.AUDIT.prepare('SELECT recid FROM jnl_records WHERE citation_checked_at IS NULL ORDER BY recid ASC LIMIT ?').bind(Math.max(1, Math.min(n, 25))).all();
+  var rows = await env.AUDIT.prepare('SELECT recid FROM jnl_records WHERE citation_checked_at IS NULL OR citation_checked_at < datetime(\'now\', \'-14 days\') ORDER BY (citation_checked_at IS NOT NULL) ASC, citation_checked_at ASC LIMIT ?').bind(Math.max(1, Math.min(n, 25))).all();
   var out = [];
   for (var i = 0; i < rows.results.length; i++) {
     try { out.push(await citationProbe(env, rows.results[i].recid)); }
