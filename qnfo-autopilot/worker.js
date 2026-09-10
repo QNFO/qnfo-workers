@@ -361,7 +361,13 @@ async function thinkLoop(env) {
     }
     if (q && q.question) {
       await env.AUDIT.prepare('INSERT INTO self_questions (ts, question, hypothesis, source, status) VALUES (?1, ?2, ?3, ?4, ?5)').bind(nowIso(), String(q.question).slice(0, 300), String(q.hypothesis || '').slice(0, 300), 'think-loop', 'open').run();
-      return { ok: true, question: q.question };
+      // E3: route the generated question into the research intake pipeline so it is ACTED on (not just stored)
+      const qh = (await sha256hex(String(q.question))).slice(0, 8);
+      const existing = await env.AUDIT.prepare('SELECT id FROM idea_proposals WHERE ip_hash = ?1 LIMIT 1').bind(qh).first();
+      if (!existing) {
+        await env.AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES ('think-loop', ?1, '', 'new', ?2, ?3)").bind(JSON.stringify({ ideas: [String(q.question)] }), qh, nowIso()).run();
+      }
+      return { ok: true, question: q.question, routed: !existing };
     }
     return { ok: false, why: 'no parseable question' };
   } catch (e) {
