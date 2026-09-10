@@ -1,9 +1,10 @@
-// FLEET registry snapshot for qnfo-observability v1.0.0
-// Captured from Cloudflare Workers API 2026-09-10; 78 workers.
-// This is the known-worker list used to validate /log sources and detect silence.
+// FLEET registry snapshot for qnfo-observability v1.1.0
+// Captured from Cloudflare Workers API 2026-09-10; 79 workers.
 export const FLEET = [
   "calendar-api",
   "events-radar",
+  "fleet-executor",
+  "fleet-scheduler",
   "jnl-referee",
   "jnl-reviser",
   "jnl-watch",
@@ -58,6 +59,7 @@ export const FLEET = [
   "qnfo-kaizen",
   "qnfo-lifecycle",
   "qnfo-memory-mcp",
+  "qnfo-observability",
   "qnfo-ops",
   "qnfo-outreach",
   "qnfo-paper-explainer",
@@ -77,7 +79,5 @@ export const FLEET = [
   "qnfo-thread-ingest",
   "qnfo-tools-mcp",
   "qnfo-twin-maintain",
-  "qnfo-venue-radar",
-  "qnfo-wrangler-test",
   "research-daily-brief"
 ];

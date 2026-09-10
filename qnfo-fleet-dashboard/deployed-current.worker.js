@@ -1066,7 +1066,7 @@ var REGISTRY = {
 };
 
 // worker.js
-var VERSION = "1.0.15";
+var VERSION = "1.0.17";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1219,9 +1219,9 @@ async function ensureStateTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_probe_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, name TEXT, url TEXT, transport TEXT, ok INTEGER, status INTEGER, ms INTEGER, body TEXT)").run();
 }
 __name(ensureStateTable, "ensureStateTable");
-async function saveState(env, st, ms) {
+async function saveState(env, st2, ms) {
   await ensureStateTable(env);
-  await env.AUDIT.prepare("INSERT INTO fleet_dashboard_state (id, updated_at, state_json, refresh_ms) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at, state_json=excluded.state_json, refresh_ms=excluded.refresh_ms").bind(st.generated_at, JSON.stringify(st), ms).run();
+  await env.AUDIT.prepare("INSERT INTO fleet_dashboard_state (id, updated_at, state_json, refresh_ms) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at, state_json=excluded.state_json, refresh_ms=excluded.refresh_ms").bind(st2.generated_at, JSON.stringify(st2), ms).run();
 }
 __name(saveState, "saveState");
 async function loadState(env) {
@@ -1374,12 +1374,12 @@ async function healthProbes(env, liveNames) {
 }
 __name(healthProbes, "healthProbes");
 var CLOSED = { closed: 1, done: 1, resolved: 1, completed: 1, cancelled: 1, canceled: 1, wontfix: 1, dismissed: 1, superseded: 1, archived: 1, fixed: 1, rejected: 1 };
-function isOpenish(st) {
-  return !CLOSED[String(st || "").toLowerCase()];
+function isOpenish(st2) {
+  return !CLOSED[String(st2 || "").toLowerCase()];
 }
 __name(isOpenish, "isOpenish");
-function failish(st) {
-  const s = String(st || "").toLowerCase();
+function failish(st2) {
+  const s = String(st2 || "").toLowerCase();
   return s.indexOf("fail") >= 0 || s === "error" || s === "err" || s === "bounce" || s === "rejected";
 }
 __name(failish, "failish");
@@ -1535,6 +1535,7 @@ async function buildState(env, ctx) {
   const liveNames = await liveScripts(env);
   const liveCount = liveNames ? liveNames.length : null;
   const integration = await integrationView(env, liveNames);
+  const report_card = await reportCardData(env, integration, audits);
   const lastRuns = await lastRuns30(env);
   const probes = await healthProbes(env, liveNames);
   const scheduled = [];
@@ -1542,11 +1543,11 @@ async function buildState(env, ctx) {
   for (const s of REGISTRY.scheduled || []) {
     const per = analytics.per[s.name] || { requests: 0, errors: 0 };
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
-    let st;
-    if (per.errors > 0) st = "ERR";
-    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt) st = "NO-RUN";
-    else if (per.requests > 0) st = "OK";
-    else st = "IDLE";
+    let st2;
+    if (per.errors > 0) st2 = "ERR";
+    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt) st2 = "NO-RUN";
+    else if (per.requests > 0) st2 = "OK";
+    else st2 = "IDLE";
     scheduled.push({
       name: s.name,
       crons: s.crons,
@@ -1557,7 +1558,7 @@ async function buildState(env, ctx) {
       err24: per.errors,
       expected24: exp,
       next: workerNextRuns(s.crons, now.getTime(), 2),
-      status: st,
+      status: st2,
       lastRun: lastRuns[s.name] || null
     });
   }
@@ -1585,11 +1586,11 @@ async function buildState(env, ctx) {
       try {
         const g = await d1all(env[ck.store], ck.sql);
         const n = g && g.length ? Number(g[0].n) : 0;
-        let st = "ok";
-        if (ck.min !== void 0 && n < ck.min) st = "warn";
-        if (ck.max !== void 0 && n > ck.max) st = "warn";
-        if (st !== "ok" && worst === "ok") worst = st;
-        results.push({ label: ck.label, n, state: st });
+        let st2 = "ok";
+        if (ck.min !== void 0 && n < ck.min) st2 = "warn";
+        if (ck.max !== void 0 && n > ck.max) st2 = "warn";
+        if (st2 !== "ok" && worst === "ok") worst = st2;
+        results.push({ label: ck.label, n, state: st2 });
       } catch (e) {
         worst = "err";
         results.push({ label: ck.label, n: null, state: "err", detail: squash(String(e.message || e)).slice(0, 90) });
@@ -1627,6 +1628,8 @@ async function buildState(env, ctx) {
     audits,
     probes,
     integration,
+    report_card,
+    chains,
     device: {
       captured_at: REGISTRY.captured_at || null,
       note: REGISTRY.note || "",
@@ -1741,6 +1744,67 @@ async function integrationView(env, liveNames) {
   };
 }
 __name(integrationView, "integrationView");
+async function reportCardData(env, integration, audits) {
+  let humanOpen = -1;
+  try {
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')");
+    humanOpen = g && g.length ? g[0].c : 0;
+  } catch (e) {
+    humanOpen = -1;
+  }
+  let selfHeal = -1;
+  try {
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM self_heal_actions");
+    selfHeal = g && g.length ? g[0].c : 0;
+  } catch (e) {
+    selfHeal = -1;
+  }
+  let openIssues = -1;
+  try {
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
+    openIssues = g && g.length ? g[0].c : 0;
+  } catch (e) {
+    openIssues = -1;
+  }
+  const drift = integration ? integration.drift : { ghost: 0, unregistered: 0, unversioned: 0 };
+  const driftTotal = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
+  return {
+    human_open: humanOpen,
+    self_heal_total: selfHeal,
+    open_issues: openIssues,
+    drift_total: driftTotal,
+    drift,
+    loa: humanOpen === 0 ? "8" : "5",
+    loa_label: humanOpen === 0 ? "autonomous ops; novel/high-blast-radius still gated (A6/A7)" : "human-gated decisions pending",
+    agi: "L3 Agents",
+    vsm: "S1-S3 present, S4 partial, S5 external",
+    ooda: "closed loop, 15-min cadence",
+    watchmaker: humanOpen === 0 ? "0 human-gated ops" : humanOpen + " open",
+    top: "human-level: LoA 10 / AGI L5 / VSM S1-S5 internalized"
+  };
+}
+__name(reportCardData, "reportCardData");
+function reportCardHtml(rc) {
+  if (!rc) return "";
+  const h = [];
+  h.push("<h2>Systems report card (autonomy + intelligence)</h2>");
+  h.push('<div class="sub">Scored against citable frameworks (Sheridan-Verplanck LoA, Beer VSM, OpenAI/DeepMind AGI levels, OODA). TOP of scale = human-level autonomy + independent decision-making. Canonical: qnfo-ops/docs/SYSTEMS-REPORT-CARD.md</div>');
+  h.push("<table><tr><th>dimension</th><th>framework</th><th>level</th><th>top of scale</th></tr>");
+  h.push("<tr><td>Decision authority</td><td>Sheridan-Verplanck LoA</td><td>LoA " + rc.loa + " (" + esc(rc.loa_label) + ")</td><td>LoA 10</td></tr>");
+  h.push("<tr><td>Intelligence</td><td>OpenAI/DeepMind levels</td><td>" + rc.agi + "</td><td>L5 Organization</td></tr>");
+  h.push("<tr><td>Organizational viability</td><td>Beer VSM</td><td>" + esc(rc.vsm) + "</td><td>S1-S5 closed, S5 internalized</td></tr>");
+  h.push("<tr><td>Decision cycle</td><td>OODA</td><td>" + esc(rc.ooda) + "</td><td>closed, real-time</td></tr>");
+  h.push("</table>");
+  h.push('<div class="chips">');
+  h.push(rc.human_open === 0 ? chip("ok", "human-gated ops: 0") : chip("warn", "human-gated ops: " + rc.human_open));
+  h.push(rc.self_heal_total >= 0 ? chip("info", "self-heal actions: " + rc.self_heal_total) : chip("warn", "self-heal: n/a"));
+  h.push(rc.open_issues >= 0 ? rc.open_issues === 0 ? chip("ok", "open agent issues: 0") : chip("warn", "open agent issues: " + rc.open_issues) : chip("warn", "issues: n/a"));
+  h.push(rc.drift_total > 0 ? chip("warn", "drift divergence: " + rc.drift_total) : chip("ok", "drift divergence: 0"));
+  h.push("</div>");
+  h.push('<div class="sub">Objective function (Watchmaker): human-intervention -> 0; drift -> 0; self-heal -> 1. Next level: ' + esc(rc.top) + ". Highest-leverage gap: normalize service_registry.version to semver (currently " + rc.drift.unversioned + " unversioned).</div>");
+  return h.join("");
+}
+__name(reportCardHtml, "reportCardHtml");
 function integrationHtml(ig) {
   if (!ig) return "";
   const h = [];
@@ -1771,6 +1835,20 @@ function integrationHtml(ig) {
   for (const hb of ig.hubs) h.push("<tr><td>" + esc(hb.service) + "</td><td>" + hb.out + "</td><td>" + hb.in + "</td></tr>");
   h.push("</table>");
   if (ig.islands.length) h.push('<h2>Islands (no declared in/out edge)</h2><div class="sub">' + esc(ig.islands.join(", ")) + "</div>");
+  h.push("<h2>Flow chains (transformation health)</h2>");
+  h.push("<table><tr><th>chain</th><th>state</th><th>signals</th></tr>");
+  for (const ch of st.chains || []) {
+    h.push("<tr><td><b>" + esc(ch.label) + '</b><div class="sub">' + esc((ch.stages || []).join(" -> ")) + "</div></td><td>" + chip(ch.state, ch.state) + "</td><td>" + ch.results.map(function(r) {
+      return esc(r.label) + "=" + (r.n === null ? "err" : r.n) + (r.state !== "ok" ? ' <b style="color:#d29922">!</b>' : "");
+    }).join(" &middot; ") + "</td></tr>");
+  }
+  h.push("</table>");
+  const opp2 = st.integration_opportunities || [];
+  if (opp2.length) {
+    h.push("<h2>Consolidation roadmap (curated)</h2><ul>");
+    for (const o of opp2) h.push("<li><b>" + esc(o.label) + "</b> &mdash; " + esc(o.note) + ' <span class="sub">[' + (o.workers || []).length + " workers]</span></li>");
+    h.push("</ul>");
+  }
   return h.join("");
 }
 __name(integrationHtml, "integrationHtml");
@@ -1788,7 +1866,7 @@ function chip(state, text) {
   return '<span class="chip chip-' + chipClass(state) + '">' + esc(text == null ? state : text) + "</span>";
 }
 __name(chip, "chip");
-function pageHtml(st) {
+function pageHtml(st2) {
   const h = [];
   h.push('<!doctype html><html lang="en"><head><meta charset="utf-8"/>');
   h.push('<meta http-equiv="refresh" content="90"/><meta name="viewport" content="width=device-width, initial-scale=1"/>');
@@ -1805,40 +1883,40 @@ function pageHtml(st) {
   h.push(".dot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:4px}");
   h.push(".dot-ok{background:#3fb950}.dot-err{background:#f85149}.dot-warn{background:#d29922}.dot-idle{background:#6e7681}");
   h.push("</style></head><body>");
-  const totalOk = st.scheduled.filter(function(x) {
+  const totalOk = st2.scheduled.filter(function(x) {
     return x.status === "OK";
   }).length;
-  const totalErr = st.scheduled.filter(function(x) {
+  const totalErr = st2.scheduled.filter(function(x) {
     return x.status === "ERR";
   }).length;
-  const totalNoRun = st.scheduled.filter(function(x) {
+  const totalNoRun = st2.scheduled.filter(function(x) {
     return x.status === "NO-RUN";
   }).length;
-  const probeOk = st.probes.filter(function(p) {
+  const probeOk = st2.probes.filter(function(p) {
     return p.ok;
   }).length;
-  h.push('<h1>QNFO Fleet Dashboard <span class="sub">v' + esc(st.version) + "</span></h1>");
-  h.push('<div class="sub">generated ' + esc(st.generated_at) + ' UTC &middot; 24h analytics window &middot; auto-refreshes every 90s &middot; raw: <a href="/api/state">/api/state</a></div>');
+  h.push('<h1>QNFO Fleet Dashboard <span class="sub">v' + esc(st2.version) + "</span></h1>");
+  h.push('<div class="sub">generated ' + esc(st2.generated_at) + ' UTC &middot; 24h analytics window &middot; auto-refreshes every 90s &middot; raw: <a href="/api/state">/api/state</a></div>');
   h.push('<div class="chips">');
-  h.push(chip("info", st.fleet.workers + " workers active"));
-  h.push(chip("info", st.fleet.scheduled + " scheduled"));
-  h.push(chip("info", st.fleet.d1_databases + " D1"));
-  h.push(chip("info", st.totals.req24 + " req/24h"));
-  h.push(st.totals.err24 > 0 ? chip("err", st.totals.err24 + " errors/24h") : chip("ok", "0 errors/24h"));
-  h.push(probeOk === st.probes.length ? chip("ok", probeOk + "/" + st.probes.length + " probes up") : chip("warn", probeOk + "/" + st.probes.length + " probes up"));
+  h.push(chip("info", st2.fleet.workers + " workers active"));
+  h.push(chip("info", st2.fleet.scheduled + " scheduled"));
+  h.push(chip("info", st2.fleet.d1_databases + " D1"));
+  h.push(chip("info", st2.totals.req24 + " req/24h"));
+  h.push(st2.totals.err24 > 0 ? chip("err", st2.totals.err24 + " errors/24h") : chip("ok", "0 errors/24h"));
+  h.push(probeOk === st2.probes.length ? chip("ok", probeOk + "/" + st2.probes.length + " probes up") : chip("warn", probeOk + "/" + st2.probes.length + " probes up"));
   h.push(chip(totalErr > 0 ? "err" : "ok", totalErr + " scheduled w/ errors"));
   h.push(chip(totalNoRun > 0 ? "warn" : "ok", totalNoRun + " no-run"));
   h.push("</div>");
-  if (st.issues && st.issues.length) {
-    h.push('<div class="card"><h2>Attention (' + st.issues.length + ")</h2><ul>");
-    for (const i of st.issues) h.push('<li class="issue-' + esc(i.sev) + '">' + esc(i.text) + "</li>");
+  if (st2.issues && st2.issues.length) {
+    h.push('<div class="card"><h2>Attention (' + st2.issues.length + ")</h2><ul>");
+    for (const i of st2.issues) h.push('<li class="issue-' + esc(i.sev) + '">' + esc(i.text) + "</li>");
     h.push("</ul></div>");
   } else {
     h.push('<div class="card"><h2>Attention</h2><div>No active error or warning conditions detected by this cycle.</div></div>');
   }
   h.push("<h2>Scheduled workers (next runs UTC)</h2>");
   h.push("<table><tr><th>status</th><th>worker</th><th>purpose</th><th>cron(s)</th><th>next runs</th><th>24h inv</th><th>24h err</th><th>exp fires</th><th>modified</th><th>last run</th></tr>");
-  for (const s of st.scheduled) {
+  for (const s of st2.scheduled) {
     const dotc = s.status === "ERR" ? "err" : s.status === "OK" ? "ok" : s.status === "NO-RUN" ? "warn" : "idle";
     h.push('<tr><td><span class="dot dot-' + dotc + '"></span>' + esc(s.status) + "</td>");
     h.push("<td>" + esc(s.name) + "</td><td>" + esc(s.purpose) + ' <span class="sub">(' + esc(s.group) + ")</span></td>");
@@ -1853,31 +1931,32 @@ function pageHtml(st) {
   h.push("</table>");
   h.push("<h2>Pipeline audits (D1 qnfo-audit + outreach + living-paper)</h2>");
   h.push("<table><tr><th>state</th><th>probe</th><th>detail</th><th>latest</th></tr>");
-  for (const a of st.audits) {
+  for (const a of st2.audits) {
     h.push("<tr><td>" + chip(a.state, a.state) + "</td><td>" + esc(a.label) + "</td><td>" + esc(a.detail) + '</td><td class="sub">' + esc(a.ts ? String(a.ts).slice(0, 19) : "") + "</td></tr>");
   }
   h.push("</table>");
   h.push("<h2>Endpoint probes</h2>");
   h.push("<table><tr><th>status</th><th>name</th><th>url</th><th>http</th><th>ms</th><th>body sample</th></tr>");
-  for (const p of st.probes) {
+  for (const p of st2.probes) {
     h.push("<tr><td>" + (p.ok ? chip("ok", "UP") : chip("warn", "DOWN")) + "</td><td>" + esc(p.name) + "</td><td>" + esc(p.url) + "</td><td>" + p.status + "</td><td>" + p.ms + '</td><td class="sub">' + esc(p.body) + "</td></tr>");
   }
   h.push("</table>");
-  h.push(integrationHtml(st.integration));
+  h.push(integrationHtml(st2.integration));
+  h.push(reportCardHtml(st2.report_card));
   h.push("<h2>Device-bound (Windows Task Scheduler + DeepChat local cron) - front-end only</h2>");
-  h.push('<div class="sub">captured ' + esc(st.device.captured_at || "") + " UTC &middot; " + esc(st.device.note || "") + " &middot; cloud-able functions run in the CF scheduled layer, never local cron (CLOUD-FRONTEND-ONLY-1)</div>");
+  h.push('<div class="sub">captured ' + esc(st2.device.captured_at || "") + " UTC &middot; " + esc(st2.device.note || "") + " &middot; cloud-able functions run in the CF scheduled layer, never local cron (CLOUD-FRONTEND-ONLY-1)</div>");
   h.push("<table><tr><th>task</th><th>status</th><th>last run</th><th>last result</th><th>next run</th><th>schedule</th></tr>");
-  for (const t of st.device.windows_tasks) {
+  for (const t of st2.device.windows_tasks) {
     const stc = t.status === "Ready" ? "ok" : "warn";
     h.push("<tr><td>" + esc(t.name) + "</td><td>" + chip(stc, t.status) + "</td><td>" + esc(t.last || "") + "</td><td>" + esc(t.lastres || "") + "</td><td>" + esc(t.next || "") + "</td><td>" + esc(t.schedule || "") + "</td></tr>");
   }
   h.push("</table>");
-  if (st.device.local_crons && st.device.local_crons.length) {
+  if (st2.device.local_crons && st2.device.local_crons.length) {
     h.push("<table><tr><th>local cron id</th><th>name</th><th>schedule</th><th>note</th></tr>");
-    for (const lc of st.device.local_crons) h.push("<tr><td>" + esc(lc.id) + "</td><td>" + esc(lc.name) + "</td><td>" + esc(lc.cron) + '</td><td class="sub">' + esc(lc.note) + "</td></tr>");
+    for (const lc of st2.device.local_crons) h.push("<tr><td>" + esc(lc.id) + "</td><td>" + esc(lc.name) + "</td><td>" + esc(lc.cron) + '</td><td class="sub">' + esc(lc.note) + "</td></tr>");
     h.push("</table>");
   }
-  h.push('<div class="sub" style="margin-top:14px">guard set: prompt-store-verify / scheduler-guard / model_guard / adversarial-guard (exit 0 each cycle) &middot; registry captured ' + esc(st.meta.registry_captured_at || "") + " UTC</div>");
+  h.push('<div class="sub" style="margin-top:14px">guard set: prompt-store-verify / scheduler-guard / model_guard / adversarial-guard (exit 0 each cycle) &middot; registry captured ' + esc(st2.meta.registry_captured_at || "") + " UTC</div>");
   h.push("</body></html>");
   return h.join("");
 }
@@ -1891,14 +1970,14 @@ async function handleRequest(request, env, ctx) {
     return json({ ok: true, worker: NAME, version: VERSION, registry_captured_at: REGISTRY.captured_at || null, generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
   if (path === "/api/refresh") {
-    const st = await runRefresh(env, ctx);
-    return json({ ok: true, generated_at: st.generated_at, issues: (st.issues || []).length, refresh_ms: st.refresh_ms });
+    const st2 = await runRefresh(env, ctx);
+    return json({ ok: true, generated_at: st2.generated_at, issues: (st2.issues || []).length, refresh_ms: st2.refresh_ms });
   }
   if (path === "/api/state") {
     const rec = await loadState(env);
     if (!rec) {
-      const st = await runRefresh(env, ctx);
-      return json(st);
+      const st2 = await runRefresh(env, ctx);
+      return json(st2);
     }
     const age = Date.now() - new Date(rec.updatedAt).getTime();
     if (age > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
@@ -1907,24 +1986,24 @@ async function handleRequest(request, env, ctx) {
   }
   if (path === "/api/integration") {
     const rec = await loadState(env);
-    const st = rec ? rec.state : await runRefresh(env, ctx);
-    return json(st.integration || { error: "no integration data" });
+    const st2 = rec ? rec.state : await runRefresh(env, ctx);
+    return json(st2.integration || { error: "no integration data" });
   }
   if (path === "/" || path === "") {
     const rec = await loadState(env);
-    let st = rec ? rec.state : null;
-    if (!st) {
+    let st2 = rec ? rec.state : null;
+    if (!st2) {
       try {
-        st = await runRefresh(env, ctx);
+        st2 = await runRefresh(env, ctx);
       } catch (e) {
-        st = { error: String(e.message || e), generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION, fleet: { workers: 0, scheduled: 0, probes: 0, d1_databases: 9 }, totals: { req24: 0, err24: 0 }, scheduled: [], audits: [], probes: [], device: { captured_at: REGISTRY.captured_at, note: REGISTRY.note, windows_tasks: REGISTRY.windows_tasks || [], local_crons: REGISTRY.local_crons || [] }, issues: [{ sev: "err", text: "refresh failed: " + String(e.message || e) }], meta: {} };
+        st2 = { error: String(e.message || e), generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION, fleet: { workers: 0, scheduled: 0, probes: 0, d1_databases: 9 }, totals: { req24: 0, err24: 0 }, scheduled: [], audits: [], probes: [], device: { captured_at: REGISTRY.captured_at, note: REGISTRY.note, windows_tasks: REGISTRY.windows_tasks || [], local_crons: REGISTRY.local_crons || [] }, issues: [{ sev: "err", text: "refresh failed: " + String(e.message || e) }], meta: {} };
       }
     } else {
       const age = Date.now() - new Date(rec.updatedAt).getTime();
       if (age > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
       }));
     }
-    return new Response(pageHtml(st), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    return new Response(pageHtml(st2), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
   return json({ error: "not found", path }, 404);
 }
@@ -1933,10 +2012,10 @@ async function runRefresh(env, ctx) {
   if (inflight) return inflight;
   inflight = (async function() {
     const t0 = Date.now();
-    const st = await buildState(env, ctx);
-    st.refresh_ms = Date.now() - t0;
-    await saveState(env, st, st.refresh_ms);
-    return st;
+    const st2 = await buildState(env, ctx);
+    st2.refresh_ms = Date.now() - t0;
+    await saveState(env, st2, st2.refresh_ms);
+    return st2;
   })().finally(function() {
     inflight = null;
   });
@@ -1953,8 +2032,8 @@ var worker_default = {
   },
   async scheduled(controller, env, ctx) {
     try {
-      const st = await runRefresh(env, ctx);
-      return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
+      const st2 = await runRefresh(env, ctx);
+      return new Response("ok generated " + st2.generated_at + " issues " + (st2.issues || []).length);
     } catch (e) {
       return new Response("err " + String(e.message || e), { status: 500 });
     }

@@ -10,7 +10,7 @@
 
 import { FLEET } from './fleet.js';
 
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -44,6 +44,7 @@ async function ensureSchema(env) {
   await env.AUDIT.prepare('CREATE INDEX IF NOT EXISTS idx_worker_logs_script_ts ON worker_logs(script_name, ts_ms)').run();
   await env.AUDIT.prepare('CREATE INDEX IF NOT EXISTS idx_worker_logs_ts ON worker_logs(ts_ms)').run();
   await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS trace_ingest_state (k TEXT PRIMARY KEY, v TEXT)').run();
+  await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS integration_state (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, json TEXT)').run();
 }
 
 // PRECONDITION: schema ensured. POSTCONDITION: cursor key persisted.
@@ -183,12 +184,153 @@ async function logEvent(env, body, req) {
   return json({ ok: true, hash: row.hash });
 }
 
+// === SYSTEM INTEGRATION ASSESSMENT (v1.1.0) ===
+// Purpose: measure the fleet as a SYSTEM - cross-worker chains (producer -> consumer -> medium),
+// feedback-loop closure, entropy/decay of the system's own bookkeeping, and integration opportunities.
+// A worker can be alive while its chain is broken; this layer makes that visible.
+
+function ageHours(iso) {
+  if (!iso) return null;
+  const t = Date.parse(String(iso));
+  if (isNaN(t)) return null;
+  return Math.max(0, (Date.now() - t) / 3600000);
+}
+
+// Chain definitions: { id, name, producer, consumer, medium, sql, max, minOk, want }
+// max: pending-items ceiling (above = backpressure/stuck); minOk: minimum expected activity (below = degraded);
+// sql must return at least {n} and may return {oldest} or {latest} as timestamp text.
+const INTEGRATION_CHAINS = [
+  { id: 'fleet-pulse', name: 'Scheduler -> Executor pulse', producer: 'fleet-scheduler', consumer: 'fleet-executor', medium: 'fleet_runs',
+    sql: "SELECT COUNT(*) n, MAX(started_at) latest FROM fleet_runs WHERE started_at >= datetime('now','-15 minutes')",
+    max: null, minOk: 3, want: '>=3 pulse runs / 15min (heartbeat closed loop)' },
+  { id: 'errata', name: 'Errata watch -> respond -> publish', producer: 'errata-watch / email', consumer: 'errata-respond / errata-publish', medium: 'errata_queue',
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM errata_queue WHERE status != 'done' AND status != 'published' AND status != 'resolved' AND status != 'superseded'",
+    max: 10, minOk: null, want: 'pending <= 10' },
+  { id: 'ideas', name: 'Idea intake -> triage', producer: 'edge form / idea-miner / auto-scan', consumer: 'idea-triage', medium: 'idea_proposals',
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM idea_proposals WHERE status = 'new'",
+    max: 30, minOk: null, want: 'new <= 30' },
+  { id: 'intents', name: 'Intent intake -> orchestrator', producer: 'calendar-api / edge', consumer: 'qnfo-intent-orchestrator', medium: 'intents',
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM intents WHERE status = 'pending'",
+    max: 20, minOk: null, want: 'pending <= 20' },
+  { id: 'version-drain', name: 'Reviser -> research-exec publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'version_queue',
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM version_queue WHERE status = 'drafted'",
+    max: 5, minOk: null, want: 'drafted <= 5' },
+  { id: 'outreach', name: 'Outreach queue -> campaign engine', producer: 'register / ops', consumer: 'qnfo-outreach', medium: 'outreach_queue',
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status = 'pending'",
+    max: 20, minOk: null, want: 'pending <= 20' },
+  { id: 'issues', name: 'Chat failures -> kaizen digest', producer: 'ops gateway', consumer: 'qnfo-kaizen', medium: 'agent_issues',
+    sql: "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'",
+    max: 10, minOk: null, want: 'open <= 10' },
+  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: 'ops digest', medium: 'alerts',
+    sql: "SELECT COUNT(*) n FROM alerts WHERE digested = 0",
+    max: 5, minOk: null, want: 'undigested <= 5' },
+  { id: 'email', name: 'Inbound email -> triage', producer: 'SMTP gateway', consumer: 'qnfo-email workers', medium: 'emails',
+    sql: "SELECT COUNT(*) n FROM emails WHERE status = 'received'",
+    max: 10, minOk: null, want: 'unprocessed <= 10' },
+  { id: 'research', name: 'Research queue -> execution', producer: 'supervisor / radars', consumer: 'qnfo-research-exec', medium: 'research_queue',
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('queued','active')",
+    max: 10, minOk: null, want: 'queued/active <= 10' },
+  { id: 'revisions', name: 'Revision log -> publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'paper_revision_log',
+    sql: "SELECT COUNT(*) n FROM paper_revision_log WHERE status = 'queued'",
+    max: 8, minOk: null, want: 'queued <= 8' },
+];
+
+// PRECONDITION: schema ensured. POSTCONDITION: integration_state row appended with latest assessment.
+async function assessIntegration(env) {
+  const chains = [];
+  for (let i = 0; i < INTEGRATION_CHAINS.length; i++) {
+    const c = INTEGRATION_CHAINS[i];
+    const st = { id: c.id, name: c.name, producer: c.producer, consumer: c.consumer, medium: c.medium, status: 'unknown', n: null, oldest_h: null, detail: '' };
+    try {
+      const r = await env.AUDIT.prepare(c.sql).first();
+      if (r) {
+        st.n = r.n == null ? null : Number(r.n);
+        st.oldest_h = ageHours(r.oldest || r.latest);
+        if (c.max != null && st.n > c.max) { st.status = 'stuck'; st.detail = 'backpressure: ' + st.n + ' waiting (' + c.want + ')'; }
+        else if (c.minOk != null && st.n < c.minOk) { st.status = 'degraded'; st.detail = 'below expected activity (' + c.want + ')'; }
+        else { st.status = 'healthy'; st.detail = c.want; }
+      } else {
+        st.n = 0; st.status = c.minOk != null ? 'degraded' : 'healthy';
+        st.detail = c.minOk != null ? 'no activity in window (' + c.want + ')' : c.want;
+      }
+    } catch (e) {
+      st.detail = 'query error: ' + String(e && e.message ? e.message : e).slice(0, 70);
+    }
+    chains.push(st);
+  }
+  let probed = [], traced = [], invocated = [];
+  try { const r = await env.AUDIT.prepare("SELECT DISTINCT name FROM fleet_probe_log").all(); probed = (r.results || []).map(function (x) { return x.name; }); } catch (e) {}
+  try { const r = await env.AUDIT.prepare("SELECT DISTINCT script_name FROM worker_logs").all(); traced = (r.results || []).map(function (x) { return x.script_name; }); } catch (e) {}
+  try { const r = await env.AUDIT.prepare("SELECT DISTINCT worker_name FROM worker_invocations").all(); invocated = (r.results || []).map(function (x) { return x.worker_name; }); } catch (e) {}
+  const probedSet = new Set(probed), tracedSet = new Set(traced), invocatedSet = new Set(invocated);
+  const fleetSize = FLEET.length;
+  const coverage = {
+    fleet_size: fleetSize,
+    probed: probedSet.size,
+    invocated: invocatedSet.size,
+    traced: tracedSet.size,
+    probe_gap: FLEET.filter(function (w) { return !probedSet.has(w); }).length,
+    trace_gap: FLEET.filter(function (w) { return !tracedSet.has(w); }).length,
+  };
+  const decaySignals = [
+    ['cloud_ops_events', 'SELECT MAX(ts) latest FROM cloud_ops_events'],
+    ['fleet_probe_log', 'SELECT MAX(ts) latest FROM fleet_probe_log'],
+    ['ops_ai_log', 'SELECT MAX(ts) latest FROM ops_ai_log'],
+    ['deployment_history', 'SELECT MAX(ts) latest FROM deployment_history'],
+    ['self_heal_actions', 'SELECT MAX(ts) latest FROM self_heal_actions'],
+    ['issue_ledger', 'SELECT MAX(last_seen) latest FROM issue_ledger'],
+  ];
+  const decay = [];
+  for (let i = 0; i < decaySignals.length; i++) {
+    const ds = decaySignals[i];
+    try {
+      const r = await env.AUDIT.prepare(ds[1]).first();
+      decay.push({ signal: ds[0], age_h: ageHours(r && r.latest) });
+    } catch (e) {
+      decay.push({ signal: ds[0], age_h: null, error: String(e && e.message ? e.message : e).slice(0, 50) });
+    }
+  }
+  const opportunities = [];
+  for (let i = 0; i < chains.length; i++) {
+    const c = chains[i];
+    if (c.status === 'stuck') opportunities.push({ kind: 'backpressure', chain: c.id, text: c.name + ': ' + c.detail + ' (oldest ' + (c.oldest_h == null ? '?' : c.oldest_h.toFixed(1)) + 'h)' });
+    if (c.status === 'degraded') opportunities.push({ kind: 'low-activity', chain: c.id, text: c.name + ': ' + c.detail });
+    if (c.oldest_h != null && c.oldest_h > 72 && c.status === 'healthy') opportunities.push({ kind: 'stale-item', chain: c.id, text: c.name + ': oldest pending item ' + c.oldest_h.toFixed(1) + 'h old (under count ceiling but stale)' });
+  }
+  if (coverage.probe_gap > 0) opportunities.push({ kind: 'coverage', text: coverage.probe_gap + ' of ' + fleetSize + ' workers have no liveness probe' });
+  if (coverage.trace_gap > 0) opportunities.push({ kind: 'trace-gap', text: 'Logpush trace coverage: ' + coverage.traced + '/' + fleetSize + ' workers emit trace events' });
+  const noSignal = FLEET.filter(function (w) { return !probedSet.has(w) && !tracedSet.has(w) && !invocatedSet.has(w); });
+  if (noSignal.length > 0) opportunities.push({ kind: 'integration-candidate', text: noSignal.length + ' workers emit no probe/trace/invocation signal: ' + noSignal.slice(0, 8).join(', ') + (noSignal.length > 8 ? ', ...' : '') });
+  const chainVals = chains.filter(function (c) { return c.status === 'healthy' || c.status === 'stuck' || c.status === 'degraded'; });
+  const chainScore = chainVals.length ? chainVals.reduce(function (a, c) { return a + (c.status === 'healthy' ? 1 : c.status === 'degraded' ? 0.5 : 0); }, 0) / chainVals.length : null;
+  const coverageScore = Math.min(1, (coverage.probed / Math.max(1, fleetSize)) * 0.6 + (coverage.traced / Math.max(1, fleetSize)) * 0.4);
+  const decVals = decay.filter(function (d) { return d.age_h != null; });
+  const freshnessScore = decVals.length ? decVals.reduce(function (a, d) { return a + Math.max(0, 1 - d.age_h / 48); }, 0) / decVals.length : null;
+  let total = null;
+  if (chainScore != null && freshnessScore != null) {
+    total = Math.round(100 * (0.5 * chainScore + 0.3 * coverageScore + 0.2 * freshnessScore));
+  }
+  const score = {
+    total: total,
+    chains: chainScore == null ? null : Math.round(chainScore * 100),
+    coverage: Math.round(coverageScore * 100),
+    freshness: freshnessScore == null ? null : Math.round(freshnessScore * 100),
+    weights: 'chains 50% / coverage 30% / freshness 20%',
+  };
+  const summary = { generated_at: new Date().toISOString(), version: VERSION, fleet_size: fleetSize, chains: chains, coverage: coverage, decay: decay, opportunities: opportunities, score: score };
+  try {
+    await env.AUDIT.prepare('INSERT INTO integration_state (ts, json) VALUES (?, ?)').bind(summary.generated_at, JSON.stringify(summary)).run();
+  } catch (e) {}
+  return summary;
+}
+
 export default {
   // PRECONDITION: cron trigger 17 * * * *. POSTCONDITION: ingest + digest executed hourly, server-side.
   async scheduled(controller, env, ctx) {
     await ensureSchema(env);
     const r = await ingestTrace(env);
     const summary = await digest(env, r);
+    await assessIntegration(env);
     ctx.waitUntil(Promise.resolve());
   },
 
@@ -200,6 +342,10 @@ export default {
       const cursor = await getCursor(env);
       const agg = await env.AUDIT.prepare('SELECT COUNT(*) n, MAX(ingested_at) latest FROM worker_logs').first();
       return json({ ok: true, name: NAME, version: VERSION, cursor, log_rows: agg ? agg.n : 0, latest_ingest: agg ? agg.latest : null });
+    }
+    if (p === '/integration') {
+      const summary = await assessIntegration(env);
+      return json({ ok: true, integration: summary });
     }
     if (p === '/run/ingest') {
       const r = await ingestTrace(env);
