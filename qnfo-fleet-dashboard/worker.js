@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.13';
+const VERSION = '1.0.14';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -360,7 +360,7 @@ async function buildState(env, ctx) {
   });
   // 12 outreach sent log
   await safeAudit('outreach_sent', 'Outreach sent_log', async function () {
-    const g = await d1all(env.OUTREACH, 'SELECT status, COUNT(*) AS c FROM sent_log GROUP BY status ORDER BY c DESC LIMIT 8');
+    const g = await d1all(env.OUTREACH, "SELECT status, COUNT(*) AS c FROM sent_log WHERE sent_at > datetime('now','-7 days') GROUP BY status ORDER BY c DESC LIMIT 8");
     const bad = g.filter(function (r) { return failish(r.status); }).reduce(function (a, r) { return a + r.c; }, 0);
     push({ key: 'outreach_sent', label: 'Outreach sent_log', state: bad > 0 ? 'warn' : 'info', detail: JSON.stringify(g) + (bad ? '; FAILED-LIKE ' + bad : ''), ts: null });
   });
@@ -386,7 +386,7 @@ async function buildState(env, ctx) {
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
     let st;
     if (per.errors > 0) st = 'ERR';
-    else if (exp > 0 && per.requests === 0) st = 'NO-RUN';
+    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt) st = 'NO-RUN';
     else if (per.requests > 0) st = 'OK';
     else st = 'IDLE';
     scheduled.push({

@@ -510,7 +510,9 @@ export const REGISTRY = {
    ],
    "purpose": "Dynamic cron dispatcher (D1 fleet_crons)",
    "group": "fleet",
-   "modified_on": "2026-09-10T07:00:00.000000Z"
+   "modified_on": "2026-09-10T07:00:00.000000Z",
+   "no_run_exempt": true,
+   "note": "cron-only worker; activity ledger = qnfo-audit.fleet_runs (adaptive GraphQL sampling undercounts)"
   }
  ],
  "windows_tasks": [
