@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.7.2";
+var VERSION = "0.9.0";
 var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -255,18 +255,22 @@ function userPrompt(rec, withText) {
 function decisionFrom(parsedList, basis) {
   var avgs = [];
   var fatal = false;
+  var fatalTexts = [];
   var anyLowConfidence = false;
   for (var i = 0; i < parsedList.length; i++) {
     var p = parsedList[i];
     if (!p) continue;
     var sc = (clampScore(p.score_soundness) + clampScore(p.score_novelty) + clampScore(p.score_clarity) + clampScore(p.score_reproducibility)) / 4;
     avgs.push(sc);
-    if (arrOf(p.fatal_flaws).length) fatal = true;
+    if (arrOf(p.fatal_flaws).length) { fatal = true; var ff = arrOf(p.fatal_flaws); for (var fj = 0; fj < ff.length; fj++) fatalTexts.push(String(ff[fj])); }
     if (String(p.confidence || "") === "low") anyLowConfidence = true;
   }
   if (!avgs.length) return { decision: "ERROR", avg: 0, fatal: false, disagreement: false, reason: "no model output parsed" };
   var avg = avgs.reduce(function (a, b) { return a + b; }, 0) / avgs.length;
   var disagreement = avgs.length > 1 && Math.abs(avgs[0] - avgs[1]) >= 2.5;
+  // JNL-P3 escape reachability (2026-09-10): a fatal flaw whose wording IS the speculation guard
+  // is the same objection as `speculative`, so it must not bypass the second-pass escape.
+  var fatalSpecOnly = fatal && fatalTexts.length > 0 && fatalTexts.every(function (t) { return SPECULATIVE_RE.test(t); });
   var decision;
   var minAvg = Math.min.apply(null, avgs);
   var maxAvg = Math.max.apply(null, avgs);
@@ -275,13 +279,13 @@ function decisionFrom(parsedList, basis) {
   var speculative = parsedList.some(function (p) {
     if (!p) return false;
     var txt = arrOf(p.weaknesses).concat(arrOf(p.limitations_of_review), arrOf(p.fatal_flaws)).join(" ").toLowerCase();
-    return /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/.test(txt);
+    return SPECULATIVE_RE.test(txt);
   });
   if (fatal || avg < 4) decision = "REJECT";
   else if (basis !== "text") decision = "REVISE"; // metadata-only can never PUBLISH (anti rubber-stamp)
   else if (avg >= 7.5 && minAvg >= 6 && !anyLowConfidence && !speculative) decision = "PUBLISH";
   else decision = "REVISE";
-  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, disagreement: disagreement, speculative: speculative, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " speculative=" + speculative + " basis=" + basis + " lowconf=" + anyLowConfidence };
+  return { decision: decision, avg: Math.round(avg * 100) / 100, fatal: fatal, fatal_spec_only: fatalSpecOnly, disagreement: disagreement, speculative: speculative, min_avg: minAvg, max_avg: maxAvg, low_confidence: anyLowConfidence, reason: "avg=" + Math.round(avg * 100) / 100 + " min=" + minAvg + " max=" + maxAvg + " fatal=" + fatal + " fatal_spec_only=" + fatalSpecOnly + " speculative=" + speculative + " basis=" + basis + " lowconf=" + anyLowConfidence };
 }
 
 function buildReport(rec, parsedList, dec, modelsUsed, basis) {
@@ -329,21 +333,13 @@ async function runReview(env, recid, manual) {
     await log(env, recid, "run", "record fetch failed");
     return { ok: false, recid: recid, error: String(e && e.message || e).slice(0, 300) };
   }
-  var basis = rec.text && rec.text.length >= 200 ? "text" : "metadata";
-  var parsedList = [];
-  var modelsUsed = [];
-  var sys = reviewerSystem("an adversarial-but-fair referee");
-  var usr = userPrompt(rec, basis === "text");
-  for (var i = 0; i < models.length; i++) {
-    try {
-      var outTxt = await aiRun(env, models[i], sys, usr);
-      var p = parseJsonObject(outTxt);
-      if (p) { parsedList.push(p); modelsUsed.push(models[i]); }
-      else { await log(env, recid, "parse", "model " + models[i] + " returned non-JSON len=" + outTxt.length); }
-    } catch (e) {
-      await log(env, recid, "model_error", "model " + models[i] + " :: " + String(e && e.message || e).slice(0, 300));
-    }
-  }
+  // JNL-DRIFT-1 (2026-09-10): the model-scoring step is extracted so that production reviews AND
+  // reproducibility re-scores share one code path. A separate path would make drift measurement
+  // measure something other than what it claims to measure.
+  var scored = await scoreOnce(env, rec, models, recid);
+  var basis = scored.basis;
+  var parsedList = scored.parsedList;
+  var modelsUsed = scored.modelsUsed;
   if (!parsedList.length) {
     await env.AUDIT.prepare("INSERT INTO jnl_reviews (recid, status, basis, text_chars, error, ran_at) VALUES (?, 'error', ?, ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET status='error', basis=excluded.basis, text_chars=excluded.text_chars, error=excluded.error, ran_at=excluded.ran_at").bind(recid, basis, rec.text_chars, "no model produced parseable JSON", nowIso).run();
     return { ok: false, recid: recid, error: "no model produced parseable JSON" };
@@ -445,7 +441,15 @@ async function handleScheduled(env) {
       ran.push({ recid: recid, ok: !!res.ok, decision: res.decision || null });
       processed++;
     }
-    return { ok: true, seeded: seeded, ran: ran, budget: budget };
+    var drift = null;
+    try {
+      var nowD = new Date();
+      if (nowD.getUTCDay() === 1 && nowD.getUTCHours() === 3) {
+        var bd = await dailyBudgetOk(env);
+        if (bd.ok) drift = await driftSample(env, 3);
+      }
+    } catch (e) { drift = { error: String(e && e.message || e).slice(0, 200) }; }
+    return { ok: true, seeded: seeded, ran: ran, budget: budget, drift: drift };
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }
@@ -463,7 +467,7 @@ var index_default = {
     try {
       if (path === "/health") {
         var schema = await ensureSchema(env);
-        var counts = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_reviews) AS reviews, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE speculative=1) AS speculative_flagged, (SELECT MAX(ran_at) FROM jnl_reviews) AS last_run").first();
+        var counts = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_reviews) AS reviews, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE speculative=1) AS speculative_flagged, (SELECT COUNT(*) FROM jnl_drift) AS drift_runs, (SELECT COUNT(*) FROM jnl_drift WHERE decision_changed=1) AS drift_flips, (SELECT COALESCE(SUM(citation_count),0) FROM jnl_records) AS total_citations, (SELECT MAX(ran_at) FROM jnl_reviews) AS last_run").first();
         return json({ ok: true, service: "jnl-referee", version: VERSION, build: BUILD, schema: schema, counts: counts, models: String(env.JNL_MODELS || MODELS_DEFAULT) });
       }
       if (path === "/queue") {
@@ -487,9 +491,14 @@ var index_default = {
         return json({ ok: true, count: rowsD.results.length, rows: rowsD.results });
       }
       if (path === "/graph") {
-        var gNodes = await env.AUDIT.prepare("SELECT recid, title FROM jnl_records ORDER BY recid").all();
+        var gNodes = await env.AUDIT.prepare("SELECT recid, title, COALESCE(citation_count,0) AS citation_count, citation_source FROM jnl_records ORDER BY recid").all();
         var gEdges = await env.AUDIT.prepare("SELECT a, b, shared, concepts FROM jnl_links ORDER BY shared DESC LIMIT 300").all();
-        return json({ ok: true, node_count: gNodes.results.length, edge_count: gEdges.results.length, nodes: gNodes.results, edges: gEdges.results });
+        var gTot = 0;
+        for (var gi = 0; gi < gNodes.results.length; gi++) gTot += Number(gNodes.results[gi].citation_count || 0);
+        // JNL-P7 (row 102): with zero external citations the edge set is concept overlap ONLY and
+        // must never be read as citation support or contrast.
+        var cStatus = gTot > 0 ? "external-citations-present" : "no-external-citations";
+        return json({ ok: true, node_count: gNodes.results.length, edge_count: gEdges.results.length, total_citations: gTot, citation_status: cStatus, edge_semantics: (gTot > 0 ? "concept overlap plus external citations" : "concept overlap only (title-term overlap); NOT citation support or contrast"), nodes: gNodes.results, edges: gEdges.results });
       }
       if (path === "/self-audit") {
         var sa = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE decision='PUBLISH') AS publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued").first();
@@ -503,6 +512,12 @@ var index_default = {
         var f2 = await env.AUDIT.prepare("UPDATE jnl_decisions SET speculative = 1 WHERE rationale LIKE '%speculative=true%'").run();
         var f3 = await env.AUDIT.prepare("UPDATE jnl_decisions SET path = 'threshold' WHERE path IS NULL").run();
         return json({ ok: true, self_review_flagged: (f1.meta && f1.meta.changes) || 0, speculative_flagged: (f2.meta && f2.meta.changes) || 0, path_defaulted: (f3.meta && f3.meta.changes) || 0, build: BUILD });
+      }
+      if (path === "/drift") {
+        var limDr = Math.min(Number(url.searchParams.get("limit") || 30), 200);
+        var dRows = await env.AUDIT.prepare("SELECT recid, checked_at, stored_decision, stored_avg, fresh_decision, fresh_avg, delta_avg, decision_changed, models, basis FROM jnl_drift ORDER BY id DESC LIMIT ?").bind(limDr).all();
+        var dSum = await env.AUDIT.prepare("SELECT COUNT(*) AS runs, SUM(decision_changed) AS flips, ROUND(AVG(delta_avg), 3) AS mean_delta FROM jnl_drift").first();
+        return json({ ok: true, summary: dSum, count: dRows.results.length, rows: dRows.results, meaning: "A stored decision that flips under an unchanged record is model-behaviour drift, not a change in the submission. Treat stored decisions as time-stamped under a model version, not as reproducible ground truth." });
       }
       if (path === "/submissions") {
         var limS = Math.min(Number(url.searchParams.get("limit") || 30), 100);
@@ -524,15 +539,32 @@ var index_default = {
           var xr = idxRows.results[xi];
           cards = cards + "<li><a href='/?recid=" + xr.recid + "'>" + escH(xr.title || ("recid " + xr.recid)) + "</a> — <strong>" + escH(xr.decision) + "</strong> (avg " + escH(String(xr.avg_score)) + ", " + escH(xr.basis) + ", " + escH(xr.created_at) + ")" + (xr.doi ? " · <a href='https://doi.org/" + escH(xr.doi) + "'>DOI</a>" : "") + "</li>";
         }
-        var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal — open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> — structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><p>Queue: " + (idxRows.results.length ? "" : "no decisions yet") + "</p><ul>" + cards + "</ul><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds · metadata-only reviews never PUBLISH · overlay-only (no Zenodo write-back).</footer></body></html>";
+        var idxStats = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review, (SELECT COUNT(*) FROM jnl_drift) AS drift_runs, (SELECT COUNT(*) FROM jnl_drift WHERE decision_changed=1) AS drift_flips, (SELECT COALESCE(SUM(citation_count),0) FROM jnl_records) AS citations, (SELECT COUNT(*) FROM jnl_submissions) AS submissions").first().catch(function () { return null; });
+        var st = idxStats || { records: 0, self_records: 0, decisions: 0, self_review: 0, drift_runs: 0, drift_flips: 0, citations: 0, submissions: 0 };
+        var selfShare = st.records ? (Math.round(1000 * st.self_records / st.records) / 10) + "%" : "n/a";
+        var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal — open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> — structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><details open style='background:#f6f6f6;padding:.6rem 1rem;border-radius:6px'><summary><strong>Status (machine-counted, not asserted)</strong></summary><ul><li>Tracked records: " + escH(String(st.records)) + " — self-authored: " + escH(String(st.self_records)) + " (" + escH(selfShare) + ")</li><li>Decisions: " + escH(String(st.decisions)) + " — flagged as self-review: " + escH(String(st.self_review)) + "</li><li>Reproducibility re-scores: " + escH(String(st.drift_runs)) + " run(s), " + escH(String(st.drift_flips)) + " decision flip(s) on identical content (model drift)</li><li>External citations across the corpus: " + escH(String(st.citations)) + " — link edges are concept-overlap only while this is zero</li><li>External submissions received: " + escH(String(st.submissions)) + "</li></ul></details><h2>Decisions</h2><ul>" + cards + "</ul><h2>Submitting a record</h2><p>Any Zenodo record can be submitted for review: send <code>POST /submit</code> with JSON <code>{&#34;id&#34;:&#34;&lt;recid, DOI, or Zenodo URL&gt;&#34;}</code> and an <code>x-jnl-token</code> header. Submissions are rate-limited per source. Records authored by this journal's own operator are recorded but are <strong>not</strong> queued for review, to prevent self-review. A review is advisory: a structured adversarial critique, never an endorsement and never a claim that a result is proven.</p><h2>Review integrity notes</h2><p>Decisions are deterministic thresholds applied to model verdicts, and model behaviour changes over time, so a stored decision is time-stamped under the models that produced it rather than a reproducible fact about the record. The <code>/drift</code> endpoint publishes re-score outcomes, including decision flips, and <code>/self-audit</code> publishes the self-review share. Every report states its review basis; metadata-only reviews can never reach PUBLISH.</p><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds · metadata-only reviews never PUBLISH · overlay-only (no Zenodo write-back) · read API: /health /self-audit /drift /graph /decisions /submissions</footer></body></html>";
         return new Response(idxHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
       }
-      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit" || path === "/rebuild-graph")) {
+      if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit" || path === "/rebuild-graph" || path === "/drift-check" || path === "/citation-probe")) {
         var authed = await authOk(request, env);
         if (!authed) return json({ ok: false, error: "unauthorized" }, 401);
         if (path === "/rebuild-graph") {
           var gRes = await buildGraph(env);
           return json({ ok: true, graph: gRes });
+        }
+        if (path === "/drift-check") {
+          var bodyD = {};
+          try { bodyD = await request.json(); } catch (e) {}
+          var modelsD = String((env.JNL_MODELS || MODELS_DEFAULT)).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+          if (bodyD.recid) return json(await driftCheck(env, Number(bodyD.recid), modelsD));
+          var nD = Math.min(Math.max(Number(bodyD.n || 3), 1), 10);
+          return json(await driftSample(env, nD));
+        }
+        if (path === "/citation-probe") {
+          var bodyP = {};
+          try { bodyP = await request.json(); } catch (e) {}
+          if (bodyP.recid) return json(await citationProbe(env, Number(bodyP.recid)));
+          return json(await citationSample(env, Math.min(Math.max(Number(bodyP.n || 25), 1), 25)));
         }
         if (path === "/submit") {
           var bodyS = {};
@@ -614,6 +646,7 @@ var index_default = {
               avg: (typeof ov.avg === "number") ? ov.avg : decC.avg,
               min_avg: (typeof ov.min_avg === "number") ? ov.min_avg : (typeof decC.min_avg === "number" ? decC.min_avg : decC.avg),
               fatal: (typeof ov.fatal === "boolean") ? ov.fatal : decC.fatal,
+              fatal_spec_only: (typeof ov.spec_only_fatal === "boolean") ? ov.spec_only_fatal : decC.fatal_spec_only,
               speculative: (typeof ov.speculative === "boolean") ? ov.speculative : decC.speculative,
               low_confidence: (typeof ov.low_confidence === "boolean") ? ov.low_confidence : decC.low_confidence,
               decision: String(ov.decision || decC.decision),
@@ -669,10 +702,16 @@ async function migrate(env) {
   var adds = [
     'ALTER TABLE jnl_records ADD COLUMN self_authored INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE jnl_records ADD COLUMN self_kind TEXT',
+    'ALTER TABLE jnl_records ADD COLUMN friends INTEGER',
     'ALTER TABLE jnl_decisions ADD COLUMN speculative INTEGER DEFAULT 0',
     'ALTER TABLE jnl_decisions ADD COLUMN spec_ack INTEGER DEFAULT 0',
     'ALTER TABLE jnl_decisions ADD COLUMN self_review INTEGER DEFAULT 0',
-    'ALTER TABLE jnl_decisions ADD COLUMN path TEXT'
+    'ALTER TABLE jnl_decisions ADD COLUMN path TEXT',
+    'ALTER TABLE jnl_decisions ADD COLUMN fatal_spec_only INTEGER DEFAULT 0',
+    "CREATE TABLE IF NOT EXISTS jnl_drift (id INTEGER PRIMARY KEY AUTOINCREMENT, recid INTEGER NOT NULL, checked_at TEXT DEFAULT (datetime('now')), stored_decision TEXT, stored_avg REAL, fresh_decision TEXT, fresh_avg REAL, delta_avg REAL, decision_changed INTEGER DEFAULT 0, models TEXT, basis TEXT, note TEXT)",
+    'ALTER TABLE jnl_records ADD COLUMN citation_count INTEGER DEFAULT 0',
+    'ALTER TABLE jnl_records ADD COLUMN citation_checked_at TEXT',
+    'ALTER TABLE jnl_records ADD COLUMN citation_source TEXT'
   ];
   var out = [];
   for (var i = 0; i < adds.length; i++) {
@@ -712,7 +751,13 @@ async function speculationAckPass(env, rec, models) {
   return { used: true, acknowledged: ack, votes: votes, models: modelsUsed, criteria: criteria, rationale: rationale || '(no second-pass model returned parseable JSON)' };
 }
 function specEscapeEligible(dec, basis) {
-  return !!(dec && dec.decision === "REVISE" && dec.speculative && !dec.fatal && basis === "text" && dec.avg >= 7.5 && (typeof dec.min_avg !== "number" || dec.min_avg >= 6) && !dec.low_confidence);
+  // JNL-P3 reachability fix (2026-09-10, gap: the escape was unreachable in practice).
+  // Reviewers routinely attach a FATAL flaw whose text IS the speculation objection. When the only
+  // fatal flaw is that wording, the record faces the same single objection as `speculative`, so it is
+  // eligible for the second pass instead of being auto-REJECTed. Any non-speculation fatal flaw
+  // (contradiction, fabrication, unusable data) still blocks the escape unconditionally.
+  var fatalOk = !dec || !dec.fatal || dec.fatal_spec_only === true || dec.spec_only_fatal === true;
+  return !!(dec && dec.decision === "REVISE" && dec.speculative && fatalOk && basis === "text" && dec.avg >= 7.5 && (typeof dec.min_avg !== "number" || dec.min_avg >= 6) && !dec.low_confidence);
 }
 // Shared by runReview AND /cal so calibration measures the same decision path as production.
 async function applySpecAckEscape(env, rec, dec, models, recid, basis) {
@@ -738,5 +783,85 @@ function specAckReportSection(specPath, NL) {
   specLines.push("- Second-pass rationale: " + String(specPath.rationale).slice(0, 700));
   return specLines.join(NL) + NL;
 }
+// JNL-DRIFT-1 (gap: decisions were not reproducible across model updates) -------------------
+// PRECONDITION: rec is a fetched record; models is a non-empty model id list.
+// POSTCONDITION: returns reviewer verdicts and the basis used. Performs NO database writes.
+async function scoreOnce(env, rec, models, recidForLog) {
+  var basis = rec.text && rec.text.length >= 200 ? 'text' : 'metadata';
+  var parsedList = [];
+  var modelsUsed = [];
+  var sys = reviewerSystem('an adversarial-but-fair referee');
+  var usr = userPrompt(rec, basis === 'text');
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var outTxt = await aiRun(env, models[i], sys, usr);
+      var p = parseJsonObject(outTxt);
+      if (p) { parsedList.push(p); modelsUsed.push(models[i]); }
+      else { await log(env, recidForLog, 'parse', 'model ' + models[i] + ' returned non-JSON len=' + outTxt.length); }
+    } catch (e) {
+      await log(env, recidForLog, 'model_error', 'model ' + models[i] + ' :: ' + String(e && e.message || e).slice(0, 300));
+    }
+  }
+  return { basis: basis, parsedList: parsedList, modelsUsed: modelsUsed };
+}
+// PRECONDITION: a stored jnl_reviews row exists for recid. POSTCONDITION: one jnl_drift row appended.
+async function driftCheck(env, recid, models) {
+  var stored = await env.AUDIT.prepare('SELECT decision, avg_score, basis FROM jnl_reviews WHERE recid = ?').bind(recid).first();
+  if (!stored || !stored.decision) return { ok: false, recid: recid, error: 'no stored decision to compare against' };
+  var rec = await fetchRecord(recid);
+  var scored = await scoreOnce(env, rec, models, recid);
+  if (!scored.parsedList.length) return { ok: false, recid: recid, error: 'no parseable output on re-score' };
+  var fresh = decisionFrom(scored.parsedList, scored.basis);
+  var delta = Math.round((fresh.avg - Number(stored.avg_score || 0)) * 100) / 100;
+  var changed = fresh.decision !== stored.decision ? 1 : 0;
+  await env.AUDIT.prepare('INSERT INTO jnl_drift (recid, stored_decision, stored_avg, fresh_decision, fresh_avg, delta_avg, decision_changed, models, basis, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(recid, stored.decision, stored.avg_score, fresh.decision, fresh.avg, delta, changed, scored.modelsUsed.join(','), scored.basis, changed ? 'DECISION CHANGED on identical stored text and current models' : 'stable').run();
+  if (changed) await log(env, recid, 'drift', 'decision changed ' + stored.decision + ' -> ' + fresh.decision + ' (avg ' + stored.avg_score + ' -> ' + fresh.avg + ')');
+  return { ok: true, recid: recid, stored_decision: stored.decision, stored_avg: stored.avg_score, fresh_decision: fresh.decision, fresh_avg: fresh.avg, delta_avg: delta, decision_changed: !!changed, basis: scored.basis };
+}
+// PRECONDITION: n >= 1. POSTCONDITION: up to n decisions re-scored; drift rows appended.
+async function driftSample(env, n) {
+  var models = String((env.JNL_MODELS || MODELS_DEFAULT)).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  var rows = await env.AUDIT.prepare('SELECT recid FROM jnl_reviews WHERE status = \'done\' AND decision IS NOT NULL ORDER BY COALESCE(ran_at, created_at) ASC LIMIT ?').bind(Math.max(1, Math.min(n, 10))).all();
+  var out = [];
+  for (var i = 0; i < rows.results.length; i++) {
+    try { out.push(await driftCheck(env, rows.results[i].recid, models)); }
+    catch (e) { out.push({ ok: false, recid: rows.results[i].recid, error: String(e && e.message || e).slice(0, 200) }); }
+  }
+  var flips = out.filter(function (x) { return x && x.decision_changed; }).length;
+  return { ok: true, checked: out.length, flips: flips, rows: out };
+}
+// JNL-P7 (row 102): external citation probe. POSTCONDITION: jnl_records citation columns updated.
+async function citationProbe(env, recid) {
+  var row = await env.AUDIT.prepare('SELECT doi FROM jnl_records WHERE recid = ?').bind(recid).first();
+  var doi = row && row.doi ? String(row.doi).replace(/^https?:\/\/doi.org\//, '') : null;
+  if (!doi) return { ok: false, recid: recid, error: 'no doi on record' };
+  var count = 0, source = 'datacite', nota = null;
+  try {
+    var res = await fetch('https://api.datacite.org/dois/' + encodeURIComponent(doi), { headers: { accept: 'application/vnd.api+json', 'user-agent': UA }, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) { nota = 'HTTP ' + res.status; }
+    else {
+      var body = await res.json();
+      var attrs = (body && body.data && body.data.attributes) || {};
+      if (typeof attrs.citationCount === 'number') count = attrs.citationCount;
+      else if (typeof attrs.citationsCount === 'number') count = attrs.citationsCount;
+      else { nota = 'citationCount absent in DataCite response'; }
+    }
+  } catch (e) { nota = String(e && e.message || e).slice(0, 160); }
+  await env.AUDIT.prepare('UPDATE jnl_records SET citation_count = ?, citation_checked_at = datetime(\'now\'), citation_source = ? WHERE recid = ?').bind(count, source, recid).run();
+  return { ok: true, recid: recid, doi: doi, citation_count: count, source: source, note: nota };
+}
+// PRECONDITION: n >= 1. POSTCONDITION: up to n records probed for external citations.
+async function citationSample(env, n) {
+  var rows = await env.AUDIT.prepare('SELECT recid FROM jnl_records WHERE citation_checked_at IS NULL ORDER BY recid ASC LIMIT ?').bind(Math.max(1, Math.min(n, 25))).all();
+  var out = [];
+  for (var i = 0; i < rows.results.length; i++) {
+    try { out.push(await citationProbe(env, rows.results[i].recid)); }
+    catch (e) { out.push({ ok: false, recid: rows.results[i].recid, error: String(e && e.message || e).slice(0, 160) }); }
+  }
+  var nonzero = out.filter(function (x) { return x && Number(x.citation_count) > 0; }).length;
+  return { ok: true, probed: out.length, records_with_citations: nonzero, rows: out };
+}
+var SPECULATIVE_RE = /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/;
 export { index_default as default };
 
