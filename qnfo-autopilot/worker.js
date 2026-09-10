@@ -243,6 +243,11 @@ async function workerDomains(env, worker) {
 // PRECONDITION: worker deployed. POSTCONDITION: health verdict. Custom domains are authoritative
 // (workers.dev subdomains return 1042 from within Cloudflare egress - NOT a failure signal).
 async function verifyHealth(env, worker) {
+  try {
+    const fresh = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const hb = await env.AUDIT.prepare('SELECT ok, ts FROM fleet_heartbeat WHERE worker = ?1').bind(worker).first();
+    if (hb && hb.ts && hb.ts >= fresh) return hb.ok === 1 ? { ok: true, why: 'heartbeat ok ' + hb.ts } : { ok: false, why: 'heartbeat failure ' + hb.ts };
+  } catch (e) {}
   const domains = await workerDomains(env, worker);
   for (const d of domains) {
     try {
@@ -303,10 +308,37 @@ async function evolveApply(env, worker, candidateId, goal) {
   return { ok: true, worker: worker, applied: true, verify: h.why, rollback_point: rbHash.slice(0, 16) };
 }
 
+// ===== AUTONOMOUS SELF-REWRITE LOOP (user-enabled 2026-09-10) =====
+// The decide-loop: on each cron fire, propose + apply a self-improvement to one worker,
+// with snapshot + auto-revert. Round-robins SEED_WORKERS; verification ladder
+// (heartbeat -> custom-domain -> parse-only) decides whether a broken deploy is detected.
+const SEED_WORKERS = ['qnfo-citation-watch', 'qnfo-email', 'qnfo-search', 'obsidian-writer', 'qnfo-lifecycle'];
+
+// PRECONDITION: cron fire (or manual /run/cycle). POSTCONDITION: one worker improved or reverted, recorded.
+async function autonomousApply(env) {
+  await ensureSchema(env);
+  await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS self_rewrite_state (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, ts TEXT, action TEXT, status TEXT, detail TEXT)').run();
+  let worker = null, candidateId = null;
+  const pend = await env.AUDIT.prepare("SELECT worker, id FROM evolve_candidates WHERE status = 'proposed' ORDER BY id ASC LIMIT 1").first();
+  if (pend) { worker = pend.worker; candidateId = pend.id; }
+  else {
+    const last = await env.AUDIT.prepare("SELECT worker FROM self_rewrite_state WHERE action = 'apply' ORDER BY id DESC LIMIT 1").first();
+    const lastW = last ? last.worker : null;
+    const idx = lastW ? (SEED_WORKERS.indexOf(lastW) + 1) % SEED_WORKERS.length : 0;
+    worker = SEED_WORKERS[idx] || SEED_WORKERS[0];
+  }
+  if (!worker) return { ok: true, skipped: 'no target' };
+  const result = await evolveApply(env, worker, candidateId, candidateId ? null : 'self-improvement: keep behavior identical, add or fix a small non-functional detail');
+  const status = result.ok ? 'applied' : 'reverted-or-rejected';
+  await env.AUDIT.prepare('INSERT INTO self_rewrite_state (worker, ts, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)').bind(worker, nowIso(), 'apply', status, String(result.why || result.verify || 'ok').slice(0, 220)).run();
+  return result;
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     await ensureSchema(env);
     ctx.waitUntil((async function () { try { await cycle(env); } catch (e) {} })());
+    ctx.waitUntil((async function () { try { await autonomousApply(env); } catch (e) {} })());
   },
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -333,6 +365,17 @@ export default {
       if (!b.worker) return json({ ok: false, error: 'need worker' }, 400);
       return json({ ok: true, apply: await evolveApply(env, b.worker, b.candidate_id, b.goal) });
     }
-    return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/cycle', '/git/commit', '/publish/report'] }, 404);
+    if (p === '/run/apply' && request.method === 'POST') {
+      const result = await autonomousApply(env);
+      return json({ ok: true, result: result });
+    }
+    if (p === '/heartbeat' && request.method === 'POST') {
+      let b = {}; try { b = await request.json(); } catch (e) { return json({ ok: false, error: 'bad json' }, 400); }
+      if (!b.worker) return json({ ok: false, error: 'need worker' }, 400);
+      await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER)').run();
+      await env.AUDIT.prepare('INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4)').bind(b.worker, String(b.version || ''), nowIso(), b.ok === false ? 0 : 1).run();
+      return json({ ok: true, heartbeat: true });
+    }
+    return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/cycle', '/git/commit', '/publish/report', '/evolve/propose', '/evolve/apply', '/heartbeat'] }, 404);
   }
 };
