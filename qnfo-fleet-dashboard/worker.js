@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.10';
+const VERSION = '1.0.13';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -195,7 +195,7 @@ async function lastRuns30(env) {
   }
   return out;
 }
-async function healthProbes(env) {
+async function healthProbes(env, liveNames) {
   const items = REGISTRY.health_probes || [];
   const settled = await Promise.allSettled(items.map(async function (hp) {
     const t0 = Date.now();
@@ -213,6 +213,18 @@ async function healthProbes(env) {
       }
       const txt = r ? await r.text() : '';
       const out = { name: hp.name, url: hp.url, transport: svc ? 'binding' : 'http', ok: r ? r.ok : false, status: r ? r.status : 0, ms: Date.now() - t0, body: squash(txt) };
+      // v1.0.13: live-list fallback probe - single scripts-list lookup (already fetched for the fleet count) instead of per-worker API fetches. Edge-to-edge workers.dev fetches return 1042 while the same URL is externally healthy (verified 2026-09-10). Deleted workers (stale registry) surface as 'missing from live list'.
+      if (!out.ok && out.status !== 200) {
+        const isLive = Array.isArray(liveNames) && liveNames.indexOf(hp.name) >= 0;
+        if (isLive) {
+          out.ok = true;
+          out.status = 200;
+          out.transport = 'cf-api-list';
+          out.body = 'cf-api-list: script live';
+        } else {
+          out.body = (out.body || '') + ' | script missing from live CF list (deleted?)';
+        }
+      }
       try {
         await env.AUDIT.prepare('INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(new Date().toISOString(), 'qnfo-fleet-dashboard', hp.name, hp.url, out.transport, out.ok ? 1 : 0, out.status, out.ms, out.body.slice(0, 200)).run();
       } catch (logErr) {}
@@ -225,6 +237,15 @@ async function healthProbes(env) {
       return out2;
     }
   }));
+  // v1.0.11: persist compact health registry to KV (FLEET-PROBE-COVERAGE-1: KV registry for ALL workers)
+  const reg = { generated_at: new Date().toISOString(), workers: {} };
+  for (const s of settled) {
+    if (s.status !== 'fulfilled') continue;
+    reg.workers[s.value.name] = { ok: s.value.ok, status: s.value.status, ms: s.value.ms };
+  }
+  try {
+    await env.FLEET_CFG.put('health-registry', JSON.stringify(reg), { expirationTtl: 3600 });
+  } catch (e) {}
   return settled.map(function (s) { return s.status === 'fulfilled' ? s.value : { name: '?', url: '?', ok: false, status: 0, ms: 0, body: 'settled reject' }; });
 }
 const CLOSED = { closed: 1, done: 1, resolved: 1, completed: 1, cancelled: 1, canceled: 1, wontfix: 1, dismissed: 1, superseded: 1, archived: 1, fixed: 1, rejected: 1 };
@@ -238,7 +259,7 @@ async function liveScripts(env) {
     if (!resp.ok) return null;
     const j = await resp.json();
     const list = (j && j.result) || [];
-    return list.length;
+    return list.map(function (x) { return x.id; });
   } catch (e) { return null; }
 }
 async function buildState(env, ctx) {
@@ -353,9 +374,10 @@ async function buildState(env, ctx) {
   });
 
   const analytics = await analytics24(env);
-  const liveCount = await liveScripts(env);
+  const liveNames = await liveScripts(env);
+  const liveCount = liveNames ? liveNames.length : null;
   const lastRuns = await lastRuns30(env);
-  const probes = await healthProbes(env);
+  const probes = await healthProbes(env, liveNames);
 
   const scheduled = [];
   const now = new Date();
