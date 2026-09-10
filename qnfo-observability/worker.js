@@ -10,7 +10,7 @@
 
 import { FLEET } from './fleet.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -320,6 +320,21 @@ async function assessIntegration(env) {
   const summary = { generated_at: new Date().toISOString(), version: VERSION, fleet_size: fleetSize, chains: chains, coverage: coverage, decay: decay, opportunities: opportunities, score: score };
   try {
     await env.AUDIT.prepare('INSERT INTO integration_state (ts, json) VALUES (?, ?)').bind(summary.generated_at, JSON.stringify(summary)).run();
+  } catch (e) {}
+  // PROACTIVE (v1.1.1): score-regression self-alert - the objective function polices its own drops.
+  try {
+    const prev = await env.AUDIT.prepare('SELECT json FROM integration_state ORDER BY id DESC LIMIT 1 OFFSET 1').first();
+    if (prev && prev.json) {
+      const prevS = JSON.parse(prev.json);
+      const prevTotal = prevS && prevS.score && typeof prevS.score.total === 'number' ? prevS.score.total : null;
+      if (prevTotal != null && score.total != null && prevTotal - score.total >= 5) {
+        const id = 'proactive-sai-drop-' + new Date().toISOString().slice(0, 13);
+        const exists = await env.AUDIT.prepare("SELECT id FROM cloud_ops_events WHERE id = ?1").bind(id).first();
+        if (!exists) {
+          await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'proactive-alert', ?3, ?4, 'qnfo-observability', 'ok')").bind(id, new Date().toISOString(), 'System integration score dropped ' + prevTotal + ' -> ' + score.total + ' (>=5 points). Investigate chains/coverage/decay regression.', JSON.stringify({ prev: prevTotal, now: score.total })).run();
+        }
+      }
+    }
   } catch (e) {}
   return summary;
 }
