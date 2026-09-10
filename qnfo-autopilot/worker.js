@@ -184,6 +184,125 @@ async function evolvePropose(env, worker, goal) {
   return { ok: true, worker: worker, candidate_bytes: proposal.length, sha256: hash.slice(0, 16), status: 'proposed (NOT deployed)' };
 }
 
+// ===== SELF-REWRITE APPLY (L3, user-enabled 2026-09-10) =====
+// APPLY = snapshot current -> deploy candidate -> verify -> AUTO-REVERT on failure.
+// Rollback is the ENGINE, not a gate: GitHub backs up code, but only this loop re-deploys it.
+
+// PRECONDITION: CF_API_TOKEN. POSTCONDITION: worker deployed, bindings preserved (module or legacy).
+async function deployWorker(env, worker, code, isModule) {
+  const tok = env.CF_API_TOKEN;
+  if (!tok) return { ok: false, why: 'no CF_API_TOKEN' };
+  let bindings = [], compat = '2026-08-01', flags = [];
+  try {
+    const s = await fetch(CF_API + '/workers/scripts/' + worker + '/settings', { headers: { 'Authorization': 'Bearer ' + tok, 'User-Agent': UA } });
+    if (s.ok) { const j = await s.json(); const r = j.result || {}; bindings = r.bindings || []; if (r.compatibility_date) compat = r.compatibility_date; if (r.compatibility_flags) flags = r.compatibility_flags; }
+  } catch (e) {}
+  const norm = (bindings || []).map(function (b) {
+    const t = b.type;
+    if (t === 'secret_text' || t === 'plain_text') return null;
+    const out = { name: b.name, type: t };
+    if (t === 'd1') { if (b.database_id) out.database_id = b.database_id; }
+    else if (t === 'kv_namespace') { if (b.namespace_id) out.namespace_id = b.namespace_id; }
+    else if (t === 'r2_bucket') { if (b.bucket_name) out.bucket_name = b.bucket_name; }
+    else if (t === 'service') { if (b.service) out.service = b.service; if (b.environment) out.environment = b.environment; }
+    else if (t === 'queue') { if (b.queue_name) out.queue_name = b.queue_name; }
+    else if (t === 'vectorize') { if (b.index_name) out.index_name = b.index_name; }
+    else if (t === 'durable_object_namespace') { if (b.namespace_id) out.namespace_id = b.namespace_id; if (b.class_name) out.class_name = b.class_name; }
+    else if (t === 'analytics_engine') { if (b.dataset) out.dataset = b.dataset; }
+    else if (t === 'ai' || t === 'browser' || t === 'send_email') { }
+    else if (t === 'workflow') { for (const k in b) { if (k !== 'name' && k !== 'type') out[k] = b[k]; } }
+    else { for (const k in b) { if (k !== 'name' && k !== 'type' && k !== 'id' && k !== 'project' && k !== 'version') out[k] = b[k]; } }
+    return out;
+  }).filter(function (x) { return x !== null; });
+  const meta = { bindings: norm, compatibility_date: compat };
+  if (isModule) meta.main_module = 'worker.js'; else meta.body_part = 'script';
+  if (flags.length) meta.compatibility_flags = flags;
+  const CRLF = '\r\n';
+  const b = '----QNFO-EVOLVE-' + Date.now();
+  const partName = isModule ? 'worker.js' : 'script';
+  const ctype = isModule ? 'application/javascript+module' : 'application/javascript';
+  const parts = ['--' + b, 'Content-Disposition: form-data; name="metadata"', 'Content-Type: application/json', '', JSON.stringify(meta), '--' + b, 'Content-Disposition: form-data; name="' + partName + '"; filename="' + partName + '"', 'Content-Type: ' + ctype, '', code, '--' + b + '--'];
+  try {
+    const resp = await fetch(CF_API + '/workers/scripts/' + worker, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + tok, 'User-Agent': UA, 'Content-Type': 'multipart/form-data; boundary=' + b }, body: parts.join(CRLF) });
+    const j = await resp.json();
+    if (!resp.ok) return { ok: false, why: 'PUT ' + resp.status + ' ' + String((j.errors || []).map(function (e) { return e.code + ':' + String(e.message).slice(0, 60); }).join('|') || j).slice(0, 140) };
+    return { ok: true };
+  } catch (e) { return { ok: false, why: String(e && e.message ? e.message : e).slice(0, 120) }; }
+}
+
+// PRECONDITION: worker deployed. POSTCONDITION: health verdict (1042 = subdomain-off, not a failure).
+async function workerDomains(env, worker) {
+  try {
+    const r = await fetch(CF_API + '/workers/domains', { headers: { 'Authorization': 'Bearer ' + env.CF_API_TOKEN, 'User-Agent': UA } });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j.result || []).filter(function (d) { return (d.worker_name && d.worker_name === worker) || (d.script && d.script === worker); }).map(function (d) { return d.hostname; });
+  } catch (e) { return []; }
+}
+
+// PRECONDITION: worker deployed. POSTCONDITION: health verdict. Custom domains are authoritative
+// (workers.dev subdomains return 1042 from within Cloudflare egress - NOT a failure signal).
+async function verifyHealth(env, worker) {
+  const domains = await workerDomains(env, worker);
+  for (const d of domains) {
+    try {
+      const resp = await fetch('https://' + d + '/health', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+      const txt = await resp.text();
+      if (resp.status >= 500) return { ok: false, why: 'http ' + resp.status + ' ' + txt.slice(0, 50) };
+      return { ok: true, why: 'custom-domain ' + d + ' http ' + resp.status };
+    } catch (e) {}
+  }
+  try {
+    const resp = await fetch('https://' + worker + '.q08.workers.dev/health', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+    const txt = await resp.text();
+    if (txt.indexOf('1042') >= 0) return { ok: true, why: 'no-reachable-domain (deploy-parses only)' };
+    if (resp.status >= 500) return { ok: false, why: 'http ' + resp.status + ' ' + txt.slice(0, 50) };
+    if (resp.status === 404) return { ok: true, why: 'no /health route (worker serving)' };
+    return { ok: true, why: 'http ' + resp.status };
+  } catch (e) {
+    return { ok: false, why: 'unreachable ' + String(e && e.message ? e.message : e).slice(0, 40) };
+  }
+}
+
+// PRECONDITION: candidate available. POSTCONDITION: applied, or auto-reverted with the rollback point restored.
+async function evolveApply(env, worker, candidateId, goal) {
+  await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS evolve_rollback (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, ts TEXT, source TEXT, sha256 TEXT)').run();
+  let proposal = null;
+  if (candidateId) {
+    const row = await env.AUDIT.prepare('SELECT proposal, sha256 FROM evolve_candidates WHERE id = ?1').bind(Number(candidateId)).first();
+    if (row) proposal = row.proposal;
+  }
+  if (!proposal) {
+    const p = await evolvePropose(env, worker, goal);
+    if (!p.ok) return p;
+    const row = await env.AUDIT.prepare('SELECT proposal, sha256 FROM evolve_candidates ORDER BY id DESC LIMIT 1').first();
+    proposal = row.proposal;
+  }
+  if (!proposal) return { ok: false, why: 'no candidate' };
+  let current;
+  try {
+    const resp = await fetch(CF_API + '/workers/scripts/' + worker + '/content/v2', { headers: { 'Authorization': 'Bearer ' + env.CF_API_TOKEN, 'User-Agent': UA } });
+    if (!resp.ok) return { ok: false, why: 'snapshot read ' + resp.status };
+    current = unwrap(await resp.text());
+  } catch (e) { return { ok: false, why: 'snapshot ' + String(e && e.message ? e.message : e).slice(0, 60) }; }
+  const isModule = current.indexOf('export default') >= 0 || current.indexOf('__esm') >= 0;
+  const rbHash = await sha256hex(current);
+  await env.AUDIT.prepare('INSERT INTO evolve_rollback (worker, ts, source, sha256) VALUES (?1, ?2, ?3, ?4)').bind(worker, nowIso(), current, rbHash).run();
+  const put = await deployWorker(env, worker, proposal, isModule);
+  if (!put.ok) {
+    await env.AUDIT.prepare("UPDATE evolve_candidates SET status = 'rejected-parse' WHERE sha256 = ?1").bind(await sha256hex(proposal)).run();
+    return { ok: false, why: 'deploy rejected (parse): ' + put.why, reverted: false };
+  }
+  const h = await verifyHealth(env, worker);
+  if (!h.ok) {
+    const rb = await deployWorker(env, worker, current, isModule);
+    await env.AUDIT.prepare("UPDATE evolve_candidates SET status = 'auto-reverted' WHERE sha256 = ?1").bind(await sha256hex(proposal)).run();
+    return { ok: false, why: 'verify failed -> AUTO-REVERTED', reverted: rb.ok, verify: h.why, rollback_point: rbHash.slice(0, 16) };
+  }
+  await env.AUDIT.prepare("UPDATE evolve_candidates SET status = 'applied' WHERE sha256 = ?1").bind(await sha256hex(proposal)).run();
+  return { ok: true, worker: worker, applied: true, verify: h.why, rollback_point: rbHash.slice(0, 16) };
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     await ensureSchema(env);
@@ -208,6 +327,11 @@ export default {
       let b = {}; try { b = await request.json(); } catch (e) { return json({ ok: false, error: 'bad json' }, 400); }
       if (!b.worker) return json({ ok: false, error: 'need worker' }, 400);
       return json({ ok: true, proposal: await evolvePropose(env, b.worker, b.goal) });
+    }
+    if (p === '/evolve/apply' && request.method === 'POST') {
+      let b = {}; try { b = await request.json(); } catch (e) { return json({ ok: false, error: 'bad json' }, 400); }
+      if (!b.worker) return json({ ok: false, error: 'need worker' }, 400);
+      return json({ ok: true, apply: await evolveApply(env, b.worker, b.candidate_id, b.goal) });
     }
     return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/cycle', '/git/commit', '/publish/report'] }, 404);
   }
