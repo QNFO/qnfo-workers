@@ -10,7 +10,7 @@
 
 import { FLEET } from './fleet.js';
 
-const VERSION = '1.1.1';
+const VERSION = '1.1.2';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -240,7 +240,7 @@ async function assessIntegration(env) {
   const chains = [];
   for (let i = 0; i < INTEGRATION_CHAINS.length; i++) {
     const c = INTEGRATION_CHAINS[i];
-    const st = { id: c.id, name: c.name, producer: c.producer, consumer: c.consumer, medium: c.medium, status: 'unknown', n: null, oldest_h: null, detail: '' };
+    const st = { id: c.id, name: c.name, producer: c.producer, consumer: c.consumer, medium: c.medium, status: 'unknown', n: null, oldest_h: null, detail: '', metric: (c.id === 'fleet-pulse' ? 'rate' : 'queue') };
     try {
       const r = await env.AUDIT.prepare(c.sql).first();
       if (r) {
@@ -361,6 +361,39 @@ export default {
     if (p === '/integration') {
       const summary = await assessIntegration(env);
       return json({ ok: true, integration: summary });
+    }
+    if (p === '/trend') {
+      // Trend analysis (v1.1.2): score delta + per-chain depth velocity = bifurcation early-warning.
+      // Chaos lesson: monitor the DERIVATIVE of queue depth, not depth alone (arrival vs drain crossing).
+      try {
+        const rows = await env.AUDIT.prepare('SELECT ts, json FROM integration_state ORDER BY id DESC LIMIT 24').all();
+        const pts = (rows.results || []).map(function (x) { try { return JSON.parse(x.json); } catch (e) { return null; } }).filter(function (x) { return x != null; });
+        const latest = pts[0] || null;
+        const prev = pts[1] || null;
+        const chainVel = [];
+        if (latest && prev) {
+          const prevChains = {};
+          (prev.chains || []).forEach(function (c) { prevChains[c.id] = c.n == null ? 0 : c.n; });
+          (latest.chains || []).forEach(function (c) {
+            const pn = prevChains[c.id] == null ? null : prevChains[c.id];
+            const cn = c.n == null ? 0 : c.n;
+            const vel = pn == null ? null : cn - pn;
+            let warn = null;
+            if (c.status === 'stuck') warn = 'stuck';
+            else if (c.metric !== 'rate' && vel != null && vel > 0 && cn >= 1) warn = 'depth growing (+' + vel + ')'; 
+            chainVel.push({ id: c.id, n: cn, prev_n: pn, velocity: vel, state: c.status, warn: warn });
+          });
+        }
+        const scNow = latest && latest.score ? latest.score.total : null;
+        const scPrev = prev && prev.score ? prev.score.total : null;
+        const delta = (scNow != null && scPrev != null) ? Math.round((scNow - scPrev) * 10) / 10 : null;
+        const warnings = [];
+        chainVel.forEach(function (c) { if (c.warn) warnings.push(c.id + ': ' + c.warn); });
+        if (delta != null && delta <= -3) warnings.push('score declining ' + delta + ' (prev ' + scPrev + ')');
+        return json({ ok: true, generated_at: new Date().toISOString(), points: pts.length, span_h: pts.length > 1 ? Math.round(((Date.parse(latest.generated_at) - Date.parse(pts[pts.length - 1].generated_at)) / 3600000) * 10) / 10 : null, score_now: scNow, score_prev: scPrev, score_delta: delta, chain_velocity: chainVel, warnings: warnings });
+      } catch (e) {
+        return json({ ok: false, error: String(e && e.message ? e.message : e).slice(0, 80) }, 500);
+      }
     }
     if (p === '/run/ingest') {
       const r = await ingestTrace(env);
