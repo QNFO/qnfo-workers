@@ -16,8 +16,6 @@ var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
 var __defProp2222222 = Object.defineProperty;
 var __name2222222 = /* @__PURE__ */ __name222222((target, value) => __defProp2222222(target, "name", { value, configurable: true }), "__name");
-var __defProp22222222 = Object.defineProperty;
-var __name22222222 = /* @__PURE__ */ __name2222222((target, value) => __defProp22222222(target, "name", { value, configurable: true }), "__name");
 var COMMON_CSS = `:root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--live:#2f6d4f;--blue:var(--accent);--blue-dark:#1a2547;--blue-light:#d8dcef;--blue-subtle:var(--accent-soft);--text:var(--ink);--text-muted:var(--muted);--bg:var(--paper);--radius:10px;--radius-lg:14px}
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box}
@@ -115,7 +113,6 @@ __name2222(stripFrontmatter, "stripFrontmatter");
 __name22222(stripFrontmatter, "stripFrontmatter");
 __name222222(stripFrontmatter, "stripFrontmatter");
 __name2222222(stripFrontmatter, "stripFrontmatter");
-__name22222222(stripFrontmatter, "stripFrontmatter");
 function esc(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -128,7 +125,6 @@ __name2222(esc, "esc");
 __name22222(esc, "esc");
 __name222222(esc, "esc");
 __name2222222(esc, "esc");
-__name22222222(esc, "esc");
 function escAttr(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -141,7 +137,6 @@ __name2222(escAttr, "escAttr");
 __name22222(escAttr, "escAttr");
 __name222222(escAttr, "escAttr");
 __name2222222(escAttr, "escAttr");
-__name22222222(escAttr, "escAttr");
 function displayTitle(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -169,13 +164,11 @@ function displayTitle(t) {
 }
 __name(displayTitle, "displayTitle");
 __name2(displayTitle, "displayTitle");
-__name22(displayTitle, "displayTitle");
 function looksLikeTeX(x) {
   return /\\[a-zA-Z]+/.test(x) || /[\\^{}_]/.test(x);
 }
 __name(looksLikeTeX, "looksLikeTeX");
 __name2(looksLikeTeX, "looksLikeTeX");
-__name22(looksLikeTeX, "looksLikeTeX");
 function titleHTML(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -189,7 +182,6 @@ function titleHTML(t) {
 }
 __name(titleHTML, "titleHTML");
 __name2(titleHTML, "titleHTML");
-__name22(titleHTML, "titleHTML");
 function xmlEscape(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -202,7 +194,6 @@ __name2222(xmlEscape, "xmlEscape");
 __name22222(xmlEscape, "xmlEscape");
 __name222222(xmlEscape, "xmlEscape");
 __name2222222(xmlEscape, "xmlEscape");
-__name22222222(xmlEscape, "xmlEscape");
 function detectCategory(title, abstract) {
   const t = ((title || "") + " " + (abstract || "")).toLowerCase();
   if (t.includes("error correction") || t.includes("stabilizer") || t.includes("fault-tolerant") || t.includes("qec") || t.includes("ldpc") || t.includes("surface code")) return "qec";
@@ -219,7 +210,6 @@ __name2222(detectCategory, "detectCategory");
 __name22222(detectCategory, "detectCategory");
 __name222222(detectCategory, "detectCategory");
 __name2222222(detectCategory, "detectCategory");
-__name22222222(detectCategory, "detectCategory");
 var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number Theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
 function texSafe(s) {
   if (!s) return "";
@@ -238,13 +228,11 @@ function texSafe(s) {
 }
 __name(texSafe, "texSafe");
 __name2(texSafe, "texSafe");
-__name22(texSafe, "texSafe");
 function cleanPunct(s) {
   return String(s || "").replace(/[ \t]+([,.!?;:])/g, "$1");
 }
 __name(cleanPunct, "cleanPunct");
 __name2(cleanPunct, "cleanPunct");
-__name22(cleanPunct, "cleanPunct");
 function _mdInline(t) {
   t = String(t || "");
   var _math = [];
@@ -254,7 +242,6 @@ function _mdInline(t) {
   }
   __name(saveMath, "saveMath");
   __name2(saveMath, "saveMath");
-  __name22(saveMath, "saveMath");
   t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) {
     return saveMath(c, true);
   });
@@ -283,7 +270,6 @@ function _mdInline(t) {
 }
 __name(_mdInline, "_mdInline");
 __name2(_mdInline, "_mdInline");
-__name22(_mdInline, "_mdInline");
 function fixMojibake(s) {
   if (!s) return "";
   const map = [
@@ -334,7 +320,6 @@ __name22(fixMojibake, "fixMojibake");
 __name222(fixMojibake, "fixMojibake");
 __name2222(fixMojibake, "fixMojibake");
 __name22222(fixMojibake, "fixMojibake");
-__name222222(fixMojibake, "fixMojibake");
 function renderMarkdown(md) {
   if (!md) return "";
   var m = String(md).replace(/\r\n?/g, "\n");
@@ -372,7 +357,6 @@ function renderMarkdown(md) {
   }
   __name(isTableSep, "isTableSep");
   __name2(isTableSep, "isTableSep");
-  __name22(isTableSep, "isTableSep");
   function emitBlockText(text) {
     var parts = text.split(/(\u0001B\d+\u0001)/g), h = "", cur = "", k;
     for (k = 0; k < parts.length; k++) {
@@ -390,19 +374,16 @@ function renderMarkdown(md) {
   }
   __name(emitBlockText, "emitBlockText");
   __name2(emitBlockText, "emitBlockText");
-  __name22(emitBlockText, "emitBlockText");
   function isListStart(s) {
     return /^[-*+]\s/.test(s) || /^\d+[.)]\s/.test(s);
   }
   __name(isListStart, "isListStart");
   __name2(isListStart, "isListStart");
-  __name22(isListStart, "isListStart");
   function isContinuation(s) {
     return /^[ \t]+\S/.test(s);
   }
   __name(isContinuation, "isContinuation");
   __name2(isContinuation, "isContinuation");
-  __name22(isContinuation, "isContinuation");
   L = m.split("\n");
   i = 0;
   while (i < L.length) {
@@ -566,7 +547,6 @@ function renderMarkdown(md) {
 }
 __name(renderMarkdown, "renderMarkdown");
 __name2(renderMarkdown, "renderMarkdown");
-__name22(renderMarkdown, "renderMarkdown");
 function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
   const total = paperCount || (recentPapers ? recentPapers.length : 0);
   const kg = nodesCount ? nodesCount + "+" : "\u2014";
@@ -599,7 +579,6 @@ __name2222(renderHubHTML, "renderHubHTML");
 __name22222(renderHubHTML, "renderHubHTML");
 __name222222(renderHubHTML, "renderHubHTML");
 __name2222222(renderHubHTML, "renderHubHTML");
-__name22222222(renderHubHTML, "renderHubHTML");
 function renderPaperRow(p) {
   const cat = detectCategory(p.title, p.abstract);
   const cl = CATEGORY_LABELS[cat] || "";
@@ -609,7 +588,6 @@ function renderPaperRow(p) {
 __name(renderPaperRow, "renderPaperRow");
 __name2(renderPaperRow, "renderPaperRow");
 __name22(renderPaperRow, "renderPaperRow");
-__name222(renderPaperRow, "renderPaperRow");
 function renderIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery) {
   const fb = ["all", "qec", "number-theory", "physics", "computer-science", "other"].map((cat) => {
     const label = cat === "all" ? "All" : CATEGORY_LABELS[cat] || cat;
@@ -631,7 +609,6 @@ __name2222(renderIndexHTML, "renderIndexHTML");
 __name22222(renderIndexHTML, "renderIndexHTML");
 __name222222(renderIndexHTML, "renderIndexHTML");
 __name2222222(renderIndexHTML, "renderIndexHTML");
-__name22222222(renderIndexHTML, "renderIndexHTML");
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
@@ -668,7 +645,6 @@ function buildPaperJsonLd(paper) {
 __name(buildPaperJsonLd, "buildPaperJsonLd");
 __name2(buildPaperJsonLd, "buildPaperJsonLd");
 __name22(buildPaperJsonLd, "buildPaperJsonLd");
-__name222(buildPaperJsonLd, "buildPaperJsonLd");
 function citationAuthorsMeta(paper) {
   const rawAuth = paper.authors || "";
   let authors = [];
@@ -684,7 +660,6 @@ __name(citationAuthorsMeta, "citationAuthorsMeta");
 __name2(citationAuthorsMeta, "citationAuthorsMeta");
 __name22(citationAuthorsMeta, "citationAuthorsMeta");
 __name222(citationAuthorsMeta, "citationAuthorsMeta");
-__name2222(citationAuthorsMeta, "citationAuthorsMeta");
 function renderPaperHTML(paper) {
   const cleanMd = fixMojibake(stripFrontmatter(paper.body_md || ""));
   const md = cleanMd;
@@ -700,7 +675,6 @@ __name2222(renderPaperHTML, "renderPaperHTML");
 __name22222(renderPaperHTML, "renderPaperHTML");
 __name222222(renderPaperHTML, "renderPaperHTML");
 __name2222222(renderPaperHTML, "renderPaperHTML");
-__name22222222(renderPaperHTML, "renderPaperHTML");
 function json(data, status) {
   status = status || 200;
   return new Response(JSON.stringify(data, null, 2), {
@@ -716,7 +690,6 @@ __name2222(json, "json");
 __name22222(json, "json");
 __name222222(json, "json");
 __name2222222(json, "json");
-__name22222222(json, "json");
 async function handlePapers(request, env) {
   try {
     const u = new URL(request.url);
@@ -724,7 +697,7 @@ async function handlePapers(request, env) {
     const search = (u.searchParams.get("search") || "").trim();
     const limit = Math.min(Math.max(parseInt(u.searchParams.get("limit") || "50", 10), 1), 200);
     const offset = Math.max(parseInt(u.searchParams.get("offset") || "0", 10), 0);
-    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill')";
+    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')";
     const params = [];
     if (search) {
       sql += " AND (title LIKE ? OR abstract LIKE ? OR authors LIKE ?)";
@@ -762,13 +735,12 @@ __name2222(handlePapers, "handlePapers");
 __name22222(handlePapers, "handlePapers");
 __name222222(handlePapers, "handlePapers");
 __name2222222(handlePapers, "handlePapers");
-__name22222222(handlePapers, "handlePapers");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return json({ error: "Paper not found", slug }, 404);
     const accept = request.headers.get("Accept") || "";
@@ -790,12 +762,11 @@ __name2222(handlePaperDetail, "handlePaperDetail");
 __name22222(handlePaperDetail, "handlePaperDetail");
 __name222222(handlePaperDetail, "handlePaperDetail");
 __name2222222(handlePaperDetail, "handlePaperDetail");
-__name22222222(handlePaperDetail, "handlePaperDetail");
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC LIMIT 8").all(),
-      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill')").first(),
+      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 8").all(),
+      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first()
     ]);
     const paperCount = countRes ? countRes.cnt : 0;
@@ -817,11 +788,10 @@ __name2222(handleHub, "handleHub");
 __name22222(handleHub, "handleHub");
 __name222222(handleHub, "handleHub");
 __name2222222(handleHub, "handleHub");
-__name22222222(handleHub, "handleHub");
 async function handleAbout(env) {
   try {
     const [pc, nc, ec] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill')").first(),
+      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM edges").first()
     ]);
@@ -836,7 +806,6 @@ async function handleAbout(env) {
 }
 __name(handleAbout, "handleAbout");
 __name2(handleAbout, "handleAbout");
-__name22(handleAbout, "handleAbout");
 function renderAboutHTML(stats) {
   const pageCSS = COMMON_CSS + `
 .about-page{max-width:760px;margin:0 auto;padding:1.4rem 1.6rem 0}
@@ -857,10 +826,9 @@ function renderAboutHTML(stats) {
 }
 __name(renderAboutHTML, "renderAboutHTML");
 __name2(renderAboutHTML, "renderAboutHTML");
-__name22(renderAboutHTML, "renderAboutHTML");
 async function handleSitemap(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
     const base = "https://papers.qnfo.org";
     const all = [
       { loc: base + "/", priority: "1.0" },
@@ -888,7 +856,6 @@ __name2222(handleSitemap, "handleSitemap");
 __name22222(handleSitemap, "handleSitemap");
 __name222222(handleSitemap, "handleSitemap");
 __name2222222(handleSitemap, "handleSitemap");
-__name22222222(handleSitemap, "handleSitemap");
 function handlePapersRobots() {
   return new Response(
     "User-agent: *\nAllow: /\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
@@ -903,10 +870,9 @@ __name2222(handlePapersRobots, "handlePapersRobots");
 __name22222(handlePapersRobots, "handlePapersRobots");
 __name222222(handlePapersRobots, "handlePapersRobots");
 __name2222222(handlePapersRobots, "handlePapersRobots");
-__name22222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC LIMIT 200").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
     let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n\n## Papers\n\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (p.doi ? " (DOI: " + p.doi + ")" : "")).join("\n");
@@ -926,10 +892,9 @@ __name2222(handleLlmsTxt, "handleLlmsTxt");
 __name22222(handleLlmsTxt, "handleLlmsTxt");
 __name222222(handleLlmsTxt, "handleLlmsTxt");
 __name2222222(handleLlmsTxt, "handleLlmsTxt");
-__name22222222(handleLlmsTxt, "handleLlmsTxt");
 async function handleRss(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') ORDER BY created_at DESC LIMIT 50").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 50").all();
     const base = "https://papers.qnfo.org";
     const now = (/* @__PURE__ */ new Date()).toUTCString();
     const items = res.results.map((p) => {
@@ -958,9 +923,8 @@ __name2222(handleRss, "handleRss");
 __name22222(handleRss, "handleRss");
 __name222222(handleRss, "handleRss");
 __name2222222(handleRss, "handleRss");
-__name22222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.5.2-askai-glm53" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: "3.5.3-quarantine-filter" });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -970,7 +934,6 @@ __name2222(health, "health");
 __name22222(health, "health");
 __name222222(health, "health");
 __name2222222(health, "health");
-__name22222222(health, "health");
 async function handleLegal(path, env) {
   try {
     const body = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "QNFO Unified License Agreement v2.0\nFull text at https://legal.qnfo.org");
@@ -993,7 +956,6 @@ __name2222(handleLegal, "handleLegal");
 __name22222(handleLegal, "handleLegal");
 __name222222(handleLegal, "handleLegal");
 __name2222222(handleLegal, "handleLegal");
-__name22222222(handleLegal, "handleLegal");
 async function handleAskAI(request, env) {
   if (!env.AI) return json({ error: "AI binding not configured" }, 503);
   const body = await request.json().catch(() => ({}));
@@ -1002,7 +964,7 @@ async function handleAskAI(request, env) {
   try {
     let paperTitle = "", paperBody = "";
     if (slug) {
-      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill') LIMIT 1").bind(slug).first();
+      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1").bind(slug).first();
       if (paper) {
         paperTitle = paper.title || "";
         paperBody = (stripFrontmatter(paper.body_md) || paper.abstract || "").slice(0, 6e3);
@@ -1028,7 +990,6 @@ __name2222(handleAskAI, "handleAskAI");
 __name22222(handleAskAI, "handleAskAI");
 __name222222(handleAskAI, "handleAskAI");
 __name2222222(handleAskAI, "handleAskAI");
-__name22222222(handleAskAI, "handleAskAI");
 async function handleStats(env) {
   try {
     const [nc, ec, nl, et] = await Promise.all([
@@ -1055,7 +1016,6 @@ __name2222(handleStats, "handleStats");
 __name22222(handleStats, "handleStats");
 __name222222(handleStats, "handleStats");
 __name2222222(handleStats, "handleStats");
-__name22222222(handleStats, "handleStats");
 function sjp(str) {
   if (!str) return {};
   try {
@@ -1072,7 +1032,6 @@ __name2222(sjp, "sjp");
 __name22222(sjp, "sjp");
 __name222222(sjp, "sjp");
 __name2222222(sjp, "sjp");
-__name22222222(sjp, "sjp");
 async function handleNodesList(url, env) {
   const label = url.searchParams.get("label");
   const search = url.searchParams.get("search");
@@ -1104,7 +1063,6 @@ __name2222(handleNodesList, "handleNodesList");
 __name22222(handleNodesList, "handleNodesList");
 __name222222(handleNodesList, "handleNodesList");
 __name2222222(handleNodesList, "handleNodesList");
-__name22222222(handleNodesList, "handleNodesList");
 async function handleNodeGet(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label,properties FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1127,7 +1085,6 @@ __name2222(handleNodeGet, "handleNodeGet");
 __name22222(handleNodeGet, "handleNodeGet");
 __name222222(handleNodeGet, "handleNodeGet");
 __name2222222(handleNodeGet, "handleNodeGet");
-__name22222222(handleNodeGet, "handleNodeGet");
 async function handleNeighbors(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1148,7 +1105,6 @@ __name2222(handleNeighbors, "handleNeighbors");
 __name22222(handleNeighbors, "handleNeighbors");
 __name222222(handleNeighbors, "handleNeighbors");
 __name2222222(handleNeighbors, "handleNeighbors");
-__name22222222(handleNeighbors, "handleNeighbors");
 async function handleEdges(url, env) {
   const type = url.searchParams.get("type");
   const source = url.searchParams.get("source");
@@ -1185,7 +1141,6 @@ __name2222(handleEdges, "handleEdges");
 __name22222(handleEdges, "handleEdges");
 __name222222(handleEdges, "handleEdges");
 __name2222222(handleEdges, "handleEdges");
-__name22222222(handleEdges, "handleEdges");
 async function handleImpact(name, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(name, name).first();
   if (!node) return json({ error: "Node not found: " + name }, 404);
@@ -1220,7 +1175,6 @@ __name2222(handleImpact, "handleImpact");
 __name22222(handleImpact, "handleImpact");
 __name222222(handleImpact, "handleImpact");
 __name2222222(handleImpact, "handleImpact");
-__name22222222(handleImpact, "handleImpact");
 async function handleQuery(request, env) {
   const body = await request.json().catch(() => ({}));
   const { query, params: qParams } = body;
@@ -1242,7 +1196,6 @@ __name2222(handleQuery, "handleQuery");
 __name22222(handleQuery, "handleQuery");
 __name222222(handleQuery, "handleQuery");
 __name2222222(handleQuery, "handleQuery");
-__name22222222(handleQuery, "handleQuery");
 async function handleSync(request, env) {
   if (request.headers.get("X-Sync-Token") !== env.SYNC_TOKEN) {
     return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
@@ -1283,7 +1236,6 @@ __name2222(handleSync, "handleSync");
 __name22222(handleSync, "handleSync");
 __name222222(handleSync, "handleSync");
 __name2222222(handleSync, "handleSync");
-__name22222222(handleSync, "handleSync");
 var gateway_worker_default = {
   async fetch(request, env) {
     const u = new URL(request.url);
