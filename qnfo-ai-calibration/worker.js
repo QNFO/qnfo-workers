@@ -43,6 +43,7 @@ var TIER0_WA = {
 var ALL_MODELS = Object.keys(TIER0_WA).concat(["deepseek-v4-flash", "deepseek-v4-flash-thinking", "deepseek-v4-pro"]);
 var CF_TO_INTERNAL = {};
 (function () { for (var k in TIER0_WA) { if (TIER0_WA[k]) CF_TO_INTERNAL[TIER0_WA[k]] = k; } })();
+CF_TO_INTERNAL["@cf/baai/bge-base-en-v1.5"] = "bge-base-en-v1.5";
 function internalId(m) { if (CF_TO_INTERNAL[m]) return CF_TO_INTERNAL[m]; if (m && m.indexOf("@cf/") === 0) { for (var k in TIER0_WA) { if (TIER0_WA[k] && TIER0_WA[k].indexOf(m.slice(5)) >= 0) return k; } } return m; }
 var DEFAULT_VISION = "kimi-k2.6,kimi-k2.7-code,glm-5.3-flash,gemma-4-26b,llama-3.2-11b-vision";
 
