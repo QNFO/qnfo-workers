@@ -7,7 +7,7 @@
 //       all scheduled workers, autonomous + receipted).
 //   (3) DAILY DIGEST — writes kind=autopilot-cycle / daily-digest events (proactive reporting).
 // CANONICAL: QNFO/qnfo-workers/qnfo-autopilot/worker.js. DEPLOY: wrangler (D1 AUDIT + cron 5 * * * *).
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const NAME = 'qnfo-autopilot';
 const DASH = 'https://fleet.qnfo.org/api/state';
 const UA = 'qnfo-autopilot/' + VERSION;
@@ -20,6 +20,7 @@ function nowIso() { return new Date().toISOString(); }
 async function ensureSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_activity_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, worker_name TEXT NOT NULL, day TEXT NOT NULL, req24 INTEGER, source TEXT, ts TEXT)").run();
   await env.AUDIT.prepare("CREATE INDEX IF NOT EXISTS idx_wad_day ON worker_activity_daily(day)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT NOT NULL, ts TEXT, status TEXT DEFAULT 'proposed', proposal TEXT, sha256 TEXT)").run();
 }
 
 // PRECONDITION: register populated. POSTCONDITION: overdue open rows returned (receipted, not modified).
@@ -59,6 +60,130 @@ async function cycle(env) {
   return report;
 }
 
+const GH_API = 'https://api.github.com';
+const B64C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// PRECONDITION: utf-8 string. POSTCONDITION: base64 (pure JS, no btoa dependency).
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += B64C[b0 >> 2] + B64C[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? B64C[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    out += i + 2 < bytes.length ? B64C[b2 & 63] : '=';
+  }
+  return out;
+}
+
+// PRECONDITION: env.GITHUB_TOKEN set. POSTCONDITION: file created/updated on GitHub (commit + ref update).
+// This is the capability that was previously device-bound (local git). Now cloud-native via GitHub API.
+async function gitCommit(env, owner, repo, path, content, message) {
+  const tok = env.GITHUB_TOKEN;
+  if (!tok) return { ok: false, why: 'no GITHUB_TOKEN secret' };
+  const url = GH_API + '/repos/' + owner + '/' + repo + '/contents/' + path;
+  const hdrs = { 'Authorization': 'Bearer ' + tok, 'User-Agent': UA, 'Accept': 'application/vnd.github+json' };
+  const body = { message: message, content: b64encode(content), branch: 'main' };
+  try {
+    const ex = await fetch(url + '?ref=main', { headers: hdrs });
+    if (ex.ok) { const j = await ex.json(); if (j && j.sha) body.sha = j.sha; }
+  } catch (e) {}
+  try {
+    const resp = await fetch(url, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, hdrs), body: JSON.stringify(body) });
+    const j = await resp.json();
+    return { ok: resp.ok, status: resp.status, commit: (j.commit && j.commit.sha) ? String(j.commit.sha).slice(0, 7) : null, path: j.content ? j.content.path : null, error: resp.ok ? null : String(j.message || '').slice(0, 120) };
+  } catch (e) {
+    return { ok: false, why: String(e && e.message ? e.message : e).slice(0, 120) };
+  }
+}
+
+// PRECONDITION: dashboard reachable. POSTCONDITION: markdown report committed to qnfo-ops/docs (no local python).
+async function publishReport(env) {
+  let st;
+  try {
+    const resp = await fetch(DASH, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
+    if (!resp.ok) return { ok: false, why: 'dash ' + resp.status };
+    st = await resp.json();
+  } catch (e) { return { ok: false, why: String(e && e.message ? e.message : e).slice(0, 60) }; }
+  const rc = st.report_card || {};
+  const ig = st.integration || {};
+  const sys = ig.system || {};
+  const day = nowIso().slice(0, 10);
+  const md = [
+    '# QNFO Autopilot Report ' + day,
+    '',
+    '> Generated autonomously by qnfo-autopilot ' + VERSION + ' (cloud; no local python/git).',
+    '',
+    '## Autonomy ladder',
+    '- LoA: ' + (rc.loa || '?') + ' (' + (rc.loa_label || '') + ')',
+    '- AGI level: ' + (rc.agi || '?'),
+    '- VSM: ' + (rc.vsm || '?'),
+    '- OODA: ' + (rc.ooda || '?'),
+    '- Watchmaker (human-gated ops): ' + (rc.watchmaker || '?'),
+    '- Drift: ghost ' + ((rc.drift && rc.drift.ghost) || 0) + ', unregistered ' + ((rc.drift && rc.drift.unregistered) || 0) + ', unversioned ' + ((rc.drift && rc.drift.unversioned) || 0),
+    '',
+    '## System integration score',
+    '- Total: ' + ((sys.score && sys.score.total) || '?') + '/100 (chains ' + ((sys.score && sys.score.chains) || '?') + ' / coverage ' + ((sys.score && sys.score.coverage) || '?') + ' / freshness ' + ((sys.score && sys.score.freshness) || '?') + ')',
+    '- Coverage: ' + JSON.stringify(sys.coverage || {}),
+    '',
+    '## Opportunities',
+    (sys.opportunities || []).map(function (o) { return '- [' + o.kind + '] ' + o.text; }).join('\n') || '- none',
+    '',
+    '## Fleet',
+    '- Workers: ' + ((st.fleet && st.fleet.workers) || '?') + ' | Scheduled: ' + ((st.fleet && st.fleet.scheduled) || '?') + ' | Probes: ' + ((st.fleet && st.fleet.probes) || '?'),
+    '',
+  ].join('\n');
+  return await gitCommit(env, 'QNFO', 'qnfo-ops', 'docs/AUTOPILOT-REPORT-' + day + '.md', md, 'autopilot: cloud-generated report ' + day);
+}
+
+const CF_API = 'https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b';
+const EVOLVE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+
+// PRECONDITION: multipart envelope from content/v2. POSTCONDITION: raw module code.
+function unwrap(raw) {
+  if (!raw || raw.indexOf('Content-Disposition') < 0) return raw;
+  const m = raw.match(/Content-Type: [^\r\n]+\r\n\r\n/);
+  if (!m) return raw;
+  const idx = raw.indexOf(m[0]) + m[0].length;
+  let code = raw.slice(idx);
+  const bm = code.match(/\r\n--[A-Za-z0-9]+--\r?\n?$/);
+  if (bm) code = code.slice(0, code.length - bm[0].length);
+  return code;
+}
+
+async function sha256hex(str) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(d)].map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+// PROPOSE rung of self-rewrite (RSI): read a worker's deployed source, generate a candidate improvement
+// via Workers AI, store as 'proposed' (NEVER auto-deploy). Apply rung stays behind the autonomy ladder
+// (L3 promotion: N=3 clean cycles + tested kill-switch + tested rollback).
+async function evolvePropose(env, worker, goal) {
+  if (!env.CF_API_TOKEN) return { ok: false, why: 'no CF_API_TOKEN secret' };
+  if (!env.AI) return { ok: false, why: 'no AI binding' };
+  let code;
+  try {
+    const resp = await fetch(CF_API + '/workers/scripts/' + worker + '/content/v2', { headers: { 'Authorization': 'Bearer ' + env.CF_API_TOKEN, 'User-Agent': UA } });
+    if (!resp.ok) return { ok: false, why: 'source ' + resp.status };
+    const raw = await resp.text();
+    code = unwrap(raw);
+  } catch (e) { return { ok: false, why: String(e && e.message ? e.message : e).slice(0, 80) }; }
+  const prompt = 'You are improving a Cloudflare Worker. Goal: ' + (goal || 'add a /version endpoint that returns JSON {ok:true,version}') + '. Here is the current module source:\n\n' + code.slice(0, 24000) + '\n\nReturn ONLY the complete modified source (JavaScript, valid module syntax).';
+  let proposal;
+  try {
+    const out = await env.AI.run(EVOLVE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 24000 });
+    proposal = typeof out === 'string' ? out : (out.response || JSON.stringify(out));
+  } catch (e) { return { ok: false, why: 'AI ' + String(e && e.message ? e.message : e).slice(0, 80) }; }
+  const hash = await sha256hex(proposal);
+  try {
+    await env.AUDIT.prepare('INSERT INTO evolve_candidates (worker, ts, status, proposal, sha256) VALUES (?1, ?2, ?3, ?4, ?5)').bind(worker, nowIso(), 'proposed', proposal, hash).run();
+  } catch (e) {}
+  return { ok: true, worker: worker, candidate_bytes: proposal.length, sha256: hash.slice(0, 16), status: 'proposed (NOT deployed)' };
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     await ensureSchema(env);
@@ -70,6 +195,20 @@ export default {
     await ensureSchema(env);
     if (p === '/health') return json({ ok: true, name: NAME, version: VERSION });
     if (p === '/run/cycle') return json({ ok: true, report: await cycle(env) });
-    return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/cycle'] }, 404);
+    if (p === '/git/commit' && request.method === 'POST') {
+      let b = {}; try { b = await request.json(); } catch (e) { return json({ ok: false, error: 'bad json' }, 400); }
+      if (!b.owner || !b.repo || !b.path || b.content == null) return json({ ok: false, error: 'need owner, repo, path, content' }, 400);
+      const r = await gitCommit(env, b.owner, b.repo, b.path, String(b.content), b.message || ('autopilot commit ' + nowIso().slice(0, 16)));
+      return json({ ok: r.ok, commit: r });
+    }
+    if (p === '/publish/report') {
+      return json({ ok: true, commit: await publishReport(env) });
+    }
+    if (p === '/evolve/propose' && request.method === 'POST') {
+      let b = {}; try { b = await request.json(); } catch (e) { return json({ ok: false, error: 'bad json' }, 400); }
+      if (!b.worker) return json({ ok: false, error: 'need worker' }, 400);
+      return json({ ok: true, proposal: await evolvePropose(env, b.worker, b.goal) });
+    }
+    return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/cycle', '/git/commit', '/publish/report'] }, 404);
   }
 };
