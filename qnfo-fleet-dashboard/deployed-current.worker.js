@@ -2063,7 +2063,7 @@ async function ensureReportCardTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS report_card_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, sai REAL, grade TEXT, scores_json TEXT, signals_json TEXT)").run();
 }
 __name(ensureReportCardTable, "ensureReportCardTable");
-function computeSai(st) {
+function computeSai(st, bench) {
   const clamp = function (x) { return Math.max(0, Math.min(1, x)); };
   const probes = st.probes || [];
   const probeRatio = probes.length ? probes.filter(function (p) { return p.ok; }).length / probes.length : 0;
@@ -2090,7 +2090,7 @@ function computeSai(st) {
   const userFreedom = userWait === 0 ? 1 : userWait > 0 ? clamp(1 - 0.15 * userWait) : 1;
   const loopHealth = 0.4 * probeRatio + 0.4 * chainRatio + 0.2 * (noRun === 0 ? 1 : 0.5);
   const autonomy = Math.min(0.5 * userFreedom + 0.5 * loopHealth, 0.70);
-  const thinking = 0.5;
+  const thinking = 0.5 + 0.5 * (typeof bench === "number" && bench >= 0 && bench <= 1 ? bench : 0);
   const decision = 0.25 * 0.95 + 0.25 * 0.70 + 0.25 * 0.40 + 0.25 * 0.90;
   const kaizen = openIssues === 0 ? 1 : openIssues > 0 ? clamp(1 - 0.05 * openIssues) : 1;
   const selfImprov = 0.3 * kaizen + 0.2 * 1 + 0.5 * 0.15;
@@ -2116,7 +2116,9 @@ async function persistWeeklyReportCard(env, st) {
     const iso = now.toISOString().slice(0, 10);
     const prior = await env.AUDIT.prepare("SELECT id FROM report_card_history WHERE ts LIKE ?1").bind(iso + "%").first();
     if (prior) return { weekly: false, dup: true };
-    const sai = computeSai(st);
+    let bench = 0;
+    try { const br = await env.AUDIT.prepare("SELECT value FROM report_card_inputs WHERE key = 'arc_agi_10task_pass_rate'").first(); if (br && br.value != null && !isNaN(Number(br.value))) bench = Number(br.value); } catch (e) {}
+    const sai = computeSai(st, bench);
     const grade = sai.sai >= 85 ? "A" : sai.sai >= 75 ? "B" : sai.sai >= 65 ? "C" : sai.sai >= 55 ? "D" : "F";
     await env.AUDIT.prepare("INSERT INTO report_card_history (ts, sai, grade, scores_json, signals_json) VALUES (?1, ?2, ?3, ?4, ?5)").bind(now.toISOString(), sai.sai, grade, JSON.stringify(sai.scores), JSON.stringify(sai.signals)).run();
     try {
