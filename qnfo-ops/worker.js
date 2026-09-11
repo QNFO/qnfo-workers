@@ -1114,7 +1114,7 @@ async function logOps(env, rec) {
   if (rec && !rec.ok) {
     try {
       const title = "[ops-chat-fail] model=" + String(rec.model || "?") + " " + String(rec.response || "").slice(0, 80);
-      const _fp2 = "chatfail:" + fnv32(title); const dup = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(_fp2).first(); if (!dup) { await env.QNFO_AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,?4,?5,'open',?6,?6,1,?7,?6)").bind(_fp2, "qnfo-ops", "medium", "ops-chat-fail", title, (new Date()).toISOString().slice(0, 19).replace("T", " "), "Auto-filed by qnfo-ops chat-failure feed (KAIZEN-CHAT-FAIL-1).").run(); }
+      const _fp2 = "chatfail:" + fnv32(title); const dup = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(_fp2).first(); if (!dup) { await env.QNFO_AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,?4,?5,'open',?6,?6,1,?7,?6)").bind(_fp2, "qnfo-ops", "medium", "ops-chat-fail", title, (new Date()).toISOString().slice(0, 19).replace("T", " "), "Auto-filed by qnfo-ops chat-failure feed (KAIZEN-CHAT-FAIL-1).").run();
       }
     } catch (e2) {
     }
