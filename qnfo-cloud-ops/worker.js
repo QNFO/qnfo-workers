@@ -539,6 +539,21 @@ const REGISTER_R2_KEY = "obsidian/notes/v1/_personal-gtd.md";
 const CLOUD_APPEND_R2_KEY = "obsidian/notes/v1/_gtd-cloud-append.md";
 const AI_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 
+function aiText(r) {
+  if (!r) return "";
+  if (typeof r === "string") return r;
+  if (typeof r.response === "string" && r.response) return r.response;
+  if (r.result && typeof r.result.response === "string" && r.result.response) return r.result.response;
+  if (r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
+  if (r.result && r.result.choices && r.result.choices[0] && r.result.choices[0].message) return String(r.result.choices[0].message.content || "");
+  return "";
+}
+function aiFinish(r) {
+  if (r && r.choices && r.choices[0]) return r.choices[0].finish_reason || "";
+  if (r && r.result && r.result.choices && r.result.choices[0]) return r.result.choices[0].finish_reason || "";
+  return "";
+}
+
 async function r2GetText(env, key) {
   try {
     const obj = await env.VAULT.get(key);
@@ -606,12 +621,23 @@ async function jobResearchScan(env) {
       const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" +
         real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") +
         "\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates — a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads — papers directly relevant to JPCUB/joules-per-solution or ultrametric physics that Rowan should read; (3) dated register lines — anything with a deadline or action date.\nReply with STRICT JSON only: {\"gtd_lines\":[{\"date\":\"YYYY-MM-DD\",\"text\":\"one short action line\"}],\"outreach\":[{\"paper_id\":\"\",\"reason\":\"one line\"}],\"must_read\":[{\"paper_id\":\"\",\"reason\":\"one line\"}]}. Empty arrays are fine. No prose.";
-      const resp = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
-      const content = (resp && (resp.response || (resp.result && resp.result.response))) || "";
+      let aiRes = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 2048 }, { gateway: { id: "default" } });
+      let content = aiText(aiRes);
+      let finish = aiFinish(aiRes);
+      if (!content) {
+        aiRes = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 4096 }, { gateway: { id: "default" } });
+        content = aiText(aiRes);
+        finish = aiFinish(aiRes);
+      }
       const m = content.match(/\{[\s\S]*\}/);
       if (m) {
         const p = JSON.parse(m[0]);
         if (p && Array.isArray(p.gtd_lines)) extracted = p;
+        else extracted = { gtd_lines: [], outreach: [], must_read: [], error: "extractor returned JSON without gtd_lines" };
+      } else if (!content) {
+        extracted = { gtd_lines: [], outreach: [], must_read: [], error: "extractor returned EMPTY content (finish=" + (finish || "unknown") + ", budgets 2048+4096 tried) - reasoning likely consumed the budget" };
+      } else {
+        extracted = { gtd_lines: [], outreach: [], must_read: [], error: "extractor returned unparseable content: " + String(content).slice(0, 160) };
       }
     } catch (e) {
       extracted = { gtd_lines: [], outreach: [], must_read: [], error: String(e && e.message || e) };
