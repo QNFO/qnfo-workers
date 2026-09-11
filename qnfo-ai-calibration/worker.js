@@ -240,18 +240,21 @@ async function upsertHealth(env, model, status, latency, failures) {
   await env.QNFO_AUDIT.prepare("INSERT INTO ai_model_health (model_id, status, ctx_override, vision_override, reasoning_override, last_probe_ts, last_latency_ms, consecutive_failures, updated_at) VALUES (?1, ?2, NULL, NULL, NULL, ?3, ?4, ?5, ?3) ON CONFLICT(model_id) DO UPDATE SET status = ?2, last_probe_ts = ?3, last_latency_ms = ?4, consecutive_failures = ?5, updated_at = ?3")
     .bind(model, status, now(), latency, failures).run();
 }
+function fnv32(s) { var h = 2166136261 >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return ("00000000" + h.toString(16)).slice(-8); }
 async function fileIssue(env, title, description, priority) {
-  var r = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
-  if (r) return false;
-  await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-ai-calibration', 'ai-calibration', ?3, 'open', ?4, ?4)")
-    .bind(title, description, priority || "medium", now()).run();
+  var tag = (title.indexOf("[gw-fail]") === 0) ? "gwfail" : "cal";
+  var fp = tag + ":" + fnv32(title);
+  var ex = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(fp).first();
+  if (ex) { await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET occurrences = occurrences + 1, last_seen = ?2, last_detail = ?3, updated_at = ?2, status = 'open', resolved_at = NULL, resolution_note = NULL WHERE fingerprint = ?1").bind(fp, now(), String(description || "").slice(0, 500)).run(); return false; }
+  await env.QNFO_AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1, 'qnfo-ai-calibration', ?2, 'ai-calibration', ?3, 'open', ?4, ?4, 1, ?5, ?4)").bind(fp, (priority === "high" ? "error" : "warn"), title, now(), String(description || "").slice(0, 500)).run();
   return true;
 }
 async function closeIssue(env, title, reason) {
-  var r = await env.QNFO_AUDIT.prepare("SELECT id, description FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
-  if (!r) return false;
-  var desc = (r.description || "") + " | auto-closed: " + reason;
-  await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status = 'closed', description = ?2, updated_at = ?3 WHERE id = ?1").bind(r.id, desc, now()).run();
+  var tag = (title.indexOf("[gw-fail]") === 0) ? "gwfail" : "cal";
+  var fp = tag + ":" + fnv32(title);
+  var ex = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1 AND status = 'open' LIMIT 1").bind(fp).first();
+  if (!ex) return false;
+  await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET status = 'resolved', resolved_at = ?2, resolution_note = ?3, updated_at = ?2 WHERE fingerprint = ?1").bind(fp, now(), String(reason || "").slice(0, 300)).run();
   return true;
 }
 

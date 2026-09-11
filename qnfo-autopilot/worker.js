@@ -311,7 +311,7 @@ async function evolveApply(env, worker, candidateId, goal) {
     if (!resp.ok) return { ok: false, why: 'snapshot read ' + resp.status };
     current = unwrap(await resp.text());
   } catch (e) { return { ok: false, why: 'snapshot ' + String(e && e.message ? e.message : e).slice(0, 60) }; }
-  const isModule = current.indexOf('export default') >= 0 || current.indexOf('__esm') >= 0;
+  const isModule = current.indexOf('export default') >= 0 || current.indexOf('export {') >= 0 || current.indexOf('export{') >= 0 || current.indexOf('export ') >= 0 || current.indexOf('__esm') >= 0;
   const rbHash = await sha256hex(current);
   await env.AUDIT.prepare('INSERT INTO evolve_rollback (worker, ts, source, sha256) VALUES (?1, ?2, ?3, ?4)').bind(worker, nowIso(), current, rbHash).run();
   const put = await deployWorker(env, worker, proposal, isModule);
