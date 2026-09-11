@@ -10,7 +10,7 @@
 
 import { FLEET } from './fleet.js';
 
-const VERSION = '1.1.2';
+const VERSION = '1.1.3';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -276,7 +276,7 @@ async function assessIntegration(env) {
     ['cloud_ops_events', 'SELECT MAX(ts) latest FROM cloud_ops_events'],
     ['fleet_probe_log', 'SELECT MAX(ts) latest FROM fleet_probe_log'],
     ['ops_ai_log', 'SELECT MAX(ts) latest FROM ops_ai_log'],
-    ['deployment_history', 'SELECT MAX(ts) latest FROM deployment_history'],
+    ['deployment_history', 'SELECT MAX(deployed_at) latest FROM deployment_history'],
     ['self_heal_actions', 'SELECT MAX(ts) latest FROM self_heal_actions'],
     ['issue_ledger', 'SELECT MAX(last_seen) latest FROM issue_ledger'],
   ];
