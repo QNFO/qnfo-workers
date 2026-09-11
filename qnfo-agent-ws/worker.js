@@ -61315,7 +61315,7 @@ function handleModels(env2) {
       owned_by: "qnfo",
       _agent: {
         version: VERSION2,
-        model: env2.DEEPSEEK_API_KEY ? "deepseek-chat" : "workers-ai llama-3.3-70b (structured tool calls)",
+        model: env2.DEEPSEEK_API_KEY ? "deepseek-chat" : "workers-ai glm-5.3 (structured tool calls)",
         tools: [
           "search_papers",
           "get_paper_context",
