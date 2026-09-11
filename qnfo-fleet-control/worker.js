@@ -6,7 +6,19 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var VERSION = "0.3.3";
 var WORKER = "qnfo-fleet-advisor";
 var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
-async function probeHealth(name) {
+async function workerNameSet(env) {
+  try {
+    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + (env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b") + "/workers/scripts?per_page=100", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "User-Agent": "qnfo-fleet-advisor" }, signal: AbortSignal.timeout(8e3) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return new Set((j.result || []).map((x) => x.id));
+  } catch (e) { return null; }
+}
+async function probeHealth(name, names) {
+  if (names && names.size) {
+    if (names.has(name)) return { ok: true, via: "cf-api-list", version: null };
+    return { ok: false, detail: "not-in-cf-worker-list" };
+  }
   const hosts = [name + ".q08.workers.dev", name + ".qnfo.org"];
   const tried = [];
   for (const h of hosts) {
@@ -105,7 +117,8 @@ async function runAudit(env) {
   const ts = nowIso();
   const findings = [];
   const PROBES = (env.PROBE_WORKERS || "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-cloud-ops,qnfo-infra,qnfo-auditor").split(",").map((s) => s.trim()).filter(Boolean);
-  const results = await Promise.all(PROBES.map((n) => probeHealth(n)));
+  const workerNames = await workerNameSet(env);
+  const results = await Promise.all(PROBES.map((n) => probeHealth(n, workerNames)));
   const down = [];
   for (let i = 0; i < PROBES.length; i++) if (!results[i].ok) down.push(PROBES[i] + "(" + (results[i].detail || "") + ")");
   try {
@@ -249,8 +262,6 @@ var server_default = {
 };
 return { FleetAdvisor: FleetAdvisor, default: server_default };
 })();
-const FleetAdvisor = advisorMod.FleetAdvisor;
-export { FleetAdvisor };
 var calibratorMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
