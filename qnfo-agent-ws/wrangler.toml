@@ -1,0 +1,31 @@
+name = "qnfo-agent-ws"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[ai]
+binding = "AI"
+
+[[send_email]]
+binding = "EMAIL"
+
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[d1_databases]]
+binding = "QNFO_GRAPH"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[vectorize]]
+binding = "PAPER_VZ"
+index_name = "qwav-research-v2"
+
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+
+[durable_objects]
+bindings = [{ name = "QnfoAgent", class_name = "QnfoAgent" }]
