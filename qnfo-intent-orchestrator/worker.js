@@ -13,7 +13,7 @@
 //   POST /triage/dispatch, POST /triage/sync, POST /triage/candidate
 // Scheduled: 06:00 digest email; 06:30 triage batch + task sync + auto-dispatch (1 active task)
 const NL = String.fromCharCode(10);
-const VERSION = '1.3.4'; // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN)
+const VERSION = '1.3.5'; // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN)
 const ROUTER = 'https://qnfo-ai.q08.workers.dev';
 const AGENT_ORCH = 'https://qnfo-agent-orchestrator.q08.workers.dev';
 const PROMOTE_THRESHOLD = 60;
@@ -134,6 +134,12 @@ async function storeNote(env, intent) {
 async function handleIntent(env, body, source, device) {
   const desire = clamp(body.desire, 4000);
   if (!desire) return { error: 'desire required' };
+  // v1.3.5 (row 215): meta/silence pre-filter - a chat-history-naming / non-actionable meta prompt
+  // must NOT be classified as a user intent (was leaking 'give this conversation a name' -> type=email).
+  // Reuses the research-triage NOISE_RE; returns a silent disposition (no row inserted).
+  if (isNoise(desire) || /^(name|title|summarize|summarise)\s+(this|the)\s+(conversation|chat)/i.test(desire)) {
+    return { silent: true, reason: 'meta', type: 'unknown', status: 'silenced' };
+  }
   const ai = await classifyAI(env, desire);
   const cls = ai || classifyRules(desire);
   if (!cls.summary) {
