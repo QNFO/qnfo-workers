@@ -143,10 +143,10 @@ const EVOLVE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 // SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
 // Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
-const COVERAGE = [
+const COVERAGE = ['jnl-pipeline', 
   'qnfo-email', 'qnfo-ai-search', 'obsidian-writer', 'qnfo-lifecycle',
-  'calendar-api', 'personal-events-radar', 'jnl-watch', 'jnl-referee', 'jnl-reviser', 'jnl-zenodo',
-  'job-market-watch', 'radar-hub', 'qnfo-events', 'qnfo-archive', 'qnfo-blank-audit', 'qnfo-chat-canary',
+  'calendar-api', 
+  'radar-hub', 'qnfo-events', 'qnfo-archive', 'qnfo-blank-audit', 'qnfo-chat-canary',
   'qnfo-ddocs-indexer', 'qnfo-idea-miner', 'qnfo-idea-triage', 'qnfo-impact', 'qnfo-paper-explainer', 'qnfo-paper-indexer',
   'qnfo-proof', 'qnfo-thread-ingest', 'qnfo-register-guard', 'qnfo-scorecard'
 ];
