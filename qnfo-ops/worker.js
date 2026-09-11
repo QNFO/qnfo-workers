@@ -3,7 +3,17 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.9.3";
+var VERSION = "2.9.4";
+// SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
+function firstFrameIdx(s) {
+  if (!s || typeof s !== 'string') return -1;
+  const bar = '｜';
+  let best = -1;
+  const marks = [bar + bar + 'DSML', "<" + 'tool_calls', "<" + 'invoke'];
+  for (let i = 0; i < marks.length; i++) { const p = s.indexOf(marks[i]); if (p >= 0 && (best < 0 || p < best)) best = p; }
+  return best;
+}
+function stripToolFrames(s) { const i = firstFrameIdx(s); return i < 0 ? s : s.slice(0, i).replace(/[ \t\r\n<]+$/, ''); }
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -1472,7 +1482,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
               const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
               if (delta) {
                 if (delta.content) content += delta.content;
-                emitChunk(delta, null);
+                if (firstFrameIdx(content) < 0) emitChunk(delta, null);
               }
             } catch (e) {
             }
@@ -1495,6 +1505,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const finalize = /* @__PURE__ */ __name(async function() {
     if (finalized) return null;
     finalized = true;
+    content = stripToolFrames(content);
     const promptTokens = upstreamUsage && upstreamUsage.prompt_tokens ? upstreamUsage.prompt_tokens : estTokens(JSON.stringify(work));
     const completionTokens = upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
     const costUsd = costUsdCalc(promptTokens, completionTokens);
