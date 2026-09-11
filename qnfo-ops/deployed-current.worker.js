@@ -4,7 +4,17 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.9.3";
+var VERSION = "2.9.5";
+// SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
+function firstFrameIdx(s) {
+  if (!s || typeof s !== 'string') return -1;
+  const bar = '｜';
+  let best = -1;
+  const marks = [bar + bar + 'DSML', "<" + 'tool_calls', "<" + 'invoke'];
+  for (let i = 0; i < marks.length; i++) { const p = s.indexOf(marks[i]); if (p >= 0 && (best < 0 || p < best)) best = p; }
+  return best;
+}
+function stripToolFrames(s) { const i = firstFrameIdx(s); return i < 0 ? s : s.slice(0, i).replace(/[ \t\r\n<]+$/, ''); }
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -1462,7 +1472,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
               const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
               if (delta) {
                 if (delta.content) content += delta.content;
-                emitChunk(delta, null);
+                if (firstFrameIdx(content) < 0) emitChunk(delta, null);
               }
             } catch (e) {
             }
@@ -1489,6 +1499,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     const completionTokens = upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
     const costUsd = costUsdCalc(promptTokens, completionTokens);
     const latencyMs = Date.now() - t0;
+    content = stripToolFrames(content);
     const logRec = { id: randId("ops-"), ts: iso(), model: wanted, strategy, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
