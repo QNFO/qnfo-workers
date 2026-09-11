@@ -1,24 +1,22 @@
-// qnfo-skill-sync v1.1.0 - QNFO.INF.KAIZEN.W6-8 (2026-08-21)
-// W6: extractor v2 uses error_sample evidence; normalized titles stored + deduped
-// W7: auto-close stale kaizen-ai issues (>30d untouched); never user-sourced
-// W8: issue source = extracted skill name (lights up qnfo-kaizen incident scoring)
-// Also: /log/chat persists error_count + error_sample; per-batch processed marking
-// (no silent loss: logs only marked processed after their batch is extracted)
+var m0 = (function(){
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// worker.js
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
-
+__name(json, "json");
 function base64Encode(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
 }
-
+__name(base64Encode, "base64Encode");
 async function readJson(req) {
   try {
     return await req.json();
@@ -26,18 +24,17 @@ async function readJson(req) {
     return null;
   }
 }
-
+__name(readJson, "readJson");
 async function githubFetch(env, path, init = {}) {
   const headers = {
     "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
     "Accept": "application/vnd.github+json",
     "User-Agent": "qnfo-skill-sync",
-    ...(init.headers || {})
+    ...init.headers || {}
   };
   return fetch(`https://api.github.com${path}`, { ...init, headers });
 }
-
-// W6: normalize titles for dedup + display (session/run ids collapse to <id>)
+__name(githubFetch, "githubFetch");
 function normalizeTitle(t) {
   if (!t) return t;
   let s = String(t).trim();
@@ -45,7 +42,7 @@ function normalizeTitle(t) {
   s = s.replace(/\s+/g, " ");
   return s.slice(0, 500);
 }
-
+__name(normalizeTitle, "normalizeTitle");
 var EXTRACT_PROMPT = `You are the QNFO kaizen issue extractor. Analyze DeepChat session records and extract ONLY real, actionable issues, errors, or optimization opportunities.
 
 Session record format:
@@ -66,8 +63,7 @@ SESSION RECORDS:
 {summaries}
 
 OUTPUT:`;
-
-export default {
+var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const method = request.method;
@@ -108,7 +104,7 @@ export default {
         (body.summary || "").slice(0, 8e3),
         body.error_flag ? 1 : 0,
         body.error_count || 0,
-        (body.error_sample || "").slice(0, 1000),
+        (body.error_sample || "").slice(0, 1e3),
         createdAt
       ).run();
       return json({ success: true, id: res.meta.last_row_id });
@@ -215,19 +211,15 @@ export default {
     ctx.waitUntil(runKaizenCycle(env));
   }
 };
-
 async function runKaizenCycle(env, limit = 100) {
   const started = Date.now();
-  const report = { date: new Date().toISOString().slice(0, 10), extracted: 0, issues: 0, staleClosed: 0, reportUrl: null, errors: [] };
-  // v1.1.1: reclaim stale locks. A cycle killed mid-run (e.g. waitUntil wall-clock
-  // limit) leaves the lock row behind; without this the daily cron skips forever.
+  const report = { date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), extracted: 0, issues: 0, staleClosed: 0, reportUrl: null, errors: [] };
   try {
     const reclaimed = await env.AUDIT_DB.prepare(
       "DELETE FROM kaizen_locks WHERE lock_key = 'cycle' AND started_at < ?"
-    ).bind(started - 20 * 60 * 1000).run();
+    ).bind(started - 20 * 60 * 1e3).run();
     if (reclaimed.meta.changes > 0) report.staleLockReclaimed = true;
   } catch (e) {
-    // table may not exist yet; the create-fallback below handles it
   }
   try {
     const lock = await env.AUDIT_DB.prepare(
@@ -248,7 +240,6 @@ async function runKaizenCycle(env, limit = 100) {
     }
   }
   try {
-    // W7: auto-close stale kaizen-ai issues (>30 days untouched). Never user-sourced.
     try {
       const stale = await env.AUDIT_DB.prepare(
         "UPDATE agent_issues SET status = 'wontfix', updated_at = ? WHERE source = 'kaizen-ai' AND status = 'open' AND updated_at < ?"
@@ -266,13 +257,14 @@ async function runKaizenCycle(env, limit = 100) {
         const batch = logs.results.slice(bi, bi + BATCH);
         const summaries = batch.map((l) => {
           const flag = l.error_flag ? " [ERROR]" : "";
-          const es = l.error_sample ? `\n  error_sample: ${String(l.error_sample).slice(0, 500)}` : "";
+          const es = l.error_sample ? `
+  error_sample: ${String(l.error_sample).slice(0, 500)}` : "";
           return `- Session ${l.session_id}${flag}: ${l.title || "untitled"}
   summary: ${(l.summary || "").slice(0, 300)}${es}`;
         }).join("\n");
         const aiResp = await env.AI.run(
           "@cf/qwen/qwen3-30b-a3b-fp8",
-          { messages: [{ role: "user", content: EXTRACT_PROMPT.replace("{summaries}", summaries) }], max_tokens: 1024, temperature: 0.2 }
+          { messages: [{ role: "user", content: EXTRACT_PROMPT.replace("{summaries}", summaries) }], max_tokens: 2048, temperature: 0.2 }
         );
         let items = [];
         if (Array.isArray(aiResp?.response)) {
@@ -285,7 +277,7 @@ async function runKaizenCycle(env, limit = 100) {
           else if (typeof aiResp?.content === "string") text = aiResp.content;
           else text = JSON.stringify(aiResp);
           const cleaned = text.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
-          const firstJsonBlock = (s) => {
+          const firstJsonBlock = /* @__PURE__ */ __name((s) => {
             const open2 = s.indexOf("{");
             const openArr = s.indexOf("[");
             let start;
@@ -309,14 +301,17 @@ async function runKaizenCycle(env, limit = 100) {
               }
             }
             return null;
-          };
+          }, "firstJsonBlock");
           const block = firstJsonBlock(cleaned);
           if (block) {
             try {
               const parsed = JSON.parse(block);
               if (!Array.isArray(parsed) && typeof parsed === "object") {
                 for (const k of ["issues", "items", "results", "findings"]) {
-                  if (Array.isArray(parsed[k])) { items = parsed[k]; break; }
+                  if (Array.isArray(parsed[k])) {
+                    items = parsed[k];
+                    break;
+                  }
                 }
                 if (items.length === 0 && Object.values(parsed).some((v) => v && typeof v === "object" && !Array.isArray(v))) {
                   items = Object.values(parsed).filter((v) => v && typeof v === "object" && !Array.isArray(v));
@@ -337,11 +332,9 @@ async function runKaizenCycle(env, limit = 100) {
           if (!item.title) continue;
           const priority = ["high", "medium", "low"].includes(item.priority) ? item.priority : "medium";
           const category = ["error", "optimization", "request", "infrastructure"].includes(item.category) ? item.category : "optimization";
-          // W6: normalized title (stored) - kills "Error in Session <id>" spam
           const normTitle = normalizeTitle(item.title);
           if (!normTitle) continue;
-          // W8: skill-scoped source when the extractor identified a skill
-          const source = (typeof item.skill === "string" && item.skill.trim()) ? item.skill.trim().toLowerCase().slice(0, 100) : "kaizen-ai";
+          const source = typeof item.skill === "string" && item.skill.trim() ? item.skill.trim().toLowerCase().slice(0, 100) : "kaizen-ai";
           const dup = await env.AUDIT_DB.prepare(
             "SELECT id FROM agent_issues WHERE title = ? AND source = ? AND status = 'open' LIMIT 1"
           ).bind(normTitle, source).first();
@@ -361,7 +354,6 @@ async function runKaizenCycle(env, limit = 100) {
           ).run();
           report.extracted++;
         }
-        // Mark this batch processed only AFTER successful extraction (no silent loss)
         for (const l of batch) {
           await env.AUDIT_DB.prepare("UPDATE chat_logs SET processed = 1 WHERE id = ?").bind(l.id).run();
         }
@@ -375,7 +367,7 @@ async function runKaizenCycle(env, limit = 100) {
     const body = [
       `# Kaizen Report - ${report.date}`,
       "",
-      `- Generated: ${new Date().toISOString()}`,
+      `- Generated: ${(/* @__PURE__ */ new Date()).toISOString()}`,
       `- Chat logs scanned: ${logs.results.length}`,
       `- Issues extracted: ${report.extracted}`,
       `- Stale auto-closed: ${report.staleClosed || 0}`,
@@ -410,7 +402,7 @@ async function runKaizenCycle(env, limit = 100) {
           message: `kaizen: daily report ${report.date} [bot]`,
           content: b64,
           branch: env.SKILLS_BRANCH,
-          ...(sha ? { sha } : {})
+          ...sha ? { sha } : {}
         })
       });
       if (putResp.ok) {
@@ -419,7 +411,7 @@ async function runKaizenCycle(env, limit = 100) {
         if (pr.commit?.sha) {
           await env.SKILLS_BUCKET.put("_sync/last-snapshot.json", JSON.stringify({
             sha: pr.commit.sha,
-            at: new Date().toISOString(),
+            at: (/* @__PURE__ */ new Date()).toISOString(),
             report: report.date
           }), { httpMetadata: { contentType: "application/json" } });
         }
@@ -439,7 +431,7 @@ async function runKaizenCycle(env, limit = 100) {
           const head = await gh.json();
           await env.SKILLS_BUCKET.put("_sync/last-snapshot.json", JSON.stringify({
             sha: head.sha,
-            at: new Date().toISOString(),
+            at: (/* @__PURE__ */ new Date()).toISOString(),
             report: report.date
           }), { httpMetadata: { contentType: "application/json" } });
         }
@@ -458,3 +450,148 @@ async function runKaizenCycle(env, limit = 100) {
   report.durationMs = Date.now() - started;
   return report;
 }
+__name(runKaizenCycle, "runKaizenCycle");
+return { default: worker_default };
+})();
+//# sourceMappingURL=worker.js.map
+
+var m1 = (function(){
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// worker.js
+var SCHEMA_URI = "https://schemas.agentskills.io/discovery/0.2.0/schema.json";
+var WELL_KNOWN = "/.well-known/agent-skills/";
+var CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type"
+};
+var VERSION = "1.1.0";
+var WORKER_NAME = "qnfo-skills-discovery";
+var worker_default = {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const method = request.method;
+    if (method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS });
+    }
+    if (method !== "GET" && method !== "HEAD") {
+      return new Response("Method Not Allowed", { status: 405, headers: CORS });
+    }
+    if (path === WELL_KNOWN + "index.json") {
+      const index = await buildIndex(env.SKILLS_BUCKET);
+      const body = JSON.stringify(index, null, 2);
+      return new Response(method === "HEAD" ? null : body, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=300",
+          ...CORS
+        }
+      });
+    }
+    if (path.startsWith(WELL_KNOWN)) {
+      const rest = path.slice(WELL_KNOWN.length);
+      const parts = rest.split("/");
+      if (parts.length === 2 && parts[1] === "SKILL.md") {
+        const name = parts[0];
+        const obj = await env.SKILLS_BUCKET.get(`${name}/SKILL.md`);
+        if (!obj) {
+          return new Response("Not Found", { status: 404, headers: CORS });
+        }
+        return new Response(method === "HEAD" ? null : obj.body, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/markdown; charset=utf-8",
+            "Cache-Control": "public, max-age=3600",
+            ETag: obj.httpEtag,
+            ...CORS
+          }
+        });
+      }
+      return new Response("Not Found", { status: 404, headers: CORS });
+    }
+    if (path === "/health") {
+      const body = JSON.stringify({ ok: true, worker: WORKER_NAME, version: VERSION });
+      return new Response(body, { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+    return new Response("Not Found", { status: 404, headers: CORS });
+  }
+};
+async function buildIndex(bucket) {
+  const skills = [];
+  const seen = /* @__PURE__ */ new Set();
+  let cursor = void 0;
+  do {
+    const list = await bucket.list({ limit: 1e3, cursor });
+    for (const obj of list.objects) {
+      if (!obj.key.endsWith("/SKILL.md")) continue;
+      const parts = obj.key.split("/");
+      if (parts.length !== 2) continue;
+      const dir = parts[0];
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      const skillObj = await bucket.get(obj.key);
+      if (!skillObj) continue;
+      const text = await skillObj.text();
+      const meta = parseFrontmatter(text);
+      if (!meta.name || !meta.description) continue;
+      skills.push({
+        name: meta.name,
+        type: "skill-md",
+        description: meta.description,
+        url: `${WELL_KNOWN}${dir}/SKILL.md`,
+        digest: `sha256:${await sha256Hex(text)}`
+      });
+    }
+    cursor = list.truncated ? list.cursor : void 0;
+  } while (cursor);
+  skills.sort((a, b) => a.name.localeCompare(b.name));
+  return { $schema: SCHEMA_URI, skills };
+}
+__name(buildIndex, "buildIndex");
+function parseFrontmatter(text) {
+  const m = text.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n/);
+  if (!m) return { name: null, description: null };
+  const fm = m[1];
+  const nameM = fm.match(/^name\s*:\s*["']?([^"'\r\n]+)["']?\s*$/m);
+  const descM = fm.match(/^description\s*:\s*["']?(.*?)["']?\s*$/m);
+  return {
+    name: nameM ? nameM[1].trim() : null,
+    description: descM ? descM[1].trim() : null
+  };
+}
+__name(parseFrontmatter, "parseFrontmatter");
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text)
+  );
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(sha256Hex, "sha256Hex");
+return { default: worker_default };
+})();
+//# sourceMappingURL=worker.js.map
+
+
+// ===== MERGED qnfo-skill-sync (merged-2026-09-11: qnfo-skill-sync+qnfo-skills-discovery) =====
+export default {
+  async fetch(request, env, ctx) {
+    const p = new URL(request.url).pathname;
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "qnfo-skill-sync", version: "merged-2026-09-11", merged: ["qnfo-skill-sync", "qnfo-skills-discovery"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return m0.default.fetch(request, env, ctx);
+    if (p === "/log/chat") return m0.default.fetch(request, env, ctx);
+    if (p === "/issues") return m0.default.fetch(request, env, ctx);
+    if (p === "/kaizen/run") return m0.default.fetch(request, env, ctx);
+    if (p === "/skills/status") return m0.default.fetch(request, env, ctx);
+    if (p === "/") return m0.default.fetch(request, env, ctx);
+    return m0.default.fetch(request, env, ctx);
+  },
+  async scheduled(event, env, ctx) {
+    const c = event.cron;
+    if (c === "0 3 * * *") return m0.default.scheduled(event, env, ctx);
+  },
+};
