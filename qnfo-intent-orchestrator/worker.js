@@ -71,18 +71,18 @@ async function recordClassify(env, model, ok, retry) {
 async function pickClassifier(env) {
   try {
     const cutoff = new Date(Date.now() - 7 * 864e5).toISOString();
-    const row = await env.D1.prepare("SELECT COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) AS fails, COUNT(*) AS n FROM intent_classify_stats WHERE model='glm-5.2' AND ts>=?1").bind(cutoff).first();
+    const row = await env.D1.prepare("SELECT COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) AS fails, COUNT(*) AS n FROM intent_classify_stats WHERE model='glm-5.3' AND ts>=?1").bind(cutoff).first();
     const n = (row && row.n) || 0;
     const fails = (row && row.fails) || 0;
     if (n >= 20 && (fails / n) > 0.05) return 'glm-5.3-flash';
   } catch (e) {}
-  return 'glm-5.2';
+  return 'glm-5.3';
 }
 
 async function classifyAI(env, desire) {
   const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only. Do not fabricate fields or values the desire does not state; when ambiguous, classify type:"unknown" rather than guessing. ADVERSARIAL-REASONING-1 (label uncertainty, never invent a classification the text does not support).';
   const first = await pickClassifier(env);
-  const order = first === 'glm-5.3-flash' ? ['glm-5.3-flash', 'glm-5.2'] : ['glm-5.2', 'glm-5.3-flash'];
+  const order = first === 'glm-5.3-flash' ? ['glm-5.3-flash', 'glm-5.3'] : ['glm-5.3', 'glm-5.3-flash'];
   for (let i = 0; i < order.length; i++) {
     const model = order[i];
     try {

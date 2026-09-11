@@ -13,14 +13,14 @@ const VERSION = "1.4.0-intake-only";
 const MODELS = {
   a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  tiebreak: "@cf/qwen/qwen3-30b-a3b-fp8",
+  tiebreak: "@cf/zai-org/glm-5.3",
 };
 const MODEL_CHAIN = [
   "@cf/zai-org/glm-5.3-flash",
   "@cf/zai-org/glm-5.3",
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/qwen/qwen3-30b-a3b-fp8",
-  "@cf/zai-org/glm-5.2",
+  "@cf/zai-org/glm-5.3",
+  "@cf/zai-org/glm-5.3",
 ];
 const ACCEPT_MIN = 0.7;
 const FEAS_MIN = 0.5;

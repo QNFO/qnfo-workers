@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var VERSION = "0.8.0-artifact-deposit";
 var WORKER = "qnfo-research-exec";
-var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
+var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
 var MAX_NOTE = 4e3;
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
@@ -951,10 +951,13 @@ __name(drainV2, "drainV2");
 //         -> GitHub artifact push (PROVENANCE standard).
 // Replaces the single-shot genNote/genPaper path. RESEARCH_HALT still honored.
 // ============================================================
+// MODEL-PER-TASK-1 (2026-09-11): the llama-3.3-70b leg was removed (user directive, and it
+// fabricates named attribution under grounded prompts). Third leg replaced with a frontier
+// writer so the ensemble keeps three independent strong legs.
 var WRITER_MODELS = [
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/zai-org/glm-5.2",
-  "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+  "@cf/zai-org/glm-5.3",
+  "@cf/moonshotai/kimi-k2.6"
 ];
 var MIN_PAPER_CHARS = 15000;
 var MIN_REFS = 8;
@@ -969,7 +972,8 @@ async function aiText(env, model, prompt, maxTokens) {
   try {
     const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens, temperature: 0.3 });
     if (typeof r === "string") return r;
-    if (r && typeof r.response === "string") return r.response;
+    if (r && typeof r.response === "string" && r.response) return r.response;
+    if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
     return "";
   } catch (e) {
     return "";
