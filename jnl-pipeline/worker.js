@@ -1,7 +1,3 @@
---90836cedc261436b9f6c0a3e12698edbebdb6ff14ed29910c5cb79ccfd9d
-Content-Disposition: form-data; name="worker.js"; filename="worker.js"
-Content-Type: application/javascript+module
-
 var jnlWatchMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1765,5 +1761,3 @@ export default {
     if (event.cron === "23 */2 * * *") return jnlRefereeMod.default.scheduled(event, env, ctx);
   },
 };
-
---90836cedc261436b9f6c0a3e12698edbebdb6ff14ed29910c5cb79ccfd9d--
