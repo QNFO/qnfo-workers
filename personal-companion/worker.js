@@ -23,18 +23,38 @@ var VERSION = "v1.0.0";
 // Non-reasoning models only. Reasoning models burn the whole token budget on
 // reasoning_content and return empty content (measured 2026-09-11: deepseek-v4-flash
 // and glm-5.3-flash returned clen=0, rlen=2668/2430, finish_reason=length at mt=700).
+// Frontier-scale writers only. llama-3.3-70b-instruct-fp8-fast was REMOVED
+// 2026-09-11 after measured fabrication: given grounded source material it invented
+// "Mathematician Mikhail Gromov is working on the application of p-adic geometry to
+// representation learning" and "Researcher Peter Scholze is currently exploring..."
+// Neither name appears in the anchors. It also produced tautological filler
+// ("manufactured ignorance refers to the deliberate creation of ignorance").
+// These models emit reasoning_content, so max_tokens must cover reasoning + prose.
 var MODELS = [
-  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
-  "@cf/google/gemma-4-26b-a4b-it"
+  "@cf/zai-org/glm-5.3"
 ];
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-var GEN_MAX_TOKENS = 4096;
+var GEN_MAX_TOKENS = 9000;
 var GEN_TIMEOUT_MS = 90000;
 var CRITIQUE_TIMEOUT_MS = 30000;
 var EMBED_TIMEOUT_MS = 30000;
 var SIM_THRESHOLD = 0.90;
 var ACCEPT_FLOOR = 5;
+
+// STANDING DIRECTIVE (2026-09-11, user, emphatic): no llama, no "small" models,
+// no "fast"/quantized variants, for any purpose - including diagnostics. llama-3.3-70b
+// was measured fabricating named living mathematicians ("Mikhail Gromov", "Peter Scholze")
+// that were absent from the source material. Enforced at runtime, not by convention.
+var BANNED_MODELS = ["llama", "mistral", "gemma-7b", "gemma-4-26b", "qwen3-30b", "qwen2.5", "r1-distill", "qwq-", "-8b", "-11b", "-7b", "-flash", "-fp8-fast", "-lora", "-mini", "-small"];
+function modelAllowed(m) {
+  var low = String(m || "").toLowerCase();
+  for (var bi = 0; bi < BANNED_MODELS.length; bi++) {
+    if (low.indexOf(BANNED_MODELS[bi]) >= 0) return false;
+  }
+  return true;
+}
 
 var NL = String.fromCharCode(10);
 
@@ -320,6 +340,56 @@ function bannedHits(text) {
     if (low.indexOf(BANNED[i]) >= 0) hits.push(BANNED[i]);
   }
   return hits;
+}
+
+function isCap(s, i) { var c = s.charAt(i); return c >= "A" && c <= "Z"; }
+function isLow(s, i) { var c = s.charAt(i); return c >= "a" && c <= "z"; }
+function readWord(s, i) {
+  var out = "";
+  while (i < s.length) {
+    var c = s.charAt(i);
+    if (isLow(s, i) || isCap(s, i) || c === "-" || (c >= "0" && c <= "9")) { out += c; i++; } else break;
+  }
+  return { w: out, i: i };
+}
+var STOPW = ["The","A","An","In","On","At","By","To","Of","If","When","Where","What","How","Why","Then","There","These","Those","We","They","He","She","His","Her","Its","Our","Their","Not","No","Yet","So","As","From","With","Without","Between","After","Before","During","Both","Each","Every","All","Some","Many","Most","Such","That","Than","Because","Although","While","Since","Thus","Hence","Therefore","However","Moreover","Furthermore","One","Two","Three","But","And","For","Or","It","This","Is","Are","Was","Were","Be","Been","Do","Does","Did","Has","Have","Had","Can","Could","Shall","Should","Will","Would","May","Might","Must"];
+var STOP = {};
+for (var sw = 0; sw < STOPW.length; sw++) STOP[STOPW[sw]] = true;
+
+// Sliding by ONE word (not by the pair) so overlapping bigrams are all produced.
+// Consuming the pair dropped the real name in "Mathematician Mikhail Gromov".
+function nameCandidates(text) {
+  var s = String(text || "");
+  var out = [];
+  for (var i = 0; i < s.length; i++) {
+    if (!isCap(s, i)) continue;
+    var a = readWord(s, i);
+    if (a.w.length < 3 || STOP[a.w] === true) continue;
+    var j = i + a.w.length;
+    var sp = 0;
+    while (j < s.length && s.charAt(j) === " ") { sp++; j++; }
+    if (sp !== 1 || !isCap(s, j)) continue;
+    var b = readWord(s, j);
+    if (b.w.length < 3 || STOP[b.w] === true) continue;
+    out.push(a.w + " " + b.w);
+    i = i + a.w.length - 1;
+  }
+  return out;
+}
+function anchorsText(anchors) {
+  var parts = [];
+  for (var i = 0; i < anchors.length; i++) parts.push(String(anchors[i].title || "") + " " + String(anchors[i].text || ""));
+  return parts.join(" ");
+}
+function unverifiedNames(piece, anchors, topic) {
+  var at = anchorsText(anchors) + " " + String((topic && topic.a) || "") + " " + String((topic && topic.b) || "");
+  var cand = nameCandidates(String(piece.body_md || ""));
+  var low = at.toLowerCase();
+  var bad = [];
+  for (var i = 0; i < cand.length; i++) {
+    if (low.indexOf(cand[i].toLowerCase()) < 0 && bad.indexOf(cand[i]) < 0) bad.push(cand[i]);
+  }
+  return bad;
 }
 
 function wordCount(s) {
@@ -961,6 +1031,12 @@ async function generate(env, form, opts) {
       var piece = comp.piece;
       if (!piece) { continue; }
       var v = validatePiece(piece, form);
+      if (v.ok) {
+        var badNames = unverifiedNames(piece, anchors, topic);
+        if (badNames.length) {
+          v = { ok: false, problems: ["unverified names: " + badNames.slice(0, 6).join(", ")], words: v.words };
+        }
+      }
       if (!v.ok) {
         await logRun(env, form, model, topic.id, "rejected", "validate: " + v.problems.join("; ") + " || raw: " + String(comp.raw || "").slice(0, 500), Date.now() - t0);
         continue;
@@ -1044,11 +1120,13 @@ export default {
     }
 
     if (p === "/api/probe") {
-      var cand = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/openai/gpt-oss-120b", "@cf/google/gemma-4-26b-a4b-it", "@cf/meta/llama-3.1-8b-instruct-fp8"];
+      var cand = ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-pro-0813"];
       if (u.searchParams.get("m")) cand = [u.searchParams.get("m")];
       var probe = {};
       var ci = Number(u.searchParams.get("i") || 0);
       var useGw = u.searchParams.get("gw") !== "0";
+      var reqM = u.searchParams.get("m");
+      if (reqM && !modelAllowed(reqM)) return json({ error: "model refused: banned by standing directive", model: reqM }, 400);
       for (ci = ci; ci < cand.length; ci++) {
         var tt = Date.now();
         try {
@@ -1072,6 +1150,41 @@ export default {
         if (u.searchParams.get("one") === "1") break;
       }
       return json({ ok: true, probe: probe });
+    }
+
+    if (p === "/api/compare") {
+      var cm = u.searchParams.get("m") || MODELS[0];
+      if (!modelAllowed(cm)) return json({ error: "model refused: banned by standing directive", model: cm }, 400);
+      var cmt = Number(u.searchParams.get("mt") || 2600);
+      var cTopic = { id: "compare", cat: "math.NT", wiki: "Ultrametric space", a: "p-adic geometry", b: "musical tuning" };
+      var cAnchors = [
+        { kind: "paper", ref: "arXiv:2509.00001", title: "Ultrametric Hierarchies in Representation Learning", text: "We show that the tree-structured distance induced by a p-adic valuation on a finite alphabet yields a representation in which semantically nested categories are metrically nested. The ultrametric inequality forces every triangle to be isosceles with the two long sides equal, which makes hierarchical clustering exact rather than approximate. We report exact recovery on three benchmarks where agglomerative clustering fails." },
+        { kind: "paper", ref: "arXiv:2509.00002", title: "Continued Fractions and Just Intonation", text: "The convergents of a continued fraction give the best rational approximations to a real number. Applied to frequency ratios, this recovers the historically attested tuning ladder: 3/2, 4/3, 5/4 and their compounds. The approximation error of a convergent falls monotonically, so the order of the ladder is forced rather than chosen. We tabulate the first nine convergents against the historical record." },
+        { kind: "concept", ref: "https://en.wikipedia.org/wiki/Ultrametric_space", title: "Ultrametric space", text: "An ultrametric space is a metric space in which the triangle inequality is replaced by the strong triangle inequality: d(x,z) is at most the larger of d(x,y) and d(y,z). Every ultrametric space embeds isometrically in a complete one, and its closed balls are either disjoint or nested, never partially overlapping." }
+      ];
+      var cSys = [P_STYLE, "", P_ESSAY, "", "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Include one section headed exactly: ## The strongest objection"].join(NL);
+      var cUser = [anchorsBlock(cTopic, cAnchors, "(life context omitted for this comparison run)", "(taste context omitted for this comparison run)"), "", "Length: 900 to 1100 words. This is a requirement."].join(NL);
+      var c0 = Date.now();
+      try {
+        var cr = await env.AI.run(cm, { messages: [{ role: "system", content: cSys }, { role: "user", content: cUser }], max_tokens: cmt, temperature: 0.7 });
+        var cc = "";
+        var crc = "";
+        if (cr && typeof cr.response === "string" && cr.response.length) cc = cr.response;
+        if (cr && cr.choices && cr.choices[0] && cr.choices[0].message) {
+          if (!cc && typeof cr.choices[0].message.content === "string") cc = cr.choices[0].message.content;
+          crc = cr.choices[0].message.reasoning_content || cr.choices[0].message.reasoning || "";
+        }
+        return json({
+          model: cm, mt: cmt, ms: Date.now() - c0,
+          clen: String(cc).length, rlen: String(crc).length,
+          fr: (cr && cr.choices && cr.choices[0] && cr.choices[0].finish_reason) || "",
+          words: wordCount(String(cc)),
+          head: String(cc).slice(0, 1200),
+          tail: String(cc).slice(-320)
+        });
+      } catch (e) {
+        return json({ model: cm, mt: cmt, ms: Date.now() - c0, err: String((e && e.message) || e).slice(0, 300) });
+      }
     }
 
     if (p === "/api/f" || p === "/api/feedback") {
