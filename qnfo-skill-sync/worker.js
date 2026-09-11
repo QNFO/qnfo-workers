@@ -271,8 +271,8 @@ async function runKaizenCycle(env, limit = 100) {
   summary: ${(l.summary || "").slice(0, 300)}${es}`;
         }).join("\n");
         const aiResp = await env.AI.run(
-          "@cf/qwen/qwen3-30b-a3b-fp8",
-          { messages: [{ role: "user", content: EXTRACT_PROMPT.replace("{summaries}", summaries) }], max_tokens: 1024, temperature: 0.2 }
+          "@cf/zai-org/glm-5.3",
+          { messages: [{ role: "user", content: EXTRACT_PROMPT.replace("{summaries}", summaries) }], max_tokens: 2048, temperature: 0.2 }
         );
         let items = [];
         if (Array.isArray(aiResp?.response)) {
