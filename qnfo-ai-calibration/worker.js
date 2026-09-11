@@ -24,27 +24,19 @@ var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
 var UA = "QNFO-AI-Calibration/" + VERSION;
 var RED10X10_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAEklEQVR4nGP4z8CAB+GTG8HSALfKY52fTcuYAAAAAElFTkSuQmCC";
 var TIER0_WA = {
-  "deepseek-r1-qwen-32b": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-  "qwen3-30b": "@cf/qwen/qwen3-30b-a3b-fp8",
-  "qwen2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
-  "glm-5.2": "@cf/zai-org/glm-5.2",
   "kimi-k2.6": "@cf/moonshotai/kimi-k2.6",
-  "qwq-32b": "@cf/qwen/qwq-32b",
-  "glm-4.7-flash": "@cf/zai-org/glm-4.7-flash",
-  "gemma-4-26b": "@cf/google/gemma-4-26b-a4b-it",
   "glm-5.3-flash": "@cf/zai-org/glm-5.3-flash",
   "gpt-oss-120b": "@cf/openai/gpt-oss-120b",
   "deepseek-v4-flash-wa": "@cf/deepseek-ai/deepseek-v4-flash-0731",
   "deepseek-v4-pro-wa": "@cf/deepseek-ai/deepseek-v4-pro-0813",
   "kimi-k2.7-code": "@cf/moonshotai/kimi-k2.7-code",
   "glm-5.3": "@cf/zai-org/glm-5.3",
-  "llama-3.2-11b-vision": "@cf/meta/llama-3.2-11b-vision-instruct"
 };
 var ALL_MODELS = Object.keys(TIER0_WA).concat(["deepseek-v4-flash", "deepseek-v4-flash-thinking", "deepseek-v4-pro"]);
 var CF_TO_INTERNAL = {};
 (function () { for (var k in TIER0_WA) { if (TIER0_WA[k]) CF_TO_INTERNAL[TIER0_WA[k]] = k; } })();
 function internalId(m) { if (CF_TO_INTERNAL[m]) return CF_TO_INTERNAL[m]; if (m && m.indexOf("@cf/") === 0) { for (var k in TIER0_WA) { if (TIER0_WA[k] && TIER0_WA[k].indexOf(m.slice(5)) >= 0) return k; } } return m; }
-var DEFAULT_VISION = "kimi-k2.6,kimi-k2.7-code,glm-5.3-flash,gemma-4-26b,llama-3.2-11b-vision";
+var DEFAULT_VISION = "kimi-k2.6,kimi-k2.7-code,glm-5.3-flash,glm-5.3";
 
 function json(resp, status) { return new Response(JSON.stringify(resp), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
 function withTimeout(promise, ms) {

@@ -8,6 +8,8 @@ var CHAT_MODELS = [
   "@cf/qwen/qwen3.8-27b"
 ];
 var REASON_MODEL = "@cf/openai/gpt-oss-120b"; // 2026-09-08 model audit: r1-distill (out $4.88/M) -> gpt-oss-120b (reasoning, 128k ctx, out $0.75/M)
+var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
+var VISION_OCR_MODEL = "@cf/zai-org/glm-5.3-flash"; // MODEL-FLOOR-1: replaced a sub-frontier vision model
 var MODEL_TIMEOUT_MS = 3e4;
 var EMBED_MODEL = "bge-base-en-v1.5";
 var MAX_EMBED_BATCH = 32;
@@ -1754,8 +1756,23 @@ var api_default = {
       const buf = await obj.arrayBuffer();
       const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
       const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + b64;
-      const out = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }], max_tokens: 1024 });
-      const text = String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || "").trim();
+      // MODEL-FLOOR-1 + VISION-GW-1: frontier vision via the compat gateway; on failure keep text empty.
+      let text = "";
+      try {
+        const gw = await fetch(GW_COMPAT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_TOKEN },
+          body: JSON.stringify({
+            model: VISION_OCR_MODEL,
+            messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
+            max_tokens: 2048
+          })
+        });
+        if (gw.ok) {
+          const gj = await gw.json();
+          text = String((gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content) || "").trim();
+        }
+      } catch (e) { text = ""; }
       await env.PERSONAL.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8000), id).run();
       return json({ ok: true, id, extracted_text: text.slice(0, 8000) });
     }
