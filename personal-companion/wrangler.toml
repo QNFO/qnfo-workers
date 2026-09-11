@@ -1,0 +1,36 @@
+name = "personal-companion"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# personal-companion - autonomous personal reading companion (personal plane)
+# PARTITION: binds ONLY personal-life D1 + personal-life Vectorize + personal-media R2.
+# Never reads living-paper / qnfo-audit / qnfo-graph / qwav-research. Writes no QNFO ledger.
+# Secrets (never in git): COMPANION_KEY, EMAIL_API_KEY
+
+[ai]
+binding = "AI"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "PERSONAL"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "personal-media"
+
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[triggers]
+crons = ["0 6 * * *"]
