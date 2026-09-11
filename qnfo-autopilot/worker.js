@@ -143,13 +143,16 @@ const EVOLVE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 // SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
 // Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
-const SERVICE_BINDINGS = {
-  'qnfo-citation-watch': 'SB_CITATION_WATCH',
-  'qnfo-email': 'SB_EMAIL',
-  'qnfo-ai-search': 'SB_AI_SEARCH',
-  'obsidian-writer': 'SB_OBSIDIAN',
-  'qnfo-lifecycle': 'SB_LIFECYCLE',
-};
+const COVERAGE = [
+  'qnfo-citation-watch', 'qnfo-email', 'qnfo-ai-search', 'obsidian-writer', 'qnfo-lifecycle',
+  'calendar-api', 'events-radar', 'personal-events-radar', 'jnl-watch', 'jnl-referee', 'jnl-reviser', 'jnl-zenodo',
+  'job-market-watch', 'qnfo-arxiv-radar', 'qnfo-events', 'qnfo-archive', 'qnfo-blank-audit', 'qnfo-chat-canary',
+  'qnfo-ddocs-indexer', 'qnfo-idea-miner', 'qnfo-idea-triage', 'qnfo-impact', 'qnfo-paper-explainer', 'qnfo-paper-indexer',
+  'qnfo-proof', 'qnfo-thread-ingest', 'qnfo-register-guard', 'qnfo-scorecard'
+];
+function sbName(w) { return 'SB_' + w.toUpperCase().replace(/[^A-Z0-9]+/g, '_'); }
+const SERVICE_BINDINGS = {};
+for (var _ci = 0; _ci < COVERAGE.length; _ci++) { SERVICE_BINDINGS[COVERAGE[_ci]] = sbName(COVERAGE[_ci]); }
 
 // PRECONDITION: multipart envelope from content/v2. POSTCONDITION: raw module code.
 function unwrap(raw) {
@@ -341,7 +344,7 @@ async function evolveApply(env, worker, candidateId, goal) {
 // The decide-loop: on each cron fire, propose + apply a self-improvement to one worker,
 // with snapshot + auto-revert. Round-robins SEED_WORKERS; verification ladder
 // (heartbeat -> custom-domain -> parse-only) decides whether a broken deploy is detected.
-const SEED_WORKERS = ['qnfo-citation-watch', 'qnfo-email', 'qnfo-ai-search', 'obsidian-writer', 'qnfo-lifecycle'];
+const SEED_WORKERS = COVERAGE;
 
 // PRECONDITION: cron fire (or manual /run/cycle). POSTCONDITION: one worker improved or reverted, recorded.
 async function autonomousApply(env) {
