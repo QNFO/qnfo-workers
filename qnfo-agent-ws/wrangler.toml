@@ -1,13 +1,14 @@
 name = "qnfo-agent-ws"
 main = "worker.js"
 compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [ai]
 binding = "AI"
 
 [[send_email]]
-binding = "EMAIL"
+name = "EMAIL"
 
 [[d1_databases]]
 binding = "LIVING_PAPER"
@@ -29,3 +30,7 @@ service = "qnfo-ai"
 
 [durable_objects]
 bindings = [{ name = "QnfoAgent", class_name = "QnfoAgent" }]
+
+[exports.QnfoAgent]
+type = "durable-object"
+storage = "sqlite"
