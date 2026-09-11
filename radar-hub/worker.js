@@ -1,0 +1,689 @@
+var eventsMod = (function(){
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// worker.js
+var VERSION = "1.0.1";
+var WORKER = "events-radar";
+var DOMAINS = [
+  { code: "ADL", name: "Adelic Physics / p-adic info", kw: ["adelic", "p-adic", "idelic", "non-archimedean", "shannon", "rate-distortion", "rate distortion", "entropy", "number theory", "adele", "adelic shannon"] },
+  { code: "UMP", name: "Ultrametric foundations / physics foundations", kw: ["ultrametric", "non-archimedean", "hierarchical", "quantum foundations", "foundations of physics", "philosophy of physics", "spacetime", "space-time", "emergence", "renormalization", "foundations"] },
+  { code: "SLB", name: "Laws of Form / distinction primitives", kw: ["laws of form", "spencer-brown", "spencer brown", "calculus of indications", "distinction", "re-entry", "reentry", "idempotent", "paradox", "loaf", "brownian"] },
+  { code: "INM", name: "Infomatics / information theory", kw: ["information theory", "infomatics", "maxwell", "szilard", "semantic information", "algorithmic information", "kolmogorov", "mutual information", "channel", "coding theory"] },
+  { code: "QD", name: "Quantum info / foundations / qubit", kw: ["qubit", "quantum", "qip", "quantum error correction", "quantum algorithm", "quantum information", "decoherence", "entanglement", "quantum computing", "quantum cryptography"] },
+  { code: "CMP", name: "Computing machines / models of computation", kw: ["automata", "cellular automata", "lambda calculus", "computability", "turing", "computation", "reversible computation", "formal languages", "hypercomputation", "memcomputing"] },
+  { code: "JPC", name: "Energy-efficient / thermodynamic computing", kw: ["energy-efficient", "energy efficient", "green computing", "sustainable computing", "carbon", "landauer", "joules", "energy benchmark", "low-power", "thermodynamic computing", "power consumption", "frugal"] },
+  { code: "SR", name: "Cryptography", kw: ["cryptograph", "post-quantum", "side-channel", "side channel", "lattice", "encryption", "privacy", "crypto"] },
+  { code: "CON", name: "Complexity science / networks / consilience", kw: ["complex", "network", "consilience", "interdisciplinary", "systems", "agent-based"] },
+  { code: "CGS", name: "Gap synthesis / research programs", kw: ["gap synthesis", "portfolio", "research program", "research agenda"] },
+  { code: "ODR", name: "Discrete physics (Compton count)", kw: ["compton", "discrete", "counting", "causal", "geometry", "primitive"] },
+  { code: "PBO", name: "Pattern-based ontology", kw: ["ontology", "autaxys", "pattern", "taxonomy", "knowledge representation", "categories"] },
+  { code: "CFE", name: "Cascading foresight", kw: ["foresight", "anticipation", "forecasting", "futures"] },
+  { code: "LOG", name: "Foundations of math / logic", kw: ["logic", "foundations of mathematics", "proof", "type theory", "category theory", "topos", "univalent", "homotopy", "set theory", "symbolic logic"] }
+];
+var SOURCES = [
+  { name: "CWI", url: "https://www.cwi.nl/en/events/", kind: "workshop", domains: ["ADL", "INM", "CMP", "QD"], delivery: "hybrid", cost: 1 },
+  { name: "Perimeter", url: "https://perimeterinstitute.ca/conferences", kind: "conference", domains: ["UMP", "QD", "ADL", "INM"], delivery: "hybrid", cost: 1 },
+  { name: "FQXi", url: "https://fqxi.org/events", kind: "other", domains: ["UMP", "QD", "SLB", "INM", "ADL"], delivery: "online", cost: 0 },
+  { name: "IQOQI", url: "https://iqoqi.at", kind: "colloquium", domains: ["QD", "UMP"], delivery: "hybrid", cost: 0 },
+  { name: "MPI-PKS", url: "https://www.pks.mpg.de/events/workshops-seminars/", kind: "workshop", domains: ["UMP", "INM", "CMP"], delivery: "onsite", cost: 1 },
+  { name: "SFI", url: "https://www.santafe.edu/events", kind: "seminar", domains: ["CON", "INM", "CFE"], delivery: "hybrid", cost: 0 },
+  { name: "QuSoft", url: "https://www.qusoft.org", kind: "workshop", domains: ["QD", "CMP"], delivery: "hybrid", cost: 0 },
+  { name: "QuTech", url: "https://www.qutech.nl/events/", kind: "event", domains: ["QD", "JPC"], delivery: "hybrid", cost: 0 },
+  { name: "CSH", url: "https://www.csh.ac.at/events/", kind: "webinar", domains: ["CON", "INM", "CFE", "JPC"], delivery: "hybrid", cost: 0 },
+  { name: "CSS", url: "https://cssociety.org/events", kind: "conference", domains: ["CON", "INM", "CFE"], delivery: "onsite", cost: 2 },
+  { name: "CNA", url: "https://www.complexnetworks.org/", kind: "conference", domains: ["CON", "INM"], delivery: "onsite", cost: 2 },
+  { name: "QIP", url: "https://qipconference.org/", kind: "conference", domains: ["QD", "CMP", "SR"], delivery: "onsite", cost: 2 },
+  // --- expanded domain scope (2026-09-02, QNFO.OPS.009) ---
+  { name: "HotCarbon", url: "https://hotcarbon.org/", kind: "workshop", domains: ["JPC", "CMP"], delivery: "onsite", cost: 1 },
+  { name: "ACM-eEnergy", url: "https://energy.acm.org/", kind: "conference", domains: ["JPC", "CMP"], delivery: "onsite", cost: 2 },
+  { name: "QWorld", url: "https://qworld.net/", kind: "webinar", domains: ["QD", "CMP"], delivery: "online", cost: 0 },
+  { name: "QCrypt", url: "https://qcrypt.net/", kind: "conference", domains: ["SR", "QD"], delivery: "onsite", cost: 2 },
+  { name: "IACR", url: "https://www.iacr.org/events/", kind: "conference", domains: ["SR"], delivery: "onsite", cost: 2 },
+  { name: "RealWorldCrypto", url: "https://rwc.iacr.org/", kind: "conference", domains: ["SR"], delivery: "onsite", cost: 2 },
+  { name: "ASL", url: "https://aslonline.org/meetings/", kind: "meeting", domains: ["LOG", "SLB"], delivery: "hybrid", cost: 1 },
+  { name: "IAOA", url: "https://iaoa.org/", kind: "other", domains: ["PBO", "LOG"], delivery: "online", cost: 0 },
+  { name: "ICTP", url: "https://www.ictp.it/events", kind: "school", domains: ["UMP", "ADL", "INM", "LOG"], delivery: "hybrid", cost: 1 },
+  { name: "IHES", url: "https://www.ihes.fr/en/events/", kind: "lecture", domains: ["UMP", "ADL", "LOG"], delivery: "hybrid", cost: 0 },
+  { name: "ESI", url: "https://www.esi.ac.at/events", kind: "workshop", domains: ["UMP", "ADL", "LOG"], delivery: "hybrid", cost: 1 },
+  { name: "NetSci", url: "https://netscisociety.net/events", kind: "conference", domains: ["CON", "INM"], delivery: "hybrid", cost: 2 }
+];
+var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+var DEADLINE_FLAGS = [
+  { label: "QIP 2027 talk submission", deadline: "2026-10-05T23:59:00-12:00", venue: "QIP", note: "Quantum Information Processing 2027 talk submission (AoE)" }
+];
+var CATALOG = [
+  { title: "QIP 2027 - 30th Conference on Quantum Information Processing", start: "2027-02-20", end: "2027-02-26", kind: "conference", delivery: "onsite", cost: 2, domains: ["QD", "CMP", "SR"], url: "https://qipconference.org/", note: "NUS Singapore. Talk submission 2026-10-05 (AoE).", deadline: "2026-10-05T23:59:00-12:00", verify: { url: "https://qipconference.org/", token: "2027" } },
+  { title: "IEEE Quantum Week QCE26 (incl. Q-SET)", start: "2026-09-13", end: "2026-09-18", kind: "conference", delivery: "onsite", cost: 2, domains: ["QD", "CMP"], url: "https://qce.quantum.ieee.org/", note: "Toronto, Canada.", verify: { url: "https://qce.quantum.ieee.org/", token: "QCE26" } },
+  { title: "HotCarbon - Hot Topics in Carbon Computing workshop", start: null, end: null, kind: "workshop", delivery: "onsite", cost: 1, domains: ["JPC", "CMP"], url: "https://hotcarbon.org/", note: "Energy/carbon-efficient systems workshop (co-located with systems conf).", verify: { url: "https://hotcarbon.org/", token: "carbon" } },
+  { title: "QCrypt - International Conf. on Quantum Cryptography", start: null, end: null, kind: "conference", delivery: "onsite", cost: 2, domains: ["SR", "QD"], url: "https://qcrypt.net/", note: "Annual quantum cryptography conference.", verify: { url: "https://qcrypt.net/", token: "qcrypt" } },
+  { title: "Delft Quantum Showcase (QuTech)", start: null, end: null, kind: "event", delivery: "onsite", cost: 0, domains: ["QD"], url: "https://www.qutech.nl/events/", note: "Public showcase at QuTech Delft.", verify: { url: "https://www.qutech.nl/events/", token: "showcase" } }
+];
+var MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+var MONTH_RE = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
+var ENTITY_MAP = { amp: "&", lt: "<", gt: ">", quot: String.fromCharCode(34), apos: String.fromCharCode(39), nbsp: " ", ndash: "\u2013", mdash: "\u2014", lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201C", rdquo: "\u201D", hellip: "\u2026", times: "\xD7", middot: "\xB7", sdot: "\u22C5", minus: "\u2212", deg: "\xB0", micro: "\xB5" };
+function decodeEntities(x) {
+  return String(x || "").replace(/&#x([0-9a-fA-F]+);|&#([0-9]+);|&([a-zA-Z][a-zA-Z0-9]*);/g, function(m, hx, dec, name) {
+    if (hx) {
+      try {
+        return String.fromCodePoint(parseInt(hx, 16));
+      } catch (e) {
+        return m;
+      }
+    }
+    if (dec) {
+      try {
+        return String.fromCodePoint(parseInt(dec, 10));
+      } catch (e) {
+        return m;
+      }
+    }
+    return Object.prototype.hasOwnProperty.call(ENTITY_MAP, name) ? ENTITY_MAP[name] : m;
+  });
+}
+__name(decodeEntities, "decodeEntities");
+function cleanHtml(text) {
+  const s = String(text || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+  return decodeEntities(s).replace(/\s+/g, " ").trim();
+}
+__name(cleanHtml, "cleanHtml");
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+__name(pad2, "pad2");
+function extractEvents(text, src) {
+  const events = [];
+  let discarded = 0;
+  const clean = cleanHtml(text);
+  const cutYear = (/* @__PURE__ */ new Date()).getFullYear();
+  const dropGarbage = /* @__PURE__ */ __name((s) => /\.st\d+\s*\{|fill\s*:\s*none|"id"\s*:\s*\d+\s*,|window\.|function\s+\(/i.test(s), "dropGarbage");
+  const seen = /* @__PURE__ */ new Set();
+  const rangeRe = new RegExp("(" + MONTH_RE + ")[a-z]*\\.?\\s+(\\d{1,2})\\s*[-\u2013\u2014]\\s*(\\d{1,2})\\s*,?\\s*(20\\d{2})", "gi");
+  const rangeRe2 = new RegExp("(\\d{1,2})\\s*[-\u2013\u2014]\\s*(\\d{1,2})\\s+(" + MONTH_RE + ")[a-z]*\\.?\\s*,?\\s*(20\\d{2})", "gi");
+  const singleRe = new RegExp("(" + MONTH_RE + ")[a-z]*\\.?\\s+(\\d{1,2})\\s*,?\\s*(20\\d{2})", "gi");
+  const singleRe2 = new RegExp("(\\d{1,2})\\s+(" + MONTH_RE + ")[a-z]*\\.?\\s*,?\\s*(20\\d{2})", "gi");
+  const push = /* @__PURE__ */ __name((mo, d1, d2, yr, idx) => {
+    const mon = (mo || "").toLowerCase().slice(0, 3);
+    const month = MONTHS[mon];
+    if (!month) {
+      discarded += 1;
+      return;
+    }
+    const year = yr ? parseInt(yr, 10) : 0;
+    if (year < cutYear || year > cutYear + 2) {
+      discarded += 1;
+      return;
+    }
+    const startIso = toISO(year, month, Math.min(d1 || 1, 28));
+    const endIso = d2 ? toISO(year, month, Math.min(d2, 28)) : startIso;
+    const key = src.name + "|" + startIso;
+    if (seen.has(key)) return;
+    const snippet = clean.slice(Math.max(0, idx - 80), idx + 200).slice(0, 240);
+    if (dropGarbage(snippet)) {
+      discarded += 1;
+      return;
+    }
+    seen.add(key);
+    const dateText = d2 ? mo + " " + d1 + "-" + d2 + ", " + year : mo + " " + d1 + ", " + year;
+    events.push({ venue: src.name, dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost, srcDomains: (src.domains || []).slice() });
+  }, "push");
+  function toISO(y, m, d) {
+    return y + "-" + pad2(m) + "-" + pad2(d);
+  }
+  __name(toISO, "toISO");
+  for (const m of clean.matchAll(rangeRe)) push(m[1], parseInt(m[2], 10), parseInt(m[3], 10), m[4], m.index);
+  for (const m of clean.matchAll(rangeRe2)) push(m[3], parseInt(m[1], 10), parseInt(m[2], 10), m[4], m.index);
+  for (const m of clean.matchAll(singleRe)) push(m[1], parseInt(m[2], 10), null, m[3], m.index);
+  for (const m of clean.matchAll(singleRe2)) push(m[2], parseInt(m[1], 10), null, m[3], m.index);
+  const kept = events.slice(0, 16);
+  discarded += Math.max(0, events.length - kept.length);
+  return { events: kept, discarded };
+}
+__name(extractEvents, "extractEvents");
+function classify(ev) {
+  const s = (ev.snippet || "").toLowerCase();
+  let kind = ev.srcKind;
+  if (/webinar|online seminar|zoom|livestream|live stream|youtube|virtual talk/i.test(s)) kind = "webinar";
+  else if (/meetup|community|networking|hackathon/i.test(s)) kind = "meetup";
+  else if (/summer school|winter school|school on|doctoral school/i.test(s)) kind = "school";
+  else if (/workshop/i.test(s)) kind = "workshop";
+  else if (/colloquium/i.test(s)) kind = "colloquium";
+  else if (/seminar/i.test(s)) kind = "seminar";
+  else if (/lecture|public talk|talk:/i.test(s)) kind = "lecture";
+  else if (/conference|symposium/i.test(s)) kind = "conference";
+  const hasInPerson = /in person|in-person|onsite|on-site|venue|location:|conference centre|university|hotel/i.test(s);
+  let delivery = ev.srcDelivery;
+  if (/online|virtual|webinar|zoom|remote|livestream|live stream|youtube|hybrid/i.test(s)) delivery = hasInPerson ? "hybrid" : "online";
+  else if (hasInPerson) delivery = "onsite";
+  let cost = ev.srcCost;
+  if (/free|no fee|complimentary|donation|open to all|no registration fee/i.test(s)) cost = 0;
+  else if (/registration fee|\bfee\b|ticket|registration required|paypal|checkout/i.test(s)) cost = 1;
+  return { kind, delivery, cost };
+}
+__name(classify, "classify");
+function domainHits(ev) {
+  const text = ((ev.snippet || "") + " " + ev.venue).toLowerCase();
+  const hits = [];
+  for (const d of DOMAINS) {
+    let n = 0;
+    for (const kw of d.kw) if (text.indexOf(kw) !== -1) n += 1;
+    if (n > 0) hits.push({ code: d.code, name: d.name, n });
+  }
+  if (hits.length === 0 && Array.isArray(ev.srcDomains)) {
+    for (const code of ev.srcDomains.slice(0, 4)) {
+      const d = DOMAINS.find((x) => x.code === code);
+      if (d && !hits.some((h) => h.code === code)) hits.push({ code: d.code, name: d.name, n: 0, affinity: true });
+    }
+  }
+  hits.sort((a, b) => b.n - a.n);
+  return hits;
+}
+__name(domainHits, "domainHits");
+function kindFriction(kind) {
+  const m = { webinar: 0, meetup: 1, lecture: 1, seminar: 1, meeting: 1, colloquium: 2, event: 2, other: 2, workshop: 3, school: 4, conference: 5 };
+  return m[kind] !== void 0 ? m[kind] : 2;
+}
+__name(kindFriction, "kindFriction");
+function deliveryFriction(d) {
+  return d === "online" ? 0 : d === "hybrid" ? 1 : d === "onsite" ? 3 : 2;
+}
+__name(deliveryFriction, "deliveryFriction");
+function costFriction(c) {
+  return c === 0 ? 0 : c === 1 ? 1 : 2;
+}
+__name(costFriction, "costFriction");
+function scoreEvent(ev) {
+  const c = classify(ev);
+  const hits = domainHits(ev);
+  const domainCount = hits.length;
+  const strong = hits.filter((h) => h.n >= 2).length;
+  const relevance = domainCount === 0 ? 0 : Math.min(10, 2 + domainCount + strong);
+  const friction = Math.min(10, kindFriction(c.kind) + deliveryFriction(c.delivery) + costFriction(c.cost));
+  const priority = Math.round(relevance * 10 / (1 + friction) * 10) / 10;
+  return {
+    ...ev,
+    kind: c.kind,
+    delivery: c.delivery,
+    cost: c.cost,
+    domains: hits.slice(0, 4).map((h) => h.code),
+    domainDetail: hits.slice(0, 4),
+    relevance,
+    friction,
+    priority,
+    frictionClass: friction <= 2 ? "LOW" : friction <= 5 ? "MED" : "HIGH"
+  };
+}
+__name(scoreEvent, "scoreEvent");
+async function scanVenue(src) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 8e3);
+  try {
+    const r = await fetch(src.url, { headers: { "User-Agent": UA, "Accept": "text/html" }, redirect: "follow", signal: ctrl.signal });
+    const text = await r.text();
+    if (r.ok) return { name: src.name, ...extractEvents(text, src) };
+    return { name: src.name, events: [], discarded: 0, error: "HTTP " + r.status };
+  } catch (e) {
+    return { name: src.name, events: [], discarded: 0, error: e && e.name === "AbortError" ? "timeout" : String(e && e.message || e).slice(0, 100) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+__name(scanVenue, "scanVenue");
+function flagStatus(deadlineIso, now) {
+  const dl = new Date(deadlineIso).getTime();
+  const days = (dl - now.getTime()) / 864e5;
+  if (days < 0) return "PASSED";
+  if (days <= 7) return "IMMINENT";
+  if (days <= 30) return "UPCOMING";
+  return "FUTURE";
+}
+__name(flagStatus, "flagStatus");
+async function verifyCatalog(env) {
+  const out = [];
+  for (const c of CATALOG) {
+    let verified = false;
+    let err = null;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8e3);
+      const r = await fetch(c.verify.url, { headers: { "User-Agent": UA }, redirect: "follow", signal: ctrl.signal });
+      clearTimeout(t);
+      const text = await r.text();
+      verified = r.ok && text.toLowerCase().indexOf(c.verify.token.toLowerCase()) !== -1;
+    } catch (e) {
+      err = String(e && e.message || e).slice(0, 80);
+    }
+    out.push({ ...c, verified, verifyError: err });
+  }
+  return out;
+}
+__name(verifyCatalog, "verifyCatalog");
+function fmtDate(iso) {
+  return iso ? iso : "TBA";
+}
+__name(fmtDate, "fmtDate");
+function costLabel(c) {
+  return c === 0 ? "free" : c === 1 ? "fee?" : "paid";
+}
+__name(costLabel, "costLabel");
+function renderReport(scannedAt, nowIso, scored, flags, catalogs, stats) {
+  const L = [];
+  const horizon = stats.horizonISO;
+  L.push("EVENTS-RADAR SCAN \u2014 generated " + scannedAt.slice(0, 10) + " (window: " + scannedAt.slice(0, 10) + " .. " + horizon + ")");
+  L.push("[EVENTS-RADAR: " + stats.inWindow + " events | " + stats.okVenues + " venues ok | " + stats.catalogVerified + "/" + catalogs.length + " catalog verified | " + flags.length + " deadline " + (flags.length === 1 ? "flag" : "flags") + "]");
+  L.push("");
+  L.push("Ranking rule: priority = 10 \xD7 relevance \xF7 (1 + friction). Friction = kind + delivery + cost");
+  L.push("(0 = free online webinar \u2026 10 = paid multi-day conference abroad). Free low-friction");
+  L.push("relevant events are ranked above costly travel conferences by design.");
+  L.push("");
+  const top = scored.filter((e) => e.relevance >= 4 && e.priority >= 4 && e.frictionClass !== "HIGH").sort((a, b) => b.priority - a.priority || a.startIso.localeCompare(b.startIso)).slice(0, 10);
+  L.push("## Top picks \u2014 relevance \xF7 friction");
+  if (top.length === 0) L.push("_No events cleared the top-pick threshold this scan._");
+  for (const e of top) {
+    L.push("- [P " + e.priority + " | " + e.frictionClass + " friction] " + fmtDate(e.startIso) + " [" + e.kind + "|" + e.delivery + "|" + costLabel(e.cost) + "] " + e.venue + ": " + e.snippet.slice(0, 120) + "  \u2192 " + e.domains.join("/") + "  <" + e.url + ">");
+  }
+  const upcoming = scored.slice().sort((a, b) => a.startIso.localeCompare(b.startIso) || a.venue.localeCompare(b.venue));
+  L.push("");
+  L.push("## Upcoming events (chronological, window \u2264 " + horizon + ")");
+  if (upcoming.length === 0) L.push("_None in window._");
+  for (const e of upcoming) {
+    L.push("- " + fmtDate(e.startIso) + (e.endIso && e.endIso !== e.startIso ? "\u2026" + e.endIso : "") + " [" + e.kind + "|" + e.delivery + "|" + costLabel(e.cost) + "] " + e.venue + ": " + e.snippet.slice(0, 130) + "  \u2192 " + (e.domains.join("/") || "\u2014") + "  <" + e.url + ">");
+  }
+  L.push("");
+  L.push("## Deadline flags");
+  for (const f of flags) L.push("- [" + f.status + "] " + f.label + " \u2014 " + f.deadline + " (" + f.note + ")");
+  L.push("");
+  L.push("## Canonical catalog (re-verified against source page each scan)");
+  for (const c of catalogs) {
+    const tag = c.verified ? "VERIFIED" : c.verifyError ? "UNREACHABLE" : "CANDIDATE-UNVERIFIED";
+    L.push("- [" + tag + "] " + c.title + (c.start ? "  " + c.start + (c.end && c.end !== c.start ? ".." + c.end : "") : "") + " [" + c.kind + "|" + c.delivery + "|" + costLabel(c.cost) + "|" + c.domains.join("/") + "]  " + c.note + "  <" + c.url + ">" + (c.deadline ? "  deadline " + c.deadline : ""));
+  }
+  L.push("");
+  L.push("## Source health");
+  L.push("- venues ok: " + stats.okVenues + "/" + stats.totalVenues + " | discarded: " + stats.discarded + " | venue errors: " + stats.venueErrors.length);
+  for (const v of stats.venueErrors) L.push("- ERR " + v.venue + ": " + v.error);
+  return L.join("\n");
+}
+__name(renderReport, "renderReport");
+async function ensureSchema(env) {
+  await env.RADAR_DB.prepare("CREATE TABLE IF NOT EXISTS events_radar (slug TEXT PRIMARY KEY, report TEXT, events_json TEXT, scanned_at TEXT, updated_at TEXT, curated_json TEXT, flags_json TEXT)").run();
+  for (const col of ["curated_json", "flags_json"]) {
+    try {
+      await env.RADAR_DB.prepare("ALTER TABLE events_radar ADD COLUMN " + col + " TEXT").run();
+    } catch (e) {
+    }
+  }
+}
+__name(ensureSchema, "ensureSchema");
+async function run(env) {
+  await ensureSchema(env);
+  const scannedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const now = /* @__PURE__ */ new Date();
+  const nowIso = scannedAt.slice(0, 10);
+  const horizon = new Date(now.getTime() + 365 * 864e5).toISOString().slice(0, 10);
+  const results = await Promise.allSettled(SOURCES.map((s) => scanVenue(s)));
+  const rawEvents = [];
+  const venueErrors = [];
+  let discarded = 0;
+  results.forEach((res, i) => {
+    if (res.status === "fulfilled" && res.value) {
+      if (res.value.error) venueErrors.push({ venue: SOURCES[i].name, error: res.value.error });
+      else {
+        rawEvents.push(...res.value.events);
+        discarded += res.value.discarded;
+      }
+    } else venueErrors.push({ venue: SOURCES[i].name, error: String((res.reason || "?").slice(0, 100)) });
+  });
+  const inWindow = rawEvents.filter((e) => e.startIso >= nowIso && e.startIso <= horizon);
+  const scored = inWindow.map(scoreEvent);
+  const seen = /* @__PURE__ */ new Set();
+  const uniq = scored.filter((e) => {
+    const k = e.venue + "|" + e.startIso;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const flags = DEADLINE_FLAGS.map((f) => ({ ...f, status: flagStatus(f.deadline, now) })).filter((f) => f.status !== "PASSED");
+  const catalogs = await verifyCatalog(env);
+  const stats = {
+    inWindow: uniq.length,
+    discarded,
+    okVenues: SOURCES.length - venueErrors.length,
+    totalVenues: SOURCES.length,
+    venueErrors,
+    catalogVerified: catalogs.filter((c) => c.verified).length,
+    horizonISO: horizon
+  };
+  const report = renderReport(scannedAt, nowIso, uniq, flags, catalogs, stats);
+  const slug = "events-radar-" + scannedAt.slice(0, 10);
+  let delivery = null;
+  try {
+    if (env.OBSIDIAN_WRITER) {
+      const dr = await env.OBSIDIAN_WRITER.fetch("https://obsidian-writer/", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: "events-radar", section: "Events Radar", content: report, date: scannedAt.slice(0, 10) })
+      });
+      delivery = { status: dr.status, ok: dr.ok };
+    }
+  } catch (e) {
+    delivery = { error: String(e && e.message || e).slice(0, 120) };
+  }
+  let email = null;
+  try {
+    if (env.EMAIL && env.EMAIL_API_KEY) {
+      const er = await env.EMAIL.fetch("https://qnfo-email.internal/send", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": env.EMAIL_API_KEY },
+        body: JSON.stringify({ to: "alerts@qnfo.org", subject: "Events Radar scan " + scannedAt.slice(0, 10), body: report })
+      });
+      email = { status: er.status, ok: er.ok };
+    }
+  } catch (e) {
+    email = { error: String(e && e.message || e).slice(0, 120) };
+  }
+  await env.RADAR_DB.prepare(
+    "INSERT OR REPLACE INTO events_radar (slug, report, events_json, curated_json, flags_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).bind(slug, report, JSON.stringify(uniq), JSON.stringify(catalogs), JSON.stringify(flags), scannedAt, scannedAt).run();
+  return {
+    slug,
+    version: VERSION,
+    events: uniq.length,
+    discarded,
+    venueErrors: venueErrors.length,
+    catalogVerified: stats.catalogVerified + "/" + catalogs.length,
+    flags: flags.map((f) => f.label + ":" + f.status),
+    topPicks: uniq.slice().sort((a, b) => b.priority - a.priority).slice(0, 5).map((e) => "P" + e.priority + " " + e.startIso + " " + e.venue + " " + e.domains.join("/")),
+    delivery,
+    email
+  };
+}
+__name(run, "run");
+var worker_default = {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(run(env));
+  },
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/" && url.searchParams.get("run") === "1") {
+      const out = await run(env);
+      return new Response(JSON.stringify({ ok: true, ...out }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/") {
+      const rows = await env.RADAR_DB.prepare("SELECT report FROM events_radar ORDER BY scanned_at DESC LIMIT 1").all();
+      const latest = rows.results && rows.results[0];
+      return new Response(latest ? latest.report : "No scan yet. GET /?run=1", { headers: { "content-type": "text/markdown" } });
+    }
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ ok: true, worker: WORKER, version: VERSION }), { headers: { "content-type": "application/json" } });
+    }
+    return new Response("events-radar worker: GET / (latest report) | GET /?run=1 (trigger scan) | GET /health", { status: 404 });
+  }
+};
+return { default: worker_default };
+})();
+//# sourceMappingURL=worker.js.map
+
+var arxivMod = (function(){
+const QNFO_VERSION = "qnfo-arxiv-radar/fabric-20260910";
+const VERSION = "1.0.1+fabric.20260910";
+var arxivModDefault = {
+  async scheduled(event, env, ctx) {
+    try {
+      const out = await run(env);
+      console.log("arxiv-radar", JSON.stringify(out));
+    } catch (e) {
+      console.error("arxiv-radar", String((e && e.message) || e));
+    }
+  },
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-arxiv-radar", version: VERSION }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/run") {
+      const out = await run(env);
+      return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("not found", { status: 404 });
+  }
+};
+const WIDE_QUERY = '(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" OR all:"ZBW" OR all:"quantum thermodynamics" OR all:"Landauer" OR all:"energy per logical qubit" OR all:"Margolus-Levitin" OR all:"cryogenic controller" OR all:"primon" OR all:"Gentile statistics" OR all:"adelic" OR all:"arithmetic quantum") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)';
+const STRONG = ["ultrametric","p-adic","bruhat","primon","adelic","gentile","joules","landauer","margolus","quantum energy","error correction","thermodynamics","logical qubit","zbw","arithmetic","energy overhead","energy efficiency","cryogenic"];
+const UA = "Mozilla/5.0 (QNFO arxiv-radar)";
+function pad(n) { return String(n).padStart(2, "0"); }
+async function run(env) {
+  const out = { hits: 0, candidates: 0, enqueued: 0, dupes: 0, noteKey: null, error: null, sample: [] };
+  let hits = [];
+  try {
+    const q = encodeURIComponent(WIDE_QUERY);
+    const r = await fetch("https://export.arxiv.org/api/query?search_query=" + q + "&start=0&max_results=20&sortBy=submittedDate&sortOrder=descending", { headers: { "User-Agent": UA } });
+    const txt = await r.text();
+    const entries = txt.split("<entry>").slice(1);
+    for (const en of entries) {
+      const t = (en.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "";
+      const id = (en.match(/<id>[\s\S]*?arxiv\.org\/abs\/([^<]+)<\/id>/) || [])[1] || "";
+      const pub = (en.match(/<published>([^<]+)<\/published>/) || [])[1] || "";
+      const sum = (en.match(/<summary>([\s\S]*?)<\/summary>/) || [])[1] || "";
+      const authors = [];
+      const am = en.match(/<name>([\s\S]*?)<\/name>/g) || [];
+      for (const a of am) authors.push(a.replace(/<\/?name>/g, "").trim());
+      if (t) hits.push({ id: id.trim(), title: t.replace(/\s+/g, " ").trim().slice(0, 220), published: pub.slice(0, 10), authors: authors.slice(0, 6), text: (t + " " + sum).replace(/\s+/g, " ").toLowerCase() });
+    }
+  } catch (e) { out.error = String((e && e.message) || e); }
+  out.hits = hits.length;
+  const candidates = [];
+  for (const h of hits) {
+    let score = 0;
+    for (const kw of STRONG) if (h.text.includes(kw)) score++;
+    if (score >= 1) candidates.push(h);
+  }
+  out.candidates = candidates.length;
+  out.sample = candidates.slice(0, 5).map(function(c){ return c.id + " " + c.title.slice(0, 60); });
+  const lines = [];
+  for (const c of candidates.slice(0, 15)) {
+    lines.push("- [" + c.id + "] " + c.title + " (" + c.published + ") " + c.authors.slice(0, 3).join(", "));
+  }
+  const d = new Date();
+  const ymd = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const key = "notes/v1/" + d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + ymd + "/_arxiv-radar-" + ymd + ".md";
+  const body = "# arXiv Radar " + ymd + "\n\nWidened scan: " + hits.length + " hits, " + candidates.length + " strong candidates\n\n" + lines.join("\n") + "\n";
+  try {
+    if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); out.noteKey = key; }
+  } catch (e) {}
+  if (env.AUDIT) {
+    for (const c of candidates.slice(0, 8)) {
+      try {
+        const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM outreach_queue WHERE paper_id=?1 LIMIT 1").bind(c.id.slice(0, 40)).first();
+        if (dup) { out.dupes++; continue; }
+        await env.AUDIT.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,NULL,?4,'pending', datetime('now'))").bind("aq-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), c.id.slice(0, 40), "", "arxiv-radar widened: " + c.title.slice(0, 120)).run();
+        out.enqueued++;
+      } catch (e) {}
+    }
+  }
+  return out;
+}
+
+return arxivModDefault;
+})();
+var researchMod = (function(){
+const QNFO_VERSION = "qnfo-research-radar/fabric-20260910";
+const VERSION = "1.0.1+fabric.20260910";
+var researchModDefault = {
+  async scheduled(event, env, ctx) {
+    const cron = event.cron;
+    let out;
+    try {
+      if (cron === "0 8 * * 7") out = await jobZenodo(env);
+      else if (cron === "0 6 1 * *") out = await jobPhilpapers(env);
+      else if (cron === "0 9 * * 7") out = await jobSeo(env);
+      else out = { status: "skipped", cron: cron };
+      console.log("research-radar", JSON.stringify(out));
+    } catch (e) {
+      console.error("research-radar", String((e && e.message) || e));
+    }
+  },
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-research-radar", version: VERSION }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/run") {
+      const mode = url.searchParams.get("job") || "all";
+      const results = {};
+      if (mode === "zenodo" || mode === "all") results.zenodo = await jobZenodo(env);
+      if (mode === "philpapers" || mode === "all") results.philpapers = await jobPhilpapers(env);
+      if (mode === "seo" || mode === "all") results.seo = await jobSeo(env);
+      return new Response(JSON.stringify(results), { headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("not found", { status: 404 });
+  }
+};
+const ZENODO_DOIS = ["10.5281/zenodo.21803159","10.5281/zenodo.21786473","10.5281/zenodo.21784489","10.5281/zenodo.21784490","10.5281/zenodo.21786603"];
+const SITEMAPS = ["https://rwnq8.github.io/sitemap.xml","https://qnfo-landing.pages.dev/sitemap.xml"];
+function pad(n) { return String(n).padStart(2, "0"); }
+function todayKey() {
+  const d = new Date();
+  const ymd = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  return { ymd: ymd, dir: "notes/v1/" + d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + ymd };
+}
+async function writeNote(env, name, body) {
+  const t = todayKey();
+  const key = t.dir + "/_" + name + "-" + t.ymd + ".md";
+  try {
+    if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); return key; }
+  } catch (e) {}
+  return null;
+}
+async function jobZenodo(env) {
+  const lines = [];
+  let ok = 0;
+  for (const doi of ZENODO_DOIS) {
+    try {
+      const r = await fetch("https://doi.org/api/handles/" + doi, { headers: { "User-Agent": "QNFO zenodo attribution audit (mailto:rwnquni@outlook.com)" } });
+      if (r.ok) { ok++; lines.push("- " + doi + " | resolve: OK (HTTP " + r.status + ")"); }
+      else lines.push("- " + doi + " | resolve: FAIL (HTTP " + r.status + ")");
+    } catch (e) { lines.push("- " + doi + " | resolve: ERROR " + String((e && e.message) || e)); }
+  }
+  const body = "# Zenodo Attribution Audit " + todayKey().ymd + "\n\nDOIs checked: " + ZENODO_DOIS.length + " | resolving: " + ok + "\n\n" + lines.join("\n") + "\n";
+  const noteKey = await writeNote(env, "zenodo-attribution", body);
+  return { status: "ok", resolving: ok, total: ZENODO_DOIS.length, noteKey: noteKey };
+}
+async function jobPhilpapers(env) {
+  let status = 0, len = 0, line = "no check";
+  try {
+    const r = await fetch("https://philpapers.org/s/Quni-Gudzinas", { headers: { "User-Agent": "Mozilla/5.0 (QNFO philpapers monitor)" } });
+    status = r.status;
+    const t = await r.text();
+    len = t.length;
+    line = "philpapers.org search page HTTP " + status + " | bytes " + len;
+  } catch (e) { line = "ERROR " + String((e && e.message) || e); }
+  const body = "# PhilPapers Index Monitor " + todayKey().ymd + "\n\n" + line + "\n";
+  const noteKey = await writeNote(env, "philpapers", body);
+  return { status: "ok", httpStatus: status, bytes: len, noteKey: noteKey };
+}
+async function jobSeo(env) {
+  const lines = [];
+  for (const u of SITEMAPS) {
+    try {
+      const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (QNFO SEO health)" } });
+      const t = await r.text();
+      const lastmod = (t.match(/<lastmod>([^<]+)<\/lastmod>/i) || [])[1] || "none";
+      lines.push("- " + u + " | HTTP " + r.status + " | bytes " + t.length + " | lastmod " + lastmod);
+    } catch (e) { lines.push("- " + u + " | ERROR " + String((e && e.message) || e)); }
+  }
+  const body = "# SEO Health Check " + todayKey().ymd + "\n\n" + lines.join("\n") + "\n";
+  const noteKey = await writeNote(env, "seo-health", body);
+  return { status: "ok", noteKey: noteKey, checks: lines.length };
+}
+
+return researchModDefault;
+})();
+var citationMod = (function(){
+const QNFO_VERSION = "qnfo-citation-watch/fabric-20260910";
+var citationModDefault = {
+  async scheduled(event, env, ctx) {
+    try {
+      const out = await run(env);
+      console.log("citation-watch", JSON.stringify(out));
+    } catch (e) {
+      console.error("citation-watch", String((e && e.message) || e));
+    }
+  },
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-citation-watch", version: "1.0.0" }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/run") {
+      const out = await run(env);
+      return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("not found", { status: 404 });
+  }
+};
+const KNOWN_DOIS = [
+  "10.5281/zenodo.21803159",
+  "10.5281/zenodo.21786473",
+  "10.5281/zenodo.21784489",
+  "10.5281/zenodo.21784490",
+  "10.5281/zenodo.21786603"
+];
+async function run(env) {
+  const lines = [];
+  let total = 0;
+  for (const doi of KNOWN_DOIS) {
+    try {
+      const r = await fetch("https://api.openalex.org/works/doi:" + doi, { headers: { "User-Agent": "QNFO citation watch (mailto:rwnquni@outlook.com)" } });
+      if (!r.ok) continue;
+      const w = await r.json();
+      const cited = (w && w.cited_by_count) || 0;
+      total += cited;
+      lines.push("- " + ((w && w.title) || doi) + " | cited_by: " + cited);
+      const cr = await fetch("https://api.openalex.org/works?filter=cites:" + doi + "&per-page=5", { headers: { "User-Agent": "QNFO citation watch (mailto:rwnquni@outlook.com)" } });
+      if (cr.ok) {
+        const c = await cr.json();
+        for (const cit of (c.results || []).slice(0, 3)) {
+          lines.push("    - " + ((cit && cit.title) || "untitled") + " | " + ((cit && cit.publication_date) || ""));
+        }
+      }
+    } catch (e) {}
+  }
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const ymd = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const key = "notes/v1/" + d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + ymd + "/_citation-watch-" + ymd + ".md";
+  const body = "# Citation Watch " + ymd + "\n\nTotal known-DOI citations: " + total + "\n\n" + lines.join("\n") + "\n";
+  let wrote = false;
+  try {
+    if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); wrote = true; }
+  } catch (e) {}
+  return { status: "ok", total, noteKey: key, lines: lines.length, wrote };
+}
+
+return citationModDefault;
+})();
+
+// ===== MERGED RADAR HUB (2026-09-11: events-radar + qnfo-arxiv-radar + qnfo-research-radar + qnfo-citation-watch) =====
+export default {
+  async fetch(request, env, ctx) {
+    const p = new URL(request.url).pathname;
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: "merged-2026-09-11" }), { headers: { "content-type": "application/json" } });
+    if (p === "/events" || p.startsWith("/events/")) {
+      const u = new URL(request.url); u.pathname = p.slice("/events".length) || "/";
+      return eventsMod.default.fetch(new Request(u.toString(), request), env, ctx);
+    }
+    if (p === "/citation" || p.startsWith("/citation/")) {
+      const u = new URL(request.url); u.pathname = p.slice("/citation".length) || "/";
+      return citationMod.fetch(new Request(u.toString(), request), env, ctx);
+    }
+    return new Response("radar-hub", { status: 200 });
+  },
+  async scheduled(event, env, ctx) {
+    const cron = event.cron;
+    if (cron === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
+    if (cron === "30 8 * * *") return arxivMod.scheduled(event, env, ctx);
+    if (cron === "0 6 1 * *" || cron === "0 8 * * 7" || cron === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
+    if (cron === "0 11 1,15 * *") return citationMod.scheduled(event, env, ctx);
+  },
+};
