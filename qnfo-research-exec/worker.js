@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.0-artifact-deposit";
+var VERSION = "0.8.1-quality-gate-fix";
 var WORKER = "qnfo-research-exec";
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
 var MAX_NOTE = 4e3;
@@ -633,7 +633,7 @@ function qualityGate(row, minLen, minRefs) {
   var len = md.length;
   var reasons = [];
   if (len < minLen) reasons.push("body_len=" + len + "<" + minLen);
-  var litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review)", "i");
+  var litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review|background)", "i");
   var doiRe = new RegExp("10[.][0-9]{4,9}/", "g");
   var axRe = new RegExp("(?:arxiv[.]org/|arXiv:[" + NLc + TBc + " ]*[0-9]{4}[.][0-9]{4,5})", "gi");
   var lit = litRe.test(md);
@@ -643,7 +643,8 @@ function qualityGate(row, minLen, minRefs) {
   var tableRe = new RegExp("^[" + NLc + TBc + " ]*[|][-:| ]+[|]", "m");
   var hasTable = tableRe.test(md);
   var hasNumeric = /(?:simulat|numerical experiment|computed|verified (?:numerically|in code)|implementation artifact)/i.test(md);
-  if (!hasFence && !hasTable && !hasNumeric) reasons.push("no_verification_marker");
+  var hasVerifyArtifact = !!(row && ((row.verify_script && String(row.verify_script).trim().length > 0) || (row.verify_output && String(row.verify_output).trim().length > 0)));
+  if (!hasFence && !hasTable && !hasNumeric && !hasVerifyArtifact) reasons.push("no_verification_marker");
   if (!reasons.length) return { ok: true };
   return { ok: false, reason: "quality gate: " + reasons.join("; ") };
 }
