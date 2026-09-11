@@ -1,7 +1,3 @@
---db1dbd8130ea27c2e3ccbf72b36e40ebbe85c99bc0257702aca5662df69f
-Content-Disposition: form-data; name="worker.js"; filename="worker.js"
-Content-Type: application/javascript+module
-
 const WORKER = "ai-health-prober";
 const VERSION = "2.3.1-mode-corrected";
 const MODELS = [{"internal": "@cf/qwen/qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text"}, {"internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed"}, {"internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text"}, {"internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text"}, {"internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text"}, {"internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text"}, {"internal": "kimi-k2.6", "id": "@cf/zai-org/glm-5.3", "kind": "text"}, {"internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text"}, {"internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text"}, {"internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text"}, {"internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text"}, {"internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text"}, {"internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text"}, {"internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text"}, {"internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text"}];
@@ -66,5 +62,3 @@ export default {
   },
   async scheduled(event, env, ctx) { ctx.waitUntil((async function(){ await runProbe(env); await checkFreshness(env); })()); },
 };
-
---db1dbd8130ea27c2e3ccbf72b36e40ebbe85c99bc0257702aca5662df69f--

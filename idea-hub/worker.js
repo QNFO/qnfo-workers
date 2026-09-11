@@ -1,7 +1,3 @@
---659f838219ec2f1752793e033b24bc950bbd266a775c5d61a8ea78839ed1
-Content-Disposition: form-data; name="worker.js"; filename="worker.js"
-Content-Type: application/javascript+module
-
 var m0 = (function(){
 var ideafactoryMod = (function(){
 const QNFO_VERSION = "qnfo-idea-factory/fabric-20260910";
@@ -2602,5 +2598,3 @@ export default {
     if (c === "0 * * * *") { m0.default.scheduled(event, env, ctx); return; }
   },
 };
-
---659f838219ec2f1752793e033b24bc950bbd266a775c5d61a8ea78839ed1--
