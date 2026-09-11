@@ -1,5 +1,5 @@
-// FLEET registry snapshot for qnfo-observability v1.1.0
-// Captured from Cloudflare Workers API 2026-09-10; 79 workers.
+// FLEET registry snapshot for qnfo-observability v1.1.3
+// Captured from Cloudflare Workers API 2026-09-10; 81 workers (qnfo-scorecard added 2026-09-10).
 export const FLEET = [
   "calendar-api",
   "events-radar",
@@ -79,5 +79,5 @@ export const FLEET = [
   "qnfo-thread-ingest",
   "qnfo-tools-mcp",
   "qnfo-twin-maintain",
-  "research-daily-brief"
+  "research-daily-brief", "qnfo-scorecard"
 ];
