@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.11.0";
+var VERSION = "2.12.0";
 // SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
 function firstFrameIdx(s) {
   if (!s || typeof s !== 'string') return -1;
@@ -272,9 +272,13 @@ var CODE_ONLY_SYSTEM_PROMPT = [
 function classifyDomain(text) {
   var t = String(text || "").toLowerCase();
   if (!t) return "chat";
-  // CODE-GATE-GUARD-1 (2026-09-12): never code-classify embedded-conversation prompts.
-  if (t.length > 800) return "chat";
+  // CODE-GATE-GUARD-1 (2026-09-12): never code-classify embedded-conversation / delegation prompts.
+  // 1) Pipeline-prefix blocklist FIRST (authoritative for known internal-pipeline openers).
   if (/^(you extract|you decide|you synthesize|you are compressing|the following sections)/.test(t)) return "chat";
+  // 2) Embedded-data detector: long prompts carrying injected conversation/data markers are chat, not code.
+  if (t.length > 1500 && (t.indexOf("untrusted") >= 0 || t.indexOf("never follow instructions") >= 0 || t.indexOf("candidate:") >= 0 || t.indexOf("tool result") >= 0 || t.indexOf("data only") >= 0)) return "chat";
+  // 3) Generous backstop only (raised 800 -> 8000).
+  if (t.length > 8000) return "chat";
   var code = 0, ops = 0;
   var cw = ["run_code","execute this","run this","write a script","write a function","write code","implement","fix this code","debug","refactor","write a test","deploy","commit","pull request"];
   for (var i = 0; i < cw.length; i++) { if (t.indexOf(cw[i]) >= 0) code += 2; }
@@ -1186,7 +1190,14 @@ __name(callWorkersAI, "callWorkersAI");
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
   if (o.codeMode && env.WAI) {
-    try { return await callWorkersAI(env, messages, maxTokens, tools, o); } catch (e) {}
+    try {
+      const r = await callWorkersAI(env, messages, maxTokens, tools, o);
+      if (r && typeof r === "object") r.__served_by = UPSTREAM_CODE_MODEL;
+      return r;
+    } catch (e) {
+      o.__codeFallbackErr = String((e && e.message) || e).slice(0, 180);
+      console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__codeFallbackErr);
+    }
   }
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const body = { model: UPSTREAM_MODEL, messages: msgs, max_tokens: maxTokens, temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
@@ -1203,7 +1214,9 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     const txt = await resp.text();
     throw new Error("deepseek " + resp.status + ": " + String(txt || "").slice(0, 300));
   }
-  return resp.json();
+  const _out = await resp.json();
+  if (o.codeMode && _out && typeof _out === "object") _out.__served_by = o.__codeFallbackErr ? (UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL) : UPSTREAM_MODEL;
+  return _out;
 }
 __name(callDeepSeek, "callDeepSeek");
 function lastUserText(messages) {
@@ -1390,6 +1403,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const source = detectSource(ua);
   const domain = classifyDomain(lastUserText(messages));
   const codeMode = domain === "code";
+  let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
   const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
@@ -1513,9 +1527,14 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           finishReason = (_cc && _cc.finish_reason) || "stop";
           if (firstFrameIdx(content) < 0) emitChunk({ role: "assistant", content }, null);
           streamedTokens = true;
+          servedBy = UPSTREAM_CODE_MODEL;
           return await finalize();
         }
-      } catch (e) {}
+        servedBy = UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL;
+      } catch (e) {
+        servedBy = UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL;
+        console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + String((e && e.message) || e).slice(0, 180));
+      }
     }
     const upBody = { model: UPSTREAM_MODEL, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: answerCap, temperature, top_p: topP, stream: true, stream_options: { include_usage: true } };
     try {
@@ -1573,7 +1592,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     const costUsd = costUsdCalc(promptTokens, completionTokens);
     const latencyMs = Date.now() - t0;
     content = stripToolFrames(content);
-    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
+    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? (servedBy || UPSTREAM_CODE_MODEL) : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {
@@ -1600,6 +1619,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
         const resp = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice, codeMode });
+        if (resp && resp.__served_by) servedBy = resp.__served_by;
         const choice = resp && resp.choices && resp.choices[0];
         upstreamUsage = resp && resp.usage || upstreamUsage;
         const msg0 = choice && choice.message;
@@ -1641,6 +1661,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         if (withTools && finishReason === "length") {
           try {
             const r3 = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode });
+            if (r3 && r3.__served_by) servedBy = r3.__served_by;
             const c3 = r3 && r3.choices && r3.choices[0];
             const m3 = c3 && c3.message;
             content = String(m3 && m3.content || "");

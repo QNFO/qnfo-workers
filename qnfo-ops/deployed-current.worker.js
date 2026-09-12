@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.9.6";
+var VERSION = "2.12.0";
 // SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
 function firstFrameIdx(s) {
   if (!s || typeof s !== 'string') return -1;
@@ -19,6 +19,8 @@ var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
+var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
 var MAX_TOOL_ITERS = 8;
 var MODEL_CTX = 1048576;
@@ -254,6 +256,46 @@ function toolsPayload() {
   });
 }
 __name(toolsPayload, "toolsPayload");
+var CODE_TOOL_NAMES = ["run_code","workspace_write","workspace_read","workspace_list","workspace_delete","github_repo_read","github_file_write","github_pr","web_fetch","web_search"];
+var CODE_ONLY_SYSTEM_PROMPT = [
+  "You are qnfo-ops/ops-exec in CODE MODE - a server-side code agent (the QNFO equivalent of Claude Code) running 100% on Cloudflare. You write, run, and verify code. You do not chat, do not converse, do not produce prose essays, and do not narrate your process.",
+  "CODE-ONLY CONTRACT (binding):",
+  "C1. CODE IS THE ONLY PRODUCT. Every turn: receive a code task -> write/edit code -> run it -> verify -> return the executed result. Output = code, execution output, diffs, test results, and at most a one-line summary. Never produce conversational prose; never ask a clarifying question a tool call or the code itself could resolve; never explain what you would do without doing it.",
+  "C2. SERVER-SIDE ONLY. All code executes on Cloudflare (run_code via Dynamic Workers + the R2-backed workspace). You are the sole executor. NEVER emit code, shell commands, SQL, or tool-call syntax FOR the client to run locally; NEVER hand back a tool_calls payload for the client to execute; NEVER ask the user to run/paste/open/install anything.",
+  "C3. TOOL-RESULT-FIRST. Lead with the executed result (stdout, return value, file content, diff, exit code, test output), then at most a one-line summary. No essays, no meta-commentary, no signposting.",
+  "C4. LOOP UNTIL DONE. plan -> write -> run -> verify -> report, in one turn, without stopping to ask permission. Re-run after fixes until the code compiles/runs and the result is verified.",
+  "C5. CODE TOOLSET (the only tools in code mode): run_code, workspace_write/read/list/delete, github_repo_read/github_file_write/github_pr, web_fetch/web_search. Ops tools (fleet_status, email_*, ops_d1_query, research_queue, etc.) are OUT of scope in code mode.",
+  "C6. VERIFY WITH EVIDENCE. Every done claim carries the executed output as evidence (actual stdout / return value / diff, never a paraphrase). If a tool errors, report the exact error text. Never fabricate a result.",
+  "C7. ADVERSARIAL. State at least one concrete failure mode or limitation of the code. Do not claim correctness without a run; do not inflate confidence.",
+  "C8. COST-MANAGED + SERVER-SIDE. All execution is free (Dynamic Workers) and 100% on Cloudflare. Keep runs bounded."
+].join(String.fromCharCode(10));
+function classifyDomain(text) {
+  var t = String(text || "").toLowerCase();
+  if (!t) return "chat";
+  // CODE-GATE-GUARD-1 (2026-09-12): never code-classify embedded-conversation / delegation prompts.
+  // 1) Pipeline-prefix blocklist FIRST (authoritative for known internal-pipeline openers).
+  if (/^(you extract|you decide|you synthesize|you are compressing|the following sections)/.test(t)) return "chat";
+  // 2) Embedded-data detector: long prompts carrying injected conversation/data markers are chat, not code.
+  if (t.length > 1500 && (t.indexOf("untrusted") >= 0 || t.indexOf("never follow instructions") >= 0 || t.indexOf("candidate:") >= 0 || t.indexOf("tool result") >= 0 || t.indexOf("data only") >= 0)) return "chat";
+  // 3) Generous backstop only (raised 800 -> 8000).
+  if (t.length > 8000) return "chat";
+  var code = 0, ops = 0;
+  var cw = ["run_code","execute this","run this","write a script","write a function","write code","implement","fix this code","debug","refactor","write a test","deploy","commit","pull request"];
+  for (var i = 0; i < cw.length; i++) { if (t.indexOf(cw[i]) >= 0) code += 2; }
+  if (t.indexOf("```") >= 0) code += 2;
+  var ca = ["import ","require(","function ","def ","class ","const ","let ","await ","return ","console.log","print(",".py",".js",".ts",".sh",".mjs"];
+  for (var j = 0; j < ca.length; j++) { if (t.indexOf(ca[j]) >= 0) code += 1; }
+  var ow = ["fleet","backlog","email","check the fleet","list open issues","d1","r2","vectorize","audit","research queue","intents"];
+  for (var k = 0; k < ow.length; k++) { if (t.indexOf(ow[k]) >= 0) ops += 2; }
+  if (code >= 3 && code > ops) return "code";
+  if (ops >= 2 && ops >= code) return "ops";
+  return "chat";
+}
+function codeToolsPayload() {
+  return OPS_TOOLS.filter(function(t) { return CODE_TOOL_NAMES.indexOf(t.name) >= 0; }).map(function(t) {
+    return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } };
+  });
+}
 var FLEET = [
   { name: "qnfo-lifecycle", binding: "LIFECYCLE" },
   { name: "qnfo-email", binding: "EMAIL", auth: true },
@@ -1117,7 +1159,7 @@ async function logOps(env, rec) {
   await ensureSchema(env);
   if (rec && String(rec.ua || "").indexOf("QNFO-AI-Calibration") >= 0) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)").bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", "ops", rec.prompt || "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)").bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", rec.domain || "ops", rec.prompt || "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0).run();
   } catch (e) {
     console.log("ops_ai_log insert failed:", e && e.message || e);
   }
@@ -1131,8 +1173,32 @@ async function logOps(env, rec) {
   }
 }
 __name(logOps, "logOps");
+async function callWorkersAI(env, messages, maxTokens, tools, opts) {
+  const o = opts || {};
+  const msgs = truncateToContext(messages, CODE_MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const inputs = { messages: msgs };
+  if (maxTokens) inputs.max_tokens = maxTokens;
+  if (o.temperature != null) inputs.temperature = o.temperature;
+  if (o.topP != null) inputs.top_p = o.topP;
+  if (tools && tools.length) { inputs.tools = tools; if (o.toolChoice) inputs.tool_choice = o.toolChoice; }
+  const res = await env.WAI.run(UPSTREAM_CODE_MODEL, inputs);
+  if (res && Array.isArray(res.choices)) return res;
+  const txt = (res && (res.response != null ? res.response : res.answer)) || "";
+  return { choices: [{ index: 0, message: { role: "assistant", content: String(txt) }, finish_reason: "stop" }], usage: (res && res.usage) || {} };
+}
+__name(callWorkersAI, "callWorkersAI");
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
+  if (o.codeMode && env.WAI) {
+    try {
+      const r = await callWorkersAI(env, messages, maxTokens, tools, o);
+      if (r && typeof r === "object") r.__served_by = UPSTREAM_CODE_MODEL;
+      return r;
+    } catch (e) {
+      o.__codeFallbackErr = String((e && e.message) || e).slice(0, 180);
+      console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__codeFallbackErr);
+    }
+  }
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const body = { model: UPSTREAM_MODEL, messages: msgs, max_tokens: maxTokens, temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
@@ -1148,7 +1214,9 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     const txt = await resp.text();
     throw new Error("deepseek " + resp.status + ": " + String(txt || "").slice(0, 300));
   }
-  return resp.json();
+  const _out = await resp.json();
+  if (o.codeMode && _out && typeof _out === "object") _out.__served_by = o.__codeFallbackErr ? (UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL) : UPSTREAM_MODEL;
+  return _out;
 }
 __name(callDeepSeek, "callDeepSeek");
 function lastUserText(messages) {
@@ -1333,6 +1401,9 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
   const clientToolChoice = body && body.tool_choice || "auto";
   const source = detectSource(ua);
+  const domain = classifyDomain(lastUserText(messages));
+  const codeMode = domain === "code";
+  let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
   const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
@@ -1354,7 +1425,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   }) : OPS_TOOLS;
   const roundTools = hybrid ? serverTools.map(function(t) {
     return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } };
-  }).concat(clientTools) : toolsPayload();
+  }).concat(clientTools) : (codeMode ? codeToolsPayload() : toolsPayload());
   const work = [];
   for (const m of messages) {
     if (!m || !m.role) continue;
@@ -1382,7 +1453,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (si >= 0) work[si] = Object.assign({}, work[si], { content: String(work[si].content || "") + "\n\n" + opsCtx });
     else work.unshift({ role: "system", content: OPS_SYSTEM_PROMPT + sysDate });
   } else {
-    work.unshift({ role: "system", content: OPS_SYSTEM_PROMPT + sysDate });
+    work.unshift({ role: "system", content: (codeMode ? CODE_ONLY_SYSTEM_PROMPT : OPS_SYSTEM_PROMPT) + sysDate });
   }
   const prompt = lastUserText(messages).slice(0, 4e3);
   const respId = randId("chatcmpl-");
@@ -1444,6 +1515,27 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     strategy = strat;
     const fallback = content;
     content = "";
+    if (codeMode && env.WAI) {
+      try {
+        const _ck = await callWorkersAI(env, work, answerCap, null, { temperature, topP });
+        const _cc = _ck && _ck.choices && _ck.choices[0];
+        const _cm = _cc && _cc.message;
+        const _ct = String((_cm && _cm.content) || "");
+        if (_ct) {
+          content = _ct;
+          if (_ck.usage) upstreamUsage = _ck.usage;
+          finishReason = (_cc && _cc.finish_reason) || "stop";
+          if (firstFrameIdx(content) < 0) emitChunk({ role: "assistant", content }, null);
+          streamedTokens = true;
+          servedBy = UPSTREAM_CODE_MODEL;
+          return await finalize();
+        }
+        servedBy = UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL;
+      } catch (e) {
+        servedBy = UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL;
+        console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + String((e && e.message) || e).slice(0, 180));
+      }
+    }
     const upBody = { model: UPSTREAM_MODEL, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: answerCap, temperature, top_p: topP, stream: true, stream_options: { include_usage: true } };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") }, body: JSON.stringify(upBody) });
@@ -1500,7 +1592,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     const costUsd = costUsdCalc(promptTokens, completionTokens);
     const latencyMs = Date.now() - t0;
     content = stripToolFrames(content);
-    const logRec = { id: randId("ops-"), ts: iso(), model: wanted, strategy, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
+    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? (servedBy || UPSTREAM_CODE_MODEL) : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {
@@ -1526,7 +1618,8 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
-        const resp = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice });
+        const resp = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice, codeMode });
+        if (resp && resp.__served_by) servedBy = resp.__served_by;
         const choice = resp && resp.choices && resp.choices[0];
         upstreamUsage = resp && resp.usage || upstreamUsage;
         const msg0 = choice && choice.message;
@@ -1567,7 +1660,8 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         if (isStream) return await streamFinalAnswer(strategy);
         if (withTools && finishReason === "length") {
           try {
-            const r3 = await callDeepSeek(env, work, answerCap, null, { temperature, topP });
+            const r3 = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode });
+            if (r3 && r3.__served_by) servedBy = r3.__served_by;
             const c3 = r3 && r3.choices && r3.choices[0];
             const m3 = c3 && c3.message;
             content = String(m3 && m3.content || "");
