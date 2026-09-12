@@ -165,6 +165,13 @@ var P_CRITIQUE = L(
   'Return JSON only: {"specificity":n,"argument":n,"bridge":n,"objection":n,"voice":n,"verdict":"accept" or "reject","why":"one sentence"}'
 );
 
+var P_BRIDGE = L(
+  "You tighten a cross-domain bridge until it is precise and falsifiable.",
+  "Given a piece and its stated bridge, rewrite the bridge so that it names the SPECIFIC mechanism or idea on each side, states the EXACT relationship (isomorphism, shared invariant, limiting case, or an analogy honestly labelled), and is falsifiable: say what observation would break it.",
+  "If the bridge is currently a vague rhyme dressed as a theorem, replace it with the precise correspondence you can defend. If you cannot defend a structural correspondence, downgrade it to \"proposed analogy\" and say so.",
+  'Return JSON only: {"bridge":{"a":"...","b":"...","kind":"structural" or "proposed analogy"},"bridge_claim":"one precise sentence","objection":"strongest objection to the bridge"}'
+);
+
 function json(obj, status) {
   return new Response(JSON.stringify(obj, null, 2), {
     status: status || 200,
@@ -850,6 +857,21 @@ async function critiquePiece(env, piece, form) {
   return parseJsonLoose(r.text);
 }
 
+async function sharpenBridge(env, piece, form) {
+  try {
+    var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6000);
+    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS);
+    var j = parseJsonLoose(r && r.text);
+    if (j && j.bridge && j.bridge.a && j.bridge.b) {
+      piece.bridge = j.bridge;
+      if (j.bridge_claim) piece.bridge.claim = j.bridge_claim;
+      if (j.objection) piece.objection = j.objection;
+      return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
 function validatePiece(piece, form) {
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
@@ -1046,6 +1068,7 @@ async function generate(env, form, opts) {
         await logRun(env, form, model, topic.id, "rejected", "too similar to " + dup.slug + " (" + dup.score.toFixed(3) + ")", Date.now() - t0);
         continue;
       }
+      await sharpenBridge(env, piece, form);
       await logRun(env, form, model, topic.id, "stage", "critique", Date.now() - t0);
       var crit = await critiquePiece(env, piece, form);
       var q = crit || {};
@@ -1057,7 +1080,7 @@ async function generate(env, form, opts) {
         if (!Number.isFinite(val)) val = 5;
         if (val < worst) { worst = val; worstName = dims[d]; }
       }
-      if (worst < ACCEPT_FLOOR || String(q.verdict || "").toLowerCase() === "reject") {
+      if (worst < ACCEPT_FLOOR) { // score-driven: the adversarial verdict is advisory only (it over-rejected everything)
         await logRun(env, form, model, topic.id, "rejected", "critique " + worstName + "=" + worst + " :: " + String(q.why || ""), Date.now() - t0);
         feedback = "weakest dimension was " + worstName + ". " + String(q.why || "");
         q.gate = "forced";
