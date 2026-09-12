@@ -2468,7 +2468,7 @@ var m0D = {
     if (p === "/idea-miner" || p.startsWith("/idea-miner/")) { const u = new URL(request.url); u.pathname = p.slice(11) || "/"; return ideaminerMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/idea-triage" || p.startsWith("/idea-triage/")) { const u = new URL(request.url); u.pathname = p.slice(12) || "/"; return ideatriageMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/" || p === "") { const u = new URL(request.url); u.pathname = "/"; return ideafactoryMod.default.fetch(new Request(u.toString(), request), env, ctx); }
-    return new Response("idea-hub", { status: 200 });
+    return ideafactoryMod.default.fetch(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
     const c = event.cron;
