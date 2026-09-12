@@ -13,7 +13,7 @@ for f in worker.js deployed-current.worker.js; do
   if grep -Fq "Ops tool loop reached its time budget after " "$DIR/$f"; then
     echo "FAIL: panic stub present in $f"; FAIL=1
   fi
-  if ! grep -q "OPS_LOOP_DEADLINE_MS\", 1[2-9][0-9][0-9][0-9][0-9]\|OPS_LOOP_DEADLINE_MS\", 2[0-9][0-9][0-9][0-9][0-9]" "$DIR/$f"; then
+  if ! grep -q "OPS_LOOP_DEADLINE_MS\", [1-9][0-9][0-9][0-9][0-9][0-9]*" "$DIR/$f"; then
     echo "FAIL: OPS_LOOP_DEADLINE_MS default <120000 in $f"; FAIL=1
   fi
 done
@@ -30,7 +30,7 @@ if ! grep -qE "^cpu_ms = 300000" "$DIR/wrangler.toml"; then
   echo "FAIL: [limits] cpu_ms not 300000 in wrangler.toml (CPU-BUDGET-1 - default 30s CPU kills run_code-heavy loops via Error 1102)"; FAIL=1
 fi
 # OPS-DURABLE-1 (2026-09-06): durable async ops-exec path must stay present (Queue + Workflows executor).
-if ! grep -q "export class OpsExecWorkflow" "$DIR/worker.js"; then
+if ! grep -qE "OpsExecWorkflow.*WorkflowEntrypoint" "$DIR/worker.js"; then
   echo "FAIL: OpsExecWorkflow class missing from worker.js (OPS-DURABLE-1)"; FAIL=1
 fi
 if ! grep -q 'OPS_JOBS_QUEUE' "$DIR/wrangler.toml"; then
@@ -39,5 +39,12 @@ fi
 if ! grep -qF '[[workflows]]' "$DIR/wrangler.toml"; then
   echo "FAIL: [[workflows]] missing from wrangler.toml (OPS-DURABLE-1)"; FAIL=1
 fi
+# RUN-TO-COMPLETION-1 (2026-09-12): the ops loop MUST enforce run-to-completion.
+# Regression: turns ended with a progress report + promise of future work, forcing the
+# user to type "continue" over and over.
+for f in worker.js deployed-current.worker.js; do
+  if ! grep -q "MORE_WORK_RE" "$DIR/$f"; then echo "FAIL: run-to-completion detector missing in $f (RUN-TO-COMPLETION-1)"; FAIL=1; fi
+  if ! grep -q "MAX_AUTO_CONTINUE" "$DIR/$f"; then echo "FAIL: MAX_AUTO_CONTINUE missing in $f (RUN-TO-COMPLETION-1)"; FAIL=1; fi
+done
 if [ "$FAIL" -eq 0 ]; then echo "GUARD PASS"; else echo "GUARD FAIL"; fi
 exit $FAIL

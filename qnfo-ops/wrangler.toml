@@ -3,13 +3,6 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
-# CPU-BUDGET-1 (2026-09-06): raise the per-request CPU ceiling from the platform default (30s)
-# to the 5-minute max so the 180s soft wall budget (OPS_LOOP_DEADLINE_MS, OPS-TIME-BUDGET-1) is
-# the binding constraint - NOT Cloudflare's default 30s active-CPU limit (Error 1102 exceededCpu).
-# Context: developers.cloudflare.com/workers/platform/limits - HTTP wall time is Unlimited while
-# streaming (heartbeats keep the client connected); active CPU is the real per-request ceiling and
-# counts run_code executions + per-round JSON.stringify/truncateToContext, NOT I/O waits (DeepSeek
-# fetch, D1/R2/Vectorize). Cost: 30M CPU-ms/mo included on Standard; $90/30d spend guard applies.
 [limits]
 cpu_ms = 300000
 
@@ -201,25 +194,16 @@ environment = "production"
 binding = "WAI"
 
 # v1.5.0: service registry auto-refresh (self-heal discovery) every 30 min
-# OPS-DURABLE-1 (2026-09-06): async/durable ops-exec jobs. POST /v1/jobs (or x-ops-async:1 on chat)
-# enqueues to qnfo-ops-jobs; this worker's queue() consumer creates an ops-exec-workflow instance;
-# OpsExecWorkflow (worker.js export class) runs the durable agent loop (each LLM round + tool call
-# is a step.do -> individually retryable, survives isolate recycling, not bound by request CPU/wall).
+[triggers]
+crons = ["*/30 * * * *"]
+
+# --- v2.14.1: async job path bindings (were API-only / inherited; now declared
+# so a wrangler deploy never drops them again — FLEET-CONTROL-NO-REPO-MIRROR-1) ---
 [[queues.producers]]
 binding = "OPS_JOBS_QUEUE"
 queue = "qnfo-ops-jobs"
 
-[[queues.consumers]]
-queue = "qnfo-ops-jobs"
-max_batch_size = 1
-max_batch_timeout = 5
-max_retries = 5
-dead_letter_queue = "qnfo-ops-jobs-dlq"
-
 [[workflows]]
-binding = "OPS_EXEC_WORKFLOW"
 name = "ops-exec-workflow"
+binding = "OPS_EXEC_WORKFLOW"
 class_name = "OpsExecWorkflow"
-
-[triggers]
-crons = ["*/30 * * * *"]
