@@ -24,7 +24,7 @@ function clampMaxTokens(requested, isReason) {
   return Math.min(Math.floor(n), isReason ? REASON_OUT_CAP : MAX_OUT_CAP);
 }
 __name(clampMaxTokens, "clampMaxTokens");
-var VERSION = "v3.4.2-stream-tokens"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
+var VERSION = "v3.5.0-telemetry-normalize"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1431,7 +1431,7 @@ var api_default = {
       if (body.stream) {
         if (loopFinal && !toolsUsed && loopUp) {
           const streamId = "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24);
-          ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, loopUp.model, loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
+          ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, (body && body.model) || loopUp.model, loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
           return new Response(fakeStream(loopFinal, streamId), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
         }
         const msgs = [{ role: "system", content: finalSystem }].concat(finalMsgs);
@@ -1456,7 +1456,7 @@ var api_default = {
           console.log("personal-api upstream stream error:", streamErrors.join(" | "));
           if (loopFinal) {
             const choice2 = { message: { role: "assistant", content: loopFinal }, finish_reason: "stop" };
-            ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, loopUp ? loopUp.model : "personal-twin-chat", loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
+            ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, (body && body.model) || (loopUp ? loopUp.model : "personal-twin-chat"), loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
             return json({ id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, message: choice2.message, finish_reason: "stop" }], usage: {}, _meta: { elapsedMs: Date.now() - t0, retrieved: items.length, degraded, toolsUsed: toolRounds.length, streamFallback: true }, ...webSources ? { _web: { query: q.slice(0, 300), sources: webSources } } : {} });
           }
           return json({ error: { message: "upstream error", type: "upstream_error" } }, 502);
@@ -1540,7 +1540,7 @@ var api_default = {
       const choice = up.body.choices && up.body.choices[0] || {};
       const usage = up.body.usage || {};
       const elapsedMs = Date.now() - t0;
-      ctx.waitUntil(logChat(env, q, choice.message ? choice.message.content || "" : "", thread, request.headers.get("User-Agent") || "", up.model, usage, elapsedMs));
+      ctx.waitUntil(logChat(env, q, choice.message ? choice.message.content || "" : "", thread, request.headers.get("User-Agent") || "", (body && body.model) || up.model, usage, elapsedMs));
       return json({
         id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24),
         object: "chat.completion",

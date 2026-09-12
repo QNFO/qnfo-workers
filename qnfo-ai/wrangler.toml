@@ -94,3 +94,7 @@ bucket_name = "qnfo-media"
 # fresh module via env.LOADER.load (same mechanism as qnfo-ops run_code).
 [[worker_loaders]]
 binding = "LOADER"
+
+# v5.24.0 retention: daily prune of ai_queries / chatbox_conversations (180d) + media_objects (21d)
+[triggers]
+crons = ["23 3 * * *"]
