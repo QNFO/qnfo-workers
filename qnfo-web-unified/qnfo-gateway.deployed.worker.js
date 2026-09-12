@@ -636,7 +636,7 @@ function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
       '</ul><p class="ld-more"><a href="/papers">All ' + total + " papers \u2192</a></p></section>";
   }
 
-  const formScript = '<' + 'script>(function(){var f=document.getElementById("ld-sub-form");if(!f)return;var msg=document.getElementById("ld-msg");var btn=document.getElementById("ld-btn");f.addEventListener("submit",function(e){e.preventDefault();var email=(document.getElementById("ld-email").value||"").trim();var hp=(document.getElementById("ld-hp")||{}).value||"";if(!email||email.indexOf("@")<1){msg.className="ld-msg err";msg.textContent="Please enter a valid email address.";return;}btn.disabled=true;msg.className="ld-msg";msg.textContent="Subscribing\u2026";fetch("/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,hp:hp,source:"qnfo.org"})}).then(function(r){return r.json().then(function(j){return {s:r.status,j:j};}).catch(function(){return {s:r.status,j:{}};});}).then(function(res){if(res.s===200&&res.j&&res.j.ok){msg.className="ld-msg ok";msg.textContent="Thanks \u2014 you are subscribed. A confirmation is on its way.";f.reset();}else{msg.className="ld-msg err";msg.textContent=(res.j&&res.j.error)||"Something went wrong. Please try again.";}}).catch(function(){msg.className="ld-msg err";msg.textContent="Network error. Please try again.";}).then(function(){btn.disabled=false;});});})();<' + '/script>';
+  const formScript = '<' + 'script>(function(){var f=document.getElementById("ld-sub-form");if(!f)return;var msg=document.getElementById("ld-msg");var btn=document.getElementById("ld-btn");f.addEventListener("submit",function(e){e.preventDefault();var email=(document.getElementById("ld-email").value||"").trim();var hp=(document.getElementById("ld-hp")||{}).value||"";if(!email||email.indexOf("@")<1){msg.className="ld-msg err";msg.textContent="Please enter a valid email address.";return;}btn.disabled=true;msg.className="ld-msg";msg.textContent="Subscribing\u2026";fetch("/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,hp:hp,source:"qnfo.org"})}).then(function(r){return r.json().then(function(j){return {s:r.status,j:j};}).catch(function(){return {s:r.status,j:{}};});}).then(function(res){if(res.s===200&&res.j&&res.j.ok){msg.className="ld-msg ok";msg.textContent="Thanks \u2014 check your inbox to confirm your subscription.";f.reset();}else{msg.className="ld-msg err";msg.textContent=(res.j&&res.j.error)||"Something went wrong. Please try again.";}}).catch(function(){msg.className="ld-msg err";msg.textContent="Network error. Please try again.";}).then(function(){btn.disabled=false;});});})();<' + '/script>';
 
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
@@ -1049,7 +1049,7 @@ __name222222(handleRss, "handleRss");
 __name2222222(handleRss, "handleRss");
 __name22222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.0-subscribers" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.1-subscribers" });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1375,6 +1375,23 @@ __name2222222(handleSync, "handleSync");
 __name22222222(handleSync, "handleSync");
 // ---------- qnfo.org subscriber sign-up (proxied to qnfo-subscribers) ----------
 const SUBSCRIBERS_ENDPOINT = "https://qnfo-subscribers.q08.workers.dev";
+async function handleConfirmProxy(request, env) {
+  const u = new URL(request.url);
+  const token = u.searchParams.get("token") || "";
+  if (!token) return new Response("Missing confirmation token.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 9000);
+  try {
+    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/confirm?token=" + encodeURIComponent(token), { signal: ctrl.signal });
+    const body = await r.text();
+    return new Response(body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  } catch (e) {
+    return new Response("Confirmation is unavailable right now.", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleSubscribeProxy(request, env) {
   let payload = {};
   try { payload = await request.json(); } catch (e) { payload = {}; }
@@ -1444,6 +1461,7 @@ var gateway_worker_default = {
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
+      if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
@@ -1475,6 +1493,7 @@ var gateway_worker_default = {
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
+      if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env);
