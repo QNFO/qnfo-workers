@@ -155,7 +155,7 @@ async function runAudit(env) {
   let suggestion = null;
   let ensemble = null;
   const NL = String.fromCharCode(10);
-  const modelP = env.ADVISOR_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const modelP = env.ADVISOR_MODEL || "@cf/deepseek-ai/deepseek-v4-pro-0813";
   const modelR = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
   const iters = Math.min(parseInt(env.ADVISOR_ITERS || "", 10) || MAX_ADVISOR_ITERS, 5);
   if (findings.length && env.AI) {
@@ -246,7 +246,7 @@ var server_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return Response.json({ ok: true, worker: WORKER, version: VERSION, model: env.ADVISOR_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast", bindings: { d1: !!env.AUDIT_DB, ai: !!env.AI, do: !!env.FleetAdvisor }, crons: ["*/20 * * * *"] });
+      return Response.json({ ok: true, worker: WORKER, version: VERSION, model: env.ADVISOR_MODEL || "@cf/deepseek-ai/deepseek-v4-pro-0813", bindings: { d1: !!env.AUDIT_DB, ai: !!env.AI, do: !!env.FleetAdvisor }, crons: ["*/20 * * * *"] });
     }
     if (url.pathname === "/run-audit" && request.method === "POST") {
       const auth = request.headers.get("x-advisor-token");

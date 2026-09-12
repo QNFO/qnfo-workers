@@ -18,7 +18,7 @@
 //   KILL-SWITCH-1     paper_explain_state.enabled=0 halts posting (still logs dry runs).
 
 const VERSION = "0.2.0";
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"; // non-reasoning, fp8-fast (24k ctx), fast + cheap
+const MODEL = "@cf/deepseek-ai/deepseek-v4-pro-0813"; // non-reasoning, fp8-fast (24k ctx), fast + cheap
 const BSKY = "https://bsky.social/xrpc";
 const UA = "Mozilla/5.0 (qnfo-paper-explainer)";
 const ARXIV_CATS = "(cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV OR cat:cs.CY OR cat:cs.HC OR cat:physics.pop-ph OR cat:q-bio.NC OR cat:econ.GN OR cat:stat.ML)";

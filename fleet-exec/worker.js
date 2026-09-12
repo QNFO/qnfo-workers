@@ -18,7 +18,7 @@ function dbFor(def, env) {
 }
 
 async function runAI(def, env) {
-  const model = def.model || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const model = def.model || "@cf/deepseek-ai/deepseek-v4-pro-0813";
   const resp = await env.AI.run(model, {
     messages: [{ role: "user", content: def.prompt || "ping" }],
     max_tokens: def.max_tokens || 1024

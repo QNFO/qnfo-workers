@@ -139,7 +139,7 @@ async function publishReport(env) {
 }
 
 const CF_API = 'https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b';
-const EVOLVE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const EVOLVE_MODEL = '@cf/deepseek-ai/deepseek-v4-pro-0813';
 
 // SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
 // Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
