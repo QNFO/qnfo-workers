@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.21.5"; // OUT-32K-1 (2026-09-08): MAX_OUT WA ceilings raised per 32K-output mandate (cap-halving retry + contextAwareTarget keep 400s self-healing)
+var VERSION = "5.25.1-anomaly-dedup"; // OUT-32K-1 (2026-09-08): MAX_OUT WA ceilings raised per 32K-output mandate (cap-halving retry + contextAwareTarget keep 400s self-healing)
 // v5.21.2 (FLEET-SELF-AWARE-1): autoRoute excludes degraded models (calibration GW-DEGRADE-1 marks
 // recurring gateway-failure classes degraded); /v1/models exposes health status for introspection.
 // GW-ERROR-SELFHEAL-1 2026-09-05: runWorkersAI schema-adaptive content-shape + 429 retry // ROLE-LABEL-NORMALIZE-1 2026-09-04 (user directive): strip a leading transport role-label wrapper (User message: / Assistant message: / user: / Human: / AI:) from first-user content BEFORE thread-slug + auto-express idea-text + chat-log/feed content, so ChatBox wrapped & clean sends of the same turn collapse to ONE ideas.qnfo thread+title (was: "User message:\n<idea>" made its own t-user-message-* thread duplicating the clean sibling) // MEDIA-NOLOG-1 2026-09-04: mediaCapture skipped for QNFO-AI-Calibration UA - calibration vision probes no longer create media_objects rows / R2 qnfo-media objects (was 1 deduped row per cycle after every purge) // NOLOG-1 2026-09-04: logQuery now skips ai_queries for internal/machine probes (was logging everything; chatbox already filtered) and QNFO-AI-Calibration UA joins the machine probe regex - calibration sweeps no longer pollute query-history/log tables // CAL-HEALTH-1 2026-09-04: ai_model_health consumption - auto routing deprioritizes failing models (loadModelHealth cached 60s) + /v1/models merges live ctx/vision/reasoning overrides written by the qnfo-ai-calibration worker (self-correcting advertisement) // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
@@ -1039,6 +1039,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   finalText = stripToolMarkup(finalText);
   return {
     text: finalText,
+    primary_model: primaryModel,
     members: membersRun,
     verified_by: verifiedBy,
     verification_result: verificationResult,
@@ -1194,6 +1195,15 @@ async function mediaProcess(env, id) {
 }
 __name(mediaProcess, "mediaProcess");
 
+var PRICE = { 0: { in: 0, out: 0 }, 1: { in: 0.14, out: 0.28 }, 2: { in: 2.19, out: 2.19 } };
+function priceOf(tier) {
+  return PRICE[tier] || null;
+}
+function costOf(tier, promptTokens, completionTokens) {
+  const p = PRICE[tier];
+  if (!p) return 0;
+  return (Number(promptTokens || 0) * p.in + Number(completionTokens || 0) * p.out) / 1e6;
+}
 async function handleChat(env, body, authHeader, ctx, ua) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
@@ -1328,7 +1338,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     domain: cls.domain,
     prompt: stripRoleWrapper(lastUserText(messages)),
     response: "",
-    prompt_tokens: 0,
+    prompt_tokens: estimateInputTokens(messages),
     completion_tokens: 0,
     cost_usd: 0,
     latency_ms: 0,
@@ -1397,8 +1407,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   if (isEnsemble || autoEnsemble) {
     try {
-      const ensResp = /* @__PURE__ */ __name((content, body2) => {
-        const logRec = { ...mkLogRec(), model: "ensemble", streamed: isStream ? 1 : 0, response: String(content).slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
+      const ensResp = /* @__PURE__ */ __name((content, body2, costTier) => {
+        const logRec = { ...mkLogRec(), model: "ensemble", streamed: isStream ? 1 : 0, response: String(content).slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0, cost_usd: costOf(costTier || 0, estimateInputTokens(messages), estimateOutputTokens(content)) };
         if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
         if (isStream) {
           const enc8 = new TextEncoder();
@@ -1436,7 +1446,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
             estimated_input_tokens: estInputTokens
           })
         };
-        return ensResp(fbText, fbBody);
+        return ensResp(fbText, fbBody, 1);
       }
       const ensCap = clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]);
       const ens = await runEnsemble(env, messages, ensCap, cls.domain);
@@ -1455,11 +1465,11 @@ async function handleChat(env, body, authHeader, ctx, ua) {
           verified_by: ens.verified_by,
           verification_result: ens.verification_result,
           agreement_rate: ens.agreement_rate,
-          estimated_cost_usd: 0,
+          estimated_cost_usd: costOf(MODELS[ens.primary_model] ? MODELS[ens.primary_model].tier : 0, estimateInputTokens(messages), ensOutTokens),
           neurons_remaining: 8e3
         })
       };
-      return ensResp(ensText, respBody);
+      return ensResp(ensText, respBody, MODELS[ens.primary_model] ? MODELS[ens.primary_model].tier : 0);
     } catch (e) {
       return json({ error: "ensemble failed: " + e.message }, 502);
     }
@@ -1592,7 +1602,7 @@ if (effSpec.api) {
       usage: { prompt_tokens: estimateInputTokens(messages), completion_tokens: singleOutTokens, total_tokens: estimateInputTokens(messages) + singleOutTokens },
       _router: mkRouter(routedModel, isAuto ? "auto" : "single", {
         deepseek_profile: effSpec.api || "workers-ai",
-        estimated_cost_usd: effSpec.tier === 0 ? 0 : void 0,
+        estimated_cost_usd: costOf(effSpec.tier, estimateInputTokens(messages), singleOutTokens),
         neurons_remaining: 8e3,
         temperature: effTemp,
         top_p: effTopP,
@@ -1603,7 +1613,7 @@ if (effSpec.api) {
       }),
       ...webSources ? { _web: { query: lastUserText(messages).slice(0, 300), sources: webSources } } : {}
     };
-    const logRec = { ...mkLogRec(), streamed: 0, response: content.slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
+    const logRec = { ...mkLogRec(), streamed: 0, response: content.slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0, cost_usd: costOf(effSpec.tier, estimateInputTokens(messages), estimateOutputTokens(content)) };
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
@@ -1632,8 +1642,8 @@ async function logQuery(env, record) {
   try {
     if (env.QNFO_AUDIT && !_internalProbe) {
       await env.QNFO_AUDIT.prepare(
-        "INSERT INTO ai_queries (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"
-      ).bind(record.id, record.ts, record.model, record.strategy, record.complexity, record.domain, record.prompt, record.response, record.prompt_tokens, record.completion_tokens, record.cost_usd, record.latency_ms, record.rag_sources, record.streamed).run();
+        "INSERT INTO ai_queries (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, rag_sources, streamed, source, ua) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)"
+      ).bind(record.id, record.ts, record.model, record.strategy, record.complexity, record.domain, record.prompt, record.response, record.prompt_tokens, record.completion_tokens, record.cost_usd, record.latency_ms, record.rag_sources, record.streamed, record.source || "other", String(record.ua || "").slice(0, 200)).run();
     }
   } catch (e) {
     console.log("ai_queries insert failed:", e && e.message || e);
@@ -1736,7 +1746,12 @@ function streamWithLog(upstream, env, ctx, rec) {
       }
     }
   });
-  ctx.waitUntil(done.then(() => logQuery(env, { ...rec, response: acc.slice(0, 2e5), streamed: 1, latency_ms: rec._t0 ? Date.now() - rec._t0 : 0 })).catch(() => {
+  ctx.waitUntil(done.then(() => {
+    const _ct = estimateOutputTokens(acc);
+    const _pt = Number(rec.prompt_tokens || 0);
+    const _tier = rec.model && MODELS[rec.model] ? MODELS[rec.model].tier : 0;
+    return logQuery(env, { ...rec, response: acc.slice(0, 2e5), streamed: 1, prompt_tokens: _pt, completion_tokens: _ct, cost_usd: costOf(_tier, _pt, _ct), latency_ms: rec._t0 ? Date.now() - rec._t0 : 0 });
+  }).catch(() => {
   }));
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
 }
@@ -2016,6 +2031,53 @@ var SHORT = "QNFO Notes";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';
 var SW_JS = "self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));";
 var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#0b57d0"/><text x="96" y="122" font-size="84" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold">Q</text></svg>';
+// RETENTION-1 (2026-09-12): prune analytics tables; shared by the daily cron + /v1/admin/maintenance.
+async function runRetention(env) {
+  const out = { ai_queries: 0, chatbox_conversations: 0, media_objects: 0 };
+  if (!env.QNFO_AUDIT) return out;
+  const c180 = new Date(Date.now() - 180 * 864e5).toISOString();
+  const c21 = new Date(Date.now() - 21 * 864e5).toISOString();
+  try { const r = await env.QNFO_AUDIT.prepare("DELETE FROM ai_queries WHERE ts < ?1").bind(c180).run(); out.ai_queries = (r.meta && r.meta.changes) || 0; } catch (e) { }
+  try { const r = await env.QNFO_AUDIT.prepare("DELETE FROM chatbox_conversations WHERE ts < ?1").bind(c180).run(); out.chatbox_conversations = (r.meta && r.meta.changes) || 0; } catch (e) { }
+  try { const r = await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE ts < ?1").bind(c21).run(); out.media_objects = (r.meta && r.meta.changes) || 0; } catch (e) { }
+  return out;
+}
+
+// ANOMALY-ALERT-1 (2026-09-12): daily threshold check on ai_queries -> qnfo-audit.alerts (the
+// canonical alert channel; deduped so one breach alerts at most once per day).
+async function detectAnomalies(env) {
+  const out = { checked: false, raised: [] };
+  if (!env.QNFO_AUDIT) return out;
+  const since = new Date(Date.now() - 864e5).toISOString();
+  let s = null;
+  try {
+    s = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(cost_usd),0) cost, COALESCE(SUM(CASE WHEN latency_ms > 60000 THEN 1 ELSE 0 END),0) slow, COALESCE(SUM(CASE WHEN latency_ms > 300000 THEN 1 ELSE 0 END),0) very_slow, COALESCE(SUM(CASE WHEN response IS NULL OR response = '' THEN 1 ELSE 0 END),0) empty FROM ai_queries WHERE ts >= ?1").bind(since).first();
+  } catch (e) { return out; }
+  if (!s || !s.n) return out;
+  out.checked = true;
+  // DEDUP-KEY-1: dedup on a STABLE kind prefix (message text embeds volatile counts and would
+  // otherwise raise a fresh alert every run). One alert per kind per day.
+  const cand = [];
+  if (s.cost > 0.5) cand.push(["cost-spike", "warning", "cost 24h $" + Number(s.cost).toFixed(4) + " exceeds $0.50 (" + s.n + " queries)"]);
+  const slowPct = Math.round(100 * s.slow / s.n);
+  if (slowPct > 15) cand.push(["slow-share", "warning", "latency: " + slowPct + "% of 24h queries >60s (" + s.slow + "/" + s.n + ")"]);
+  if (s.very_slow > 0) cand.push(["latency-max", "warning", "latency: " + s.very_slow + " 24h queries exceeded 300s"]);
+  const emptyPct = Math.round(100 * s.empty / s.n);
+  if (emptyPct > 20) cand.push(["empty-rate", "warning", "quality: " + emptyPct + "% of 24h responses empty (" + s.empty + "/" + s.n + ")"]);
+  for (const c of cand) {
+    const kind = c[0];
+    const msg = kind + ": " + c[2];
+    try {
+      const dup = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM alerts WHERE source = 'qnfo-ai-anomaly' AND date(created_at) = date('now') AND message LIKE ?1").bind(kind + ":%").first();
+      if (!(dup && dup.n)) {
+        await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES ('qnfo-ai-anomaly', ?1, ?2)").bind(c[1], msg.slice(0, 500)).run();
+        out.raised.push(msg);
+      }
+    } catch (e) { }
+  }
+  return out;
+}
+
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -2062,6 +2124,10 @@ var worker_default = {
         object: "model",
         created: 171e7,
         owned_by: m.tier === 0 ? "workers-ai" : m.family,
+        contextWindow: ctx,
+        context_length: ctx,
+        maxOutput: m.maxOut ?? null,
+        max_output_tokens: m.maxOut ?? null,
         capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(reasoning ? ["reasoning"] : []).concat(vision ? ["vision"] : []),
         _router: {
           tier: m.tier,
@@ -2073,8 +2139,8 @@ var worker_default = {
           vision: vision,
           tools: !!m.tools,
           overridden: !!(h.ctx_override != null || h.vision_override != null || h.reasoning_override != null),
-          costPer1MInput: m.tier === 0 ? 0 : m.tier === 1 ? 0.14 : m.tier === 2 ? 2.19 : null,
-          costPer1MOutput: m.tier === 0 ? 0 : m.tier === 1 ? 0.28 : m.tier === 2 ? 2.19 : null,
+          costPer1MInput: priceOf(m.tier) ? priceOf(m.tier).in : null,
+          costPer1MOutput: priceOf(m.tier) ? priceOf(m.tier).out : null,
           availability: m.tier === 0 ? "always" : m.tier <= 2 ? "key-required" : "billing-required",
           health_status: h.status || "ok"
         }
@@ -2335,7 +2401,18 @@ var worker_default = {
       const pr = await mediaProcess(env, id);
       return json(pr, pr.ok ? 200 : 502);
     }
+    if (path === "/v1/admin/maintenance" && method === "POST") {
+      const authH = request.headers.get("Authorization") || "";
+      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      const retention = await runRetention(env);
+      const anomalies = await detectAnomalies(env);
+      return json({ ok: true, retention, anomalies });
+    }
     return json({ error: "Not found" }, 404);
+  },
+  async scheduled(event, env, ctx) {
+    try { await runRetention(env); } catch (e) { console.log("retention failed:", e && e.message || e); }
+    try { await detectAnomalies(env); } catch (e) { console.log("anomaly detect failed:", e && e.message || e); }
   }
 };
 export {

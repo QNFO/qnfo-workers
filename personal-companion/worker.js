@@ -1,20 +1,52 @@
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+/**
+ * personal-companion - v1.0.0
+ *
+ * What it is
+ *   A private writing engine on the personal plane. It reads Rowan's own taste
+ *   model (personal-life.profile), his lived record (activity / events / notes),
+ *   and public primary sources (arXiv, Wikipedia), then writes three kinds of
+ *   piece on a weekly rhythm: a cross-domain essay, a set of curated field
+ *   notes, and an installment of one ongoing long-form work.
+ *
+ * Partition
+ *   PERSONAL d1 + personal-life Vectorize + personal-media R2 only. It never
+ *   reads the QNFO records oracle and never writes a QNFO ledger. Nothing it
+ *   produces enters the research corpus, the audit log, or any QNFO registry.
+ *
+ * Delivery
+ *   A private reading page at / gated by COMPANION_KEY, plus a mail nudge to
+ *   Rowan's own mailbox through the shared qnfo-email service binding.
+ */
 
-// worker.js
-var VERSION = "1.0.0";
+var VERSION = "v1.0.0";
+
+// Non-reasoning models only. Reasoning models burn the whole token budget on
+// reasoning_content and return empty content (measured 2026-09-11: deepseek-v4-flash
+// and glm-5.3-flash returned clen=0, rlen=2668/2430, finish_reason=length at mt=700).
+// Frontier-scale writers only. llama-3.3-70b-instruct-fp8-fast was REMOVED
+// 2026-09-11 after measured fabrication: given grounded source material it invented
+// "Mathematician Mikhail Gromov is working on the application of p-adic geometry to
+// representation learning" and "Researcher Peter Scholze is currently exploring..."
+// Neither name appears in the anchors. It also produced tautological filler
+// ("manufactured ignorance refers to the deliberate creation of ignorance").
+// These models emit reasoning_content, so max_tokens must cover reasoning + prose.
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
   "@cf/zai-org/glm-5.3"
 ];
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-var GEN_MAX_TOKENS = 9e3;
-var GEN_TIMEOUT_MS = 9e4;
-var CRITIQUE_TIMEOUT_MS = 3e4;
-var EMBED_TIMEOUT_MS = 3e4;
-var SIM_THRESHOLD = 0.9;
+var GEN_MAX_TOKENS = 9000;
+var GEN_TIMEOUT_MS = 90000;
+var CRITIQUE_TIMEOUT_MS = 30000;
+var EMBED_TIMEOUT_MS = 30000;
+var SIM_THRESHOLD = 0.90;
 var ACCEPT_FLOOR = 5;
+
+// STANDING DIRECTIVE (2026-09-11, user, emphatic): no llama, no "small" models,
+// no "fast"/quantized variants, for any purpose - including diagnostics. llama-3.3-70b
+// was measured fabricating named living mathematicians ("Mikhail Gromov", "Peter Scholze")
+// that were absent from the source material. Enforced at runtime, not by convention.
 var BANNED_MODELS = ["llama", "mistral", "gemma-7b", "gemma-4-26b", "qwen3-30b", "qwen2.5", "r1-distill", "qwq-", "-8b", "-11b", "-7b", "-flash", "-fp8-fast", "-lora", "-mini", "-small"];
 function modelAllowed(m) {
   var low = String(m || "").toLowerCase();
@@ -23,13 +55,17 @@ function modelAllowed(m) {
   }
   return true;
 }
-__name(modelAllowed, "modelAllowed");
+
 var NL = String.fromCharCode(10);
+
 function L() {
   return Array.prototype.slice.call(arguments).join(NL);
 }
-__name(L, "L");
+
+// Weekday rhythm (Europe/Amsterdam). 3 essays, 3 note sets, 1 serial per week.
 var RHYTHM = ["notes", "essay", "notes", "essay", "notes", "essay", "serial"];
+
+// Rotating seams. Each entry names a primary source lane and a bridge pair.
 var TOPICS = [
   { id: "ultrametric-music", cat: "math.NT", wiki: "Ultrametric space", a: "p-adic geometry", b: "musical tuning" },
   { id: "form-distinction", cat: "cs.LO", wiki: "Laws of Form", a: "the calculus of indications", b: "programming language semantics" },
@@ -46,44 +82,18 @@ var TOPICS = [
   { id: "entropy-meaning", cat: "cs.IT", wiki: "Entropy (information theory)", a: "Shannon entropy", b: "the meaning of a phrase" },
   { id: "kuramoto-ensemble", cat: "nlin.PS", wiki: "Kuramoto model", a: "coupled oscillators", b: "ensemble discipline" }
 ];
+
 var BANNED = [
-  "delve",
-  "tapestry",
-  "landscape of",
-  "realm of",
-  "unlock the",
-  "game-changer",
-  "ever-evolving",
-  "testament to",
-  "nestled",
-  "dive into",
-  "let us explore",
-  "let us now",
-  "in today's world",
-  "it is worth noting",
-  "it's worth noting",
-  "in conclusion",
-  "plays a crucial role",
-  "plays a vital role",
-  "shed light on",
-  "pave the way",
-  "stands as a",
-  "serves as a",
-  "rich history",
-  "in an era of",
-  "navigate the complexities",
-  "in the realm of",
-  "rich tapestry",
-  "as an ai",
-  "i hope this",
-  "in this essay",
-  "this essay will",
-  "we will explore",
-  "qnfo",
-  "qwav",
-  "zenodo",
-  "living-paper"
+  "delve", "tapestry", "landscape of", "realm of", "unlock the", "game-changer",
+  "ever-evolving", "testament to", "nestled", "dive into", "let us explore",
+  "let us now", "in today's world", "it is worth noting", "it's worth noting",
+  "in conclusion", "plays a crucial role", "plays a vital role", "shed light on",
+  "pave the way", "stands as a", "serves as a", "rich history", "in an era of",
+  "navigate the complexities", "in the realm of", "rich tapestry",
+  "as an ai", "i hope this", "in this essay", "this essay will", "we will explore",
+  "qnfo", "qwav", "zenodo", "living-paper"
 ];
+
 var P_STYLE = L(
   "You are writing for one reader: Rowan.",
   "Never reproduce any heading, label, bullet, or phrasing from the briefing, or from these instructions, inside the piece. The briefing is addressed to you, not to the reader.",
@@ -110,6 +120,7 @@ var P_STYLE = L(
   "- State uncertainty at its true size. Never inflate confidence to make a piece land better.",
   "- One section must state the strongest objection to the piece's own central claim, in the objector's own terms, and say how bad it is."
 );
+
 var P_ESSAY = L(
   "FORM: cross-domain essay, 900 to 1500 words.",
   "Take one seam between two fields and walk it. Do not survey. Argue.",
@@ -121,6 +132,7 @@ var P_ESSAY = L(
   "5. under a heading, the strongest objection to the bridge",
   "6. what would have to be true for the bridge to be more than a rhyme"
 );
+
 var P_NOTES = L(
   "FORM: curated field notes, between 3 and 5 items.",
   "Each item is one concrete thing: a paper, a concept, a place, a piece of music, a passage, an exhibition.",
@@ -128,6 +140,7 @@ var P_NOTES = L(
   "If only three of the supplied anchors are worth his time, give three. Never pad to a count. Never include an item you would not defend.",
   "Give every item a short title."
 );
+
 var P_SERIAL = L(
   "FORM: serialized long-form, 1200 to 1800 words, continuing one ongoing work.",
   "You are given the RUNNING WORK: its thesis and the closing lines of the previous installment.",
@@ -135,10 +148,12 @@ var P_SERIAL = L(
   "This installment must add at least one claim that was not available before it, and it must close mid-motion on a question the next installment has to answer.",
   "Keep the running work's title. Put the installment number in the subtitle."
 );
+
 var P_OUT = L(
   "Return JSON only, with no prose around it:",
   '{"title":"...","subtitle":"","lede":"one sentence, at most 30 words","body_md":"the piece as markdown","bridge":{"a":"field or idea","b":"field or idea","kind":"structural" or "proposed analogy"},"objection":"the strongest objection, one or two sentences"}'
 );
+
 var P_CRITIQUE = L(
   "You are an adversarial reader. You dislike fluency. You are looking for reasons this piece is worthless.",
   "Score each dimension 0 to 10. Be harsh: a 7 means genuinely good.",
@@ -149,12 +164,7 @@ var P_CRITIQUE = L(
   "voice: plain scholarly prose free of filler, tells, and self-reference?",
   'Return JSON only: {"specificity":n,"argument":n,"bridge":n,"objection":n,"voice":n,"verdict":"accept" or "reject","why":"one sentence"}'
 );
-var P_BRIDGE = L(
-  "You tighten a cross-domain bridge until it is precise and falsifiable.",
-  "Given a piece and its stated bridge, rewrite the bridge so that it names the SPECIFIC mechanism or idea on each side, states the EXACT relationship (isomorphism, shared invariant, limiting case, or an analogy honestly labelled), and is falsifiable: say what observation would break it.",
-  'If the bridge is currently a vague rhyme dressed as a theorem, replace it with the precise correspondence you can defend. If you cannot defend a structural correspondence, downgrade it to "proposed analogy" and say so.',
-  'Return JSON only: {"bridge":{"a":"...","b":"...","kind":"structural" or "proposed analogy"},"bridge_claim":"one precise sentence","objection":"strongest objection to the bridge"}'
-);
+
 function json(obj, status) {
   return new Response(JSON.stringify(obj, null, 2), {
     status: status || 200,
@@ -166,14 +176,20 @@ function json(obj, status) {
     }
   });
 }
-__name(json, "json");
+
 function html(body, status) {
   return new Response(body, {
     status: status || 200,
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }
   });
 }
-__name(html, "html");
+
+function bearer(request) {
+  var h = request.headers.get("Authorization") || "";
+  if (h.indexOf("Bearer ") === 0) return h.slice(7).trim();
+  return h.trim();
+}
+
 function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   if (a.length !== b.length) return false;
@@ -181,7 +197,7 @@ function safeEqual(a, b) {
   for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
-__name(safeEqual, "safeEqual");
+
 function authorized(request, env) {
   var key = env.COMPANION_KEY || "";
   if (!key) return true;
@@ -192,7 +208,7 @@ function authorized(request, env) {
   var ck = m >= 0 ? c.slice(m + 7).split(";")[0] : "";
   return safeEqual(q, key) || safeEqual(ck, key);
 }
-__name(authorized, "authorized");
+
 async function sha16(s) {
   var data = new TextEncoder().encode(String(s));
   var digest = await crypto.subtle.digest("SHA-256", data);
@@ -201,40 +217,35 @@ async function sha16(s) {
   for (var i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, "0");
   return out;
 }
-__name(sha16, "sha16");
+
 function nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString();
+  return new Date().toISOString();
 }
-__name(nowIso, "nowIso");
+
 function amsParts(d) {
   var fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Amsterdam",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    weekday: "short",
-    hour12: false
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false
   });
   var parts = {};
   var arr = fmt.formatToParts(d);
   for (var i = 0; i < arr.length; i++) parts[arr[i].type] = arr[i].value;
   return parts;
 }
-__name(amsParts, "amsParts");
+
 function amsDayKey(d) {
   var p = amsParts(d);
   return p.year + "-" + p.month + "-" + p.day;
 }
-__name(amsDayKey, "amsDayKey");
+
 function amsWeekday(d) {
   var names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var p = amsParts(d);
   var idx = names.indexOf(p.weekday);
   return idx < 0 ? d.getUTCDay() : idx;
 }
-__name(amsWeekday, "amsWeekday");
+
 function squish(s) {
   var out = "";
   var prev = false;
@@ -254,20 +265,19 @@ function squish(s) {
   }
   return out.trim();
 }
-__name(squish, "squish");
+
 function stripTags(s) {
   var out = "";
   var depth = 0;
   for (var i = 0; i < s.length; i++) {
     var c = s.charAt(i);
     if (c === "<") depth++;
-    else if (c === ">") {
-      if (depth > 0) depth--;
-    } else if (depth === 0) out += c;
+    else if (c === ">") { if (depth > 0) depth--; }
+    else if (depth === 0) out += c;
   }
   return squish(out);
 }
-__name(stripTags, "stripTags");
+
 function sections(xml, tag) {
   var open = "<" + tag + ">";
   var close = "</" + tag + ">";
@@ -283,7 +293,7 @@ function sections(xml, tag) {
   }
   return out;
 }
-__name(sections, "sections");
+
 function firstTag(chunk, tag) {
   var open = "<" + tag + ">";
   var close = "</" + tag + ">";
@@ -293,40 +303,36 @@ function firstTag(chunk, tag) {
   if (b < 0) return "";
   return stripTags(chunk.slice(a + open.length, b));
 }
-__name(firstTag, "firstTag");
+
 function parseJsonLoose(text) {
   if (!text) return null;
   var a = text.indexOf("{");
   var b = text.lastIndexOf("}");
   if (a < 0 || b <= a) return null;
-  try {
-    return JSON.parse(text.slice(a, b + 1));
-  } catch (e) {
-    return null;
-  }
+  try { return JSON.parse(text.slice(a, b + 1)); } catch (e) { return null; }
 }
-__name(parseJsonLoose, "parseJsonLoose");
+
 function hasEmoji(s) {
   for (var i = 0; i < s.length; i++) {
     var c = s.charCodeAt(i);
-    if (c >= 55296 && c <= 56319) {
+    if (c >= 0xd800 && c <= 0xdbff) {
       var lo = s.charCodeAt(i + 1);
-      if (lo >= 56320 && lo <= 57343) {
-        var cp = (c - 55296) * 1024 + (lo - 56320) + 65536;
-        if (cp >= 126976 && cp <= 129791) return true;
+      if (lo >= 0xdc00 && lo <= 0xdfff) {
+        var cp = (c - 0xd800) * 0x400 + (lo - 0xdc00) + 0x10000;
+        if (cp >= 0x1f000 && cp <= 0x1faff) return true;
         i++;
       }
-    } else if (c >= 9728 && c <= 10175) {
+    } else if (c >= 0x2600 && c <= 0x27bf) {
       return true;
-    } else if (c >= 8592 && c <= 8703) {
+    } else if (c >= 0x2190 && c <= 0x21ff) {
       return true;
-    } else if (c === 65039) {
+    } else if (c === 0xfe0f) {
       return true;
     }
   }
   return false;
 }
-__name(hasEmoji, "hasEmoji");
+
 function bannedHits(text) {
   var low = text.toLowerCase();
   var hits = [];
@@ -335,33 +341,23 @@ function bannedHits(text) {
   }
   return hits;
 }
-__name(bannedHits, "bannedHits");
-function isCap(s, i) {
-  var c = s.charAt(i);
-  return c >= "A" && c <= "Z";
-}
-__name(isCap, "isCap");
-function isLow(s, i) {
-  var c = s.charAt(i);
-  return c >= "a" && c <= "z";
-}
-__name(isLow, "isLow");
+
+function isCap(s, i) { var c = s.charAt(i); return c >= "A" && c <= "Z"; }
+function isLow(s, i) { var c = s.charAt(i); return c >= "a" && c <= "z"; }
 function readWord(s, i) {
   var out = "";
   while (i < s.length) {
     var c = s.charAt(i);
-    if (isLow(s, i) || isCap(s, i) || c === "-" || c >= "0" && c <= "9") {
-      out += c;
-      i++;
-    } else break;
+    if (isLow(s, i) || isCap(s, i) || c === "-" || (c >= "0" && c <= "9")) { out += c; i++; } else break;
   }
-  return { w: out, i };
+  return { w: out, i: i };
 }
-__name(readWord, "readWord");
-var STOPW = ["The", "A", "An", "In", "On", "At", "By", "To", "Of", "If", "When", "Where", "What", "How", "Why", "Then", "There", "These", "Those", "We", "They", "He", "She", "His", "Her", "Its", "Our", "Their", "Not", "No", "Yet", "So", "As", "From", "With", "Without", "Between", "After", "Before", "During", "Both", "Each", "Every", "All", "Some", "Many", "Most", "Such", "That", "Than", "Because", "Although", "While", "Since", "Thus", "Hence", "Therefore", "However", "Moreover", "Furthermore", "One", "Two", "Three", "But", "And", "For", "Or", "It", "This", "Is", "Are", "Was", "Were", "Be", "Been", "Do", "Does", "Did", "Has", "Have", "Had", "Can", "Could", "Shall", "Should", "Will", "Would", "May", "Might", "Must"];
+var STOPW = ["The","A","An","In","On","At","By","To","Of","If","When","Where","What","How","Why","Then","There","These","Those","We","They","He","She","His","Her","Its","Our","Their","Not","No","Yet","So","As","From","With","Without","Between","After","Before","During","Both","Each","Every","All","Some","Many","Most","Such","That","Than","Because","Although","While","Since","Thus","Hence","Therefore","However","Moreover","Furthermore","One","Two","Three","But","And","For","Or","It","This","Is","Are","Was","Were","Be","Been","Do","Does","Did","Has","Have","Had","Can","Could","Shall","Should","Will","Would","May","Might","Must"];
 var STOP = {};
-for (sw = 0; sw < STOPW.length; sw++) STOP[STOPW[sw]] = true;
-var sw;
+for (var sw = 0; sw < STOPW.length; sw++) STOP[STOPW[sw]] = true;
+
+// Sliding by ONE word (not by the pair) so overlapping bigrams are all produced.
+// Consuming the pair dropped the real name in "Mathematician Mikhail Gromov".
 function nameCandidates(text) {
   var s = String(text || "");
   var out = [];
@@ -371,10 +367,7 @@ function nameCandidates(text) {
     if (a.w.length < 3 || STOP[a.w] === true) continue;
     var j = i + a.w.length;
     var sp = 0;
-    while (j < s.length && s.charAt(j) === " ") {
-      sp++;
-      j++;
-    }
+    while (j < s.length && s.charAt(j) === " ") { sp++; j++; }
     if (sp !== 1 || !isCap(s, j)) continue;
     var b = readWord(s, j);
     if (b.w.length < 3 || STOP[b.w] === true) continue;
@@ -383,15 +376,13 @@ function nameCandidates(text) {
   }
   return out;
 }
-__name(nameCandidates, "nameCandidates");
 function anchorsText(anchors) {
   var parts = [];
   for (var i = 0; i < anchors.length; i++) parts.push(String(anchors[i].title || "") + " " + String(anchors[i].text || ""));
   return parts.join(" ");
 }
-__name(anchorsText, "anchorsText");
 function unverifiedNames(piece, anchors, topic) {
-  var at = anchorsText(anchors) + " " + String(topic && topic.a || "") + " " + String(topic && topic.b || "");
+  var at = anchorsText(anchors) + " " + String((topic && topic.a) || "") + " " + String((topic && topic.b) || "");
   var cand = nameCandidates(String(piece.body_md || ""));
   var low = at.toLowerCase();
   var bad = [];
@@ -400,26 +391,22 @@ function unverifiedNames(piece, anchors, topic) {
   }
   return bad;
 }
-__name(unverifiedNames, "unverifiedNames");
+
 function wordCount(s) {
   var n = 0;
   var inWord = false;
   for (var i = 0; i < s.length; i++) {
     var c = s.charAt(i);
     var ws = c === " " || c === NL || c === String.fromCharCode(13) || c === String.fromCharCode(9);
-    if (ws) {
-      inWord = false;
-    } else if (!inWord) {
-      inWord = true;
-      n++;
-    }
+    if (ws) { inWord = false; }
+    else if (!inWord) { inWord = true; n++; }
   }
   return n;
 }
-__name(wordCount, "wordCount");
+
 async function embed(env, texts) {
   var resp = await env.AI.run(EMBED_MODEL, { text: texts }, { signal: AbortSignal.timeout(EMBED_TIMEOUT_MS) });
-  var vecs = resp && resp.data || [];
+  var vecs = (resp && resp.data) || [];
   var out = [];
   for (var i = 0; i < vecs.length; i++) {
     if (Array.isArray(vecs[i]) && vecs[i].length === 768) {
@@ -430,7 +417,7 @@ async function embed(env, texts) {
   }
   return out;
 }
-__name(embed, "embed");
+
 async function ensureSchema(env) {
   var stmts = [
     "CREATE TABLE IF NOT EXISTS companion_pieces (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE NOT NULL, form TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT, lede TEXT, body_md TEXT NOT NULL, anchor_json TEXT, quality_json TEXT, word_count INTEGER, day TEXT, created_at TEXT NOT NULL)",
@@ -443,7 +430,9 @@ async function ensureSchema(env) {
     await env.PERSONAL.prepare(stmts[i]).run();
   }
 }
-__name(ensureSchema, "ensureSchema");
+
+// ---------------------------------------------------------------- fuel
+
 async function loadProfile(env) {
   var r = await env.PERSONAL.prepare(
     "SELECT facet, label, statement FROM profile WHERE confidence >= 0.7 ORDER BY facet, label"
@@ -452,16 +441,12 @@ async function loadProfile(env) {
   var lines = [];
   var lastFacet = "";
   for (var i = 0; i < rows.length; i++) {
-    if (rows[i].facet !== lastFacet) {
-      lastFacet = rows[i].facet;
-      lines.push("");
-      lines.push("[" + lastFacet + "]");
-    }
+    if (rows[i].facet !== lastFacet) { lastFacet = rows[i].facet; lines.push(""); lines.push("[" + lastFacet + "]"); }
     lines.push("- " + rows[i].label + ": " + squish(rows[i].statement || ""));
   }
-  return lines.join(NL).slice(0, 7e3);
+  return lines.join(NL).slice(0, 7000);
 }
-__name(loadProfile, "loadProfile");
+
 async function loadLife(env) {
   var lines = [];
   var acts = await env.PERSONAL.prepare(
@@ -492,9 +477,9 @@ async function loadLife(env) {
   for (var k = 0; k < nr.length; k++) {
     lines.push("- " + nr[k].ts + " [" + nr[k].kind + "] " + squish((nr[k].content || "").slice(0, 200)));
   }
-  return lines.join(NL).slice(0, 6e3);
+  return lines.join(NL).slice(0, 6000);
 }
-__name(loadLife, "loadLife");
+
 async function loadContinuity(env, form) {
   var lines = [];
   var pcs = await env.PERSONAL.prepare(
@@ -531,35 +516,34 @@ async function loadContinuity(env, form) {
       lines.push("RUNNING WORK: none yet. You are starting a new long-form work. Choose a title and a thesis, and begin it.");
     }
   }
-  return lines.join(NL).slice(0, 6e3);
+  return lines.join(NL).slice(0, 6000);
 }
-__name(loadContinuity, "loadContinuity");
+
 async function pickTopic(env, form) {
   var used = [];
   try {
     var r = await env.PERSONAL.prepare("SELECT key FROM companion_seeds ORDER BY used_at DESC LIMIT 24").all();
     var rr = r.results || [];
     for (var i = 0; i < rr.length; i++) used.push(rr[i].key);
-  } catch (e) {
-    used = [];
-  }
+  } catch (e) { used = []; }
   var fresh = [];
   for (var j = 0; j < TOPICS.length; j++) if (used.indexOf(TOPICS[j].id) < 0) fresh.push(TOPICS[j]);
   var pool = fresh.length ? fresh : TOPICS;
-  var day = amsDayKey(/* @__PURE__ */ new Date());
+  var day = amsDayKey(new Date());
   var n = Number(day.slice(8, 10)) || 0;
-  var off = form === "serial" ? 5 : form === "notes" ? 9 : 0;
+  var off = form === "serial" ? 5 : (form === "notes" ? 9 : 0);
   var pick = pool[(n + off) % pool.length];
   try {
-    await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?)").bind(pick.id, "rotation", form, nowIso()).run();
-  } catch (e) {
-  }
+    await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?)")
+      .bind(pick.id, "rotation", form, nowIso()).run();
+  } catch (e) {}
   return pick;
 }
-__name(pickTopic, "pickTopic");
+
 async function fetchArxiv(cat) {
-  var url = "https://export.arxiv.org/api/query?search_query=cat:" + encodeURIComponent(cat) + "&sortBy=submittedDate&sortOrder=descending&max_results=5";
-  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
+  var url = "https://export.arxiv.org/api/query?search_query=cat:" + encodeURIComponent(cat) +
+    "&sortBy=submittedDate&sortOrder=descending&max_results=5";
+  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12000) });
   if (!resp.ok) return [];
   var xml = await resp.text();
   var chunks = sections(xml, "entry");
@@ -568,29 +552,31 @@ async function fetchArxiv(cat) {
     var title = firstTag(chunks[i], "title");
     var summary = firstTag(chunks[i], "summary");
     var id = firstTag(chunks[i], "id");
-    if (title) out.push({ kind: "paper", ref: id, title, text: squish(summary).slice(0, 900) });
+    if (title) out.push({ kind: "paper", ref: id, title: title, text: squish(summary).slice(0, 900) });
     if (out.length >= 3) break;
   }
   return out;
 }
-__name(fetchArxiv, "fetchArxiv");
+
 async function fetchWiki(title) {
   var url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title);
-  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
+  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12000) });
   if (!resp.ok) return null;
   var j = await resp.json();
   var text = squish(j.extract || "");
   if (!text) return null;
   return { kind: "concept", ref: j.content_urls && j.content_urls.desktop && j.content_urls.desktop.page ? j.content_urls.desktop.page : url, title: squish(j.title || title), text: text.slice(0, 1100) };
 }
-__name(fetchWiki, "fetchWiki");
+
+// ---------------------------------------------------------------- model
+
 async function callModel(env, messages, maxTokens, timeoutMs) {
   var lastErr = "";
   var tryN = MODELS.length < 2 ? MODELS.length : 2;
   for (var i = 0; i < tryN; i++) {
     try {
       var resp = await env.AI.run(MODELS[i], {
-        messages,
+        messages: messages,
         max_tokens: maxTokens,
         temperature: 0.7
       }, { gateway: { id: "default" }, signal: AbortSignal.timeout(timeoutMs) });
@@ -600,33 +586,31 @@ async function callModel(env, messages, maxTokens, timeoutMs) {
         var msg = resp.choices[0].message;
         if (typeof msg.content === "string" && msg.content.length > 0) text = msg.content;
       }
-      if (typeof text === "string" && text.trim().length > 80) return { model: MODELS[i], text };
+      if (typeof text === "string" && text.trim().length > 80) return { model: MODELS[i], text: text };
       lastErr = "empty or truncated output from " + MODELS[i] + " len=" + String(text || "").length;
     } catch (e) {
-      lastErr = MODELS[i] + ": " + String(e && e.message || e);
+      lastErr = MODELS[i] + ": " + String((e && e.message) || e);
     }
   }
   throw new Error("all models failed: " + lastErr);
 }
-__name(callModel, "callModel");
+
+// ---------------------------------------------------------------- shaping
+
 function renderInline(s) {
   var out = "";
   var i = 0;
   while (i < s.length) {
     if (s.charAt(i) === "*" && s.charAt(i + 1) === "*") {
       var end = s.indexOf("**", i + 2);
-      if (end > -1) {
-        out += "<strong>" + s.slice(i + 2, end) + "</strong>";
-        i = end + 2;
-        continue;
-      }
+      if (end > -1) { out += "<strong>" + s.slice(i + 2, end) + "</strong>"; i = end + 2; continue; }
     }
     out += s.charAt(i);
     i++;
   }
   return out;
 }
-__name(renderInline, "renderInline");
+
 function escHtml(s) {
   var out = "";
   var AMP = "&amp;", LT = "&lt;", GT = "&gt;", QUOT = "&quot;", Q = String.fromCharCode(34);
@@ -640,80 +624,42 @@ function escHtml(s) {
   }
   return out;
 }
-__name(escHtml, "escHtml");
+
 function renderBody(md) {
   var lines = String(md || "").split(NL);
   var out = [];
   var buf = [];
   var listOpen = false;
   function flushP() {
-    if (buf.length) {
-      out.push("<p>" + renderInline(escHtml(buf.join(" "))) + "</p>");
-      buf = [];
-    }
+    if (buf.length) { out.push("<p>" + renderInline(escHtml(buf.join(" "))) + "</p>"); buf = []; }
   }
-  __name(flushP, "flushP");
-  function closeList() {
-    if (listOpen) {
-      out.push("</ul>");
-      listOpen = false;
-    }
-  }
-  __name(closeList, "closeList");
+  function closeList() { if (listOpen) { out.push("</ul>"); listOpen = false; } }
   for (var i = 0; i < lines.length; i++) {
     var t = lines[i].trim();
-    if (!t) {
-      flushP();
-      closeList();
-      continue;
-    }
-    if (t.indexOf("### ") === 0) {
-      flushP();
-      closeList();
-      out.push("<h3>" + renderInline(escHtml(t.slice(4))) + "</h3>");
-      continue;
-    }
-    if (t.indexOf("## ") === 0) {
-      flushP();
-      closeList();
-      out.push("<h2>" + renderInline(escHtml(t.slice(3))) + "</h2>");
-      continue;
-    }
-    if (t.indexOf("# ") === 0) {
-      flushP();
-      closeList();
-      out.push("<h2>" + renderInline(escHtml(t.slice(2))) + "</h2>");
-      continue;
-    }
+    if (!t) { flushP(); closeList(); continue; }
+    if (t.indexOf("### ") === 0) { flushP(); closeList(); out.push("<h3>" + renderInline(escHtml(t.slice(4))) + "</h3>"); continue; }
+    if (t.indexOf("## ") === 0) { flushP(); closeList(); out.push("<h2>" + renderInline(escHtml(t.slice(3))) + "</h2>"); continue; }
+    if (t.indexOf("# ") === 0) { flushP(); closeList(); out.push("<h2>" + renderInline(escHtml(t.slice(2))) + "</h2>"); continue; }
     if (t.indexOf("- ") === 0) {
       flushP();
-      if (!listOpen) {
-        out.push("<ul>");
-        listOpen = true;
-      }
+      if (!listOpen) { out.push("<ul>"); listOpen = true; }
       out.push("<li>" + renderInline(escHtml(t.slice(2))) + "</li>");
       continue;
     }
-    if (t.indexOf("> ") === 0) {
-      flushP();
-      closeList();
-      out.push("<blockquote>" + renderInline(escHtml(t.slice(2))) + "</blockquote>");
-      continue;
-    }
+    if (t.indexOf("> ") === 0) { flushP(); closeList(); out.push("<blockquote>" + renderInline(escHtml(t.slice(2))) + "</blockquote>"); continue; }
     buf.push(t);
   }
-  flushP();
-  closeList();
+  flushP(); closeList();
   return out.join(NL);
 }
-__name(renderBody, "renderBody");
+
 function formLabel(f) {
   if (f === "essay") return "Essay";
   if (f === "notes") return "Field notes";
   if (f === "serial") return "Long-form";
   return f;
 }
-__name(formLabel, "formLabel");
+
 var CSS = L(
   ":root{--bg:#faf8f5;--fg:#1b1a18;--mut:#6b6560;--line:#e2dcd4;--acc:#8a5a2b}",
   "@media(prefers-color-scheme:dark){:root{--bg:#161513;--fg:#e8e4de;--mut:#9a938b;--line:#2e2b27;--acc:#c99a5e}}",
@@ -746,19 +692,25 @@ var CSS = L(
   ".fb a{margin-right:1rem}",
   "footer{margin-top:3.4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.78rem}"
 );
+
 function page(title, inner, extraHead) {
-  return "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=" + String.fromCharCode(34) + "width=device-width,initial-scale=1" + String.fromCharCode(34) + "><title>" + escHtml(title) + "</title><style>" + CSS + "</style>" + (extraHead || "") + "</head><body><div class=wrap>" + inner + "</div></body></html>";
+  return "<!doctype html><html lang=en><head><meta charset=utf-8>" +
+    "<meta name=viewport content=" + String.fromCharCode(34) + "width=device-width,initial-scale=1" + String.fromCharCode(34) + ">" +
+    "<title>" + escHtml(title) + "</title><style>" + CSS + "</style>" + (extraHead || "") +
+    "</head><body><div class=wrap>" + inner + "</div></body></html>";
 }
-__name(page, "page");
+
 function shell(inner) {
   return "<header class=mast><h1>Reading</h1><p>Written for one reader. Private.</p></header>" + inner;
 }
-__name(shell, "shell");
+
 function renderIndex(pieces, keyQS, filter) {
   var items = [];
   for (var i = 0; i < pieces.length; i++) {
     var p = pieces[i];
-    items.push("<li><a class=t href=" + String.fromCharCode(34) + "/p/" + p.slug + keyQS + String.fromCharCode(34) + ">" + escHtml(p.title) + "</a><div class=m>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div>" + (p.lede ? "<div class=l>" + escHtml(p.lede) + "</div>" : "") + "</li>");
+    items.push("<li><a class=t href=" + String.fromCharCode(34) + "/p/" + p.slug + keyQS + String.fromCharCode(34) + ">" +
+      escHtml(p.title) + "</a><div class=m>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div>" +
+      (p.lede ? "<div class=l>" + escHtml(p.lede) + "</div>" : "") + "</li>");
   }
   var nav = "<nav class=forms><a href=/" + keyQS + ">all</a>";
   nav += "<a href=/?form=essay" + (keyQS ? "&" + keyQS.slice(1) : "") + ">essays</a>";
@@ -767,14 +719,23 @@ function renderIndex(pieces, keyQS, filter) {
   var body = nav + (items.length ? "<ul class=idx>" + items.join("") + "</ul>" : "<p>Nothing yet.</p>");
   return page("Reading", shell(body));
 }
-__name(renderIndex, "renderIndex");
+
 function renderPiece(p, keyQS) {
-  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + (p.lede ? "<p class=lede>" + escHtml(p.lede) + "</p>" : "") + renderBody(p.body_md);
-  var fb = "<div class=fb>Was this worth your time? <a href=/api/f?slug=" + p.slug + "&s=good>yes</a><a href=/api/f?slug=" + p.slug + "&s=flat>flat</a><a href=/api/f?slug=" + p.slug + "&s=no>no</a></div>";
+  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div>" +
+    "<h2>" + escHtml(p.title) + "</h2>" +
+    (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") +
+    (p.lede ? "<p class=lede>" + escHtml(p.lede) + "</p>" : "") +
+    renderBody(p.body_md);
+  var fb = "<div class=fb>Was this worth your time? " +
+    "<a href=/api/f?slug=" + p.slug + "&s=good>yes</a>" +
+    "<a href=/api/f?slug=" + p.slug + "&s=flat>flat</a>" +
+    "<a href=/api/f?slug=" + p.slug + "&s=no>no</a></div>";
   var foot = "<footer><a href=/ " + keyQS + ">back to index</a></footer>";
   return page(p.title, shell(body + fb + foot));
 }
-__name(renderPiece, "renderPiece");
+
+// ---------------------------------------------------------------- compose
+
 function anchorsBlock(topic, anchors, life, profile) {
   var lines = [];
   lines.push("--- briefing. Never reproduce any wording from this briefing in the piece. ---");
@@ -794,9 +755,9 @@ function anchorsBlock(topic, anchors, life, profile) {
   lines.push("");
   lines.push("his recent life; use only if it sharpens a piece, never list it back at him:");
   lines.push(life);
-  return lines.join(NL).slice(0, 16e3);
+  return lines.join(NL).slice(0, 16000);
 }
-__name(anchorsBlock, "anchorsBlock");
+
 function countHeadings(md, level) {
   var mark = level === 3 ? "### " : "## ";
   var lines = String(md).split(NL);
@@ -804,7 +765,7 @@ function countHeadings(md, level) {
   for (var i = 0; i < lines.length; i++) if (lines[i].trim().indexOf(mark) === 0) n++;
   return n;
 }
-__name(countHeadings, "countHeadings");
+
 function extractSection(md, needle) {
   var lines = String(md).split(NL);
   var out = [];
@@ -820,16 +781,13 @@ function extractSection(md, needle) {
   }
   return out.join(" ").trim();
 }
-__name(extractSection, "extractSection");
+
 function firstParagraph(md) {
   var lines = String(md).split(NL);
   var buf = [];
   for (var i = 0; i < lines.length; i++) {
     var t = lines[i].trim();
-    if (!t) {
-      if (buf.length) break;
-      continue;
-    }
+    if (!t) { if (buf.length) break; continue; }
     if (t.indexOf("#") === 0) continue;
     if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) continue;
     buf.push(t);
@@ -837,14 +795,18 @@ function firstParagraph(md) {
   }
   return buf.join(" ").slice(0, 400);
 }
-__name(firstParagraph, "firstParagraph");
+
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
-  var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
-  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. Include one section headed exactly: ## The strongest objection";
+  var formContract = form === "essay" ? P_ESSAY : (form === "serial" ? P_SERIAL : P_NOTES);
+  var outRule = form === "notes"
+    ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs."
+    : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. Include one section headed exactly: ## The strongest objection";
   var sys = [P_STYLE, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular from the source material. Name the paper, the theorem, the number, or the place. A sentence that could have been written without the source material is a failed sentence.";
-  var lenRule = concreteRule + " " + (form === "essay" ? "Length: 1000 to 1300 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1300 to 1700 words. This is a requirement, not a suggestion." : "Length: four items, each 110 to 170 words. This is a requirement, not a suggestion.");
-  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous attempt was rejected by an adversarial reader for this reason: " + feedback + " Write a fresh piece that fixes that." : ""].join(NL);
+  var lenRule = concreteRule + " " + (form === "essay" ? "Length: 1000 to 1300 words. This is a requirement, not a suggestion."
+    : (form === "serial" ? "Length: 1300 to 1700 words. This is a requirement, not a suggestion."
+    : "Length: four items, each 110 to 170 words. This is a requirement, not a suggestion."));
+  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? ("A previous attempt was rejected by an adversarial reader for this reason: " + feedback + " Write a fresh piece that fixes that.") : ""].join(NL);
   var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, GEN_TIMEOUT_MS);
   var md = String(r.text || "").trim();
   if (md.indexOf("```") === 0) {
@@ -875,31 +837,19 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
     raw: String(r.text || "")
   };
 }
-__name(composePiece, "composePiece");
+
 async function critiquePiece(env, piece, form) {
-  var band = form === "essay" ? "900 to 1500 words" : form === "serial" ? "1200 to 1800 words" : "3 to 5 items of 90 to 200 words each";
-  var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
+  var band = form === "essay" ? "900 to 1500 words" : (form === "serial" ? "1200 to 1800 words" : "3 to 5 items of 90 to 200 words each");
+  var user = "FORM: " + form + " (" + band + ")" + NL + NL +
+    "TITLE: " + piece.title + NL +
+    "LEDE: " + (piece.lede || "") + NL +
+    "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL +
+    "STATED OBJECTION: " + (piece.objection || "") + NL + NL +
+    "BODY:" + NL + piece.body_md;
   var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS);
   return parseJsonLoose(r.text);
 }
-__name(critiquePiece, "critiquePiece");
-async function sharpenBridge(env, piece, form) {
-  try {
-    var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6e3);
-    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS);
-    var j = parseJsonLoose(r && r.text);
-    if (j && j.bridge && j.bridge.a && j.bridge.b) {
-      piece.bridge = j.bridge;
-      if (j.bridge_claim) piece.bridge.claim = j.bridge_claim;
-      if (j.objection) piece.objection = j.objection;
-      return true;
-    }
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-__name(sharpenBridge, "sharpenBridge");
+
 function validatePiece(piece, form) {
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
@@ -916,17 +866,19 @@ function validatePiece(piece, form) {
   if (hits.length) problems.push("banned: " + hits.join(", "));
   if (hasEmoji(md)) problems.push("emoji present");
   if (!piece.title || String(piece.title).length < 4) problems.push("no title");
-  if (form !== "notes" && wc >= 700 && (!piece.objection || String(piece.objection).length < 40)) problems.push("objection too thin");
+  if (form !== "notes" && (wc >= 700) && (!piece.objection || String(piece.objection).length < 40)) problems.push("objection too thin");
   if (!piece.bridge || !piece.bridge.a || !piece.bridge.b) problems.push("no bridge declared");
-  return { ok: problems.length === 0, problems, words: wc };
+  return { ok: problems.length === 0, problems: problems, words: wc };
 }
-__name(validatePiece, "validatePiece");
+
+// ---------------------------------------------------------------- store
+
 async function similarExists(env, text, excludeSlug) {
   try {
-    var vecs = await embed(env, [text.slice(0, 6e3)]);
+    var vecs = await embed(env, [text.slice(0, 6000)]);
     if (!vecs.length) return null;
     var res = await env.VZ.query(vecs[0], { topK: 3, returnMetadata: "all" });
-    var ms = res && res.matches || [];
+    var ms = (res && res.matches) || [];
     for (var i = 0; i < ms.length; i++) {
       var m = ms[i];
       var isPiece = m.metadata && String(m.metadata.kind || "") === "companion-piece";
@@ -934,75 +886,78 @@ async function similarExists(env, text, excludeSlug) {
         return { slug: m.metadata.slug, score: m.score };
       }
     }
-  } catch (e) {
-  }
+  } catch (e) {}
   return null;
 }
-__name(similarExists, "similarExists");
+
 async function persistPiece(env, piece, form, topic, model, quality, words) {
-  var day = amsDayKey(/* @__PURE__ */ new Date());
+  var day = amsDayKey(new Date());
   var salt = String(Date.now()) + topic.id + form;
-  var slug = day + "-" + form + "-" + await sha16(salt);
+  var slug = day + "-" + form + "-" + (await sha16(salt));
   var anchorJson = JSON.stringify({ topic: topic.id, seam: [topic.a, topic.b], bridge: piece.bridge || null });
   await env.PERSONAL.prepare(
     "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
   ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 600), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
+
   try {
-    var vecs = await embed(env, [String(piece.title) + NL + String(piece.lede || "") + NL + String(piece.body_md).slice(0, 5e3)]);
+    var vecs = await embed(env, [String(piece.title) + NL + String(piece.lede || "") + NL + String(piece.body_md).slice(0, 5000)]);
     if (vecs.length && env.VZ) {
       await env.VZ.upsert([{
         id: "companion-" + slug,
         values: vecs[0],
-        metadata: { kind: "companion-piece", slug, form, title: String(piece.title).slice(0, 200), day }
+        metadata: { kind: "companion-piece", slug: slug, form: form, title: String(piece.title).slice(0, 200), day: day }
       }]);
     }
-  } catch (e) {
-  }
+  } catch (e) {}
+
   try {
     await env.MEDIA.put("companion/" + day + "/" + slug + ".md", String(piece.body_md), {
       httpMetadata: { contentType: "text/markdown; charset=utf-8" }
     });
-  } catch (e) {
-  }
+  } catch (e) {}
+
   if (form === "serial") {
     var lines = String(piece.body_md).trim().split(NL);
     var tail = lines.slice(Math.max(0, lines.length - 3)).join(" ");
     var cur = await env.PERSONAL.prepare("SELECT id, chapters, title FROM companion_series ORDER BY id DESC LIMIT 1").all();
     var c = (cur.results || [])[0];
     if (c) {
-      await env.PERSONAL.prepare("UPDATE companion_series SET chapters = ?, last_lines = ?, updated_at = ? WHERE id = ?").bind((c.chapters || 0) + 1, tail.slice(0, 800), nowIso(), c.id).run();
+      await env.PERSONAL.prepare("UPDATE companion_series SET chapters = ?, last_lines = ?, updated_at = ? WHERE id = ?")
+        .bind((c.chapters || 0) + 1, tail.slice(0, 800), nowIso(), c.id).run();
     } else {
-      await env.PERSONAL.prepare("INSERT INTO companion_series(series, title, thesis, chapters, last_lines, updated_at) VALUES(?,?,?,?,?,?)").bind(topic.id + "-serial", String(piece.title).slice(0, 300), String(piece.lede || "").slice(0, 600), 1, tail.slice(0, 800), nowIso()).run();
+      await env.PERSONAL.prepare("INSERT INTO companion_series(series, title, thesis, chapters, last_lines, updated_at) VALUES(?,?,?,?,?,?)")
+        .bind(topic.id + "-serial", String(piece.title).slice(0, 300), String(piece.lede || "").slice(0, 600), 1, tail.slice(0, 800), nowIso()).run();
     }
   }
   return slug;
 }
-__name(persistPiece, "persistPiece");
+
 async function logRun(env, form, model, topic, status, detail, ms) {
   try {
     await env.PERSONAL.prepare(
       "INSERT INTO companion_runs(run_at, form, model, topic, status, detail, ms) VALUES(?,?,?,?,?,?,?)"
     ).bind(nowIso(), form, String(model || ""), String(topic || ""), status, String(detail || "").slice(0, 1200), ms).run();
-  } catch (e) {
-  }
+  } catch (e) {}
 }
-__name(logRun, "logRun");
+
+// ---------------------------------------------------------------- delivery
+
 async function sendMail(env, piece, slug, day) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
     var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
-    var body = (piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
+    var body = (piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 20000) + NL + NL + "Read online: " + String(piece.link || "");
     var resp = await env.EMAIL.fetch("https://email.internal/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
-      body: JSON.stringify({ to: "rwnquni@outlook.com", from: "rowan.quni@qnfo.org", subject, body })
+      body: JSON.stringify({ to: "rwnquni@outlook.com", from: "rowan.quni@qnfo.org", subject: subject, body: body })
     });
     return { ok: resp.ok, status: resp.status };
   } catch (e) {
-    return { ok: false, error: String(e && e.message || e) };
+    return { ok: false, error: String((e && e.message) || e) };
   }
 }
-__name(sendMail, "sendMail");
+
 async function mailOut(env, slug, origin) {
   try {
     var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(slug).all();
@@ -1010,11 +965,11 @@ async function mailOut(env, slug, origin) {
     if (!prow) return { ok: false, error: "no piece" };
     prow.link = origin + "/p/" + slug + (env.COMPANION_KEY ? "?k=" + env.COMPANION_KEY : "");
     return await sendMail(env, prow, slug, prow.day);
-  } catch (e) {
-    return { ok: false, error: String(e && e.message || e) };
-  }
+  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
 }
-__name(mailOut, "mailOut");
+
+// ---------------------------------------------------------------- run
+
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -1029,25 +984,23 @@ async function generate(env, form, opts) {
     var life = await loadLife(env);
     var continuity = await loadContinuity(env, form);
     await logRun(env, form, "", topic.id, "stage", "context " + profile.length + "/" + life.length + "/" + continuity.length, Date.now() - t0);
+
     var anchors = [];
-    var dayN = Number(amsDayKey(/* @__PURE__ */ new Date()).slice(8, 10)) || 0;
+    var dayN = Number(amsDayKey(new Date()).slice(8, 10)) || 0;
     try {
       var papers = await fetchArxiv(topic.cat);
       for (var i = 0; i < papers.length; i++) anchors.push(papers[i]);
-    } catch (e) {
-    }
+    } catch (e) {}
     try {
       var w = await fetchWiki(topic.wiki);
       if (w) anchors.push(w);
-    } catch (e) {
-    }
+    } catch (e) {}
     if (anchors.length < 3) {
       var fbCats = ["quant-ph", "math.NT", "cond-mat.stat-mech", "cs.IT", "math.CT"];
       try {
         var more = await fetchArxiv(fbCats[dayN % fbCats.length]);
         for (var m2 = 0; m2 < more.length && anchors.length < 4; m2++) anchors.push(more[m2]);
-      } catch (e) {
-      }
+      } catch (e) {}
     }
     if (anchors.length < 3) {
       var fbWiki = ["Ultrametric space", "Laws of Form", "Entropy (information theory)", "Counterpoint", "Kuramoto model"];
@@ -1056,18 +1009,16 @@ async function generate(env, form, opts) {
         try {
           var w2 = await fetchWiki(fw);
           if (w2) anchors.push(w2);
-        } catch (e) {
-        }
+        } catch (e) {}
       }
     }
-    await logRun(env, form, "", topic.id, "stage", "anchorKinds " + anchors.map(function(x) {
-      return x.kind;
-    }).join(","), Date.now() - t0);
+    await logRun(env, form, "", topic.id, "stage", "anchorKinds " + anchors.map(function (x) { return x.kind; }).join(","), Date.now() - t0);
     await logRun(env, form, "", topic.id, "stage", "anchors " + anchors.length, Date.now() - t0);
     if (anchors.length < 2) {
       await logRun(env, form, "", topic.id, "blocked", "insufficient anchors", Date.now() - t0);
       return { ok: false, error: "insufficient anchors" };
     }
+
     var attempt = 0;
     var best = null;
     var feedback = "";
@@ -1076,11 +1027,9 @@ async function generate(env, form, opts) {
       await logRun(env, form, "", topic.id, "stage", "compose attempt " + attempt, Date.now() - t0);
       var comp = await composePiece(env, form, topic, anchors, life, profile, continuity, feedback);
       model = comp.model;
-      await logRun(env, form, model, topic.id, "stage", "composed " + String(comp.piece && comp.piece.body_md || "").length, Date.now() - t0);
+      await logRun(env, form, model, topic.id, "stage", "composed " + String((comp.piece && comp.piece.body_md) || "").length, Date.now() - t0);
       var piece = comp.piece;
-      if (!piece) {
-        continue;
-      }
+      if (!piece) { continue; }
       var v = validatePiece(piece, form);
       if (v.ok) {
         var badNames = unverifiedNames(piece, anchors, topic);
@@ -1097,7 +1046,6 @@ async function generate(env, form, opts) {
         await logRun(env, form, model, topic.id, "rejected", "too similar to " + dup.slug + " (" + dup.score.toFixed(3) + ")", Date.now() - t0);
         continue;
       }
-      await sharpenBridge(env, piece, form);
       await logRun(env, form, model, topic.id, "stage", "critique", Date.now() - t0);
       var crit = await critiquePiece(env, piece, form);
       var q = crit || {};
@@ -1107,40 +1055,41 @@ async function generate(env, form, opts) {
       for (var d = 0; d < dims.length; d++) {
         var val = Number(q[dims[d]]);
         if (!Number.isFinite(val)) val = 5;
-        if (val < worst) {
-          worst = val;
-          worstName = dims[d];
-        }
+        if (val < worst) { worst = val; worstName = dims[d]; }
       }
-      if (worst < ACCEPT_FLOOR) {
+      if (worst < ACCEPT_FLOOR || String(q.verdict || "").toLowerCase() === "reject") {
         await logRun(env, form, model, topic.id, "rejected", "critique " + worstName + "=" + worst + " :: " + String(q.why || ""), Date.now() - t0);
         feedback = "weakest dimension was " + worstName + ". " + String(q.why || "");
         q.gate = "forced";
-        best = { piece, quality: q, words: v.words };
+        best = { piece: piece, quality: q, words: v.words };
         continue;
       }
       q.gate = "passed";
-      best = { piece, quality: q, words: v.words };
+      best = { piece: piece, quality: q, words: v.words };
       break;
     }
     if (!best) {
       await logRun(env, form, model, topic.id, "failed", "no piece survived the gate", Date.now() - t0);
       return { ok: false, error: "no piece survived the gate" };
     }
+
     var slug = await persistPiece(env, best.piece, form, topic, model, best.quality, best.words);
     await logRun(env, form, model, topic.id, "ok", slug, Date.now() - t0);
-    return { ok: true, slug, form, title: best.piece.title, words: best.words, quality: best.quality, topic: topic.id, model };
+    return { ok: true, slug: slug, form: form, title: best.piece.title, words: best.words, quality: best.quality, topic: topic.id, model: model };
   } catch (e) {
-    await logRun(env, form, model, topic ? topic.id : "", "error", String(e && e.message || e), Date.now() - t0);
-    return { ok: false, error: String(e && e.message || e) };
+    await logRun(env, form, model, topic ? topic.id : "", "error", String((e && e.message) || e), Date.now() - t0);
+    return { ok: false, error: String((e && e.message) || e) };
   }
 }
-__name(generate, "generate");
-var worker_default = {
+
+// ---------------------------------------------------------------- http
+
+export default {
   async fetch(request, env, ctx) {
     var u = new URL(request.url);
     var p = u.pathname;
     if (request.method === "OPTIONS") return json({ ok: true });
+
     if (p === "/health") {
       var n = 0, last = null;
       try {
@@ -1148,26 +1097,28 @@ var worker_default = {
         n = ((r.results || [])[0] || {}).n || 0;
         var r2 = await env.PERSONAL.prepare("SELECT slug, title, form, day FROM companion_pieces ORDER BY id DESC LIMIT 1").all();
         last = (r2.results || [])[0] || null;
-      } catch (e) {
-      }
-      return json({ ok: true, version: VERSION, pieces: n, last, rhythm: RHYTHM, models: MODELS });
+      } catch (e) {}
+      return json({ ok: true, version: VERSION, pieces: n, last: last, rhythm: RHYTHM, models: MODELS });
     }
+
     if (!authorized(request, env)) {
       return json({ error: { message: "unauthorized: append ?k=KEY" } }, 401);
     }
+
     if (p === "/api/ping") {
       var ping = {};
       for (var pi = 0; pi < MODELS.length; pi++) {
         var t0p = Date.now();
         try {
-          var rp = await env.AI.run(MODELS[pi], { messages: [{ role: "user", content: "Reply with the single word: ready" }], max_tokens: 16 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(3e4) });
-          ping[MODELS[pi]] = { ms: Date.now() - t0p, resp: String(rp && rp.response || JSON.stringify(rp)).slice(0, 160) };
+          var rp = await env.AI.run(MODELS[pi], { messages: [{ role: "user", content: "Reply with the single word: ready" }], max_tokens: 16 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(30000) });
+          ping[MODELS[pi]] = { ms: Date.now() - t0p, resp: String((rp && rp.response) || JSON.stringify(rp)).slice(0, 160) };
         } catch (e) {
-          ping[MODELS[pi]] = { ms: Date.now() - t0p, err: String(e && e.message || e).slice(0, 200) };
+          ping[MODELS[pi]] = { ms: Date.now() - t0p, err: String((e && e.message) || e).slice(0, 200) };
         }
       }
-      return json({ ok: true, version: VERSION, ping });
+      return json({ ok: true, version: VERSION, ping: ping });
     }
+
     if (p === "/api/probe") {
       var cand = ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-pro-0813"];
       if (u.searchParams.get("m")) cand = [u.searchParams.get("m")];
@@ -1188,20 +1139,19 @@ var worker_default = {
             max_tokens: Number(u.searchParams.get("mt") || 700),
             temperature: 0.7
           }, opts2);
-          var c = rq && rq.response || "";
+          var c = (rq && rq.response) || "";
           var rc = "";
           if (rq && rq.choices && rq.choices[0] && rq.choices[0].message) {
             if (!c) c = rq.choices[0].message.content || "";
             rc = rq.choices[0].message.reasoning_content || "";
           }
-          probe[cand[ci]] = { ms: Date.now() - tt, clen: String(c).length, rlen: String(rc).length, fr: rq && rq.choices && rq.choices[0] && rq.choices[0].finish_reason || "" };
-        } catch (e) {
-          probe[cand[ci]] = { ms: Date.now() - tt, err: String(e && e.message || e).slice(0, 160) };
-        }
+          probe[cand[ci]] = { ms: Date.now() - tt, clen: String(c).length, rlen: String(rc).length, fr: (rq && rq.choices && rq.choices[0] && rq.choices[0].finish_reason) || "" };
+        } catch (e) { probe[cand[ci]] = { ms: Date.now() - tt, err: String((e && e.message) || e).slice(0, 160) }; }
         if (u.searchParams.get("one") === "1") break;
       }
-      return json({ ok: true, probe });
+      return json({ ok: true, probe: probe });
     }
+
     if (p === "/api/compare") {
       var cm = u.searchParams.get("m") || MODELS[0];
       if (!modelAllowed(cm)) return json({ error: "model refused: banned by standing directive", model: cm }, 400);
@@ -1225,39 +1175,41 @@ var worker_default = {
           crc = cr.choices[0].message.reasoning_content || cr.choices[0].message.reasoning || "";
         }
         return json({
-          model: cm,
-          mt: cmt,
-          ms: Date.now() - c0,
-          clen: String(cc).length,
-          rlen: String(crc).length,
-          fr: cr && cr.choices && cr.choices[0] && cr.choices[0].finish_reason || "",
+          model: cm, mt: cmt, ms: Date.now() - c0,
+          clen: String(cc).length, rlen: String(crc).length,
+          fr: (cr && cr.choices && cr.choices[0] && cr.choices[0].finish_reason) || "",
           words: wordCount(String(cc)),
           head: String(cc).slice(0, 1200),
           tail: String(cc).slice(-320)
         });
       } catch (e) {
-        return json({ model: cm, mt: cmt, ms: Date.now() - c0, err: String(e && e.message || e).slice(0, 300) });
+        return json({ model: cm, mt: cmt, ms: Date.now() - c0, err: String((e && e.message) || e).slice(0, 300) });
       }
     }
+
     if (p === "/api/f" || p === "/api/feedback") {
       var slug = u.searchParams.get("slug") || "";
       var sig = u.searchParams.get("s") || u.searchParams.get("signal") || "";
       if (slug && sig) {
         try {
-          await env.PERSONAL.prepare("INSERT INTO companion_feedback(slug, signal, note, created_at) VALUES(?,?,?,?)").bind(slug, sig.slice(0, 40), (u.searchParams.get("note") || "").slice(0, 500), nowIso()).run();
-        } catch (e) {
-        }
+          await env.PERSONAL.prepare("INSERT INTO companion_feedback(slug, signal, note, created_at) VALUES(?,?,?,?)")
+            .bind(slug, sig.slice(0, 40), (u.searchParams.get("note") || "").slice(0, 500), nowIso()).run();
+        } catch (e) {}
       }
       return Response.redirect(new URL("/p/" + slug + (u.searchParams.get("k") ? "?k=" + u.searchParams.get("k") : ""), u.origin).toString(), 302);
     }
+
     if (p === "/api/pieces") {
       var lim = Number(u.searchParams.get("limit")) || 30;
       var f2 = u.searchParams.get("form") || "";
-      var sql = f2 ? "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT ?" : "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces ORDER BY id DESC LIMIT ?";
+      var sql = f2
+        ? "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT ?"
+        : "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces ORDER BY id DESC LIMIT ?";
       var st = f2 ? env.PERSONAL.prepare(sql).bind(f2, lim) : env.PERSONAL.prepare(sql).bind(lim);
       var rr = await st.all();
       return json({ ok: true, count: (rr.results || []).length, pieces: rr.results || [] });
     }
+
     if (p.indexOf("/api/piece/") === 0) {
       var s3 = p.slice(11);
       var q3 = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(s3).all();
@@ -1265,21 +1217,20 @@ var worker_default = {
       if (!row3) return json({ error: { message: "not found" } }, 404);
       return json({ ok: true, piece: row3 });
     }
+
     if (p === "/api/runs") {
       var q4 = await env.PERSONAL.prepare("SELECT * FROM companion_runs ORDER BY id DESC LIMIT 40").all();
       return json({ ok: true, runs: q4.results || [] });
     }
+
     if (p === "/run" || p === "/api/run") {
       var want = u.searchParams.get("form") || "";
-      if (!want || ["essay", "notes", "serial"].indexOf(want) < 0) want = RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
+      if (!want || ["essay", "notes", "serial"].indexOf(want) < 0) want = RHYTHM[amsWeekday(new Date())];
       if (u.searchParams.get("async") === "1") {
-        ctx.waitUntil((async function() {
+        ctx.waitUntil((async function () {
           var o = await generate(env, want, {});
-          if (o && o.ok && u.searchParams.get("mail") === "1") {
-            await mailOut(env, o.slug, u.origin);
-          }
-        })().catch(function() {
-        }));
+          if (o && o.ok && u.searchParams.get("mail") === "1") { await mailOut(env, o.slug, u.origin); }
+        })().catch(function () {}));
         return json({ ok: true, accepted: true, form: want, note: "generating; poll /api/runs" });
       }
       var out = await generate(env, want, {});
@@ -1292,26 +1243,29 @@ var worker_default = {
             var m = await sendMail(env, prow, out.slug, prow.day);
             out.mail = m;
           }
-        } catch (e) {
-          out.mail = { ok: false, error: String(e && e.message || e) };
-        }
+        } catch (e) { out.mail = { ok: false, error: String((e && e.message) || e) }; }
       }
       return json(out);
     }
+
     var keyQS = env.COMPANION_KEY && u.searchParams.get("k") ? "?k=" + u.searchParams.get("k") : "";
     var cookie = "";
     if (env.COMPANION_KEY && u.searchParams.get("k")) {
       cookie = "pc_key=" + env.COMPANION_KEY + "; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax";
     }
+
     if (p === "/" || p === "") {
       var filter = u.searchParams.get("form") || "";
-      var sql2 = filter ? "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT 200" : "SELECT slug, form, title, lede, word_count, day FROM companion_pieces ORDER BY id DESC LIMIT 200";
+      var sql2 = filter
+        ? "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT 200"
+        : "SELECT slug, form, title, lede, word_count, day FROM companion_pieces ORDER BY id DESC LIMIT 200";
       var st2 = filter ? env.PERSONAL.prepare(sql2).bind(filter) : env.PERSONAL.prepare(sql2);
       var rows = await st2.all();
       var res = html(renderIndex(rows.results || [], keyQS, filter));
       if (cookie) res.headers.set("Set-Cookie", cookie);
       return res;
     }
+
     if (p.indexOf("/p/") === 0) {
       var s = p.slice(3);
       var q = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(s).all();
@@ -1321,11 +1275,13 @@ var worker_default = {
       if (cookie) res2.headers.set("Set-Cookie", cookie);
       return res2;
     }
+
     return json({ error: { message: "not found", version: VERSION } }, 404);
   },
+
   async scheduled(event, env, ctx) {
-    var form = RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
-    ctx.waitUntil((async function() {
+    var form = RHYTHM[amsWeekday(new Date())];
+    ctx.waitUntil((async function () {
       var out = await generate(env, form, {});
       if (out.ok) {
         try {
@@ -1335,13 +1291,8 @@ var worker_default = {
             prow.link = "https://personal-companion.q08.workers.dev/p/" + out.slug + (env.COMPANION_KEY ? "?k=" + env.COMPANION_KEY : "");
             await sendMail(env, prow, out.slug, prow.day);
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
     })());
   }
 };
-export {
-  worker_default as default
-};
-//# sourceMappingURL=worker.js.map

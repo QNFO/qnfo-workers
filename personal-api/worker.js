@@ -24,7 +24,7 @@ function clampMaxTokens(requested, isReason) {
   return Math.min(Math.floor(n), isReason ? REASON_OUT_CAP : MAX_OUT_CAP);
 }
 __name(clampMaxTokens, "clampMaxTokens");
-var VERSION = "v3.2.2-maxout200k"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
+var VERSION = "v3.5.0-telemetry-normalize"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -656,6 +656,18 @@ function usageOf(resp) {
   return resp && resp.usage || resp && resp.result && resp.result.usage || {};
 }
 __name(usageOf, "usageOf");
+function estTok(x) {
+  let s = "";
+  if (Array.isArray(x)) {
+    for (const m of x) {
+      const c = m && m.content;
+      if (typeof c === "string") s += c;
+      if (c && Array.isArray(c)) { for (const p of c) { if (p && typeof p.text === "string") s += p.text; } }
+    }
+  } else s = String(x == null ? "" : x);
+  return Math.max(1, Math.ceil(s.length / 4));
+}
+__name(estTok, "estTok");
 // ---- MEDIA-INGEST-1 (2026-09-03) personal image store ----
 function persExtractMedia(messages) {
   const out = [];
@@ -1123,7 +1135,7 @@ var SHORT = "Personal Twin";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';
 var SW_JS = "self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));";
 var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#0b57d0"/><text x="96" y="122" font-size="84" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold">Q</text></svg>';
-async function logChat(env, q, asstMsg, thread, ua, model) {
+async function logChat(env, q, asstMsg, thread, ua, model, usage, latencyMs) {
   try {
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     const uaL = (ua || "").toLowerCase();
@@ -1136,6 +1148,10 @@ async function logChat(env, q, asstMsg, thread, ua, model) {
       env.PERSONAL.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source, ua) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(uId + "-u", thread, nowIso, "user", userMsg, model || "personal-twin-chat", src, String(ua || "").slice(0, 200)),
       env.PERSONAL.prepare("INSERT OR REPLACE INTO chat (id, thread, ts, role, content, model, source, ua) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(uId + "-a", thread, nowIso, "assistant", asst, model || "personal-twin-chat", src, String(ua || "").slice(0, 200))
     ]);
+    if (usage || latencyMs) {
+      await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS queries (id TEXT PRIMARY KEY, ts TEXT, model TEXT, source TEXT, thread TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, latency_ms INTEGER)").run();
+      await env.PERSONAL.prepare("INSERT OR REPLACE INTO queries (id, ts, model, source, thread, prompt_tokens, completion_tokens, latency_ms) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(uId, nowIso, model || "personal-twin-chat", src, thread, (usage && usage.prompt_tokens) || 0, (usage && usage.completion_tokens) || 0, latencyMs || 0).run();
+    }
     const day = nowIso.slice(0, 10);
     const ups = [];
     const uVecs = await embed(env, [userMsg.slice(0, 1e3)]);
@@ -1211,10 +1227,10 @@ var api_default = {
     if (path === "/v1/models") {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
       return json({ object: "list", data: [
-        { id: "personal-twin-chat", object: "model", created: 1787241600, owned_by: "quni" },
-        { id: "personal-twin-pro", object: "model", created: 1787241600, owned_by: "quni" },
-        { id: "personal-twin-reason", object: "model", created: 1787241600, owned_by: "quni" },
-        { id: "bge-base-en-v1.5", object: "model", created: 1787241600, owned_by: "quni" }
+        { id: "personal-twin-chat", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "vision"], contextWindow: 1048576, context_length: 1048576, maxOutput: 200000, max_output_tokens: 200000, _router: { tier: 0, family: "personal", reasoning: true, ctx: 1048576, temperature: 0.7, top_p: 0.9, vision: true, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "deepseek-v4-pro-0813" } },
+        { id: "personal-twin-pro", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 1310720, context_length: 1310720, maxOutput: 200000, max_output_tokens: 200000, _router: { tier: 0, family: "personal", reasoning: true, ctx: 1310720, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "glm-5.3" } },
+        { id: "personal-twin-reason", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 128000, context_length: 128000, maxOutput: 32768, max_output_tokens: 32768, _router: { tier: 0, family: "personal", reasoning: true, ctx: 128000, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "gpt-oss-120b" } },
+        { id: "bge-base-en-v1.5", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["embeddings"], contextWindow: 512, context_length: 512, maxOutput: 0, max_output_tokens: 0, _router: { tier: 0, family: "embedding", reasoning: false, ctx: 512, temperature: 0, top_p: 1, vision: false, tools: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok" } }
       ] });
     }
     if (path === "/v1/chat/completions" && request.method === "POST") {
@@ -1415,7 +1431,7 @@ var api_default = {
       if (body.stream) {
         if (loopFinal && !toolsUsed && loopUp) {
           const streamId = "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24);
-          ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, loopUp.model));
+          ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, (body && body.model) || loopUp.model, loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
           return new Response(fakeStream(loopFinal, streamId), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
         }
         const msgs = [{ role: "system", content: finalSystem }].concat(finalMsgs);
@@ -1440,7 +1456,7 @@ var api_default = {
           console.log("personal-api upstream stream error:", streamErrors.join(" | "));
           if (loopFinal) {
             const choice2 = { message: { role: "assistant", content: loopFinal }, finish_reason: "stop" };
-            ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, loopUp ? loopUp.model : "personal-twin-chat"));
+            ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, (body && body.model) || (loopUp ? loopUp.model : "personal-twin-chat"), loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
             return json({ id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, message: choice2.message, finish_reason: "stop" }], usage: {}, _meta: { elapsedMs: Date.now() - t0, retrieved: items.length, degraded, toolsUsed: toolRounds.length, streamFallback: true }, ...webSources ? { _web: { query: q.slice(0, 300), sources: webSources } } : {} });
           }
           return json({ error: { message: "upstream error", type: "upstream_error" } }, 502);
@@ -1504,7 +1520,7 @@ var api_default = {
           }
         });
         ctx.waitUntil(doneP.then(function() {
-          return logChat(env, q, acc, thread, request.headers.get("User-Agent") || "", "personal-twin-chat");
+          return logChat(env, q, acc, thread, request.headers.get("User-Agent") || "", "personal-twin-chat", { prompt_tokens: estTok(msgs), completion_tokens: estTok(acc) }, Date.now() - t0);
         }));
         return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
       }
@@ -1524,7 +1540,7 @@ var api_default = {
       const choice = up.body.choices && up.body.choices[0] || {};
       const usage = up.body.usage || {};
       const elapsedMs = Date.now() - t0;
-      ctx.waitUntil(logChat(env, q, choice.message ? choice.message.content || "" : "", thread, request.headers.get("User-Agent") || "", up.model));
+      ctx.waitUntil(logChat(env, q, choice.message ? choice.message.content || "" : "", thread, request.headers.get("User-Agent") || "", (body && body.model) || up.model, usage, elapsedMs));
       return json({
         id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24),
         object: "chat.completion",
