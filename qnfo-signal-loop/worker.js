@@ -1,4 +1,4 @@
-const VERSION = "1.0.0-l8-loop";
+const VERSION = "1.1.0-l8-consume";
 const WORKER = "qnfo-signal-loop";
 
 function json(data, status = 200) {
@@ -66,11 +66,45 @@ async function checkBoundary(env, worker, source) {
   return { worker, source, permitted: row ? (row.permitted === 1) : false, row: row || null };
 }
 
+async function runConsume(env, commit) {
+  await ensureSchema(env);
+  // L8 consumption: re-entry signals with eps>0 re-enter L1 triage via idea_proposals.
+  // Boundary-enforced: qnfo-signal-loop may consume only artifact_reentry (seeded in B).
+  const rows = await env.QNFO_AUDIT.prepare(
+    `SELECT * FROM signals WHERE source = 'artifact_reentry' AND status = 'new' AND evidential_weight > 0 ORDER BY created_at LIMIT 25`
+  ).all();
+  const out = { candidate: (rows.results || []).length, consumed: 0, proposals: 0, skipped_no_questions: 0, skipped_boundary: 0, errors: 0 };
+  for (const s of (rows.results || [])) {
+    let oq = [];
+    try { oq = JSON.parse(s.open_questions || "[]"); } catch (e) { oq = []; }
+    if (!Array.isArray(oq) || !oq.length) { out.skipped_no_questions++; continue; }
+    const b = await env.QNFO_AUDIT.prepare(
+      `SELECT permitted FROM signal_worker_boundary WHERE worker = 'qnfo-signal-loop' AND source = 'artifact_reentry'`
+    ).first();
+    if (!b || Number(b.permitted) !== 1) { out.skipped_boundary++; continue; }
+    if (!commit) { out.consumed++; out.proposals += oq.length; continue; }
+    let ok = true;
+    for (const q of oq) {
+      try {
+        await env.QNFO_AUDIT.prepare(
+          `INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?,?,?,?,?,?)`
+        ).bind("auto-reentry", "Re-entry from " + String(s.source_ref || "").slice(0, 120) + ": " + String(q).slice(0, 1800), "auto", "new", "l8-reentry", new Date().toISOString()).run();
+        out.proposals++;
+      } catch (e) { out.errors++; ok = false; }
+    }
+    if (ok) await env.QNFO_AUDIT.prepare(`UPDATE signals SET status = 'consumed' WHERE id = ?`).bind(s.id).run();
+    out.consumed++;
+  }
+  return out;
+}
+
 export default {
   async scheduled(event, env) {
     if (event.cron === "0 * * * *") {
-      try { const r = await runReentry(env); console.log(JSON.stringify({ worker: WORKER, ...r })); }
+      try { const r = await runReentry(env); console.log(JSON.stringify({ worker: WORKER, reentry: r })); }
       catch (e) { console.log(WORKER + " reentry error: " + e.message); }
+      try { const c = await runConsume(env, true); console.log(JSON.stringify({ worker: WORKER, consume: c })); }
+      catch (e) { console.log(WORKER + " consume error: " + e.message); }
     }
   },
   async fetch(request, env) {
@@ -85,6 +119,11 @@ export default {
       if (p === "/run/reentry") {
         const r = await runReentry(env);
         return json({ ok: true, ...r });
+      }
+      if (p === "/run/consume") {
+        const commit = url.searchParams.get("commit") === "1";
+        const r = await runConsume(env, commit);
+        return json({ ok: true, commit, ...r });
       }
       if (p === "/signals") {
         const lim = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
