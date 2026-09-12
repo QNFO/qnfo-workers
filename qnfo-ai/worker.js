@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.24.0-telemetry-completeness"; // OUT-32K-1 (2026-09-08): MAX_OUT WA ceilings raised per 32K-output mandate (cap-halving retry + contextAwareTarget keep 400s self-healing)
+var VERSION = "5.25.1-anomaly-dedup"; // OUT-32K-1 (2026-09-08): MAX_OUT WA ceilings raised per 32K-output mandate (cap-halving retry + contextAwareTarget keep 400s self-healing)
 // v5.21.2 (FLEET-SELF-AWARE-1): autoRoute excludes degraded models (calibration GW-DEGRADE-1 marks
 // recurring gateway-failure classes degraded); /v1/models exposes health status for introspection.
 // GW-ERROR-SELFHEAL-1 2026-09-05: runWorkersAI schema-adaptive content-shape + 429 retry // ROLE-LABEL-NORMALIZE-1 2026-09-04 (user directive): strip a leading transport role-label wrapper (User message: / Assistant message: / user: / Human: / AI:) from first-user content BEFORE thread-slug + auto-express idea-text + chat-log/feed content, so ChatBox wrapped & clean sends of the same turn collapse to ONE ideas.qnfo thread+title (was: "User message:\n<idea>" made its own t-user-message-* thread duplicating the clean sibling) // MEDIA-NOLOG-1 2026-09-04: mediaCapture skipped for QNFO-AI-Calibration UA - calibration vision probes no longer create media_objects rows / R2 qnfo-media objects (was 1 deduped row per cycle after every purge) // NOLOG-1 2026-09-04: logQuery now skips ai_queries for internal/machine probes (was logging everything; chatbox already filtered) and QNFO-AI-Calibration UA joins the machine probe regex - calibration sweeps no longer pollute query-history/log tables // CAL-HEALTH-1 2026-09-04: ai_model_health consumption - auto routing deprioritizes failing models (loadModelHealth cached 60s) + /v1/models merges live ctx/vision/reasoning overrides written by the qnfo-ai-calibration worker (self-correcting advertisement) // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
@@ -2031,6 +2031,53 @@ var SHORT = "QNFO Notes";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';
 var SW_JS = "self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));";
 var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#0b57d0"/><text x="96" y="122" font-size="84" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold">Q</text></svg>';
+// RETENTION-1 (2026-09-12): prune analytics tables; shared by the daily cron + /v1/admin/maintenance.
+async function runRetention(env) {
+  const out = { ai_queries: 0, chatbox_conversations: 0, media_objects: 0 };
+  if (!env.QNFO_AUDIT) return out;
+  const c180 = new Date(Date.now() - 180 * 864e5).toISOString();
+  const c21 = new Date(Date.now() - 21 * 864e5).toISOString();
+  try { const r = await env.QNFO_AUDIT.prepare("DELETE FROM ai_queries WHERE ts < ?1").bind(c180).run(); out.ai_queries = (r.meta && r.meta.changes) || 0; } catch (e) { }
+  try { const r = await env.QNFO_AUDIT.prepare("DELETE FROM chatbox_conversations WHERE ts < ?1").bind(c180).run(); out.chatbox_conversations = (r.meta && r.meta.changes) || 0; } catch (e) { }
+  try { const r = await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE ts < ?1").bind(c21).run(); out.media_objects = (r.meta && r.meta.changes) || 0; } catch (e) { }
+  return out;
+}
+
+// ANOMALY-ALERT-1 (2026-09-12): daily threshold check on ai_queries -> qnfo-audit.alerts (the
+// canonical alert channel; deduped so one breach alerts at most once per day).
+async function detectAnomalies(env) {
+  const out = { checked: false, raised: [] };
+  if (!env.QNFO_AUDIT) return out;
+  const since = new Date(Date.now() - 864e5).toISOString();
+  let s = null;
+  try {
+    s = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(cost_usd),0) cost, COALESCE(SUM(CASE WHEN latency_ms > 60000 THEN 1 ELSE 0 END),0) slow, COALESCE(SUM(CASE WHEN latency_ms > 300000 THEN 1 ELSE 0 END),0) very_slow, COALESCE(SUM(CASE WHEN response IS NULL OR response = '' THEN 1 ELSE 0 END),0) empty FROM ai_queries WHERE ts >= ?1").bind(since).first();
+  } catch (e) { return out; }
+  if (!s || !s.n) return out;
+  out.checked = true;
+  // DEDUP-KEY-1: dedup on a STABLE kind prefix (message text embeds volatile counts and would
+  // otherwise raise a fresh alert every run). One alert per kind per day.
+  const cand = [];
+  if (s.cost > 0.5) cand.push(["cost-spike", "warning", "cost 24h $" + Number(s.cost).toFixed(4) + " exceeds $0.50 (" + s.n + " queries)"]);
+  const slowPct = Math.round(100 * s.slow / s.n);
+  if (slowPct > 15) cand.push(["slow-share", "warning", "latency: " + slowPct + "% of 24h queries >60s (" + s.slow + "/" + s.n + ")"]);
+  if (s.very_slow > 0) cand.push(["latency-max", "warning", "latency: " + s.very_slow + " 24h queries exceeded 300s"]);
+  const emptyPct = Math.round(100 * s.empty / s.n);
+  if (emptyPct > 20) cand.push(["empty-rate", "warning", "quality: " + emptyPct + "% of 24h responses empty (" + s.empty + "/" + s.n + ")"]);
+  for (const c of cand) {
+    const kind = c[0];
+    const msg = kind + ": " + c[2];
+    try {
+      const dup = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM alerts WHERE source = 'qnfo-ai-anomaly' AND date(created_at) = date('now') AND message LIKE ?1").bind(kind + ":%").first();
+      if (!(dup && dup.n)) {
+        await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES ('qnfo-ai-anomaly', ?1, ?2)").bind(c[1], msg.slice(0, 500)).run();
+        out.raised.push(msg);
+      }
+    } catch (e) { }
+  }
+  return out;
+}
+
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -2354,17 +2401,18 @@ var worker_default = {
       const pr = await mediaProcess(env, id);
       return json(pr, pr.ok ? 200 : 502);
     }
+    if (path === "/v1/admin/maintenance" && method === "POST") {
+      const authH = request.headers.get("Authorization") || "";
+      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      const retention = await runRetention(env);
+      const anomalies = await detectAnomalies(env);
+      return json({ ok: true, retention, anomalies });
+    }
     return json({ error: "Not found" }, 404);
   },
   async scheduled(event, env, ctx) {
-    try {
-      const cutoff = new Date(Date.now() - 180 * 864e5).toISOString();
-      await env.QNFO_AUDIT.prepare("DELETE FROM ai_queries WHERE ts < ?1").bind(cutoff).run();
-      await env.QNFO_AUDIT.prepare("DELETE FROM chatbox_conversations WHERE ts < ?1").bind(cutoff).run();
-      await env.QNFO_AUDIT.prepare("DELETE FROM media_objects WHERE ts < ?1").bind(new Date(Date.now() - 21 * 864e5).toISOString()).run();
-    } catch (e) {
-      console.log("retention prune failed:", e && e.message || e);
-    }
+    try { await runRetention(env); } catch (e) { console.log("retention failed:", e && e.message || e); }
+    try { await detectAnomalies(env); } catch (e) { console.log("anomaly detect failed:", e && e.message || e); }
   }
 };
 export {
