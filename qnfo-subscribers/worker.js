@@ -1,10 +1,13 @@
 // qnfo-subscribers — qnfo.org email capture + weekly research digest
 //
 // Canonical source: QNFO/qnfo-workers/qnfo-subscribers/worker.js
-// Purpose: own the newsletter subscriber list (qnfo-audit.subscribers), send a
-//          confirmation email on sign-up, and mail a weekly digest of newly
+// Purpose: own the newsletter subscriber list (qnfo-audit.subscribers), run
+//          double opt-in confirmation, and mail a weekly digest of newly
 //          published papers. The public form lives on qnfo.org; the gateway
-//          proxies /api/subscribe and /api/unsubscribe here (same-origin UX).
+//          proxies /api/subscribe, /api/confirm and /api/unsubscribe here.
+//
+// Double opt-in: a sign-up is stored as status='pending' and only becomes
+// 'subscribed' (and thus digest-eligible) after the confirmation link is opened.
 //
 // Bindings:
 //   AUDIT       D1   qnfo-audit      (subscribers, subscriber_digest_runs)
@@ -13,7 +16,7 @@
 // Secret:
 //   SUBSCRIBERS_TOKEN  Bearer token for POST /run/digest (manual trigger)
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.1";
 const SITE = "https://qnfo.org";
 const FROM = { email: "qnfo@qnfo.org", name: "QNFO" };
 const MAX_RECIPIENTS = 1000;
@@ -56,6 +59,7 @@ async function sha256Hex(s) {
 
 function fmtDate(s) { return String(s || "").slice(0, 10); }
 function unsubUrl(token) { return SITE + "/api/unsubscribe?token=" + encodeURIComponent(token); }
+function confirmUrl(token) { return SITE + "/api/confirm?token=" + encodeURIComponent(token); }
 
 async function sendEmail(env, to, subject, text) {
   if (!env.SEND_EMAIL) return { error: "SEND_EMAIL binding missing" };
@@ -67,19 +71,20 @@ async function sendEmail(env, to, subject, text) {
   }
 }
 
-function welcomeText(token) {
+function confirmText(token) {
   return [
     "Thanks for subscribing to QNFO.",
     "",
-    "QNFO publishes open-science research on computing paradigms \u2014 p-adic mathematics,",
-    "ultrametric geometry, topological quantum computation, and the thermodynamic reality",
-    "of computation. Everything carries a Zenodo DOI and is independently verifiable.",
+    "Please confirm your subscription by opening this link:",
     "",
-    "You will receive a short weekly digest of new papers: titles, links and DOIs, nothing else.",
+    confirmUrl(token),
+    "",
+    "Once confirmed you will receive a short weekly digest of new QNFO papers:",
+    "titles, links and DOIs, nothing else.",
+    "",
+    "If you did not request this, ignore this message - no further email will be sent.",
     "",
     "Browse the corpus: " + SITE + "/papers",
-    "",
-    "Unsubscribe at any time: " + unsubUrl(token),
     "",
     "\u2014 QNFO"
   ].join("\n");
@@ -111,7 +116,7 @@ async function handleSubscribe(request, env) {
   try { body = await request.json(); } catch (e) { body = {}; }
   const email = normEmail(body && body.email);
   const hp = String((body && (body.hp || body.website)) || "");
-  if (hp) return json({ ok: true });
+  if (hp) return json({ ok: true, pending: true });
 
   if (!validEmail(email)) return json({ ok: false, error: "Please enter a valid email address." }, 400);
 
@@ -137,23 +142,46 @@ async function handleSubscribe(request, env) {
     let token = existing && existing.unsub_token ? existing.unsub_token : "";
     if (!token) token = crypto.randomUUID().replace(/-/g, "");
 
+    // An already-confirmed subscriber stays confirmed; anything else becomes pending.
     await env.AUDIT.prepare(
       "INSERT INTO subscribers (email, status, source, unsub_token, ip_hash, user_agent, created_at) " +
-      "VALUES (?1, 'subscribed', ?2, ?3, ?4, ?5, datetime('now')) " +
-      "ON CONFLICT(email) DO UPDATE SET status='subscribed', updated_at=datetime('now'), source=excluded.source"
+      "VALUES (?1, 'pending', ?2, ?3, ?4, ?5, datetime('now')) " +
+      "ON CONFLICT(email) DO UPDATE SET " +
+      "status = CASE WHEN subscribers.status = 'subscribed' THEN 'subscribed' ELSE 'pending' END, " +
+      "updated_at = datetime('now'), source = excluded.source"
     ).bind(email, source, token, ipHash, ua).run();
 
-    let welcomed = !!(existing && existing.welcomed_at);
-    if (!welcomed) {
-      const res = await sendEmail(env, email, "You're subscribed to QNFO research", welcomeText(token));
+    const alreadyConfirmed = !!(existing && existing.status === "subscribed");
+    let sent = false;
+    if (!alreadyConfirmed) {
+      const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token));
       if (res && res.ok) {
-        welcomed = true;
+        sent = true;
         await env.AUDIT.prepare("UPDATE subscribers SET welcomed_at = datetime('now') WHERE email = ?1").bind(email).run();
       }
     }
-    return json({ ok: true, welcomed: welcomed, resubscribed: !!(existing && existing.status === "unsubscribed") });
+    return json({ ok: true, pending: !alreadyConfirmed, confirmation_sent: sent });
   } catch (e) {
     return json({ ok: false, error: "Sign-up failed. Please try again shortly." }, 500);
+  }
+}
+
+async function handleConfirm(request, env) {
+  const u = new URL(request.url);
+  const token = u.searchParams.get("token") || "";
+  if (!token) return html("<h1>Missing link</h1><p>This confirmation link is incomplete.</p>", 400);
+  try {
+    const row = await env.AUDIT.prepare("SELECT email, status FROM subscribers WHERE unsub_token = ?1").bind(token).first();
+    if (!row) return html("<h1>Link not recognised</h1><p>This confirmation link is invalid.</p>", 404);
+    if (row.status === "subscribed") {
+      return html("<h1>Already confirmed</h1><p>Your subscription is active. The next digest will reach you by email.</p>");
+    }
+    await env.AUDIT.prepare(
+      "UPDATE subscribers SET status='subscribed', confirmed_at=datetime('now'), updated_at=datetime('now') WHERE unsub_token = ?1"
+    ).bind(token).run();
+    return html("<h1>Subscription confirmed</h1><p>You are on the list. The next digest of new QNFO papers will reach you by email.</p>");
+  } catch (e) {
+    return html("<h1>Something went wrong</h1><p>Please try again later.</p>", 500);
   }
 }
 
@@ -215,7 +243,7 @@ async function runDigest(env, opts) {
     return { ok: true, skipped: "no-new-papers", papers: 0, recipients: subs.length, sent: 0, failed: 0 };
   }
   if (!subs.length) {
-    await recordRun(env, since, now, papers.length, 0, 0, 0, "skipped", "no subscribers");
+    await recordRun(env, since, now, papers.length, 0, 0, 0, "skipped", "no confirmed subscribers");
     return { ok: true, skipped: "no-subscribers", papers: papers.length, recipients: 0, sent: 0, failed: 0 };
   }
 
@@ -232,25 +260,34 @@ async function runDigest(env, opts) {
     }
   }
 
-  try {
-    await env.AUDIT.prepare("UPDATE subscribers SET last_digest_at = datetime('now') WHERE status='subscribed'").run();
-  } catch (e) { /* best-effort */ }
+  // Record delivery evidence on the subscribers that actually received the digest.
+  if (sent > 0) {
+    try {
+      await env.AUDIT.prepare(
+        "UPDATE subscribers SET last_digest_at = datetime('now') WHERE status='subscribed'"
+      ).run();
+    } catch (e) { /* best-effort */ }
+  }
 
   await recordRun(env, since, now, papers.length, subs.length, sent, failed, failed ? "partial" : "ok", null);
   return { ok: true, papers: papers.length, recipients: subs.length, sent: sent, failed: failed };
 }
 
 async function health(env) {
-  let subscribers = null;
+  let confirmed = null, pending = null;
   try {
-    const r = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM subscribers WHERE status='subscribed'").first();
-    subscribers = r ? r.c : null;
-  } catch (e) { subscribers = "err"; }
+    // COALESCE: SUM() over an empty table is NULL, which would report "unknown"
+    // instead of the true zero. Counts must be numbers at all times.
+    const r = await env.AUDIT.prepare("SELECT COALESCE(SUM(status='subscribed'),0) AS c, COALESCE(SUM(status='pending'),0) AS p, COUNT(*) AS total FROM subscribers").first();
+    confirmed = r ? Number(r.c) : null;
+    pending = r ? Number(r.p) : null;
+  } catch (e) { confirmed = "err"; }
   return json({
     status: "ok",
     worker: "qnfo-subscribers",
     version: VERSION,
-    subscribers: subscribers,
+    subscribers: confirmed,
+    pending: pending,
     send_email: !!env.SEND_EMAIL,
     audit_db: !!env.AUDIT,
     living_db: !!env.LIVING
@@ -267,6 +304,7 @@ export default {
     }
     if (p === "/health" && method === "GET") return health(env);
     if (p === "/subscribe" && method === "POST") return handleSubscribe(request, env);
+    if (p === "/confirm" && (method === "GET" || method === "POST")) return handleConfirm(request, env);
     if (p === "/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribe(request, env);
     if (p === "/run/digest" && method === "POST") {
       const auth = request.headers.get("Authorization") || "";
