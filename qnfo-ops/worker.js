@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.9.5";
+var VERSION = "2.9.6";
 // SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
 function firstFrameIdx(s) {
   if (!s || typeof s !== 'string') return -1;
@@ -1760,7 +1760,23 @@ async function registryRefresh(env) {
       rich++;
     }
   }
-  return { ok: true, workers: apiList.length, richSelfDoc: rich, ts: now };
+  let pruned = -1;
+  if (apiList.length > 0) {
+    const liveSet = new Set(apiList.map(function(w) { return w.id; }));
+    liveSet.add("qnfo-ops");
+    for (const f of FLEET) liveSet.add(f.name);
+    try {
+      const allRows = await env.QNFO_AUDIT.prepare("SELECT service FROM service_registry WHERE kind = 'worker'").all();
+      const stale = (allRows.results || []).map(function(r) { return r.service; }).filter(function(s) { return s && !liveSet.has(s); });
+      for (const s2 of stale) {
+        await env.QNFO_AUDIT.prepare("DELETE FROM service_registry WHERE service = ?1").bind(s2).run();
+      }
+      pruned = stale.length;
+    } catch (e) {
+      pruned = -1;
+    }
+  }
+  return { ok: true, workers: apiList.length, richSelfDoc: rich, pruned, ts: now };
 }
 __name(registryRefresh, "registryRefresh");
 async function registryList(env) {
@@ -1783,6 +1799,17 @@ async function registryGet(env, service) {
   }
 }
 __name(registryGet, "registryGet");
+async function registryDelete(env, service) {
+  if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
+  if (!service || !/^[a-z0-9-]+$/.test(service)) return { ok: false, error: "invalid service name" };
+  try {
+    const res = await env.QNFO_AUDIT.prepare("DELETE FROM service_registry WHERE service = ?1").bind(service).run();
+    return { ok: true, service, deleted: res && res.meta && res.meta.changes ? res.meta.changes : 0 };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+__name(registryDelete, "registryDelete");
 async function ensureJobsSchema(env) {
   if (!env.QNFO_AUDIT) return;
   try {
@@ -2036,6 +2063,11 @@ var worker_default = {
         return json({ error: "invalid JSON" }, 400);
       }
       return json(await registryRegister(env, body));
+    }
+    if (path.startsWith("/registry/") && method === "DELETE") {
+      if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
+      const svc = decodeURIComponent(path.slice("/registry/".length));
+      return json(await registryDelete(env, svc));
     }
     if (path === "/analytics" && method === "GET") return json(await cfAnalytics(env));
     if (path === "/telemetry" && method === "GET") {
