@@ -30,26 +30,40 @@
 // reader's own recent events. So the model opens on his life, in his voice, and
 // cites him by name where it is quoting rather than inhabiting.
 //
-// That seam is the defect this module names: the piece cannot say "I am a model
-// writing about you", and it does not want to say "I attended", so it says
-// "Rowan rated it 5 out of 5" and then continues as "I". A reader who knows the
-// facts will ask who "I" is. There is no answer in the text, because there is no
-// narrator in the text other than the reader.
-//
-// THREE CHECKS
+// FOUR CHECKS
 //   1. impersonation        - the writer asserting lived experience
-//   2. attribution-seam     - the reader named in the third person inside a
-//                             first-person piece
-//   3. invented-particular  - scene detail the record does not hold
+//   2. attribution-seam     - the reader named in the third person as the subject
+//                             of an experience verb, inside a first-person piece
+//   3. reader-as-subject    - the reader's name in the possessive ("Rowan's own
+//                             handwriting is not the subject here"), which names
+//                             him as an object of study. Live occurrence: the
+//                             serial "The Hand That Signs" (same day). This is a
+//                             review flag, not proof of impersonation: a piece
+//                             may legitimately discuss a real person's property.
+//   4. invented-particular  - scene detail the record does not hold (headcount,
+//                             room, staged scene), scoped to sentences that
+//                             mention a recorded venue
+//
+// REVISION 2 (same day, after running the checks over all four live pieces)
+// Revision 1 flagged particulars anywhere in the text. Measured against the other
+// published essay ("The Walker's Argument", same day), that produced false
+// positives on hypothetical and attributed prose: "Two people walking side by
+// side", "Reading groups that meet in a seminar room", and, in "The Sector That
+// Has No Ground Truth", "those stations hold as few as eighty people" - none of
+// which is a claim about a recorded event. A false block is as damaging as a
+// false pass, so particulars are now checked only in sentences that mention a
+// venue the record actually holds. The cost is a known miss: a piece that
+// recounts a recorded event without naming the venue will not be flagged on
+// particulars. That trade is deliberate and is pinned by tests.
 //
 // SCOPE / KNOWN LIMITS
-// These are surface checks, not a proof of authorship. They flag spans for a
-// human or a policy to judge; they do not decide. A piece may legitimately name
-// a real person in the third person (a review, a quotation) - check 2 is scoped
-// to text that also speaks in the first person, and voice.test.js pins that
-// scoping with a negative control. A headcount is flagged whenever it appears,
-// because no record row stores one; if a headcount is ever added to the record,
-// this check must be given the row rather than left as a blanket rule.
+// Surface checks, not proof of authorship. They flag spans for a policy or a
+// human to judge; they do not decide. Check 2 is scoped to text that also speaks
+// in the first person (a third-person review naming a real person is not
+// flagged). Check 1's "my week|trip|energy|attention|travel" list is
+// deliberately narrow but not exact: an abstract use such as "my attention was on
+// the argument" would be flagged. If the record ever gains a headcount or a room,
+// these checks must be given that row rather than left as blanket rules.
 
 const EXP_VERBS = ['rated', 'attended', 'sat', 'visited', 'travelled', 'traveled', 'spoke', 'presented'];
 
@@ -78,6 +92,25 @@ export function hasFirstPerson(text) {
   return /(^|[\s(])I[\s,']/.test(s) || /\bmy\b/i.test(s) || /\bme\b/i.test(s) || /\bwe\b/i.test(s);
 }
 
+// Sentences that mention a recorded venue. When no venues are supplied, fall back
+// to sentences that mention the reader or speak in the first person, so the check
+// still has a scope rather than silently covering everything.
+function venueScope(flat, venues, names) {
+  const sents = flat.split(/(?<=[.!?])\s+/);
+  const hit = v => sents.filter(s => {
+    const l = s.toLowerCase();
+    if (l.indexOf(String(v).toLowerCase()) >= 0) return true;
+    const head = String(v).split(',')[0].trim().toLowerCase();
+    return head.length >= 4 && l.indexOf(head) >= 0;
+  });
+  let scope = [];
+  for (const v of venues) scope = scope.concat(hit(v));
+  if (!venues.length) {
+    scope = sents.filter(s => names.some(n => s.indexOf(n) >= 0) || hasFirstPerson(s));
+  }
+  return scope.join(' ');
+}
+
 // opts: { names: ['Rowan'], venues: ['Wolfson College, Cambridge', ...] }
 // Returns [{ kind, span, why }]. Empty array = nothing to block on voice grounds.
 export function checkVoice(text, opts) {
@@ -85,7 +118,6 @@ export function checkVoice(text, opts) {
   const names = (o.names && o.names.length) ? o.names : ['Rowan'];
   const venues = o.venues || [];
   const flat = String(text || '').replace(/\s+/g, ' ');
-  const low = flat.toLowerCase();
   const v = [];
   let m;
 
@@ -95,6 +127,15 @@ export function checkVoice(text, opts) {
     if (m) v.push({
       kind: 'impersonation', span: m[0],
       why: 'first-person claim of lived experience; the writer attended nothing'
+    });
+  }
+
+  // 3. reader-as-subject
+  for (const n of names) {
+    m = new RegExp('\\b' + esc(n) + "'s\\b").exec(flat);
+    if (m) v.push({
+      kind: 'reader-as-subject', span: m[0],
+      why: 'reader named in the possessive: the piece is treating his life as material'
     });
   }
 
@@ -110,28 +151,32 @@ export function checkVoice(text, opts) {
     }
   }
 
-  // 3. invented particulars
-  HEADCOUNT.lastIndex = 0;
-  while ((m = HEADCOUNT.exec(flat))) {
-    v.push({
-      kind: 'invented-particular', span: m[0],
-      why: 'headcount: no record row stores attendance numbers'
-    });
-  }
-  for (const r of ROOMS) {
-    if (low.indexOf(r) < 0) continue;
-    if (venues.some(x => String(x).toLowerCase().indexOf(r) >= 0)) continue;
-    v.push({
-      kind: 'invented-particular', span: r,
-      why: 'room-level venue detail; the record stores the venue only as a coarse string'
-    });
-  }
-  for (const s of SCENES) {
-    if (low.indexOf(s) < 0) continue;
-    v.push({
-      kind: 'invented-particular', span: s,
-      why: 'staged scene detail; no record row describes the room'
-    });
+  // 4. invented particulars, inside recorded-venue sentences only
+  const scoped = venueScope(flat, venues, names);
+  if (scoped) {
+    const sl = scoped.toLowerCase();
+    HEADCOUNT.lastIndex = 0;
+    while ((m = HEADCOUNT.exec(scoped))) {
+      v.push({
+        kind: 'invented-particular', span: m[0],
+        why: 'headcount: no record row stores attendance numbers'
+      });
+    }
+    for (const r of ROOMS) {
+      if (sl.indexOf(r) < 0) continue;
+      if (venues.some(x => String(x).toLowerCase().indexOf(r) >= 0)) continue;
+      v.push({
+        kind: 'invented-particular', span: r,
+        why: 'room-level venue detail; the record stores the venue only as a coarse string'
+      });
+    }
+    for (const s of SCENES) {
+      if (sl.indexOf(s) < 0) continue;
+      v.push({
+        kind: 'invented-particular', span: s,
+        why: 'staged scene detail; no record row describes the room'
+      });
+    }
   }
 
   return v;
