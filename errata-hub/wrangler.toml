@@ -1,0 +1,30 @@
+name = "errata-hub"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+[ai]
+binding = "AI"
+
+# binding BROWSER: type=browser (see deployed config)
+
+# secret: ERRATA_TOKEN -> wrangler secret put ERRATA_TOKEN
+
+[[d1_databases]]
+binding = "GRAPH_DB"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[r2_buckets]]
+binding = "MIRROR"
+bucket_name = "qnfo-releases"
+
+[[d1_databases]]
+binding = "PAPERS_DB"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+# binding SEND_EMAIL: type=send_email (see deployed config)
+
+[[d1_databases]]
+binding = "WATCH_DB"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# secret: ZENODO_TOKEN -> wrangler secret put ZENODO_TOKEN

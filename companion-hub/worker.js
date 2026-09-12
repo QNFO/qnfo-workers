@@ -1,8 +1,9 @@
+var personalcompanionMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.0";
+var VERSION = "v1.0.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -148,12 +149,6 @@ var P_CRITIQUE = L(
   "objection: is the stated objection the strongest available one, or a straw man?",
   "voice: plain scholarly prose free of filler, tells, and self-reference?",
   'Return JSON only: {"specificity":n,"argument":n,"bridge":n,"objection":n,"voice":n,"verdict":"accept" or "reject","why":"one sentence"}'
-);
-var P_BRIDGE = L(
-  "You tighten a cross-domain bridge until it is precise and falsifiable.",
-  "Given a piece and its stated bridge, rewrite the bridge so that it names the SPECIFIC mechanism or idea on each side, states the EXACT relationship (isomorphism, shared invariant, limiting case, or an analogy honestly labelled), and is falsifiable: say what observation would break it.",
-  'If the bridge is currently a vague rhyme dressed as a theorem, replace it with the precise correspondence you can defend. If you cannot defend a structural correspondence, downgrade it to "proposed analogy" and say so.',
-  'Return JSON only: {"bridge":{"a":"...","b":"...","kind":"structural" or "proposed analogy"},"bridge_claim":"one precise sentence","objection":"strongest objection to the bridge"}'
 );
 function json(obj, status) {
   return new Response(JSON.stringify(obj, null, 2), {
@@ -883,23 +878,6 @@ async function critiquePiece(env, piece, form) {
   return parseJsonLoose(r.text);
 }
 __name(critiquePiece, "critiquePiece");
-async function sharpenBridge(env, piece, form) {
-  try {
-    var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6e3);
-    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS);
-    var j = parseJsonLoose(r && r.text);
-    if (j && j.bridge && j.bridge.a && j.bridge.b) {
-      piece.bridge = j.bridge;
-      if (j.bridge_claim) piece.bridge.claim = j.bridge_claim;
-      if (j.objection) piece.objection = j.objection;
-      return true;
-    }
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-__name(sharpenBridge, "sharpenBridge");
 function validatePiece(piece, form) {
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
@@ -1097,7 +1075,6 @@ async function generate(env, form, opts) {
         await logRun(env, form, model, topic.id, "rejected", "too similar to " + dup.slug + " (" + dup.score.toFixed(3) + ")", Date.now() - t0);
         continue;
       }
-      await sharpenBridge(env, piece, form);
       await logRun(env, form, model, topic.id, "stage", "critique", Date.now() - t0);
       var crit = await critiquePiece(env, piece, form);
       var q = crit || {};
@@ -1112,7 +1089,7 @@ async function generate(env, form, opts) {
           worstName = dims[d];
         }
       }
-      if (worst < ACCEPT_FLOOR) {
+      if (worst < ACCEPT_FLOOR || String(q.verdict || "").toLowerCase() === "reject") {
         await logRun(env, form, model, topic.id, "rejected", "critique " + worstName + "=" + worst + " :: " + String(q.why || ""), Date.now() - t0);
         feedback = "weakest dimension was " + worstName + ". " + String(q.why || "");
         q.gate = "forced";
@@ -1341,7 +1318,771 @@ var worker_default = {
     })());
   }
 };
-export {
-  worker_default as default
+return { default: worker_default };
+})();
+var personallifeindexerMod = (function(){
+const QNFO_VERSION = "personal-life-indexer/fabric-20260910";
+const VERSION = "2.5.0+index-auth";
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// indexer.js
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var indexer_default = {
+  async scheduled(event, env, ctx) {
+    console.log(`[indexer] cron: ${event.cron} \u2014 one slice of 400`);
+    ctx.waitUntil(indexAll(env, { limit: 300, scanCap: 400 }));
+  },
+  async fetch(request, env, ctx) {
+    try {
+      const url = new URL(request.url);
+      const cors = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      };
+      if (request.method === "OPTIONS") return new Response(null, { headers: cors, status: 204 });
+      if (url.pathname === "/health") {
+        return json({ ok: true, worker: "personal-life-indexer", index: "personal-life", version: VERSION }, cors);
+      }
+      if (url.pathname === "/index") {
+        const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        if (token !== env.INDEX_TOKEN) {
+          return json({ ok: false, error: "unauthorized \u2014 X-Index-Token required" }, cors, 401);
+        }
+        if (request.method !== "POST" && request.method !== "GET") return json({ ok: false, error: "method" }, cors, 405);
+        const limit = Number(url.searchParams.get("limit") || 200);
+        const scanCap = Number(url.searchParams.get("scanCap") || 400);
+        const prefix = url.searchParams.get("prefix") || "";
+        const cursor = url.searchParams.get("cursor") || void 0;
+        const result = await indexAll(env, { limit, scanCap, prefix, cursor });
+        return json({ ok: true, ...result }, cors);
+      }
+      if (url.pathname === "/files" && request.method === "GET") {
+        const prefix = url.searchParams.get("prefix") || "";
+        const limit = Number(url.searchParams.get("limit") || 50);
+        const rows = await env.PERSONAL.prepare(
+          "SELECT path, type, size, modified, indexed_at, chunks, category FROM files WHERE path LIKE ?1 ORDER BY modified DESC LIMIT ?2"
+        ).bind(`%${prefix}%`, limit).all();
+        return json({ ok: true, files: rows.results, count: rows.results.length }, cors);
+      }
+      return json({ ok: false, error: "not found" }, cors, 404);
+    } catch (e) {
+      return json({ ok: false, error: "EXCEPTION: " + (e && e.message || String(e)) }, {}, 500);
+    }
+  }
 };
-//# sourceMappingURL=worker.js.map
+async function json(obj, cors = {}, status = 200) {
+  return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...cors } });
+}
+__name(json, "json");
+__name2(json, "json");
+var TEXT_EXTS = /* @__PURE__ */ new Set(["md", "txt", "csv", "tsv", "json", "html", "htm", "xml", "yaml", "yml", "tex", "bib", "mermaid", "log", "ini", "cfg", "conf", "rtf", "mdx", "markdown"]);
+var NOISE_FRAGMENTS = ["node_modules", "/.git/", ".wrangler/", "/dist/", "/build/", "/.obsidian/workspace", "desktop.ini"];
+function extOf(key) {
+  const i = key.lastIndexOf(".");
+  return i >= 0 ? key.slice(i + 1).toLowerCase() : "";
+}
+__name(extOf, "extOf");
+__name2(extOf, "extOf");
+function sanitize(s, max = 800) {
+  return String(s || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ").replace(/[\uD800-\uDFFF]/g, "").trim().slice(0, max);
+}
+__name(sanitize, "sanitize");
+__name2(sanitize, "sanitize");
+async function getObjectText(r2, key, maxBytes = 4 * 1024 * 1024) {
+  try {
+    const obj = await r2.get(key);
+    if (!obj || obj.size > maxBytes) return null;
+    const ext = extOf(key);
+    if (!TEXT_EXTS.has(ext)) return null;
+    const buf = await obj.arrayBuffer();
+    return new TextDecoder("utf-8", { fatal: false }).decode(buf);
+  } catch (e) {
+    return null;
+  }
+}
+__name(getObjectText, "getObjectText");
+__name2(getObjectText, "getObjectText");
+function chunkText(text, size = 900, overlap = 120) {
+  const chunks = [];
+  const clean = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").trim();
+  const n = clean.length;
+  if (n < 60) return chunks;
+  let i = 0;
+  while (i < n) {
+    let end = i + size;
+    if (end > n) end = n;
+    else {
+      let lastNl = -1;
+      for (let j = i; j < end; j++) if (clean.charCodeAt(j) === 10) lastNl = j;
+      if (lastNl > i + size * 0.5) end = lastNl;
+      else {
+        let lastSp = -1;
+        for (let j = i; j < end; j++) if (clean.charCodeAt(j) === 32) lastSp = j;
+        if (lastSp > i + size * 0.5) end = lastSp;
+      }
+    }
+    const chunk = clean.slice(i, end).trim();
+    if (chunk.length >= 40) chunks.push(chunk);
+    if (end >= n) break;
+    if (end <= i) break;
+    i = end - overlap;
+  }
+  return chunks;
+}
+__name(chunkText, "chunkText");
+__name2(chunkText, "chunkText");
+var CATEGORY_KEYWORDS = [
+  ["finance", ["bank", "statement", "tax", "invoice", "receipt", "mortgage", "rent", "insurance", "salary", "paycheck", "visa card"]],
+  ["health", ["medical", "doctor", "clinic", "prescription", "vaccin", "hospital", "therapy"]],
+  ["legal", ["contract", "agreement", "will", "power of attorney", "court", "lawsuit", "notary", "settlement"]],
+  ["housing", ["apartment", "lease", "landlord", "property", "utilities", "electricity", "water bill"]],
+  ["identity", ["passport", "driving license", "residence permit", "visa", "birth certificate", "id card"]],
+  ["work", ["resume", "cv", "interview", "offer letter", "employment", "reference"]],
+  ["travel", ["flight", "boarding", "itinerary", "hotel", "booking", "ticket"]],
+  ["education", ["diploma", "transcript", "degree", "course", "university", "certificate"]],
+  ["personal", ["family", "photo", "journal", "diary", "letter"]]
+];
+function categorize(text, key) {
+  const hay = (text + " " + key).toLowerCase();
+  let best = "general", bestScore = 0;
+  for (const [cat, kws] of CATEGORY_KEYWORDS) {
+    let score = 0;
+    for (const kw of kws) if (hay.includes(kw)) score++;
+    if (score > bestScore) {
+      bestScore = score;
+      best = cat;
+    }
+  }
+  return bestScore > 0 ? best : "general";
+}
+__name(categorize, "categorize");
+__name2(categorize, "categorize");
+async function sha256hex(s) {
+  const data = new TextEncoder().encode(s);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest.slice(0, 16))).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(sha256hex, "sha256hex");
+__name2(sha256hex, "sha256hex");
+async function safeUpsert(env, batch, skipped) {
+  if (batch.length === 0) return;
+  try {
+    await env.VZ.upsert(batch);
+  } catch (e) {
+    if (batch.length === 1) {
+      const md = batch[0].metadata || {};
+      skipped.push(md.path || "?");
+      console.log(`[indexer] skipped bad vector id=${batch[0].id} path=${md.path}`);
+      return;
+    }
+    const mid = Math.ceil(batch.length / 2);
+    await safeUpsert(env, batch.slice(0, mid), skipped);
+    await safeUpsert(env, batch.slice(mid), skipped);
+  }
+}
+__name(safeUpsert, "safeUpsert");
+__name2(safeUpsert, "safeUpsert");
+async function indexAll(env, { limit, scanCap, prefix, cursor }) {
+  const started = Date.now();
+  let scanned = 0, indexed = 0, skipped = 0, errors = 0;
+  let nextCursor = void 0;
+  const skippedVectors = [];
+  const regRows = await env.PERSONAL.prepare("SELECT path, size, modified FROM files").all();
+  const registry = /* @__PURE__ */ new Map();
+  for (const r of regRows.results || []) registry.set(r.path, `${r.size}|${r.modified}`);
+  const vectorBuf = [];
+  const d1Buf = [];
+  async function flush() {
+    if (vectorBuf.length) await safeUpsert(env, vectorBuf.splice(0, vectorBuf.length), skippedVectors);
+    if (d1Buf.length) {
+      try {
+        await env.PERSONAL.batch(d1Buf.splice(0, d1Buf.length));
+      } catch (e) {
+        d1Buf.splice(0, d1Buf.length);
+      }
+    }
+  }
+  __name(flush, "flush");
+  __name2(flush, "flush");
+  const listed = await env.DDRIVE.list({ cursor, limit: 1e3, prefix: prefix || void 0 });
+  nextCursor = listed.cursor || void 0;
+  for (const obj of listed.objects || []) {
+    scanned++;
+    if (scanned > scanCap) break;
+    const key = obj.key;
+    if (NOISE_FRAGMENTS.some((f) => key.includes(f))) {
+      skipped++;
+      continue;
+    }
+    const ext = extOf(key);
+    if (!TEXT_EXTS.has(ext)) {
+      skipped++;
+      continue;
+    }
+    const mod = obj.uploaded && obj.uploaded.toISOString() || (/* @__PURE__ */ new Date()).toISOString();
+    const sig = `${obj.size}|${mod}`;
+    if (registry.get(key) === sig) {
+      skipped++;
+      continue;
+    }
+    const text = await getObjectText(env.DDRIVE, key);
+    if (!text) {
+      skipped++;
+      continue;
+    }
+    const chunks = chunkText(text);
+    if (chunks.length === 0) {
+      skipped++;
+      continue;
+    }
+    let vectors = [];
+    try {
+      const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chunks.slice(0, 32) }, { gateway: { id: "default" } });
+      vectors = resp && resp.data || [];
+    } catch (e) {
+      errors++;
+      continue;
+    }
+    const valid = vectors.filter((v) => Array.isArray(v) && v.length === 768).map((v) => v.map((x) => Number.isFinite(x) ? x : 0));
+    if (valid.length === 0) {
+      errors++;
+      continue;
+    }
+    const cat = categorize(chunks.join(" "), key);
+    const keyDigest = await sha256hex(key);
+    const pathSan = sanitize(key, 500);
+    for (let i = 0; i < valid.length; i++) {
+      vectorBuf.push({
+        id: `${keyDigest}:${i}`,
+        values: valid[i],
+        metadata: {
+          path: pathSan,
+          type: String(ext),
+          chunk: String(i),
+          category: String(cat),
+          modified: String(mod),
+          text: sanitize(chunks[i] || "", 800)
+        }
+      });
+    }
+    d1Buf.push(env.PERSONAL.prepare(
+      `INSERT INTO files (path, type, size, modified, indexed_at, chunks, title, category)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+       ON CONFLICT(path) DO UPDATE SET size=?3, modified=?4, indexed_at=?5, chunks=?6, title=?7, category=?8`
+    ).bind(key, ext, obj.size, mod, (/* @__PURE__ */ new Date()).toISOString(), valid.length, basename(key), cat));
+    registry.set(key, sig);
+    indexed++;
+    if (indexed >= limit || vectorBuf.length >= 500) await flush();
+  }
+  await flush();
+  return {
+    scanned,
+    indexed,
+    skipped,
+    errors,
+    elapsedMs: Date.now() - started,
+    cursor: nextCursor,
+    done: !nextCursor,
+    skippedVectors: skippedVectors.length
+  };
+}
+__name(indexAll, "indexAll");
+__name2(indexAll, "indexAll");
+function basename(key) {
+  const parts = key.split("/");
+  return parts[parts.length - 1] || key;
+}
+__name(basename, "basename");
+__name2(basename, "basename");
+return { default: indexer_default };
+})();
+var personallifemaintainMod = (function(){
+const QNFO_VERSION = "personal-life-maintain/fabric-20260910";
+const VERSION = "1.0.0+fabric.20260910";
+const MEM_DECAY_HALF_LIFE_DAYS = 90;
+const MEM_PRUNE_EFFECTIVE_IMPORTANCE = 0.2;
+function json(data, status) {
+  return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+}
+async function runMemoryMaintain(env, opts) {
+  opts = opts || {};
+  var commit = !!opts.commit;
+  var result = { status: "memory-maintained", plane: "personal", commit: commit, timestamp: new Date().toISOString(), scanned: 0, decayed: 0, expired: 0, deduped: 0, pruned: 0, ids: [] };
+  try {
+    var rows = await env.PERSONAL.prepare("SELECT id, category, content, summary, importance, session_id, created_at, expires_at FROM agent_memories").all();
+    var mems = rows.results || [];
+    result.scanned = mems.length;
+    var now = Date.now();
+    var pruneIds = new Set();
+    for (var i = 0; i < mems.length; i++) {
+      var m = mems[i];
+      var importance = m.importance != null ? Number(m.importance) : 0.7;
+      if (m.expires_at) {
+        var exp = new Date(m.expires_at).getTime();
+        if (!isNaN(exp) && exp <= now) { pruneIds.add(m.id); result.expired++; continue; }
+      }
+      var created = new Date(m.created_at).getTime();
+      if (isNaN(created)) continue;
+      var ageDays = (now - created) / 864e5;
+      var effective = importance * Math.pow(0.5, ageDays / MEM_DECAY_HALF_LIFE_DAYS);
+      if (effective < MEM_PRUNE_EFFECTIVE_IMPORTANCE) { pruneIds.add(m.id); result.decayed++; }
+    }
+    var byCat = {};
+    for (var j = 0; j < mems.length; j++) {
+      var mm = mems[j];
+      if (pruneIds.has(mm.id)) continue;
+      var key = mm.category + "::" + String(mm.content || "").toLowerCase().replace(/\s+/g, " ").trim();
+      if (!byCat[key]) byCat[key] = [];
+      byCat[key].push(mm);
+    }
+    for (var k in byCat) {
+      var group = byCat[k];
+      if (group.length < 2) continue;
+      group.sort(function(a, b) { return (Number(b.importance) || 0) - (Number(a.importance) || 0); });
+      for (var g = 1; g < group.length; g++) {
+        var dup = group[g];
+        if (pruneIds.has(dup.id)) continue;
+        pruneIds.add(dup.id); result.deduped++;
+      }
+    }
+    if (commit && pruneIds.size) {
+      var ids = Array.from(pruneIds);
+      for (var c = 0; c < ids.length; c += 100) {
+        var chunk = ids.slice(c, c + 100);
+        var ph = chunk.map(function() { return "?"; }).join(",");
+        await env.PERSONAL.prepare("DELETE FROM agent_memories WHERE id IN (" + ph + ")").bind.apply(null, chunk).run();
+        await env.VZ.deleteByIds(chunk).catch(function(e) { console.error("[personal-maintain] VZ delete error:", e.message); });
+      }
+    }
+    result.pruned = pruneIds.size;
+    result.ids = Array.from(pruneIds).slice(0, 50);
+    if (commit) {
+      await env.PERSONAL.prepare("INSERT INTO memory_maintain_runs (run_id, plane, scanned, pruned, decayed, expired, deduped, notes, created_at) VALUES (?, 'personal', ?, ?, ?, ?, ?, ?, datetime('now'))").bind("memory-maintain-" + Date.now(), result.scanned, result.pruned, result.decayed, result.expired, result.deduped, JSON.stringify(result.ids)).run().catch(function(e) { console.error("[personal-maintain] run record error:", e.message); });
+    }
+  } catch (e) { result.error = e.message; }
+  return result;
+}
+var personallifemaintainModDefault = {
+  async fetch(request, env) {
+    var url = new URL(request.url), p = url.pathname;
+    if (p === "/health") return json({ status: "ok", worker: "personal-life-maintain", version: VERSION, plane: "personal", bindings: { d1: !!env.PERSONAL, vz: !!env.VZ }, cron: "0 2 * * *" });
+    if (p === "/run/memory-maintain") {
+      var q = url.searchParams;
+      var commit = q.get("commit") === "1" || q.get("commit") === "true";
+      var result = await runMemoryMaintain(env, { commit: commit });
+      return json(result);
+    }
+    return json({ error: "not found" }, 404);
+  },
+  async scheduled(event, env, ctx) {
+    console.log("[personal-life-maintain] cron:", event.cron);
+    try { var r = await runMemoryMaintain(env, { commit: true }); console.log("[personal-life-maintain] done:", JSON.stringify({ scanned: r.scanned, pruned: r.pruned })); }
+    catch (e) { console.error("[personal-life-maintain] error:", e.message); }
+  }
+};
+return { default: personallifemaintainModDefault };
+})();
+var personallifesearchMod = (function(){
+const QNFO_VERSION = "personal-life-search/fabric-20260910";
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// search.js
+async function json(obj, cors = {}, status = 200) {
+  return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...cors } });
+}
+__name(json, "json");
+function sanitize(s, max = 1500) {
+  return String(s || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ").replace(/[\uD800-\uDFFF]/g, "").trim().slice(0, max);
+}
+__name(sanitize, "sanitize");
+async function sha16(s) {
+  const data = new TextEncoder().encode(String(s));
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest.slice(0, 16))).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(sha16, "sha16");
+async function embed(env, texts) {
+  const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: texts.slice(0, 32) }, { gateway: { id: "default" } });
+  const vectors = resp && resp.data || [];
+  return vectors.filter((v) => Array.isArray(v) && v.length === 768).map((v) => v.map((x) => Number.isFinite(x) ? x : 0));
+}
+__name(embed, "embed");
+async function safeUpsert(env, batch) {
+  if (batch.length === 0) return 0;
+  try {
+    await env.VZ.upsert(batch);
+    return batch.length;
+  } catch (e) {
+    if (batch.length === 1) return 0;
+    const mid = Math.ceil(batch.length / 2);
+    const a = await safeUpsert(env, batch.slice(0, mid));
+    const b = await safeUpsert(env, batch.slice(mid));
+    return a + b;
+  }
+}
+__name(safeUpsert, "safeUpsert");
+var search_default = {
+  async fetch(request, env, ctx) {
+    try {
+      const url = new URL(request.url);
+      const cors = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-Index-Token, Authorization"
+      };
+      if (request.method === "OPTIONS") return new Response(null, { headers: cors, status: 204 });
+      if (url.pathname === "/health") {
+        return json({ ok: true, worker: "personal-life-search", index: "personal-life", version: "v1.2.3-env-secret" }, cors);
+      }
+      if (url.pathname === "/stats" && request.method === "GET") {
+        const f = await env.PERSONAL.prepare("SELECT COUNT(*) as n FROM files").first();
+        const p = await env.PERSONAL.prepare("SELECT COUNT(*) as n FROM profile").first();
+        const e = await env.PERSONAL.prepare("SELECT COUNT(*) as n FROM events").first();
+        const b = await env.PERSONAL.prepare("SELECT COUNT(*) as n FROM browse").first();
+        const m = await env.PERSONAL.prepare("SELECT COUNT(*) as n FROM email_index").first();
+        return json({ ok: true, filesIndexed: f && f.n || 0, profileFacets: p && p.n || 0, events: e && e.n || 0, browseUrls: b && b.n || 0, emailIndexed: m && m.n || 0 }, cors);
+      }
+      if (url.pathname === "/search") {
+        const q = (url.searchParams.get("q") || "").trim();
+        const topK = Number(url.searchParams.get("topK") || 20);
+        if (!q) return json({ ok: false, error: "missing q" }, cors, 400);
+        const [vector] = await embed(env, [q]);
+        if (!vector) return json({ ok: false, error: "embed failed" }, cors, 500);
+        const result = await env.VZ.query(vector, { topK, returnValues: false, returnMetadata: "all" });
+        const byFile = /* @__PURE__ */ new Map();
+        for (const hit of result.matches || []) {
+          const m = hit.metadata || {};
+          if (m.doc === "profile" || m.doc === "event" || m.doc === "browse") continue;
+          const path = m.path || "unknown";
+          if (!byFile.has(path)) byFile.set(path, []);
+          byFile.get(path).push({ score: hit.score, text: m.text || "", chunk: m.chunk || 0, type: m.type || "", category: m.category || "", modified: m.modified || "" });
+        }
+        const files = [];
+        for (const [path, hits] of byFile) {
+          hits.sort((a, b) => b.score - a.score);
+          files.push({ path, bestScore: hits[0].score, hits: hits.slice(0, 3), category: hits[0].category, type: hits[0].type, modified: hits[0].modified, snippet: hits[0].text });
+        }
+        files.sort((a, b) => b.bestScore - a.bestScore);
+        return json({ ok: true, query: q, count: files.length, files }, cors);
+      }
+      if (url.pathname === "/profile" && request.method === "GET") {
+        const q = (url.searchParams.get("q") || "").trim();
+        const facet = url.searchParams.get("facet") || "";
+        const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
+        if (q) {
+          const [vector] = await embed(env, [q]);
+          if (!vector) return json({ ok: false, error: "embed failed" }, cors, 500);
+          const result = await env.VZ.query(vector, { topK: 40, returnValues: false, returnMetadata: "all" });
+          const matches = (result.matches || []).filter((h) => (h.metadata || {}).doc === "profile");
+          const ids = matches.map((h) => (h.metadata || {}).id).filter(Boolean);
+          const items = [];
+          for (const id of ids.slice(0, 25)) {
+            const row = await env.PERSONAL.prepare("SELECT id, facet, label, statement, evidence, confidence, updated_at FROM profile WHERE id = ?1").bind(id).first();
+            if (row) items.push({ ...row, score: (matches.find((h) => (h.metadata || {}).id === id) || {}).score });
+          }
+          return json({ ok: true, query: q, count: items.length, facets: items }, cors);
+        }
+        const sql = facet ? `SELECT id, facet, label, statement, evidence, confidence, updated_at FROM profile WHERE facet = ?1 ORDER BY facet, id LIMIT ?2` : `SELECT id, facet, label, statement, evidence, confidence, updated_at FROM profile ORDER BY facet, id LIMIT ?1`;
+        const rows = facet ? await env.PERSONAL.prepare(sql).bind(facet, limit).all() : await env.PERSONAL.prepare(sql).bind(limit).all();
+        return json({ ok: true, count: rows.results.length, facets: rows.results }, cors);
+      }
+      if (url.pathname === "/events" && request.method === "GET") {
+        const q = (url.searchParams.get("q") || "").trim();
+        const category = url.searchParams.get("category") || "";
+        const from = url.searchParams.get("from") || "";
+        const to = url.searchParams.get("to") || "";
+        const upcoming = url.searchParams.get("upcoming") || "";
+        const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
+        if (q) {
+          const [vector] = await embed(env, [q]);
+          if (!vector) return json({ ok: false, error: "embed failed" }, cors, 500);
+          const result = await env.VZ.query(vector, { topK: 40, returnValues: false, returnMetadata: "all" });
+          const matches = (result.matches || []).filter((h) => (h.metadata || {}).doc === "event");
+          const ids = matches.map((h) => (h.metadata || {}).id).filter(Boolean);
+          const items = [];
+          for (const id of ids.slice(0, 25)) {
+            const row = await env.PERSONAL.prepare("SELECT * FROM events WHERE id = ?1").bind(id).first();
+            if (row) items.push({ ...row, score: (matches.find((h) => (h.metadata || {}).id === id) || {}).score });
+          }
+          return json({ ok: true, query: q, count: items.length, events: items }, cors);
+        }
+        const conds = [];
+        const binds = [];
+        if (category) {
+          conds.push("category = ?1");
+          binds.push(category);
+        }
+        if (from) {
+          conds.push("COALESCE(start_date, '9999') >= ?" + (binds.length + 1));
+          binds.push(from);
+        }
+        if (to) {
+          conds.push("COALESCE(start_date, '') <= ?" + (binds.length + 1));
+          binds.push(to);
+        }
+        if (upcoming) {
+          conds.push("COALESCE(start_date, '9999') >= ?" + (binds.length + 1));
+          binds.push((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+        }
+        const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
+        const rows = await env.PERSONAL.prepare(`SELECT * FROM events ${where} ORDER BY COALESCE(start_date, '9999') ASC, ingested_at DESC LIMIT ?${binds.length + 1}`).bind(...binds, limit).all();
+        return json({ ok: true, count: rows.results.length, events: rows.results }, cors);
+      }
+      if (url.pathname === "/browse" && request.method === "GET") {
+        const q = (url.searchParams.get("q") || "").trim();
+        const domain = url.searchParams.get("domain") || "";
+        const days = Number(url.searchParams.get("days") || 0);
+        const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
+        const conds = [];
+        const binds = [];
+        if (q) {
+          conds.push("(title LIKE ?1 OR url LIKE ?1 OR domain LIKE ?1)");
+          binds.push(`%${q}%`);
+        }
+        if (domain) {
+          conds.push("domain = ?" + (binds.length + 1));
+          binds.push(domain);
+        }
+        if (days > 0) {
+          const cutoff = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+          conds.push("COALESCE(last_visit, '') >= ?" + (binds.length + 1));
+          binds.push(cutoff);
+        }
+        const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
+        const rows = await env.PERSONAL.prepare(`SELECT url, title, domain, visit_count, last_visit, first_visit FROM browse ${where} ORDER BY visit_count DESC LIMIT ?${binds.length + 1}`).bind(...binds, limit).all();
+        return json({ ok: true, count: rows.results.length, browse: rows.results }, cors);
+      }
+      if (url.pathname === "/recommend" && request.method === "GET") {
+        const q = (url.searchParams.get("q") || "").trim();
+        const scope = url.searchParams.get("scope") || "all";
+        const topK = Math.min(Number(url.searchParams.get("topK") || 15), 50);
+        if (!q) return json({ ok: false, error: "missing q" }, cors, 400);
+        const [vector] = await embed(env, [q]);
+        if (!vector) return json({ ok: false, error: "embed failed" }, cors, 500);
+        const want = /* @__PURE__ */ __name((s) => scope === "all" || scope === s, "want");
+        const items = [];
+        const scanK = Math.min(Math.max(topK * 3, 30), 40);
+        const full = await env.VZ.query(vector, { topK: scanK, returnValues: false, returnMetadata: "all" });
+        const typed = /* @__PURE__ */ __name((doc) => (full.matches || []).filter((h) => (h.metadata || {}).doc === doc), "typed");
+        if (want("profile")) {
+          for (const h of typed("profile")) {
+            const id = (h.metadata || {}).id;
+            if (!id) continue;
+            const row = await env.PERSONAL.prepare("SELECT id, facet, label, statement, evidence FROM profile WHERE id = ?1").bind(id).first();
+            if (row) items.push({ doc: "profile", id, score: h.score, facet: row.facet, label: row.label, statement: row.statement, evidence: row.evidence });
+          }
+        }
+        if (want("events")) {
+          for (const h of typed("event")) {
+            const id = (h.metadata || {}).id;
+            if (!id) continue;
+            const row = await env.PERSONAL.prepare("SELECT * FROM events WHERE id = ?1").bind(id).first();
+            if (row) items.push({ doc: "event", id, score: h.score, category: row.category, title: row.title, venue: row.venue, city: row.city, start_date: row.start_date, end_date: row.end_date, amount: row.amount, currency: row.currency, source: row.source, energy: row.energy, energy_label: row.energy_label });
+          }
+        }
+        if (want("files")) {
+          for (const h of full.matches || []) {
+            const m = h.metadata || {};
+            if (m.doc === "profile" || m.doc === "event" || m.doc === "browse") continue;
+            items.push({ doc: "file", path: m.path, score: h.score, category: m.category, snippet: (m.text || "").slice(0, 400) });
+          }
+        }
+        if (want("browse")) {
+          for (const h of typed("browse")) {
+            const m = h.metadata || {};
+            items.push({ doc: "browse", url: m.url, title: m.title, domain: m.domain, visits: m.visit_count, last_visit: m.last_visit, score: h.score });
+          }
+        }
+        items.sort((a, b) => b.score - a.score);
+        return json({ ok: true, query: q, scope, count: items.length, items: items.slice(0, topK) }, cors);
+      }
+      if (url.pathname === "/activity" && request.method === "GET") {
+        const days = Math.min(Number(url.searchParams.get("days") || 30), 365);
+        const from = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+        const rows = await env.PERSONAL.prepare("SELECT date, title, category, venue, city, notes, energy, energy_label FROM activity WHERE date >= ?1 ORDER BY date DESC LIMIT 100").bind(from).all();
+        return json({ ok: true, count: rows.results.length, activity: rows.results }, cors);
+      }
+      if (url.pathname === "/ingest" && request.method === "POST") {
+        const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        if (token !== env.INDEX_TOKEN) return json({ ok: false, error: "unauthorized \u2014 X-Index-Token required" }, cors, 401);
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ ok: false, error: "invalid JSON body" }, cors, 400);
+        }
+        const items = Array.isArray(body.items) ? body.items : [];
+        const counts = { profile: 0, event: 0, browse: 0, email: 0, activity: 0, vectors: 0, errors: 0 };
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        const vbuf = [];
+        const dbuf = [];
+        for (const it of items.slice(0, 200)) {
+          try {
+            const doc = it.doc || "";
+            if (doc === "profile") {
+              const id = String(it.id || "").trim();
+              const facet = sanitize(it.facet || "", 60);
+              const label = sanitize(it.label || "", 120);
+              const statement = sanitize(it.statement || "", 1500);
+              if (!id || !facet || !statement) {
+                counts.errors++;
+                continue;
+              }
+              const evidence = sanitize(it.evidence || "", 800);
+              const confidence = Number(it.confidence || 0.7);
+              dbuf.push(env.PERSONAL.prepare(
+                `INSERT INTO profile (id, facet, label, statement, evidence, confidence, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)
+                 ON CONFLICT(id) DO UPDATE SET facet=?2, label=?3, statement=?4, evidence=?5, confidence=?6, updated_at=?7`
+              ).bind(id, facet, label, statement, evidence, confidence, now));
+              const [vec] = await embed(env, [statement.slice(0, 1e3)]);
+              if (vec) vbuf.push({ id: "p:" + await sha16(id), values: vec, metadata: { doc: "profile", id, facet, label, text: statement.slice(0, 800) } });
+              counts.profile++;
+            } else if (doc === "event") {
+              const id = String(it.id || "").trim();
+              const category = sanitize(it.category || "other", 40);
+              const title = sanitize(it.title || "", 300);
+              if (!id || !title) {
+                counts.errors++;
+                continue;
+              }
+              if (id.startsWith("evt-auto:")) {
+                const sd = sanitize(it.start_date || "", 10);
+                if (sd) {
+                  const dup = await env.PERSONAL.prepare(
+                    "SELECT id FROM events WHERE start_date = ?1 AND category = ?2 AND id NOT LIKE 'evt-auto:%' LIMIT 1"
+                  ).bind(sd, category).first();
+                  if (dup) {
+                    counts.errors++;
+                    continue;
+                  }
+                }
+              }
+              const venue = sanitize(it.venue || "", 200);
+              const city = sanitize(it.city || "", 100);
+              const country = sanitize(it.country || "", 80);
+              const start_date = sanitize(it.start_date || "", 10);
+              const end_date = sanitize(it.end_date || "", 10);
+              const amount = Number(it.amount) || null;
+              const currency = sanitize(it.currency || "", 8);
+              const booking_ref = sanitize(it.booking_ref || "", 100);
+              const source = sanitize(it.source || "", 300);
+              const source_subject = sanitize(it.source_subject || "", 400);
+              const energy = Number(it.energy) || null;
+              const energy_label = sanitize(it.energy_label || "", 20);
+              const notes = sanitize(it.notes || "", 800);
+              dbuf.push(env.PERSONAL.prepare(
+                `INSERT INTO events (id, category, title, venue, city, country, start_date, end_date, amount, currency, booking_ref, source, source_subject, energy, energy_label, notes, ingested_at)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
+                 ON CONFLICT(id) DO UPDATE SET category=?2, title=?3, venue=?4, city=?5, country=?6, start_date=?7, end_date=?8, amount=?9, currency=?10, booking_ref=?11, source=?12, source_subject=?13, energy=?14, energy_label=?15, notes=?16, ingested_at=?17`
+              ).bind(id, category, title, venue, city, country, start_date, end_date, amount, currency, booking_ref, source, source_subject, energy, energy_label, notes, now));
+              const emb = `${title} | ${category} | ${venue} | ${city} | ${country} | ${notes}`.slice(0, 1e3);
+              const [vec] = await embed(env, [emb]);
+              if (vec) vbuf.push({ id: "e:" + await sha16(id), values: vec, metadata: { doc: "event", id, category, title, start_date, venue, city, text: emb.slice(0, 800) } });
+              counts.event++;
+            } else if (doc === "browse") {
+              const burl = String(it.url || "").trim();
+              if (!burl) {
+                counts.errors++;
+                continue;
+              }
+              const title = sanitize(it.title || "", 300);
+              const domain = sanitize(it.domain || "", 120);
+              const visit_count = Number(it.visit_count || 0);
+              const last_visit = sanitize(it.last_visit || "", 40);
+              const first_visit = sanitize(it.first_visit || "", 40);
+              dbuf.push(env.PERSONAL.prepare(
+                `INSERT INTO browse (url, title, domain, visit_count, last_visit, first_visit, indexed_at) VALUES (?1,?2,?3,?4,?5,?6,?7)
+                 ON CONFLICT(url) DO UPDATE SET title=?2, domain=?3, visit_count=?4, last_visit=?5, first_visit=?6, indexed_at=?7`
+              ).bind(burl, title, domain, visit_count, last_visit, first_visit, now));
+              if (visit_count >= 20) {
+                const [vec] = await embed(env, [`${title} | ${domain}`.slice(0, 900)]);
+                if (vec) vbuf.push({ id: "b:" + await sha16(burl), values: vec, metadata: { doc: "browse", url: burl.slice(0, 500), title: title.slice(0, 300), domain, visit_count, last_visit } });
+              }
+              counts.browse++;
+            } else if (doc === "email") {
+              const message_id = String(it.message_id || "").trim();
+              if (!message_id) {
+                counts.errors++;
+                continue;
+              }
+              const store = sanitize(it.store || "", 100);
+              const folder = sanitize(it.folder || "", 100);
+              const sender = sanitize(it.sender || "", 200);
+              const subject = sanitize(it.subject || "", 400);
+              const received_at = sanitize(it.received_at || "", 40);
+              const category = sanitize(it.category || "", 40);
+              const event_id = sanitize(it.event_id || "", 120);
+              const summary = sanitize(it.summary || "", 800);
+              dbuf.push(env.PERSONAL.prepare(
+                `INSERT INTO email_index (message_id, store, folder, sender, subject, received_at, category, event_id, summary, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+                 ON CONFLICT(message_id) DO UPDATE SET store=?2, folder=?3, sender=?4, subject=?5, received_at=?6, category=?7, event_id=?8, summary=?9, ingested_at=?10`
+              ).bind(message_id, store, folder, sender, subject, received_at, category, event_id, summary, now));
+              const [vec] = await embed(env, [`${subject} | ${sender} | ${summary}`.slice(0, 900)]);
+              if (vec) vbuf.push({ id: "em:" + await sha16(message_id), values: vec, metadata: { doc: "email", message_id, subject: subject.slice(0, 300), sender: sender.slice(0, 150), received_at, category, text: `${subject} | ${sender} | ${summary}`.slice(0, 800) } });
+              counts.email++;
+            } else if (doc === "activity") {
+              const adate = sanitize(it.date || "", 10);
+              const atitle = sanitize(it.title || "", 300);
+              if (!adate || !atitle) {
+                counts.errors++;
+                continue;
+              }
+              const venue = sanitize(it.venue || "", 200);
+              const city = sanitize(it.city || "", 100);
+              const notes = sanitize(it.notes || "", 800);
+              const category = sanitize(it.category || "other", 40);
+              const energy = Number(it.energy) || null;
+              const energy_label = sanitize(it.energy_label || "", 20);
+              await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS activity (date TEXT, title TEXT, category TEXT, venue TEXT, city TEXT, notes TEXT, energy REAL, energy_label TEXT, ingested_at TEXT, PRIMARY KEY(date, title))").run();
+              dbuf.push(env.PERSONAL.prepare("INSERT INTO activity (date, title, category, venue, city, notes, energy, energy_label, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(date, title) DO UPDATE SET category=?3, venue=?4, city=?5, notes=?6, energy=?7, energy_label=?8, ingested_at=?9").bind(adate, atitle, category, venue, city, notes, energy, energy_label, now));
+              const [vec] = await embed(env, [(atitle + " | " + category + " | " + venue + " | " + notes).slice(0, 900)]);
+              if (vec) vbuf.push({ id: "act:" + await sha16(adate + atitle), values: vec, metadata: { doc: "activity", date: adate, title: atitle, category: category, venue: venue, text: (atitle + " - " + notes).slice(0, 800) } });
+              counts.activity++;
+            } else {
+              counts.errors++;
+            }
+          } catch (e) {
+            counts.errors++;
+          }
+        }
+        if (dbuf.length) {
+          try {
+            await env.PERSONAL.batch(dbuf);
+          } catch (e) {
+            counts.errors += dbuf.length;
+          }
+        }
+        counts.vectors = await safeUpsert(env, vbuf);
+        return json({ ok: true, ...counts }, cors);
+      }
+      return json({ ok: false, error: "not found" }, cors, 404);
+    } catch (e) {
+      return json({ ok: false, error: "EXCEPTION: " + (e && e.message || String(e)), stack: (e && e.stack || "").slice(0, 800) }, {}, 500);
+    }
+  }
+};
+return { default: search_default };
+})();
+
+// ===== MERGE companion-hub =====
+export default {
+  async fetch(request, env, ctx) {
+    const p = new URL(request.url).pathname;
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "companion-hub", version: "1.0.0", members: 4 }), { headers: { "content-type": "application/json" } });
+    if (p === "/personal-companion" || p.startsWith("/personal-companion/")) { const u = new URL(request.url); u.pathname = p.slice(19) || "/"; return personalcompanionMod.default.fetch(new Request(u.toString(), request), env, ctx); }
+    if (p === "/personal-life-indexer" || p.startsWith("/personal-life-indexer/")) { const u = new URL(request.url); u.pathname = p.slice(22) || "/"; return personallifeindexerMod.default.fetch(new Request(u.toString(), request), env, ctx); }
+    if (p === "/personal-life-maintain" || p.startsWith("/personal-life-maintain/")) { const u = new URL(request.url); u.pathname = p.slice(23) || "/"; return personallifemaintainMod.default.fetch(new Request(u.toString(), request), env, ctx); }
+    if (p === "/personal-life-search" || p.startsWith("/personal-life-search/")) { const u = new URL(request.url); u.pathname = p.slice(21) || "/"; return personallifesearchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
+    return new Response("companion-hub", { status: 200 });
+  },
+  async scheduled(event, env, ctx) {
+    const c = event.cron;
+    if (c === "0 6 * * *") return personalcompanionMod.default.scheduled(event, env, ctx);
+    if (c === "0 */12 * * *") return personallifeindexerMod.default.scheduled(event, env, ctx);
+    if (c === "0 2 * * *") return personallifemaintainMod.default.scheduled(event, env, ctx);
+  },
+};

@@ -1,19 +1,19 @@
 name = "jnl-pipeline"
 main = "worker.js"
 compatibility_date = "2026-09-01"
-workers_dev = true
 
 [ai]
 binding = "AI"
 
 [[d1_databases]]
 binding = "AUDIT"
-database_name = "jnl-audit"
 database_id = "8be80cdb-979d-401f-b3ab-6a16869473ec"
 
-[[vectorize]]
-binding = "CORPUS"
-index_name = "jnl-corpus"
+# binding CORPUS: type=vectorize (see deployed config)
+
+# secret: JNL_OPS_TOKEN -> wrangler secret put JNL_OPS_TOKEN
+
+# secret: JNL_TOKEN -> wrangler secret put JNL_TOKEN
 
 [[r2_buckets]]
 binding = "PARSE_CACHE"
@@ -21,4 +21,6 @@ bucket_name = "jnl-parse-cache"
 
 [[kv_namespaces]]
 binding = "STATE"
-id = "0cf89b469bcb47058e343611d9117897"
+id = "None"
+
+# secret: ZENODO_TOKEN -> wrangler secret put ZENODO_TOKEN
