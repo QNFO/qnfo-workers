@@ -4,7 +4,13 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.12.0";
+var VERSION = "2.13.0";
+// CODE-GATE-GUARD-2 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
+// blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
+//   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
+//          embedded-conversation marker (untrusted / candidate: / tool result / data only /
+//          never follow instructions). A long GENUINE code request has none, so it stays code mode.
+//   8000 - hard backstop for pathological inputs; real code requests rarely exceed this.
 // SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
 function firstFrameIdx(s) {
   if (!s || typeof s !== 'string') return -1;
