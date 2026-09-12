@@ -13,7 +13,8 @@
 // DEPLOY: wrangler deploy (secrets: QNFO_ROUTER_KEY, OPS_KEY, PT_KEY, DEEPSEEK_KEY, CF_API_TOKEN)
 // CANONICAL SOURCE: qnfo-workers/qnfo-ai-calibration (FLEET-SELF-DOC-1)
 // ROUTES: GET /health | GET /manifest | POST /run (auth) | GET /results (auth) | GET /
-var VERSION = "1.1.4"; // GW-DEGRADE-2 (2026-09-08): gateway failure classes are keyed by full CF model id (@cf/...) but ai_model_health rows use internal roster ids - added reverse map + correct row targeting // GW-DEGRADE-1 (2026-09-08): recurring gateway-failure classes (prevCount>0 or count>=2 in sweep) now mark ai_model_health status degraded so health-aware routing (qnfo-ai loadModelHealth) deprioritizes/skips them; stopped classes self-clear to ok on absence (mirrors probe-path semantics) // GW-FAIL-DEDUP-1 (2026-09-06): respect prior dispositions - skip re-filing gw-fail when a wontfix/closed/resolved ticket already exists for the model (stops the 5-ticket-per-sweep regeneration loop)
+// GW-DEDUP-2 (2026-09-12): gw-fail dedup now on OPEN only; prior wontfix/closed/resolved no longer permanently suppress re-filing (recurring classes resurface) and the degrade path is no longer skipped. Supersedes GW-FAIL-DEDUP-1.
+var VERSION = "1.1.5"; // GW-DEGRADE-2 (2026-09-08): gateway failure classes are keyed by full CF model id (@cf/...) but ai_model_health rows use internal roster ids - added reverse map + correct row targeting // GW-DEGRADE-1 (2026-09-08): recurring gateway-failure classes (prevCount>0 or count>=2 in sweep) now mark ai_model_health status degraded so health-aware routing (qnfo-ai loadModelHealth) deprioritizes/skips them; stopped classes self-clear to ok on absence (mirrors probe-path semantics) // GW-FAIL-DEDUP-1 (2026-09-06): respect prior dispositions - skip re-filing gw-fail when a wontfix/closed/resolved ticket already exists for the model (stops the 5-ticket-per-sweep regeneration loop)
 // GW-WATCH-1 2026-09-05: autonomous AI Gateway failure sweep (detect -> D1 -> issue -> auto-close) // SVC-BINDING-1: same-account workers.dev fetches 404 at the edge from inside a Worker (verified live 2026-09-04) - internal probes use service bindings (QNFO_AI/QNFO_OPS/PT_API); DeepSeek/catalog stay public
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var OPS = "https://qnfo-ops.q08.workers.dev";
@@ -317,11 +318,10 @@ async function gatewayFailureSweep(env, t0) {
     parts.push(b.status + " " + b.model + " x" + b.count + " [" + clsLabel + "]");
     var title = "[gw-fail] " + b.status + " " + b.model;
     try {
-      var dispo = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status IN ('wontfix','closed','resolved') LIMIT 1").bind("%" + b.model + "%").first();
-      if (dispo) continue;
+      var openDup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status = 'open' LIMIT 1").bind("%" + b.model + "%").first();
       var prev = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND status = ?2 AND ts < ?3 AND ts > ?4").bind(b.model, b.status, lastTs, lastTs - 45 * 60 * 1000).first();
       var prevCount = prev ? Number(prev.c || 0) : 0;
-      if (b.count >= 2 || prevCount > 0) {
+      if (!openDup && (b.count >= 2 || prevCount > 0)) {
         await fileIssue(env, title, "gateway failures in sweep window: " + b.count + "x status=" + b.status + " class=" + clsLabel + " sample=" + String(b.sample || "").slice(0, 200) + ". Router-level self-heal handles content-shape/rate classes; escalate if this class persists.", "high");
       }
     } catch (e) {}
