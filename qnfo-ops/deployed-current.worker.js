@@ -1192,8 +1192,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   if (o.codeMode && env.WAI) {
     try {
       const r = await callWorkersAI(env, messages, maxTokens, tools, o);
-      if (r && typeof r === "object") r.__served_by = UPSTREAM_CODE_MODEL;
-      return r;
+      return { resp: r, servedBy: UPSTREAM_CODE_MODEL };
     } catch (e) {
       o.__codeFallbackErr = String((e && e.message) || e).slice(0, 180);
       console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__codeFallbackErr);
@@ -1215,8 +1214,8 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     throw new Error("deepseek " + resp.status + ": " + String(txt || "").slice(0, 300));
   }
   const _out = await resp.json();
-  if (o.codeMode && _out && typeof _out === "object") _out.__served_by = o.__codeFallbackErr ? (UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL) : UPSTREAM_MODEL;
-  return _out;
+  const _servedBy = o.codeMode ? (o.__codeFallbackErr ? (UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL) : UPSTREAM_CODE_MODEL) : null;
+  return { resp: _out, servedBy: _servedBy };
 }
 __name(callDeepSeek, "callDeepSeek");
 function lastUserText(messages) {
@@ -1288,7 +1287,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
       ctx.waitUntil(logOps(env, { id: recId, ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
       return new Response(relayStream(resp.body, recId, env, ctx, norm), { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache" } });
     }
-    const cResp = await callDeepSeek(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
+    const { resp: cResp } = await callDeepSeek(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
     const cChoice = cResp && cResp.choices && cResp.choices[0];
     const cMsg = cChoice && cChoice.message || {};
     const cText = String(cMsg.content || "");
@@ -1618,8 +1617,8 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
-        const resp = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice, codeMode });
-        if (resp && resp.__served_by) servedBy = resp.__served_by;
+        const { resp, servedBy: _sb1 } = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice, codeMode });
+        if (_sb1) servedBy = _sb1;
         const choice = resp && resp.choices && resp.choices[0];
         upstreamUsage = resp && resp.usage || upstreamUsage;
         const msg0 = choice && choice.message;
@@ -1660,8 +1659,8 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         if (isStream) return await streamFinalAnswer(strategy);
         if (withTools && finishReason === "length") {
           try {
-            const r3 = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode });
-            if (r3 && r3.__served_by) servedBy = r3.__served_by;
+            const { resp: r3, servedBy: _sb2 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode });
+            if (_sb2) servedBy = _sb2;
             const c3 = r3 && r3.choices && r3.choices[0];
             const m3 = c3 && c3.message;
             content = String(m3 && m3.content || "");
@@ -2035,7 +2034,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "3 seconds", backoff: "linear" }, timeout: "15 minutes" }, async function() {
-          const r = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto" });
+          const { resp: r } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto" });
           return JSON.parse(JSON.stringify(r));
         });
       } catch (e) {
@@ -2078,7 +2077,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       finishReason = choice && choice.finish_reason || "stop";
       if (withTools && finishReason === "length") {
         try {
-          const r3 = await callDeepSeek(env, work, answerCap, null, { temperature, topP });
+          const { resp: r3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP });
           addUsage(r3);
           const c3 = r3 && r3.choices && r3.choices[0];
           const m3 = c3 && c3.message;
