@@ -67,16 +67,6 @@ binding = "SVC_QNFO_OUTREACH"
 service = "qnfo-outreach"
 environment = "production"
 
-[[services]]
-binding = "SVC_PERSONAL_EVENTS_RADAR"
-service = "personal-events-radar"
-environment = "production"
-
-[[services]]
-binding = "SVC_QNFO_GATEWAY"
-service = "qnfo-gateway"
-environment = "production"
-
 [[kv_namespaces]]
 binding = "FLEET_CFG"
 id = "d3768b93a76640be83151b00a8b42717"

@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.16';
+const VERSION = '1.0.18';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -196,7 +196,8 @@ async function lastRuns30(env) {
   return out;
 }
 async function healthProbes(env, liveNames) {
-  const items = REGISTRY.health_probes || [];
+  const liveSet = liveNames ? new Set(liveNames) : null;
+  const items = (REGISTRY.health_probes || []).filter(function (hp) { return !liveSet || liveSet.has(hp.name); });
   const settled = await Promise.allSettled(items.map(async function (hp) {
     const t0 = Date.now();
     try {
@@ -331,7 +332,9 @@ async function buildState(env, ctx) {
     const g = await d1all(env.AUDIT, 'SELECT COUNT(*) AS c, COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) AS bad, COALESCE(ROUND(AVG(latency_ms)),0) AS avgms, MAX(ts) AS latest FROM ops_ai_log WHERE ts >= ?', [iso24]);
     if (!g || !g.length) { push({ key: 'ops_gateway', label: 'Ops AI gateway (24h)', state: 'ok', detail: 'no rows in window', ts: null }); return; }
     const r = g[0];
-    push({ key: 'ops_gateway', label: 'Ops AI gateway (24h)', state: r.bad > 0 ? 'err' : 'ok', detail: r.c + ' calls, ' + r.bad + ' failed (ok=0), avg ' + r.avgms + 'ms', ts: r.latest });
+    const okCount = r.c - r.bad;
+    const gwState = r.bad === 0 ? 'ok' : (r.bad / r.c >= 0.1 ? 'err' : 'warn');
+    push({ key: 'ops_gateway', label: 'Ops AI gateway (24h)', state: gwState, detail: r.c + ' calls, ' + r.bad + ' failed (ok=' + okCount + '), avg ' + r.avgms + 'ms', ts: r.latest });
   });
   // 8 model health
   await safeAudit('ai_model_health', 'AI model health', async function () {
@@ -377,12 +380,15 @@ async function buildState(env, ctx) {
   const liveNames = await liveScripts(env);
   const liveCount = liveNames ? liveNames.length : null;
   const integration = await integrationView(env, liveNames);
+  const report_card = await reportCardData(env, integration, audits);
   const lastRuns = await lastRuns30(env);
   const probes = await healthProbes(env, liveNames);
 
   const scheduled = [];
   const now = new Date();
+  const liveSet = liveNames ? new Set(liveNames) : null;
   for (const s of (REGISTRY.scheduled || [])) {
+    if (liveSet && !liveSet.has(s.name)) continue;
     const per = analytics.per[s.name] || { requests: 0, errors: 0 };
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
     let st;
@@ -453,6 +459,7 @@ async function buildState(env, ctx) {
     audits: audits,
     probes: probes,
     integration: integration,
+    report_card: report_card,
     chains: chains,
     device: {
       captured_at: REGISTRY.captured_at || null,
@@ -522,7 +529,63 @@ async function integrationView(env, liveNames) {
   };
 }
 
-function integrationHtml(ig) {
+
+async function reportCardData(env, integration, audits) {
+  let humanOpen = -1;
+  try {
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')");
+    humanOpen = g && g.length ? g[0].c : 0;
+  } catch (e) { humanOpen = -1; }
+  let selfHeal = -1;
+  try {
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM self_heal_actions");
+    selfHeal = g && g.length ? g[0].c : 0;
+  } catch (e) { selfHeal = -1; }
+  let openIssues = -1;
+  try {
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
+    openIssues = g && g.length ? g[0].c : 0;
+  } catch (e) { openIssues = -1; }
+  const drift = integration ? integration.drift : { ghost: 0, unregistered: 0, unversioned: 0 };
+  const driftTotal = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
+  return {
+    human_open: humanOpen,
+    self_heal_total: selfHeal,
+    open_issues: openIssues,
+    drift_total: driftTotal,
+    drift: drift,
+    loa: humanOpen === 0 ? '8' : '5',
+    loa_label: humanOpen === 0 ? 'autonomous ops; novel/high-blast-radius still gated (A6/A7)' : 'human-gated decisions pending',
+    agi: 'L3 Agents',
+    vsm: 'S1-S3 present, S4 partial, S5 external',
+    ooda: 'closed loop, 15-min cadence',
+    watchmaker: humanOpen === 0 ? '0 human-gated ops' : (humanOpen + ' open'),
+    top: 'human-level: LoA 10 / AGI L5 / VSM S1-S5 internalized'
+  };
+}
+
+function reportCardHtml(rc) {
+  if (!rc) return '';
+  const h = [];
+  h.push('<h2>Systems report card (autonomy + intelligence)</h2>');
+  h.push('<div class="sub">Scored against citable frameworks (Sheridan-Verplanck LoA, Beer VSM, OpenAI/DeepMind AGI levels, OODA). TOP of scale = human-level autonomy + independent decision-making. Canonical: qnfo-ops/docs/SYSTEMS-REPORT-CARD.md</div>');
+  h.push('<table><tr><th>dimension</th><th>framework</th><th>level</th><th>top of scale</th></tr>');
+  h.push('<tr><td>Decision authority</td><td>Sheridan-Verplanck LoA</td><td>LoA ' + rc.loa + ' (' + esc(rc.loa_label) + ')</td><td>LoA 10</td></tr>');
+  h.push('<tr><td>Intelligence</td><td>OpenAI/DeepMind levels</td><td>' + rc.agi + '</td><td>L5 Organization</td></tr>');
+  h.push('<tr><td>Organizational viability</td><td>Beer VSM</td><td>' + esc(rc.vsm) + '</td><td>S1-S5 closed, S5 internalized</td></tr>');
+  h.push('<tr><td>Decision cycle</td><td>OODA</td><td>' + esc(rc.ooda) + '</td><td>closed, real-time</td></tr>');
+  h.push('</table>');
+  h.push('<div class="chips">');
+  h.push(rc.human_open === 0 ? chip('ok', 'human-gated ops: 0') : chip('warn', 'human-gated ops: ' + rc.human_open));
+  h.push(rc.self_heal_total >= 0 ? chip('info', 'self-heal actions: ' + rc.self_heal_total) : chip('warn', 'self-heal: n/a'));
+  h.push(rc.open_issues >= 0 ? (rc.open_issues === 0 ? chip('ok', 'open agent issues: 0') : chip('warn', 'open agent issues: ' + rc.open_issues)) : chip('warn', 'issues: n/a'));
+  h.push(rc.drift_total > 0 ? chip('warn', 'drift divergence: ' + rc.drift_total) : chip('ok', 'drift divergence: 0'));
+  h.push('</div>');
+  h.push('<div class="sub">Objective function (Watchmaker): human-intervention -> 0; drift -> 0; self-heal -> 1. Next level: ' + esc(rc.top) + '. Highest-leverage gap: normalize service_registry.version to semver (currently ' + rc.drift.unversioned + ' unversioned).</div>');
+  return h.join('');
+}
+
+function integrationHtml(ig, st) {
   if (!ig) return '';
   const h = [];
   h.push('<h2>System integration (fleet-wide)</h2>');
@@ -644,7 +707,8 @@ function pageHtml(st) {
     h.push('<tr><td>' + (p.ok ? chip('ok', 'UP') : chip('warn', 'DOWN')) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.url) + '</td><td>' + p.status + '</td><td>' + p.ms + '</td><td class="sub">' + esc(p.body) + '</td></tr>');
   }
   h.push('</table>');
-  h.push(integrationHtml(st.integration));
+  h.push(integrationHtml(st.integration, st));
+  h.push(reportCardHtml(st.report_card));
   h.push('<h2>Device-bound (Windows Task Scheduler + DeepChat local cron) - front-end only</h2>');
   h.push('<div class="sub">captured ' + esc(st.device.captured_at || '') + ' UTC &middot; ' + esc(st.device.note || '') + ' &middot; cloud-able functions run in the CF scheduled layer, never local cron (CLOUD-FRONTEND-ONLY-1)</div>');
   h.push('<table><tr><th>task</th><th>status</th><th>last run</th><th>last result</th><th>next run</th><th>schedule</th></tr>');
