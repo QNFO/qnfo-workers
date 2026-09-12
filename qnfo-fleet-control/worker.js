@@ -3,7 +3,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // src/server.js
-var VERSION = "0.4.11";
+var VERSION = "0.4.12";
 var WORKER = "qnfo-fleet-advisor";
 var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
 async function workerNameSet(env) {
@@ -1009,6 +1009,18 @@ function isModule(code) {
   return (code || "").indexOf("export default") >= 0 || (code || "").indexOf("export {") >= 0 || /^\s*import\s/.test(code || "");
 }
 __name(isModule, "isModule");
+async function workerMeta(env, worker) {
+  try {
+    var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker, { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
+    if (!r.ok) return null;
+    var j = await r.json();
+    var res = (j && j.result) || {};
+    return { module: res.module === true, main_module: res.main_module || null, bindings: res.bindings || [] };
+  } catch (e) {
+    return null;
+  }
+}
+__name(workerMeta, "workerMeta");
 async function timedFetch(url, opts, ms) {
   var ac = new AbortController();
   var t = setTimeout(function() {
@@ -1251,11 +1263,16 @@ async function redeploy(env, worker) {
   }
   var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
   var toSha = await sha256(c.code);
+  var meta = await workerMeta(env, worker);
+  var isMod = isModule(c.code);
+  if (meta && typeof meta.module === "boolean") isMod = meta.module;
+  else if (meta && meta.main_module) isMod = true;
+  var mm = (meta && meta.main_module) || "worker.js";
   var r;
-  if (isModule(c.code)) {
+  if (isMod) {
     var fd = new FormData();
-    fd.append("metadata", new Blob([JSON.stringify({ main_module: "worker.js" })], { type: "application/json" }));
-    fd.append("worker.js", new Blob([c.code], { type: "application/javascript+module" }), "worker.js");
+    fd.append("metadata", new Blob([JSON.stringify(Object.assign({ main_module: mm }, (meta && meta.bindings && meta.bindings.length) ? { bindings: meta.bindings } : {}))], { type: "application/json" }));
+    fd.append(mm, new Blob([c.code], { type: "application/javascript+module" }), mm);
     r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") }, body: fd }, 2e4);
   } else {
     r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/javascript" }, body: c.code }, 2e4);
