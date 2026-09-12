@@ -16,6 +16,8 @@ var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
 var __defProp2222222 = Object.defineProperty;
 var __name2222222 = /* @__PURE__ */ __name222222((target, value) => __defProp2222222(target, "name", { value, configurable: true }), "__name");
+var __defProp22222222 = Object.defineProperty;
+var __name22222222 = /* @__PURE__ */ __name2222222((target, value) => __defProp22222222(target, "name", { value, configurable: true }), "__name");
 var COMMON_CSS = `:root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--live:#2f6d4f;--blue:var(--accent);--blue-dark:#1a2547;--blue-light:#d8dcef;--blue-subtle:var(--accent-soft);--text:var(--ink);--text-muted:var(--muted);--bg:var(--paper);--radius:10px;--radius-lg:14px}
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box}
@@ -113,6 +115,7 @@ __name2222(stripFrontmatter, "stripFrontmatter");
 __name22222(stripFrontmatter, "stripFrontmatter");
 __name222222(stripFrontmatter, "stripFrontmatter");
 __name2222222(stripFrontmatter, "stripFrontmatter");
+__name22222222(stripFrontmatter, "stripFrontmatter");
 function esc(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -125,6 +128,7 @@ __name2222(esc, "esc");
 __name22222(esc, "esc");
 __name222222(esc, "esc");
 __name2222222(esc, "esc");
+__name22222222(esc, "esc");
 function escAttr(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -137,6 +141,7 @@ __name2222(escAttr, "escAttr");
 __name22222(escAttr, "escAttr");
 __name222222(escAttr, "escAttr");
 __name2222222(escAttr, "escAttr");
+__name22222222(escAttr, "escAttr");
 function displayTitle(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -164,11 +169,13 @@ function displayTitle(t) {
 }
 __name(displayTitle, "displayTitle");
 __name2(displayTitle, "displayTitle");
+__name22(displayTitle, "displayTitle");
 function looksLikeTeX(x) {
   return /\\[a-zA-Z]+/.test(x) || /[\\^{}_]/.test(x);
 }
 __name(looksLikeTeX, "looksLikeTeX");
 __name2(looksLikeTeX, "looksLikeTeX");
+__name22(looksLikeTeX, "looksLikeTeX");
 function titleHTML(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -182,6 +189,7 @@ function titleHTML(t) {
 }
 __name(titleHTML, "titleHTML");
 __name2(titleHTML, "titleHTML");
+__name22(titleHTML, "titleHTML");
 function xmlEscape(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -194,6 +202,7 @@ __name2222(xmlEscape, "xmlEscape");
 __name22222(xmlEscape, "xmlEscape");
 __name222222(xmlEscape, "xmlEscape");
 __name2222222(xmlEscape, "xmlEscape");
+__name22222222(xmlEscape, "xmlEscape");
 function detectCategory(title, abstract) {
   const t = ((title || "") + " " + (abstract || "")).toLowerCase();
   if (t.includes("error correction") || t.includes("stabilizer") || t.includes("fault-tolerant") || t.includes("qec") || t.includes("ldpc") || t.includes("surface code")) return "qec";
@@ -210,6 +219,7 @@ __name2222(detectCategory, "detectCategory");
 __name22222(detectCategory, "detectCategory");
 __name222222(detectCategory, "detectCategory");
 __name2222222(detectCategory, "detectCategory");
+__name22222222(detectCategory, "detectCategory");
 var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number Theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
 function texSafe(s) {
   if (!s) return "";
@@ -228,11 +238,13 @@ function texSafe(s) {
 }
 __name(texSafe, "texSafe");
 __name2(texSafe, "texSafe");
+__name22(texSafe, "texSafe");
 function cleanPunct(s) {
   return String(s || "").replace(/[ \t]+([,.!?;:])/g, "$1");
 }
 __name(cleanPunct, "cleanPunct");
 __name2(cleanPunct, "cleanPunct");
+__name22(cleanPunct, "cleanPunct");
 function _mdInline(t) {
   t = String(t || "");
   var _math = [];
@@ -242,6 +254,7 @@ function _mdInline(t) {
   }
   __name(saveMath, "saveMath");
   __name2(saveMath, "saveMath");
+  __name22(saveMath, "saveMath");
   t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) {
     return saveMath(c, true);
   });
@@ -270,6 +283,7 @@ function _mdInline(t) {
 }
 __name(_mdInline, "_mdInline");
 __name2(_mdInline, "_mdInline");
+__name22(_mdInline, "_mdInline");
 function fixMojibake(s) {
   if (!s) return "";
   const map = [
@@ -320,6 +334,7 @@ __name22(fixMojibake, "fixMojibake");
 __name222(fixMojibake, "fixMojibake");
 __name2222(fixMojibake, "fixMojibake");
 __name22222(fixMojibake, "fixMojibake");
+__name222222(fixMojibake, "fixMojibake");
 function renderMarkdown(md) {
   if (!md) return "";
   var m = String(md).replace(/\r\n?/g, "\n");
@@ -357,6 +372,7 @@ function renderMarkdown(md) {
   }
   __name(isTableSep, "isTableSep");
   __name2(isTableSep, "isTableSep");
+  __name22(isTableSep, "isTableSep");
   function emitBlockText(text) {
     var parts = text.split(/(\u0001B\d+\u0001)/g), h = "", cur = "", k;
     for (k = 0; k < parts.length; k++) {
@@ -374,16 +390,19 @@ function renderMarkdown(md) {
   }
   __name(emitBlockText, "emitBlockText");
   __name2(emitBlockText, "emitBlockText");
+  __name22(emitBlockText, "emitBlockText");
   function isListStart(s) {
     return /^[-*+]\s/.test(s) || /^\d+[.)]\s/.test(s);
   }
   __name(isListStart, "isListStart");
   __name2(isListStart, "isListStart");
+  __name22(isListStart, "isListStart");
   function isContinuation(s) {
     return /^[ \t]+\S/.test(s);
   }
   __name(isContinuation, "isContinuation");
   __name2(isContinuation, "isContinuation");
+  __name22(isContinuation, "isContinuation");
   L = m.split("\n");
   i = 0;
   while (i < L.length) {
@@ -547,30 +566,120 @@ function renderMarkdown(md) {
 }
 __name(renderMarkdown, "renderMarkdown");
 __name2(renderMarkdown, "renderMarkdown");
+__name22(renderMarkdown, "renderMarkdown");
+const LD_CSS = `
+.ld-top{display:flex;align-items:center;gap:1.2rem;max-width:920px;margin:0 auto;padding:1rem 1.6rem;border-bottom:1px solid var(--border)}
+.ld-brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:1.18rem;color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;gap:.5rem}
+.ld-nav{margin-left:auto;display:flex;gap:.3rem;flex-wrap:wrap}
+.ld-nav a{color:var(--muted);font-size:.85rem;font-weight:500;text-decoration:none;padding:.3rem .55rem;border-radius:6px;transition:all .15s}
+.ld-nav a:hover{color:var(--accent);background:var(--accent-soft)}
+.ld-main{max-width:920px;margin:0 auto;padding:0 1.6rem 3.2rem}
+.ld-hero{text-align:center;padding:4rem 0 2.2rem}
+.ld-tag{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem}
+.ld-hero h1{font-family:'Fraunces',Georgia,serif;font-size:3rem;font-weight:600;margin:0 0 .8rem;letter-spacing:-.015em;border:none;padding:0}
+.ld-hero p{color:var(--muted);font-size:1.06rem;max-width:620px;margin:0 auto;line-height:1.7}
+.ld-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem;margin-top:1.4rem}
+.ld-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.3rem;display:block;color:var(--ink);text-decoration:none;transition:all .15s}
+.ld-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.ld-card h3{font-family:'Fraunces',Georgia,serif;font-size:1.06rem;font-weight:600;margin:0 0 .3rem}
+.ld-card p{margin:0;font-size:.85rem;color:var(--muted);line-height:1.55}
+.ld-go{display:block;margin-top:.55rem;font-size:.78rem;color:var(--accent)}
+.ld-latest{margin-top:2.8rem;border-top:1px solid var(--border);padding-top:1.5rem}
+.ld-latest h2{font-family:'Fraunces',Georgia,serif;font-size:1.25rem;font-weight:600;margin:0 0 .35rem}
+.ld-latest ul{list-style:none;padding:0;margin:.4rem 0 0}
+.ld-latest li{display:flex;gap:1rem;align-items:baseline;padding:.6rem 0;border-bottom:1px solid var(--border)}
+.ld-latest li a{flex:1;color:var(--ink);text-decoration:none;font-family:'Fraunces',Georgia,serif;font-size:1rem;line-height:1.45}
+.ld-latest li a:hover{color:var(--accent)}
+.ld-date{color:var(--muted);font-size:.76rem;white-space:nowrap}
+.ld-more{margin:.9rem 0 0;text-align:center}
+.ld-more a{font-size:.86rem;color:var(--accent);text-decoration:none}
+.ld-sub{margin-top:3rem;padding:1.9rem 1.6rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg)}
+.ld-sub h2{font-family:'Fraunces',Georgia,serif;font-size:1.25rem;font-weight:600;margin:0 0 .5rem}
+.ld-sub p{color:var(--muted);font-size:.92rem;line-height:1.7;margin:0 0 1.1rem;max-width:640px}
+.ld-sub form{display:flex;gap:.6rem;flex-wrap:wrap}
+.ld-sub input[type=email]{flex:1;min-width:220px;padding:.65rem .85rem;border:1.5px solid var(--border);border-radius:var(--radius);font:inherit;font-size:.95rem;background:#fff;color:var(--ink);outline:none}
+.ld-sub input[type=email]:focus{border-color:var(--accent)}
+.ld-sub button{padding:.65rem 1.3rem;border:1.5px solid var(--accent);background:var(--accent);color:#fff;border-radius:var(--radius);font:inherit;font-size:.92rem;font-weight:500;cursor:pointer;transition:all .15s}
+.ld-sub button:hover{background:#1a2547;border-color:#1a2547}
+.ld-sub button:disabled{opacity:.6;cursor:default}
+.ld-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.ld-sr{position:absolute;left:-9999px}
+.ld-msg{font-size:.86rem;margin:.75rem 0 0;min-height:1.2em}
+.ld-msg.ok{color:var(--live)}
+.ld-msg.err{color:#a4453c}
+.ld-foot{max-width:920px;margin:0 auto;padding:1.4rem 1.6rem 2.4rem;border-top:1px solid var(--border);display:flex;gap:1.2rem;justify-content:center;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.ld-foot a{color:var(--muted);text-decoration:none}
+.ld-foot a:hover{color:var(--accent)}
+@media(max-width:640px){.ld-top{flex-wrap:wrap}.ld-nav{margin-left:0;width:100%}.ld-hero h1{font-size:2.35rem}.ld-hero{padding:3rem 0 1.8rem}}
+`;
 function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
   const total = paperCount || (recentPapers ? recentPapers.length : 0);
-  const kg = nodesCount ? nodesCount + "+" : "\u2014";
+  const kg = nodesCount ? nodesCount.toLocaleString("en-US") + "+" : "\u2014";
   const cards = [
-    { icon: "\u{1F4C4}", title: "Research Papers", desc: "Browse the full corpus of publications across number theory, physics, quantum error correction, and computer science \u2014 all with Zenodo DOIs and independent verifiability.", href: "/papers" },
-    { icon: "\u{1F517}", title: "Knowledge Graph", desc: "Explore the QNFO concept graph \u2014 " + kg + " interconnected nodes mapping research entities, papers, and their relationships.", href: "/graph" },
-    { icon: "\u{1F4A1}", title: "Idea Factory", desc: "A public read-only window into the QNFO research conversations \u2014 prompts, explorations, and open questions as they develop, live.", href: "https://ideas.qnfo.org" },
-    { icon: "\u2696\uFE0F", title: "License", desc: "QNFO Unified License Agreement v2.0 \u2014 open-science licensing with commercial protections.", href: "/legal" },
-    { icon: "\u{1F5C4}\uFE0F", title: "Archive", desc: "Persistent archival storage with DOI registration and R2-redundant backup infrastructure.", href: "https://archive.qnfo.org" },
-    { icon: "\u26A1", title: "QWAV Platform", desc: "Pre-commercial computing platform exploring p-adic ultrametric architectures benchmarked with JPCUB.", href: "https://qwav.org" },
-    { icon: "\u{1F50F}", title: "iPatent.me", desc: "Quantum technology patent disclosure framework for prior art documentation.", href: "https://ipatent.qnfo.org" }
+    { t: "Research Papers", d: "The full corpus \u2014 number theory, physics, QEC and computer science \u2014 every paper with a Zenodo DOI.", go: "Browse papers \u2192", h: "/papers" },
+    { t: "Knowledge Graph", d: kg + " nodes mapping the conceptual structure of the research program.", go: "Explore the graph \u2192", h: "/graph" },
+    { t: "Ideas \u2014 Live", d: "Research conversations as they develop, streamed from the QNFO AI worker.", go: "Watch ideas \u2192", h: "https://ideas.qnfo.org" },
+    { t: "QWAV Platform", d: "Pre-commercial computing benchmarked in joules-per-solution, not qubit counts.", go: "Explore QWAV \u2192", h: "https://qwav.org" },
+    { t: "Research Archive", d: "Persistent archival storage with DOI registration and redundant backup.", go: "Open the archive \u2192", h: "https://archive.qnfo.org" },
+    { t: "License", d: "The QNFO Unified License Agreement \u2014 open science with commercial protections.", go: "Read the license \u2192", h: "/legal" }
   ];
-  const cardsHtml = cards.map(
-    (c) => '<a href="' + c.href + '" class="hub-card" style="text-decoration:none;color:inherit;display:block"><div class="card-icon">' + c.icon + "</div><h3>" + c.title + "</h3><p>" + c.desc + "</p></a>"
+  const cardsHtml = cards.map((c) =>
+    '<a class="ld-card" href="' + c.h + '"><h3>' + c.t + '</h3><p>' + c.d + '</p><span class="ld-go">' + c.go + "</span></a>"
   ).join("");
+
   let papersHtml = "";
   if (recentPapers && recentPapers.length > 0) {
-    papersHtml = '<div class="hub-section-header" style="margin-top:1rem">Latest Papers</div><ul class="latest-papers">' + recentPapers.slice(0, 8).map(
-      (p) => '<li><a href="/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><span class="date">' + esc((p.created_at || "").slice(0, 10)) + "</span></li>"
-    ).join("") + '</ul><p style="text-align:center;margin-top:.75rem"><a href="/papers" style="color:var(--blue);text-decoration:none;font-weight:500">View all papers \u2192</a></p>';
+    papersHtml = '<section class="ld-latest"><h2>Latest papers</h2><ul>' +
+      recentPapers.slice(0, 8).map((p) =>
+        '<li><a href="/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><span class="ld-date">' + esc(String(p.created_at || "").slice(0, 10)) + "</span></li>"
+      ).join("") +
+      '</ul><p class="ld-more"><a href="/papers">All ' + total + " papers \u2192</a></p></section>";
   }
-  const statsHtml = total > 0 ? '<div class="stats-bar"><div class="stat-item"><div class="stat-number">' + total + '+</div><div class="stat-label">Papers</div></div><div class="stat-item"><div class="stat-number">' + kg + '</div><div class="stat-label">KG Nodes</div></div><div class="stat-item"><div class="stat-number">5</div><div class="stat-label">Research Domains</div></div></div>' : "";
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO \u2014 Research Foundation</title><meta name="description" content="QNFO is an open-science research collective publishing critical analyses of quantum computing, exploring p-adic mathematics, ultrametric geometry, and topological computation \u2014 all with independently verifiable Zenodo DOIs."><meta property="og:title" content="QNFO \u2014 Research Foundation"><meta property="og:description" content="Open-science research collective. ' + total + `+ papers. Independent verification. Zenodo DOIs."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org"><meta name="twitter:card" content="summary"><link rel="canonical" href="https://qnfo.org"><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement("script");s.src="https://unpkg.com/mathjax@3/es5/tex-svg-full.js";document.head.appendChild(s);"><\/script><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='white' font-family='system-ui'>N</text></svg>"><style>` + COMMON_CSS + '</style><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><a href="#hub-content" class="skip-link">Skip to main content</a><nav class="top-nav" role="navigation" aria-label="Main"><a class="brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a><a href="https://ipatent.qnfo.org">iPatent</a></nav><main id="hub-content"><header class="hub-hero" role="banner"><h1>QNFO Research Foundation</h1><p class="subtitle">An open-science research collective publishing critical analyses of the $35B quantum computing industry. Our work spans p-adic mathematics, ultrametric geometry, topological quantum computation, and condensed matter approaches \u2014 all published with independently verifiable Zenodo DOIs.</p>' + statsHtml + '</header><div class="container"><div class="about-section"><h2>About QNFO</h2><p>QNFO is a research foundation that publishes analyses of computing paradigms, with a focus on thermodynamic efficiency and architectural honesty. Our core thesis: computational advantage must be measured in joules-per-solution, not qubit counts or press releases.</p><p>We maintain a <a href="/papers" style="color:var(--blue)">growing corpus of research papers</a>, a <a href="/graph" style="color:var(--blue)">knowledge graph</a> mapping conceptual relationships, and the <a href="/legal" style="color:var(--blue)">QNFO Unified License Agreement</a> governing intellectual property. Our commercial platform, <a href="https://qwav.org" style="color:var(--blue)">QWAV</a>, translates this research into pre-commercial computing architectures benchmarked with <a href="https://doi.org/10.5281/zenodo.21637028" style="color:var(--blue)" target="_blank" rel="noopener">JPCUB</a>.</p></div><div class="hub-cards">' + cardsHtml + "</div>" + papersHtml + '</div></main><footer class="site-footer" role="contentinfo"><div class="footer-links"><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/legal">License</a><a href="https://qwav.org">QWAV Platform</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">Privacy</a></div><p>Licensed under <a href="/legal">QNFO-ULA v2.0</a><br>\xA9 2025\u20132026 QNFO Research Foundation</p></footer></body></html>';
+
+  const formScript = '<' + 'script>(function(){var f=document.getElementById("ld-sub-form");if(!f)return;var msg=document.getElementById("ld-msg");var btn=document.getElementById("ld-btn");f.addEventListener("submit",function(e){e.preventDefault();var email=(document.getElementById("ld-email").value||"").trim();var hp=(document.getElementById("ld-hp")||{}).value||"";if(!email||email.indexOf("@")<1){msg.className="ld-msg err";msg.textContent="Please enter a valid email address.";return;}btn.disabled=true;msg.className="ld-msg";msg.textContent="Subscribing\u2026";fetch("/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,hp:hp,source:"qnfo.org"})}).then(function(r){return r.json().then(function(j){return {s:r.status,j:j};}).catch(function(){return {s:r.status,j:{}};});}).then(function(res){if(res.s===200&&res.j&&res.j.ok){msg.className="ld-msg ok";msg.textContent="Thanks \u2014 you are subscribed. A confirmation is on its way.";f.reset();}else{msg.className="ld-msg err";msg.textContent=(res.j&&res.j.error)||"Something went wrong. Please try again.";}}).catch(function(){msg.className="ld-msg err";msg.textContent="Network error. Please try again.";}).then(function(){btn.disabled=false;});});})();<' + '/script>';
+
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    "<title>QNFO \u2014 Research Foundation</title>" +
+    '<meta name="description" content="QNFO is an open-science research collective publishing critical analyses of the quantum computing industry \u2014 p-adic mathematics, ultrametric geometry, topological quantum computation, and the thermodynamic reality of computation. Every claim independently verifiable.">' +
+    '<meta property="og:title" content="QNFO \u2014 Research Foundation">' +
+    '<meta property="og:description" content="Open-science research collective. ' + total + ' papers, independently verifiable, Zenodo DOIs.">' +
+    '<meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org">' +
+    '<meta name="twitter:card" content="summary"><link rel="canonical" href="https://qnfo.org">' +
+    "<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='%23faf7f2' font-family='Georgia,serif'>Q</text></svg>\">" +
+    "<script>window.MathJax={tex:{inlineMath:[[\"$\",\"$\"]],displayMath:[[\"$$\",\"$$\"]],processEscapes:true},svg:{scale:1.1,fontCache:\"global\"},options:{skipHtmlTags:[\"script\",\"noscript\",\"style\",\"textarea\",\"pre\",\"code\"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState===\"complete\"){setTimeout(__mq,150)}else{window.addEventListener(\"load\",function(){setTimeout(__mq,150)})}<\/script>" +
+    "<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js\" id=\"MathJax-script\" onerror=\"this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg-full.js';document.head.appendChild(s);\"><\/script>" +
+    "<style>" + COMMON_CSS + LD_CSS + "</style>" +
+    "<!-- Google tag (gtag.js) --><script async src=\"https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R\"><\/script>" +
+    "<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag(\"js\",new Date());gtag(\"config\",\"G-LV7RHRVW6R\");<\/script>" +
+    "</head><body>" +
+    '<a href="#ld-main" class="skip-link">Skip to main content</a>' +
+    '<header class="ld-top"><a class="ld-brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a>' +
+    '<nav class="ld-nav" aria-label="Main">' +
+    '<a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org">QWAV</a>' +
+    '<a href="https://ask.qwav.tech">Ask</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a>' +
+    "</nav></header>" +
+    '<main class="ld-main" id="ld-main">' +
+    '<section class="ld-hero"><span class="ld-tag">Research foundation</span><h1>QNFO</h1>' +
+    "<p>An open-science research collective publishing critical analyses of the quantum computing industry \u2014 p-adic mathematics, ultrametric geometry, topological quantum computation, and the thermodynamic reality of computation. Every claim independently verifiable.</p></section>" +
+    '<div class="ld-cards">' + cardsHtml + "</div>" +
+    papersHtml +
+    '<section class="ld-sub" id="subscribe" aria-labelledby="ld-sub-h">' +
+    '<h2 id="ld-sub-h">New papers by email</h2>' +
+    "<p>QNFO is moving off the social feeds. When new research is published, subscribers get one short weekly digest \u2014 titles, links and DOIs, nothing else.</p>" +
+    '<form id="ld-sub-form" novalidate>' +
+    '<label class="ld-sr" for="ld-email">Email address</label>' +
+    '<input id="ld-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>' +
+    '<input class="ld-hp" type="text" id="ld-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">' +
+    '<button type="submit" id="ld-btn">Subscribe</button>' +
+    "</form>" +
+    '<p class="ld-msg" id="ld-msg" role="status" aria-live="polite"></p>' +
+    "</section></main>" +
+    '<footer class="ld-foot"><span>\u00a9 2026 QNFO</span><a href="/papers">Papers</a><a href="/about">About</a><a href="https://qwav.org">QWAV</a><a href="/legal">QNFO-ULA</a></footer>' +
+    formScript +
+    "</body></html>";
 }
+
 __name(renderHubHTML, "renderHubHTML");
 __name2(renderHubHTML, "renderHubHTML");
 __name22(renderHubHTML, "renderHubHTML");
@@ -579,6 +688,7 @@ __name2222(renderHubHTML, "renderHubHTML");
 __name22222(renderHubHTML, "renderHubHTML");
 __name222222(renderHubHTML, "renderHubHTML");
 __name2222222(renderHubHTML, "renderHubHTML");
+__name22222222(renderHubHTML, "renderHubHTML");
 function renderPaperRow(p) {
   const cat = detectCategory(p.title, p.abstract);
   const cl = CATEGORY_LABELS[cat] || "";
@@ -588,6 +698,7 @@ function renderPaperRow(p) {
 __name(renderPaperRow, "renderPaperRow");
 __name2(renderPaperRow, "renderPaperRow");
 __name22(renderPaperRow, "renderPaperRow");
+__name222(renderPaperRow, "renderPaperRow");
 function renderIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery) {
   const fb = ["all", "qec", "number-theory", "physics", "computer-science", "other"].map((cat) => {
     const label = cat === "all" ? "All" : CATEGORY_LABELS[cat] || cat;
@@ -609,6 +720,7 @@ __name2222(renderIndexHTML, "renderIndexHTML");
 __name22222(renderIndexHTML, "renderIndexHTML");
 __name222222(renderIndexHTML, "renderIndexHTML");
 __name2222222(renderIndexHTML, "renderIndexHTML");
+__name22222222(renderIndexHTML, "renderIndexHTML");
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
@@ -645,6 +757,7 @@ function buildPaperJsonLd(paper) {
 __name(buildPaperJsonLd, "buildPaperJsonLd");
 __name2(buildPaperJsonLd, "buildPaperJsonLd");
 __name22(buildPaperJsonLd, "buildPaperJsonLd");
+__name222(buildPaperJsonLd, "buildPaperJsonLd");
 function citationAuthorsMeta(paper) {
   const rawAuth = paper.authors || "";
   let authors = [];
@@ -660,6 +773,7 @@ __name(citationAuthorsMeta, "citationAuthorsMeta");
 __name2(citationAuthorsMeta, "citationAuthorsMeta");
 __name22(citationAuthorsMeta, "citationAuthorsMeta");
 __name222(citationAuthorsMeta, "citationAuthorsMeta");
+__name2222(citationAuthorsMeta, "citationAuthorsMeta");
 function renderPaperHTML(paper) {
   const cleanMd = fixMojibake(stripFrontmatter(paper.body_md || ""));
   const md = cleanMd;
@@ -675,6 +789,7 @@ __name2222(renderPaperHTML, "renderPaperHTML");
 __name22222(renderPaperHTML, "renderPaperHTML");
 __name222222(renderPaperHTML, "renderPaperHTML");
 __name2222222(renderPaperHTML, "renderPaperHTML");
+__name22222222(renderPaperHTML, "renderPaperHTML");
 function json(data, status) {
   status = status || 200;
   return new Response(JSON.stringify(data, null, 2), {
@@ -690,6 +805,7 @@ __name2222(json, "json");
 __name22222(json, "json");
 __name222222(json, "json");
 __name2222222(json, "json");
+__name22222222(json, "json");
 async function handlePapers(request, env) {
   try {
     const u = new URL(request.url);
@@ -735,6 +851,7 @@ __name2222(handlePapers, "handlePapers");
 __name22222(handlePapers, "handlePapers");
 __name222222(handlePapers, "handlePapers");
 __name2222222(handlePapers, "handlePapers");
+__name22222222(handlePapers, "handlePapers");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
@@ -762,6 +879,7 @@ __name2222(handlePaperDetail, "handlePaperDetail");
 __name22222(handlePaperDetail, "handlePaperDetail");
 __name222222(handlePaperDetail, "handlePaperDetail");
 __name2222222(handlePaperDetail, "handlePaperDetail");
+__name22222222(handlePaperDetail, "handlePaperDetail");
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
@@ -788,6 +906,7 @@ __name2222(handleHub, "handleHub");
 __name22222(handleHub, "handleHub");
 __name222222(handleHub, "handleHub");
 __name2222222(handleHub, "handleHub");
+__name22222222(handleHub, "handleHub");
 async function handleAbout(env) {
   try {
     const [pc, nc, ec] = await Promise.all([
@@ -806,6 +925,7 @@ async function handleAbout(env) {
 }
 __name(handleAbout, "handleAbout");
 __name2(handleAbout, "handleAbout");
+__name22(handleAbout, "handleAbout");
 function renderAboutHTML(stats) {
   const pageCSS = COMMON_CSS + `
 .about-page{max-width:760px;margin:0 auto;padding:1.4rem 1.6rem 0}
@@ -826,6 +946,7 @@ function renderAboutHTML(stats) {
 }
 __name(renderAboutHTML, "renderAboutHTML");
 __name2(renderAboutHTML, "renderAboutHTML");
+__name22(renderAboutHTML, "renderAboutHTML");
 async function handleSitemap(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
@@ -856,6 +977,7 @@ __name2222(handleSitemap, "handleSitemap");
 __name22222(handleSitemap, "handleSitemap");
 __name222222(handleSitemap, "handleSitemap");
 __name2222222(handleSitemap, "handleSitemap");
+__name22222222(handleSitemap, "handleSitemap");
 function handlePapersRobots() {
   return new Response(
     "User-agent: *\nAllow: /\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
@@ -870,6 +992,7 @@ __name2222(handlePapersRobots, "handlePapersRobots");
 __name22222(handlePapersRobots, "handlePapersRobots");
 __name222222(handlePapersRobots, "handlePapersRobots");
 __name2222222(handlePapersRobots, "handlePapersRobots");
+__name22222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
@@ -892,6 +1015,7 @@ __name2222(handleLlmsTxt, "handleLlmsTxt");
 __name22222(handleLlmsTxt, "handleLlmsTxt");
 __name222222(handleLlmsTxt, "handleLlmsTxt");
 __name2222222(handleLlmsTxt, "handleLlmsTxt");
+__name22222222(handleLlmsTxt, "handleLlmsTxt");
 async function handleRss(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 50").all();
@@ -923,8 +1047,9 @@ __name2222(handleRss, "handleRss");
 __name22222(handleRss, "handleRss");
 __name222222(handleRss, "handleRss");
 __name2222222(handleRss, "handleRss");
+__name22222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.5.3-quarantine-filter" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.0-subscribers" });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -934,6 +1059,7 @@ __name2222(health, "health");
 __name22222(health, "health");
 __name222222(health, "health");
 __name2222222(health, "health");
+__name22222222(health, "health");
 async function handleLegal(path, env) {
   try {
     const body = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "QNFO Unified License Agreement v2.0\nFull text at https://legal.qnfo.org");
@@ -956,6 +1082,7 @@ __name2222(handleLegal, "handleLegal");
 __name22222(handleLegal, "handleLegal");
 __name222222(handleLegal, "handleLegal");
 __name2222222(handleLegal, "handleLegal");
+__name22222222(handleLegal, "handleLegal");
 async function handleAskAI(request, env) {
   if (!env.AI) return json({ error: "AI binding not configured" }, 503);
   const body = await request.json().catch(() => ({}));
@@ -990,6 +1117,7 @@ __name2222(handleAskAI, "handleAskAI");
 __name22222(handleAskAI, "handleAskAI");
 __name222222(handleAskAI, "handleAskAI");
 __name2222222(handleAskAI, "handleAskAI");
+__name22222222(handleAskAI, "handleAskAI");
 async function handleStats(env) {
   try {
     const [nc, ec, nl, et] = await Promise.all([
@@ -1016,6 +1144,7 @@ __name2222(handleStats, "handleStats");
 __name22222(handleStats, "handleStats");
 __name222222(handleStats, "handleStats");
 __name2222222(handleStats, "handleStats");
+__name22222222(handleStats, "handleStats");
 function sjp(str) {
   if (!str) return {};
   try {
@@ -1032,6 +1161,7 @@ __name2222(sjp, "sjp");
 __name22222(sjp, "sjp");
 __name222222(sjp, "sjp");
 __name2222222(sjp, "sjp");
+__name22222222(sjp, "sjp");
 async function handleNodesList(url, env) {
   const label = url.searchParams.get("label");
   const search = url.searchParams.get("search");
@@ -1063,6 +1193,7 @@ __name2222(handleNodesList, "handleNodesList");
 __name22222(handleNodesList, "handleNodesList");
 __name222222(handleNodesList, "handleNodesList");
 __name2222222(handleNodesList, "handleNodesList");
+__name22222222(handleNodesList, "handleNodesList");
 async function handleNodeGet(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label,properties FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1085,6 +1216,7 @@ __name2222(handleNodeGet, "handleNodeGet");
 __name22222(handleNodeGet, "handleNodeGet");
 __name222222(handleNodeGet, "handleNodeGet");
 __name2222222(handleNodeGet, "handleNodeGet");
+__name22222222(handleNodeGet, "handleNodeGet");
 async function handleNeighbors(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1105,6 +1237,7 @@ __name2222(handleNeighbors, "handleNeighbors");
 __name22222(handleNeighbors, "handleNeighbors");
 __name222222(handleNeighbors, "handleNeighbors");
 __name2222222(handleNeighbors, "handleNeighbors");
+__name22222222(handleNeighbors, "handleNeighbors");
 async function handleEdges(url, env) {
   const type = url.searchParams.get("type");
   const source = url.searchParams.get("source");
@@ -1141,6 +1274,7 @@ __name2222(handleEdges, "handleEdges");
 __name22222(handleEdges, "handleEdges");
 __name222222(handleEdges, "handleEdges");
 __name2222222(handleEdges, "handleEdges");
+__name22222222(handleEdges, "handleEdges");
 async function handleImpact(name, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(name, name).first();
   if (!node) return json({ error: "Node not found: " + name }, 404);
@@ -1175,6 +1309,7 @@ __name2222(handleImpact, "handleImpact");
 __name22222(handleImpact, "handleImpact");
 __name222222(handleImpact, "handleImpact");
 __name2222222(handleImpact, "handleImpact");
+__name22222222(handleImpact, "handleImpact");
 async function handleQuery(request, env) {
   const body = await request.json().catch(() => ({}));
   const { query, params: qParams } = body;
@@ -1196,6 +1331,7 @@ __name2222(handleQuery, "handleQuery");
 __name22222(handleQuery, "handleQuery");
 __name222222(handleQuery, "handleQuery");
 __name2222222(handleQuery, "handleQuery");
+__name22222222(handleQuery, "handleQuery");
 async function handleSync(request, env) {
   if (request.headers.get("X-Sync-Token") !== env.SYNC_TOKEN) {
     return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
@@ -1236,6 +1372,55 @@ __name2222(handleSync, "handleSync");
 __name22222(handleSync, "handleSync");
 __name222222(handleSync, "handleSync");
 __name2222222(handleSync, "handleSync");
+__name22222222(handleSync, "handleSync");
+// ---------- qnfo.org subscriber sign-up (proxied to qnfo-subscribers) ----------
+const SUBSCRIBERS_ENDPOINT = "https://qnfo-subscribers.q08.workers.dev";
+async function handleSubscribeProxy(request, env) {
+  let payload = {};
+  try { payload = await request.json(); } catch (e) { payload = {}; }
+  const email = String((payload && payload.email) || "").trim().toLowerCase();
+  if (!email || email.length > 254 || !/^[^@\s]{1,64}@[^@\s.]{1,255}\.[^@\s.]{2,}$/.test(email)) {
+    return json({ ok: false, error: "Please enter a valid email address." }, 400);
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 9000);
+  try {
+    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/subscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "qnfo-gateway/3.6",
+        "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "",
+        "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300)
+      },
+      body: JSON.stringify({ email: email, hp: String((payload && payload.hp) || ""), source: "qnfo.org" }),
+      signal: ctrl.signal
+    });
+    const data = await r.json().catch(function () { return {}; });
+    return json(data && typeof data === "object" ? data : { ok: false, error: "Sign-up failed." }, r.status);
+  } catch (e) {
+    return json({ ok: false, error: "Sign-up is unavailable right now. Please try again shortly." }, 502);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function handleUnsubscribeProxy(request, env) {
+  const u = new URL(request.url);
+  const token = u.searchParams.get("token") || "";
+  if (!token) return new Response("Missing unsubscribe token.", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 9000);
+  try {
+    const r = await fetch(SUBSCRIBERS_ENDPOINT + "/unsubscribe?token=" + encodeURIComponent(token), { signal: ctrl.signal });
+    const body = await r.text();
+    return new Response(body, { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  } catch (e) {
+    return new Response("Unsubscribe is unavailable right now.", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 var gateway_worker_default = {
   async fetch(request, env) {
     const u = new URL(request.url);
@@ -1257,6 +1442,8 @@ var gateway_worker_default = {
     if (host === "legal.qnfo.org") return handleLegal(p, env);
     if (host === "papers.qnfo.org" || host === "qnfo-publications.pages.dev") {
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+      if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
+      if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
@@ -1286,6 +1473,8 @@ var gateway_worker_default = {
       if (p === "/health") return health();
       if (p === "/legal" || p === "/license") return handleLegal(p, env);
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+      if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
+      if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env);
