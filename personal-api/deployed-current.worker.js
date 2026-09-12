@@ -24,7 +24,7 @@ function clampMaxTokens(requested, isReason) {
   return Math.min(Math.floor(n), isReason ? REASON_OUT_CAP : MAX_OUT_CAP);
 }
 __name(clampMaxTokens, "clampMaxTokens");
-var VERSION = "v3.4.1-catalog-ctx"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
+var VERSION = "v3.4.2-stream-tokens"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -656,6 +656,18 @@ function usageOf(resp) {
   return resp && resp.usage || resp && resp.result && resp.result.usage || {};
 }
 __name(usageOf, "usageOf");
+function estTok(x) {
+  let s = "";
+  if (Array.isArray(x)) {
+    for (const m of x) {
+      const c = m && m.content;
+      if (typeof c === "string") s += c;
+      if (c && Array.isArray(c)) { for (const p of c) { if (p && typeof p.text === "string") s += p.text; } }
+    }
+  } else s = String(x == null ? "" : x);
+  return Math.max(1, Math.ceil(s.length / 4));
+}
+__name(estTok, "estTok");
 // ---- MEDIA-INGEST-1 (2026-09-03) personal image store ----
 function persExtractMedia(messages) {
   const out = [];
@@ -1508,7 +1520,7 @@ var api_default = {
           }
         });
         ctx.waitUntil(doneP.then(function() {
-          return logChat(env, q, acc, thread, request.headers.get("User-Agent") || "", "personal-twin-chat", null, Date.now() - t0);
+          return logChat(env, q, acc, thread, request.headers.get("User-Agent") || "", "personal-twin-chat", { prompt_tokens: estTok(msgs), completion_tokens: estTok(acc) }, Date.now() - t0);
         }));
         return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
       }
