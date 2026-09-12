@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.13.1";
+var VERSION = "2.14.0";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -28,7 +28,16 @@ var UPSTREAM_MODEL = "deepseek-v4-flash";
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-var MAX_TOOL_ITERS = 8;
+var MAX_TOOL_ITERS = 30;
+// OPS-EXEC-AUTONOMY-1 (2026-09-12): the tool-loop cap was 8. Long autonomous tasks hit it,
+// the loop then forced a TOOL-LESS final round, and the model emitted a NARRATION of the
+// next step ("then the artifact", "I will run", "before touching the PR") instead of a
+// finished deliverable - so the user had to re-prompt ("execute", "continue"). Raised to 30
+// so a full plan -> act -> verify -> report cycle completes in ONE request; the 300s wall
+// deadline (OPS_LOOP_DEADLINE_MS) and [limits] cpu_ms=300000 remain the binding backstops.
+var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
+var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
+var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
 var MODEL_CTX = 1048576;
 var CORS_HEADERS = {
   "Content-Type": "application/json",
@@ -208,6 +217,7 @@ var OPS_SYSTEM_PROMPT = [
   "A3. NEVER HAND-HOLD: never ask the user to run commands locally, open a browser, or report back anything you can do with a tool. Every in-scope action maps to a server-side tool: SQL -> ops_d1_query, compute -> run_code, files -> workspace_*/r2_*, fleet -> fleet_status, mailbox -> email_*, web -> web_fetch/web_search, GitHub -> github_*. If a tool can do it, DO IT; never describe doing it.",
   "A4. run_code IS YOUR COMPUTE ENGINE: use it autonomously for any pure computation, verification, data transform, or math (finite JS that returns a value or console.logs text). Never ask the user to run code locally - you run it server-side.",
   "A5. READ-ONLY AND COMPUTE ACTIONS EXECUTE IMMEDIATELY (no confirmation). Only DESTRUCTIVE/irreversible actions gate on explicit confirmation (rules 3/3b below).",
+  "A6. ONE-SHOT COMPLETION (binding, 2026-09-12): the user gives ONE natural-language instruction and expects the WHOLE task planned, executed, verified and reported in that single turn, server-side, with NO further prompting. Never end a turn with a progress report, a checkpoint, or a promise of future work ('then I will', 'next I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching the PR'). If work remains, CALL THE NEXT TOOL NOW in this same turn and keep going. A turn that ends by announcing what you would do next is a FAILED turn. End only with the completed deliverable, or - if genuinely blocked by a missing tool/credential/permission - exactly one final line 'INCOMPLETE: <what remains and why>'.",
   "Rules:",
   "1. Report REAL results with evidence (versions, counts, ids, statuses); lead with the direct result. Never fabricate tool output.",
   "2. Tools: fleet_status (full fleet), ops_issues_list, ops_issue_run, ops_d1_query (multi-DB read-only), vectorize_query (research corpus + notes/tasks/handoffs), r2_list, r2_get, kv_get, research_queue (queue idea -> autonomous backend execution), intents_query, candidates_query, service_discover (machine registry), backlog_status, cf_analytics (account cost/usage), email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code, web_fetch, web_search, github_repo_read, github_file_write, github_pr, workspace_write, workspace_read, workspace_list, workspace_delete.",
@@ -1396,8 +1406,9 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const messages = body && body.messages;
   const max_tokens = body && body.max_tokens;
   const stream = body && body.stream;
-  const wanted = model || "ops-exec";
-  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash") return json({ error: "unknown model " + wanted + " (available: ops-exec, deepseek-v4-flash)" }, 400);
+  const rawWanted = String(model || "ops-exec");
+  const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
+  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash") return json({ error: "unknown model " + rawWanted + " (available: ops-exec, deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
   if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
@@ -1414,7 +1425,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
   const loopDeadlineMs = envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5);
-  const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", 8);
+  const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", 30);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 32768);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
   const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
@@ -1618,11 +1629,13 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const runner = /* @__PURE__ */ __name(async function() {
     if (isStream) emitProgress();
     try {
+      let autoContinue = 0;
       for (let iter = 0; iter <= maxIters; iter++) {
         const deadlineHit = Date.now() > loopDeadline;
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
+        if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
         const { resp, servedBy: _sb1 } = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice, codeMode });
         if (_sb1) servedBy = _sb1;
         const choice = resp && resp.choices && resp.choices[0];
@@ -1662,6 +1675,13 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         content = String(msg0 && msg0.content || "");
         finishReason = choice && choice.finish_reason || "stop";
         strategy = toolLog.length ? hybrid ? "hybrid" : "agent-tools" : hybrid ? "hybrid-chat" : "chat";
+        if (iter < maxIters && toolLog.length && autoContinue < 3 && FUTURE_WORK_RE.test(content)) {
+          autoContinue++;
+          work.push({ role: "assistant", content: content || "" });
+          work.push({ role: "system", content: CONTINUE_DIRECTIVE });
+          if (isStream) emitProgress();
+          continue;
+        }
         if (isStream) return await streamFinalAnswer(strategy);
         if (withTools && finishReason === "length") {
           try {
@@ -2037,6 +2057,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     for (let turn = 0; turn <= maxTurns; turn++) {
       const withTools = turn < maxTurns;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
+      if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "3 seconds", backoff: "linear" }, timeout: "15 minutes" }, async function() {
