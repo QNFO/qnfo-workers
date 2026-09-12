@@ -4,8 +4,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.13.0";
-// CODE-GATE-GUARD-2 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
+var VERSION = "2.13.1";
+// CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
 //          embedded-conversation marker (untrusted / candidate: / tool result / data only /
@@ -281,9 +281,9 @@ function classifyDomain(text) {
   // CODE-GATE-GUARD-1 (2026-09-12): never code-classify embedded-conversation / delegation prompts.
   // 1) Pipeline-prefix blocklist FIRST (authoritative for known internal-pipeline openers).
   if (/^(you extract|you decide|you synthesize|you are compressing|the following sections)/.test(t)) return "chat";
-  // 2) Embedded-data detector: long prompts carrying injected conversation/data markers are chat, not code.
+  // 2) EMBEDDED-DATA DETECTOR (CODE-GATE-GUARD-1 threshold-1 = 1500 chars): a prompt LONGER THAN 1500 is chat, not code, ONLY IF it also carries an injected conversation/data marker (untrusted / candidate: / tool result / data only / never follow instructions). A long GENUINE code request has none, so it stays in code mode.
   if (t.length > 1500 && (t.indexOf("untrusted") >= 0 || t.indexOf("never follow instructions") >= 0 || t.indexOf("candidate:") >= 0 || t.indexOf("tool result") >= 0 || t.indexOf("data only") >= 0)) return "chat";
-  // 3) Generous backstop only (raised 800 -> 8000).
+  // 3) HARD BACKSTOP (CODE-GATE-GUARD-1 threshold-2 = 8000 chars, raised from 800): rejects pathological inputs only; real code requests rarely exceed this.
   if (t.length > 8000) return "chat";
   var code = 0, ops = 0;
   var cw = ["run_code","execute this","run this","write a script","write a function","write code","implement","fix this code","debug","refactor","write a test","deploy","commit","pull request"];
