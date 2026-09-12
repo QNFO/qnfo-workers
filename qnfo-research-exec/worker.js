@@ -1459,7 +1459,7 @@ __name2(run, "run");
 
 var worker_default = {
     async scheduled(event, env, ctx) {
-    // v0.5.17-research-restored: research-exec is the SINGLE research_queue stage-machine
+    // v0.8.1: research-exec is the SINGLE research_queue stage-machine
     // owner (proven publisher: 09-03/09-04 note->draft->publish->published with real DOIs
     // 22278600/22278842/22279728/22280745 via direct Workers-AI models). drainV2 (version_queue)
     // then run() (research_queue). triage is intake-only (score/enqueue). Canonical 2026-09-06:

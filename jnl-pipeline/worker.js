@@ -8,7 +8,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
 var COMMUNITY = `https://zenodo.org/api/communities/${COMMUNITY_ID}/records`;
 var CURSOR_KEY = "cursor:lastModified";
-var VERSION = "0.1.9";
+var VERSION = "1.0.0";
 var PAGE_SIZE = 25;
 var MAX_PAGES = 40;
 var UA = "jnl-watch/0.1.9 (QNFO AI-referee overlay for Zenodo community aiscience)";

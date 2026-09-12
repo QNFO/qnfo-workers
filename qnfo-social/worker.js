@@ -1,7 +1,7 @@
 // qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry + agent_issue escalation (was v0.5.1-failopen).
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN. D1: DB (qnfo-audit.social_threads). AI: env.AI.
 // Cron posts oldest queued thread. /compose drafts a thread from title+abstract (draft -> approve -> queued).
-var VERSION = '0.5.2-checker-heal';
+var VERSION = '0.5.2';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 

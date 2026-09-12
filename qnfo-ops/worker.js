@@ -1,9 +1,10 @@
+function fnv32(s){var h=2166136261>>>0;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return ("00000000"+h.toString(16)).slice(-8);}
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.9.4";
+var VERSION = "2.13.1";
 // SERVER-SIDE-EXEC-100-1 (2026-09-11): strip model text-form tool-call frames from client content.
 function firstFrameIdx(s) {
   if (!s || typeof s !== 'string') return -1;
@@ -745,10 +746,7 @@ async function telemetryAnalyze(env, hours) {
         if (okRow && okRow.c > 0) {
           out.recovered++;
           try {
-            const openRow = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE category = 'telemetry-self-heal' AND title LIKE ?1 AND status = 'open' LIMIT 1").bind("[self-heal] tool " + String(r.text).slice(0, 60) + "%").first();
-            if (openRow) {
-              await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status = 'resolved', updated_at = ?1 WHERE id = ?2").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "), openRow.id).run();
-              out.autoResolved = (out.autoResolved || 0) + 1;
+            const _fp = "selfheal:" + fnv32("[self-heal] tool " + String(r.text).slice(0, 60)); const openRow = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1 AND status = 'open' LIMIT 1").bind(_fp).first(); if (openRow) { await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET status = 'resolved', resolved_at = ?1, updated_at = ?1 WHERE fingerprint = ?2").bind((new Date()).toISOString().slice(0, 19).replace("T", " "), openRow.fingerprint).run(); out.autoResolved = (out.autoResolved || 0) + 1;
             }
           } catch (eR) {
           }
@@ -759,13 +757,7 @@ async function telemetryAnalyze(env, hours) {
       const toolKey = String(r.text).slice(0, 60);
       const title = "[self-heal] tool " + toolKey + " failing x" + r.n + " (" + h + "h no recovery)";
       try {
-        const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE category = 'telemetry-self-heal' AND title LIKE ?1 AND status = 'open' LIMIT 1").bind("[self-heal] tool " + toolKey + "%").first();
-        if (dup) {
-          await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET title = ?1, priority = ?2, description = ?3, updated_at = ?4 WHERE id = ?5").bind(title, (r.n || 0) >= 5 ? "high" : "medium", "Auto-filed by qnfo-ops telemetry self-heal loop (" + r.n + " failures in " + h + "h, last " + String(r.last_ts).slice(0, 19) + "). Re-probe the tool via the ops endpoint and close when it succeeds.", (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "), dup.id).run();
-          out.alreadyOpen++;
-          continue;
-        }
-        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?7)").bind(title, "Auto-filed by qnfo-ops telemetry self-heal loop (" + r.n + " failures in " + h + "h, last " + String(r.last_ts).slice(0, 19) + "). Re-probe the tool via the ops endpoint and close when it succeeds.", "qnfo-ops", "telemetry-self-heal", (r.n || 0) >= 5 ? "high" : "medium", "open", (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ")).run();
+        const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey); const dup = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(_fp).first(); if (dup) { await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET title = ?1, level = ?2, last_detail = ?3, occurrences = occurrences + 1, last_seen = ?4, updated_at = ?4, status = 'open' WHERE fingerprint = ?5").bind(title, (r.n || 0) >= 5 ? "high" : "medium", "Auto-filed by qnfo-ops telemetry self-heal loop.", (new Date()).toISOString().slice(0, 19).replace("T", " "), _fp).run(); out.alreadyOpen++; continue; } await env.QNFO_AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,?4,?5,'open',?6,?6,1,?7,?6)").bind(_fp, "qnfo-ops", (r.n || 0) >= 5 ? "high" : "medium", "telemetry-self-heal", title, (new Date()).toISOString().slice(0, 19).replace("T", " "), "Auto-filed by qnfo-ops telemetry self-heal loop.").run();
         out.filed++;
         out.persistent.push({ tool: r.text, count: r.n, lastError: r.last_ts });
       } catch (e3) {
@@ -1132,9 +1124,7 @@ async function logOps(env, rec) {
   if (rec && !rec.ok) {
     try {
       const title = "[ops-chat-fail] model=" + String(rec.model || "?") + " " + String(rec.response || "").slice(0, 80);
-      const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'").bind(title).first();
-      if (!dup) {
-        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?7)").bind(title, "Auto-filed by qnfo-ops chat-failure feed (KAIZEN-CHAT-FAIL-1): chat via " + String(rec.model || "?") + " failed. Prompt: " + String(rec.prompt || "").slice(0, 300) + "\nResponse/error: " + String(rec.response || "").slice(0, 300), "qnfo-ops", "ops-chat-fail", "medium", "open", (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " ")).run();
+      const _fp2 = "chatfail:" + fnv32(title); const dup = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(_fp2).first(); if (!dup) { await env.QNFO_AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,?4,?5,'open',?6,?6,1,?7,?6)").bind(_fp2, "qnfo-ops", "medium", "ops-chat-fail", title, (new Date()).toISOString().slice(0, 19).replace("T", " "), "Auto-filed by qnfo-ops chat-failure feed (KAIZEN-CHAT-FAIL-1).").run();
       }
     } catch (e2) {
     }
@@ -1505,11 +1495,11 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const finalize = /* @__PURE__ */ __name(async function() {
     if (finalized) return null;
     finalized = true;
-    content = stripToolFrames(content);
     const promptTokens = upstreamUsage && upstreamUsage.prompt_tokens ? upstreamUsage.prompt_tokens : estTokens(JSON.stringify(work));
     const completionTokens = upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
     const costUsd = costUsdCalc(promptTokens, completionTokens);
     const latencyMs = Date.now() - t0;
+    content = stripToolFrames(content);
     const logRec = { id: randId("ops-"), ts: iso(), model: wanted, strategy, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {

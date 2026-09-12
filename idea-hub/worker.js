@@ -1,6 +1,6 @@
 var m0 = (function(){
 var ideafactoryMod = (function(){
-const QNFO_VERSION = "qnfo-idea-factory/fabric-20260910";
+const QNFO_VERSION = "1.0.0";
 var __freeze = Object.freeze;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });

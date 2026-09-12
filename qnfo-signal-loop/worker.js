@@ -1,4 +1,4 @@
-const VERSION = "1.1.0-l8-consume";
+const VERSION = "1.1.0";
 const WORKER = "qnfo-signal-loop";
 
 function json(data, status = 200) {

@@ -24,7 +24,7 @@ function clampMaxTokens(requested, isReason) {
   return Math.min(Math.floor(n), isReason ? REASON_OUT_CAP : MAX_OUT_CAP);
 }
 __name(clampMaxTokens, "clampMaxTokens");
-var VERSION = "v3.5.0-telemetry-normalize"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
+var VERSION = "3.5.0"; // VISION-1 + MEDIA-INGEST-1 (2026-09-03): accepts image content - vision-capable WA models ordered first (non-vision deepseek no longer answers "no image"); image parts captured to R2 personal-media + PERSONAL.media_objects with /v1/media list+bytes
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):

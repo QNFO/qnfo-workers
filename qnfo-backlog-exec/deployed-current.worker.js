@@ -1,56 +1,36 @@
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+// qnfo-backlog-exec v1.1.1 - agent_issues backlog executor (cloud-native ops).
+// v1.1.1: drain ordering (priority, then least-recently-watched) so each daily run advances.
+// v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
+// failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
+// All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
+const VERSION = "1.2.6";
+const WORKER = "qnfo-backlog-exec";
+const MAX_ROW = 40;
+const PROBE_TIMEOUT = 8000;
 
-// worker.js
-var VERSION = "1.2.4";
-var WORKER = "qnfo-backlog-exec";
-var MAX_ROW = 40;
-var PROBE_TIMEOUT = 8e3;
 async function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
-__name(json, "json");
-function ts() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-__name(ts, "ts");
-function nowEpoch() {
-  return Date.now();
-}
-__name(nowEpoch, "nowEpoch");
+function ts() { return new Date().toISOString(); }
+function nowEpoch() { return Date.now(); }
+
 async function recordEvent(env, kind, text, meta, job, status) {
   try {
-    const id = kind.slice(0, 2) + "-" + (job || WORKER) + "-" + Date.now().toString(36);
-    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, ts(), kind, String(text).slice(0, 800), JSON.stringify(meta || {}).slice(0, 800), job || WORKER, status || "ok").run();
-  } catch (e) {
-  }
+    const id = kind.slice(0,2) + "-" + (job || WORKER) + "-" + Date.now().toString(36);
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+      .bind(id, ts(), kind, String(text).slice(0,800), JSON.stringify(meta||{}).slice(0,800), job || WORKER, status || "ok").run();
+  } catch (e) {}
 }
-__name(recordEvent, "recordEvent");
 async function alert(env, source, level, message) {
-  try {
-    await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(source, level, String(message).slice(0, 500)).run();
-  } catch (e) {
-  }
+  try { await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(source, level, String(message).slice(0,500)).run(); } catch (e) {}
 }
-__name(alert, "alert");
+
 function workerTarget(text) {
   const m = String(text || "").match(/\b(qnfo-[a-z0-9-]+|personal-api(?:-[a-z0-9-]+)?|research-daily-brief|calendar-api|events-radar|qnfo-ai|qnfo-ai-chat)\b/g);
   if (!m) return null;
   return m[0];
 }
-__name(workerTarget, "workerTarget");
-async function probeHealthyViaLog(env, name) {
-  try {
-    const row = await env.AUDIT.prepare("SELECT ok, status, ts FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
-    if (row && Number(row.ok) === 1) {
-      const age = Date.now() - new Date(row.ts).getTime();
-      if (age < 24 * 3600 * 1e3) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status };
-    }
-  } catch (e) {
-  }
-  return null;
-}
-__name(probeHealthyViaLog, "probeHealthyViaLog");
+
 async function probeHealth(name) {
   const hosts = [name + ".q08.workers.dev", name + ".qnfo.org"];
   for (const h of hosts) {
@@ -60,12 +40,11 @@ async function probeHealth(name) {
       const r = await fetch("https://" + h + "/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-backlog-exec)" }, signal: ctl.signal });
       clearTimeout(timer);
       if (r.ok) return { ok: true, host: h, status: r.status };
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   return { ok: false, host: null, status: 0 };
 }
-__name(probeHealth, "probeHealth");
+
 async function run(env) {
   const rows = await env.AUDIT.prepare("SELECT id, title, description, source, category, priority, status, created_at, updated_at FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, updated_at ASC, id LIMIT ?1").bind(MAX_ROW).all();
   const items = rows.results || [];
@@ -77,8 +56,7 @@ async function run(env) {
     const name = workerTarget(title + " " + String(row.description || ""));
     const isHealthAvailability = /health|heartbeat|availability|endpoint down|is down|reachable/i.test(title) && /health|availability|reachable|down/i.test(title);
     if (name && isHealthAvailability) {
-      const pLog = await probeHealthyViaLog(env, name);
-      const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts } : await probeHealth(name);
+      const p = await probeHealth(name);
       if (p.ok) {
         await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
         closed++;
@@ -86,56 +64,29 @@ async function run(env) {
         await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): " + p.host, { id: row.id, target: name, action: "closed", reason: "health-availability predicate passed" }, WORKER, "ok");
         continue;
       } else {
-        if (/orphan|bogus|does not exist/i.test(title)) {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
-          closed++;
-          detail.push({ id: row.id, target: name, action: "closed", note: "orphan probe target (no such host) - closed on first failed probe" });
-          continue;
-        }
         escalated++;
         detail.push({ id: row.id, target: name, action: "escalate", note: "health probe still failing" });
         continue;
       }
     }
-    const isExceptionClass = !isHealthAvailability && name && /alert-storm|exception|error-burst|worker-exception|recurring fail/i.test(title);
-    if (isExceptionClass && name) {
-      const ca = row.created_at;
-      const ageMs = typeof ca === "number" ? now - ca : now - (new Date(ca).getTime() || 0);
-      if (ageMs > 24 * 3600 * 1e3) {
-        let rec = 0;
-        try {
-          const ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM alerts WHERE source='qnfo-error-selfheal' AND message LIKE ?1 AND julianday(created_at) >= julianday('now', '-24 hours')").bind("%" + name + "%").first();
-          rec = ar ? Number(ar.c || 0) : 0;
-        } catch (e) {
-        }
-        if (rec === 0) {
-          const ev = await probeHealthyViaLog(env, name) || await probeHealth(name);
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
-          closed++;
-          detail.push({ id: row.id, target: name, action: "closed", note: "exception-class recovered: no error-selfheal recurrence 24h, age>24h" + (ev && ev.ok ? ", health ev " + ev.host : "") });
-          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): exception-class recovered", { id: row.id, target: name, action: "closed", reason: "no error-selfheal recurrence in 24h" }, WORKER, "ok");
-          continue;
-        }
-      }
-    }
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
     rechecked++;
-    detail.push({ id: row.id, title: title.slice(0, 60), action: "recheck", note: name ? "probe target " + name : "no probe target" });
+    detail.push({ id: row.id, title: title.slice(0,60), action: "recheck", note: name ? ("probe target " + name) : "no probe target" });
   }
-  const summary = { processed: items.length, closed, rechecked, escalated, detail: detail.slice(0, MAX_ROW) };
-  if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter((d) => d.action === "escalate").map((d) => d.target).join(", "));
-  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ processed: items.length, closed, rechecked, escalated }), { processed: items.length, closed, rechecked, escalated }, WORKER, "ok");
+  const summary = { processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
+  if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter(d=>d.action==="escalate").map(d=>d.target).join(", "));
+  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
 }
-__name(run, "run");
-var worker_default = {
+
+export default {
   async scheduled(event, env, ctx) {
     try {
       const out = await run(env);
       console.log("backlog-exec", JSON.stringify(out));
     } catch (e) {
-      console.error("backlog-exec", String(e && e.message || e));
-      await alert(env, WORKER, "error", "run failed: " + String(e && e.message || e));
+      console.error("backlog-exec", String((e && e.message) || e));
+      await alert(env, WORKER, "error", "run failed: " + String((e && e.message) || e));
     }
   },
   async fetch(request, env) {
@@ -146,12 +97,8 @@ var worker_default = {
     }
     if (url.pathname === "/run" && request.method === "POST") {
       const out = await run(env);
-      return json({ ok: true, worker: WORKER, version: VERSION, out });
+      return json({ ok: true, worker: WORKER, version: VERSION, out: out });
     }
     return json({ error: "not found" }, 404);
   }
 };
-export {
-  worker_default as default
-};
-//# sourceMappingURL=worker.js.map

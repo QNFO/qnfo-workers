@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.2-glm53"; // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
+var VERSION = "0.3.2"; // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {

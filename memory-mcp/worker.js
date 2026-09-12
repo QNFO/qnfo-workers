@@ -4,7 +4,7 @@
 // Bindings: LIVING_PAPER (D1 papers), GRAPH_DB (D1 qnfo-graph nodes/edges/agent_memories),
 //           PAPER_VZ (Vectorize qwav-research-v2), AI (embeddings).
 
-const PROTOCOL_VERSION = "2024-11-05";
+const PROTOCOL_VERSION = "2.0.3";
 const SERVER_NAME = "qnfo-memory-mcp";
 const SERVER_VERSION = "2.0.3";
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";

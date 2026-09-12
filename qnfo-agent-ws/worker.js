@@ -34771,7 +34771,7 @@ function declaredDialect(schema, remedy) {
 __name(declaredDialect, "declaredDialect");
 
 // node_modules/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs
-var LATEST_PROTOCOL_VERSION = "2025-11-25";
+var LATEST_PROTOCOL_VERSION = "1.3.9";
 var SUPPORTED_PROTOCOL_VERSIONS = [
   LATEST_PROTOCOL_VERSION,
   "2025-06-18",

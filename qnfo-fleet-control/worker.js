@@ -3,7 +3,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // src/server.js
-var VERSION = "0.3.3";
+var VERSION = "0.4.11";
 var WORKER = "qnfo-fleet-advisor";
 var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
 async function workerNameSet(env) {
