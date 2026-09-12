@@ -1,7 +1,7 @@
 // personal-companion/lib/grounding.js
 //
 // Added 2026-09-12 by qnfo-ops. Pure functions only: no bindings, no I/O, no
-// network. Safe to unit-test in isolation.
+// network. Safe to unit-test in isolation. See grounding.test.js.
 //
 // WHY THIS EXISTS
 // The published piece "The Understimulated Interval"
@@ -22,6 +22,16 @@
 // FIX: (a) precompute relations and inject them as explicit anchors;
 //      (b) verify extracted claims against those relations before publish;
 //      (c) never serve a piece that fails (b), including forced fallbacks.
+//
+// PARSER HARDENING (revision 2, same day)
+// Revision 1 of parseRange understood only "(10-14 Aug)". Measured against 11
+// real-world title formats it mis-parsed 6, silently returning duration 1:
+// "(10-14 Aug 2026)", "(3-5 September)", "(Sept 3-5)", "(28 Feb - 3 Mar)",
+// "(2026-08-10 to 2026-08-14)", "(3-5 Nov 2027)".
+// A wrong duration is worse than no duration: it would make checkGrounding
+// reject CORRECT prose. Revision 2 parses all 11 and, when a digit-bearing
+// range is present but unparseable, returns duration null (not 1) so the row
+// is excluded from matching instead of poisoning it.
 
 export const MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
                      jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
@@ -31,46 +41,93 @@ export const WORDNUM = { one:1, two:2, three:3, four:4, five:5, six:6,
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const dayNum = s => Math.floor(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 86400000);
+const monthOf = s => MON[String(s || '').toLowerCase().slice(0, 3)] || null;
 
-// Parse an explicit range in a KB title, e.g. "(10-14 Aug)", anchored to the
-// row's own year and month. Returns null when the title carries no range.
+// Parse a date range from a KB title, anchored to the row's own year.
+// Returns { start, end, known }:
+//   known: true  -> end is set (or equals start for a single-day row)
+//   known: false -> a digit-bearing range is present but was not understood;
+//                   duration is UNKNOWN and must not be guessed.
 export function parseRange(title, anchorDate) {
-  const m = /\((\d{1,2})\s*[-\u2013]\s*(\d{1,2})\s+([A-Za-z]{3})\)/.exec(title || '');
-  if (!m) return null;
-  const y = +anchorDate.slice(0, 4);
-  const mo = MON[m[3].toLowerCase()];
-  if (!mo) return null;
-  return { start: iso(y, mo, +m[1]), end: iso(y, mo, +m[2]) };
+  const y0 = +String(anchorDate).slice(0, 4);
+  const t = String(title || '');
+  let m;
+
+  // 2026-08-10 to 2026-08-14
+  m = /(\d{4}-\d{2}-\d{2})\s*(?:to|until|[\u2013\u2014-])\s*(\d{4}-\d{2}-\d{2})/.exec(t);
+  if (m) return { start: m[1], end: m[2], known: true };
+
+  // (10-14 Aug) | (3-5 Sep) | (10-14 Aug 2026) | (3-5 September)
+  m = /\(\s*(\d{1,2})\s*[\u2013\u2014-]\s*(\d{1,2})\s+([A-Za-z]{3,9})\.?\s*(\d{4})?\s*\)/.exec(t);
+  if (m) {
+    const mo = monthOf(m[3]);
+    if (mo) {
+      const y = m[4] ? +m[4] : y0;
+      return { start: iso(y, mo, +m[1]), end: iso(y, mo, +m[2]), known: true };
+    }
+  }
+
+  // (Sept 3-5) | (September 3-5 2026)
+  m = /\(\s*([A-Za-z]{3,9})\.?\s+(\d{1,2})\s*[\u2013\u2014-]\s*(\d{1,2})\s*(\d{4})?\s*\)/.exec(t);
+  if (m) {
+    const mo = monthOf(m[1]);
+    if (mo) {
+      const y = m[4] ? +m[4] : y0;
+      return { start: iso(y, mo, +m[2]), end: iso(y, mo, +m[3]), known: true };
+    }
+  }
+
+  // (28 Feb - 3 Mar) cross-month
+  m = /\(\s*(\d{1,2})\s+([A-Za-z]{3,9})\.?\s*[\u2013\u2014-]\s*(\d{1,2})\s+([A-Za-z]{3,9})\.?\s*(\d{4})?\s*\)/.exec(t);
+  if (m) {
+    const a = monthOf(m[2]), b = monthOf(m[4]);
+    if (a && b) {
+      const y = m[5] ? +m[5] : y0;
+      let s = iso(y, a, +m[1]);
+      let e = iso(y, b, +m[3]);
+      if (dayNum(e) < dayNum(s)) e = iso(y + 1, b, +m[3]); // wraps the new year
+      return { start: s, end: e, known: true };
+    }
+  }
+
+  // A range is visible but not understood: say so rather than guess.
+  if (/\(\s*\d|\d\s*[\u2013\u2014-]\s*\d|\bto\b|\buntil\b/i.test(t) && /\d/.test(t)) {
+    return { start: anchorDate, end: null, known: false };
+  }
+
+  return { start: anchorDate, end: anchorDate, known: true };
 }
 
 // (a) Relations that must be SUPPLIED to the model, not inferred by it.
 export function deriveTemporalFacts(rows) {
   const evs = (rows || []).map(r => {
-    const rng = parseRange(r.title, r.date);
-    const start = rng ? rng.start : r.date;
-    const end = rng ? rng.end : r.date;
+    const g = parseRange(r.title, r.date);
     return {
-      title: r.title, start, end,
-      duration: dayNum(end) - dayNum(start) + 1,
+      title: r.title, start: g.start, end: g.end, known: g.known,
+      duration: g.known ? (g.end ? dayNum(g.end) - dayNum(g.start) + 1 : 1) : null,
       energy: (r.energy === null || r.energy === undefined) ? null : r.energy,
       energy_label: r.energy_label || '',
       venue: r.venue || '', city: r.city || ''
     };
   });
+
   const gaps = [];
   for (let i = 0; i < evs.length; i++) {
     for (let j = i + 1; j < evs.length; j++) {
       const a = evs[i], b = evs[j];
-      if (dayNum(a.start) <= dayNum(b.start)) {
-        gaps.push({
-          from: a.title, to: b.title,
-          startGap: dayNum(b.start) - dayNum(a.start),
-          endToStart: dayNum(b.start) - dayNum(a.end)
-        });
-      }
+      if (dayNum(a.start) > dayNum(b.start)) continue;
+      gaps.push({
+        from: a.title, to: b.title,
+        startGap: dayNum(b.start) - dayNum(a.start),
+        // only meaningful when both ends are established
+        endToStart: (a.known && a.end && b.known && b.end)
+          ? dayNum(b.start) - dayNum(a.end) : null
+      });
     }
   }
-  return { evs, gaps };
+
+  const unknownDuration = evs.filter(e => e.duration === null).map(e => e.title);
+  return { evs, gaps, unknownDuration };
 }
 
 // Render the derived relations as context lines. These are the numbers the
@@ -78,12 +135,16 @@ export function deriveTemporalFacts(rows) {
 export function injectFacts(facts) {
   const out = ['DERIVED RELATIONS (computed from the record; state these exactly, do not recompute)'];
   for (const e of facts.evs) {
-    out.push(`- ${e.title} :: ${e.start} to ${e.end} = ${e.duration} days`
+    out.push(`- ${e.title} :: ${e.start}`
+      + (e.duration === null
+          ? ' :: DURATION NOT ESTABLISHED (range present but not parsed) - do not state a duration for this event'
+          : ` to ${e.end} = ${e.duration} days`)
       + (e.energy_label ? ` :: energy=${e.energy_label}` : '')
       + (e.venue ? ` :: venue=${e.venue}` : ' :: venue NOT RECORDED'));
   }
   for (const g of facts.gaps) {
-    out.push(`- GAP ${g.from} -> ${g.to} :: start-to-start = ${g.startGap} days, end-to-start = ${g.endToStart} days`);
+    out.push(`- GAP ${g.from} -> ${g.to} :: start-to-start = ${g.startGap} days`
+      + (g.endToStart === null ? '' : `, end-to-start = ${g.endToStart} days`));
   }
   out.push('If a quantity is not listed above, it is not known. Do not compute it, and do not compare two events on a quantity that is absent (cost, distance, effort).');
   return out;
@@ -113,17 +174,22 @@ export function extractClaims(text) {
   return out;
 }
 
-// (b) cont. A claim is a violation unless it matches a derived relation.
+// (b) cont. A claim is a violation unless it matches an ESTABLISHED relation.
+// Rows with unknown duration contribute nothing: we do not flag prose we cannot
+// check, because a false block is as damaging as a false pass.
 export function checkGrounding(text, facts) {
   const claims = extractClaims(text);
-  const durations = facts.evs.map(e => e.duration);
+  const durations = facts.evs.map(e => e.duration).filter(n => n !== null);
   const gaps = [];
-  for (const g of facts.gaps) { gaps.push(g.startGap, g.endToStart); }
+  for (const g of facts.gaps) {
+    gaps.push(g.startGap);
+    if (g.endToStart !== null) gaps.push(g.endToStart);
+  }
   const uniq = a => [...new Set(a)].sort((x, y) => x - y);
   const v = [];
   for (const c of claims) {
     if (c.kind === 'duration' && durations.indexOf(c.n) < 0) {
-      v.push({ ...c, why: `duration ${c.n}d matches no record (record durations: ${uniq(durations).join(', ')})` });
+      v.push({ ...c, why: `duration ${c.n}d matches no record (established durations: ${uniq(durations).join(', ')})` });
     }
     if (c.kind === 'interval' && gaps.indexOf(c.n) < 0) {
       v.push({ ...c, why: `interval ${c.n}d is not a computed gap (computed gaps: ${uniq(gaps).join(', ')})` });
