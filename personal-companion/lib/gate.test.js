@@ -7,6 +7,14 @@
 // reading.q08.org/p/2026-09-12-essay-3bf32c8a197d2196 (companion_pieces.id=8),
 // fetched 2026-09-13. It is not a paraphrase: the seven violations asserted here
 // are the seven qnfo-ops measured on the live text via run_code.
+//
+// REVISION 2 (same day): adds the addressee block, after measuring the hole that
+// gate.js revision 1 left open. voice.js returns 1 violation on the run-442 text
+// (reader-as-subject on "Rowan's") and 0 on the same text with a TYPOGRAPHIC
+// apostrophe, so a piece headed "# Field Notes for Rowan" with no straight-apostrophe
+// possessive passed revision 1 with zero voice violations. The assertions below pin
+// both the hole and the fix. The live-fixture assertions from revision 1 are
+// unchanged and still pass: addressee blocking on the live piece is 0.
 
 import assert from 'node:assert';
 import { deriveTemporalFacts } from './grounding.js';
@@ -126,6 +134,45 @@ t('auditPublishedPiece does not silently pass (empty-facts regression)', () => {
   const res = auditPublishedPiece(row, KB);
   assert.strictEqual(res.violations.length, 7,
     'audit path must derive facts from kbRows; got ' + res.violations.length + ' violations');
+});
+
+// --- addressee (gate.js revision 2): the hole revision 1 left open ------------
+// Measured on the live fixture: 0 blocking, 1 warning. That is why the revision 1
+// assertion `violations.length === 7` still holds after the merge.
+t('live piece: 0 blocking addressee violations', () => {
+  assert.strictEqual(live.addresseeBlocking.length, 0);
+});
+t('live piece: exactly 1 addressee warning naming the reader', () => {
+  assert.strictEqual(live.addressee.length, 1);
+  assert.ok(/Rowan rated/.test(live.addressee[0].span),
+    'expected the warning span to carry the offending sentence');
+});
+t('live piece: total violations still 7 after the addressee merge', () => {
+  assert.strictEqual(live.violations.length, 7);
+});
+
+// The heading that companion_runs id=442 actually emitted. Revision 1 blocked the
+// real run only because of the straight-apostrophe possessive in the body; the
+// heading itself produced nothing.
+t('heading naming the addressee blocks on its own', () => {
+  const body = '# Field Notes for Rowan\n\n## Notation Systems as Cognitive Scaffolds\n\nA notation system is a set of symbols.';
+  const d = runGate({ body: body, quality: {}, facts: facts, kbRows: KB });
+  assert.strictEqual(d.publish, false);
+  assert.strictEqual(d.addresseeBlocking.length, 2,
+    'expected reader-in-heading + reader-address');
+});
+t('a typographic apostrophe no longer escapes the gate', () => {
+  const body = '# Field Notes for Rowan\n\nRowan\u2019s work on the seams between mathematics and music.';
+  const d = runGate({ body: body, quality: {}, facts: facts, kbRows: KB });
+  assert.strictEqual(d.publish, false, 'this exact shape passed revision 1 with 0 voice violations');
+  assert.strictEqual(d.addresseeBlocking.length, 2);
+});
+t('a bare mention without a heading or address frame does NOT block', () => {
+  const body = 'The record logs the first week 5 out of 5 for felt energy, as Rowan reported it.';
+  const d = runGate({ body: body, quality: {}, facts: facts, kbRows: KB });
+  assert.strictEqual(d.publish, true, 'a bare mention is a warning; blocking it would reject the serial');
+  assert.ok(d.addressee.length >= 1, 'expected at least one warning');
+  assert.strictEqual(d.addresseeBlocking.length, 0);
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
