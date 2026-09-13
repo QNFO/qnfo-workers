@@ -9,6 +9,17 @@
 //   node apply-research-exec-fix.mjs --apply
 //   node apply-research-exec-fix.mjs --apply --with-deposit-log     (optional FIX D)
 //
+// REV 3 (2026-09-13, ops-endpoint session): FIX B's classifier was over-broad — it matched a
+// bare `failed` and a bare `\berror\b` anywhere in the payload, so any log text merely
+// CONTAINING those words would be relabelled status='error'. Verified with run_code against the
+// live anchors: the string `{"queued":0,...,"failed":2,"published":19}` classifies as 'error'
+// under the rev-2 pattern. `failed=N` is a COUNT, not a failure signal. The classifier now
+// requires a positive failure signature: `"ok":false`, `is not defined`, `ERR_`, or a
+// `_status` of 4xx/5xx. Both observed production payloads still classify correctly.
+// SCOPE OF THE CLAIM: the over-classification is demonstrated on the pattern. A concrete
+// false-positive PATH in this 80,916-byte bundle is NOT established — no caller of logEvent()
+// with such a payload has been read. This is a narrowing on principle, not a proven flood.
+//
 // WHY A PATCHER
 // worker.js is 80,916 bytes. github_repo_read truncates at 32,768 chars with no offset, and
 // web_fetch collapses whitespace and eats every run of text between a '<' and the next '>'.
@@ -91,9 +102,10 @@
 // passing a status therefore record a successful event, which is exactly how FIX A
 // stayed invisible across 19 occurrences in 2 days.
 //
-// FIX: classify the text when no status is supplied. Any payload carrying an error
-// signature is recorded as status='error' so the telemetry self-heal loop can see it.
-// This does not change what is logged, only how it is labelled.
+// FIX: classify the text when no status is supplied, using a POSITIVE failure signature only.
+// Rev 2 used `"ok":false | \berror\b | is not defined | failed | ERR_`; the two bare-word
+// alternatives were removed because they match on substring presence, not on failure. This
+// changes only how an event is labelled, never what is logged.
 //
 // ---------------------------------------------------------------------------
 // FIX C — BLOCKER FOR FIX A — the canonical the scanner reads is not this file
@@ -168,12 +180,16 @@ if (!USED) {
 }
 
 // ---------------------------------------------------------------- FIX B
+// Rev 3: positive failure signatures only. `\berror\b` and a bare `failed` were removed —
+// they match on presence of a word, so `"failed":2` (a count) classified as a failure.
 const L_OLD = 'status || "ok"';
-const L_NEW = 'status || (/(?:"ok"\\s*:\\s*false|\\berror\\b|is not defined|failed|ERR_)/i.test(String(text)) ? "error" : "ok")';
+const L_NEW = 'status || (/(?:"ok"\\s*:\\s*false|is not defined|ERR_|_status\\s*[=:]\\s*"?[45]\\d\\d)/i.test(String(text)) ? "error" : "ok")';
 const L_HITS = src.split(L_OLD).length - 1;
 if (L_HITS === 0) {
-  if (src.includes('is not defined|failed|ERR_')) {
-    console.log('  skip  FIX B already applied');
+  if (src.includes('is not defined|ERR_')) {
+    console.log('  skip  FIX B already applied (rev 3)');
+  } else if (src.includes('is not defined|failed|ERR_')) {
+    console.log('  skip  FIX B already applied (rev 2 classifier; re-run after reverting to narrow it)');
   } else {
     problems.push('FIX B: anchor \'status || "ok"\' not found (0 matches)');
   }
@@ -181,7 +197,7 @@ if (L_HITS === 0) {
   problems.push('FIX B: anchor \'status || "ok"\' appears ' + L_HITS + 'x (need 1)');
 } else {
   src = src.split(L_OLD).join(L_NEW);
-  console.log('  fix   FIX B: logEvent() now records error-signature payloads as status=error');
+  console.log('  fix   FIX B: logEvent() records a failure payload as status=error (positive signatures only)');
   changed++;
 }
 
