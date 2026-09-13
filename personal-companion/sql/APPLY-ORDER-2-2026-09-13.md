@@ -4,13 +4,24 @@ Author: qnfo-ops. **Supersedes `sql/APPLY-ORDER-2026-09-13.md`**, which was writ
 `sql/QRI-4-body-corrections-verified-2026-09-13.sql` existed. It changes no SQL. Read this before
 running anything in this directory.
 
-## 1. The order is QRI-1 → QRI-4 → QRI-3
+> ## ⚠ REVISION 3 (2026-09-13) — §1's step 3 is WRONG. Read `sql/APPLY-ORDER-3-2026-09-13.md` first.
+>
+> **Do not run `QRI-3` after `QRI-1`.** Both files contain the same non-idempotent statement
+> (`ALTER TABLE companion_feedback ADD COLUMN source TEXT DEFAULT 'unknown';`) followed by identical
+> provenance UPDATEs over identical id ranges (1–42 → `probe`, 43–48 → `human`), and both state the
+> ALTER errors on re-run. The three-step order below therefore raises
+> `duplicate column name: source` at QRI-3 §0.
+>
+> **The order is `QRI-1 → QRI-4`.** Run QRI-3 §0–1 *instead of* QRI-1 §3 only if the `source` column
+> is absent. Never both. The rest of this file (revisions 1–2) stands.
+
+## 1. The order is QRI-1 → QRI-4 (see revision 3 above) ~~→ QRI-3~~
 
 | step | file | what it does |
 |---|---|---|
 | 1 | `sql/QRI-1-corrections-2026-09-13.sql` | tags `quality_json` (`gate_reason`, `errata`, `errata_at`), reclassifies feedback provenance |
 | 2 | `sql/QRI-4-body-corrections-verified-2026-09-13.sql` | corrects `body_md` (the reader-visible text) + recomputes `word_count` |
-| 3 | `sql/QRI-3-feedback-provenance-2026-09-13.sql` | the provenance partition, if QRI-1's version was not applied |
+| ~~3~~ | ~~`sql/QRI-3-feedback-provenance-2026-09-13.sql`~~ | **NOT RUN** — redundant with QRI-1 rev 2 §3 and errors on the duplicate `ALTER TABLE` |
 
 **Do not run `QRI-2`.** Its steps 1–4 are superseded by QRI-4, which applies the same three
 replacement spans with one correction: it retains "a status tournament", a phrase the record supports
@@ -87,6 +98,10 @@ SELECT length(body_md) AS len, word_count,
 Expected on an untouched row: `len 15517, word_count 2539, five 332, qpl 352`. Any other value means a
 file has already run — reconcile against §4 before continuing, and check `quality_json` for
 `$.qri2_at` / `$.qri4_at` to learn which.
+
+Live check 2026-09-13: **no file in this directory has run.** Two independent probes — id=8 reads
+`len 15517, word_count 2539, five 332, gate 'passed', qri4_at null`, and
+`SELECT source … FROM companion_feedback` raises `D1_ERROR: no such column: source`.
 
 ## 6. What none of these files do
 
