@@ -4,7 +4,8 @@
 // stale-canon branch copies the deployed body into the R2 canonical and continues, so
 // "whatever is deployed" is blessed as canonical and divergence can never be seen.
 // (Same defect, same error kind, on research-daily-brief, qnfo-twin-maintain and
-// osf-integrity-check — those three are deliberately NOT changed here; see the note below.)
+// osf-integrity-check — those three are deliberately NOT changed here; see README.md
+// section "Deferred siblings (stale-canon)" for the note, which now exists.)
 //
 // The value is deliberately the DEPLOYED BUILD TAG, not a semver. num() parses a build tag
 // to [0], so canonical and deployed compare EQUAL and this line cannot trigger a redeploy.
