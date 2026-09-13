@@ -17,6 +17,16 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 binding = "EMAIL"
 service = "qnfo-email"
 
+# Service bindings for worker-health probe (P3-FIX-2026-09-13)
+# q08.workers.dev URLs 530/1016 from inside CF — service bindings bypass this.
+[[services]]
+binding = "QNFO_AI_SVC"
+service = "qnfo-ai"
+
+[[services]]
+binding = "PERSONAL_API_SVC"
+service = "personal-api"
+
 # secret (set via wrangler secret put): EMAIL_API_KEY
 # secret (set via wrangler secret put): GH_TOKEN
 # secret (set via wrangler secret put): GMAIL_PASS
@@ -63,7 +73,3 @@ name = "SEND_EMAIL"
 [[r2_buckets]]
 binding = "VAULT"
 bucket_name = "d-drive"
-
-# AMS_SCHEDULE-derived cron triggers (offset +2 CEST; re-sync with offset +1 CET before 2026-10-25)
-[triggers]
-crons = ["0 15 * * 5", "0 4 * * 7", "0 6 * * 1", "0 6 * * 6", "0 6,12 * * 1-5", "0 7 * * 7", "0 7,13 * * 1-5", "0 8 * * 1-5", "0 9 * * 1-5", "0 9 3 9 *", "0 4 1 * *", "0 5 * * 1", "15 4 * * *", "15 5 * * 1", "30 5 * * 1", "30 6 * * 1-5", "30 7 * * 1-5", "5 3,15 * * *", "30 3 * * 1", "20 4 * * *", "10 3 * * *"]

@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.14.1"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.14.3"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -1144,7 +1144,18 @@ async function jobZenodoStats(env) {
   for (const doi of todo) {
     const rid = doi.split(".").pop();
     try {
-      const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
+      // ZENODO-STATS-TIMEOUT-1 (2026-09-13): add 10s timeout per request.
+      // Without timeout, 218 sequential requests can hit CF Worker time limit.
+      // Also handle 429 rate-limit with a 2s backoff + one retry.
+      let r;
+      try {
+        r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA, signal: AbortSignal.timeout(10000) });
+      } catch (fetchErr) { errors++; continue; }
+      if (r.status === 429) {
+        await new Promise((res) => setTimeout(res, 2000));
+        try { r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA, signal: AbortSignal.timeout(10000) }); }
+        catch (retryErr) { errors++; continue; }
+      }
       if (!r.ok) { errors++; continue; }
       const d = await r.json();
       const st = d.stats || {};
@@ -1482,11 +1493,15 @@ async function jobOutreach(env) {
 async function jobWorkerHealth(env) {
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
   const endpoints = [
-    { worker: "qnfo-ai",        binding: "QNFO_AI", url: "https://qnfo-ai.internal/health",               headers: { "User-Agent": UA } },
-    { worker: "personal-api",   binding: "PERSONAL_API", url: "https://personal-api.internal/health",      headers: { "User-Agent": UA } },
+    // P3-FIX-2026-09-13: q08.workers.dev URLs return 530/1016 (DNS error) from inside CF.
+    // The binding field activates the already-written service-binding fetcher path:
+    //   env[ep.binding].fetch(url, opts) — bypasses the DNS loopback issue entirely.
+    // Bindings QNFO_AI_SVC + PERSONAL_API_SVC added to wrangler.toml same cycle.
+    { worker: "qnfo-ai",        url: "https://qnfo-ai.q08.workers.dev/health",        binding: "QNFO_AI_SVC",      headers: { "User-Agent": UA } },
+    { worker: "personal-api",   url: "https://personal-api.q08.workers.dev/health",   binding: "PERSONAL_API_SVC", headers: { "User-Agent": UA } },
     { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health",              headers: { "User-Agent": UA } },
-    { worker: "qnfo-ai-chat",   binding: "QNFO_AI", url: "https://qnfo-ai.internal/v1/chat/completions",  headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
-    { worker: "personal-api-chat", binding: "PERSONAL_API", url: "https://personal-api.internal/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
+    { worker: "qnfo-ai-chat",   url: "https://qnfo-ai.q08.workers.dev/v1/chat/completions",  binding: "QNFO_AI_SVC",      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
+    { worker: "personal-api-chat", url: "https://personal-api.q08.workers.dev/v1/chat/completions", binding: "PERSONAL_API_SVC", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
   ];
   const out = { checks: [], failed: [] };
   const now = new Date().toISOString();
