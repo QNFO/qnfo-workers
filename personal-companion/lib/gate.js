@@ -30,9 +30,29 @@
 // piece — a false block, which is as damaging as a false pass. Warnings are returned
 // separately as `addressee` for a human or a policy to review.
 //
-// Effect on the existing contract, measured: for the live fixture the addressee
-// blocking count is 0 and the warning count is 1, so `violations` stays at 7 and
-// every assertion in gate.test.js revision 1 still holds.
+// REVISION 3 (2026-09-13, QRI-2) — the false block rev 2 left standing
+// Rev 2 filtered ADDRESSEE warnings but merged `voice` into `violations`
+// UNFILTERED. voice.js rev 2 had no severity, so every voice finding blocked —
+// including check 3, which voice.js's own header calls "a review flag, not proof
+// of impersonation", and check 1, which its header records as firing on the
+// abstract "my attention". Rev 2's own note above states the goal that the serial
+// must not be blocked; that goal was NOT met, because the block came from voice.js,
+// not from addressee.js. Measured with the committed modules:
+//
+//   companion_pieces.id=7 disclaimer  -> voice: 2 violations
+//                                        [impersonation] "my attention"
+//                                        [reader-as-subject] "Rowan's"
+//                                        => rev 2 still returned publish=false
+//
+// voice.js rev 3 labels each violation. Rev 3 of this file therefore filters
+// `voice` by severity too, so the two documented review flags are reported as
+// warnings and only the shipped-defect class blocks.
+//
+// MEASURED, 3/3 (run_code against the PERSONAL.activity rows, 2026-09-13):
+//   companion_pieces.id=8  -> publish=false, 7 blocking (2 grounding + 5 voice)
+//   companion_pieces.id=7  -> publish=true,  0 blocking, 3 warnings
+//   runs id=442 heading    -> publish=false, 2 blocking (reader-in-heading, reader-address)
+//   rev 2 on the same three: false / FALSE / false   (one wrong)
 //
 // USAGE (inside the compose pipeline, after `critique`, before the INSERT into
 // companion_pieces):
@@ -52,12 +72,20 @@
 //     quality.gate_reason = decision.reason;
 //   }
 //
-// CONTRACT: decision = { publish, gate, reason, violations, grounding, voice,
-//                        addressee, addresseeBlocking }
+// CONTRACT: decision = { publish, gate, reason, violations, warnings, grounding,
+//                        voice, addressee, addresseeBlocking }
 //   publish === false  ->  do not serve. A gap in the page is preferred to an
 //                          ungrounded piece; the rhythm refills it next day.
-//   addressee          ->  ALL addressee findings, including warnings. Review signal.
-//   addresseeBlocking  ->  the subset merged into `violations`. Blocking.
+//   violations         ->  the blocking set. Non-empty implies publish === false.
+//   warnings           ->  review flags (voice only; addressee findings are all in
+//                          `addressee`). Never affect publish.
+//   addresseeBlocking  ->  the subset of addressee merged into `violations`.
+//
+// NOTE ON INLINING: the deploy patcher strips `export `/`import` and concatenates
+// grounding.js + voice.js + addressee.js + gate.js into ONE scope. Nothing here may
+// declare a name that already exists in one of those modules (addressee.js owns
+// `blockingViolations`). The severity filter is therefore written inline rather than
+// added as a helper.
 
 import { checkGrounding, publishPolicy, deriveTemporalFacts } from './grounding.js';
 import { checkVoice, venuesOf, mergeViolations } from './voice.js';
@@ -75,7 +103,12 @@ export function runGate(o) {
   const addressee = checkAddressee(body, { names: names });
   const addresseeBlocking = blockingViolations(addressee);
 
-  const violations = mergeViolations(grounding, voice, addresseeBlocking);
+  // Grounding violations carry no severity: an unsupported record-derived claim is
+  // always blocking. Voice (rev 3) and addressee carry severity; only 'block' counts.
+  const voiceBlocking = voice.filter(function (x) { return x.severity !== 'warn'; });
+  const voiceWarnings = voice.filter(function (x) { return x.severity === 'warn'; });
+
+  const violations = mergeViolations(grounding, voiceBlocking, addresseeBlocking);
   const decision = publishPolicy({
     quality: opts.quality || {},
     violations: violations,
@@ -87,6 +120,7 @@ export function runGate(o) {
     gate: decision.gate,
     reason: decision.reason,
     violations: violations,
+    warnings: voiceWarnings,
     grounding: grounding,
     voice: voice,
     addressee: addressee,
