@@ -60928,7 +60928,7 @@ ${JSON.stringify(milestone.data, null, 2)}` : "";
 };
 
 // agent-ws.js
-var VERSION2 = "1.3.9";
+var VERSION2 = "2.0.0";
 var MAX_BODY = 64 * 1024;
 var CLOUDFLARE_API_MCP_URL = "https://mcp.cloudflare.com/mcp";
 var SYSTEM_PROMPT = `You are a QNFO research agent running on the Cloudflare Quniverse fleet (account: quniverse, ~54 workers). You have access to tools that query the QNFO knowledge infrastructure (D1 papers database, Vectorize semantic search, graph database). QNFO is not an acronym.
