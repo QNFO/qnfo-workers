@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.0";
+var VERSION = "1.2.1";
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -487,8 +487,20 @@ var worker_default = {
   },
   async scheduled(event, env, ctx) {
     try {
-      const r = await runOnce(env, "live");
-      console.log("[qnfo-paper-reviser] cron done:", JSON.stringify({ candidates: r.candidates, results: r.results.map(function(x) {
+      // REVISION-ALL-PUBLICATIONS-1: auto-detect if there are 'already-revised' papers
+      // that still have only 1 Zenodo version (backlog drain). Pass force=true if so.
+      const backlog = await env.WATCH_DB.prepare(
+        "SELECT COUNT(*) AS n FROM paper_revision_log WHERE status='already-revised'"
+      ).first();
+      // Check version_queue to see if any already-revised papers are queued
+      const queuedN = await env.WATCH_DB.prepare(
+        "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'"
+      ).first();
+      // Use force if there are already-revised papers AND no current backlog in version_queue
+      // (avoid flooding the drain queue)
+      const force = (backlog && backlog.n > 0) && (!queuedN || queuedN.n < 3);
+      const r = await runOnce(env, "live", force);
+      console.log("[qnfo-paper-reviser] cron done:", JSON.stringify({ candidates: r.candidates, force: r.force, results: r.results.map(function(x) {
         return { slug: x.slug, queued: x.queued, flagged: x.flagged, skipped: x.skipped, error: x.error };
       }) }));
     } catch (e) {
