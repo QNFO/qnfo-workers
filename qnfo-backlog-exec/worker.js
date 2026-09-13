@@ -1,4 +1,17 @@
-// qnfo-backlog-exec v1.2.6 - agent_issues backlog executor (cloud-native ops).
+// qnfo-backlog-exec v1.2.7 - agent_issues backlog executor (cloud-native ops).
+// v1.2.7 (PATCH-2026-09-13-stale-model-noise, qnfo-ops): model-health / ai-calibration
+//  resolution predicates. Measured live 2026-09-13: the drain ran every ~2 min and reported
+//  {processed:25, closed:0, rechecked:25, escalated:0} with EVERY row carrying
+//  note:"no probe target" - a permanent no-op. Cause: run() only had close predicates for
+//  health-availability, exception/alert-storm (both require workerTarget() to match a worker
+//  name in the title) and the OPEN-ISSUES% noise sweep. 20 of the 25 open rows were
+//  MODEL-DEGRADED / [gw-fail] / [ai-cal], which name MODELS not workers -> workerTarget()
+//  returned null -> they fell through to `recheck` on every pass forever.
+//  Each of those classes has a D1-resolvable predicate, so they are now closeable on
+//  EVIDENCE rather than age. Verified at write time: ai_model_health had 25 rows all
+//  status='ok' (0 degraded) while 10 MODEL-DEGRADED tickets sat open; ai_gateway_failures
+//  24h still showed bge-base 30755 rate-capacity + qwen2.5-coder 13986 content-shape, so
+//  those gw-fail rows are REAL and are deliberately kept open, not closed.
 // v1.2.6 (red-team 2026-09-09): watchdog coverage + created_at normalizer.
 //  - Sweep predicate widened 'OPEN-ISSUES %' -> 'OPEN-ISSUES%': the qnfo-fleet-advisor watchdog
 //    row 'OPEN-ISSUES-BACKLOG' (re-filed every 20 min) has NO space after OPEN-ISSUES and so was
@@ -19,7 +32,7 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.2.6";
+const VERSION = "1.2.7";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -172,6 +185,69 @@ async function run(env) {
         }
       }
     }
+
+    // ---- v1.2.7: model-health / ai-calibration / gw-fail resolution predicates ------------
+    // Rows in these classes name MODELS, not workers, so workerTarget() returned null and they
+    // fell straight through to `recheck` on every run forever (measured: closed:0, rechecked:25,
+    // note "no probe target" on all 25). Each class has a D1-resolvable predicate, so close on
+    // evidence rather than age. Deliberately NO escalation for still-current gw-fail rows: they
+    // are a genuine open defect and escalating every 2 min would be an alert storm.
+    const isModelHealth = /^MODEL-DEGRADED\b/i.test(title);
+    if (isModelHealth) {
+      try {
+        const dg = await env.AUDIT.prepare("SELECT model_id FROM ai_model_health WHERE status='degraded'").all();
+        const degraded = new Set((dg.results || []).map((d) => String(d.model_id)));
+        const named = title.replace(/^MODEL-DEGRADED\s*/i, "").split(",").map((s) => s.trim()).filter(Boolean);
+        const still = named.filter((m) => degraded.has(m));
+        if (degraded.size === 0 || still.length === 0) {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, action: "closed", note: "model-health stale: none of [" + named.slice(0, 4).join(",") + "] degraded now (degraded rows=" + degraded.size + ")" });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (model-health): no named model degraded now", { id: row.id, action: "closed", reason: "model-health predicate cleared v1.2.7" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, action: "recheck", note: "model-health STILL degraded: " + still.join(",") });
+        continue;
+      } catch (e) {}
+    }
+    const probeFail = title.match(/^\[ai-cal\]\s+model probe failing:\s*(\S+)/i);
+    if (probeFail) {
+      try {
+        const model = probeFail[1];
+        const h = await env.AUDIT.prepare("SELECT status FROM ai_model_health WHERE model_id=?1").bind(model).first();
+        if (!h || String(h.status) !== "degraded") {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: model, action: "closed", note: "ai-cal probe-failing stale: ai_model_health status=" + (h ? h.status : "absent") });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (ai-cal " + model + "): health no longer degraded", { id: row.id, target: model, action: "closed", reason: "ai-cal probe predicate cleared v1.2.7" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, target: model, action: "recheck", note: "ai-cal probe STILL failing: " + model });
+        continue;
+      } catch (e) {}
+    }
+    const gwFail = title.match(/^\[gw-fail\]\s+(\d+)\s+(\S+)/);
+    if (gwFail) {
+      try {
+        const model = gwFail[2];
+        const rec = await env.AUDIT.prepare("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE model=?1 AND ts >= ((strftime('%s','now') - 86400) * 1000)").bind(model).first();
+        const n = rec ? Number(rec.n || 0) : 0;
+        if (n === 0) {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: model, action: "closed", note: "gw-fail stale: 0 failures for " + model + " in 24h" });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (gw-fail " + model + "): no recurrence in 24h", { id: row.id, target: model, action: "closed", reason: "gateway-failure predicate cleared v1.2.7" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, target: model, action: "recheck", note: "gateway failures CURRENT: " + n + "/24h - real defect, root fix pending" });
+        continue;
+      } catch (e) {}
+    }
+    // ---- end v1.2.7 -----------------------------------------------------------------------
+
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
     rechecked++;
     detail.push({ id: row.id, title: title.slice(0,60), action: "recheck", note: name ? ("probe target " + name) : "no probe target" });
