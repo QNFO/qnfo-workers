@@ -17,13 +17,22 @@
 // ---------------------------------------------------------------------------
 // FIX A — HIGH — the recurring, unticketed, invisible v2-drain failure
 // ---------------------------------------------------------------------------
-// Observed production error, from cloud_ops_events (kind=v2-drain):
+// Observed production error, verbatim from cloud_ops_events (kind=v2-drain):
 //
 //     [{"ok":false,"stage":"v2","error":"NL is not defined"}]
 //
-// 18 occurrences in 2 days at a ~2h15m cadence, last seen 2026-09-13T03:11:34Z.
-// Logged with status='ok', so telemetry_analyze never saw it and no ticket was ever
-// filed. Blast radius: the version_queue publish drain silently stalls.
+// EVIDENCE (read-only D1, 2026-09-13) — correcting a figure carried over from the
+// earlier closeout, which said "18 occurrences in 2 days":
+//
+//   SELECT status, COUNT(*) n, MIN(ts), MAX(ts) FROM cloud_ops_events WHERE kind='v2-drain' GROUP BY status;
+//     -> ONE row: status='ok', n=38
+//   first_ts 2026-09-03T14:11:10.269Z, last_ts 2026-09-13T05:21:30.947Z
+//
+// So: 38 occurrences over 10 days at a ~130-minute cadence, and EVERY ONE carries the
+// error payload above while being recorded with status='ok'. The single-row GROUP BY
+// is the proof of total masking — not one row was ever filed as an error.
+//
+// Blast radius: the version_queue publish drain silently stalls; nothing surfaces.
 //
 // ROOT CAUSE (read from source): depositToGithub() builds the deposit README with
 // a bare `NL`:
@@ -32,7 +41,7 @@
 //
 // but `NL` is never declared anywhere in the bundle. The sibling worker
 // personal-companion declares `var NL = String.fromCharCode(10);`; this bundle was
-// assembled from a source that relied on that declaration without carrying it.
+// assembled from a source that relied on that declaration without carrying it over.
 //
 // THE ERROR MESSAGE IS ITSELF THE PROOF THAT NO DECLARATION EXISTS:
 //   * `var NL` anywhere in module scope hoists to `undefined` — the README would then
@@ -48,12 +57,15 @@
 // FIX B — MEDIUM — error payloads logged as success
 // ---------------------------------------------------------------------------
 // logEvent() writes `status || "ok"`. Callers that log a failure payload without
-// passing a status therefore record a successful event, which is how FIX A stayed
-// invisible for two days while occurring every ~2 hours.
+// passing a status therefore record a successful event, which is exactly how FIX A
+// stayed invisible across 38 occurrences in 10 days.
 //
 // FIX: classify the text when no status is supplied. Any payload carrying an error
 // signature is recorded as status='error' so the telemetry self-heal loop can see it.
 // This does not change what is logged, only how it is labelled.
+//
+// NOTE ON COVERAGE: FIX B does not retro-fit the 38 existing rows. A separate,
+// optional backfill is described in the deploy note at the bottom.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -84,7 +96,8 @@ if (!USED) {
     problems.push('FIX A: VERSION anchor "0.8.1-quality-gate-fix" not found exactly once, so there is no verified insertion point');
   } else {
     const insert = vAnchor + '\n// QRI-OPS 2026-09-13: NL was used by depositToGithub() but never declared in this\n'
-      + '// bundle (ReferenceError "NL is not defined", 18x in 2 days, masked as status=\'ok\').\n'
+      + '// bundle (ReferenceError "NL is not defined", 38x over 10 days, every one masked\n'
+      + '// as status=\'ok\' in cloud_ops_events).\n'
       + 'var NL = String.fromCharCode(10);';
     src = src.split(vAnchor).join(insert);
     console.log('  fix   FIX A: declared NL (used but undeclared -> ReferenceError in depositToGithub)');
@@ -139,5 +152,9 @@ console.log('Verification after deploy:');
 console.log('  SELECT ts, kind, status, text FROM cloud_ops_events');
 console.log('   WHERE kind = \'v2-drain\' ORDER BY ts DESC LIMIT 10;');
 console.log('  Expect: no further "NL is not defined" rows. With FIX B in place a future');
-console.log('  v2-drain failure will appear with status=\'error\' and be visible to');
+console.log('  v2-drain failure appears with status=\'error\' and is visible to');
 console.log('  telemetry_analyze instead of being filed as a success.');
+console.log('');
+console.log('Optional backfill for the 38 masked rows (D1 write required, not done here):');
+console.log('  UPDATE cloud_ops_events SET status = \'error\'');
+console.log('   WHERE kind = \'v2-drain\' AND text LIKE \'%is not defined%\';');
