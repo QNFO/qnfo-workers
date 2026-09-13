@@ -1,8 +1,15 @@
 #!/usr/bin/env node
-// apply-gw-classify-2.mjs - GW-CLASSIFY-2 (2026-09-13)
+// apply-gw-classify-2.mjs - GW-CLASSIFY-2 + GW-VISION-HEALTH-1 (2026-09-13)
 //
-// Fixes the defect class behind open agent_issues 678/682/683 (the stuck
-// [gw-fail] backlog) in qnfo-ai-calibration.
+// Fixes two defects in qnfo-ai-calibration:
+//
+//   GW-CLASSIFY-2      request-shape gateway failures were filed against the model and
+//                      marked ai_model_health degraded. Fixes open agent_issues
+//                      678/682/683 (the stuck [gw-fail] backlog).
+//   GW-VISION-HEALTH-1 the vision pool never propagated its result to ai_model_health,
+//                      so for a vision-only model the inferential gateway sweep was the
+//                      ONLY writer and could mark degraded a model the direct probe
+//                      measures as healthy.
 //
 // USAGE
 //   node apply-gw-classify-2.mjs path/to/worker.js          # apply in place
@@ -39,7 +46,7 @@ function swap(label, from, to) {
   console.log("  ok  " + label);
 }
 
-console.log("GW-CLASSIFY-2 on " + FILE);
+console.log("GW-CLASSIFY-2 + GW-VISION-HEALTH-1 on " + FILE);
 console.log("");
 
 // ---------------------------------------------------------------- A1 classifier
@@ -133,11 +140,47 @@ swap(
         }`
 );
 
+// ---------------------------------------------------------------- A8 vision health
+swap(
+  "A8 vision pool propagates its result to ai_model_health (vision-only models)",
+  `  await runPool(visionModels, 2, async function (m) {
+    var res = await probeVision(env, m);
+    results.push(Object.assign({ probe: "vision", target: m }, res));
+    return res;
+  });`,
+  `  await runPool(visionModels, 2, async function (m) {
+    var res = await probeVision(env, m);
+    results.push(Object.assign({ probe: "vision", target: m }, res));
+    // GW-VISION-HEALTH-1 (2026-09-13): the vision pool wrote to ai_calibration_results and then dropped
+    // the result - it never called upsertHealth. For a vision-ONLY model (absent from ALL_MODELS) nothing
+    // in this worker updated its health at all, so the inferential gateway sweep was the sole writer and
+    // could mark degraded a model this direct probe measures as healthy. Observed in the 13:30:57.835Z
+    // run: probeVision(gemma-4-26b) returned status=pass detail="ok Red" while gatewayFailureSweep
+    // recorded 400 @cf/google/gemma-4-26b-a4b-it [image-input] and set status='degraded' - same t0.
+    // Only vision-only models are touched, so health semantics for models shared with the model-probe
+    // pool (kimi-k2.6, kimi-k2.7-code, glm-5.3-flash) are unchanged.
+    try {
+      if (ALL_MODELS.indexOf(m) < 0) {
+        if (res.status === "pass") {
+          await upsertHealth(env, m, "ok", res.latency_ms, 0);
+          await closeIssue(env, "[ai-cal] model probe failing: " + m, "vision probe passing");
+        } else {
+          var vprev = await env.QNFO_AUDIT.prepare("SELECT consecutive_failures FROM ai_model_health WHERE model_id = ?1").bind(m).first();
+          var vcf = (vprev ? (vprev.consecutive_failures || 0) : 0) + 1;
+          await upsertHealth(env, m, vcf >= failThreshold ? "failing" : "degraded", res.latency_ms, vcf);
+          if (vcf >= failThreshold) await fileIssue(env, "[ai-cal] model probe failing: " + m, "vision probe consecutive_failures=" + vcf + " detail=" + res.detail, "high");
+        }
+      }
+    } catch (e) {}
+    return res;
+  });`
+);
+
 // ---------------------------------------------------------------- A7 version
 swap(
   "A7 version bump 1.1.4 -> 1.1.6",
   `var VERSION = "1.1.4";`,
-  `var VERSION = "1.1.6"; // GW-CLASSIFY-2 (2026-09-13): shape-vs-model-fault gate + explicit request-shape/unclassified classes`
+  `var VERSION = "1.1.6"; // GW-CLASSIFY-2 + GW-VISION-HEALTH-1 (2026-09-13): shape-vs-model-fault gate, explicit request-shape/unclassified classes, vision health propagation`
 );
 
 console.log("");
