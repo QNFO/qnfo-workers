@@ -228,7 +228,3 @@ crons = ["*/30 * * * *"]
 binding = "CONTAINERS_PILOT"
 service = "qnfo-containers-pilot"
 environment = "production"
-
-[[migrations]]
-tag = "v2"
-new_classes = ["AgenticOpsExec"]
