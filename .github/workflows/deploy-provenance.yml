@@ -1,0 +1,50 @@
+name: deploy-provenance
+
+# Fails when a worker ships a fix that production cannot have received.
+#
+# Origin: 2026-09-13 fleet error audit. qnfo-pipeline-ops produced 931 alerts
+# all-time / 72 in 24h from a defect whose fix was committed in canonical source
+# and never deployed, while its `deployed-current.worker.js` snapshot was a byte
+# copy of the repo source - so every drift check compared the repo to itself and
+# reported clean. qnfo-research-exec carried the same shape: a staged patcher for
+# the "NL is not defined" ReferenceError left unapplied, with 40/40 v2-drain
+# failure rows recorded as status='ok'.
+#
+# This runs the guard non-strict, so the current warning state does not block
+# merges; a FAIL (missing snapshot, or duplicate snapshot alongside a staged
+# patcher) does.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Scan worker deploy provenance
+        run: node scripts/check-deploy-provenance.mjs
+
+      - name: Record machine-readable provenance
+        if: always()
+        run: node scripts/check-deploy-provenance.mjs --json > deploy-provenance.json || true
+
+      - name: Upload provenance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-provenance
+          path: deploy-provenance.json
+          if-no-files-found: ignore
