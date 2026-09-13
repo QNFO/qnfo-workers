@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.15.6";
+var VERSION = "2.15.7";
 function boundedToolLog(a, cap) {
   a = Array.isArray(a) ? a : [];
   cap = cap || 24000;
@@ -1288,7 +1288,7 @@ async function logOps(env, rec) {
   } catch (e) {
     console.log("ops_ai_log insert failed:", e && e.message || e);
   }
-  if (rec && !rec.ok) {
+  if (rec && rec.ok === 0) {
     try {
       const title = "[ops-chat-fail] model=" + String(rec.model || "?") + " " + String(rec.response || "").slice(0, 80);
       const _fp2 = "chatfail:" + fnv32(title);
