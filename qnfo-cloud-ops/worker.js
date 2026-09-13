@@ -1902,16 +1902,17 @@ async function selfRegister(env) {
   return resp.ok;
 }
 
-export default {
-  
+
+// SENSITIVITY-ANALYSIS PILLAR (AUTONOMY-PILLARS-1, 2026-09-13)
+// Weekly adversarial self-check of value-laden trade-offs.
 async function jobSensitivityAnalysis(env) {
   const ts = new Date().toISOString();
   const checks = [
     { check: "cost_vs_capability", finding: "Containers scale-to-zero ($0 idle). Cold start ~15s. Trade-off: accepted.", verdict: "PASS" },
     { check: "autonomy_vs_safety", finding: "Destructive ops require confirm:true. email_respond reply-only. Trade-off: accepted.", verdict: "PASS" },
-    { check: "service_binding_coupling", finding: "ops-exec CONTAINERS_PILOT binding: if deleted, shell tools fail. Mitigation: health reports binding status.", verdict: "WARN" },
-    { check: "concurrent_deploy_races", finding: "Multiple agents can overwrite deploys (LAST-WINS). Mitigation: cf_worker_read version guard.", verdict: "WARN" },
-    { check: "async_job_cap", finding: "200 async jobs/day. Sync path works within 90s. Cap resets at 23:59Z.", verdict: "PASS" }
+    { check: "service_binding_coupling", finding: "ops-exec CONTAINERS_PILOT binding: if deleted, shell tools fail silently.", verdict: "WARN" },
+    { check: "concurrent_deploy_races", finding: "Multiple agents can overwrite deploys (LAST-WINS). cf_worker_read guard exists but not universally used.", verdict: "WARN" },
+    { check: "async_job_cap", finding: "200 async jobs/day cap. Sync path works within 90s. Cap resets at 23:59Z.", verdict: "PASS" }
   ];
   const warns = checks.filter(c => c.verdict === "WARN").map(c => c.check).join(", ");
   const summary = "SENSITIVITY-ANALYSIS: " + checks.filter(c => c.verdict === "WARN").length + " WARNs (" + warns + "), " + checks.filter(c => c.verdict === "PASS").length + " PASSes";
@@ -1919,9 +1920,11 @@ async function jobSensitivityAnalysis(env) {
     if (env.QNFO_AUDIT) {
       await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind("sa-" + Date.now().toString(36), ts, "sensitivity-analysis", summary, JSON.stringify({checks, ts}).slice(0, 4000), "qnfo-cloud-ops", "ok").run();
     }
-  } catch (e) {}
+  } catch (e) { console.log("sensitivity-analysis log failed:", e.message); }
   return { ok: true, checks: checks.length, warns: checks.filter(c => c.verdict === "WARN").length, summary };
 }
+export default {
+  
 
 async scheduled(event, env, ctx) {
     const cron = event.cron;
@@ -1945,7 +1948,6 @@ async scheduled(event, env, ctx) {
         await sendDigest(env, "QNFO cloud job failure \u2014 " + job, "Job " + job + " failed: " + String(e && e.message || e));
       } catch (e2) {}
     }
-    ctx.waitUntil(jobSensitivityAnalysis(env).catch(e => console.log("sensitivity-analysis:", e.message)));
   },
 
   async fetch(request, env, ctx) {

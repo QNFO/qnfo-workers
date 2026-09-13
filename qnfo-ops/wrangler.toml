@@ -229,3 +229,7 @@ crons = ["*/30 * * * *"]
 binding = "FLEET_FEED"
 service = "qnfo-fleet-feed"
 environment = "production"
+
+[[migrations]]
+tag = "v2"
+new_classes = ["AgenticOpsExec"]

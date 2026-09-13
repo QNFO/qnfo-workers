@@ -2788,6 +2788,14 @@ async function createJobFromBody(env, body) {
   return { id: jobId, model: "ops-exec" };
 }
 __name(createJobFromBody, "createJobFromBody");
+// AgenticOpsExec Durable Object stub (added v2.24.0 to preserve DO class from concurrent deploy)
+// The concurrent agent v2.23.0 introduced this class; we preserve it to avoid deleting DO instances.
+export class AgenticOpsExec {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+  async fetch(request) {
+    return new Response(JSON.stringify({ ok: true, worker: "qnfo-ops", class: "AgenticOpsExec", version: VERSION }), { headers: { "Content-Type": "application/json" } });
+  }
+}
 var OpsExecWorkflow = class extends WorkflowEntrypoint {
   static {
     __name(this, "OpsExecWorkflow");
