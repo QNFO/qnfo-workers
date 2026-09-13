@@ -4,7 +4,9 @@ Date: 2026-09-13 (qnfo-ops / ops-exec)
 Corrects: `patches/2026-09-13-model-depth-and-code-routing.md` (commits `f79dda65`, `fdcf2110`)
 
 I read the deployer myself this time instead of trusting a summary. Two of my findings were
-about a file that is **never read in production**, and one was flatly wrong.
+about a file that is **never read in production**, and one was flatly wrong. This file also
+records a correction to its own previous revision (see §2.3) — I withdrew a claim that the
+data then re-confirmed.
 
 ---
 
@@ -30,8 +32,8 @@ skips if `depV === canV` (no-op).
 
 **Consequence:** `qnfo-ai-calibration/deployed-current.worker.js` **exists**, so it is
 candidate #1 and `qnfo-ai-calibration/worker.js` is **never fetched**. Editing `worker.js`
-changes nothing at runtime. That is the RC-6 divergence the sibling patch doc described —
-and it means my patcher, which defaults to `worker.js`, was aimed at a dead file.
+changes nothing at runtime. That is the RC-6 divergence the sibling patch doc described — and
+it means my patcher, which defaults to `worker.js`, was aimed at a dead file.
 
 Secondary: because every GitHub hit is written back to R2 with a fresh timestamp, GitHub
 changes propagate on the next scan after R2 goes stale — roughly hourly, not instantly.
@@ -40,7 +42,7 @@ changes propagate on the next scan after R2 goes stale — roughly hourly, not i
 
 ## 2. What I got wrong
 
-### F3 was wrong. The live probe set is 18 models, not 10.
+### 2.1 F3 was wrong — the live probe set is 18 models, not 10
 
 `deployed-current.worker.js` `TIER0_WA` has **15** entries:
 `deepseek-r1-qwen-32b`, `qwen3-30b`, `qwen2.5-coder-32b`, `glm-5.2`, `kimi-k2.6`, `qwq-32b`,
@@ -51,38 +53,61 @@ changes propagate on the next scan after R2 goes stale — roughly hourly, not i
 => **18 probed**. My "only 10 models are probed" came from the shadowed 7-entry `worker.js`.
 P2-7's premise survives (18 probed vs a handful actually routed to) but the number was wrong.
 
-### F7/F8 do not apply to production.
+### 2.2 F7/F8 do not apply to production
 
 The live bundle is internally **consistent**:
 
-- `fileIssue()`: `SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'` then
-  `INSERT INTO agent_issues (...)`
+- `fileIssue()`: `SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'` then `INSERT INTO agent_issues (...)`
 - `closeIssue()`: `UPDATE agent_issues SET status = 'closed' ...`
 - gw-fail dedup guard: `SELECT id FROM agent_issues WHERE title LIKE ?1 AND status IN ('wontfix','closed','resolved')`
 - gw-fail auto-close pass: `SELECT id, title FROM agent_issues WHERE title LIKE '[gw-fail]%' AND status = 'open'`
 
 Writer and both readers use `agent_issues`. The `issue_ledger`/`agent_issues` split exists
 **only** in the shadowed `worker.js`. My claim that "the guard cannot match its own writer"
-was therefore **a statement about dead code, not a production defect.** The P0 item built on
-it should be dropped from production scope (it remains valid as source hygiene for `worker.js`).
+was **a statement about dead code, not a production defect.** Drop it from production scope
+(it remains valid as source hygiene for `worker.js`).
 
-### The gw-fail ledger is not a runaway leak.
+### 2.3 The gw-fail burst IS real — I wrongly withdrew it
 
-Live `agent_issues` where `title LIKE '[gw-fail]%'`:
+The previous revision of this file claimed the ledger "is not a runaway leak" and withdrew my
+burst finding. The data contradicts that withdrawal. `ORDER BY id`, `created_at` in ms:
 
-| status | rows | distinct created_at |
+| id | created_at | Δ from 654 |
 |---|---|---|
-| wontfix | 15 | 15 |
-| open | 8 | 8 |
-| resolved | 6 | 6 |
-| closed | 2 | 2 |
-| **total** | **31** | **31** |
+| 654 | 1789133446488 | 0 |
+| 655 | 1789133448026 | 1,538 |
+| 656 | 1789133449374 | 2,886 |
+| 657 | 1789133451412 | 4,924 |
+| 658 | 1789133453017 | 6,529 |
+| 659 | 1789133454436 | 7,948 |
+| 660 | 1789133456460 | 9,972 |
 
-That is the shape of a working lifecycle — file, get dispositioned, get suppressed — not an
-unbounded emitter. My earlier "7 rows in a 10-second burst" reading was taken from a
-compressed window and is **not reproduced here**; the aggregate is consistent with normal
-accumulation over weeks. I am withdrawing the "unbounded leak" characterisation pending a
-burst test I can actually cite.
+**Seven issues in 9.97 seconds.** A second cluster: 482/483/484 at
+1788681613411→1788681616019 = **2,608 ms**. Both are real.
+
+Live distribution: `wontfix 15`, `open 8`, `resolved 6`, `closed 2` — 31 rows, 31 distinct
+`created_at`.
+
+**Guard paradox — this is the useful finding.** The current canonical *contains* the dedup
+guard, and row 489 (`[gw-fail] 400 @cf/qwen/qwen3.8-27b`, status `resolved`) carries a title
+**identical** to row 654 (`[gw-fail] 400 @cf/qwen/qwen3.8-27b`). The guard is
+`SELECT id FROM agent_issues WHERE title LIKE '%<b.model>%' AND status IN ('wontfix','closed','resolved')`
+then `if (dispo) continue;`. Under that code, 654 could not have been filed if 489 was already
+`resolved`. And `fileIssue()` dedups on `title = ?1 AND status = 'open'`, so 654 could not have
+been filed if 489 was `open` either.
+
+⇒ **The version running at 2026-09-11T13:30:46Z filed gw-fail rows with neither guard in
+force.** The current canonical has both. The most consistent reading is that the regression I
+originally described was real and has **since been corrected in the canonical** — i.e. the P0
+"revert the regression" item is probably already done.
+
+**Corroboration:** the newest gw-fail row is 670 at `1789214453581` (≈2026-09-12T12:00:53Z) and
+it is a single row, not a burst. No gw-fail rows have appeared in the ~21 hours since, across
+~42 half-hourly sweeps. A still-broken emitter would have produced hundreds.
+
+**What I cannot prove:** that sha `3624a4da` was what ran at 13:30Z, or when it landed. There
+is no deploy record for it that I have read, and `main` is being written by other automation
+(§5). The inference rests on behaviour plus the guard paradox, not on a deployment log.
 
 ---
 
@@ -97,15 +122,15 @@ burst test I can actually cite.
 | **RC-4 deepseek-direct can never pass** | `pass = r.status === 200 && r.text.indexOf("deepseek-v4-flash") >= 0;` — DeepSeek's own `/v1/models` cannot contain a CF alias |
 | **RC-5 vision results never persisted** | `runPool(visionModels, 2, ...)` pushes to `results` and returns; no `upsertHealth` |
 
-Note `DEFAULT_VISION` live has **5** entries (adds `gemma-4-26b`, `llama-3.2-11b-vision`)
-vs 4 in the shadowed source.
+`DEFAULT_VISION` live has **5** entries (adds `gemma-4-26b`, `llama-3.2-11b-vision`) vs 4 in
+the shadowed source.
 
 ---
 
 ## 4. Corrected fix path
 
 The live file is an **esbuild bundle** (`var __defProp`, `__name(target, value) => ...`
-wrappers, `6e4`/`9e4`/`45e3` numeric literals). Hand-editing it is wrong. The correct order:
+wrappers, `6e4`/`9e4`/`45e3` numeric literals). Hand-editing it is wrong. Correct order:
 
 1. Edit `qnfo-ai-calibration/worker.js` (the hand-written source) — my patcher does this.
 2. **Rebuild** the bundle so `deployed-current.worker.js` regenerates from that source.
@@ -132,8 +157,10 @@ workflow cannot be enforced while that is true.
 
 ## 6. Still unresolved
 
-- I did **not** diff the two files byte-for-byte; the divergence is established by reading
-  both and comparing the specific regions above.
+- I did **not** diff the two files byte-for-byte; the divergence is established by reading both
+  and comparing the specific regions above.
 - I cannot rebuild the bundle (no node runtime, no filesystem on qnfo-ops).
+- I cannot read `resolved_at`-style history, so I cannot date when row 489 became `resolved` —
+  which is the one measurement that would settle §2.3 outright.
 - The router fix (P0-1) remains a specification: `qnfo-ai/worker.js` still not read in full.
 - `CODE_EVAL` (required by the P1-4 probe) does not exist; Workers forbid `eval`/`new Function`.
