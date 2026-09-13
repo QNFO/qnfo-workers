@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.15.3";
+var VERSION = "2.15.4";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2762,7 +2762,8 @@ var worker_default = {
       return json({ id: created.id, status: "queued", model: created.model, workflow: "ops-exec-workflow", poll: "/v1/jobs/" + created.id, ts: iso() }, 202);
     }
     if (path === "/v1/jobs" && method === "GET") {
-      if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      // JOBS-STATUS-PUBLIC-1 (2026-09-13): read-only job LIST is public (status metadata
+      // only - id/status/model/strategy/error/timestamps; no payload/response/tool_log).
       const st = (url.searchParams.get("status") || "").trim();
       const lim = Math.max(1, Math.min(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 100));
       const sel = "SELECT id, status, model, strategy, error, created_at, updated_at FROM ops_jobs";
