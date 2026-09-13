@@ -1,11 +1,15 @@
--- 2026-09-13-REMEDIATION.sql   (rev 3 — supersedes rev 2, commit c62788d6)
+-- 2026-09-13-REMEDIATION.sql   (rev 4 — supersedes rev 3, commit 90fa8e2e)
 -- Author: qnfo-ops (ops/audit endpoint). Target DB: qnfo-audit.
 --
 -- This endpoint is READ-ONLY on D1 and cannot deploy, so it could not execute the writes below.
 -- Every statement is scoped and idempotent; none is a bulk delete.
 --
+-- ── rev 4 change ──
+--   * Adds FIX 7 (WARNING REGISTRY) — fleet_issue_log / fleet_error_state / fleet_agents, the last
+--     uncovered warning surface.
+--
 -- ── rev 3 change ──
---   * Adds FIX 6 (EMAIL SURFACE) — the mailbox warning surface, previously uncovered.
+--   * Adds FIX 6 (EMAIL SURFACE).
 --
 -- ── rev 2 changes (corrections to rev 1) ──
 --   * FIX 1 rewritten: the phantom rows are RE-TOUCHED EVERY SWEEP (updated_at 13:31:08-13:31:12Z
@@ -23,6 +27,7 @@
 --                            healthVer=10 errKinds={"version-format":17,"stale-canon":4,"health-ver":10}
 --   backlog drain 2026-09-13: processed=12 closed=0 escalated=0 rechecked=12
 --   email 682 total / 23 in 24h / spam 45 (6.6%) / alerts@ mailbox 304 messages
+--   fleet_issue_log 12 tracked / 10 firing ~hourly / fleet_error_state 8 rows / fleet_agents EMPTY
 
 
 -- ══ FIX 0 — FIRST: reconcile the qnfo-ai-calibration source drift. Nothing below is durable without it.
@@ -273,6 +278,48 @@ UPDATE issue_ledger
 --     SELECT classification, status, COUNT(*) FROM emails GROUP BY classification, status;
 
 
+-- ══ FIX 7 — WARNING REGISTRY: warnings fire hourly and are never promoted (no SQL)
+--
+-- fleet_issue_log holds 12 tracked findings. TEN of them are firing ~hourly — occurrences 82-91,
+-- last_seen 2026-09-13T13:46:09Z — and NONE of them appears in the agent_issues backlog (12 items).
+-- The warnings are recorded but there is no promotion path to remediation, so they recur forever:
+--
+--   id             sev   category            title                                                occ
+--   iss-ac576b99   err   worker-errors       "9 worker(s) with 24h errors"                        91
+--   iss-8e1ec290   err   queue-freshness     "Queue version_queue"                                82
+--   iss-f0272a33   err   queue-freshness     "Queue research_queue"                               91
+--   iss-13152cf9   warn  queue-freshness     "Queue outreach_queue"                               91
+--   iss-f6c7c0dd   err   gateway             "Ops AI gateway (24h)"                               91
+--   iss-cac511bc   warn  model-health        "AI model health"                                    84
+--   iss-98f1c548   warn  integration-chain   "Telemetry (trace -> worker_logs)"                   91
+--   iss-313bc84c   warn  integration-chain   "Research execution (queue -> papers)"               91
+--   iss-1eb53b62   warn  integration-chain   "Research intake (radar -> ideas -> triage)"         91
+--   iss-b4a143c0   warn  agent-issues        "Agent issues (open)"                                90
+--   iss-9d0ff956   warn  scheduled-no-run    "1 scheduled worker(s) saw 0 invocations in 24h"      1
+--
+-- Cross-links to defects found elsewhere in this file:
+--   iss-f6c7c0dd + iss-cac511bc  <- the gateway/model-health noise analysed in FIX 3 and FIX 4.
+--   iss-8e1ec290                 <- issue 677 "[gw-fail] VQ error version_queue id=18".
+--   iss-1eb53b62                 <- the orphaned research-intake chain (radar -> ideas -> triage).
+--   iss-9d0ff956 (2026-09-13T04:01Z, single occurrence) is the one genuine STALE-WORKER signal in
+--     this table: a scheduled worker expected to fire saw 0 invocations in 24h. NOT pinned to a
+--     name — fleet_crons holds only 6 rows and the sole disabled/null-fired entry is
+--     demo-venue-radar-daily (enabled=0, last_fired=NULL, next_fire=NULL). That is the only
+--     candidate this audit can name, and it is not a confirmed match.
+--
+-- Two supporting tables are themselves degraded, which is why this surface is invisible:
+--   fleet_error_state  8 rows / 8 workers, max 9 errors (job-market-watch), newest seen_at
+--                      2026-09-11T05:17:39Z — NO writes in 2+ days while iss-ac576b99 reports
+--                      "9 worker(s) with 24h errors" every hour. The error table is stale.
+--   fleet_agents       EMPTY (0 rows) — the fleet agent registry table is unpopulated.
+--
+-- VERIFY 7:
+--   SELECT id, category, sev, title, occurrences, last_seen FROM fleet_issue_log
+--    ORDER BY occurrences DESC LIMIT 20;
+--   SELECT worker, errors, seen_at FROM fleet_error_state ORDER BY errors DESC;
+--   SELECT COUNT(*) FROM fleet_agents;
+
+
 -- ══ RECOMMENDED ORDER (each step is a prerequisite for the next) ══
 --   1. Recover + commit the qnfo-ai-calibration 1.1.5 source as ONE canonical file (FIX 0).
 --   2. Fix internalId() — replace the substring fallback with a total map, or normalise to the
@@ -286,3 +333,5 @@ UPDATE issue_ledger
 --      [gw-fail] tickets, and it is the highest-value item in this file.
 --   8. Fix the internal-alert sending path so alerts are not delivered twice via the bounce route
 --      (FIX 6a/6b), and stop routing subscription confirmations to alerts@ (FIX 6c).
+--   9. Give fleet_issue_log a promotion path into agent_issues, and restore the writers for
+--      fleet_error_state (stale since 2026-09-11) and fleet_agents (empty) — FIX 7.
