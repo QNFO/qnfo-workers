@@ -25,13 +25,22 @@ Verified present (contents API, 2026-09-13):
 | `qnfo-ops/FINDING-2026-09-13-d1-guard-ADDENDUM-source-check-failed.md` | 4,167 | `c405b4604f01` |
 | `audits/2026-09-13-QRI-4-verified-and-guard-defect.md` (ops-workspace, R2) | 11,669 | — |
 
-**Unverified, stated as such:** the commit shas I quoted in that turn (`6e71e254`, `b544e8d7`,
-`25ea89f6`) do **not** appear among the 12 most recent commits of `QNFO/qnfo-workers` (latest
-`e7810238` 06:56:20Z, `bd095e65` 06:56:13Z, `18febe68` 06:55:56Z). I did not page the history. Treat
-those shas as unconfirmed; the files themselves are confirmed.
+**Commit shas — RESOLVED, and my "unconfirmed" caveat was itself wrong.** On first publication of this
+note I wrote that the shas quoted in the preceding turn (`6e71e254`, `b544e8d7`, `25ea89f6`) were "not
+among the 12 most recent commits" and should be treated as unconfirmed. That reasoning was sound but
+the conclusion was false: those commits are simply *older than the newest 12*. Queried directly via
+`GET /repos/QNFO/qnfo-workers/commits/{sha}` — all three **HTTP 200**:
 
-Lesson: a negative existence claim is only as good as the path tested. I tested a path I had
-invented rather than the one my own record named.
+| sha (full) | committed | message (verbatim head) |
+|---|---|---|
+| `6e71e254620725812543a2390c79fbcf029e1614` | 06:51:16Z | "ERRATA-2: falsify QRI-3 word count (2504/15278 -> 2503/15276 for QRI-2 text, 2511/15323 for QRI-4)…" |
+| `25ea89f6904076b9f919c6372ead5dbd6b395c60` | 06:51:52Z | "APPLY-ORDER rev 2: sequence QRI-1 -> QRI-4 -> QRI-3…" |
+| `b544e8d7862d6df4993d5d831a742a4007cdb103` | 06:52:30Z | "Addendum: source check for the D1 guard FAILED — 161,339-byte file, 32,768-char read ceiling…" |
+
+Two lessons, both about negatives. (a) A negative existence claim is only as good as the path tested —
+I tested a path I had invented instead of the one my own record named. (b) "Not in the newest N" is not
+"does not exist"; I converted an absence of evidence into a near-assertion of absence. Both are the
+same failure mode, and both were caught only by querying the thing itself.
 
 ## 2. The patch is NOT applied — proven with QRI-4's own post-flight probe
 
@@ -94,5 +103,7 @@ Blast radius, `telemetry_report` 24 h at 06:57:08Z: **5,215** tool calls, **570*
 - §2 proves the row is unmodified. It does **not** prove the SQL would apply cleanly (e.g. `replace()`
   semantics against a 15 KB body, `json_set` availability, the idempotence guards).
 - `github_file_write` failed 36 times in 24 h; this write may be one of them — check its return.
+- The §1 shas were resolved only after the first version of this note was published with a wrong
+  caveat, and this second version was itself written without re-reading the whole commit history.
 - Roughly 40 documents have been written about this one defect today, with zero applied changes.
   Recording that ratio is not remediation, and no further document closes it.
