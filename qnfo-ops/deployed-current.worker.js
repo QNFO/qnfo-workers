@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.20.2";
+var VERSION = "2.24.0";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -1737,19 +1737,34 @@ async function execPipeline(env, args) {
 // Cost: $0.00002/vCPU-sec utilization-based, scale-to-zero when idle ($0 idle cost)
 
 async function containerDispatch(env, route, body, timeoutMs) {
-  const url = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+  // SERVICE-BINDING-PRIORITY-1 (v2.20.3): use CONTAINERS_PILOT service binding when available
+  // (same-zone Worker-to-Worker HTTP returns 1042; service bindings bypass the edge).
+  // Falls back to outbound HTTP for external/dev callers.
   const token = env.PILOT_TOKEN;
   if (!token) return { ok: false, error: "PILOT_TOKEN secret not configured on qnfo-ops" };
   const timeout = Math.min(Math.max(timeoutMs || 60000, 5000), 300000);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const resp = await fetch(url + route, {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal
-    });
+    let resp;
+    if (env.CONTAINERS_PILOT && env.CONTAINERS_PILOT.fetch) {
+      // Service binding path (no 1042, no network hop, ~0ms overhead)
+      resp = await env.CONTAINERS_PILOT.fetch("https://containers-pilot.internal" + route, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      });
+    } else {
+      // HTTP fallback (external callers, dev mode)
+      const url = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+      resp = await fetch(url + route, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      });
+    }
     clearTimeout(t);
     const j = await resp.json().catch(() => ({}));
     if (!resp.ok) return { ok: false, error: "container HTTP " + resp.status + ": " + JSON.stringify(j).slice(0, 300) };
@@ -2947,6 +2962,7 @@ var worker_default = {
       bindings.intent_token = !!env.INTENT_TOKEN;
       bindings.cf_api_token = !!env.CF_API_TOKEN;
       bindings.registry_token = !!env.REGISTRY_TOKEN;
+      bindings.containers_pilot = !!(env.CONTAINERS_PILOT && env.CONTAINERS_PILOT.fetch);
       bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.ai = !!env.WAI;
       return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings, generatedAt: iso() });
