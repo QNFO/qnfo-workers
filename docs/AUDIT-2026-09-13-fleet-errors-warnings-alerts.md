@@ -4,6 +4,11 @@ Auditor: qnfo-ops (ops-exec). Window: live state at 2026-09-13T14:08Z.
 Sources: qnfo-audit D1, fleet_status, telemetry_report, email_stats, backlog_status.
 Every count below is a tool result, not an estimate.
 
+> **REVISION 2 (2026-09-13T14:20Z).** Revision 1 prescribed "export the Workflow
+> class" for `personal-companion`. **That advice is withdrawn and must not be
+> applied — it would cause a production downgrade.** See §0.5. Read §0.5 before
+> acting on any fix in this document.
+
 ---
 
 ## 0. Headline
@@ -20,11 +25,75 @@ Every count below is a tool result, not an estimate.
 | Tool failures 24h | 658 of 7,539 | 8.7% |
 | Worker-health FAILED events | 13 | qnfo-ai + personal-api, 530 |
 | Register overdue | 26 | regOpen 99, regDue7 51, regEscalated EMPTY |
+| `scanerr:*` keys in fleet_deploy_state | **44** | 3 `nocanon`, 7 `stale-canon` |
 
 The open backlog is 3, down from 15 two days ago. That number is **not** a
 health signal: `fleet_issue_log` shows 10 chronic issues each firing 84–93
 times, i.e. once per ~20-minute advisor cycle. The backlog drained; the
 causes did not.
+
+---
+
+## 0.5 SAFETY CORRECTION — a failing deploy is not always a defect
+
+**Revision 1's FIX-1 is withdrawn.** It read:
+
+> FIX-1 personal-companion (hourly loop, 26 failures) — Fix: export the
+> Workflow class from the deployed bundle entrypoint, or add `script_name`.
+
+That is exactly backwards. A prior finding on this worker
+(`personal-companion/FINDING-2026-09-13-deploy-loop-DO-NOT-FIX-10021.md`)
+establishes that **the 10021 failure is the only thing preventing a downgrade**.
+Verified this session:
+
+| what | how | value |
+|---|---|---|
+| `auto_heal` | `fleet_deploy_state` | **`1`**, set 2026-09-08 16:25:49 |
+| `enabled` | `fleet_deploy_state` | **`1`**, same timestamp |
+| production version | drift row, 13:01:22 | deployed **`v1.1.0`** |
+| deploy target | `fleet_deploys` rows 28→74 | **`1.0.0`** — lower |
+
+Three defects are stacked on one worker:
+1. the artifact is **older than production** (`1.0.0` vs `v1.1.0`);
+2. the artifact is **structurally undeployable** (no `GenerationFlow` export);
+3. the **comparator** misparses the version strings.
+
+**Defect 2 is currently cancelling defects 1 and 3.** Removing defect 2 lets
+`1.0.0` replace `v1.1.0` on the live worker, hourly, with `auto_heal=1` and
+nothing to stop it.
+
+### Defect 3 is now proven, not inferred
+
+The comparator emits **opposite labels for the identical state**, differing
+only by a leading `v`:
+
+| ts | deployed_version | canonical_version | note |
+|---|---|---|---|
+| 13:01:22 | `v1.1.0` | `1.0.0` | **`canonical-ahead`** |
+| 14:02:05 | `1.1.0` | `1.0.0` | **`deployed-ahead`** |
+
+Same worker, same canonical, same 62-minute window. `v1.1.0` is parsed as
+behind `1.0.0`; `1.1.0` is parsed as ahead of it. The leading `v` flips the
+verdict. This is direct evidence for the comparator misparse previously
+recorded as inference.
+
+### Correct order of operations
+
+1. `UPDATE fleet_deploy_state SET value='0' WHERE key='auto_heal'` — one row,
+   reversible, and the only change that makes every later step safe.
+2. Reconcile the canonical so it is **≥ v1.1.0** *and* exports `GenerationFlow`.
+3. Fix the comparator (`qnfo-fleet-control/version-compare.mjs`).
+4. Only then restore `auto_heal=1`, and re-verify from `/health`.
+
+**Step 1 is a D1 write and this endpoint is SELECT/WITH only. I cannot perform
+it.** Until it lands, do not act on FIX-1 or FIX-2.
+
+### This endpoint is also a downgrade target
+
+`qnfo-ops` (this auditor): deployed `2.15.7` / canonical `2.15.6`,
+`deployed-ahead` at 14:04:05 — and at 13:03:10 the same worker read
+`2.15.1` / `2.13.0`. A redeploy of this endpoint would regress it. Any
+fleet-wide "heal the drift" sweep would downgrade the auditor.
 
 ---
 
@@ -40,28 +109,39 @@ ok=1 → 22 rows.
 | qnfo-fleet-advisor | 2/3 | `HTTP 415: Content-Type must be one of: application/javascript, text/javascript, multipart/form-data` |
 | qnfo-observability | 1/1 | `HTTP 400 code 10021: Uncaught Error: No such module "fleet.js". imported from "worker.js"` |
 
-### FIX-1 personal-companion (hourly loop, 26 failures)
-The bundle is a downgrade target (`v1.1.0 -> 1.0.0`) whose artifact does not
-export `GenerationFlow`. The deployer cannot move it.
-Fix: export the Workflow class from the deployed bundle entrypoint, or add
-`script_name` to the workflow config. Until then, remove personal-companion
-from the deployer's target set so the hourly loop stops.
+### FIX-1 personal-companion — **DO NOT APPLY** (see §0.5)
+The correct action is to disable `auto_heal`, not to make the deploy succeed.
 
 ### FIX-2 qnfo-cloud-ops (25/25, never succeeded)
 `worker.js:1:2` SyntaxError is the signature of a `404:`-prefixed body being
-uploaded as JavaScript. The GitHub canonical is valid; the R2 object
-`r2:qnfo-canonical/qnfo-cloud-ops.js` is poisoned and the deployer resolves
-R2 first, then writes R2 back only on success — self-perpetuating.
-Fix: delete or overwrite that R2 object. Editing GitHub cannot fix this.
+uploaded as JavaScript. Every row's `source_path` is
+`r2:qnfo-canonical/qnfo-cloud-ops.js`, and the deployer resolves R2 before
+GitHub — so the GitHub canonical is correct and unused while the R2 object is
+poisoned.
+
+Drift direction: deployed `1.14.1` / canonical `1.14.1-gtd-guard`,
+`canonical-ahead` — a suffix variant, so unlike FIX-1 this is not a downgrade.
+
+**But clearing the R2 object alone does not fix it.** That requires a *valid*
+`1.14.1-gtd-guard` artifact to upload; the object currently holds a tombstone,
+and I do not hold the good bytes. Fix = rebuild the bundle, then overwrite the
+R2 object, then confirm the deploy. Two of those three steps are outside this
+endpoint.
 
 ### FIX-3 qnfo-observability (new, 2026-09-13T14:04:01Z)
-The bundle imports `fleet.js`, which is not bundled.
-Fix: bundle `fleet.js` into the artifact, or drop the import. Deployed 1.1.3,
-canonical 1.1.4 — the canonical is the broken one.
+`No such module "fleet.js"`. The repo directory **contains `fleet.js`**, so the
+module exists in source. The deployer uploads a single file
+(`<worker>/worker.js` or `<worker>/deployed-current.worker.js`) and does not
+bundle sibling modules. So this is not a missing file — it is a
+**multi-module worker the single-file deployer cannot express**.
+
+Fix: either bundle `worker.js` + `fleet.js` into one artifact, or move
+`fleet.js` to a separate worker reached by a service binding. Deployed 1.1.3,
+canonical 1.1.4 — the canonical is the broken one, so this is not a downgrade.
 
 ### FIX-4 qnfo-fleet-advisor
-Upload Content-Type is not a JS MIME type.
-Fix: set `Content-Type: application/javascript` on the upload.
+Upload Content-Type is not a JS MIME type. Fix: set
+`Content-Type: application/javascript` on the upload.
 
 ---
 
@@ -89,12 +169,23 @@ written on 2026-09-10, not a worker name.
 
 ### FIX-5
 Have the label writer emit bare semver (e.g. `1.6.1`) and set the worker-name
-field separately. One change clears all 14 `version-format` errors and the
+field separately. One change clears all 14 `version-format` errors plus the
 4 `stale-canon` and 10 `health-ver` rows that depend on the same field.
+Note this interacts with §0.5 defect 3: the comparator already mis-handles
+prefixes, so fix the comparator before mass-normalising labels.
 
 Also drifting: qnfo-signal-loop (1.1.2 vs 1.1.0), qnfo-research-exec (0.8.1 vs
 0.5.17-research-restored), qnfo-ops (2.15.7 vs 2.15.6), qnfo-fleet-dashboard
 (1.5.1 vs 1.1.0), qnfo-fleet-control (0.3.4 vs 0.3.3).
+
+### FIX-5b roster reconciliation
+`fleet_deploy_state` carries **44** `scanerr:*` keys. Three are `nocanon`
+(no canonical at all): `qnfo-container-executor`, `qnfo-scorecard`,
+`qnfo-wrangler-test`. Seven are `stale-canon`: `obsidian-writer`,
+`osf-integrity-check`, `personal-life-maintain`, `qnfo-arxiv-radar`,
+`qnfo-research-radar`, `qnfo-twin-maintain`, `research-daily-brief`.
+The same keys include names the service registry describes as merged into
+`fleet-exec` / `errata-hub`. Two rosters, unreconciled.
 
 ---
 
@@ -310,31 +401,40 @@ not of independent faults.
 
 ---
 
-## 10. Fix queue, ranked
+## 10. Fix queue, ranked (corrected)
 
-| # | Fix | Owner | Blocks |
-|---|---|---|---|
-| 1 | Clear `r2:qnfo-canonical/qnfo-cloud-ops.js` (FIX-2) | R2 write | 25 deploys |
-| 2 | Export `GenerationFlow` or set `script_name` (FIX-1) | personal-companion | 26 deploys |
-| 3 | Emit bare semver, drop `<name>/` prefix (FIX-5) | label writer | 14+4+10 drift rows |
-| 4 | Gate ensemble on non-empty src/bib context; cap attempt (FIX-9) | qnfo-research-exec | issues 687/688, ~192 criticals |
-| 5 | Fix `endpoint/deepseek-direct/models` assertion + digest (FIX-6) | qnfo-ai-calibration | 1/28 probes every run |
-| 6 | workers.dev fetch → service binding (FIX-11) | qnfo-auditor-health | open anomaly |
-| 7 | Bundle `fleet.js` (FIX-3) | qnfo-observability | 1 deploy |
-| 8 | Require measured counter for degraded (FIX-8) | qnfo-ai-calibration | model health |
-| 9 | Make gateway-sweep fail on thresholds (FIX-7) | qnfo-ai-calibration | masked errors |
-| 10 | Unstick version_queue id 18 (FIX-10) | jnl/zenodo publisher | issue 677 |
-| 11 | Fix 530 custom-domain health check (FIX-12) | DNS / health prober | 13 FAILED/day |
-| 12 | Correct INTAKE-STALL label (FIX-10) | qnfo-signal-loop | 24 criticals |
+| # | Fix | Owner | Blocks | Safe to apply now? |
+|---|---|---|---|---|
+| 0 | `auto_heal='0'` (§0.5 step 1) | D1 write | **everything else** | needs D1 write |
+| 1 | Comparator leading-`v` fix (FIX-5 / §0.5) | qnfo-fleet-control | wrong drift labels | yes, code |
+| 2 | Emit bare semver, drop `<name>/` prefix (FIX-5) | label writer | 14+4+10 drift rows | after #1 |
+| 3 | Gate ensemble on src/bib context; cap attempt (FIX-9) | qnfo-research-exec | 687/688, ~192 criticals | yes, code |
+| 4 | Fix `deepseek-direct/models` assertion + digest (FIX-6) | qnfo-ai-calibration | 1/28 probes | yes, code |
+| 5 | workers.dev fetch → service binding (FIX-11) | qnfo-auditor-health | open anomaly | yes, code |
+| 6 | Rebuild + re-upload qnfo-cloud-ops R2 object (FIX-2) | R2 write + build | 25 deploys | needs R2 write |
+| 7 | Bundle `fleet.js` (FIX-3) | qnfo-observability | 1 deploy | yes, build |
+| 8 | Require measured counter for degraded (FIX-8) | qnfo-ai-calibration | model health | yes, code |
+| 9 | Make gateway-sweep fail on thresholds (FIX-7) | qnfo-ai-calibration | masked errors | yes, code |
+| 10 | Unstick version_queue id 18 (FIX-10) | jnl/zenodo publisher | issue 677 | yes, code |
+| 11 | Fix 530 custom-domain health check (FIX-12) | DNS / health prober | 13 FAILED/day | needs DNS |
+| 12 | Correct INTAKE-STALL label (FIX-10) | qnfo-signal-loop | 24 criticals | yes, code |
+| — | ~~Export `GenerationFlow` (old FIX-1)~~ | — | — | **DO NOT APPLY** |
+| 13 | Reconcile 44 `scanerr:*` keys / two rosters (FIX-5b) | registry owner | 3 nocanon, 7 stale | yes, code |
 
 ---
 
 ## 11. What this audit could NOT establish
 
-- The `personal-companion` **live** version is not observable from this
-  endpoint. Its downgrade attempts are proven; its present state is not.
+- The `personal-companion` **live** version is asserted from `/health` in the
+  prior finding, not re-fetched this session. Its downgrade attempts are
+  proven; its present state is corroborated by the drift row only.
 - The R2-first resolution order in `qnfo-fleet-deploy` is **inferred** from
   `source_path` values and the 404-prefixed body, not read from the resolver.
+- The pre-fix comparator source is **unavailable** — the documented archive
+  pointer `qnfo-fleet-deploy/worker.js@ed539ec3` returns `path not found`
+  (retried with the full sha and alternate paths). The leading-`v` misparse is
+  therefore supported by the two contrary drift rows in §0.5 rather than by
+  reading the comparator.
 - The ensemble root cause is **inferred** from `srcFetched:false`/`bibCount:0`
   in the failed rows. The leg-level dispatch logs were not available.
 - `ai_queries` is a capped sample (~2,600 rows) against ~264k worker requests
@@ -342,6 +442,9 @@ not of independent faults.
 - Direct-API model spend (claude/gpt/deepseek-direct) is invisible to
   `cf_analytics`, which only counts Workers AI neurons (790,847 ≈ $8.70/30d).
   That figure is **not** total fleet AI spend.
+- `fleet_deploys` is **not** the complete deploy record: `personal-companion`
+  `modified_on` = 2026-09-13T13:32:01.743Z while its newest ledger row is
+  13:01:23. Scripts change with no ledger row.
 - `ops_issue_run` refused to execute: it requires explicit affirmation in the
   latest user message and returned `dryRun:true, openBacklog:3`. No issue was
   closed by this audit.
@@ -349,5 +452,6 @@ not of independent faults.
 ## 12. Actuators this endpoint does not have
 
 No deploy, no D1 write, no R2 write/delete, no git ref creation. Every FIX
-above is a specification. Three of them (FIX-2, FIX-3, FIX-4) are deploy-plane
-or storage fixes that cannot be expressed as a code commit at all.
+above is a specification. Critically, **§0.5 step 1 is a D1 write** — so the
+single highest-leverage action in this document is outside my reach, and
+FIX-1/FIX-2 must remain untouched until someone performs it.
