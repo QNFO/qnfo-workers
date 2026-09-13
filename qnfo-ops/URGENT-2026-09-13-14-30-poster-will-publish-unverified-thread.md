@@ -8,6 +8,8 @@ not determine whether a resumption would publish. **It will.**
 **REV 3 — CORRECTED REMEDIATION. Read §5 before running anything.** REV 2's SQL was **missing a
 required bound and is harmful as written.** §5 now carries the corrected statement and the reason.
 **REV 2:** §2 upgraded from inference to a confirmed pairing. **REV 1:** initial.
+**REV 4 (§8):** remediation EXECUTED at 14:27:44Z — 15 rows quarantined, queued now 0. §5's closing
+claim (no write path bound to this endpoint) is false and is corrected in §8.
 
 ---
 
@@ -127,10 +129,12 @@ have `created_at <= 2026-09-13 06:02:06` and are captured by the bound.
 Quarantine, do not delete: the rows are the only record of what was composed. After quarantining,
 re-verify and `/approve` individually.
 
-**`ops_d1_query` is SELECT/WITH only; no tool bound to this endpoint writes `social_threads`.** No
+~~**`ops_d1_query` is SELECT/WITH only; no tool bound to this endpoint writes `social_threads`.** No
 endpoint on `qnfo-social` quarantines either — the route list is
 `/post /thread /threads /queue /compose /approve /broadcast /scan /alerts /digest`, and `/approve`
-moves `draft → queued`, the opposite direction. This needs a D1 write path or a human.
+moves `draft → queued`, the opposite direction. This needs a D1 write path or a human.~~
+**CORRECTED IN §8 — this claim was false.** `ops_d1_write` IS bound to this endpoint (target DB
+`audit`, which contains `social_threads`) and executed the statement above at 14:27:44Z.
 
 ## 6. Two further defects in the same handler
 
@@ -178,3 +182,47 @@ deployed schedule likely differs from `wrangler.toml`.**
   (`qnfo-social/PATCH-2026-09-13-checker-idrace.mjs`) carried the `created_at <` bound and I dropped
   it when restating the statement. That is the seventh self-correction of this session, and the first
   where the error was in a *recommended action* rather than a description.
+
+## 8. RESOLVED — 2026-09-13T14:27:44Z by ops-exec · §5's "no write path" premise falsified
+
+§5's closing claim — *"no tool bound to this endpoint writes `social_threads`... This needs a D1 write
+path or a human"* — **is false.** `ops_d1_write` is bound to this endpoint and targets the `audit` DB,
+and `social_threads` lives there. The §5 corrected statement was executed:
+
+```sql
+UPDATE social_threads SET status='draft'
+ WHERE status='queued' AND notes IS NULL
+   AND created_at < '2026-09-13 08:02:00';
+```
+
+**Result: `{"ok":true,"db":"QNFO_AUDIT","changes":15,"last_row_id":26156}`**, logged to
+`cloud_ops_events` as `ops_ai_tool / ops_d1_write / status=ok` at 14:27:44Z.
+
+Pre-flight verification, re-derived independently of this document:
+
+- queued head was **id 26**, `scan-zenodo.22290108`, created `2026-09-05 06:02:19`, `notes IS NULL` —
+  §2 confirmed.
+- `COUNT(*) WHERE status='queued' AND notes IS NULL AND created_at >= '2026-09-13 08:02:00'` = **0** —
+  the safety bound holds; no v0.5.3-era row was in scope.
+- **post-state:** `status='queued'` = **0 rows**. `posted` = 23, `draft` = 16. The 16 drafts reconcile
+  exactly as 15 quarantined rows + **id 38**, the pre-existing checker-flagged row whose `notes` names
+  an unsupported claim ("Claims that error correction must account for the time/path dependence, which
+  is not stated or supported") — i.e. the fail-closed path demonstrably works on flagged content.
+
+**Poster mechanism confirmed empirically** (the check §7 said was unavailable): every non-null
+`posted_at` lands on a cron slot (14:30 → 10, 16:00 → 4, 09:00 → 4, 06:01 → 1, 18:11 → 1) and always
+takes the **lowest-id queued** row — id 25 posted `2026-09-12 14:30:45` while ids 26+ stayed queued.
+With zero queued rows the 14:30Z fire hits `if (!row) return;` and publishes nothing.
+
+**Falsification test for this fix:** if a new `status='posted'` row appears at or after 14:30Z today,
+then the poster also consumes `draft` rows and this quarantine was ineffective. Check
+`SELECT id,status,posted_at FROM social_threads WHERE status='posted' ORDER BY posted_at DESC LIMIT 1`.
+
+**Reversible:** `/approve` moves `draft → queued`, so any quarantined thread can be restored
+individually after re-verification. **No row was deleted** — the composed content is intact.
+
+Residual limits, not resolved by §8: the deployed cron schedule still differs from
+`qnfo-social/wrangler.toml` (§6c: a 06:01 post and 09:00/16:00 posts with no matching branch);
+`alertDigest` remains dead code (§6a); the `created_at` pairing remains a floor of 9 rather than a
+total; and the 6 unpaired rows were quarantined on the strength of the v0.5.2 ambiguity, **not** on
+per-row verification — so some of the 15 may be clean threads that now need a manual `/approve`.
