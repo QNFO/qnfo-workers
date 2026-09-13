@@ -6,8 +6,14 @@
 //   response-envelope change; runModel only read r.response/r.result, not choices[0].message.content),
 //   so proposals stayed 'new' forever and NOTHING alerted. Now pipeline-ops alarms on this class in
 //   <=15 min, and auto-triggers a triage drain when the triage worker is reachable.
+// v0.5.3-alert-dedup (2026-09-13, fleet audit): escalateTerminal() and intakeWatchdog() emitted a
+//   CRITICAL alert on every 15-min run even when the message itself said "-> agent_issues dup",
+//   i.e. the condition was already tracked by an open ticket. Measured: 765 critical alerts,
+//   ~96/day for two unchanged terminal failures. Both now gate on r.inserted, matching the
+//   convention escalateVersion() already uses in this same file. The per-run heartbeat is
+//   preserved by run()'s cloud_ops_events kind='health' row.
 
-var VERSION = "0.5.2-intake-alert-gate";
+var VERSION = "0.5.3-alert-dedup";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -70,9 +76,13 @@ async function intakeWatchdog(env) {
     const r = await escIssue(env, title, desc, "research-intake", "high");
     out.action = "escalated";
     try { const resp = await fetch(TRIAGE_URL + "/health"); out.triage_health = resp.status; } catch (e) {}
-    try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "INTAKE-STALL escalated -> agent_issues " + (r.inserted ? "ok" : "dup") + ": " + stalledN + " proposals stuck new").run();
-    } catch (e) {}
+    // v0.5.3: only alert on a NEWLY filed ticket. Previously a critical alert was emitted on
+    // every 15-min run even when the message said "dup", i.e. the ticket already existed.
+    if (r.inserted) {
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "INTAKE-STALL escalated -> agent_issues ok: " + stalledN + " proposals stuck new").run();
+      } catch (e) {}
+    }
   } else {
     // stall cleared or not a stall - self-close any open INTAKE-STALL issue (single-issue lifecycle)
     try {
@@ -115,7 +125,13 @@ async function escalateTerminal(env, terminal) {
     const title = "TERMINAL research failure " + String(t.source_id || t.id || "?").slice(0, 40);
     const desc = "research_queue terminal (recover_count " + (t.recover_count || 0) + " >= " + MAX_RECOVERS + "): " + String(t.error || "no error").slice(0, 400);
     const r = await escIssue(env, title, desc, "research-pipeline", "high");
-    try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "terminal research failure " + String(t.source_id || t.id || "?").slice(0, 40) + " -> agent_issues " + (r.inserted ? "ok" : "dup") + ": " + String(t.error || "").slice(0, 200)).run(); } catch (e) {}
+    // v0.5.3: gate on r.inserted. Previously this emitted a CRITICAL alert every 15 min even
+    // when the message read "-> agent_issues dup" (the ticket already existed). Measured:
+    // 765 critical alerts, ~96/day for two unchanged terminal failures. escalateVersion()
+    // below already used this pattern; escalateTerminal() now matches it.
+    if (r.inserted) {
+      try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "terminal research failure " + String(t.source_id || t.id || "?").slice(0, 40) + " -> agent_issues ok: " + String(t.error || "").slice(0, 200)).run(); } catch (e) {}
+    }
   }
 }
 async function versionErrors(env) {
