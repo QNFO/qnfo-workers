@@ -4,8 +4,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.13.0";
-// CODE-GATE-GUARD-2 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
+var VERSION = "2.16.0";
+// CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
 //          embedded-conversation marker (untrusted / candidate: / tool result / data only /
@@ -255,6 +255,19 @@ var OPS_TOOLS = [
   { name: "workspace_read", description: "Read a text file from the server-side ops-workspace (R2-backed virtual filesystem).", parameters: { type: "object", properties: { path: { type: "string", description: "relative file path" }, maxChars: { type: "number", description: "max chars (default 20000, max 100000)" } }, required: ["path"], additionalProperties: false } },
   { name: "workspace_list", description: "List files under a prefix in the server-side ops-workspace (R2-backed virtual filesystem).", parameters: { type: "object", properties: { prefix: { type: "string", description: "path prefix (empty = root)" }, limit: { type: "number", description: "max keys (default 50, max 500)" } }, additionalProperties: false } },
   { name: "workspace_delete", description: "Delete a file from the server-side ops-workspace (R2-backed virtual filesystem).", parameters: { type: "object", properties: { path: { type: "string", description: "relative file path" } }, required: ["path"], additionalProperties: false } }
+,
+
+  { name: "ops_d1_write", description: "Guarded multi-DB WRITE (INSERT/UPDATE/DELETE/REPLACE/CREATE/DROP/ALTER). Destructive statements require confirm:true. db: audit|living|graph|portfolio|outreach|cms|ipatent|personal. params: optional positional array.", parameters: { type: "object", properties: { db: { type: "string", enum: ["audit","living","graph","portfolio","outreach","cms","ipatent","personal"] }, sql: { type: "string" }, params: { type: "array" }, confirm: { type: "boolean" } }, required: ["sql"], additionalProperties: false } },
+  { name: "r2_put", description: "Write (put) one text object to a bound R2 bucket: releases/audit/backups/skills.", parameters: { type: "object", properties: { bucket: { type: "string", enum: ["releases","audit","backups","skills"] }, key: { type: "string" }, content: { type: "string" } }, required: ["key","content"], additionalProperties: false } },
+  { name: "r2_delete", description: "Delete one object from a bound R2 bucket (destructive; requires confirm:true).", parameters: { type: "object", properties: { bucket: { type: "string", enum: ["releases","audit","backups","skills"] }, key: { type: "string" }, confirm: { type: "boolean" } }, required: ["key"], additionalProperties: false } },
+  { name: "kv_put", description: "Write a string value to the bound KV namespace (equation-cache).", parameters: { type: "object", properties: { key: { type: "string" }, value: { type: "string" } }, required: ["key","value"], additionalProperties: false } },
+  { name: "kv_delete", description: "Delete a key from the bound KV namespace (destructive; requires confirm:true).", parameters: { type: "object", properties: { key: { type: "string" }, confirm: { type: "boolean" } }, required: ["key"], additionalProperties: false } },
+  { name: "github_create_branch", description: "Create a new branch in a GitHub repo from an existing branch (base, default main) via the git refs API.", parameters: { type: "object", properties: { repo: { type: "string" }, branch: { type: "string" }, base: { type: "string" } }, required: ["repo","branch"], additionalProperties: false } },
+  { name: "cf_worker_read", description: "Read the live deployed bundle + VERSION of a Cloudflare Worker via CF API. Use before editing to avoid concurrent-agent races (CONCURRENT-WORKER-VERIFY-1). Returns bundle_snippet (up to maxChars), version, size, modified_on.", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name (e.g. qnfo-agent-orchestrator)" }, maxChars: { type: "number", description: "max chars of bundle to return (default 8000, max 40000)" } }, required: ["worker"], additionalProperties: false } },
+  { name: "cf_worker_deploy", description: "Deploy a Cloudflare Worker via CF API PUT (server-side; no local wrangler required). Supports expected_version guard to prevent concurrent-agent races. Use for API-managed workers that have no wrangler.toml (e.g. qnfo-agent-orchestrator). ADVERSARIAL: does not validate JS syntax — test with run_code first.", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name" }, content: { type: "string", description: "full JS source to deploy" }, version: { type: "string", description: "version label (for logging)" }, expected_version: { type: "string", description: "if set, aborts if live version != this (race guard)" } }, required: ["worker","content"], additionalProperties: false } },
+  { name: "cf_worker_bindings", description: "Read live bindings for a Cloudflare Worker via CF API. Use before authoring wrangler.toml for MERGE consolidations (BINDING-PRESERVATION-1). Returns bindings array with type/name and type-specific fields (namespace_id, database_id, etc.).", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name" } }, required: ["worker"], additionalProperties: false } },
+  { name: "github_cherry_pick", description: "Graft one or more commits onto origin/main via GitHub Trees+Commits API (WORKTREE-GRAFT-PUSH-1). Server-side equivalent of: git worktree add --detach <tmp> origin/main && git cherry-pick <sha> && git push origin HEAD:main. ADVERSARIAL: does NOT resolve merge conflicts — check for file divergence first.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, commits: { type: "array", items: { type: "string" }, description: "array of commit SHAs to graft in order" }, base: { type: "string", description: "target branch (default main)" } }, required: ["repo","commits"], additionalProperties: false } },
+  { name: "dr_validate_schema", description: "Server-side D1 schema validation (JS port of dr_validate_schema.py). Validates required tables/columns in qnfo-audit + living-paper D1 databases directly via bound D1 bindings. Returns {ok, status:'SCHEMA OK'|'SCHEMA ERROR', violations, validated}.", parameters: { type: "object", properties: {}, additionalProperties: false } }
 ];
 function toolsPayload() {
   return OPS_TOOLS.map(function(t) {
@@ -281,9 +294,9 @@ function classifyDomain(text) {
   // CODE-GATE-GUARD-1 (2026-09-12): never code-classify embedded-conversation / delegation prompts.
   // 1) Pipeline-prefix blocklist FIRST (authoritative for known internal-pipeline openers).
   if (/^(you extract|you decide|you synthesize|you are compressing|the following sections)/.test(t)) return "chat";
-  // 2) Embedded-data detector: long prompts carrying injected conversation/data markers are chat, not code.
+  // 2) EMBEDDED-DATA DETECTOR (CODE-GATE-GUARD-1 threshold-1 = 1500 chars): a prompt LONGER THAN 1500 is chat, not code, ONLY IF it also carries an injected conversation/data marker (untrusted / candidate: / tool result / data only / never follow instructions). A long GENUINE code request has none, so it stays in code mode.
   if (t.length > 1500 && (t.indexOf("untrusted") >= 0 || t.indexOf("never follow instructions") >= 0 || t.indexOf("candidate:") >= 0 || t.indexOf("tool result") >= 0 || t.indexOf("data only") >= 0)) return "chat";
-  // 3) Generous backstop only (raised 800 -> 8000).
+  // 3) HARD BACKSTOP (CODE-GATE-GUARD-1 threshold-2 = 8000 chars, raised from 800): rejects pathological inputs only; real code requests rarely exceed this.
   if (t.length > 8000) return "chat";
   var code = 0, ops = 0;
   var cw = ["run_code","execute this","run this","write a script","write a function","write code","implement","fix this code","debug","refactor","write a test","deploy","commit","pull request"];
@@ -1090,6 +1103,283 @@ async function workspaceDelete(env, args) {
   }
 }
 __name(workspaceDelete, "workspaceDelete");
+
+// ── v2.15.12 deployed delta (ops_d1_write, r2_put/delete, kv_put/delete, github_create_branch,
+//    ensureReasoningContent, deepseekFetchOnce) ─────────────────────────────────────────────
+// OPS-D1-WRITE-1: guarded multi-DB write surface
+async function d1Write(env, args, userText) {
+  var raw = String(args && args.sql || "").trim();
+  var sql = raw.replace(/;\s*$/, "");
+  if (!sql) return { ok: false, error: "empty SQL" };
+  if (!/^(insert|update|delete|replace|create|drop|alter)\b/i.test(sql)) return { ok: false, rejected: true, error: "write must start with INSERT/UPDATE/DELETE/REPLACE/CREATE/DROP/ALTER" };
+  var destructive = /\b(drop|truncate)\b/i.test(sql) || (/\b(delete|update)\b/i.test(sql) && !/\bwhere\b/i.test(sql));
+  var affirmed = /(yes|please|confirm|go ahead|send it|do it|execute|proceed|approved|affirm)/i.test(String(userText || ""));
+  if (destructive && args && args.confirm !== true && !affirmed) return { ok: false, rejected: true, error: "DESTRUCTIVE write requires confirm:true or explicit affirmation", plan: sql };
+  var bind = DB_MAP[String(args && args.db || "audit")] || DB_MAP.audit;
+  if (!env[bind]) return { ok: false, error: "db not bound: " + bind };
+  try {
+    var params = Array.isArray(args && args.params) ? args.params : [];
+    var stmt = env[bind].prepare(sql);
+    if (params.length) stmt = stmt.bind(...params);
+    var res = await stmt.run();
+    return { ok: true, db: bind, changes: res && res.meta ? res.meta.changes : null, last_row_id: res && res.meta ? res.meta.last_row_id : null };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+async function r2Put(env, args) {
+  const bucket = String(args && args.bucket || "releases");
+  const key = String(args && args.key || "");
+  const content = String(args && args.content || "");
+  if (!key) return { ok: false, error: "key required" };
+  const bind = R2_MAP[bucket] || R2_MAP.releases;
+  if (!env[bind]) return { ok: false, error: "bucket not bound: " + bucket };
+  try { await env[bind].put(key, content); return { ok: true, bucket, key, wrote: true, bytes: content.length }; }
+  catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+async function r2Delete(env, args) {
+  const bucket = String(args && args.bucket || "releases");
+  const key = String(args && args.key || "");
+  const confirm = args && (args.confirm === true || String(args.confirm).toLowerCase() === "true");
+  if (!key) return { ok: false, error: "key required" };
+  if (!confirm) return { ok: false, rejected: true, error: "r2_delete is destructive; requires confirm:true" };
+  const bind = R2_MAP[bucket] || R2_MAP.releases;
+  if (!env[bind]) return { ok: false, error: "bucket not bound: " + bucket };
+  try { await env[bind].delete(key); return { ok: true, bucket, key, deleted: true }; }
+  catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+async function kvPut(env, args) {
+  const key = String(args && args.key || "");
+  const value = String(args && args.value || "");
+  if (!key) return { ok: false, error: "key required" };
+  if (!env.EQCACHE_KV) return { ok: false, error: "kv namespace not bound: EQCACHE_KV" };
+  try { await env.EQCACHE_KV.put(key, value); return { ok: true, key, wrote: true }; }
+  catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+async function kvDelete(env, args) {
+  const key = String(args && args.key || "");
+  const confirm = args && (args.confirm === true || String(args.confirm).toLowerCase() === "true");
+  if (!key) return { ok: false, error: "key required" };
+  if (!confirm) return { ok: false, rejected: true, error: "kv_delete is destructive; requires confirm:true" };
+  if (!env.EQCACHE_KV) return { ok: false, error: "kv namespace not bound: EQCACHE_KV" };
+  try { await env.EQCACHE_KV.delete(key); return { ok: true, key, deleted: true }; }
+  catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+}
+async function githubCreateBranch(env, args) {
+  const repo = String(args && args.repo || "").trim();
+  const branch = String(args && args.branch || "").trim();
+  const base = String(args && args.base || "main").trim();
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret missing on qnfo-ops (required for write)" };
+  if (!repo || repo.indexOf("/") <= 0 || !branch) return { ok: false, error: "repo (owner/name) + branch required" };
+  const headRes = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/git/ref/heads/" + encPath(base));
+  if (headRes.status !== 200) return { ok: false, error: "base branch not found: " + base + " (GitHub " + headRes.status + ")" };
+  const sha = headRes.json && headRes.json.object && headRes.json.object.sha;
+  if (!sha) return { ok: false, error: "base branch sha missing" };
+  const res = await githubApi(env, "POST", "/repos/" + encPath(repo) + "/git/refs", { ref: "refs/heads/" + branch, sha });
+  if (res.status === 201) return { ok: true, repo, branch, ref: "refs/heads/" + branch, sha };
+  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300) };
+}
+var RC_PLACEHOLDER = "[reasoning omitted upstream; tool call decision only]";
+function ensureReasoningContent(msgs) {
+  var list = Array.isArray(msgs) ? msgs : [];
+  for (var i = 0; i < list.length; i++) {
+    var m = list[i];
+    if (m && m.role === "assistant") {
+      if (typeof m.reasoning_content !== "string" || !m.reasoning_content.trim()) {
+        m.reasoning_content = RC_PLACEHOLDER;
+      }
+    }
+  }
+  return list;
+}
+var DEEPSEEK_RETRIES = 3;
+async function deepseekFetchOnce(env, body) {
+  ensureReasoningContent(body && body.messages);
+  let lastErr = null;
+  for (let attempt = 0; attempt < DEEPSEEK_RETRIES; attempt++) {
+    try {
+      const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+        body: JSON.stringify(body)
+      });
+      if (resp.ok) return await resp.json();
+      const txt = await resp.text();
+      const msg = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
+      if (resp.status === 400 && /reasoning_content/i.test(txt)) {
+        if (/must be passed back/i.test(txt) && !body.__rcEnsured) {
+          const b2 = JSON.parse(JSON.stringify(body));
+          b2.__rcEnsured = true;
+          ensureReasoningContent(b2.messages || []);
+          return await deepseekFetchOnce(env, b2);
+        } else if (!body.__rcStripped) {
+          const b3 = JSON.parse(JSON.stringify(body));
+          b3.__rcStripped = true;
+          for (const _m of b3.messages || []) if (_m && _m.reasoning_content !== undefined) delete _m.reasoning_content;
+          return await deepseekFetchOnce(env, b3);
+        }
+      }
+      if (resp.status !== 429 && resp.status < 500) { const _f = new Error(msg); _f.__fatal = true; throw _f; }
+      lastErr = new Error(msg);
+    } catch (e) { if (e && e.__fatal) throw e; lastErr = e; }
+    await new Promise(function(r) { setTimeout(r, 700 * (attempt + 1)); });
+  }
+  throw lastErr || new Error("deepseek request failed after retries");
+}
+
+
+// ── v2.16.0 new tools: 5 server-side execution unblocks ──────────────────────
+// CF_WORKER_READ-1: read live deployed worker bundle + version for coordination
+async function cfWorkerRead(env, args) {
+  if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
+  const worker = String(args && args.worker || "").trim();
+  if (!worker) return { ok: false, error: "worker name required" };
+  const maxChars = Math.min(Math.max(parseInt(args && args.maxChars, 10) || 8000, 500), 40000);
+  try {
+    const metaR = await fetch(
+      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
+      { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
+    );
+    const metaJ = metaR.ok ? await metaR.json() : null;
+    const meta = metaJ && metaJ.result || {};
+    const srcR = await fetch(
+      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/content",
+      { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Accept": "application/javascript" } }
+    );
+    if (!srcR.ok) return { ok: false, error: "CF API " + srcR.status + " reading " + worker };
+    const ct = srcR.headers.get("Content-Type") || "";
+    let src = "";
+    if (ct.indexOf("multipart") >= 0) {
+      const raw = await srcR.text();
+      const parts = raw.split(/--[^\r\n]+/);
+      for (const p of parts) {
+        if (p.indexOf("worker.js") >= 0 || p.indexOf("application/javascript") >= 0) {
+          const body = p.replace(/^[\s\S]*?\r?\n\r?\n/, "");
+          if (body.trim()) { src = body; break; }
+        }
+      }
+      if (!src) src = raw;
+    } else {
+      src = await srcR.text();
+    }
+    const vMatch = src.match(/var VERSION\s*=\s*["']([^"']+)["']/);
+    const version = vMatch ? vMatch[1] : (meta.modified_on ? "unknown (modified " + meta.modified_on + ")" : "unknown");
+    return { ok: true, worker, version, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
+  } catch (e) {
+    return { ok: false, error: "cf_worker_read failed: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+// CF_WORKER_DEPLOY-1: deploy worker via CF API PUT (server-side, preserves bindings via wrangler.toml)
+async function cfWorkerDeploy(env, args) {
+  if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
+  const worker = String(args && args.worker || "").trim();
+  const content = String(args && args.content || "").trim();
+  const versionNote = String(args && args.version || "").trim();
+  if (!worker) return { ok: false, error: "worker name required" };
+  if (!content) return { ok: false, error: "content (JS source) required" };
+  if (args && args.expected_version) {
+    const cur = await cfWorkerRead(env, { worker, maxChars: 500 });
+    if (cur.ok && cur.version !== String(args.expected_version)) {
+      return { ok: false, rejected: true, error: "VERSION MISMATCH: live=" + cur.version + " expected=" + args.expected_version + " — concurrent agent may have deployed. Read current bundle first (cf_worker_read) before retrying." };
+    }
+  }
+  try {
+    const boundary = "ops-deploy-" + Date.now().toString(16);
+    const metadataPart = JSON.stringify({ body_part: "worker.js", bindings: [] });
+    const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
+    const resp = await fetch(
+      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
+      { method: "PUT", headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary }, body }
+    );
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400) };
+    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+  } catch (e) {
+    return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+// CF_WORKER_BINDINGS-1: read live bindings for binding-reconciliation (BINDING-PRESERVATION-1)
+async function cfWorkerBindings(env, args) {
+  if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
+  const worker = String(args && args.worker || "").trim();
+  if (!worker) return { ok: false, error: "worker name required" };
+  try {
+    const resp = await fetch(
+      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/bindings",
+      { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
+    );
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 300) };
+    const bindings = (j && j.result || []).map(b => ({ type: b.type, name: b.name, ...(b.namespace_id ? { namespace_id: b.namespace_id } : {}), ...(b.database_id ? { database_id: b.database_id } : {}), ...(b.index_name ? { index_name: b.index_name } : {}), ...(b.bucket_name ? { bucket_name: b.bucket_name } : {}), ...(b.service ? { service: b.service } : {}), ...(b.class_name ? { class_name: b.class_name } : {}), ...(b.queue_name ? { queue_name: b.queue_name } : {}), }));
+    return { ok: true, worker, count: bindings.length, bindings };
+  } catch (e) {
+    return { ok: false, error: "cf_worker_bindings failed: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+// GITHUB_CHERRY_PICK-1: graft commits onto origin/main via GitHub Trees API (WORKTREE-GRAFT-PUSH-1)
+async function githubCherryPick(env, args) {
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret missing on qnfo-ops (required for write)" };
+  const repo = String(args && args.repo || "").trim();
+  const commits = Array.isArray(args && args.commits) ? args.commits.map(String) : [];
+  const base = String(args && args.base || "main").trim();
+  if (!repo || repo.indexOf("/") < 0) return { ok: false, error: "repo (owner/name) required" };
+  if (!commits.length) return { ok: false, error: "commits array (list of SHAs) required" };
+  const results = [];
+  let currentBase = null;
+  try {
+    const refR = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/git/ref/heads/" + encPath(base));
+    if (refR.status !== 200) return { ok: false, error: "base branch not found: " + base + " (GitHub " + refR.status + ")" };
+    currentBase = refR.json && refR.json.object && refR.json.object.sha;
+    if (!currentBase) return { ok: false, error: "base branch sha missing" };
+    for (const sha of commits) {
+      const commitR = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/git/commits/" + encodeURIComponent(sha));
+      if (commitR.status !== 200) { results.push({ sha, ok: false, error: "commit not found: " + sha + " (GitHub " + commitR.status + ")" }); continue; }
+      const commitObj = commitR.json || {};
+      const treeSha = commitObj.tree && commitObj.tree.sha;
+      if (!treeSha) { results.push({ sha, ok: false, error: "commit tree sha missing for " + sha }); continue; }
+      const newCommitBody = { message: (commitObj.message || "cherry-pick " + sha.slice(0, 8)) + "\n\nCherry-picked from " + sha + " (WORKTREE-GRAFT-PUSH-1 server-side graft via qnfo-ops)", tree: treeSha, parents: [currentBase], author: commitObj.author || { name: "QNFO ops", email: "ops@qnfo.org", date: new Date().toISOString() } };
+      const newCommitR = await githubApi(env, "POST", "/repos/" + encPath(repo) + "/git/commits", newCommitBody);
+      if (newCommitR.status !== 201) { results.push({ sha, ok: false, error: "create commit failed: GitHub " + newCommitR.status + " " + JSON.stringify(newCommitR.json).slice(0, 200) }); continue; }
+      const newSha = newCommitR.json && newCommitR.json.sha;
+      const pushR = await githubApi(env, "PATCH", "/repos/" + encPath(repo) + "/git/refs/heads/" + encPath(base), { sha: newSha, force: false });
+      if (pushR.status !== 200) { results.push({ sha, ok: false, newSha, error: "push failed: GitHub " + pushR.status + " " + JSON.stringify(pushR.json).slice(0, 200) }); continue; }
+      currentBase = newSha;
+      results.push({ sha, ok: true, newSha, pushed: true });
+    }
+    return { ok: true, repo, base, grafted: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, results, newHead: currentBase };
+  } catch (e) {
+    return { ok: false, error: "github_cherry_pick failed: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+// DR_VALIDATE_SCHEMA-1: server-side D1 schema validation (JS port of dr_validate_schema.py)
+async function drValidateSchema(env, args) {
+  const REQUIRED = {
+    audit: { db: env.QNFO_AUDIT, tables: { handoffs: ["id","session_id","project_id","phase_completed","summary","wbs_code"], wbs_state: ["project_id","current_phase","total_phases","last_updated"], cloud_ops_events: ["id","ts","kind","text","meta","job","status"], agent_issues: ["id","title","category","priority","status","created_at","updated_at"], ops_ai_log: ["id","ts","model","strategy","prompt","response","latency_ms"], service_registry: ["service","kind","version","base_url","updated_at"], ops_jobs: ["id","status","model","payload","created_at","updated_at"], issue_ledger: ["fingerprint","source","level","category","title","status","first_seen","last_seen","occurrences"] } },
+    living: { db: env.LIVING_PAPER, tables: { papers: ["identifier","title","authors","status","doi","slug","created_at"], paper_ids: ["slug","vectorize_id","kg_id","doi","r2_path","zenodo_url","papers_server_url","created_at"] } }
+  };
+  const violations = [];
+  let validated = 0;
+  for (const [dbKey, spec] of Object.entries(REQUIRED)) {
+    if (!spec.db) { violations.push(dbKey + ": DB BINDING MISSING"); continue; }
+    let tables = [];
+    try { const r = await spec.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all(); tables = (r.results || []).map(row => row.name).filter(Boolean); }
+    catch (e) { violations.push(dbKey + ": list tables failed: " + (e && e.message || String(e))); continue; }
+    const tableSet = new Set(tables);
+    for (const [table, cols] of Object.entries(spec.tables)) {
+      if (!tableSet.has(table)) { violations.push(dbKey + "." + table + ": TABLE MISSING"); continue; }
+      let haveCols = [];
+      try { const pr = await spec.db.prepare("PRAGMA table_info(" + table + ")").all(); haveCols = (pr.results || []).map(row => row.name).filter(Boolean); }
+      catch (e) { violations.push(dbKey + "." + table + ": pragma failed: " + (e && e.message || String(e))); continue; }
+      const haveSet = new Set(haveCols);
+      const missing = cols.filter(c => !haveSet.has(c));
+      if (missing.length) violations.push(dbKey + "." + table + ": missing columns " + JSON.stringify(missing));
+      else validated++;
+    }
+  }
+  if (violations.length) return { ok: false, status: "SCHEMA ERROR", violations, validated, note: violations.length + " violation(s), " + validated + " tables/columns OK" };
+  return { ok: true, status: "SCHEMA OK", violations: [], validated, note: validated + " tables/columns validated across 2 databases" };
+}
+
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
   try {
@@ -1131,6 +1421,17 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "workspace_read") res = await workspaceRead(env, args);
     else if (name === "workspace_list") res = await workspaceList(env, args);
     else if (name === "workspace_delete") res = await workspaceDelete(env, args);
+        else if (name === "ops_d1_write") res = await d1Write(env, args, userText);
+    else if (name === "r2_put") res = await r2Put(env, args);
+    else if (name === "r2_delete") res = await r2Delete(env, args);
+    else if (name === "kv_put") res = await kvPut(env, args);
+    else if (name === "kv_delete") res = await kvDelete(env, args);
+    else if (name === "github_create_branch") res = await githubCreateBranch(env, args);
+    else if (name === "cf_worker_read") res = await cfWorkerRead(env, args);
+    else if (name === "cf_worker_deploy") res = await cfWorkerDeploy(env, args);
+    else if (name === "cf_worker_bindings") res = await cfWorkerBindings(env, args);
+    else if (name === "github_cherry_pick") res = await githubCherryPick(env, args);
+    else if (name === "dr_validate_schema") res = await drValidateSchema(env, args);
     else res = { ok: false, error: "unknown tool: " + name };
   } catch (e) {
     res = { ok: false, error: "tool crashed: " + (e && e.message ? e.message : String(e)) };
