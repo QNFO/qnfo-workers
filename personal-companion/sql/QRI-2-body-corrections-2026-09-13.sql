@@ -1,4 +1,4 @@
--- QRI-2 body correction — PERSONAL (personal-life) D1
+-- QRI-2 / QRI-3 body correction — PERSONAL (personal-life) D1
 -- Author: qnfo-ops, 2026-09-13. EXECUTOR: any principal with D1 write on PERSONAL.
 --
 -- WHY THIS FILE EXISTS
@@ -15,8 +15,22 @@
 -- served. Correcting `body_md` is the ONLY action available today that changes what a
 -- reader sees. This file does that. It is complementary to QRI-1, not a replacement.
 --
+-- THREE REPLACEMENTS, NOT TWO (added in the QRI-3 pass)
+-- The first draft of this file replaced two spans and left a LIVE standing-filter
+-- violation behind. `instr()` returns only the FIRST match, and QPL occurs twice:
+--
+--   QPL at 352    inside the opening span (289..575)   -> covered
+--   QPL at 13954  in the closing section               -> NOT covered until QRI-3
+--
+-- The closing sentence reads "The LoF26 room and the QPL 2026 room differed in what they
+-- did to attention." PERSONAL.profile holds, at confidence 0.95, "Do not bring up QPL or
+-- CWI summer school topics in personal recommendations" (dated 2026-08-25). Correcting
+-- the opening while leaving the closing would have shipped text that still names the
+-- thing the reader asked not to be sent. Step 2b closes it.
+--
 -- SCOPE: one row. Verified 2026-09-13 that only companion_pieces.id=8 carries the
--- defect (probe over all 7 live pieces: ids 6,7,9,10,11,12 all zero on every token).
+-- defect (probe over all 7 live pieces: ids 6,7,9,10,11,12 all zero on every token,
+-- and QPL = 0 for all of them).
 
 -- ---------------------------------------------------------------------------
 -- 0. Reversibility record. Store the exact before/after strings so the edit can
@@ -27,7 +41,8 @@ UPDATE companion_pieces
          quality_json,
          '$.qri2_at',          '2026-09-13',
          '$.qri2_before_s1',   'Rowan rated it 5 out of 5 for felt energy. Five days later, at QPL 2026 in Amsterdam — the Workshop on Quantum Programming Languages, a status tournament with proceedings and citations — he rated the same week 1 out of 5. Drained. The two events cost roughly the same in travel and time.',
-         '$.qri2_before_s2',   'On 10 August 2026, in the dining hall at Wolfson College, Cambridge, about forty people sat in a circle and took turns being wrong out loud. The occasion was LoF26, a conference on George Spencer-Brown''s *Laws of Form*, and it ran five days on conversation, play, and free participation.'
+         '$.qri2_before_s2',   'On 10 August 2026, in the dining hall at Wolfson College, Cambridge, about forty people sat in a circle and took turns being wrong out loud. The occasion was LoF26, a conference on George Spencer-Brown''s *Laws of Form*, and it ran five days on conversation, play, and free participation.',
+         '$.qri3_before_s3',   'the QPL 2026 room'
        )
  WHERE id = 8 AND json_extract(quality_json, '$.qri2_at') IS NULL;
 
@@ -69,18 +84,37 @@ UPDATE companion_pieces
    AND instr(body_md, 'Five days later') > 0;  -- idempotent
 
 -- ---------------------------------------------------------------------------
+-- 2b. STANDING FILTER (QRI-3) — the second QPL occurrence.
+--     The closing section reprises the two events and names QPL again. The reader's
+--     standing filter forbids QPL. Replace only the name, keeping the comparison:
+--     the preceding sentence says "Return to Cambridge and Amsterdam", so "the second
+--     room" resolves without re-introducing the name.
+--     Verified 2026-09-13: instr(body_md, 'the QPL 2026 room') = 13950.
+--     After this, instr(body_md,'QPL') = 0.
+-- ---------------------------------------------------------------------------
+UPDATE companion_pieces
+   SET body_md = replace(
+         body_md,
+         'the QPL 2026 room',
+         'the second room'
+       )
+ WHERE id = 8
+   AND instr(body_md, 'QPL') > 0;              -- idempotent
+
+-- ---------------------------------------------------------------------------
 -- 3. word_count is now stale. Set the EXACT recomputed value.
 --
 --    DERIVATION (run_code, 2026-09-13, using worker.js's own wordCount():
 --    runs of non-whitespace, whitespace = space \n \r \t):
 --
---      stored word_count (before)          2539
---      span 1 source words  49 -> repl  31  delta -18
---      span 2 source words  54 -> repl  37  delta -17
---      total delta                          -35
---      CORRECTED word_count                2504
+--      stored word_count (before)            2539
+--      span 1  source 49 words -> repl 31    delta -18
+--      span 2  source 54 words -> repl 37    delta -17
+--      span 3  source  4 words -> repl  3    delta  -1
+--      total delta                            -36
+--      CORRECTED word_count                  2503
 --
---    body_md length: 15517 -> 15278 chars (delta -239).
+--    body_md length: 15517 -> 15276 chars (deltas -239, then -2).
 --
 --    DO NOT compute this as `length(body_md) - length(replace(body_md,' ','')) + 1`.
 --    That counts only spaces, so it ignores the paragraph newlines and undercounts
@@ -89,8 +123,8 @@ UPDATE companion_pieces
 --    than none.
 -- ---------------------------------------------------------------------------
 UPDATE companion_pieces
-   SET word_count = 2504
- WHERE id = 8 AND instr(body_md, 'Five days later') = 0;
+   SET word_count = 2503
+ WHERE id = 8 AND instr(body_md, 'QPL') = 0;
 
 -- ---------------------------------------------------------------------------
 -- 4. Tag the gate result (as QRI-1 does) and record that the served text is fixed.
@@ -99,15 +133,16 @@ UPDATE companion_pieces
    SET quality_json = json_set(
          quality_json,
          '$.gate',        'blocked-grounding',
-         '$.gate_reason', 'QRI-2: body corrected in place; 2 unsupported record-derived claims + 4 unsupported particulars removed',
-         '$.errata',      'QRI-2 2026-09-13: "Five days later" -> the events were seven days apart; "cost roughly the same in travel and time" -> no cost recorded; "same week" -> LoF26 10-14 Aug vs QPL 17-21 Aug; "dining hall" / "about forty people" / "sat in a circle" / "took turns being wrong" -> in no record row; "Workshop on Quantum Programming Languages" -> dropped, unverified'
+         '$.gate_reason', 'QRI-2/QRI-3: body corrected in place; 2 unsupported record-derived claims + 4 unsupported particulars + 1 standing-filter violation removed',
+         '$.errata',      'QRI-2/QRI-3 2026-09-13: "Five days later" -> the events were seven days apart; "cost roughly the same in travel and time" -> no cost recorded; "same week" -> LoF26 10-14 Aug vs QPL 17-21 Aug; "dining hall" / "about forty people" / "sat in a circle" / "took turns being wrong" -> in no record row; "Workshop on Quantum Programming Languages" -> dropped, unverified; the closing "the QPL 2026 room" -> "the second room", because a standing filter at confidence 0.95 forbids QPL/CWI topics'
        )
  WHERE id = 8;
 
 -- ---------------------------------------------------------------------------
 -- 5. Verification. Run after 0-4.
---    EXPECT: len=15278, five=0, dining=0, forty=0, costeq=0, sameweek=0,
---            seven_days>0, repl2_present=1, gate=blocked-grounding, word_count=2504
+--    EXPECT: len=15276, five=0, dining=0, forty=0, costeq=0, sameweek=0,
+--            qpl=0, cwi=0, seven_days>0, repl2_present=1, repl3_present>0,
+--            gate=blocked-grounding, word_count=2503
 -- ---------------------------------------------------------------------------
 SELECT id,
        length(body_md)                                                   AS len,
@@ -116,8 +151,11 @@ SELECT id,
        instr(body_md, 'about forty people')                              AS forty,
        instr(body_md, 'cost roughly the same in travel and time')        AS costeq,
        instr(body_md, 'he rated the same week')                          AS sameweek,
+       instr(body_md, 'QPL')                                             AS qpl,
+       instr(body_md, 'CWI')                                             AS cwi,
        instr(body_md, 'seven days apart')                                AS seven_days,
        instr(body_md, 'On 10 August 2026 LoF26 opened')                  AS repl2_present,
+       instr(body_md, 'the second room')                                 AS repl3_present,
        json_extract(quality_json, '$.gate')                              AS gate,
        word_count
   FROM companion_pieces
@@ -129,13 +167,17 @@ SELECT id,
 -- (a) The gate is not running in production. Applying this file corrects the text of
 --     ONE piece; it does not prevent the next piece from repeating the defect. That
 --     requires deploying a worker built from the v1.0.0 source plus the patches
---     (VERSION 1.3.0) and wiring runGate() at the insert site — which needs deploy
+--     (VERSION 1.4.0) and wiring runGate() at the insert site — which needs deploy
 --     access qnfo-ops does not have.
--- (b) /api/pieces is public with no key and returns anchor_json and quality_json
+-- (b) The physics/science CATEGORY filter ("No physics/science books in reading
+--     recommendations", conf 0.98) is NOT enforced by the gate. filters.js covers only
+--     the entity deny-list. The category row needs a subject classifier at pickTopic(),
+--     before anchors are fetched. Not written.
+-- (c) /api/pieces is public with no key and returns anchor_json and quality_json
 --     (internal topic/bridge scaffolding and the critic's verdict text), while the
 --     masthead reads "Private.". `--fail-closed` is deliberately NOT the default:
 --     COMPANION_KEY is unset on the live deployment, so inverting authorized() would
 --     black out the page on the next deploy. Decide: set the key, or drop the label.
--- (c) 42 of 45 companion_feedback rows are machine-written (three sub-second bursts)
+-- (d) 42 of 45 companion_feedback rows are machine-written (three sub-second bursts)
 --     and loadContinuity() presents the newest 12 as "HOW HE REACTED (this is the
 --     strongest signal you have)". Handled in QRI-1 section 3; still to apply.
