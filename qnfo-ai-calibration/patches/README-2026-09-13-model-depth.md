@@ -1,14 +1,14 @@
 # READ FIRST — model-depth / code-routing artifact set, 2026-09-13
 
-Sixteen files written by two qnfo-ops sessions on 2026-09-13. Several contain claims that later
+Seventeen files written by two qnfo-ops sessions on 2026-09-13. Several contain claims that later
 verification refuted or reinstated. **This index exists so nobody acts on a superseded one.**
-Last updated by the second session (rows 10-13).
+Last updated by the second session (rows 10-14).
 
 ## Read in this order
 
 | # | File | Commit | Status |
 |---|---|---|---|
-| 1 | `qnfo-ai-calibration/patches/2026-09-13-model-depth-and-code-routing.md` | `f79dda65` | **PARTLY SUPERSEDED — see rows 5, 7, 9, 10-13** |
+| 1 | `qnfo-ai-calibration/patches/2026-09-13-model-depth-and-code-routing.md` | `f79dda65` | **PARTLY SUPERSEDED — see rows 5, 7, 9, 10-14** |
 | 2 | `qnfo-ai-calibration/apply-model-depth-fix.mjs` | `fdcf2110` | source hygiene only; targets a shadowed file (row 3) |
 | 3 | `qnfo-ai-calibration/patches/2026-09-13-CORRECTION-shadowed-source.md` | `c2bf88b8` | **authoritative** on which file is live |
 | 4 | `qnfo-ai-calibration/patches/2026-09-13-PROOF-gw-fail-guard-was-absent.md` | `66dd340d` | dated proof; conclusion **extended** by row 11 |
@@ -20,9 +20,10 @@ Last updated by the second session (rows 10-13).
 | 10 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM3-live-reverification.md` | `9464ede2` | **authoritative** — live re-verification, corrects 5 claims |
 | 11 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM4-gw-fail-resolve-refile-loop.md` | `2c9dd883` | **authoritative** — gw-fail root cause |
 | 12 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM5-instrumentation-correction.md` | `b4a2f283` | **authoritative** — telemetry / `ok`-flag correction |
-| 13 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM6-first-hand-fleet-probe.md` | `5749c5e4` | **authoritative** — fleet census, mobile path |
+| 13 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM6-first-hand-fleet-probe.md` | `5749c5e4` | **authoritative** — fleet census, mobile latency; **§4 WITHDRAWN by row 14** |
+| 14 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM7-correction-object-object-is-logger.md` | `8da482e8` | **authoritative** — withdraws row 13 §4 |
 
-## Corrections issued after this index was first written (rows 10-13)
+## Corrections issued after this index was first written (rows 10-14)
 
 1. **The gw-fail burst recurred.** 7 rows (ids 678-684) at 2026-09-13T07:31:00.954Z, **42.00 h**
    after the 09-11 burst — so the README's "nothing in ~21 h across ~42 sweeps" is now false.
@@ -61,14 +62,17 @@ Last updated by the second session (rows 10-13).
     healthyCount 12). The 43 with `healthy:null` are **unmeasured, not down**.
 12. **The `qnfo-ai` version drift is retired.** Both the fleet probe and `service_discover` report
     **5.25.1**; neither 5.21.2 nor 5.21.3 is current.
-13. **The mobile client path is sending malformed prompts, and still is.** `prompt LIKE
-    '%[object Object]%'`: 122 total, of which **40 are `mobile`, newest 2026-09-13T13:21:49.743Z** —
-    about a minute before the query that found it. `other` and `chatbox` both stopped on 09-09.
-14. **Mobile `agent-tools` averages 151 s per call** (n=182, max 381,890 ms), against 10.2 s for the
-    trivial `chat` path. Ten calls on 09-13 exceeded 300 s; maximum **578,831 ms**. Flagged as a
-    settings observation, not changed.
-15. **Research candidates have not advanced since 2026-09-04** (`candidates_query`: 4 rows, newest
+13. **Mobile `agent-tools` averages 151 s per call** (row 13 §5; n=182, max 381,890 ms), against
+    10.2 s for the trivial `chat` path. Ten calls on 09-13 exceeded 300 s; maximum **578,831 ms**.
+    Flagged as a settings observation, not changed.
+14. **Research candidates have not advanced since 2026-09-04** (`candidates_query`: 4 rows, newest
     created 09-04T10:49:35Z). The triage stage is not producing.
+15. **`ops_ai_log.prompt` is corrupted by the logger for messages-array requests** (row 14). The
+    `[object Object],[object Object]` text that row 13 §4 attributed to the mobile client is a
+    **logger defect**: `String(messages)` instead of `JSON.stringify`, one token per message.
+    Withdrawn from row 13. The `response` column on those rows holds real output — including this
+    session's own turns — so the conversations succeeded. 122 rows affected; `node`, `okhttp`,
+    `curl` and `qnfo-ops-workflow` are all 0% affected because they send string prompts.
 
 ## Current position on P0-1 (the item the first session got wrong twice)
 
@@ -98,6 +102,7 @@ the 32,768-character read cap. High confidence; unread for the live artifact.
 5. **"Run the drain and it will clear a few."** Wrong for gw-fail: the drain triggers refiling.
 6. **"71 workers deployed."** Probe says 55.
 7. **"`qnfo-ai` version drift 5.21.2 / 5.21.3."** Both sources report 5.25.1.
+8. **"The mobile client is sending malformed prompts."** Withdrawn — the logger is. See correction 15.
 
 ## Verified and worth acting on
 
@@ -113,7 +118,8 @@ the 32,768-character read cap. High confidence; unread for the live artifact.
 | The closer can never fire: its 24h predicate requires 0 failures while every model fails 47-48 of 48 sweeps | `apply-gw-closer-fix.mjs` rev 2, sha `9d942cc7` |
 | `ops_req_log` has no status/duration column -> a hung request is indistinguishable from a completed one | D1 schema |
 | Tool reliability: `web_search` 51.9% error (uniform ~19.5 s timeout), `web_fetch` 46.5%, `email_respond` 0-for-15 | `cloud_ops_events` |
-| The mobile path sends `[object Object],[object Object]` as the prompt (40 rows, live) and averages 151 s per `agent-tools` call | `ops_ai_log` |
+| The request logger corrupts `prompt` for messages-array requests (122 rows) | `ops_ai_log`, cross-checked against `response` |
+| Mobile `agent-tools` averages 150,956 ms (n=182); ten calls on 09-13 exceeded 300 s, max 578,831 ms | `ops_ai_log` |
 
 ## The one ready-to-apply fix
 
@@ -126,7 +132,9 @@ One token: `return "qwq-32b";` -> `return "glm-5.3-flash";`, plus a `VERSION` bu
 
 **No PR was opened and no code was deployed.** `github_file_write` cannot create a ref (404 on a
 short name and on `refs/heads/…`); `github_pr` returns 422; and `main` is the deployer's upstream,
-so committing a live artifact there *is* a production deploy. Apply on a branch.
+so committing a live artifact there *is* a production deploy. Apply on a branch. **`main` is written
+concurrently by other automation** — one write in this session failed with
+`409: is at ef03f9f99… but expected 84f8f954…`.
 
 ## Two binding limits
 
@@ -135,5 +143,5 @@ so committing a live artifact there *is* a production deploy. Apply on a branch.
 2. **The `strategy` column is uninterpreted** — five values, and 19 rows pair `strategy="single"`
    with `model="ensemble"`, refuting both candidate readings. No longer load-bearing.
 
-**Provenance note:** this set is now 16 artifacts from two sessions. Rows 10-13 are the current
+**Provenance note:** this set is now 17 artifacts from two sessions. Rows 10-14 are the current
 authority; read them before acting on rows 1-9.
