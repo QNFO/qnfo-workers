@@ -1,4 +1,4 @@
-// qnfo-fleet-advisor v0.3.3 - canonical autonomous Cloudflare fleet advisor.
+// qnfo-fleet-advisor v0.3.4 - canonical autonomous Cloudflare fleet advisor.
 // 100% server-side, 100% autonomous. Cron */20 + token-gated POST /run-audit.
 // v0.3.0: ENSEMBLE advice (primary llama proposes + gpt-oss-120b adversarially reviews
 // IMPROVE/ACCEPT -> consensus suggestion); gateway drift fixed to real fields only
@@ -12,7 +12,19 @@
 //   live count, so step-7 open-title dedupe never matched -> a new ticket every */20 cron
 //   (~42 tickets in 21h, ALERT-STORM-DETECTED #522). Fix: stable title + refresh-in-place,
 //   count excludes OPEN-ISSUES* self-tickets, legacy spam auto-closed on first v0.3.3 run.
-const VERSION = "0.3.3";
+// v0.3.4 PHANTOM-1 + FLOOD-FIX-2 (2026-09-13): the MODEL-DEGRADED finding had BOTH bugs
+//   that FLOOD-FIX-1 fixed for the backlog ticket, and the degraded set was permanently
+//   non-empty. ai_model_health carries two id namespaces: this advisor reads every row with
+//   status='degraded', while qnfo-ai-calibration's internalId() writes the CF ids it cannot
+//   reverse-map as their OWN rows with last_probe_ts NULL and consecutive_failures 0. Those
+//   phantom rows are never probed and never cleared, so the finding fired every cycle and
+//   its title embedded the live set -> 12 tickets filed since 09-08, 10 still open, only 2
+//   ever closed. Fix: (a) count only rows that carry a real probe (last_probe_ts IS NOT
+//   NULL) - measured 2026-09-13, exactly the 4 phantoms have NULL and all 20 real rows have
+//   a timestamp; (b) STABLE title "MODEL-DEGRADED" with the set moved into the description,
+//   refreshed in place by step-7 dedupe; (c) auto-close when the probed set empties;
+//   (d) step 4c retires the legacy per-run "MODEL-DEGRADED <set>" tickets.
+const VERSION = "0.3.4";
 const WORKER = "qnfo-fleet-advisor";
 
 const nowIso = () => new Date().toISOString();
@@ -127,10 +139,24 @@ async function runAudit(env) {
     }
   } catch (e) {}
 
-  // 3. Degraded models
+  // 3. Degraded models (v0.3.4 PHANTOM-1 + FLOOD-FIX-2)
+  //  PHANTOM-1: only rows that carry a real probe count as degraded. qnfo-ai-calibration
+  //    writes the CF ids its internalId() reverse map cannot resolve as their OWN rows, with
+  //    last_probe_ts NULL and consecutive_failures 0. No prober writes those keys, so they
+  //    are never cleared and the degraded set was permanently non-empty. Measured
+  //    2026-09-13: exactly 4 rows have last_probe_ts IS NULL (the phantoms) and all 20 real
+  //    rows have a probe timestamp, so this predicate removes the phantoms and nothing else.
+  //  FLOOD-FIX-2: the title embedded the live degraded set, so step-7 open-title dedupe never
+  //    matched -> one new ticket per */20 cron (12 filed since 09-08, 10 still open, 2 ever
+  //    closed). Same remedy as v0.3.3 step 4: STABLE title, set in the description, refreshed
+  //    in place, auto-closed when the probed set empties.
   try {
-    const deg = await d1All(env, "SELECT model_id FROM ai_model_health WHERE status = 'degraded'");
-    if (deg && deg.length) findings.push({ kind: "model-health", severity: "medium", title: "MODEL-DEGRADED " + deg.map((d) => d.model_id).slice(0, 4).join(","), detail: "degraded: " + deg.map((d) => d.model_id).join(",") });
+    const deg = await d1All(env, "SELECT model_id FROM ai_model_health WHERE status = 'degraded' AND last_probe_ts IS NOT NULL");
+    if (deg && deg.length) {
+      findings.push({ kind: "model-health", severity: "medium", title: "MODEL-DEGRADED", detail: "degraded (probed): " + deg.map((d) => d.model_id).join(",") });
+    } else {
+      await d1Run(env, "UPDATE agent_issues SET status='closed', description=?, updated_at=? WHERE status='open' AND source=? AND category='model-health'", ["[advisor] closed: no probed model is degraded at " + ts, ts, WORKER]);
+    }
   } catch (e) {}
 
   // 4. Backlog pressure (v0.3.3 FLOOD-FIX-1): exclude this worker's own OPEN-ISSUES*
@@ -148,6 +174,14 @@ async function runAudit(env) {
   // OPEN-ISSUES-BACKLOG ticket. Runs every cycle; idempotent.
   try {
     await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='backlog' AND title LIKE 'OPEN-ISSUES %'", [ts, WORKER]);
+  } catch (e) {}
+
+  // 4c. v0.3.4 FLOOD-FIX-2 cleanup: close the legacy per-run "MODEL-DEGRADED <set>" tickets
+  // (the set was embedded in the title, so every cron run produced a new one) superseded by
+  // the single refreshable "MODEL-DEGRADED" ticket. LIKE 'MODEL-DEGRADED %' has a trailing
+  // space and so never matches the new stable title. Runs every cycle; idempotent.
+  try {
+    await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='model-health' AND title LIKE 'MODEL-DEGRADED %'", [ts, WORKER]);
   } catch (e) {}
 
   // 5. Gateway config drift (advisory)
