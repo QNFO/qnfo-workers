@@ -25,4 +25,3 @@ crons = ["37 */2 * * *"]
 
 [vars]
 INDEX_TOKEN = "ddx-v1-2026-k9m2n4p7r5t8w3x6"
-DDOC_PREFIX = "2026-09-04"
