@@ -1,0 +1,137 @@
+{
+  "manifest_version": "1.0",
+  "generated_at": "2026-09-13T13:30:00Z",
+  "generated_by": "qnfo-ops (ops-exec)",
+  "scope": "QNFO Cloudflare fleet integration surface",
+  "confidence": {
+    "census": "contested - see census.conflict",
+    "deploy_topology": "verified from wrangler.toml + registry + fleet_deploys",
+    "registry_gaps": "verified by SQL aggregate over service_registry"
+  },
+  "census": {
+    "repo_worker_dirs": 92,
+    "repo_non_worker_entries": 5,
+    "deployed_workers_listed": 55,
+    "worker_dirs_never_deployed": 39,
+    "deployed_names_without_matching_repo_dir": 2,
+    "deployed_names_without_matching_repo_dir_list": ["qnfo-agent-orchestrator", "qnfo-memory-mcp"],
+    "registry_rows": 55,
+    "registry_state_live": 49,
+    "registry_state_merged": 6,
+    "health_ok_via_service_binding": 12,
+    "health_unprobed": 43,
+    "conflict": {
+      "claim_a": "fleet_status and service_discover both report 55 workers",
+      "claim_b": "fleet_probe_log holds 131 cf-api-list rows with ok=1 for qnfo-pipeline-ops, which is absent from the 55",
+      "resolution": "unresolved; if the listing is token-scoped the 55 is not an account total"
+    }
+  },
+  "deploy_topology": {
+    "live_deployer_worker": "qnfo-fleet-control",
+    "live_deployer_source": "qnfo-fleet-control/worker.js",
+    "live_deployer_source_bytes": 75875,
+    "live_deployer_source_sha": "d9d438f042c8f39a0fe27661b977fdb8c437197e",
+    "superseded_source_dir": "qnfo-fleet-deploy",
+    "superseded_reason": "MERGE WAVE A 2026-09-11: advisor + calibrator + deploy merged into qnfo-fleet-control",
+    "canonical_source": "r2:qnfo-canonical/<worker>.js",
+    "fallback_source": "<worker>/deployed-current.worker.js then <worker>/worker.js",
+    "no_self_list": ["qnfo-fleet-deploy"],
+    "kill_switch": { "key": "fleet_deploy_state.enabled", "value": "1", "documented_default": "0" },
+    "auto_heal": { "key": "fleet_deploy_state.auto_heal", "value": "1", "documented_default": "0" }
+  },
+  "registry_gaps": {
+    "total_rows": 55,
+    "missing_routes": 48,
+    "missing_tools": 52,
+    "missing_capabilities": 23,
+    "missing_deps": 22,
+    "missing_purpose": 21,
+    "rows_with_routes": ["qnfo-ai", "qnfo-cloud-ops", "qnfo-intent-orchestrator", "qnfo-ops", "qnfo-proof", "qnfo-subscribers", "qnfo-tools-mcp"],
+    "blank_hub_rows": ["audit-hub", "companion-hub", "errata-hub", "idea-hub", "jnl-pipeline"],
+    "state_merged_but_live": ["qnfo-backlog-exec", "qnfo-paper-explainer", "qnfo-paper-indexer", "qnfo-pdf", "qnfo-research-exec", "qnfo-research-supervisor"]
+  },
+  "version_truth_conflicts": [
+    { "worker": "qnfo-email", "live_health": "1.8.0", "drift_deployed_version": "qnfo-email/fabric-20260910", "class": "store-disagreement" },
+    { "worker": "qnfo-fleet-dashboard", "registry_version": "1.1.0", "drift_deployed_version": "1.5.1", "class": "store-disagreement" },
+    { "worker": "qnfo-ai", "live_health": "5.25.1", "repo_source": "5.21.5", "drift_canonical_version": "5.21.3", "class": "repo-behind-live" },
+    { "worker": "personal-companion", "live_health": "v1.1.0", "drift_canonical_version": "1.0.0", "class": "canonical-behind-live" },
+    { "worker": "qnfo-ai-calibration", "live_health": "1.1.5", "registry_version": "1.1.4", "class": "registry-behind-live" }
+  ],
+  "nonsemver_deployed_versions": {
+    "pattern": "<worker>/fabric-20260910",
+    "workers": ["qnfo-agent-orchestrator", "qnfo-archive", "qnfo-ddocs-indexer", "qnfo-email", "qnfo-lifecycle", "qnfo-paper-indexer", "qnfo-qwav"],
+    "effect": "parseInt gives NaN->0, comparator scores [0,0,0], every row labelled canonical-ahead hourly",
+    "current_impact": "inert - these rows receive no deploy attempt",
+    "latent_impact": "becomes a downgrade path if census or guard changes"
+  },
+  "drift": {
+    "total_rows": 1492,
+    "distinct_workers": 50,
+    "canonical_ahead": { "rows": 974, "workers": 32, "last_ts": "2026-09-13 13:03:23" },
+    "deployed_ahead": { "rows": 518, "workers": 18, "last_ts": "2026-09-13 13:03:33" },
+    "scanerr_keys_stale": { "noVERSION": 29, "stale_canon": 15, "nocanon": 15 },
+    "scan_census_history": [52, 55, 75, 77, 80],
+    "scan_census_latest": 55,
+    "healed_always_zero": true
+  },
+  "deploys": {
+    "total_attempts": 74,
+    "ok": 21,
+    "fail": 53,
+    "success_rate_pct": 28.4,
+    "distinct_workers_attempted": 14,
+    "concentration": { "personal-companion": 30, "qnfo-cloud-ops": 25, "top2_share_pct": 74.3 },
+    "ongoing_loops": [
+      { "worker": "personal-companion", "cadence": "hourly at :01", "attempts": 30, "ok": 4, "error": "HTTP 400 code 10021 Workflow GenerationFlow must be exported", "from": "v1.1.0", "to": "1.0.0", "direction": "DOWNGRADE" },
+      { "worker": "qnfo-cloud-ops", "cadence": "hourly until 07:02:38", "attempts": 25, "ok": 0, "error": "HTTP 400 code 10021 Uncaught SyntaxError worker.js:1:2" }
+    ]
+  },
+  "backlog": {
+    "agent_issues_total": 684,
+    "open": 10,
+    "closed": 320,
+    "wontfix": 258,
+    "resolved": 96,
+    "open_by_category": { "ai-calibration": 7, "research-pipeline": 2, "zenodo-publish": 1 },
+    "drain_last_run": { "processed": 10, "closed": 0, "rechecked": 10, "escalated": 0, "openBacklogBefore": 10 },
+    "fleet_improvements": { "proposed_P1": 29, "proposed_P2": 2, "approved_P3": 38, "approved_P2": 5, "approved_P1": 1, "note": "no consumer drains fleet_improvements" },
+    "task_dod_register": { "done": 100, "open": 99, "cancelled": 19, "in_progress": 1, "overdue_reported_by_guard": 26 }
+  },
+  "signal": {
+    "email_total": 682,
+    "email_spam": 258,
+    "email_spam_pct": 37.8,
+    "email_alerts_classified": 176,
+    "sampled_spam_rows": 20,
+    "sampled_bounce_notifications": 14,
+    "bounce_path": "bounces@cf-bounce.qnfo.org -> alerts@qnfo.org",
+    "finding": "every fleet self-signal to alerts@qnfo.org in the sampled window is stored status=spam",
+    "counter_evidence": "3 of 20 sampled spam rows are genuine third-party spam"
+  },
+  "model_health": {
+    "rows": 25,
+    "status_ok": 25,
+    "status_degraded": 0,
+    "qualified_cf_ids_with_null_last_probe": ["@cf/baai/bge-base-en-v1.5", "@cf/google/gemma-4-26b-a4b-it", "@cf/qwen/qwen2.5-coder-32b-instruct", "@cf/zai-org/glm-5.2"],
+    "canonical_rows_stale_hours": 44.53,
+    "stale_rows": ["deepseek-r1-qwen-32b", "glm-4.7-flash", "glm-5.2", "llama-3.2-11b-vision", "qwen2.5-coder-32b", "qwq-32b"],
+    "note": "status='ok' on all 25 rows while 6 canonical rows are 44.5h unprobed; updated_at is a minutely heartbeat, not probe evidence"
+  },
+  "transport_map": {
+    "service_binding": { "status": "working", "evidence": "12/55 healthy 200" },
+    "custom_domain_worker_host": { "status": "broken", "evidence": "qnfo-ai/qnfo-ops/qnfo-gateway/qnfo-email/journal .qnfo.org/health -> 530" },
+    "workers_dev_from_worker": { "status": "broken", "evidence": "404 even for live qnfo-ops" },
+    "internal_hostname_plain_fetch": { "status": "broken", "evidence": "CF-1016 530; correct only with a service binding" },
+    "internal_hostname_service_binding": { "status": "working", "evidence": "qnfo-cloud-ops uses env.EMAIL.fetch" },
+    "feedback_probes": { "rows": 2, "status": "fail", "code": 404, "last_ts": "2026-09-13T01:46:08Z" }
+  },
+  "remediation_queue": [
+    { "n": 1, "action": "disarm auto-heal", "target": "UPDATE fleet_deploy_state SET value='0' WHERE key IN ('auto_heal','enabled')", "type": "config", "blocker": "ops_d1_query is SELECT/WITH only" },
+    { "n": 2, "action": "repair alert delivery", "target": "mail auth for alerts@qnfo.org", "type": "config", "blocker": "no mail-config tool bound" },
+    { "n": 3, "action": "populate registry routes/state", "target": "48 rows routes, 6 rows state, 5 blank hubs", "type": "data", "blocker": "needs D1 write" },
+    { "n": 4, "action": "land downgrade guard", "target": "qnfo-fleet-control/worker.js", "type": "code", "blocker": "NO_SELF - manual deploy required" },
+    { "n": 5, "action": "reverse personal-companion regression", "target": "restore v1.1.0 or pin out of redeploy()", "type": "code+data", "blocker": "v1.1.0 source unreachable from qnfo-ops" },
+    { "n": 6, "action": "clear poisoned canonical", "target": "delete/overwrite r2 qnfo-canonical/qnfo-cloud-ops.js", "type": "data", "blocker": "qnfo-canonical R2 not bound to these tools" },
+    { "n": 7, "action": "reconcile deploy census", "target": "the API listing the scan iterates", "type": "config", "blocker": "token scope unverifiable from qnfo-ops" }
+  ]
+}
