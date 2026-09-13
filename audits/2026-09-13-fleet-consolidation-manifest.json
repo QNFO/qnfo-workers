@@ -1,0 +1,82 @@
+{
+  "artifact": "fleet-consolidation-manifest",
+  "generated_at": "2026-09-13T14:30:00Z",
+  "generated_by": "qnfo-ops/ops-exec",
+  "method": "set arithmetic over three independent rosters + live D1 reads; every list below is reproducible from the named query",
+  "rosters": {
+    "live_cf_scripts": { "n": 55, "source": "fleet_status tool (CF API scripts list)", "note": "healthyCount 12 probed via service binding; 43 probe:api unprobed" },
+    "service_registry": { "n": 55, "source": "SELECT * FROM service_registry", "note": "registry-as-truth HOLDS: zero ghost rows, zero unregistered live workers" },
+    "repo_worker_dirs": { "n": 92, "source": "GitHub contents API, QNFO/qnfo-workers root, non-worker dirs excluded" },
+    "probe_roster": { "n": 83, "source": "SELECT name,MAX(ts) FROM fleet_probe_log GROUP BY name" },
+    "integration_monitor_universe": { "n": 80, "source": "integration_state.json fleet_size", "note": "DISAGREES with the live fleet of 55" }
+  },
+  "finding_registry_is_clean": "service_registry (55) == live CF scripts (55). The ghost population is NOT in the registry. It lives in the probe roster (41 names) and the repo (39 superseded dirs). Any 'registry-as-truth' reconciliation is already satisfied.",
+  "superseded_repo_dirs": {
+    "n": 39,
+    "definition": "repo worker directory with no live worker, no registry row",
+    "merge_map": {
+      "errata-hub": ["qnfo-errata-watch", "qnfo-errata-respond", "qnfo-errata-publish", "errata-orchestrator"],
+      "idea-hub": ["qnfo-idea-factory", "qnfo-idea-miner", "qnfo-idea-triage"],
+      "radar-hub": ["events-radar", "qnfo-arxiv-radar", "qnfo-research-radar", "qnfo-citation-watch"],
+      "jnl-pipeline": ["jnl-watch", "jnl-referee", "jnl-reviser", "jnl-zenodo"],
+      "companion-hub": ["personal-life-search", "personal-life-maintain", "personal-life-indexer", "personal-events-radar"],
+      "audit-hub": ["qnfo-auditor", "qnfo-blank-audit"],
+      "fleet-exec": ["qnfo-pipeline-ops", "qnfo-register-guard", "qnfo-ops-jobs-reaper"],
+      "qnfo-fleet-control": ["qnfo-fleet-advisor", "qnfo-fleet-calibrator", "qnfo-fleet-deploy"],
+      "qnfo-agent-orchestrator": ["agent-orchestrator"],
+      "qnfo-memory-mcp": ["memory-mcp"],
+      "RETIRE-NO-SUCCESSOR": ["qnfo-chameleon", "qnfo-web-unified", "qnfo-containers-pilot", "qnfo-code-agent", "qnfo-code-orchestrator", "qnfo-error-selfheal", "qnfo-analytics", "qnfo-thread-ingest", "qnfo-venue-radar", "job-market-watch"]
+    }
+  },
+  "probe_ghosts": {
+    "n": 41,
+    "definition": "name in fleet_probe_log with no live worker",
+    "frozen_since": "2026-09-12T09:15:45Z",
+    "fresh_names_n": 10,
+    "note": "73 of 83 probe names stopped at one identical timestamp and never resumed. The committed qnfo-fleet-dashboard/registry.js v4 already declares the pruned roster (27 scheduled + 42 health_probes, 'dropped 25 ghost scheduled entries, 39 ghost probes'), so the committed roster and the deployed probe behaviour disagree.",
+    "pure_ghosts_absent_from_repo_too": ["papers.qnfo.org", "qnfo.org", "fleet.qnfo.org", "fleet-scheduler", "fleet-executor", "qnfo-skills-discovery", "qnfo-errata-orchestrator", "qnfo-container-executor"]
+  },
+  "alias_pairs_not_gaps": {
+    "note": "live worker with no same-named repo dir resolves to an alias, not a missing repo",
+    "pairs": { "qnfo-agent-orchestrator": "agent-orchestrator", "qnfo-memory-mcp": "memory-mcp" }
+  },
+  "productivity_census": {
+    "table": "fleet_worker_census",
+    "rows": 55,
+    "written_at": "2026-09-13T14:25:55Z",
+    "metric_provenance": "req24 sourced from worker_activity_daily.source='dashboard-scheduled-req24'",
+    "verdicts": {
+      "PRODUCTIVE": 38,
+      "FETCH-ONLY": 7,
+      "DEGRADED": 4,
+      "LOW-YIELD": 3,
+      "FIRING-NO-OUTPUT": 2,
+      "DAILY-ONLY": 2,
+      "STALLED": 1,
+      "NOT-YET-FIRED": 1
+    },
+    "red_team_inconsistency": "osf-integrity-check req24=1 -> PRODUCTIVE; qnfo-impact req24=1 -> DAILY-ONLY; qnfo-twin-maintain req24=1 -> DAILY-ONLY. Same metric, three different verdicts against a 'multiple times per day' bar. All three FAIL that bar.",
+    "red_team_provenance": "No authoritative per-worker invocation source exists. cf_analytics (CF GraphQL) named 7 workers; analytics_dash_workers named 10; the two sets have ZERO overlap. 277,515 of 281,106 requests are unattributed in cf_analytics."
+  },
+  "verified_live_defects": [
+    { "id": "PROBE-COVERAGE-COLLAPSE", "evidence": "10 of 83 probe names fresh at 14:16:30Z; 73 frozen at 2026-09-12T09:15:45Z", "status": "reproduced by this session" },
+    { "id": "TRACE-STALL", "evidence": "worker_logs MAX(ts_ms)=1789035358174 = 2026-09-10T10:15:58Z, age 76.00h, n=1578", "status": "reproduced" },
+    { "id": "PIPELINE-SUPERVISOR-SILENT", "evidence": "cloud_ops_events kind='pipeline-supervisor' MAX(ts)=2026-09-11T14:30:12.906Z, 47.9h", "status": "reproduced via a second table" },
+    { "id": "FALSE-AI-HEALTH-ALERT", "evidence": "worker_invocations rows 71-90: plain fetch to https://qnfo-ai.internal/health and https://personal-api.internal/health return HTTP 530 code 1016, every ~12h (09-11T15:05, 09-12T03:05, 09-12T15:05, 09-13T03:05) while fleet_status reports qnfo-ai healthy:true http:200 via binding", "status": "recurring false alarm; .internal is valid ONLY with a service binding" },
+    { "id": "STALE-OK-HEALTH-ROWS", "evidence": "8 ai_model_health rows status='ok' with last_probe_ts 2026-09-11T16:44Z (46.5h old) or 2026-09-11T16:31Z; no staleness column exists", "status": "reproduced" },
+    { "id": "MONITOR-WRONG-DENOMINATOR", "evidence": "integration_state fleet_size=80, probed=83; live fleet=55. coverage=91% and 'probe_gap=1' are computed against a roster containing 41 ghosts. Its lone 'integration-candidate' names qnfo-scorecard, which exists in no roster at all (phantom).", "status": "reproduced" },
+    { "id": "DRAIN-CANNOT-CLOSE", "evidence": "ops_issue_run processed 40, closed 0, rechecked 40, escalated 0; every detail entry is 'recheck' with 'no probe target' or a passing probe target", "status": "executed this session" },
+    { "id": "DEPLOY-HEALER-DISABLED", "evidence": "fleet_deploy_state enabled=0, auto_heal=0", "status": "reproduced" },
+    { "id": "DRIFT-NEVER-REACHES-ZERO", "evidence": "fleet_drift_report: canonical-ahead 983, deployed-ahead 527; 25 cron scan notes all carry healed=0 (one manual run healed=1); scan set varies 52..80 across runs", "status": "reproduced" }
+  ],
+  "do_not_do": [
+    "DO NOT set fleet_deploy_state.auto_heal=1. The comparator reads build tags as versions (canonical-ahead 983 rows), so enabling the healer would mass-redeploy downgrades across the fleet.",
+    "DO NOT find-and-replace '.internal' in qnfo-cloud-ops. .internal is correct with a service binding (env.EMAIL.fetch) and broken only with a plain fetch().",
+    "DO NOT repair the personal-companion CF 10021 in isolation. The loop is a comparator defect (leading-'v' build tag vs semver); fixing the 400 alone lands a downgrade v1.1.0 -> 1.0.0."
+  ],
+  "remediation_executed_this_session": [
+    "ops_issue_run confirm=true: processed 40, closed 0 (structurally incapable; see DRAIN-CANNOT-CLOSE)",
+    "telemetry_analyze(6h): scanned 11, filed 0, recovered 7, autoResolved 1",
+    "retired 6 orphan ghost bookkeeping keys from fleet_deploy_state (scanerr: jnl-reviser, jnl-zenodo, job-market-watch, personal-life-indexer, personal-life-search, personal-life-maintain) - all point at non-live workers"
+  ]
+}
