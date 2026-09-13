@@ -3,8 +3,15 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.1";
-var MODELS = [{ "internal": "@cf/qwen/qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text" }, { "internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed" }, { "internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text" }, { "internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }];
+var VERSION = "2.3.2";
+// v2.3.2 ID-NAMESPACE-1 (2026-09-13): the health table carries TWO id namespaces.
+// This prober writes only the `internal` key. qnfo-ai-calibration GW-DEGRADE-1/2 writes
+// gateway-failure health under the full CF id when its internalId() reverse map cannot
+// resolve it, so 4 models got phantom `@cf/...` rows (status degraded, last_probe_ts NULL,
+// consecutive_failures 0) that no prober can ever clear -> MODEL-DEGRADED refiled every
+// */20 cron. MODELS was also 15 entries for 10 distinct models, with one entry recording
+// GLM-5.3's probe result against kimi-k2.6.
+var MODELS = [{ "internal": "@cf/qwen/qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text" }, { "internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed" }, { "internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text" }, { "internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }];
 var SIGNALS = [["cal_loop", "fleet_cal_state", "updated_at", 24, "heartbeat"], ["kaizen", "kaizen_candidates", "created_at", 48, "heartbeat"], ["evolve", "evolve_candidates", "ts", 72, "heartbeat"], ["pipeline_status", "pipeline_status", "last_updated", 24, "event"], ["amh_models", "ai_model_health", "updated_at", 26, "heartbeat"], ["heartbeat", "fleet_heartbeat", "ts", 6, "heartbeat"], ["cloud_ops", "cloud_ops_events", "ts", 24, "heartbeat"], ["fleet_runs", "fleet_runs", "started_at", 24, "heartbeat"], ["research_queue", "research_queue", "created_at", 72, "heartbeat"], ["version_queue", "version_queue", "created_at", 72, "heartbeat"], ["paper_revision", "paper_revision_log", "created_at", 96, "heartbeat"], ["agent_issues", "agent_issues", "updated_at", 96, "heartbeat"], ["self_heal", "self_heal_actions", "ts", 48, "event"], ["outreach", "outreach_log", "sent_at", 72, "event"]];
 function json(o, s) {
   return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } });
@@ -39,20 +46,45 @@ function toMs(m) {
   return isNaN(t) ? null : t;
 }
 __name(toMs, "toMs");
+// v2.3.2 AMH-RECONCILE-1: clear `degraded` rows that carry no probe evidence at all, and
+// report how many rows this prober's write-key set cannot reach (coverage gap).
+async function reconcileHealth(env, probedIds, now) {
+  const out = { reconciled: 0, uncovered: 0 };
+  if (!env.QNFO_AUDIT) return out;
+  try {
+    const r = await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status='ok', updated_at=?1 WHERE status='degraded' AND last_probe_ts IS NULL AND COALESCE(consecutive_failures,0)=0").bind(new Date(now).toISOString()).run();
+    out.reconciled = r && r.meta && typeof r.meta.changes === "number" ? r.meta.changes : 0;
+  } catch (e) {
+  }
+  try {
+    const rows = await env.QNFO_AUDIT.prepare("SELECT model_id FROM ai_model_health").all();
+    const set = {};
+    for (let i = 0; i < probedIds.length; i++) set[probedIds[i]] = 1;
+    const all = rows && rows.results || [];
+    for (let i = 0; i < all.length; i++) {
+      if (!set[all[i].model_id]) out.uncovered++;
+    }
+  } catch (e) {
+  }
+  return out;
+}
+__name(reconcileHealth, "reconcileHealth");
 async function runProbe(env) {
   const now = Date.now();
   const results = [];
+  const probedIds = [];
   for (let i = 0; i < MODELS.length; i++) {
     const m = MODELS[i];
     const r = await probeOne(env, m);
     const mid = m.internal || m.id;
+    probedIds.push(mid);
     results.push({ model: mid, ok: r.ok, ms: r.ms || null });
     if (env.QNFO_AUDIT) {
       try {
         if (r.ok) {
-          await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status=?5, last_probe_ts=?2, last_latency_ms=?3, consecutive_failures=0, updated_at=?4 WHERE model_id=?1").bind(mid, now, r.ms || null, new Date(now).toISOString(), "ok").run();
+          await env.QNFO_AUDIT.prepare("INSERT INTO ai_model_health (model_id, status, last_probe_ts, last_latency_ms, consecutive_failures, updated_at) VALUES (?1, ?5, ?2, ?3, 0, ?4) ON CONFLICT(model_id) DO UPDATE SET status=?5, last_probe_ts=?2, last_latency_ms=?3, consecutive_failures=0, updated_at=?4").bind(mid, now, r.ms || null, new Date(now).toISOString(), "ok").run();
         } else {
-          await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status=CASE WHEN consecutive_failures >= 2 THEN ?6 ELSE ?5 END, last_probe_ts=?2, consecutive_failures=COALESCE(consecutive_failures,0)+1, updated_at=?4 WHERE model_id=?1").bind(mid, now, null, new Date(now).toISOString(), "degraded", "failing").run();
+          await env.QNFO_AUDIT.prepare("INSERT INTO ai_model_health (model_id, status, last_probe_ts, last_latency_ms, consecutive_failures, updated_at) VALUES (?1, ?5, ?2, ?3, 1, ?4) ON CONFLICT(model_id) DO UPDATE SET status=CASE WHEN consecutive_failures >= 2 THEN ?6 ELSE ?5 END, last_probe_ts=?2, last_latency_ms=?3, consecutive_failures=COALESCE(consecutive_failures,0)+1, updated_at=?4").bind(mid, now, null, new Date(now).toISOString(), "degraded", "failing").run();
         }
       } catch (e) {
       }
@@ -62,7 +94,8 @@ async function runProbe(env) {
   for (let i = 0; i < results.length; i++) {
     if (results[i].ok) up++;
   }
-  return { probed: results.length, up, down: results.length - up };
+  const extra = await reconcileHealth(env, probedIds, now);
+  return { probed: results.length, up, down: results.length - up, reconciled: extra.reconciled, uncovered: extra.uncovered };
 }
 __name(runProbe, "runProbe");
 async function checkFreshness(env) {
@@ -95,6 +128,31 @@ async function checkFreshness(env) {
   return out;
 }
 __name(checkFreshness, "checkFreshness");
+// v2.3.2 AMH-COVERAGE-1: the SIGNALS loop above uses MAX(ts_column), so a single freshly
+// written row masks every stale row in the table. Measured 2026-09-13: 'amh_models'
+// reported fresh/age 0h while 12 of 24 rows were stale (8 at 37.6-37.9h) or never probed.
+// This check counts rows instead of taking a maximum.
+async function checkHealthCoverage(env, now) {
+  const THRESHOLD_H = 26;
+  let total = 0, stale = 0, neverProbed = 0;
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health").first();
+    total = r ? Number(r.n || 0) : 0;
+    const s = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health WHERE last_probe_ts IS NULL OR last_probe_ts < ?1").bind(now - THRESHOLD_H * 36e5).first();
+    stale = s ? Number(s.n || 0) : 0;
+    const np = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health WHERE last_probe_ts IS NULL").first();
+    neverProbed = np ? Number(np.n || 0) : 0;
+  } catch (e) {
+    return { signal: "amh_coverage", status: "error" };
+  }
+  const status = stale > 0 ? "stale" : "fresh";
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind("amh_coverage", "ai_model_health", "last_probe_ts", stale + "/" + total + " stale (" + neverProbed + " never probed)", null, THRESHOLD_H, status, new Date(now).toISOString(), "heartbeat").run();
+  } catch (e) {
+  }
+  return { signal: "amh_coverage", total, stale, neverProbed, threshold_hours: THRESHOLD_H, status };
+}
+__name(checkHealthCoverage, "checkHealthCoverage");
 var worker_default = {
   async fetch(request, env, ctx) {
     const u = new URL(request.url);
@@ -102,12 +160,13 @@ var worker_default = {
     if (u.pathname === "/run") {
       const p = await runProbe(env);
       const f = await checkFreshness(env);
+      const coverage = await checkHealthCoverage(env, Date.now());
       let st = 0, idle = 0;
       for (let i = 0; i < f.length; i++) {
         if (f[i].status === "stale") st++;
         if (f[i].status === "idle") idle++;
       }
-      return json({ ok: true, version: VERSION, probe: p, freshness: f, stale_count: st, idle_count: idle });
+      return json({ ok: true, version: VERSION, probe: p, coverage, freshness: f, stale_count: st, idle_count: idle });
     }
     if (u.pathname === "/freshness") return json(await checkFreshness(env));
     return json({ ok: false, error: "not found" }, 404);
@@ -116,6 +175,7 @@ var worker_default = {
     ctx.waitUntil((async function() {
       await runProbe(env);
       await checkFreshness(env);
+      await checkHealthCoverage(env, Date.now());
     })());
   }
 };
