@@ -10,6 +10,8 @@ required bound and is harmful as written.** §5 now carries the corrected statem
 **REV 2:** §2 upgraded from inference to a confirmed pairing. **REV 1:** initial.
 **REV 4 (§8):** remediation EXECUTED at 14:27:44Z — 15 rows quarantined, queued now 0. §5's closing
 claim (no write path bound to this endpoint) is false and is corrected in §8.
+**REV 5 (§9):** gate verified from source; closure is deterministic, not timing-dependent. §6c
+resolved. Posting is now HALTED pending re-approval.
 
 ---
 
@@ -158,7 +160,7 @@ the **poster**. Adding an entry to `crons` without adding a matching branch does
 dominant and the last two posts are 2026-09-12 14:30:45 and 2026-09-11 14:30:36 — supporting the
 declared cron. But **id 23 posted at 06:01:29**, and the declared `0 6 * * *` branch runs `autoScan`,
 which drafts and does not post. The 16:00 and 09:00 posts have no matching branch at all. **So the
-deployed schedule likely differs from `wrangler.toml`.**
+deployed schedule likely differs from `wrangler.toml`.** *(Resolved in §9.)*
 
 ## 7. Limits
 
@@ -217,6 +219,7 @@ With zero queued rows the 14:30Z fire hits `if (!row) return;` and publishes not
 **Falsification test for this fix:** if a new `status='posted'` row appears at or after 14:30Z today,
 then the poster also consumes `draft` rows and this quarantine was ineffective. Check
 `SELECT id,status,posted_at FROM social_threads WHERE status='posted' ORDER BY posted_at DESC LIMIT 1`.
+*(Superseded by §9: the source proves drafts are never selected, so this test should return id 25.)*
 
 **Reversible:** `/approve` moves `draft → queued`, so any quarantined thread can be restored
 individually after re-verification. **No row was deleted** — the composed content is intact.
@@ -226,3 +229,57 @@ Residual limits, not resolved by §8: the deployed cron schedule still differs f
 `alertDigest` remains dead code (§6a); the `created_at` pairing remains a floor of 9 rather than a
 total; and the 6 unpaired rows were quarantined on the strength of the v0.5.2 ambiguity, **not** on
 per-row verification — so some of the 15 may be clean threads that now need a manual `/approve`.
+
+## 9. Source-verified closure — 14:28:41Z (the gate is proven, not inferred)
+
+I read `qnfo-social/worker.js` directly (sha `c6dc5bd46ee16b7803e3bd2b59e7dc61c5822c56`, 21,753 B,
+`VERSION = '0.5.3-failclosed'`) instead of relying on §1's quote. The `scheduled()` head is exactly:
+
+```js
+if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
+if (event.cron === '0 6 * * *') { await autoScan(env); return; }
+const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
+if (!row) return;
+```
+
+**The gate is `status='queued'` and nothing else. `draft` is never selected by any cron path** — only
+`/broadcast`, an explicit authenticated call, posts a draft. With `queued = 0` at 14:28:41Z, **every
+poster fire is a deterministic no-op**: the 14:30Z fire returns at `if (!row) return;` before any
+session or post call. This is stronger than observing the 14:30 post — it holds for all future fires
+until a row is deliberately re-queued, so the outcome does not depend on the clock.
+
+State at 14:28:41Z: `queued = 0`, `draft = 16`, `posted = 23`, `posting = 0`, `failed = 0`,
+`last_posted_at = 2026-09-12 14:30:45`.
+
+**§6c RESOLVED.** Repo `qnfo-social/wrangler.toml` (sha `db1c8093`) declares
+`crons = ["30 14 * * *", "0 6 * * *"]`, yet posts exist at 09:00 and 16:00 that no branch matches.
+`deployment_history` id 44 (2026-09-04) records adding `0 9 * * *` and `0 16 * * *` to qnfo-social. So
+**the deployed schedule is a superset of the repo toml, and each extra entry falls through to the
+poster** (§6b) — that is the source of the 09:00/16:00 posts. The repo toml is stale relative to the
+deployment. **Three poster fires per day (14:30, 09:00, 16:00); all three are now no-ops.**
+
+**Two defects §6 did not report:**
+
+- **`status='posting'` is an orphan state.** The poster first sets `status='posting'`
+  (`WHERE id=? AND status='queued'`), then posts; on failure it sets `status='failed'` with
+  `retry_count+1`. But the selection query only ever takes `status='queued'`, so a row stranded in
+  `posting` by a mid-flight death is **never retried and never surfaced**. Currently `posting = 0`
+  and `failed = 0`, so nothing is stranded today.
+- **`/queue` bypasses the checker entirely.** `INSERT OR IGNORE INTO social_threads (..., status)
+  VALUES (..., 'queued')` — an authenticated caller can enqueue unverified content directly, with no
+  `checkThread` call and `notes` left NULL. It is the one path that manufactures exactly the shape §3
+  calls ambiguous.
+
+**Operational consequence, stated plainly: posting is HALTED, not merely fixed.** With `queued = 0`,
+@qnfo.bsky.social publishes nothing until a row is re-queued. That is intended — all 16 drafts are
+either checker-flagged (id 38) or v0.5.2-era ambiguous — but the *only* recovery path is per-row
+re-verification followed by `POST /approve` (`draft → queued`). Nothing re-queues automatically, and
+`/approve` does not re-run the checker: approving a quarantined row re-queues it with `notes IS NULL`,
+which is again indistinguishable from clean.
+
+**Residual uncertainty:** I read the repository source, not the deployed bundle. If deployed
+qnfo-social differs from sha `c6dc5bd4`, the no-op conclusion weakens. Supporting evidence that it does
+not differ: observed row shapes (flagged rows as `draft` with `notes`; legacy rows as `queued` with
+`notes IS NULL`) match this source's logic exactly, and the drift report converged to
+`0.5.3-failclosed` at 08:02Z today. Unverified assumption: the deployed cron set is the 09-04 superset
+inferred from `deployment_history` id 44 plus post time-of-day — I could not read the live schedule.
