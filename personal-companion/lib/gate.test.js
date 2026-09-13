@@ -15,6 +15,15 @@
 // possessive passed revision 1 with zero voice violations. The assertions below pin
 // both the hole and the fix. The live-fixture assertions from revision 1 are
 // unchanged and still pass: addressee blocking on the live piece is 0.
+//
+// REVISION 3 (2026-09-13, QRI-2 red team): pins voice.js rev 3 (check 5,
+// first-person-attendance) and grounding.js rev 3 (single-day rows, the silent
+// duration 1, NaN gap poisoning). ONE EXISTING ASSERTION WAS DELIBERATELY CHANGED
+// and is marked below: the shared KB row "CWI summer school (28 Aug)" is a single
+// day, so rev 3 parses it as duration 1 where rev 2 returned unknown. The test that
+// asserted `null` for it was asserting a parser gap, not an invariant; its real
+// invariant ("never silently return duration 1 for a range you did not understand")
+// is kept, against a genuinely unparseable title.
 
 import assert from 'node:assert';
 import { deriveTemporalFacts } from './grounding.js';
@@ -65,7 +74,19 @@ t('LoF26 -> QPL end-to-start = 3 days', () => {
   assert.strictEqual(g.endToStart, 3);
 });
 t('unparseable-range row yields duration null, never 1', () => {
-  assert.strictEqual(facts.evs[2].duration, null);
+  const f = deriveTemporalFacts([{ title: 'Residency (2026, dates tba)', date: '2026-03-02' }]);
+  assert.strictEqual(f.evs[0].duration, null);
+  assert.strictEqual(f.evs[0].known, false);
+});
+// REVISION 3, CHANGED ASSERTION. Revision 2 asserted facts.evs[2].duration === null
+// for the real KB row "CWI summer school (28 Aug)". That row is a single day, and
+// rev 3 parses it as one day, so the assertion became false. The invariant it was
+// protecting is kept in the test immediately above, against a title that really is
+// an unparseable range. This is a deliberate change, not a test loosened to pass.
+t('REVISION 3: the single-day KB row is 1 day, and no longer "unknown"', () => {
+  assert.strictEqual(facts.evs[2].duration, 1);
+  assert.strictEqual(facts.evs[2].known, true);
+  assert.strictEqual(facts.unknownDuration.length, 0);
 });
 
 // --- the live piece must be blocked ---
@@ -173,6 +194,84 @@ t('a bare mention without a heading or address frame does NOT block', () => {
   assert.strictEqual(d.publish, true, 'a bare mention is a warning; blocking it would reject the serial');
   assert.ok(d.addressee.length >= 1, 'expected at least one warning');
   assert.strictEqual(d.addresseeBlocking.length, 0);
+});
+
+// ============================================================================
+// REVISION 3 — voice.js check 5: first-person-attendance
+// ============================================================================
+// The hole, measured 2026-09-13 by executing revision 2 against this exact text:
+// "I was there for both" produced ZERO findings from any check (publish = true,
+// blockingTotal = 0), and the same text with "I attended both" produced one
+// `impersonation` finding that gate.js rev 4 classifies as a WARNING, so it
+// published anyway. Both must now block.
+const RT_A = "On 10 August 2026, at Wolfson College, Cambridge, five days of conversation, play, and free "
+  + "participation began. Seven days later, at QPL 2026 in Amsterdam, the week rated 1 out of 5. Drained. "
+  + "I was there for both, and they differed in what they asked attention to do.";
+
+t('a two-word presence claim no longer publishes (was publish=true)', () => {
+  const d = runGate({ body: RT_A, quality: {}, facts, kbRows: KB });
+  assert.strictEqual(d.publish, false);
+  assert.ok(d.violations.some(v => v.kind === 'first-person-attendance'),
+    'expected a BLOCKING first-person-attendance finding, not a warning');
+});
+t('an attendance claim using a LISTED verb now blocks instead of warning', () => {
+  const d = runGate({ body: RT_A.replace('I was there for both', 'I attended both'), quality: {}, facts, kbRows: KB });
+  assert.strictEqual(d.publish, false, 'rev 2 published this: impersonation was filtered to a warning');
+  assert.strictEqual(d.warnings.length, 1, 'the impersonation finding stays a warning');
+  assert.ok(d.violations.some(v => v.kind === 'first-person-attendance'));
+});
+t('a quoted presence claim is a warning, not a block', () => {
+  const d = runGate({ body: 'The explorer wrote: "I was there, and the wind never stopped."', quality: {}, facts, kbRows: KB });
+  assert.strictEqual(d.publish, true);
+  assert.ok(d.warnings.some(w => w.kind === 'first-person-attendance'));
+});
+t('a presence claim outside any recorded venue is a warning, not a block', () => {
+  const d = runGate({ body: 'I was there for a while, and the argument held.', quality: {}, facts, kbRows: KB });
+  assert.strictEqual(d.publish, true);
+  assert.strictEqual(d.warnings.length, 1);
+});
+t('the idiom "I was at a loss" is not a presence claim (no false block)', () => {
+  const d = runGate({ body: 'Seven days later, at QPL 2026 in Amsterdam, I was at a loss to explain the drop. I was in doubt about the mechanism.', quality: {}, facts, kbRows: KB });
+  assert.strictEqual(d.publish, true);
+  assert.strictEqual(d.voice.length, 0, 'a false block is as damaging as a false pass');
+});
+t('the live piece gains no attendance finding from revision 3', () => {
+  const d = runGate({ body: LIVE, quality: { verdict: 'reject' }, facts, kbRows: KB });
+  assert.strictEqual(d.voice.length, 5, 'revision 3 must not add a finding to the live fixture');
+  assert.strictEqual(d.violations.length, 7);
+});
+// KNOWN MISS, recorded rather than papered over: this verbatim extract of the live
+// body still produces 0 findings and still publishes. It is the class the reader's
+// own question is about. Pinned here so the gap cannot be forgotten.
+t('KNOWN MISS: first-person narration of the record with no name/verb still passes', () => {
+  const body = "Return to Cambridge and Amsterdam. The LoF26 room and the QPL 2026 room differed in what "
+    + "they did to attention. The first leaves intervals \u2014 the pause after someone says something wrong, "
+    + "the walk to the next session, the unminuted conversation. The energy ratings were 5 and 1.";
+  const d = runGate({ body: body, quality: {}, facts, kbRows: KB });
+  assert.strictEqual(d.publish, true, 'documented gap: unfixed because the candidate rule is unvalidated');
+  assert.strictEqual(d.violations.length, 0);
+});
+
+// ============================================================================
+// REVISION 3 — grounding.js: no silent duration 1, no NaN gaps
+// ============================================================================
+t('a row with no parseable date yields duration null, never 1', () => {
+  const f = deriveTemporalFacts([{ title: 'No date row', date: null }]);
+  assert.strictEqual(f.evs[0].duration, null, 'rev 2 emitted 1 here');
+  assert.strictEqual(f.evs[0].known, false);
+});
+t('an undated row does not poison the gap arithmetic with NaN', () => {
+  const f = deriveTemporalFacts([
+    { title: 'LoF26 (10-14 Aug)', date: '2026-08-10' },
+    { title: 'Undated', date: null },
+    { title: 'QPL 2026 (17-21 Aug)', date: '2026-08-17' }]);
+  assert.ok(f.gaps.every(g => Number.isFinite(g.startGap)), 'every gap must be a finite number');
+  assert.strictEqual(f.gaps.length, 1, 'the undated row must not be paired into a gap');
+  assert.strictEqual(f.gaps[0].startGap, 7);
+});
+t('the live piece is still blocked at exactly 7 after both revisions', () => {
+  const d = runGate({ body: LIVE, quality: { verdict: 'reject' }, facts, kbRows: KB });
+  assert.strictEqual(d.violations.length, 7);
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
