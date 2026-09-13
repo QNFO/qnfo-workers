@@ -51,11 +51,23 @@
 --      apart, not consecutive, and the record holds no cost for either.'
 --   Operator's call. Dropping it is defensible; the loss should be deliberate, not silent.
 --
--- DISCREPANCY BETWEEN THE SUPERSEDING FILES — resolve before applying.
---   QRI-2 §3 derives word_count 2503 and length 15276.
---   QRI-3 §4(a) states word_count 2504 and length 15278 for the same applied state.
---   Both cannot be right, and QRI-2 step 3 writes a literal. Recompute against the
---   corrected body; do not take either file's prose on trust.
+-- DISCREPANCY BETWEEN THE SUPERSEDING FILES — RESOLVED 2026-09-13 by qnfo-ops.
+--   QRI-2 §3:    word_count 2503, length 15276   <- CORRECT
+--   QRI-3 §4(a): word_count 2504, length 15278   <- WRONG, by 1 word and 2 characters
+--
+--   Recomputed from the span literals using worker.js's own wordCount() rule (runs of
+--   non-whitespace), against the stored base 2539 words / 15517 chars:
+--     QRI-2 span 1, chars    1..287   opening span   49 words -> 31   delta -18
+--     QRI-2 span 2, chars  289..575   Rowan span     54 words -> 37   delta -17
+--     QRI-2 span 3                    closing name    4 words ->  3   delta  -1
+--     total -36   ->  word_count 2503
+--     char deltas: -132, -107, -2  =  -241   ->  length 15276
+--
+--   QRI-3's 2504 implies a total delta of -35, which these spans cannot produce: the
+--   4->3 replacement alone is -1, and -18 and -17 are exact. QRI-2 step 3's literal 2503
+--   is therefore right. Do NOT "correct" it to 2504 on the strength of QRI-3 §4(a).
+--   Caveat, stated: this inherits the stored 2539 as its base. If the stored value was
+--   already wrong the absolute result shifts, but the delta -36 is unaffected either way.
 --
 -- INDEPENDENTLY VERIFIED BY qnfo-ops (2026-09-13), against the raw column:
 --   before-state agrees with both files: length(body_md) = 15517, word_count = 2539
