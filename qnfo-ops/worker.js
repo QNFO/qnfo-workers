@@ -1878,7 +1878,20 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   const t0 = Date.now();
   let res;
   try {
-    if (name === "fleet_status") res = await fleetStatus(env);
+    if (name === "fleet_status") {
+      res = await fleetStatus(env);
+      // FLEET-FEED-WIRE-1: append fleet-feed summary to fleet_status response
+      if (env.FLEET_FEED) {
+        try {
+          var ffr = await env.FLEET_FEED.fetch('https://qnfo-fleet-feed.q08.workers.dev/feed/summary');
+          if (ffr.ok) {
+            var ffd = await ffr.json();
+            res.feed_summary = ffd.summary;
+            res.feed_top = (ffd.top_findings || []).slice(0, 3);
+          }
+        } catch(eFf) {}
+      }
+    }
     else if (name === "ops_issues_list") res = await listIssues(env, args);
     else if (name === "ops_issue_run") res = await triggerBacklog(env, args, userText);
     else if (name === "ops_d1_query") res = await d1Query(env, args);

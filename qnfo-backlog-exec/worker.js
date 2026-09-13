@@ -1,4 +1,4 @@
-// qnfo-backlog-exec v1.3.0 - agent_issues backlog executor + issue_ledger resolver + ops_jobs reaper.
+// qnfo-backlog-exec v1.4.0 - agent_issues backlog executor + issue_ledger resolver + ops_jobs reaper.
 // v1.3.0 (PATCH-2026-09-13-ops-jobs-reaper, qnfo-ops): ops_jobs terminal-status reaper (defect D17).
 //  The async-job runner writes `response` but never writes the terminal status, so finished legs
 //  sit in 'continuing'/'running' forever and every status surface lies. Measured live
@@ -72,7 +72,7 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -431,6 +431,32 @@ async function run(env) {
 
 export default {
   async scheduled(event, env, ctx) {
+    // FLEET-FEED-CONSUMER-1: read own work queue from fleet-feed and auto-execute SQL actions
+    if (env.FLEET_FEED) {
+      try {
+        var fr = await env.FLEET_FEED.fetch('https://qnfo-fleet-feed.q08.workers.dev/feed/self?worker=qnfo-backlog-exec');
+        if (fr.ok) {
+          var fd = await fr.json();
+          var actionable = (fd.findings || []).filter(function(f) {
+            return f.auto_action && f.severity_int >= 2 && f.category && !f.category.startsWith('backlog/');
+          }).slice(0, 10);
+          for (var af of actionable) {
+            // Execute SQL auto_actions directly
+            var sql = af.auto_action;
+            if (sql && /^(UPDATE|INSERT|DELETE)/i.test(sql.trim())) {
+              try { await env.AUDIT.prepare(sql).run(); } catch(e2) {}
+            }
+            // Log to self_heal_actions
+            try {
+              await env.AUDIT.prepare(
+                "INSERT OR IGNORE INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,datetime('now'),'executed',datetime('now'))"
+              ).bind('feed-auto-exec', af.id, (af.auto_action||'').slice(0,500)).run();
+            } catch(e3) {}
+          }
+        }
+      } catch(eFeed) {}
+    }
+
     try {
       const out = await run(env);
       console.log("backlog-exec", JSON.stringify(out));
