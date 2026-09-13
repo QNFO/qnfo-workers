@@ -19,20 +19,37 @@
 // ---------------------------------------------------------------------------
 // FIX A — high — F3 in audits/2026-09-13-fix-queue.json
 // ---------------------------------------------------------------------------
-// DEFECT: the `deepseek-direct/models` probe can never pass while the endpoint is
-// healthy. Its predicate is:
+// DEFECT: the `deepseek-direct/models` probe asserts that the string
+// "deepseek-v4-flash" appears in DeepSeek's own /models response:
 //
 //     pass = r.status === 200 && r.text.indexOf("deepseek-v4-flash") >= 0;
 //
-// "deepseek-v4-flash" is this fleet's internal roster / gateway alias. It is not a
-// DeepSeek public model id, so DeepSeek's own /models response will not contain it.
+// "deepseek-v4-flash" is this fleet's internal roster / gateway alias. Keying an
+// assertion on an internal alias appearing in a third party's catalogue is fragile:
+// when DeepSeek's catalogue no longer carries that string, a healthy endpoint is
+// reported as failing, forever, on every sweep.
 //
-// EVIDENCE (read-only, 2026-09-13): ai_calibration_results rows for
-// target='deepseek-direct/models' fail on EVERY sweep with detail="http=200" —
-// 25 consecutive rows spanning ~13 hours at the */30 cron cadence, zero passes.
-// A probe that returns http=200 and is marked fail, every time, is a probe-assertion
-// defect, not an endpoint outage. It is the direct source of the recurring
-// "[gw-fail]" / ai-calibration high-priority ticket cluster.
+// EVIDENCE — and a correction to an earlier draft of this comment (read-only D1,
+// 2026-09-13):
+//   * ai_calibration_results, target='deepseek-direct/models': 335 rows total,
+//     182 pass / 153 fail. The probe DID pass historically.
+//   * Last pass 2026-09-10T01:01:10Z. First fail 2026-09-10T01:31:08Z, i.e. the
+//     very next 30-minute sweep. All 153 failures are consecutive from that instant
+//     to 2026-09-13T06:00:52Z — a clean step change, no intermittent behaviour.
+//   * The sweep immediately before the change passed every one of its 28 probes
+//     (health, roster, 18 model probes, 4 vision, tools, stream, routing).
+//   * No deploy of qnfo-ai-calibration is recorded in deployment_history near the
+//     onset (nearest entries: qnfo-observability 2026-09-10 17:44, qnfo-ops 09-11).
+//
+// An earlier draft of this file claimed the assertion "can never pass". That was
+// WRONG and is retracted: it passed 182 times. The correct reading is a REGRESSION
+// with a precise onset, most likely an upstream change to DeepSeek's model list
+// (catalogue/alias retirement), not a fleet code change.
+//
+// HONEST LIMIT: deployment_history is a manual log, so its silence is not proof that
+// no deploy happened. "Upstream change" is the better-supported explanation, not a
+// verified fact. What IS verified is that a 200 with a body is being reported as an
+// endpoint failure on every sweep for 3.2 days, which is a probe defect either way.
 //
 // FIX: assert on the transport and on a response that looks like a model list, not
 // on an internal alias appearing in a third party's catalogue.
@@ -46,8 +63,12 @@
 //     if (cf >= failThreshold) { failing[m] = res.detail; ... }
 //
 // so a probe that fails below the threshold increments `fail` but is never named.
-// A digest that says nothing failed, next to a fail counter that says two did, is
-// worse than no digest: it hides the signal the digest exists to surface.
+// VERIFIED against the last three runs:
+//     cal-1789279252538-41c75c  total=28 pass=26 fail=2  digest={"failing":[],"drift_models":[]}
+//     cal-1789277443832-a4fd7a  total=28 pass=27 fail=1  digest={"failing":[],"drift_models":[]}
+//     cal-1789275646641-34492b  total=28 pass=26 fail=2  digest={"failing":[],"drift_models":[]}
+// A digest that names nothing, beside a counter that says two things failed, is worse
+// than no digest: it hides the signal the digest exists to surface.
 //
 // FIX: derive the named list from the results actually collected.
 //
@@ -57,12 +78,15 @@
 // Issue 664 reads: consecutive_failures=2 detail=http=200 echo=false "OK"
 // Same class as FIX A: http=200, non-empty body, marked fail because the reply did
 // not contain the exact expected token ("Reply with exactly: OK"). A model that
-// answers "OK." or "Ok" or adds a word is marked as an outage.
+// answers "OK." or "Ok" or adds a word is marked as an outage. Note that the same
+// sweep in which deepseek-direct/models first failed also shows llama-3.2-11b-vision
+// passing with detail "ok Red." — i.e. these probes are sensitive to trivial output
+// variation, which is what makes issue 664's echo=false worth distrusting.
 //
 // It is deliberately NOT patched here. The assertion sits in a line containing '<'
 // and '>', which is exactly the region web_fetch destroys, so the verbatim source
-// could not be read and any anchor would be a guess. Recommended change, for a
-// human or an agent with an unlossy read:
+// could not be read and any anchor would be a guess. Recommended change, for a human
+// or an agent with an unlossy read:
 //
 //     -  var pass = r.status === 200 && echo;
 //     +  var pass = r.status === 200 && String(content || "").trim().length > 0;
@@ -96,7 +120,7 @@ if (A_HITS === 0) {
     problems.push('FIX A: predicate on "deepseek-v4-flash" not found (0 matches)');
   }
 } else {
-  console.log('  fix   FIX A: ' + A_HITS + ' occurrence(s) of the impossible /models assertion');
+  console.log('  fix   FIX A: ' + A_HITS + ' occurrence(s) of the catalogue-alias assertion');
   src = src.replace(A_RE, '/deepseek/i.test(r.text)');
   changed++;
 }
@@ -149,3 +173,7 @@ console.log('so unlike personal-companion this patch lands on real, current sour
 console.log('After deploy, expect the ai-calibration ticket cluster to close itself:');
 console.log('  fileIssue() only files when a probe fails, and the sweep auto-closes a');
 console.log('  class after 24h with no failure.');
+console.log('Do NOT expect FIX A to restore the probe to "pass" by itself if DeepSeek has');
+console.log('retired the alias: the new predicate asserts only that /models answers 200 with');
+console.log('a deepseek-looking list. If the endpoint is genuinely gone, it will now fail');
+console.log('with a truthful detail instead of a misleading one.');
