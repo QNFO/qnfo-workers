@@ -29,6 +29,9 @@
 // needs a subject classifier and belongs one level earlier, at `pickTopic()`, before
 // anchors are fetched. The concurrent session reached the same split. Only the entity
 // list is implemented here, and the category row is explicitly NOT claimed as covered.
+// Measured 2026-09-13: four physics/science book recommendations (Hawking, Feynman,
+// Penrose, Weinberg) all pass this check. The reader's HIGHEST-confidence exclusion is
+// therefore the LEAST covered by it. That gap is real and is not closed here.
 //
 // WHY SOME TERMS ARE DELIBERATELY OMITTED
 // The physics row names two titles: "The Information" (Gleick) and "The Order of Time"
@@ -45,11 +48,46 @@
 // top-level `esc`, so this module's escape helper is named `fesc`. An earlier draft of
 // this file used `esc` and would have produced a bundle that does not parse — caught by
 // the collision check before it reached a deploy, and recorded here so it is not
-// reintroduced.
+// reintroduced. Rev 2 adds `norm`, `SEP` and `termPattern`; none of those names exists in
+// grounding.js, voice.js, addressee.js or gate.js.
 //
 // PARAMETERISED, NOT HARDCODED TO A PERSON
 // `checkStandingFilters(text, { terms })` takes the term list as an argument, following
 // addressee.js's rule that no person's particulars are baked into the fleet's code.
+//
+// ---------------------------------------------------------------------------
+// REVISION 2 (2026-09-13, same day) — the boundary let digits through
+// ---------------------------------------------------------------------------
+// Rev 1 used `(?<![A-Za-z0-9])TERM(?![A-Za-z0-9])`. The lookahead requires a
+// NON-ALPHANUMERIC character after the term, so ANY DIGIT immediately following defeated
+// it. Measured by executing rev 1 against adversarial probes — 6 of 9 evaded a BLOCKING
+// check:
+//
+//   QPL2026                  -> pass   (the concatenated form a model emits)
+//   Qpl2026                  -> pass
+//   Quantum Physics & Logic  -> pass   (the expansion IS listed; the & variant was not)
+//   Q.P.L. / Q P L / the C.W.I. summer school -> pass
+//   QPL's, cwi-2026, QPL_2026 -> blocked (correct)
+//
+// The live body_md reads "QPL 2026" with a space, which is the ONLY reason the shipped
+// defect was caught. That is luck, not coverage. A deny-list whose whole purpose is to
+// stop a named topic must not be defeated by removing a space.
+//
+// Rev 2 matches on a WORD PATTERN instead: the term is normalised ('&' -> " and ",
+// separator runs -> space, lowercased), split into words, and rejoined with a bounded
+// separator run. Boundaries become [A-Za-z]-only, so digits may sit adjacent while
+// letters still protect against substring hits. The pattern is applied to the ORIGINAL
+// text, so the reported `span` is the real matched text rather than a flattened copy.
+//
+// Measured rev 1 -> rev 2, executed, not asserted:
+//   must-block 6/6 -> 6/6 | must-not-block 5/5 -> 5/5 | corrected body clean -> clean
+//   evasion probes blocked 3/9 -> 6/9 | regressions 0
+//
+// RESIDUAL, STATED NOT CLAIMED: separator-broken initialisms (Q.P.L., Q P L, C.W.I.)
+// still evade. Closing them needs a letter-collapse step (join runs of single letters
+// before matching), which would also collapse ordinary prose abbreviations — the same
+// false-positive risk class this module already declined for "The Information" and
+// "The Order of Time". Not implemented, not claimed.
 
 // Each term is tied to the profile row it implements, so the list is auditable.
 export const ENTITY_DENY = [
@@ -68,6 +106,26 @@ export const ENTITY_DENY_OMITTED = ['The Information', 'The Order of Time'];
 
 const fesc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Normalise a term for word-pattern construction. '&' becomes " and " so a term written
+// with a conjunction matches BOTH "and" and "&" in the body. Rev 2 addition.
+const norm = s => String(s || '')
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
+// Bounded separator run between the words of a multi-word term. Bounded (1-4 chars) so a
+// term cannot match across an arbitrarily long stretch of body text. Rev 2 addition.
+const SEP = '[^A-Za-z0-9]{1,4}';
+
+// Build the word pattern for one term. A literal "and" becomes an alternation so that
+// "Quantum Physics and Logic" and "Quantum Physics & Logic" both match. Rev 2 addition.
+function termPattern(term) {
+  const words = norm(term).split(' ').filter(Boolean);
+  if (!words.length) return null;
+  return words.map(w => (w === 'and' ? '(?:and|&)' : fesc(w))).join(SEP);
+}
+
 // Which filter rows are in force for a generation context. Reporting only — it does NOT
 // derive deny terms from row labels, because a label is a sentence, not a term. Terms
 // live in ENTITY_DENY above, where each one names its source row.
@@ -80,17 +138,20 @@ export function filtersInForce(profileRows, minConfidence) {
 
 // opts: { terms: ['QPL', ...], deny: [{term, source, conf}] }
 // Returns [{ kind, severity, span, why }]. Empty array = no filter matched.
-// Word-bounded and case-insensitive: 'QPL' matches "QPL 2026" but not "QPLX";
-// 'CWI' matches the standalone token but not inside a longer word.
+// Word-bounded and case-insensitive. Rev 2 boundaries are [A-Za-z]-only, so digits may
+// sit adjacent: 'QPL' matches "QPL 2026", "QPL2026" and "QPL's"; it still does not match
+// "QPLX". 'CWI' matches the standalone token but not inside a longer word ("acwi").
 export function checkStandingFilters(text, opts) {
   const o = opts || {};
-  const flat = String(text || '').replace(/\s+/g, ' ');
+  const src = String(text || '');
   const deny = o.deny || ENTITY_DENY;
   const terms = o.terms || deny.map(d => (typeof d === 'string' ? d : d.term)).filter(Boolean);
   const v = [];
   for (const t of terms) {
-    const re = new RegExp('(?<![A-Za-z0-9])' + fesc(t) + '(?![A-Za-z0-9])', 'i');
-    const m = re.exec(flat);
+    const pat = termPattern(t);
+    if (!pat) continue;
+    const re = new RegExp('(?<![A-Za-z])' + pat + '(?![A-Za-z])', 'i');
+    const m = re.exec(src);
     if (!m) continue;
     const rec = deny.find(d => d && d.term === t);
     v.push({
