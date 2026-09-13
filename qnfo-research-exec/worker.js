@@ -4,8 +4,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.1-quality-gate-fix";
+var VERSION = "0.8.3";
 var WORKER = "qnfo-research-exec";
+var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
 var MAX_NOTE = 4e3;
 var MAX_PAPER = 3e4;
@@ -1459,7 +1460,7 @@ __name2(run, "run");
 
 var worker_default = {
     async scheduled(event, env, ctx) {
-    // v0.5.17-research-restored: research-exec is the SINGLE research_queue stage-machine
+    // v0.8.1: research-exec is the SINGLE research_queue stage-machine
     // owner (proven publisher: 09-03/09-04 note->draft->publish->published with real DOIs
     // 22278600/22278842/22279728/22280745 via direct Workers-AI models). drainV2 (version_queue)
     // then run() (research_queue). triage is intake-only (score/enqueue). Canonical 2026-09-06:
