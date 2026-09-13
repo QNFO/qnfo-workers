@@ -1,4 +1,4 @@
-// qnfo-research-supervisor v1.1.1 -- durable supervisor + v2-drain driver over the research-publication pipeline.
+// qnfo-research-supervisor v1.1.2 -- durable supervisor + v2-drain driver over the research-publication pipeline.
 // v1.0.0 (2026-09-06): survey + remediate stalls + record.
 // v1.1.0 (2026-09-06): added RESEARCH_EXEC service binding + drive step.
 // v1.1.1 (2026-09-06): drive step = SAFE v2 publish drain ONLY (research-exec drainV2 claim is now an
@@ -6,11 +6,39 @@
 //   /run driving is DEFERRED: research-exec run() stage selection (researching+note/draft) is not yet
 //   atomically claimed, so a second driver could double-generate an in-flight item. Do NOT add a research
 //   /run loop until run() gets atomic stage claims.
+// v1.1.2 ORPHAN-VISIBILITY-1 (2026-09-13, qnfo-ops): survey now reports rows it CANNOT act on.
+//   Diagnosis that prompted this (measured read-only, qnfo-audit):
+//     research_queue: ensemble-draft 3, failed 2, pending 1, published 19.
+//     The three ensemble legs are real, named rows:
+//       ENSEMBLE-001-writer-a / -b / -c, status='ensemble-draft', stage='reconciled',
+//       attempt=0, claimed_at=NULL, created 2026-09-08 11:57:47-49.
+//     They reconciled on 2026-09-08 and have not moved since - five days. Nothing in the fleet
+//     merges reconciled ensemble legs into a paper. The two `failed` rows (source_id 45, 51)
+//     carry error "ensemble: only 0/3 legs produced drafts", attempt=12, recover_count=2,
+//     terminal_rearms=3, and are terminal.
+//   WHY THIS WORKER CANNOT FIX IT, by its own predicates:
+//     - remediate() matches only `status='researching' AND agent_task_id IS NULL AND
+//       claimed_at < now-60min`. The orphaned rows are 'pending'/'failed'/'ensemble-draft',
+//       so they never match. That is why the live survey reports staleClaims: 0.
+//     - drive() only drains version_queue. The orphans live in research_queue.
+//     - The header above explicitly DEFERS research-cycle driving until research-exec has
+//       atomic stage claims. That warning still stands and this patch does not violate it.
+//   So the correct minimal change is to make the stall VISIBLE rather than to drive it.
+//   Consequence of the status quo: the live survey reported
+//     actions: [] and drive: { calls: [], backlog: { version: 0 } }
+//   on two consecutive runs (2026-09-11T14:15Z and 14:30Z) - i.e. the supervisor observed
+//   the identical stuck set and emitted no signal about it. Five days of stall produced no
+//   alert, no issue, and no log line that distinguishes it from a healthy idle pipeline.
+//   This patch adds `orphans` to the survey, the record event, and the response. It mutates
+//   NO state: it is a read + log change, safe under the deferred-driver constraint.
+//   Still required, by someone with deploy + D1 write: give research-exec run() atomic stage
+//   claims, THEN add a driver for ensemble->merge, THEN decide whether ENSEMBLE-001 is worth
+//   resuming or should be abandoned. Not done here.
 // Steps: survey -> remediate (stale claims / stale 'publishing') -> drive (v2 drain) -> record.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-const VERSION = "1.1.1";
+const VERSION = "1.1.2";
 
 function json(data, status) {
   if (status === void 0) status = 200;
@@ -70,6 +98,13 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
       const prl = await countBy(env, "paper_revision_log", "status");
       const staleClaims = await firstRows(env, "SELECT id, stage, claimed_at, attempt, agent_task_id FROM research_queue WHERE status='researching' AND agent_task_id IS NULL AND claimed_at < datetime('now','-60 minutes') ORDER BY claimed_at ASC", 20);
       const stalePublishing = await firstRows(env, "SELECT id, slug, updated_at FROM version_queue WHERE status='publishing' AND updated_at < datetime('now','-30 minutes') ORDER BY updated_at ASC", 20);
+      // v1.1.2 ORPHAN-VISIBILITY-1: rows older than 24h that are neither published nor
+      // claimed. These are exactly the rows remediate() and drive() cannot touch, so they
+      // would otherwise be invisible. Read-only.
+      let orphaned = [];
+      try {
+        orphaned = await firstRows(env, "SELECT id, status, stage, attempt, claimed_at, created_at FROM research_queue WHERE status NOT IN ('published') AND created_at < datetime('now','-24 hours') ORDER BY created_at ASC", 20);
+      } catch (e) { orphaned = []; }
       let publishedTotal = 0;
       let published24h = 0;
       try {
@@ -78,7 +113,7 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
         const p24 = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND updated_at >= datetime('now','-24 hours')").first();
         published24h = (p24 && p24.n) || 0;
       } catch (e) {}
-      return { rq: rq, vq: vq, st: st, prl: prl, staleClaims: staleClaims, stalePublishing: stalePublishing, publishedTotal: publishedTotal, published24h: published24h };
+      return { rq: rq, vq: vq, st: st, prl: prl, staleClaims: staleClaims, stalePublishing: stalePublishing, orphaned: orphaned, publishedTotal: publishedTotal, published24h: published24h };
     });
 
     const remediate = await step.do("remediate", { retries: retry, timeout: "60 seconds" }, async function () {
@@ -95,7 +130,7 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
         const up = await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='drafted', updated_at=datetime('now') WHERE id=? AND status='publishing'").bind(it.id).run();
         if (up && up.meta && up.meta.changes) actions.push({ kind: "release-vq-publishing", id: it.id, slug: it.slug });
       }
-      return { actions: actions, acted: actions.length };
+      return { actions: actions, acted: actions.length, orphansNotActedOn: (survey.orphaned || []).length };
     });
 
     const drive = await step.do("drive", { retries: retry, timeout: "300 seconds" }, async function () {
@@ -123,6 +158,8 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
       const text = JSON.stringify({
         rq: survey.rq, vq: survey.vq, st: survey.st, prl: survey.prl,
         staleClaims: survey.staleClaims.length, stalePublishing: survey.stalePublishing.length,
+        // v1.1.2: the rows this worker cannot act on, with their stage and age.
+        orphans: (survey.orphaned || []).map(function (o) { return { id: o.id, status: o.status, stage: o.stage, attempt: o.attempt, created_at: o.created_at }; }),
         publishedTotal: survey.publishedTotal, published24h: survey.published24h,
         actions: remediate.actions,
         drive: drive
@@ -143,6 +180,8 @@ export class ResearchSupervisor extends WorkflowEntrypoint {
         revisionLog: survey.prl,
         staleClaims: survey.staleClaims.length,
         stalePublishing: survey.stalePublishing.length,
+        orphans: (survey.orphaned || []).length,
+        orphanDetail: (survey.orphaned || []).map(function (o) { return o.id + "(" + o.status + "/" + o.stage + ")"; }),
         publishedTotal: survey.publishedTotal,
         published24h: survey.published24h
       },
