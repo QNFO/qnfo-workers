@@ -3,7 +3,7 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
-# qnfo-fleet-dashboard v1.0.0 - fleet/pipeline/schedule health dashboard (Task-Scheduler-style view of the CF ecosystem).
+# qnfo-fleet-dashboard v1.2.0 - fleet/pipeline/schedule health dashboard (Task-Scheduler-style view of the CF ecosystem).
 # Purpose: at-a-glance view of every scheduled worker (crons + next UTC runs), 24h invocation/error analytics
 # (CF GraphQL), D1 pipeline audits (qnfo-audit/outreach/living-paper), endpoint probes, and device-bound tasks.
 # Cron refresh = every 15 min (cloud); GET /api/state auto-refreshes when older than 15 min.

@@ -1,0 +1,17 @@
+name = "qnfo-code-agent"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# qnfo-code-agent v0.1.0 - 100% SERVER-SIDE autonomous code agent.
+# GitHub repo read/edit/commit/PR tools (QNFO org) + coding-model agent loop.
+# ISOLATED from qnfo-ops (the live AI gateway): separate worker, separate secrets,
+# registered for discovery via REGISTRY_TOKEN. Never co-edits qnfo-ops/worker.js.
+# Upstream coding model: Workers AI via AI binding (kimi-k2.7-code / qwen2.5-coder-32b).
+# Secrets (set via wrangler secret put, never in git): GITHUB_TOKEN, CODE_AGENT_KEY.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[ai]
+binding = "AI"

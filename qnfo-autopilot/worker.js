@@ -139,16 +139,16 @@ async function publishReport(env) {
 }
 
 const CF_API = 'https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b';
-const EVOLVE_MODEL = '@cf/deepseek-ai/deepseek-v4-pro-0813';
+const EVOLVE_MODEL = '@cf/moonshotai/kimi-k2.6';
 
 // SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
 // Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
-const COVERAGE = [
+const COVERAGE = ['paper-hub', 'jnl-pipeline', 
   'qnfo-email', 'qnfo-ai-search', 'obsidian-writer', 'qnfo-lifecycle',
-  'calendar-api', 'personal-events-radar', 'jnl-watch', 'jnl-referee', 'jnl-reviser', 'jnl-zenodo',
-  'job-market-watch', 'radar-hub', 'qnfo-events', 'qnfo-archive', 'qnfo-blank-audit', 'qnfo-chat-canary',
-  'qnfo-ddocs-indexer', 'qnfo-idea-miner', 'qnfo-idea-triage', 'qnfo-impact', 'qnfo-paper-explainer', 'qnfo-paper-indexer',
-  'qnfo-proof', 'qnfo-thread-ingest', 'qnfo-register-guard', 'qnfo-scorecard'
+  'calendar-api', 
+  'radar-hub', 'qnfo-events', 'qnfo-archive',  'qnfo-chat-canary',
+  'qnfo-ddocs-indexer',   'qnfo-impact',  
+  'qnfo-proof', 'qnfo-thread-ingest',  
 ];
 function sbName(w) { return 'SB_' + w.toUpperCase().replace(/[^A-Z0-9]+/g, '_'); }
 const SERVICE_BINDINGS = {};
