@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.0.4";
+var VERSION = "1.0.4-deepseek-flash";
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";

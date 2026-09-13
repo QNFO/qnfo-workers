@@ -4,23 +4,14 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.5";
+var VERSION = "0.8.0-artifact-deposit";
 var WORKER = "qnfo-research-exec";
-var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
 var MAX_NOTE = 4e3;
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
 var ROUTER = "https://qnfo-ai.internal/v1/chat/completions";
-// FIX-ENSEMBLE-FETCH-2026-09-13: global fetch() cannot resolve 'qnfo-ai.internal'.
-// env.QNFO_AI.fetch() (service binding) CAN resolve it. Use binding when available.
-function routerFetch(env, url, opts) {
-  if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
-    return env.QNFO_AI.fetch(url, opts);
-  }
-  return fetch(url, opts);
-}
 var GATEWAY_MODEL = "deepseek-v4-flash";
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -85,7 +76,7 @@ async function gatewayPaper(env, prompt) {
     ctrl.abort();
   }, 12e4);
   try {
-    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     if (!r.ok) {
       await logEvent(env, "ai-error", "gateway " + r.status);
       return "";
@@ -642,7 +633,7 @@ function qualityGate(row, minLen, minRefs) {
   var len = md.length;
   var reasons = [];
   if (len < minLen) reasons.push("body_len=" + len + "<" + minLen);
-  var litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review|background)", "i");
+  var litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review)", "i");
   var doiRe = new RegExp("10[.][0-9]{4,9}/", "g");
   var axRe = new RegExp("(?:arxiv[.]org/|arXiv:[" + NLc + TBc + " ]*[0-9]{4}[.][0-9]{4,5})", "gi");
   var lit = litRe.test(md);
@@ -652,8 +643,7 @@ function qualityGate(row, minLen, minRefs) {
   var tableRe = new RegExp("^[" + NLc + TBc + " ]*[|][-:| ]+[|]", "m");
   var hasTable = tableRe.test(md);
   var hasNumeric = /(?:simulat|numerical experiment|computed|verified (?:numerically|in code)|implementation artifact)/i.test(md);
-  var hasVerifyArtifact = !!(row && ((row.verify_script && String(row.verify_script).trim().length > 0) || (row.verify_output && String(row.verify_output).trim().length > 0)));
-  if (!hasFence && !hasTable && !hasNumeric && !hasVerifyArtifact) reasons.push("no_verification_marker");
+  if (!hasFence && !hasTable && !hasNumeric) reasons.push("no_verification_marker");
   if (!reasons.length) return { ok: true };
   return { ok: false, reason: "quality gate: " + reasons.join("; ") };
 }
@@ -969,7 +959,7 @@ var WRITER_MODELS = [
   "@cf/zai-org/glm-5.3",
   "@cf/moonshotai/kimi-k2.6"
 ];
-var MIN_PAPER_CHARS = 8000; // lowered from 15000 to match 4096-token Workers AI output cap
+var MIN_PAPER_CHARS = 15000;
 var MIN_REFS = 8;
 var MAX_REVIEW_CYCLES = 2;
 var PILOT = "https://qnfo-containers-pilot.q08.workers.dev";
@@ -979,17 +969,13 @@ var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
 
 async function aiText(env, model, prompt, maxTokens) {
-  // FIX 2026-09-13: Workers AI hard-caps output at 4096 tokens; passing 30000 causes silent empty return
-  const cappedTokens = Math.min(maxTokens, 4096);
   try {
-    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
+    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens, temperature: 0.3 });
     if (typeof r === "string") return r;
     if (r && typeof r.response === "string" && r.response) return r.response;
     if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
-    await logEvent(env, "ai-warn", "aiText model=" + model + " returned unexpected shape: " + JSON.stringify(r).slice(0,200));
     return "";
   } catch (e) {
-    await logEvent(env, "ai-error", "aiText model=" + model + " threw: " + String(e && e.message || e).slice(0,200));
     return "";
   }
 }
@@ -999,7 +985,7 @@ async function gwCall(env, prompt, maxTokens) {
   const ctrl = new AbortController();
   const t = setTimeout(function() { ctrl.abort(); }, 240000);
   try {
-    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) return "";
     const j = await r.json();
@@ -1145,7 +1131,7 @@ async function stageGround(env, row) {
   } catch (e) {}
   let corpus = "";
   try {
-    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
+    const r = await fetch(ROUTER + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
     if (r.ok) {
       const j = await r.json();
       const hits = (j.results || []).slice(0, 6);
@@ -1472,7 +1458,7 @@ __name2(run, "run");
 
 var worker_default = {
     async scheduled(event, env, ctx) {
-    // v0.8.1: research-exec is the SINGLE research_queue stage-machine
+    // v0.5.17-research-restored: research-exec is the SINGLE research_queue stage-machine
     // owner (proven publisher: 09-03/09-04 note->draft->publish->published with real DOIs
     // 22278600/22278842/22279728/22280745 via direct Workers-AI models). drainV2 (version_queue)
     // then run() (research_queue). triage is intake-only (score/enqueue). Canonical 2026-09-06:

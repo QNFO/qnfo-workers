@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.1";
+var VERSION = "1.1.0-depth-gate";
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -175,16 +175,12 @@ function parseJsonObject(text) {
   }
 }
 __name(parseJsonObject, "parseJsonObject");
-async function selectCandidates(env, limit, force) {
-  const rows = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != '' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 500").all();
+async function selectCandidates(env, limit) {
+  const rows = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != '' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
   const all = rows && rows.results || [];
   // id 132 (2026-09-08): terminal dispositions only; every status below is terminal for the auto-loop.
-  // REVISION-ALL-PUBLICATIONS-1 (2026-09-14): when force=true, 'already-revised' and
-  // 'needs-substantive-revision' are NOT excluded — they need a v2 Zenodo version.
-  const terminalStatuses = force
-    ? "('flagged','queued','stub-fragment')"
-    : "('already-revised','flagged','queued','stub-fragment','needs-substantive-revision')";
-  const done = await env.WATCH_DB.prepare("SELECT slug FROM paper_revision_log WHERE status IN " + terminalStatuses + " GROUP BY slug").all();
+  // "needs-substantive-revision" and "stub-fragment" defer to the substantive-remediation loop (id 133).
+  const done = await env.WATCH_DB.prepare("SELECT slug FROM paper_revision_log WHERE status IN ('already-revised','flagged','queued','stub-fragment','needs-substantive-revision') GROUP BY slug").all();
   const doneSet = new Set((done && done.results || []).map(function(r) {
     return r.slug;
   }));
@@ -195,7 +191,7 @@ async function selectCandidates(env, limit, force) {
   const out = [];
   for (const p of all) {
     if (doneSet.has(p.slug) || pendSet.has(p.slug)) continue;
-    if (!force && String(p.body_md || "").length < 8000) {
+    if (String(p.body_md || "").length < 8000) {
       await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.doi, p.title).run();
       continue;
     }
@@ -327,9 +323,8 @@ function addChangelog(md, versionTo, changelog) {
   return md + block;
 }
 __name(addChangelog, "addChangelog");
-async function processPaper(env, paper, mode, force) {
+async function processPaper(env, paper, mode) {
   const dry = mode === "dry";
-  force = !!force;
   const doi = paper.zenodo_doi || paper.doi || "";
   const recId = recIdOf(doi);
   if (!recId) {
@@ -380,10 +375,7 @@ async function processPaper(env, paper, mode, force) {
   // id 132 (2026-09-08): body is a fragment only when trivially short. The old regex matched any
   // short heading-only line (## Abstract, ## References) and mislabeled 6-21k-char papers as stubs.
   var isStub = bodyLen < 1500;
-  // REVISION-ALL-PUBLICATIONS-1 (2026-09-14): force=true bypasses the substance gate
-  // so papers with no genuine issues still get a v2.0.0 Zenodo version.
-  // This satisfies the standing directive that every publication reaches >=2 Zenodo versions.
-  if ((isStub || noRealIssues) && !force) {
+  if (isStub || noRealIssues) {
     if (!dry) {
       await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ zenodo_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
     }
@@ -416,21 +408,18 @@ async function processPaper(env, paper, mode, force) {
   return { slug: paper.slug, queued: true, versionFrom: paper.version, versionTo, issues: auditSummary, applied: edits.applied.length, skippedEdits: edits.skipped.length, doi };
 }
 __name(processPaper, "processPaper");
-async function runOnce(env, mode, force) {
+async function runOnce(env, mode) {
   const dry = mode === "dry";
-  force = !!force;
-  // REVISION-ALL-PUBLICATIONS-1: when force=true, also include papers already in
-  // paper_revision_log with status='already-revised' (they have no issues but need v2).
-  const candidates = await selectCandidates(env, force ? 38 : BATCH, force);
+  const candidates = await selectCandidates(env, BATCH);
   const results = [];
   for (const p of candidates) {
     try {
-      results.push(await processPaper(env, p, mode, force));
+      results.push(await processPaper(env, p, mode));
     } catch (e) {
       results.push({ slug: p.slug, error: String(e && e.message || e).slice(0, 200) });
     }
   }
-  return { ok: true, worker: "qnfo-paper-reviser", version: VERSION, dry, model: MODEL, force, candidates: candidates.length, results };
+  return { ok: true, worker: "qnfo-paper-reviser", version: VERSION, dry, model: MODEL, candidates: candidates.length, results };
 }
 __name(runOnce, "runOnce");
 async function statusSweep(env) {
@@ -447,10 +436,8 @@ var worker_default = {
     if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-paper-reviser", version: VERSION, model: MODEL, bindings: { ai: !!env.AI, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, auth: !!env.REVISER_TOKEN } });
     if (url.pathname === "/run/scan") {
       const mode = url.searchParams.get("mode") || "dry";
-      // REVISION-ALL-PUBLICATIONS-1: force=1 bypasses substance gate for backlog drain
-      const force = url.searchParams.get("force") === "1";
       try {
-        return json(await runOnce(env, mode, force));
+        return json(await runOnce(env, mode));
       } catch (e) {
         return json({ ok: false, error: e.message }, 500);
       }
@@ -487,20 +474,8 @@ var worker_default = {
   },
   async scheduled(event, env, ctx) {
     try {
-      // REVISION-ALL-PUBLICATIONS-1: auto-detect if there are 'already-revised' papers
-      // that still have only 1 Zenodo version (backlog drain). Pass force=true if so.
-      const backlog = await env.WATCH_DB.prepare(
-        "SELECT COUNT(*) AS n FROM paper_revision_log WHERE status='already-revised'"
-      ).first();
-      // Check version_queue to see if any already-revised papers are queued
-      const queuedN = await env.WATCH_DB.prepare(
-        "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'"
-      ).first();
-      // Use force if there are already-revised papers AND no current backlog in version_queue
-      // (avoid flooding the drain queue)
-      const force = (backlog && backlog.n > 0) && (!queuedN || queuedN.n < 3);
-      const r = await runOnce(env, "live", force);
-      console.log("[qnfo-paper-reviser] cron done:", JSON.stringify({ candidates: r.candidates, force: r.force, results: r.results.map(function(x) {
+      const r = await runOnce(env, "live");
+      console.log("[qnfo-paper-reviser] cron done:", JSON.stringify({ candidates: r.candidates, results: r.results.map(function(x) {
         return { slug: x.slug, queued: x.queued, flagged: x.flagged, skipped: x.skipped, error: x.error };
       }) }));
     } catch (e) {

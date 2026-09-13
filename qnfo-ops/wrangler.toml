@@ -224,8 +224,7 @@ class_name = "OpsExecWorkflow"
 [triggers]
 crons = ["*/30 * * * *"]
 
-# FLEET-FEED-BINDING-1 (2026-09-13)
 [[services]]
-binding = "FLEET_FEED"
-service = "qnfo-fleet-feed"
+binding = "CONTAINERS_PILOT"
+service = "qnfo-containers-pilot"
 environment = "production"
