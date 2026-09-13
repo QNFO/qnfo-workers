@@ -1,89 +1,100 @@
 {
   "artifact": "fleet-consolidation-manifest",
-  "revision": 2,
-  "generated_at": "2026-09-13T14:34:00Z",
+  "revision": 3,
+  "generated_at": "2026-09-13T14:38:00Z",
   "generated_by": "qnfo-ops/ops-exec",
-  "revision_2_note": "REV 1 CALLED THESE 'GHOSTS FROM AN OLD ROSTER'. THAT WAS WRONG IN MECHANISM. fleet_probe_log carries HTTP status per probe, and it shows every one of the 22 returned HTTP 200 (113-395 times each) until 2026-09-11, then flipped to 404. They were LIVE workers deleted in the consolidation wave; the rosters were simply never updated. The 55-worker baseline is CONFIRMED authoritative by this evidence, which resolves the largest uncertainty in rev 1.",
-  "method": "set arithmetic over six rosters + per-name HTTP status history from fleet_probe_log",
-  "rosters": {
-    "live_cf_scripts": { "n": 55, "source": "fleet_status (CF API scripts list)", "status": "AUTHORITATIVE - corroborated by probe history" },
-    "service_registry": { "n": 55, "source": "SELECT * FROM service_registry", "note": "clean: zero ghost rows, zero unregistered live workers" },
-    "deploy_scanner": { "n": 61, "source": "SELECT DISTINCT worker FROM fleet_drift_report", "note": "22 names deleted 2026-09-11 still scanned; 16 live workers never scanned" },
-    "integration_monitor": { "n": 80, "source": "integration_state.json fleet_size", "note": "denominator is the stale probe roster, not the fleet" },
-    "probe_log": { "n": 83, "source": "SELECT name FROM fleet_probe_log GROUP BY name" },
-    "repo_worker_dirs": { "n": 92, "source": "GitHub contents API root" }
+  "revision_history": {
+    "rev1": "Called the 22 names 'ghosts from an old roster'. WRONG MECHANISM - retracted.",
+    "rev2": "fleet_probe_log HTTP status falsifies rev1: each name returned 200 (113-395x) until 2026-09-11, then 404. They were live workers deleted in the consolidation wave. Confirms 55 is authoritative.",
+    "rev3": "Adds the two wontfix adjudications that bear on the task premise, the #746 fix-ordering hazard, and the alert-ledger purge caveat."
+  },
+  "task_premise_adjudicated": {
+    "finding": "The instruction 'every worker must execute multiple times a day or be merged/consolidated' was ALREADY evaluated and rejected by the fleet's own queue, with data.",
+    "issue_736_WONTFIX": "WORKER-PRODUCTIVITY-CONSOLIDATION. Rationale: 'The multiple-times-per-day test is the wrong test for this fleet. Measured req24 vs expected24 for all 40 scheduled workers: req24 range 1..1663; 35 of 40 have req24 >= 3; 38 of 40 have req24 >= expected24. Zero scheduled workers fail to execute. The 15 workers without crons are pull-based services and apps by design, not idle workers - qnfo-gateway alone serves 157,988 req/30d, the highest traffic in the fleet.'",
+    "issue_728_WONTFIX": "STALE-WORKER-CONSOLIDATION. Rationale: '45/55 workers unprobed conflates two different things: (a) the service-binding health probe in fleet_status reaches 12 of 55, and (b) the dashboard tracks 40 scheduled workers with live req24. The 43 unprobed figure counts pull-based services that have no /health-by-binding path, not dead workers.'",
+    "residue_kept_open_elsewhere": ["errata-hub (merged hub, no registered cron)", "qnfo-subscribers (declares weekly-digest, no cron)", "qnfo-research-supervisor (silent since 2026-09-11)"],
+    "operator_note": "These dispositions were NOT overridden. They also do not explain the six-roster defect below, which is a reporting/coordination failure rather than a productivity failure."
   },
   "cutover_timeline": {
-    "finding": "The wave-A/B consolidation executed 2026-09-11 between 09:19Z and 16:45Z. Roughly 22 workers were deleted. Only the live CF scripts list and service_registry reflect it.",
+    "finding": "The wave-A/B consolidation executed 2026-09-11 between 09:19Z and 16:45Z. ~22 workers were deleted. No downstream consumer was updated.",
     "evidence_basis": "fleet_probe_log per-name HTTP status: last status=200 before the flip to status=404",
     "groups": {
       "last_200_2026-09-11T09:15Z_to_09:45Z": ["qnfo-fleet-advisor", "qnfo-fleet-calibrator", "qnfo-fleet-deploy", "fleet-scheduler", "fleet-executor", "qnfo-arxiv-radar", "qnfo-citation-watch", "events-radar"],
       "last_200_2026-09-11T14:00Z_to_14:15Z": ["qnfo-errata-watch", "qnfo-errata-respond", "qnfo-errata-publish", "qnfo-idea-factory", "qnfo-idea-miner", "qnfo-idea-triage", "personal-life-search", "qnfo-auditor", "qnfo-blank-audit", "qnfo-register-guard", "qnfo-skills-discovery", "qnfo-error-selfheal", "jnl-watch", "job-market-watch", "personal-events-radar"],
       "last_200_2026-09-11T16:30Z_to_16:45Z": ["qnfo-pipeline-ops", "qnfo-analytics", "qnfo-thread-ingest"],
-      "404_throughout_window": ["qnfo-venue-radar"],
-      "code_agent_pilot_class_last_200_2026-09-11T08:45Z": ["qnfo-code-agent", "qnfo-container-executor", "qnfo-containers-pilot"]
+      "code_agent_pilot_class_last_200_2026-09-11T08:45Z": ["qnfo-code-agent", "qnfo-container-executor", "qnfo-containers-pilot"],
+      "404_throughout_window": ["qnfo-venue-radar"]
     },
-    "independent_corroboration": "alerts source='qnfo-error-selfheal': 67 rows, last 2026-09-11 09:19:14, none after. Second, independent confirmation of the same cutover.",
-    "post_cutover_state": "All 22 then returned 404 until the probe roster froze at 2026-09-12T09:15:45Z and never resumed."
+    "independent_corroboration": "alerts source='qnfo-error-selfheal': 67 rows, last 2026-09-11 09:19:14, none after.",
+    "post_cutover_state": "All 22 returned 404 until the probe roster froze at 2026-09-12T09:15:45Z and never resumed."
   },
-  "scanner_only_names": {
-    "names": ["qnfo-scorecard", "qnfo-system-health", "qnfo-wrangler-test"],
-    "evidence": "ZERO rows in fleet_probe_log. Absent from the CF scripts list, service_registry, and the repo. They exist ONLY in the deploy scanner's roster (scanerr:qnfo-scorecard=nocanon, scanerr:qnfo-wrangler-test=nocanon) and, for qnfo-scorecard, in the integration monitor's integration-candidate output.",
-    "consequence": "The scanner scans at least 3 names that no other system can see. NOT deleted deliberately - these keys are the evidence of the roster defect, and the scanner would regenerate them."
-  },
-  "never_probed_repo_dirs": ["qnfo-chameleon", "qnfo-web-unified"],
-  "superseded_repo_dirs": {
-    "n": 39,
-    "merge_map": {
-      "errata-hub": ["qnfo-errata-watch", "qnfo-errata-respond", "qnfo-errata-publish", "errata-orchestrator"],
-      "idea-hub": ["qnfo-idea-factory", "qnfo-idea-miner", "qnfo-idea-triage"],
-      "radar-hub": ["events-radar", "qnfo-arxiv-radar", "qnfo-research-radar", "qnfo-citation-watch"],
-      "jnl-pipeline": ["jnl-watch", "jnl-referee", "jnl-reviser", "jnl-zenodo"],
-      "companion-hub": ["personal-life-search", "personal-life-maintain", "personal-life-indexer", "personal-events-radar"],
-      "audit-hub": ["qnfo-auditor", "qnfo-blank-audit"],
-      "fleet-exec": ["fleet-scheduler", "fleet-executor", "qnfo-pipeline-ops", "qnfo-register-guard", "qnfo-ops-jobs-reaper"],
-      "qnfo-fleet-control": ["qnfo-fleet-advisor", "qnfo-fleet-calibrator", "qnfo-fleet-deploy"],
-      "qnfo-agent-orchestrator": ["agent-orchestrator"],
-      "qnfo-memory-mcp": ["memory-mcp"],
-      "RETIRE-NO-SUCCESSOR": ["qnfo-chameleon", "qnfo-web-unified", "qnfo-containers-pilot", "qnfo-container-executor", "qnfo-code-agent", "qnfo-code-orchestrator", "qnfo-error-selfheal", "qnfo-analytics", "qnfo-thread-ingest", "qnfo-venue-radar", "job-market-watch"]
-    }
+  "rosters": {
+    "live_cf_scripts": { "n": 55, "source": "fleet_status (CF API scripts list)", "status": "AUTHORITATIVE - corroborated by probe history" },
+    "service_registry": { "n": 55, "source": "SELECT * FROM service_registry", "note": "clean: zero ghost rows, zero unregistered live workers" },
+    "deploy_scanner": { "n": 61, "source": "SELECT DISTINCT worker FROM fleet_drift_report", "note": "22 deleted names still scanned; 16 live workers never scanned" },
+    "integration_monitor": { "n": 80, "source": "integration_state.json fleet_size" },
+    "probe_log": { "n": 83, "source": "SELECT name FROM fleet_probe_log GROUP BY name" },
+    "repo_worker_dirs": { "n": 92, "source": "GitHub contents API root" }
   },
   "live_workers_never_scanned": {
     "n": 16,
     "names": ["calendar-api", "fleet-exec", "qnfo-agent-ws", "qnfo-ai-search", "qnfo-autopilot", "qnfo-chat-canary", "qnfo-events", "qnfo-impact", "qnfo-infra", "qnfo-memory-mcp", "qnfo-outreach", "qnfo-pdf", "qnfo-proof", "qnfo-research-supervisor", "qnfo-tools-mcp", "radar-hub"],
-    "note": "Includes two wave-B merge products (fleet-exec, radar-hub): the scanner cannot see the hubs that replaced the workers it still scans."
+    "note": "Includes fleet-exec and radar-hub - the wave-B hubs that REPLACED workers the scanner still scans. Blind in both directions."
+  },
+  "scanner_only_names": {
+    "names": ["qnfo-scorecard", "qnfo-system-health", "qnfo-wrangler-test"],
+    "evidence": "ZERO rows in fleet_probe_log; absent from the CF scripts list, service_registry and the repo. Present only in the deploy scanner roster (scanerr:qnfo-scorecard=nocanon, scanerr:qnfo-wrangler-test=nocanon).",
+    "action": "Deliberately NOT deleted - these keys are the evidence of the roster defect and the scanner would regenerate them."
+  },
+  "fix_ordering_hazard_issue_746": {
+    "status": "OPEN, high priority - MUST be honoured",
+    "hazard": "Do NOT deploy the repo qnfo-fleet-dashboard/registry.js to repair probe coverage. It holds 27 scheduled / 42 probes; the DEPLOYED dashboard is v1.5.1 with 40 scheduled / 10 probes and is a STRICT SUPERSET on the scheduled axis. Deploying the repo file would drop 13 workers carrying 50.3 percent of measured traffic, including qnfo-ai (the busiest worker in the fleet).",
+    "dropped_if_deployed": ["qnfo-ai 1656 req24", "fleet-exec 1462", "personal-companion 543", "idea-hub 224", "jnl-pipeline 145", "qnfo-observability 143", "qnfo-fleet-control 109", "qnfo-autopilot 33", "ai-health-prober 23", "qnfo-signal-loop 22", "companion-hub 5", "audit-hub 5", "radar-hub 2"],
+    "correct_procedure": "Take the DEPLOYED registry (v1.5.1: 40 scheduled + 10 probes) as the base and ADD BACK the ~34 missing health_probes. Verify with two independent checks: fleet_probe_log distinct names per hour must exceed 80, and worker_activity_daily must still report 40 workers per snapshot."
+  },
+  "data_caveat_alert_ledger_purged": {
+    "source": "issue 728",
+    "finding": "The alerts ledger was purged mid-session 2026-09-13: criticals 717 -> 4, and info 59 (7-day subset) -> 11 (all-time), which is arithmetically impossible without deletion. The storm rows were deleted, not resolved.",
+    "consequence": "Any alert-derived figure, including any quoted in this session, is a snapshot of a mutating table and is stale on arrival."
   },
   "productivity_census": {
     "table": "fleet_worker_census",
     "rows": 55,
     "metric_provenance": "req24 from worker_activity_daily.source='dashboard-scheduled-req24'",
     "verdicts": { "PRODUCTIVE": 38, "FETCH-ONLY": 7, "DEGRADED": 4, "LOW-YIELD": 3, "FIRING-NO-OUTPUT": 2, "DAILY-ONLY": 2, "STALLED": 1, "NOT-YET-FIRED": 1 },
-    "bar_failures": "8 of 55 fail 'multiple times per day'; 15 rows carry measured=0 (no measurement at all)",
-    "red_team_inconsistency": "osf-integrity-check req24=1 -> PRODUCTIVE, but qnfo-impact req24=1 -> DAILY-ONLY and qnfo-twin-maintain req24=1 -> DAILY-ONLY. Same metric, three verdicts; all three fail the stated bar.",
+    "red_team_inconsistency": "osf-integrity-check req24=1 -> PRODUCTIVE, but qnfo-impact req24=1 -> DAILY-ONLY and qnfo-twin-maintain req24=1 -> DAILY-ONLY. Same metric, three verdicts.",
     "red_team_provenance": "No authoritative per-worker invocation source exists. cf_analytics (CF GraphQL) names 7 workers; analytics_dash_workers names 10; the two sets have ZERO overlap. cf_analytics leaves 277,515 of 281,106 requests unattributed."
   },
   "verified_live_defects": [
     { "id": "PROBE-COVERAGE-COLLAPSE", "evidence": "10 of 83 probe names fresh at 14:16:30Z; 73 frozen at 2026-09-12T09:15:45Z (29.01h)" },
     { "id": "TRACE-STALL", "evidence": "worker_logs MAX(ts_ms)=1789035358174 = 2026-09-10T10:15:58.174Z, 76.01h, n=1578" },
     { "id": "PIPELINE-SUPERVISOR-SILENT", "evidence": "cloud_ops_events kind='pipeline-supervisor' MAX(ts)=2026-09-11T14:30:12.906Z, 47.9h" },
-    { "id": "FALSE-AI-HEALTH-ALERT", "evidence": "worker_invocations 71-90: plain fetch to https://qnfo-ai.internal/health and https://personal-api.internal/health -> HTTP 530 / code 1016, every ~12h (09-11T15:05, 09-12T03:05, 09-12T15:05, 09-13T03:05), while fleet_status reports qnfo-ai healthy:true http:200 via binding" },
+    { "id": "FALSE-AI-HEALTH-ALERT", "evidence": "worker_invocations 71-90: plain fetch to https://qnfo-ai.internal/health and https://personal-api.internal/health -> HTTP 530 / code 1016, every ~12h, while fleet_status reports qnfo-ai healthy:true http:200 via binding" },
     { "id": "STALE-OK-HEALTH-ROWS", "evidence": "8 ai_model_health rows status='ok' with last_probe_ts 45.5-45.75h old; no staleness column" },
-    { "id": "MONITOR-WRONG-DENOMINATOR", "evidence": "fleet_size=80 vs live 55; coverage=91% and probe_gap=1 computed against a roster with 41 stale names" },
-    { "id": "DRAIN-CANNOT-CLOSE", "evidence": "processed 40, closed 0, rechecked 40, escalated 0; every detail entry 'recheck' with 'no probe target' or a passing target" },
+    { "id": "MONITOR-WRONG-DENOMINATOR", "evidence": "fleet_size=80 vs live 55; coverage=91% computed against a roster with 41 stale names" },
+    { "id": "DRAIN-CANNOT-CLOSE", "evidence": "processed 40, closed 0, rechecked 40, escalated 0" },
     { "id": "BACKLOG-GROWS-FASTER-THAN-DRAIN", "evidence": "openBacklog 43 -> 47 during this session while the drain closed 0" },
     { "id": "DEPLOY-HEALER-DISABLED", "evidence": "fleet_deploy_state enabled=0, auto_heal=0" },
     { "id": "DRIFT-NEVER-REACHES-ZERO", "evidence": "canonical-ahead 983, deployed-ahead 527; healed=0 in 25 of 26 cron scan notes; scan set varies 52..80 across runs" },
-    { "id": "ALERT-STREAM-ROTATED", "evidence": "top live alert source is now qnfo-backlog-exec (34, last 2026-09-13 14:29:22); qnfo-error-selfheal (67) died 2026-09-11 09:19:14" }
+    { "id": "REGISTRY-MULTI-WRITER", "evidence": "issue 767: >=3 writers in 2 timestamp formats in the same minute; registrar truncates version strings (qnfo-gateway health '3.6.1-subscribers' vs registry '3.6.1')" }
   ],
   "do_not_do": [
+    "DO NOT deploy the repo qnfo-fleet-dashboard/registry.js. See fix_ordering_hazard_issue_746 - it drops 13 workers carrying 50.3 percent of measured traffic.",
     "DO NOT set fleet_deploy_state.auto_heal=1. The comparator reads build tags as versions (983 canonical-ahead rows), so enabling the healer mass-redeploys downgrades.",
     "DO NOT find-and-replace '.internal' in qnfo-cloud-ops. .internal is correct with a service binding and broken only with a plain fetch().",
-    "DO NOT repair personal-companion's CF 10021 in isolation; the loop is a comparator defect and the fix alone lands a downgrade v1.1.0 -> 1.0.0.",
-    "DO NOT delete scanerr:qnfo-scorecard / qnfo-wrangler-test. They are the evidence of the scanner roster defect and would be regenerated."
+    "DO NOT repair personal-companion's CF 10021 in isolation; the fix alone lands a downgrade v1.1.0 -> 1.0.0.",
+    "DO NOT delete scanerr:qnfo-scorecard / qnfo-wrangler-test - they are the evidence of the roster defect.",
+    "DO NOT apply the multiple-times-per-day test to request-driven workers - issue 736, wontfix, with traffic data."
   ],
   "remediation_executed_this_session": [
-    "ops_issue_run confirm=true: processed 40, closed 0 (structurally incapable; see DRAIN-CANNOT-CLOSE)",
+    "ops_issue_run confirm=true: processed 40, closed 0 (structurally incapable)",
     "telemetry_analyze(6h): scanned 11, filed 0, recovered 7, autoResolved 1",
-    "retired 15 ghost scanerr keys from fleet_deploy_state (6 no-successor + 9 with a documented hub successor); verified by re-read (changes 6 then 9). Safe: probe history confirms all 15 workers were deleted 2026-09-11."
-  ]
+    "retired 15 ghost scanerr keys from fleet_deploy_state (verified by re-read: changes 6 then 9). Safe: probe history confirms all 15 were deleted 2026-09-11.",
+    "extended open issue 722 with the six-roster evidence, the 09-11 cutover mechanism, the 16 never-scanned live workers, the scanner-only names, and the 746 constraint. Verified: description length 4228, original head intact, status open."
+  ],
+  "consumers_still_stale": {
+    "n": 3,
+    "targets": ["deploy scanner roster (qnfo-fleet-control)", "integration monitor denominator (qnfo-observability, fleet_size 80)", "probe roster (qnfo-fleet-dashboard, 10 names)"],
+    "blocked_by": "Each requires editing source past the 32,768-char read cap and a wrangler deploy route that does not exist on this endpoint (fleet_deploy_state enabled=0, auto_heal=0; healed=0 in 25/26 scan runs)."
+  }
 }
