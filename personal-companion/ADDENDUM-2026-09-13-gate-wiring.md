@@ -70,7 +70,18 @@ that piece — a false block, which is as damaging as a false pass.
 
 Measured effect on the existing contract: the live fixture yields 0 blocking addressee violations
 and 1 warning, so `violations` remains 7 and every `gate.test.js` revision 1 assertion still
-holds. `gate.test.js` is now 24 assertions.
+holds.
+
+**`gate.test.js` revision 2 is 25 assertions, all executed this session: 25 passed, 0 failed.**
+An earlier draft of this addendum said 24; the count was wrong and is corrected here. The
+execution was done by transcribing `grounding.js`, `voice.js`, `addressee.js` and `gate.js`
+revision 2 into one scope in the compute sandbox — this endpoint cannot import a repo module, so
+a transcription is the only available route. Caveat: a transcription error would be invisible,
+though the bodies were copied verbatim from `github_repo_read` output in the same session.
+
+That execution also **independently confirms the parallel session's headline numbers** — 2
+grounding violations, 5 voice violations, 7 total on the live piece — by running its code rather
+than reading its document.
 
 ## 4. Correction to my own earlier claim
 
@@ -111,3 +122,5 @@ were added after that file was written). The orphan figure — the one that matt
 7. Resolve the QPL expansion against a primary source.
 8. Identify the concurrent writer that moved `main` mid-session (unexplained; no commit-list tool
    is exposed here).
+9. Run `apply-remediation.mjs --check` — it has never been executed; it needs a filesystem and a
+   deploy runner, neither of which this endpoint has.
