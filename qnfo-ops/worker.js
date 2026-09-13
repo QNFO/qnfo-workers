@@ -14,7 +14,21 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.15.4";
+var VERSION = "2.15.5";
+function boundedToolLog(a, cap) {
+  a = Array.isArray(a) ? a : [];
+  cap = cap || 24000;
+  var out = [], n = 2;
+  for (var i = a.length - 1; i >= 0; i--) {
+    var t = JSON.stringify(a[i]);
+    if (t == null) continue;
+    if (n + t.length > cap) break;
+    n += t.length + 1;
+    out.unshift(a[i]);
+  }
+  return JSON.stringify(out);
+}
+
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1851,7 +1865,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       }
     }
     console.log("OPS_LOOP_DONE rounds=" + itersUsed + " tool_rounds=" + toolRoundsUsed + " continues=" + autoContinueUsed + " bail=" + bailReason + " tools=" + toolLog.length + " chain_next=" + (_chainNext || "-") + " latency_ms=" + latencyMs);
-    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? servedBy || UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
+    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? servedBy || UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: boundedToolLog(toolLog, 3000), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 1 };
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {
@@ -1983,7 +1997,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       return await finalize();
     } catch (e) {
       const errText = "ops agent error: " + (e && e.message ? e.message : String(e));
-      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "agent", prompt, response: errText.slice(0, 2e3), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "agent", prompt, response: errText.slice(0, 2e3), latency_ms: Date.now() - t0, tool_calls: boundedToolLog(toolLog, 3000), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
       if (isStream) {
         emitChunk({ role: "assistant", content: errText }, null);
         emitChunk({}, "stop");
@@ -2500,8 +2514,8 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       console.log("job continuation failed: " + String(eChainW && eChainW.message || eChainW).slice(0, 200));
     }
     const doneRes = await step.do("job-finalize", async function() {
-      await jobSet(env, jobId, final.status, { response: final.response, tool_log: JSON.stringify(toolLog).slice(0, 3e3), strategy: "job-workflow" });
-      const rec = { id: randId("ops-"), ts: iso(), model: "ops-exec", strategy: "job-workflow", prompt, response: String(final.response || "").slice(0, 2e4) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: upUsage && upUsage.prompt_tokens ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: upUsage && upUsage.completion_tokens ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.status === "failed" ? 0 : 1 };
+      await jobSet(env, jobId, final.status, { response: final.response, tool_log: boundedToolLog(toolLog, 24000), strategy: "job-workflow" });
+      const rec = { id: randId("ops-"), ts: iso(), model: "ops-exec", strategy: "job-workflow", prompt, response: String(final.response || "").slice(0, 2e4) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: upUsage && upUsage.prompt_tokens ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: upUsage && upUsage.completion_tokens ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: boundedToolLog(toolLog, 3000), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.status === "failed" ? 0 : 1 };
       await logOps(env, rec);
       return { status: final.status, error: final.error || null, response: String(final.response || "").slice(0, 2e3) };
     });
