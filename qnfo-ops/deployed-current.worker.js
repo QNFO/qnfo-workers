@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.17.0";
+var VERSION = "2.20.0";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -281,6 +281,16 @@ var OPS_TOOLS = [
   { name: "workspace_read_multi", description: "Read up to 20 workspace files in one parallel call. Returns array of {path, ok, content, size, truncated}. Faster than N sequential workspace_read calls.", parameters: { type: "object", properties: { paths: { type: "array", items: { type: "string" }, description: "workspace-relative paths (max 20)" }, maxCharsEach: { type: "number", description: "max chars per file (default 20000, max 100000)" } }, required: ["paths"], additionalProperties: false } },
   { name: "workspace_stat", description: "Get workspace file metadata (exists, size, upload time, etag) without reading content.", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } },
   { name: "exec_pipeline", description: "Chain multiple run_code steps where each step receives the previous step's stdout as __prev (string). Equivalent to a shell pipeline. Max 10 steps. Set continueOnError:true on a step to proceed past failures.", parameters: { type: "object", properties: { steps: { type: "array", items: { type: "object", properties: { code: { type: "string" }, continueOnError: { type: "boolean" } }, required: ["code"] }, description: "array of {code, continueOnError?} steps (max 10)" }, input: { type: "string", description: "initial __prev value for step 1" } }, required: ["steps"], additionalProperties: false } }
+,
+
+  { name: "shell_exec", description: "Execute bash in a Cloudflare Firecracker VM. Full shell: bash, python3.12, node22, npm, pip, git, ripgrep, curl, apt-get. Internet-enabled. /workspace persistent across calls. COLD START: ~10-15s first call; subsequent ~100ms. No secrets inside container.", parameters: { type: "object", properties: { cmd: { type: "string" }, cwd: { type: "string", description: "working directory (default /workspace)" }, env: { type: "object", description: "env vars to set" }, timeout_ms: { type: "number", description: "timeout ms (default 60000, max 300000)" } }, required: ["cmd"], additionalProperties: false } },
+  { name: "exec_python", description: "Execute Python 3.12 code in Cloudflare Container (REAL interpreter, deterministic, not LLM). pip packages installable via container_install. Returns {ok, exit_code, stdout, stderr}.", parameters: { type: "object", properties: { code: { type: "string" }, argv: { type: "array", items: { type: "string" } }, timeout_ms: { type: "number" } }, required: ["code"], additionalProperties: false } },
+  { name: "exec_node", description: "Execute Node.js 22 code in Cloudflare Container. npm packages installable via container_install. Returns {ok, exit_code, stdout, stderr}.", parameters: { type: "object", properties: { code: { type: "string" }, cwd: { type: "string" }, timeout_ms: { type: "number" } }, required: ["code"], additionalProperties: false } },
+  { name: "container_install", description: "Install packages in Cloudflare Container. manager=pip (Python), npm (Node in /workspace), apt (system packages). ADVERSARIAL: resets on scale-to-zero — always install at start of task session.", parameters: { type: "object", properties: { packages: { type: "array", items: { type: "string" } }, manager: { type: "string", enum: ["pip","npm","apt"] }, cwd: { type: "string" }, timeout_ms: { type: "number" } }, required: ["packages"], additionalProperties: false } },
+  { name: "git_clone_exec", description: "Clone a public git repo into /workspace/<name> and optionally run a bash command in it. depth=1 default (fast). Returns clone_result + exec_result.", parameters: { type: "object", properties: { url: { type: "string", description: "public git clone URL" }, cmd: { type: "string", description: "bash command to run after clone" }, branch: { type: "string" }, depth: { type: "number", description: "clone depth (default 1, 0=full)" }, name: { type: "string", description: "local dir name under /workspace" }, timeout_ms: { type: "number" } }, required: ["url"], additionalProperties: false } },
+  { name: "container_workspace_exec", description: "Run a bash command in a /workspace subdirectory. Use for build/test/lint in a cloned repo.", parameters: { type: "object", properties: { cmd: { type: "string" }, dir: { type: "string", description: "subdir under /workspace" }, timeout_ms: { type: "number" } }, required: ["cmd"], additionalProperties: false } },
+  { name: "container_status", description: "Probe Cloudflare Container health and warm it up. Returns {ok, health, status: {containerRunning, initialized}}. Call to pre-warm before time-sensitive shell_exec.", parameters: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "shell_pipeline", description: "Chain up to 20 bash commands sequentially in the same container, sharing /workspace state. Write files to /workspace to pass state between steps. Set continueOnError:true to proceed past failures.", parameters: { type: "object", properties: { steps: { type: "array", items: { type: "object", properties: { cmd: { type: "string" }, cwd: { type: "string" }, continueOnError: { type: "boolean" } }, required: ["cmd"] }, description: "steps array (max 20)" }, timeout_ms: { type: "number", description: "per-step timeout ms (default 60000)" } }, required: ["steps"], additionalProperties: false } }
 ];
 function toolsPayload() {
   return OPS_TOOLS.map(function(t) {
@@ -1719,6 +1729,145 @@ async function execPipeline(env, args) {
   return { ok: true, steps_run: results.length, final_output: prev, results };
 }
 
+
+// ── v2.20.0 Full-stack shell execution via Cloudflare Containers ─────────────────────
+// Architecture: ops-exec (Worker) → qnfo-containers-pilot (Worker+DO) → Firecracker VM
+// Image: nikolaik/python-nodejs:python3.12-nodejs22 (Python 3.12 + Node.js 22 + npm)
+// Startup: auto-installs git + ripgrep + curl via apt-get (~10-15s cold start)
+// Cost: $0.00002/vCPU-sec utilization-based, scale-to-zero when idle ($0 idle cost)
+
+async function containerDispatch(env, route, body, timeoutMs) {
+  const url = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+  const token = env.PILOT_TOKEN;
+  if (!token) return { ok: false, error: "PILOT_TOKEN secret not configured on qnfo-ops" };
+  const timeout = Math.min(Math.max(timeoutMs || 60000, 5000), 300000);
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const resp = await fetch(url + route, {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { ok: false, error: "container HTTP " + resp.status + ": " + JSON.stringify(j).slice(0, 300) };
+    return j;
+  } catch (e) {
+    clearTimeout(t);
+    const isTimeout = e && e.name === "AbortError";
+    return { ok: false, error: isTimeout ? "container timeout after " + timeout + "ms (cold start ~15s; retry or increase timeout_ms)" : "container: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+
+function fmtContainer(j) {
+  if (!j || !j.ok) return { ok: false, error: j && j.error || "container error" };
+  const r = j.result || {};
+  return { ok: r.exitCode === 0, exit_code: r.exitCode, stdout: (r.stdout || "").slice(0, 65536), stderr: (r.stderr || "").slice(0, 8192), stdout_truncated: !!r.stdoutTruncated, stderr_truncated: !!r.stderrTruncated };
+}
+
+async function shellExec(env, args) {
+  const cmd = String(args && args.cmd || "").trim();
+  const cwd = args && args.cwd ? String(args.cwd) : null;
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  const env_vars = args && args.env && typeof args.env === "object" ? args.env : {};
+  if (!cmd) return { ok: false, error: "cmd required" };
+  const j = await containerDispatch(env, "/sh", { cmd, cwd, env: env_vars }, timeout);
+  return fmtContainer(j);
+}
+
+async function execPython(env, args) {
+  const code = String(args && args.code || "").trim();
+  const argv = Array.isArray(args && args.argv) ? args.argv.map(String) : [];
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  if (!code) return { ok: false, error: "code required" };
+  const j = await containerDispatch(env, "/exec", { code, argv }, timeout);
+  return fmtContainer(j);
+}
+
+async function execNode(env, args) {
+  const code = String(args && args.code || "").trim();
+  const cwd = args && args.cwd ? String(args.cwd) : null;
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  if (!code) return { ok: false, error: "code required" };
+  const j = await containerDispatch(env, "/node", { code, cwd }, timeout);
+  return fmtContainer(j);
+}
+
+async function containerInstall(env, args) {
+  const packages = Array.isArray(args && args.packages) ? args.packages.map(String) : [String(args && args.packages || "")];
+  const manager = String(args && args.manager || "pip").toLowerCase();
+  const cwd = args && args.cwd ? String(args.cwd) : null;
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 120000, 10000), 300000);
+  if (!packages.length || !packages[0]) return { ok: false, error: "packages required" };
+  if (!["pip","npm","apt"].includes(manager)) return { ok: false, error: "manager must be pip|npm|apt" };
+  let route, body;
+  if (manager === "pip") { route = "/pip"; body = { packages }; }
+  else if (manager === "npm") { route = "/npm"; body = { packages, cwd }; }
+  else { route = "/sh"; body = { cmd: "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends " + packages.join(" ") + " 2>&1 | tail -5" }; }
+  const j = await containerDispatch(env, route, body, timeout);
+  return { ...fmtContainer(j), packages, manager };
+}
+
+async function gitCloneExec(env, args) {
+  const url2 = String(args && args.url || "").trim();
+  const cmd = String(args && args.cmd || "").trim();
+  const branch = args && args.branch ? String(args.branch) : null;
+  const depth = parseInt(args && args.depth, 10) || 1;
+  const name = args && args.name ? String(args.name) : url2.split("/").pop().replace(/\.git$/, "");
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 120000, 10000), 300000);
+  if (!url2) return { ok: false, error: "url required" };
+  const cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name }, timeout);
+  if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result };
+  if (!cmd) return { ok: true, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ) };
+  const execJ = await containerDispatch(env, "/workspace/exec", { dir: name, cmd }, timeout);
+  return { ok: (execJ.result || {}).exitCode === 0, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ), exec_result: fmtContainer(execJ) };
+}
+
+async function containerWorkspaceExec(env, args) {
+  const cmd = String(args && args.cmd || "").trim();
+  const dir = args && args.dir ? String(args.dir) : "";
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  if (!cmd) return { ok: false, error: "cmd required" };
+  const j = await containerDispatch(env, "/workspace/exec", { cmd, dir }, timeout);
+  return fmtContainer(j);
+}
+
+async function containerStatus(env, args) {
+  const url2 = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+  const token = env.PILOT_TOKEN;
+  if (!token) return { ok: false, error: "PILOT_TOKEN not configured" };
+  try {
+    const h = await fetch(url2 + "/health");
+    const hj = await h.json().catch(() => ({}));
+    const s = await fetch(url2 + "/status", { headers: { "Authorization": "Bearer " + token } });
+    const sj = await s.json().catch(() => ({}));
+    return { ok: true, url: url2, health: hj, status: sj };
+  } catch (e) {
+    return { ok: false, error: "container_status: " + (e && e.message || String(e)).slice(0, 200) };
+  }
+}
+
+async function shellPipeline(env, args) {
+  const steps = Array.isArray(args && args.steps) ? args.steps : [];
+  if (!steps.length) return { ok: false, error: "steps array required" };
+  if (steps.length > 20) return { ok: false, error: "max 20 steps" };
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 120000);
+  const results = [];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const cmd = String(step && step.cmd || "").trim();
+    const cwd = step && step.cwd ? String(step.cwd) : null;
+    if (!cmd) { results.push({ step: i + 1, ok: false, error: "empty cmd" }); continue; }
+    const j = await containerDispatch(env, "/sh", { cmd, cwd }, timeout);
+    const r = fmtContainer(j);
+    results.push({ step: i + 1, cmd: cmd.slice(0, 100), ...r });
+    if (!r.ok && !(step && step.continueOnError)) return { ok: false, failed_at_step: i + 1, results };
+  }
+  return { ok: true, steps_run: results.length, results };
+}
+
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
   try {
@@ -1782,6 +1931,14 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "workspace_read_multi") res = await workspaceReadMulti(env, args);
     else if (name === "workspace_stat") res = await workspaceStat(env, args);
     else if (name === "exec_pipeline") res = await execPipeline(env, args);
+        else if (name === "shell_exec") res = await shellExec(env, args);
+    else if (name === "exec_python") res = await execPython(env, args);
+    else if (name === "exec_node") res = await execNode(env, args);
+    else if (name === "container_install") res = await containerInstall(env, args);
+    else if (name === "git_clone_exec") res = await gitCloneExec(env, args);
+    else if (name === "container_workspace_exec") res = await containerWorkspaceExec(env, args);
+    else if (name === "container_status") res = await containerStatus(env, args);
+    else if (name === "shell_pipeline") res = await shellPipeline(env, args);
     else res = { ok: false, error: "unknown tool: " + name };
   } catch (e) {
     res = { ok: false, error: "tool crashed: " + (e && e.message ? e.message : String(e)) };
