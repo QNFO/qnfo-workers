@@ -8,14 +8,19 @@
 | machine-readable | https://raw.githubusercontent.com/QNFO/qnfo-workers/main/qnfo-ops/status/jobs.json |
 | JSON (rendered) | https://github.com/QNFO/qnfo-workers/blob/main/qnfo-ops/status/jobs.json |
 
-Snapshot observed through **2026-09-13T13:40:48.465Z**. Source: `qnfo-audit` D1, table
-`ops_jobs`, read through the ops endpoint's read-only SQL path.
+Snapshot observed through **2026-09-13T13:45:33.213Z** (query taken 2026-09-13T13:46:07.618Z).
+Source: `qnfo-audit` D1, table `ops_jobs`, read through the ops endpoint's read-only SQL path.
 
 ## Why this file exists
 
 `GET /v1/jobs` and `GET /v1/jobs/:id` on `qnfo-ops.q08.workers.dev` are **bearer-gated**
 (`authOk()` compares the SHA-256 of `Authorization: Bearer …` against `OPS_ROUTER_AUTH_KEY`).
 A client that is handed only a URL gets `{"error":"Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY"}`.
+
+Confirmed by test this session: an **unauthenticated** `GET /v1/jobs/job-ba4db44e03c8f4` returns
+**HTTP 404**, while the same id is present in D1 as `status='succeeded'` (created 13:45:11.680Z,
+updated 13:45:33.213Z, 745 response chars). The gate masks a live row as a missing one — a 404
+from this surface means "not authorized", **not** "does not exist".
 
 The in-worker fix is fully specified at
 `patches/2026-09-13-public-job-status-route.md` but **is not applied** and cannot be applied from
@@ -26,10 +31,19 @@ this endpoint actually holds.
 
 | status | jobs | with a written response | last updated |
 |---|---:|---:|---|
-| succeeded | 46 | 45 | 2026-09-13T13:40:48.465Z |
+| succeeded | 47 | 46 | 2026-09-13T13:45:33.213Z |
 | **continuing** | **39** | **39** | 2026-09-13T13:40:34.195Z |
-| running | 3 | 0 | 2026-09-13T13:40:31.905Z |
+| running | 4 | 0 | 2026-09-13T13:45:18.352Z |
 | failed | 8 | 1 | 2026-09-12T13:27:59.053Z |
+
+## The snapshot is self-perturbing — read this before citing any number
+
+The previous snapshot in this file (`observed_through` 2026-09-13T13:40:48.465Z) reported
+**succeeded 46 / running 3**. Five minutes later the same query returns **succeeded 47 / running 4**.
+The cause is structural: **every invocation of the ops endpoint writes an `ops_jobs` row**, so the
+act of measuring the table changes it. There is no consistent read of `ops_jobs` available to a
+poller, and any number on this page is stale by the time it renders. Treat the totals as
+indicative, never as a settled count.
 
 ## Read this before trusting any status here — D17
 
@@ -57,6 +71,12 @@ route with a `?fields=` allowlist — not this file.
 
 ## Limits
 
-- This is a **snapshot**, not a live endpoint. It is refreshed only when a session writes it.
-- Job ids are not enumerable here; only the newest 20 appear, and `jobs.json` carries no full list.
-- The snapshot cannot show a job that was created after `observed_through`.
+- This is a **snapshot**, not a live endpoint. It is refreshed only when a session chooses to
+  rewrite it; there is no cron behind it.
+- `error` is excluded, so `has_error: 0` does **not** mean a job succeeded — 39 of them carry a
+  finished answer while stuck in `continuing`.
+- The redaction is enforced by convention in the writing session, not by code. Nothing prevents a
+  future refresh from committing a `response` body.
+- This file was itself the subject of a write-path defect this session; see
+  `DRIFT-2026-09-13T1346Z.md` for the mechanism (concurrent writes in one batch race on a single
+  branch-head precondition).
