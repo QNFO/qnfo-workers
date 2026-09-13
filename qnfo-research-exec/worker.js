@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.4";
+var VERSION = "0.8.5";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -13,6 +13,14 @@ var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
 var ROUTER = "https://qnfo-ai.internal/v1/chat/completions";
+// FIX-ENSEMBLE-FETCH-2026-09-13: global fetch() cannot resolve 'qnfo-ai.internal'.
+// env.QNFO_AI.fetch() (service binding) CAN resolve it. Use binding when available.
+function routerFetch(env, url, opts) {
+  if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
+    return env.QNFO_AI.fetch(url, opts);
+  }
+  return fetch(url, opts);
+}
 var GATEWAY_MODEL = "deepseek-v4-flash";
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -77,7 +85,7 @@ async function gatewayPaper(env, prompt) {
     ctrl.abort();
   }, 12e4);
   try {
-    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     if (!r.ok) {
       await logEvent(env, "ai-error", "gateway " + r.status);
       return "";
@@ -987,7 +995,7 @@ async function gwCall(env, prompt, maxTokens) {
   const ctrl = new AbortController();
   const t = setTimeout(function() { ctrl.abort(); }, 240000);
   try {
-    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) return "";
     const j = await r.json();
@@ -1133,7 +1141,7 @@ async function stageGround(env, row) {
   } catch (e) {}
   let corpus = "";
   try {
-    const r = await fetch(ROUTER + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
+    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
     if (r.ok) {
       const j = await r.json();
       const hits = (j.results || []).slice(0, 6);
