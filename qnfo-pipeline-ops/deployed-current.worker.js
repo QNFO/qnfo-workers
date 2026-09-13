@@ -12,8 +12,16 @@
 //   ~96/day for two unchanged terminal failures. Both now gate on r.inserted, matching the
 //   convention escalateVersion() already uses in this same file. The per-run heartbeat is
 //   preserved by run()'s cloud_ops_events kind='health' row.
+// v0.5.4-summary-dedup (2026-09-13, fleet audit follow-up): v0.5.3 gated only the two inner
+//   emitters. Alert attribution by message shape showed the LARGEST emitter was untouched: run()'s
+//   own summary alert fired level='critical' every 15 min because terminalFailures() returns the two
+//   permanent failures (recover_count >= MAX_RECOVERS, already ticketed as agent_issues 644/651).
+//   409 of the 765 critical alerts were that single line - more than escalateTerminal (333) and
+//   intakeWatchdog (23) combined. The summary now emits only when the condition FINGERPRINT changes,
+//   or every 6h as a re-notify, tracked in the new pipeline_state table. Suppressed runs still write
+//   the cloud_ops_events kind='health' heartbeat, so liveness is unchanged.
 
-var VERSION = "0.5.3-alert-dedup";
+var VERSION = "0.5.4-summary-dedup";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -23,6 +31,7 @@ var R_RETRY_HOURS = 6;
 var MAX_TERMINAL_REARMS = 3;
 var INTAKE_STALL_MIN = 120;        // minutes before a 'new' proposal is a stall
 var INTAKE_BACKLOG_ALERT_N = 5;    // proposals stuck -> escalate
+var SUMMARY_RENOTIFY_HOURS = 6;    // re-emit an unchanged summary at most this often
 var TRIAGE_URL = "https://qnfo-idea-triage.q08.workers.dev";
 
 function json(data, status) { return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
@@ -42,6 +51,7 @@ async function escIssue(env, title, desc, cat, prio) {
 async function ensureSchema(env) {
   try { await env.QNFO_AUDIT.prepare("ALTER TABLE research_queue ADD COLUMN recover_count INTEGER DEFAULT 0").run(); } catch (e) {}
   try { await env.QNFO_AUDIT.prepare("ALTER TABLE research_queue ADD COLUMN terminal_rearms INTEGER DEFAULT 0").run(); } catch (e) {}
+  try { await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS pipeline_state (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)").run(); } catch (e) {}
 }
 
 async function health(env) {
@@ -178,14 +188,38 @@ async function run(env) {
   const intake = await intakeWatchdog(env);
   const stalled = h.researching + h.review;
   const intakeEscalating = intake && intake.action === "escalated";
+  let summaryState = "none";
   if (h.failed > 0 || stalled > 0 || terminal.length > 0 || vErr.length > 0 || intakeEscalating) {
     const level = terminal.length > 0 || intakeEscalating ? "critical" : (h.failed > 0 || vErr.length > 0 ? "warning" : "info");
     const msg = "research pipeline: failed=" + h.failed + " stalled=" + stalled + " published=" + h.published + " recovered=" + recovered + " vqErr=" + vErr.length + " rearmed=" + rearmed + " rTerm=" + rearmedTerminal + " intake=" + (intake && intake.action !== "none" ? intake.action : "ok") + (terminal.length ? " terminal=" + terminal.length : "");
-    try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, level, msg).run(); } catch (e) {}
+    // v0.5.4: fingerprint-gate the summary. The previous unconditional emit produced 409 critical
+    // alerts (the single largest emitter) for a condition that cannot clear - the two permanent
+    // terminal failures, already ticketed as agent_issues 644/651. Emit on change, or re-notify
+    // every SUMMARY_RENOTIFY_HOURS. The cloud_ops_events heartbeat below is unaffected.
+    const fp = [level, h.failed, stalled, terminal.length, vErr.length, intakeEscalating ? 1 : 0, rearmed, rearmedTerminal].join("|");
+    let due = true;
+    try {
+      const prev = await env.QNFO_AUDIT.prepare("SELECT v, updated_at FROM pipeline_state WHERE k='summary_fp'").first();
+      if (prev && prev.v === fp && prev.updated_at) {
+        const ts = String(prev.updated_at);
+        const ms = Date.parse(ts.replace(" ", "T") + (ts.indexOf("Z") >= 0 ? "" : "Z"));
+        if (isFinite(ms)) {
+          const ageH = (Date.now() - ms) / 36e5;
+          if (ageH >= 0 && ageH < SUMMARY_RENOTIFY_HOURS) due = false;
+        }
+      }
+    } catch (e) {}
+    if (due) {
+      summaryState = "emitted";
+      try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, level, msg).run(); } catch (e) {}
+      try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO pipeline_state (k, v, updated_at) VALUES ('summary_fp', ?, datetime('now'))").bind(fp).run(); } catch (e) {}
+    } else {
+      summaryState = "suppressed-unchanged";
+    }
   }
   await digestAlerts(env);
   try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind("po-" + Date.now().toString(36) + "-" + Math.floor(Math.random()*1e6).toString(36), nowIso(), "health", JSON.stringify(h), JSON.stringify({ intake: intake }), WORKER, "ok").run(); } catch (e) {}
-  return Object.assign({ recovered: recovered, recoveredStale: recoveredStale, recoveredFailed: recoveredFailed, rearmedTerminal: rearmedTerminal, terminal: terminal.length, vqErr: vErr.length, rearmed: rearmed, intake: intake }, h);
+  return Object.assign({ recovered: recovered, recoveredStale: recoveredStale, recoveredFailed: recoveredFailed, rearmedTerminal: rearmedTerminal, terminal: terminal.length, vqErr: vErr.length, rearmed: rearmed, intake: intake, summary: summaryState }, h);
 }
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); },
