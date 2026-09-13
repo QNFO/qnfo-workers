@@ -1,4 +1,4 @@
-// qnfo-fleet-advisor v0.3.4 - canonical autonomous Cloudflare fleet advisor.
+// qnfo-fleet-advisor v0.3.5 - canonical autonomous Cloudflare fleet advisor.
 // 100% server-side, 100% autonomous. Cron */20 + token-gated POST /run-audit.
 // v0.3.0: ENSEMBLE advice (primary llama proposes + gpt-oss-120b adversarially reviews
 // IMPROVE/ACCEPT -> consensus suggestion); gateway drift fixed to real fields only
@@ -24,7 +24,29 @@
 //   a timestamp; (b) STABLE title "MODEL-DEGRADED" with the set moved into the description,
 //   refreshed in place by step-7 dedupe; (c) auto-close when the probed set empties;
 //   (d) step 4c retires the legacy per-run "MODEL-DEGRADED <set>" tickets.
-const VERSION = "0.3.4";
+// v0.3.5 PHANTOM-2 (2026-09-13, qnfo-ops): v0.3.4's PHANTOM-1 predicate is INCOMPLETE and
+//   the finding still never clears. v0.3.4 filtered on `last_probe_ts IS NOT NULL`, but a
+//   FIFTH qualified-id row carries a real probe timestamp, so the predicate returns 1, not 0.
+//   Measured live 2026-09-13 (read-only D1, qnfo-audit):
+//     SELECT model_id,status,gateway_failures,last_probe_ts FROM ai_model_health
+//      WHERE status='degraded';
+//     -> @cf/baai/bge-base-en-v1.5            gateway_failures 0     last_probe_ts NULL
+//     -> @cf/google/gemma-4-26b-a4b-it        gateway_failures 0     last_probe_ts NULL
+//     -> @cf/qwen/qwen2.5-coder-32b-instruct  gateway_failures 0     last_probe_ts NULL
+//     -> @cf/zai-org/glm-5.2                  gateway_failures 0     last_probe_ts NULL
+//     -> @cf/qwen/qwen3.8-27b                 gateway_failures 1371  last_probe_ts 1789280141458
+//   All 5 degraded rows carry qualified ids; ZERO short-form rows are degraded.
+//     SELECT COUNT(*) FROM ai_model_health WHERE status='degraded' AND last_probe_ts IS NOT NULL;
+//     -> 1        (v0.3.4's predicate: never empties, so the auto-close branch is dead code)
+//     SELECT COUNT(*) FROM ai_model_health WHERE status IN ('degraded','failing')
+//      AND model_id NOT LIKE '@cf/%';
+//     -> 0        (structural predicate: correct)
+//   A qualified CF id is never a canonical roster id, so the guard belongs in the predicate
+//   itself rather than in a proxy for it. `last_probe_ts` is kept as an ADDITIONAL condition
+//   (a row with no probe is still not evidence) but is no longer load-bearing on its own.
+//   The other 4 phantoms are re-keyed/removed by qnfo-ai-calibration v1.1.5 FIX E; this
+//   predicate is what makes the advisor stop filing regardless of when that deploy lands.
+const VERSION = "0.3.5";
 const WORKER = "qnfo-fleet-advisor";
 
 const nowIso = () => new Date().toISOString();
@@ -139,23 +161,28 @@ async function runAudit(env) {
     }
   } catch (e) {}
 
-  // 3. Degraded models (v0.3.4 PHANTOM-1 + FLOOD-FIX-2)
-  //  PHANTOM-1: only rows that carry a real probe count as degraded. qnfo-ai-calibration
-  //    writes the CF ids its internalId() reverse map cannot resolve as their OWN rows, with
-  //    last_probe_ts NULL and consecutive_failures 0. No prober writes those keys, so they
-  //    are never cleared and the degraded set was permanently non-empty. Measured
-  //    2026-09-13: exactly 4 rows have last_probe_ts IS NULL (the phantoms) and all 20 real
-  //    rows have a probe timestamp, so this predicate removes the phantoms and nothing else.
+  // 3. Degraded models (v0.3.4 PHANTOM-1 + FLOOD-FIX-2, CORRECTED in v0.3.5 PHANTOM-2)
+  //  PHANTOM-2 (v0.3.5): the predicate is now STRUCTURAL. A qualified "@cf/..." id is never
+  //    a canonical roster id, so it can never be a real degraded model. v0.3.4 relied on
+  //    `last_probe_ts IS NOT NULL` as a proxy for "is a phantom" and that proxy is wrong:
+  //    @cf/qwen/qwen3.8-27b carries last_probe_ts=1789280141458, so v0.3.4's query returned 1
+  //    and the auto-close branch below was unreachable. `last_probe_ts IS NOT NULL` is kept
+  //    as an additional condition (a row with no probe is still not evidence) but the
+  //    namespace guard is what makes the set actually empty.
   //  FLOOD-FIX-2: the title embedded the live degraded set, so step-7 open-title dedupe never
   //    matched -> one new ticket per */20 cron (12 filed since 09-08, 10 still open, 2 ever
   //    closed). Same remedy as v0.3.3 step 4: STABLE title, set in the description, refreshed
   //    in place, auto-closed when the probed set empties.
   try {
-    const deg = await d1All(env, "SELECT model_id FROM ai_model_health WHERE status = 'degraded' AND last_probe_ts IS NOT NULL");
+    const deg = await d1All(env, "SELECT model_id FROM ai_model_health WHERE status = 'degraded' AND last_probe_ts IS NOT NULL AND model_id NOT LIKE '@cf/%'");
     if (deg && deg.length) {
       findings.push({ kind: "model-health", severity: "medium", title: "MODEL-DEGRADED", detail: "degraded (probed): " + deg.map((d) => d.model_id).join(",") });
     } else {
-      await d1Run(env, "UPDATE agent_issues SET status='closed', description=?, updated_at=? WHERE status='open' AND source=? AND category='model-health'", ["[advisor] closed: no probed model is degraded at " + ts, ts, WORKER]);
+      // No canonical model is degraded. Retire the stable ticket AND the legacy per-run
+      // "MODEL-DEGRADED <set>" tickets (they embed the set in the title, so step 4c's
+      // LIKE 'MODEL-DEGRADED %' covers them; both are closed here for idempotence).
+      await d1Run(env, "UPDATE agent_issues SET status='closed', description=?, updated_at=? WHERE status='open' AND source=? AND category='model-health'", ["[advisor] closed: no canonical (non-@cf/) model is degraded at " + ts, ts, WORKER]);
+      await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND title LIKE 'MODEL-DEGRADED%'", [ts, WORKER]);
     }
   } catch (e) {}
 
