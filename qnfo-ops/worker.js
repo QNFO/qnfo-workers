@@ -491,7 +491,10 @@ async function d1Query(env, args) {
   const raw = String(args && args.sql || "").trim();
   const sql = raw.replace(/;\s*$/, "");
   if (!/^(select|with)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only" };
-  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, rejected: true, error: "single read statement only" };
+  // OPS-D1-WRITE-GUARD-FIX-1 (2026-09-13): strip quoted strings before multi-statement check
+  // Old check tripped on datetime('now'), 'dispatched', etc. inside string literals
+  var _sqlNoStr = sql.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(_sqlNoStr)) return { ok: false, rejected: true, error: "single write statement only" };
   if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
   if (!/\blimit\s+\d+/i.test(sql) && !/^\s*select\s+(count|sum|avg|min|max)\s*\(/i.test(sql) && !/\bgroup\s+by\b/i.test(sql) && !/select\s+sqlite_version/i.test(sql)) return { ok: false, rejected: true, error: "add LIMIT n (aggregate exempt)" };
   const bind = DB_MAP[String(args && args.db || "audit")] || DB_MAP.audit;
