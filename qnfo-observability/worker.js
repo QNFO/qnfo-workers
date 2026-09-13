@@ -1,4 +1,4 @@
-// qnfo-observability v1.0.0 — canonical fleet observability layer
+// qnfo-observability v1.1.5 — canonical fleet observability layer
 // PURPOSE: makes the QNFO fleet observable to itself.
 //   (1) INGEST  — scheduled trace ingest: Cloudflare Logpush workers_trace_events (R2 qnfo-audit/workers_trace/*.log.gz)
 //                 parsed into structured D1 table worker_logs. Covers ALL workers with zero per-worker code changes.
@@ -9,14 +9,38 @@
 //                 (qnfo-audit.ops_jobs). STATUS METADATA ONLY — never the response body (JOBS-STATUS-PUBLIC-1).
 // CANONICAL SOURCE: QNFO/qnfo-workers/qnfo-observability/worker.js
 // DEPLOY: wrangler deploy (from this dir); bindings AUDIT (qnfo-audit D1) + LOGS (R2 qnfo-audit); cron 17 * * * *.
+//         NOTE: this worker is a MULTI-MODULE worker (imports ./fleet.js). The R2 canonical object
+//         r2:qnfo-canonical/qnfo-observability.js must carry BOTH modules; a canonical holding only
+//         worker.js fails with "No such module \"fleet.js\"" (observed: fleet_deploys id 76,
+//         2026-09-13T14:04:01Z, ok:0).
+//
+// v1.1.5-false-clean-fix (2026-09-13, ops-endpoint session). The integration monitor could report
+//   `healthy, n=0` for a chain whose pending predicate matched NO rows because the status enum in the
+//   medium had changed. Verified against live D1 this session — five chains were false-clean:
+//     alerts    predicate `digested = 0`      -> 0 rows; actual: 'auto' 914, 1 141, NULL 45
+//     outreach  predicate `status='pending'`  -> 0 rows; actual: 'needs-contact' 20, sent 3, skipped 18
+//     revisions predicate `status='queued'`   -> 0 rows; actual: 'needs-substantive-revision' 38, quarantined 23
+//     intents   predicate `status='pending'`  -> 0 rows; actual: 'triaged' 34, deduped 10, done 106
+//     email     predicate `status='received'` -> 0 rows; actual: processed 226, archived 110, spam 45
+//   A monitor that cannot see backlog is worse than no monitor, because it reports health.
+//   Two changes:
+//     (a) Corrected the two predicates whose target enum is unambiguous from live data
+//         (alerts -> NULL/''/0; outreach -> 'needs-contact'), so real backlog is visible again.
+//     (b) Added `total` to every chain. When the pending predicate matches 0 rows while the medium
+//         holds >= 20 rows, the chain now reports `empty-match` and raises an `enum-check`
+//         opportunity, instead of silently asserting `healthy`. This catches enum drift on ANY chain
+//         without guessing semantics. Chains where empty genuinely IS success (ideas, errata,
+//         version-drain) set expectEmpty:true and are exempt from the opportunity.
+//   The score is unaffected: empty-match is not counted as healthy or degraded (see chainScore).
 
 import { FLEET } from './fleet.js';
 
-const VERSION = '1.1.4';
+const VERSION = '1.1.5-false-clean-fix';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
 const RETENTION_DAYS = 30;      // worker_logs retention window
+const EMPTY_MATCH_MIN_TOTAL = 20; // rows in the medium before an empty match is suspicious
 const UA = 'qnfo-observability/' + VERSION;
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
@@ -198,43 +222,62 @@ function ageHours(iso) {
   return Math.max(0, (Date.now() - t) / 3600000);
 }
 
-// Chain definitions: { id, name, producer, consumer, medium, sql, max, minOk, want }
-// max: pending-items ceiling (above = backpressure/stuck); minOk: minimum expected activity (below = degraded);
-// sql must return at least {n} and may return {oldest} or {latest} as timestamp text.
+// Chain definitions: { id, name, producer, consumer, medium, sql, total, max, minOk, want, expectEmpty }
+// sql:   counts rows in the PENDING state (must return {n} and optionally {oldest}|{latest}).
+// total: counts ALL rows in the medium. Used by the v1.1.5 empty-match guard: if sql matches 0 rows
+//        while total >= EMPTY_MATCH_MIN_TOTAL, the chain reports `empty-match` rather than `healthy`,
+//        because the pending predicate is more likely stale than the medium is drained.
+// max:   pending-items ceiling (above = backpressure/stuck). minOk: minimum expected activity.
+// expectEmpty: true when zero pending rows IS the success condition (drained queue), suppressing the
+//        empty-match opportunity for that chain.
 const INTEGRATION_CHAINS = [
   { id: 'fleet-pulse', name: 'Scheduler -> Executor pulse', producer: 'fleet-scheduler', consumer: 'fleet-executor', medium: 'fleet_runs',
     sql: "SELECT COUNT(*) n, MAX(started_at) latest FROM fleet_runs WHERE started_at >= datetime('now','-15 minutes')",
-    max: null, minOk: 3, want: '>=3 pulse runs / 15min (heartbeat closed loop)' },
+    total: "SELECT COUNT(*) n FROM fleet_runs",
+    max: null, minOk: 3, expectEmpty: false, want: '>=3 pulse runs / 15min (heartbeat closed loop)' },
   { id: 'errata', name: 'Errata watch -> respond -> publish', producer: 'errata-watch / email', consumer: 'errata-respond / errata-publish', medium: 'errata_queue',
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM errata_queue WHERE status NOT IN ('done','published','resolved','superseded','implemented')",
-    max: 10, minOk: null, want: 'pending <= 10' },
+    total: "SELECT COUNT(*) n FROM errata_queue",
+    max: 10, minOk: null, expectEmpty: true, want: 'pending <= 10' },
   { id: 'ideas', name: 'Idea intake -> triage', producer: 'edge form / idea-miner / auto-scan', consumer: 'idea-triage', medium: 'idea_proposals',
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM idea_proposals WHERE status = 'new'",
-    max: 30, minOk: null, want: 'new <= 30' },
+    total: "SELECT COUNT(*) n FROM idea_proposals",
+    max: 30, minOk: null, expectEmpty: true, want: 'new <= 30' },
   { id: 'intents', name: 'Intent intake -> orchestrator', producer: 'calendar-api / edge', consumer: 'qnfo-intent-orchestrator', medium: 'intents',
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM intents WHERE status = 'pending'",
-    max: 20, minOk: null, want: 'pending <= 20' },
+    total: "SELECT COUNT(*) n FROM intents",
+    max: 20, minOk: null, expectEmpty: false, want: 'pending <= 20' },
   { id: 'version-drain', name: 'Reviser -> research-exec publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'version_queue',
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM version_queue WHERE status = 'drafted'",
-    max: 5, minOk: null, want: 'drafted <= 5' },
+    total: "SELECT COUNT(*) n FROM version_queue",
+    max: 5, minOk: null, expectEmpty: true, want: 'drafted <= 5' },
   { id: 'outreach', name: 'Outreach queue -> campaign engine', producer: 'register / ops', consumer: 'qnfo-outreach', medium: 'outreach_queue',
-    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status = 'pending'",
-    max: 20, minOk: null, want: 'pending <= 20' },
+    // v1.1.5: was status='pending' (0 rows). Live enum uses 'needs-contact' for unworked items (20 rows).
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status = 'needs-contact'",
+    total: "SELECT COUNT(*) n FROM outreach_queue",
+    max: 20, minOk: null, expectEmpty: false, want: 'needs-contact <= 20' },
   { id: 'issues', name: 'Chat failures -> kaizen digest', producer: 'ops gateway', consumer: 'qnfo-kaizen', medium: 'agent_issues',
     sql: "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'",
-    max: 10, minOk: null, want: 'open <= 10' },
+    total: "SELECT COUNT(*) n FROM agent_issues",
+    max: 10, minOk: null, expectEmpty: true, want: 'open <= 10' },
   { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: 'ops digest', medium: 'alerts',
-    sql: "SELECT COUNT(*) n FROM alerts WHERE digested = 0",
-    max: 5, minOk: null, want: 'undigested <= 5' },
+    // v1.1.5: was `digested = 0` (0 rows). Live values are TEXT 'auto' (914), INTEGER 1 (141), NULL (45).
+    // The column is declared INTEGER but producers write TEXT, so an equality test on 0 can never match.
+    sql: "SELECT COUNT(*) n FROM alerts WHERE digested IS NULL OR digested = '' OR digested = 0",
+    total: "SELECT COUNT(*) n FROM alerts",
+    max: 5, minOk: null, expectEmpty: true, want: 'undigested <= 5' },
   { id: 'email', name: 'Inbound email -> triage', producer: 'SMTP gateway', consumer: 'qnfo-email workers', medium: 'emails',
     sql: "SELECT COUNT(*) n FROM emails WHERE status = 'received'",
-    max: 10, minOk: null, want: 'unprocessed <= 10' },
+    total: "SELECT COUNT(*) n FROM emails",
+    max: 10, minOk: null, expectEmpty: false, want: 'unprocessed <= 10' },
   { id: 'research', name: 'Research queue -> execution', producer: 'supervisor / radars', consumer: 'qnfo-research-exec', medium: 'research_queue',
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')",
-    max: 10, minOk: null, want: 'queued/active <= 10' },
+    total: "SELECT COUNT(*) n FROM research_queue",
+    max: 10, minOk: null, expectEmpty: false, want: 'queued/active <= 10' },
   { id: 'revisions', name: 'Revision log -> publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'paper_revision_log',
     sql: "SELECT COUNT(*) n FROM paper_revision_log WHERE status = 'queued'",
-    max: 8, minOk: null, want: 'queued <= 8' },
+    total: "SELECT COUNT(*) n FROM paper_revision_log",
+    max: 8, minOk: null, expectEmpty: false, want: 'queued <= 8' },
 ];
 
 // PRECONDITION: schema ensured. POSTCONDITION: integration_state row appended with latest assessment.
@@ -242,14 +285,24 @@ async function assessIntegration(env) {
   const chains = [];
   for (let i = 0; i < INTEGRATION_CHAINS.length; i++) {
     const c = INTEGRATION_CHAINS[i];
-    const st = { id: c.id, name: c.name, producer: c.producer, consumer: c.consumer, medium: c.medium, status: 'unknown', n: null, oldest_h: null, detail: '', metric: (c.id === 'fleet-pulse' ? 'rate' : 'queue') };
+    const st = { id: c.id, name: c.name, producer: c.producer, consumer: c.consumer, medium: c.medium, status: 'unknown', n: null, total: null, oldest_h: null, detail: '', metric: (c.id === 'fleet-pulse' ? 'rate' : 'queue') };
     try {
       const r = await env.AUDIT.prepare(c.sql).first();
+      // v1.1.5: read the medium size so an empty pending match can be distinguished from a drained queue.
+      if (c.total) {
+        try { const tr = await env.AUDIT.prepare(c.total).first(); st.total = tr ? Number(tr.n) || 0 : null; } catch (eT) { st.total = null; }
+      }
       if (r) {
         st.n = r.n == null ? null : Number(r.n);
         st.oldest_h = ageHours(r.oldest || r.latest);
         if (c.max != null && st.n > c.max) { st.status = 'stuck'; st.detail = 'backpressure: ' + st.n + ' waiting (' + c.want + ')'; }
         else if (c.minOk != null && st.n < c.minOk) { st.status = 'degraded'; st.detail = 'below expected activity (' + c.want + ')'; }
+        else if (st.n === 0 && st.total != null && st.total >= EMPTY_MATCH_MIN_TOTAL) {
+          // The pending predicate matched nothing, but the medium is not empty. Either the queue drained
+          // or the status enum moved. We cannot tell from here, so we must not assert health.
+          st.status = 'empty-match';
+          st.detail = '0 of ' + st.total + ' rows matched the pending predicate (' + c.want + ') - verify the status enum, or confirm the queue is genuinely drained';
+        }
         else { st.status = 'healthy'; st.detail = c.want; }
       } else {
         st.n = 0; st.status = c.minOk != null ? 'degraded' : 'healthy';
@@ -297,12 +350,16 @@ async function assessIntegration(env) {
     const c = chains[i];
     if (c.status === 'stuck') opportunities.push({ kind: 'backpressure', chain: c.id, text: c.name + ': ' + c.detail + ' (oldest ' + (c.oldest_h == null ? '?' : c.oldest_h.toFixed(1)) + 'h)' });
     if (c.status === 'degraded') opportunities.push({ kind: 'low-activity', chain: c.id, text: c.name + ': ' + c.detail });
+    // v1.1.5: surface enum drift as its own signal class, unless empty is the success condition.
+    if (c.status === 'empty-match' && !INTEGRATION_CHAINS[i].expectEmpty) opportunities.push({ kind: 'enum-check', chain: c.id, text: c.name + ': ' + c.detail });
     if (c.oldest_h != null && c.oldest_h > 72 && c.status === 'healthy') opportunities.push({ kind: 'stale-item', chain: c.id, text: c.name + ': oldest pending item ' + c.oldest_h.toFixed(1) + 'h old (under count ceiling but stale)' });
   }
   if (coverage.probe_gap > 0) opportunities.push({ kind: 'coverage', text: coverage.probe_gap + ' of ' + fleetSize + ' workers have no liveness probe' });
   if (coverage.trace_gap > 0) opportunities.push({ kind: 'trace-gap', text: 'Logpush trace coverage: ' + coverage.traced + '/' + fleetSize + ' workers emit trace events' });
   const noSignal = FLEET.filter(function (w) { return !probedSet.has(w) && !tracedSet.has(w) && !invocatedSet.has(w); });
   if (noSignal.length > 0) opportunities.push({ kind: 'integration-candidate', text: noSignal.length + ' workers emit no probe/trace/invocation signal: ' + noSignal.slice(0, 8).join(', ') + (noSignal.length > 8 ? ', ...' : '') });
+  // v1.1.5: empty-match is deliberately excluded from chainScore - it is an UNKNOWN, not a pass and not
+  // a failure. Counting it as healthy is what let five stale predicates report green for days.
   const chainVals = chains.filter(function (c) { return c.status === 'healthy' || c.status === 'stuck' || c.status === 'degraded'; });
   const chainScore = chainVals.length ? chainVals.reduce(function (a, c) { return a + (c.status === 'healthy' ? 1 : c.status === 'degraded' ? 0.5 : 0); }, 0) / chainVals.length : null;
   const coverageScore = Math.min(1, (coverage.probed / Math.max(1, fleetSize)) * 0.6 + (coverage.traced / Math.max(1, fleetSize)) * 0.4);
@@ -318,6 +375,7 @@ async function assessIntegration(env) {
     coverage: Math.round(coverageScore * 100),
     freshness: freshnessScore == null ? null : Math.round(freshnessScore * 100),
     weights: 'chains 50% / coverage 30% / freshness 20%',
+    note: 'v1.1.5: chains in empty-match are excluded from chainScore (unknown, not healthy)',
   };
   const summary = { generated_at: new Date().toISOString(), version: VERSION, fleet_size: fleetSize, chains: chains, coverage: coverage, decay: decay, opportunities: opportunities, score: score };
   try {
@@ -382,7 +440,8 @@ export default {
             const vel = pn == null ? null : cn - pn;
             let warn = null;
             if (c.status === 'stuck') warn = 'stuck';
-            else if (c.metric !== 'rate' && vel != null && vel > 0 && cn >= 1) warn = 'depth growing (+' + vel + ')'; 
+            else if (c.status === 'empty-match') warn = 'empty-match (verify enum)';
+            else if (c.metric !== 'rate' && vel != null && vel > 0 && cn >= 1) warn = 'depth growing (+' + vel + ')';
             chainVel.push({ id: c.id, n: cn, prev_n: pn, velocity: vel, state: c.status, warn: warn });
           });
         }
