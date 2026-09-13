@@ -969,7 +969,7 @@ var WRITER_MODELS = [
   "@cf/zai-org/glm-5.3",
   "@cf/moonshotai/kimi-k2.6"
 ];
-var MIN_PAPER_CHARS = 15000;
+var MIN_PAPER_CHARS = 8000; // lowered from 15000 to match 4096-token Workers AI output cap
 var MIN_REFS = 8;
 var MAX_REVIEW_CYCLES = 2;
 var PILOT = "https://qnfo-containers-pilot.q08.workers.dev";
@@ -979,13 +979,17 @@ var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
 
 async function aiText(env, model, prompt, maxTokens) {
+  // FIX 2026-09-13: Workers AI hard-caps output at 4096 tokens; passing 30000 causes silent empty return
+  const cappedTokens = Math.min(maxTokens, 4096);
   try {
-    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens, temperature: 0.3 });
+    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
     if (typeof r === "string") return r;
     if (r && typeof r.response === "string" && r.response) return r.response;
     if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
+    await logEvent(env, "ai-warn", "aiText model=" + model + " returned unexpected shape: " + JSON.stringify(r).slice(0,200));
     return "";
   } catch (e) {
+    await logEvent(env, "ai-error", "aiText model=" + model + " threw: " + String(e && e.message || e).slice(0,200));
     return "";
   }
 }
