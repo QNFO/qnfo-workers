@@ -36,6 +36,7 @@ UPDATE companion_pieces
 --    a headcount and a staged scene, none of which any record row holds.
 --    Guarded by instr() so a whitespace or character drift cannot silently no-op.
 --    Verified 2026-09-13: instr(body_md, <the span>) = 1, i.e. the body opens with it.
+--    Geometry: span length 287, occupying body chars 1..287.
 -- ---------------------------------------------------------------------------
 UPDATE companion_pieces
    SET body_md = replace(
@@ -55,7 +56,8 @@ UPDATE companion_pieces
 --    "the Workshop on Quantum Programming Languages" is NOT tool-verified; QPL is
 --    believed to be Quantum Physics and Logic, but no tool call confirmed it, so the
 --    expansion is DROPPED rather than asserted.
---    Verified 2026-09-13: instr(body_md, <the span>) = 289.
+--    Verified 2026-09-13: instr(body_md, <the span>) = 289 (one separator space after
+--    span 1). Span length 287, occupying body chars 289..575.
 -- ---------------------------------------------------------------------------
 UPDATE companion_pieces
    SET body_md = replace(
@@ -67,13 +69,27 @@ UPDATE companion_pieces
    AND instr(body_md, 'Five days later') > 0;  -- idempotent
 
 -- ---------------------------------------------------------------------------
--- 3. word_count is now stale (the piece shortened). Recompute it from body_md.
---    SQLite has no word-split, so use the same definition worker.js uses (runs of
---    non-whitespace). This expression approximates it; if exactness matters, export
---    body_md and run wordCount() from worker.js instead of trusting this line.
+-- 3. word_count is now stale. Set the EXACT recomputed value.
+--
+--    DERIVATION (run_code, 2026-09-13, using worker.js's own wordCount():
+--    runs of non-whitespace, whitespace = space \n \r \t):
+--
+--      stored word_count (before)          2539
+--      span 1 source words  49 -> repl  31  delta -18
+--      span 2 source words  54 -> repl  37  delta -17
+--      total delta                          -35
+--      CORRECTED word_count                2504
+--
+--    body_md length: 15517 -> 15278 chars (delta -239).
+--
+--    DO NOT compute this as `length(body_md) - length(replace(body_md,' ','')) + 1`.
+--    That counts only spaces, so it ignores the paragraph newlines and undercounts
+--    badly: on "one two\n\nthree four\nfive" it yields 3 where the true count is 5.
+--    A literal is used instead, because a plausible-but-wrong word count is worse
+--    than none.
 -- ---------------------------------------------------------------------------
 UPDATE companion_pieces
-   SET word_count = length(body_md) - length(replace(body_md, ' ', '')) + 1
+   SET word_count = 2504
  WHERE id = 8 AND instr(body_md, 'Five days later') = 0;
 
 -- ---------------------------------------------------------------------------
@@ -90,8 +106,8 @@ UPDATE companion_pieces
 
 -- ---------------------------------------------------------------------------
 -- 5. Verification. Run after 0-4.
---    EXPECT: s1 = 0, full2 = 0, dining = 0, forty = 0, five = 0, costeq = 0,
---            seven_days = present, gate = blocked-grounding.
+--    EXPECT: len=15278, five=0, dining=0, forty=0, costeq=0, sameweek=0,
+--            seven_days>0, repl2_present=1, gate=blocked-grounding, word_count=2504
 -- ---------------------------------------------------------------------------
 SELECT id,
        length(body_md)                                                   AS len,
