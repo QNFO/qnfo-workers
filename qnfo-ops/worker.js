@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.18.0";
+var VERSION = "2.19.0";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -2478,7 +2478,7 @@ async function registryRefresh(env) {
   const now = iso();
   const upsert = /* @__PURE__ */ __name(async function(service, kind, fields) {
     try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=COALESCE(excluded.purpose, purpose), capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
     } catch (e) {
     }
   }, "upsert");
