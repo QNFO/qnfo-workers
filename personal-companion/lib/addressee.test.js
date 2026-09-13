@@ -3,12 +3,19 @@
 // Dependency-free test suite for addressee.js. Added 2026-09-13 by qnfo-ops.
 // Run: node lib/addressee.test.js
 //
-// REVISION 2 (same day): revision 1 of this file had three wrong expectations —
-// it assumed one blocking violation per heading, that an empty names array
-// disables the check, and that a single line yields one violation. All three were
-// wrong, and running the suite is what showed it (18 passed, 4 failed). The one
-// genuine module fault it exposed — a case-sensitive bare-mention regex — is
-// fixed in addressee.js revision 2. Expectations below now match measured output.
+// REVISION 3 (same day): revision 1 of this file had three wrong expectations and
+// revision 2 had a fourth. Running the suite is what exposed all four:
+//   1. one blocking violation per heading — measured: 2 (the address frame
+//      "for Rowan" matches inside the heading)
+//   2. an empty names array disables the check — measured: it falls back to the
+//      default name, because an empty array is falsy on .length
+//   3. one violation per line — measured: 3, one per kind
+//   4. three mentions on one line yield three violations — measured: 1, because
+//      mentions inside the same 45-character window produce the SAME span and
+//      dedupe collapses them. The count is a window count, not an occurrence count.
+// Only one of those was a module fault — a case-sensitive bare-mention regex,
+// fixed in addressee.js revision 2. The rest were bad tests, which is the more
+// common failure and the reason the suite is run rather than asserted.
 //
 // Every fixture is real text, not invented:
 //   PIECE8    - the verbatim opening of the live companion_pieces.id=8
@@ -98,12 +105,16 @@ ok('lowercase name is matched', checkAddressee('rowan rated it 5', NAMES).length
 ok('uppercase name is matched', checkAddressee('ROWAN rated it 5', NAMES).length === 1);
 ok('mixed case name is matched', checkAddressee('RoWaN rated it 5', NAMES).length === 1);
 
-// --- dedupe -----------------------------------------------------------------
+// --- dedupe, measured --------------------------------------------------------
 const oneLine = checkAddressee('# Field Notes for Rowan', NAMES);
 ok('one line yields three distinct kinds', oneLine.length === 3 && distinctKinds(oneLine) === 3);
 ok('no duplicate kind+span survives', oneLine.length === distinctSpans(oneLine));
-ok('repeated identical text does not multiply',
-   checkAddressee('Rowan. Rowan. Rowan.', NAMES).length === 3);
+// Adjacent mentions share a 45-character window, so they collapse to one span.
+// The piece is still flagged; the count is a window count, not an occurrence count.
+ok('adjacent repeats collapse to one span window',
+   checkAddressee('Rowan. Rowan. Rowan.', NAMES).length === 1);
+ok('repeats beyond one window are counted separately',
+   checkAddressee('Rowan. ' + 'x'.repeat(120) + ' Rowan.', NAMES).length === 2);
 
 console.log('addressee.test.js: ' + pass + ' passed, ' + fail + ' failed');
 if (fail) throw new Error(fail + ' assertion(s) failed');
