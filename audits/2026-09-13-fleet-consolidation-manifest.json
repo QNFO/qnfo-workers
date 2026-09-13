@@ -1,98 +1,80 @@
 {
   "artifact": "fleet-consolidation-manifest",
-  "revision": 6,
-  "generated_at": "2026-09-13T14:42:00Z",
+  "revision": 7,
+  "generated_at": "2026-09-13T14:50:00Z",
   "generated_by": "qnfo-ops/ops-exec",
-  "revision_history": {
-    "rev1": "'Ghosts from an old roster'. Wrong mechanism - retracted.",
-    "rev2": "'LIVE workers DELETED on 2026-09-11', inferred from fleet_probe_log 200 -> 404. FALSIFIED.",
-    "rev3": "Added wontfix adjudications, #746 hazard, alert-ledger purge caveat.",
-    "rev4": "Retracted the cutover. Claimed 55 is NOT authoritative. Corrected the liveness method.",
-    "rev5": "Falsified rev4's own 'self-healing' claim about the deleted scanerr keys.",
-    "rev6": "REVERSES rev4. 55 IS authoritative (direct CF API read). Write-evidence does NOT prove worker identity, because retired workers keep writing as modules inside hubs. Withdraws BOTH earlier mechanism claims as unproven."
-  },
-  "rev6_reversal_of_rev4": {
-    "rev4_claimed": "The 55-worker roster is NOT authoritative, because qnfo-pipeline-ops / qnfo-fleet-advisor / qnfo-register-guard write to D1 today while being absent from it.",
-    "why_that_is_wrong": "Two readable sibling files settle it.",
-    "evidence_1_direct_cf_read": "QNFO/qnfo-workers qnfo-observability/fleet.js (sha 1e7410c3, 2,596 B) header: 'REGENERATED 2026-09-13 from qnfo-audit.service_registry (55 rows), cross-checked against qnfo-fleet-dashboard's own Cloudflare API read: fleet_dashboard_state.fleet.workers = 55; fleet_dashboard_state.integration.ghost = []; fleet_dashboard_state.integration.unregistered = [] (updated 2026-09-13T13:46:11.904Z, from /accounts/{id}/workers/scripts?per_page=100).' A direct account-level read with per_page=100 returned 55, zero ghosts, zero unregistered.",
-    "evidence_2_retired_modules_still_write": "Same file: 'A worker that has been merged into a hub is retired even if its code still runs inside the hub under its own WORKER constant (cf. qnfo-fleet-control bundling qnfo-fleet-advisor + qnfo-fleet-calibrator).' Independently confirmed by qnfo-fleet-control/version-compare.mjs (sha 86835e1a, 5,840 B), which records qnfo-fleet-control/worker.js (75,875 B, sha d9d438f0) as: module 1 var VERSION='0.3.3' var WORKER='qnfo-fleet-advisor'; module 2 var VERSION='1.0.0' var WORKER='qnfo-fleet-calibrator'.",
-    "consequence": "qnfo-fleet-advisor's 2026-09-13T14:21:14Z write was emitted BY qnfo-fleet-control running its advisor module. It is not a separate live worker. The same pattern covers qnfo-pipeline-ops and qnfo-register-guard, both of which my own merge map had already assigned to fleet-exec."
-  },
-  "corrected_liveness_rule": {
-    "rule": "Write-evidence is NECESSARY BUT NOT SUFFICIENT for worker identity. A name is a live WORKER iff it appears in the Cloudflare scripts list. A name appearing in D1 writes but NOT in the CF scripts list is a retired MODULE executing inside a hub under its own WORKER constant.",
-    "short_form": "CF scripts list decides EXISTENCE; D1 writes decide ACTIVITY.",
-    "supersedes": "rev4's rule ('liveness must be measured from D1 writes') is incomplete and withdrawn."
-  },
-  "mechanism_WITHDRAWN_as_unproven": {
-    "statement": "I withdraw BOTH earlier claims about when the ~22 names were retired.",
-    "why": "The two probe transports disagree for qnfo-fleet-advisor. transport=cf-api-list reported ok=1 status=200 n=102 with last_ts 2026-09-11T09:15:50 and was never used again; transport=http reported ok=0 status=404 n=97 spanning 2026-09-10T07:00 to 2026-09-12T09:15:45 - i.e. 404 from its FIRST observation.",
-    "two_consistent_readings": [
-      "(A) Retirement at 2026-09-11T09:15:50, with http always failing via SVC-BINDING-1.",
-      "(B) Retirement before 2026-09-10T07:00, with cf-api-list reading a list that still contained the name."
-    ],
-    "verdict": "Indistinguishable from the data I hold. The retirement is real and coincides with or predates 09-11; the exact date is UNKNOWN."
-  },
-  "rosters": {
-    "live_cf_scripts": { "n": 55, "status": "AUTHORITATIVE", "evidence": "direct CF API read of /accounts/{id}/workers/scripts?per_page=100 at 2026-09-13T13:46:11.904Z: workers=55, ghost=[], unregistered=[]" },
-    "service_registry": { "n": 55, "note": "matches the CF read" },
-    "deploy_scanner": { "n": 61, "note": "scans retired names; 3 names it scans appear in no other roster" },
-    "integration_monitor": { "n": 80, "note": "the DEPLOYED monitor runs a STALE 81-name fleet.js; the repo copy is regenerated to 55 but NOT deployed" },
-    "probe_log": { "n": 83, "note": "73 frozen at 2026-09-12T09:15:45Z" },
-    "repo_worker_dirs": { "n": 92 }
-  },
-  "monitor_stale_roster": {
-    "stale_n": 81,
-    "correct_n": 55,
-    "evidence": "qnfo-observability/fleet.js states the PRIOR version was captured 2026-09-10 with 81 entries, one ('qnfo-scorecard') appended by hand the same day, and that the file was not regenerated.",
-    "documented_consequence": "digest() computed workers_silent_24h = FLEET.filter(w => !seen.has(w)) and 'reported ~26 workers as silent that no longer exist'; logEvent() mislabelled retired names as registered.",
-    "fix_state": "regenerated in the repo; NOT deployed"
-  },
-  "comparator_fix_exists_but_undeployed": {
-    "file": "QNFO/qnfo-workers qnfo-fleet-control/version-compare.mjs (sha 86835e1a, 5,840 B)",
-    "status": "20/20 assertions pass per version-compare.test.mjs; NOT deployed",
-    "bug_it_fixes": "A leading 'v' makes parseInt('v1') NaN -> 0, so 'v1.1.0' parses as [0,1,0] and ranks LOWER than '1.0.0' = [1,0,0]. personal-companion is therefore labelled canonical-ahead and redeployed hourly, forever, all attempts failing.",
-    "load_bearing_rule_5": "Same numeric core with a DIFFERENT suffix is UNORDERABLE and the caller must NOT redeploy. Without it a naive semver rule would order '3.6.1' above '3.6.1-subscribers' and DOWNGRADE qnfo-gateway, and '1.14.1' above '1.14.1-gtd-guard' and strip the cloud-ops guard.",
-    "live_state": "today's scan still reports drifted=9 ahead=9; personal-companion still loops. The blocker is the deploy gap, not the analysis."
-  },
-  "auto_close_predicate_defect": {
-    "ticket": "783 - source-verified, deployed-verified, falsifiable prediction recorded",
-    "mechanism": "qnfo-backlog-exec's health-availability branch closes a ticket when the TARGET re-probes PASS. For a ticket whose subject is 'the monitor reports X incorrectly', the re-probe passes precisely BECAUSE the monitor is wrong. #693 was closed 7.2 minutes after filing on this path.",
-    "source": "qnfo-backlog-exec/worker.js sha fc0eb745, 31,806 B, VERSION 1.3.0",
-    "reclose_warning": "#693 will be auto-closed again whenever the drain selects it, because its title still matches isHealthAvailability and workerTarget still resolves qnfo-ai, whose binding probe passes. Recorded on the ticket so a future 'closed' is not misread as a fix.",
-    "prediction": "A new alerts row with source='worker-health' level='error' id>1121 plus ~5 new worker_invocations rows at ~2026-09-13T15:05Z. Silence by 16:00Z falsifies the 'alarms forever' claim.",
-    "cadence_evidence": "2026-09-11T15:05:36, 2026-09-12T03:05:46, 2026-09-12T15:05:23, 2026-09-13T03:05:43 - 4 of 4 consecutive 12-hour intervals, identical payload."
-  },
-  "fix_ordering_hazard_issue_746": {
-    "status": "OPEN, high - MUST be honoured",
-    "hazard": "Do NOT deploy the repo qnfo-fleet-dashboard/registry.js. It holds 27 scheduled / 42 probes; the DEPLOYED dashboard is v1.5.1 with 40 scheduled / 10 probes and is a STRICT SUPERSET on the scheduled axis. Deploying it would drop 13 workers carrying 50.3 percent of measured traffic, including qnfo-ai.",
-    "correct_procedure": "Take the DEPLOYED registry as the base and ADD BACK the ~34 missing health_probes."
-  },
-  "task_premise_adjudicated": {
-    "issue_736_WONTFIX": "'The multiple-times-per-day test is the wrong test for this fleet... 38 of 40 have req24 >= expected24. Zero scheduled workers fail to execute. qnfo-gateway alone serves 157,988 req/30d.'",
-    "issue_728_WONTFIX": "'The 43 unprobed figure counts pull-based services that have no /health-by-binding path, not dead workers.'"
-  },
-  "deletion_disclosure": {
-    "what": "15 fleet_deploy_state scanerr keys deleted on a justification that has since been retracted.",
-    "keys": ["scanerr:jnl-reviser", "scanerr:jnl-zenodo", "scanerr:job-market-watch", "scanerr:personal-life-indexer", "scanerr:personal-life-search", "scanerr:personal-life-maintain", "scanerr:qnfo-arxiv-radar", "scanerr:qnfo-citation-watch", "scanerr:qnfo-research-radar", "scanerr:qnfo-errata-publish", "scanerr:qnfo-errata-respond", "scanerr:qnfo-errata-watch", "scanerr:qnfo-idea-factory", "scanerr:fleet-executor", "scanerr:fleet-scheduler"],
-    "regeneration": "29 keys remain (44 before). None of the 15 restored; newest remaining updated_at is 2026-09-12T11:02:43Z. NOT self-healing.",
-    "harm_assessment": "Softened by later measurement: fleet_drift_report row 1708 shows 'cron: scanned=55 clean=33 drifted=9 ahead=9 healed=1 errors=0' at 2026-09-13 14:05:46, so the scanner IS running and reported zero errors - it had nothing to write. The deletion removed state that has not been regenerated, but the non-regeneration is probably benign rather than evidence of loss."
-  },
-  "data_caveats": [
-    "The alerts ledger was purged mid-session 2026-09-13 (criticals 717 -> 4 per issue 728).",
-    "My ticket edits used updated_at inconsistently: three ~18 minutes AHEAD of wall clock, one ~23 minutes BEHIND. The drain orders by updated_at ASC, so ordering is distorted.",
-    "~10 concurrent ops-exec sessions were active on the same prompt; shared-state reads may be seconds stale.",
-    "Real time at last check: 2026-09-13T14:37:51Z (cloud_ops_events MAX(ts)). Backlog grew 43 -> 74 during this session while drains closed 0."
+  "revision_history": [
+    "rev1 'ghosts from an old roster' - retracted.",
+    "rev2 'live workers deleted 2026-09-11' inferred from probe 200->404 - falsified.",
+    "rev3 wontfix adjudications, #746 hazard, ledger purge caveat.",
+    "rev4 retracted the cutover; wrongly claimed 55 is not authoritative.",
+    "rev5 falsified rev4's own 'self-healing' claim about the deleted scanerr keys.",
+    "rev6 REVERSED rev4: 55 IS authoritative; write-evidence does not prove worker identity.",
+    "rev7 CORRECTS THE BLOCKER. A deploy route EXISTS. Also records the deploy-level root cause and the human handoff list."
   ],
-  "self_corrections_this_session": [
-    "chains score in integration_state (claimed 100, was 91)",
-    "attachment framing",
-    "updated_at as a heartbeat",
-    "'ghosts from an old roster' mechanism",
-    "the 2026-09-11 cutover mechanism (falsified)",
-    "'the 15 deleted keys are self-healing' (falsified)",
-    "the harm assessment of that deletion (softened)",
-    "the attribution of the false 530 (ai-health-prober -> the worker-health job)",
-    "rev4's '55 is NOT authoritative' (reversed by rev6)",
-    "the write-evidence liveness rule (superseded by rev6)"
-  ]
+  "CORRECTED_BLOCKER": {
+    "previous_claim": "I stated ~8 times that 'no deploy route exists' and that every fix requires a wrangler deploy this endpoint cannot perform.",
+    "why_that_is_misleading": "A deploy route EXISTS and is ready. It is simply not triggerable from this endpoint.",
+    "the_route": "QNFO/qnfo-workers .github/workflows/apply-staged-patchers.yml (sha cfe39a393b8f2e0f6e69826263af1b769665831e, 4,414 B). Its own header calls it 'THE MISSING PIECE IN THE DEPLOY CHAIN'. It checks out the repo, sets up Node 20, rejects a patcher path outside the repo, ALWAYS runs the patcher with --check first, then runs --apply only if mode=apply, then commits only if commit=yes.",
+    "why_i_cannot_use_it": "It is MANUAL-ONLY BY DESIGN: 'on: workflow_dispatch' with no push trigger, and its own comment states 'nothing is written unless a human sets apply=apply'. Triggering it requires a POST to /repos/{owner}/{repo}/actions/workflows/{id}/dispatches. No tool on this endpoint can do that - I hold github_repo_read, github_file_write, github_pr and github_create_branch only.",
+    "already_tracked": "task_dod_register id 233, WBS P7.H3, owner=user, due 2026-09-16: 'HUMAN - run the staged fleet patches and deploy (unblocks about 34 of 51 open issues)'. DoD: dispatch the workflow with patcher=qnfo-research-exec/apply-research-exec-fix.mjs, mode=check first then mode=apply, commit=yes; then confirm the next hourly scan reports source_path ending worker.js with canonical=0.8.2-nl-fix.",
+    "do_not": "Do NOT add a push trigger to this workflow to bypass the manual gate. It is manual by design because an apply=apply run writes to the repo AND, via the scanner, to production within ~1 hour - the workflow itself calls it 'an irreversible production change'. Do NOT enable fleet_deploy_state to force it either: the live scanner carries the unguarded comparator and the stale-canon self-seal."
+  },
+  "DEPLOY_LEVEL_ROOT_CAUSE_the_shadow": {
+    "source": "the same workflow's header, quoted verbatim",
+    "resolver_order": "qnfo-fleet-deploy resolves a deploy payload as: 1. R2 qnfo-canonical/<worker>.js (only if fresh, <30 min); 2. GitHub raw, first 200 not starting with '404:': (a) qnfo-workers/main/<n>/deployed-current.worker.js, (b) qnfo-ops/main/cloud/<n>/deployed-current.worker.js, (c) qnfo-workers/main/<n>/worker.js <- the real source, (d) qnfo-ops/main/cloud/<n>/worker.js; 3. stale R2.",
+    "the_defect": "Candidate (a) SHADOWS candidate (c). 'A stale mirror at (a) makes the comparator see deployed-ahead, so scan() skips the heal forever and no committed fix lands.'",
+    "why_this_matters": "This is the deploy-level twin of the ticket-level auto-close defect. Ticket level: the drain closes a defect because the target is healthy. Deploy level: a committed fix never ships because a stale mirror makes the scanner believe the deployed build is ahead. Both make the system look converged while nothing converges.",
+    "status_for_qnfo-research-exec": "the (a) mirror is now a '404:' tombstone (commit 45a8e360), so resolution falls through to (c) worker.js - but worker.js still carries the unpatched bundle, and the patcher needs a Node runner. The workflow IS that runner."
+  },
+  "HUMAN_HANDOFF_LIST_from_task_dod_register": [
+    { "wbs": "P7.H2", "id": 232, "owner": "user", "due": "2026-09-14", "title": "HUMAN SECURITY - rotate the exposed credentials (issue 747) and require auth on the MCP SSE endpoint (issue 764)", "note": "Flagged in its own evidence pointer as 'the highest-consequence open items in the fleet'. Due tomorrow. I did not read or echo any credential." },
+    { "wbs": "P7.H1", "id": 231, "owner": "user", "due": "2026-09-15", "title": "fix the *.qnfo.org pretty-name 530s by adding Worker Custom Domains or stopping the qnfo.org-name prober", "note": "Its own evidence pointer retracts an earlier instruction to restore the workers.dev subdomain: q08.workers.dev/health returns 200, so the subdomain is alive. Root cause is a *.qnfo.org wildcard resolving unrouted pretty-names to placeholder origin 192.0.2.1." },
+    { "wbs": "P7.H3", "id": 233, "owner": "user", "due": "2026-09-16", "title": "run the staged fleet patches and deploy", "note": "unblocks about 34 of 51 open issues. See CORRECTED_BLOCKER." },
+    { "wbs": "P7.H4", "id": 234, "owner": "user", "due": "2026-09-20", "title": "execute consolidation groups G1-G4 from the fleet productivity plan", "note": "DoD = a reduced live script count with service_registry reconciled to it. Its own note warns: do NOT apply the multiple-times-per-day test to request-driven workers." },
+    { "wbs": "QNFO.FLEET.P0", "id": 230, "owner": "agent", "due": null, "title": "PRUNE: retire or merge the 10 non-productive workers identified by fleet_worker_census", "note": "DoD = 0 workers in FIRING-NO-OUTPUT and 0 in STALLED, retired set recorded in service_registry.state, drift_total stays 0." }
+  ],
+  "AUTHORITATIVE_FACTS": {
+    "live_workers": 55,
+    "evidence": "read directly from fleet_dashboard_state (id 1, updated 2026-09-13T14:31:37.318Z, version 1.5.1): integration = {registered:55, live:55, ghost:[], unregistered:[], unversioned:[], drift:{ghost:0,unregistered:0,unversioned:0}}; fleet = {workers:55, scheduled:40, probes:10, d1_databases:9}",
+    "liveness_rule": "CF scripts list decides EXISTENCE; D1 writes decide ACTIVITY. Retired workers keep writing under their own WORKER constant as modules inside hubs - qnfo-fleet-control bundles qnfo-fleet-advisor (VERSION 0.3.3) + qnfo-fleet-calibrator (1.0.0).",
+    "transport": "the dashboard's own device note states verbatim: 'worker /health probing moved to CF-API liveness (workers.dev subrequest is broken from within a Worker)'. So probe 404s from the http transport are a KNOWN-BROKEN method, not evidence of deletion. The retirement date is NOT datable from probe data.",
+    "last_deploy": "2026-09-11T10:34:07.744Z - audits.deployments reads '0 deploys; latest: qnfo-ops deploy 2026-09-11T10:34:07.744Z'. The deploy freeze is ~2 days old and begins inside the merge window.",
+    "deploy_state": "enabled=0 / auto_heal=0 is the CORRECT fail-closed state per the README, NOT a defect. Live values were 1/1 until 2026-09-08. Do NOT enable."
+  },
+  "KEY_DEFECTS": [
+    { "id": "AUTO-CLOSE-PREDICATE", "ticket": 783, "note": "closes on TARGET re-probe PASS, so a ticket whose subject is 'the monitor is wrong' auto-closes because the monitor is wrong. #693 died in 7.2 minutes. Source- and deployed-verified." },
+    { "id": "THE_SHADOW", "note": "see DEPLOY_LEVEL_ROOT_CAUSE_the_shadow. Candidate (a) shadows (c); a stale mirror yields 'deployed-ahead' and scan() skips the heal forever." },
+    { "id": "D2_COMPARATOR", "note": "num() does s.split('-')[0] so 'v1.1.0' -> [0,1,0] < '1.0.0'. The DANGEROUS polarity is the 'false' (upgrade) classification - qnfo-qwav would be OVERWRITTEN. Fix exists at qnfo-fleet-control/version-compare.mjs (20/20 tests, rule 5 UNORDERABLE for same-core-different-suffix) but is NOT deployed." },
+    { "id": "D6_SCRIPT_NAME", "note": "multipart metadata omits script_name -> CF 10021 for workers owning a Workflow binding. Second independent cause of the personal-companion hourly loop." },
+    { "id": "D5_NO_SELF", "note": "NO_SELF=['qnfo-fleet-deploy'] but the live script is qnfo-fleet-control - self-redeploy is NOT refused for the worker that executes." },
+    { "id": "D3_REDEPLOY_BYPASS", "note": "POST /redeploy bypasses the caller's guard; 518 deployed-ahead rows across 18 workers, each one authenticated POST from a revert." },
+    { "id": "FALSE_530", "ticket": 693, "note": "the worker-health job plain-fetches https://qnfo-ai.internal/health -> HTTP 530 code 1016 while bindings prove 200. 4 of 4 consecutive 12-hour intervals. Generator is the worker-health job (qnfo-cloud-ops capability ai-endpoint-health), NOT ai-health-prober." },
+    { "id": "DRIFT_TOTAL_NAME_COLLISION", "note": "report_card.drift_total is 0 (roster-integrity only) while fleet_drift_report holds 1,510 version-drift rows. 'drift_total 0' can be misread as 'no drift'." },
+    { "id": "F746_FIX_HAZARD", "ticket": 746, "note": "do NOT deploy the repo qnfo-fleet-dashboard/registry.js - it drops 13 workers carrying 50.3% of measured traffic." }
+  ],
+  "FALSIFIABLE_PREDICTION": {
+    "what": "a new alerts row with source='worker-health' level='error' id>1121, plus ~5 new worker_invocations rows",
+    "when": "~2026-09-13T15:05Z",
+    "falsifies": "silence by 16:00Z falsifies the 'alarms forever' claim in issue 783 and would imply the fix shipped",
+    "cadence_evidence": "2026-09-11T15:05:36, 2026-09-12T03:05:46, 2026-09-12T15:05:23, 2026-09-13T03:05:43 - 4 of 4 consecutive 12-hour intervals"
+  },
+  "TASK_PREMISE": {
+    "verdict": "already adjudicated WONTFIX before this session",
+    "issues": [736, 728],
+    "rationale": "38 of 40 scheduled workers meet req24 >= expected24; qnfo-gateway serves 157,988 req/30d with no cron by design. A worker is not unproductive because it has no cron."
+  },
+  "DELETION_DISCLOSURE": {
+    "what": "15 fleet_deploy_state scanerr keys deleted on a justification later retracted.",
+    "keys": ["scanerr:jnl-reviser", "scanerr:jnl-zenodo", "scanerr:job-market-watch", "scanerr:personal-life-indexer", "scanerr:personal-life-search", "scanerr:personal-life-maintain", "scanerr:qnfo-arxiv-radar", "scanerr:qnfo-citation-watch", "scanerr:qnfo-research-radar", "scanerr:qnfo-errata-publish", "scanerr:qnfo-errata-respond", "scanerr:qnfo-errata-watch", "scanerr:qnfo-idea-factory", "scanerr:fleet-executor", "scanerr:fleet-scheduler"],
+    "regeneration": "29 keys remain of 44. None restored. NOT self-healing. Probably benign: the scanner ran at 2026-09-13 14:05:46 with errors=0, so it had nothing to write."
+  },
+  "DATA_CAVEATS": [
+    "The alerts ledger was purged mid-session 2026-09-13 (criticals 717 -> 4 per issue 728).",
+    "My ticket edits used updated_at inconsistently (some ~18 min ahead of wall clock, one ~23 min behind).",
+    "~10 concurrent ops-exec sessions were active on the same prompt.",
+    "Real time at last check: 2026-09-13T14:37:51Z. Backlog grew 43 -> 77 during this session while drains closed 0.",
+    "I have NOT read qnfo-fleet-control/worker.js (75,875 B, past the 32,768-char cap) - defects D1-D6 come from a prior session's read and from version-compare.mjs."
+  ],
+  "SELF_CORRECTIONS": ["chains score", "attachment framing", "updated_at heartbeat", "ghosts mechanism", "09-11 cutover", "self-healing claim", "its harm assessment", "530 attribution", "55 not authoritative", "write-evidence rule", "enabled=0 as defect", "the over-correction that followed", "no-deploy-route exists"]
 }
