@@ -1,4 +1,19 @@
-// qnfo-backlog-exec v1.2.7 - agent_issues backlog executor (cloud-native ops).
+// qnfo-backlog-exec v1.2.8 - agent_issues backlog executor + issue_ledger resolver (cloud-native ops).
+// v1.2.8 (PATCH-2026-09-13-issue-ledger-resolver, qnfo-ops): issue_ledger resolution sweep +
+//  dual-counter /health. Measured live 2026-09-13: /health openBacklog=12 (agent_issues) while
+//  issue_ledger held 305 status='open' fingerprints - a 25x apparent divergence. Investigation
+//  showed the two are DIFFERENT OBJECT TYPES, not a broken counter: agent_issues = actionable
+//  tickets with a resolution predicate; issue_ledger = deduplicated alert fingerprints keyed by
+//  fingerprint (PRIMARY KEY) where status='open' means "condition not yet resolved". The ledger
+//  had NO consumer and NO resolver, so unresolved fingerprints accumulated forever; 216 of 305
+//  (71%) had occurrences<=1 (seen once, never again) and the oldest dated to 2026-09-02.
+//  Fix: (a) sweepIssueLedger() auto-resolves any fingerprint whose last_seen is older than the
+//  stale window - safe by construction because fingerprint is the PK, so a RECURRENCE updates
+//  last_seen in place; a stale last_seen therefore PROVES the condition stopped recurring.
+//  (b) /health now reports openLedger alongside openBacklog so the two counters are never
+//  conflated by a dashboard again.
+//  Verified at write time: issue_ledger live ingest (41 rows first_seen 2026-09-13, latest
+//  last_seen 2026-09-13T12:21:31Z), 305 open / 19 resolved / 1 acknowledged, 216 one-shot.
 // v1.2.7 (PATCH-2026-09-13-stale-model-noise, qnfo-ops): model-health / ai-calibration
 //  resolution predicates. Measured live 2026-09-13: the drain ran every ~2 min and reported
 //  {processed:25, closed:0, rechecked:25, escalated:0} with EVERY row carrying
@@ -32,7 +47,7 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.2.7";
+const VERSION = "1.2.8";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -130,8 +145,40 @@ async function sweepAdvisorNoise(env) {
   return closed;
 }
 
+// v1.2.8: issue_ledger resolver. issue_ledger is a DEDUPLICATED ALERT-FINGERPRINT ledger
+// (PK=fingerprint), NOT a ticket backlog: status='open' means "condition not yet resolved".
+// It had no consumer and no resolver, so unresolved fingerprints accumulated forever (305 open,
+// 216 of them one-shot, oldest 2026-09-02). Resolve on evidence: fingerprint is the PRIMARY KEY,
+// so a RECURRENCE updates last_seen IN PLACE - a stale last_seen therefore PROVES the condition
+// stopped recurring. History is preserved (status/resolved_at/resolution_note; never DELETE).
+// Window is env-tunable via LEDGER_STALE_HOURS (default 72).
+async function sweepIssueLedger(env) {
+  let resolved = 0;
+  const now = nowEpoch();
+  const hours = Number(env.LEDGER_STALE_HOURS) > 0 ? Math.floor(Number(env.LEDGER_STALE_HOURS)) : 72;
+  try {
+    const stale = await env.AUDIT.prepare(
+      "SELECT fingerprint, source, title, last_seen FROM issue_ledger WHERE status='open' AND julianday(last_seen) < julianday('now', ?1) ORDER BY last_seen LIMIT 500"
+    ).bind("-" + hours + " hours").all();
+    const rows = stale.results || [];
+    for (const r of rows) {
+      await env.AUDIT.prepare(
+        "UPDATE issue_ledger SET status='resolved', resolved_at=?1, resolution_note=?2, updated_at=?1 WHERE fingerprint=?3 AND status='open'"
+      ).bind(ts(), "auto-resolved v1.2.8: not re-seen in " + hours + "h (fingerprint PK - a recurrence would have advanced last_seen)", r.fingerprint).run();
+      resolved++;
+    }
+    if (resolved > 0) {
+      await recordEvent(env, "job-run", "backlog-exec resolved " + resolved + " stale issue_ledger fingerprint(s) (not re-seen in " + hours + "h)", { action: "issue_ledger-sweep", resolved: resolved, window_hours: hours }, WORKER, "ok");
+    }
+  } catch (e) {
+    await recordEvent(env, "job-run", "backlog-exec issue_ledger sweep failed: " + String((e && e.message) || e), { action: "issue_ledger-sweep", error: true }, WORKER, "error");
+  }
+  return resolved;
+}
+
 async function run(env) {
   const noiseClosed = await sweepAdvisorNoise(env);
+  const ledgerResolved = await sweepIssueLedger(env);
   const rows = await env.AUDIT.prepare("SELECT id, title, description, source, category, priority, status, created_at, updated_at FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, updated_at ASC, id LIMIT ?1").bind(MAX_ROW).all();
   const items = rows.results || [];
   const now = nowEpoch();
@@ -252,9 +299,9 @@ async function run(env) {
     rechecked++;
     detail.push({ id: row.id, title: title.slice(0,60), action: "recheck", note: name ? ("probe target " + name) : "no probe target" });
   }
-  const summary = { noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
+  const summary = { noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
   if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter(d=>d.action==="escalate").map(d=>d.target).join(", "));
-  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
+  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
 }
 
@@ -272,7 +319,8 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       const open = await env.AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status='open'").first().catch(() => null);
-      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1 });
+      const led = await env.AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status='open'").first().catch(() => null);
+      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1 });
     }
     if (url.pathname === "/run" && request.method === "POST") {
       const out = await run(env);
