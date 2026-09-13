@@ -23,7 +23,7 @@ documented elsewhere".
 | 9 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM2-route-pools-exclude-flash.md` | `1b7624d4` | **authoritative** on the routing question |
 | 10 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM3-live-reverification.md` | `9464ede2` | **§6 superseded by correction 17** |
 | 11 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM4-gw-fail-resolve-refile-loop.md` | `2c9dd883` | core proof stands; **actor corrected by 18** |
-| 12 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM5-instrumentation-correction.md` | `b4a2f283` | **§6 withdrawn by 20**; §1 refined by 19 |
+| 12 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM5-instrumentation-correction.md` | `b4a2f283` | **§6 withdrawn by 20**; §1 refined by 19; **quantified by 31** |
 | 13 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM6-first-hand-fleet-probe.md` | `5749c5e4` | §1-3, §5-7 stand; **§4 WITHDRAWN by row 14** |
 | 14 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM7-correction-object-object-is-logger.md` | `8da482e8` | **authoritative** — withdraws row 13 §4 |
 | 15 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM8-reconciliation-with-qnfo-ops-findings.md` | `9c4dd73c` | reconciles with `qnfo-ops/FINDING-*`; **§1 REFUTED by row 16** |
@@ -33,9 +33,9 @@ documented elsewhere".
 ## Corrections issued after this index was first written (rows 10-17)
 
 1. **The gw-fail burst recurred** — 7 rows (ids 678-684) at 2026-09-13T07:31:00.954Z, 42.00 h after
-   the 09-11 burst. Eight tickets were resolved in one instant at 2026-09-13T07:25:07Z; 7 rows were
-   re-filed 5 m 53 s later. The same title was filed three times: 489 (`resolved` since 09-08),
-   654, 678. **Do not run `ops_issue_run` against `[gw-fail]` rows.**
+   the 09-11 burst. Eight tickets resolved in one instant at 2026-09-13T07:25:07Z; 7 rows re-filed
+   5 m 53 s later. The same title was filed three times: 489 (`resolved` since 09-08), 654, 678.
+   **Do not run `ops_issue_run` against `[gw-fail]` rows.**
 2. **The self-rewrite loop has never deployed anything** — every `self_rewrite_state` row is
    `reverted-or-rejected`.
 3. **The 71.2% code->flash share is a LIFETIME average**, not current routing.
@@ -52,7 +52,6 @@ documented elsewhere".
 13. **Mobile `agent-tools` averages 151 s** (n=182); max 578,831 ms.
 14. **Research candidates have not advanced since 2026-09-04.**
 15. **`ops_ai_log.prompt` is corrupted by the logger** for messages-array requests (122 rows).
-    Row 13 §4's attribution to the mobile client is withdrawn.
 16. **A deploy path exists** — `qnfo-fleet-deploy`, `POST /redeploy`, token-gated, hourly. The
     accurate blocker is **unreachable from this endpoint by design**.
 17. **`qwen3.8-27b`'s 400s are probe-side, not "real load"** — *"System message must be at the
@@ -76,26 +75,48 @@ documented elsewhere".
     `deployed-current.worker.js`; the deploy path pulls `r2:qnfo-canonical/<worker>.js`.
 26. **Fleet drift: 18 of 55 workers mismatch**; a canonical redeploy would **regress** the 9
     `deployed-ahead` — including `qnfo-ai` 5.25.1 -> 5.21.3. Auto-heal armed, `healed=0` always.
-27. **My first-turn cost figures were stale by ~43%.** Live `cf_analytics` (2026-09-13T13:30:09Z):
-    **1,130,379 neurons / $12.43** (30 d), **279,664 worker requests / 187 errors** — not
-    790,847 / $8.70 / 263,723 / 146. Any budget argument built on the old numbers is wrong.
+27. **My first-turn cost figures were stale by ~43%.** Live `cf_analytics`: **1,130,379 neurons /
+    $12.43** (30 d), **279,664 worker requests / 187 errors** — not 790,847 / $8.70 / 263,723 / 146.
 28. **The `gemma-2b-it-lora` claim is REFUTED — and it underpinned P0-2.** Live `cf_analytics`
     `by_model` contains **no gemma-2b entry at all**. The largest listed consumer is
-    **`kimi-k2.6` 94,553 neurons**, then `qwen2.5-coder-32b-instruct` 25,638, `gpt-oss-120b` 25,018,
-    `glm-5.3-flash` 22,356, `qwen3-30b-a3b-fp8` 4,713, `llama-3.2-11b-vision-instruct` 1,647,
-    `glm-4.7-flash` 1,118, `qwen3.8-27b` 290. **The "a 2B model burns more neurons than most of the
-    roster" argument has no live support.** The largest spend is on *depth* models. (P0-2's
-    conclusion still stands for a different reason — those models are already absent from the roster.)
+    **`kimi-k2.6` 94,553 neurons**. **The "a 2B model burns more neurons than most of the roster"
+    argument has no live support** — the largest spend is on *depth* models.
 29. **The async continuation path is stuck.** `ops_jobs`: **32 of 87 rows (37%) are non-terminal
-    `continuing`**, every one created 2026-09-13 between 06:29 and 13:28Z; the oldest has been stuck
-    6+ hours. Statuses: succeeded 42, **continuing 32**, failed 8, running 5. Payloads run
-    170 KB-837 KB each. This is the mechanism behind the ~52% unclean-ending rate in correction 8.
+    `continuing`**, all created 2026-09-13 between 06:29 and 13:28Z; oldest stuck 6+ hours.
+    Payloads 170 KB-837 KB. The mechanism behind the ~52% unclean-ending rate in correction 8.
 30. **Invocation attribution is partial.** `cf_analytics.by_worker` lists 8 entries summing to
-    ~23,000 of 279,664 requests, with `__unknown__` at 20,328. Do not treat it as a full census.
-    (The by_model list is likewise capped: the 8 entries account for ~175,333 of 1,130,379 neurons,
-    15.5%.)
+    ~23,000 of 279,664 requests; `by_model`'s 8 entries cover only ~175,333 of 1,130,379 neurons (15.5%).
+31. **THE CALIBRATION SUITE'S FAILURE SIGNAL IS ~85% ARTIFACT.** `ai_calibration_results` over 335
+    runs: `endpoint` fail **170**, `latency` fail **114**, `tools` fail 39, `model` fail 7,
+    `routing` fail 2 (~332 total ≈ 1 per run — which is the `fail:1` every run reports).
+    - **167 of the 170 `endpoint` failures are ONE probe bug.** `deepseek-direct/models`: pass **168**,
+      fail **167**, and the fail detail is **`http=200`**. The GET-endpoint pass condition is
+      `r.status === 200 && r.text.indexOf("deepseek-v4-flash") >= 0` — it requires the literal model
+      name to appear in a `/models` listing. The request succeeds; the assertion is wrong. The other
+      3 are real 60 s timeouts (`personal-api` 2, `qnfo-ops` 1). **Real endpoint services are
+      1002/1005 = 99.7% healthy.**
+    - **`tools`: 296 pass, 24 fail `http=200`, 15 timeout.** The 24 are `deepseek-v4-flash` answering
+      without emitting a tool call — model behaviour, not infra.
+    - So **167 (50%) of all failures are one probe bug and 114 (34%) are latency-threshold trips;
+      only ~50 are genuine.** Every 30-min run reports `fail:1`, and that 1 is usually this bug — a
+      constant, meaningless failure signal sustained for 335 runs.
+    - **Consequence for the mandate: you cannot enforce "no dumb models" with this instrument.** Adding
+      a code-correctness probe to a suite whose failure signal is 85% artifact would produce unusable
+      signal until the noise is fixed.
+32. **`latency_max_ms=8000` fires, and it hits the code tier — but it does not change routing.**
+    `probe='latency'` fail n=**114** across 15 models: glm-4.7-flash 16, qwen3-30b 16, glm-5.3-flash 11,
+    deepseek-v4-flash-wa 9, **deepseek-v4-pro-wa 9**, glm-5.2 9, **gpt-oss-120b 8**,
+    **kimi-k2.7-code 8**, deepseek-v4-flash-thinking 7, **kimi-k2.6 7**, deepseek-r1-qwen-32b 4,
+    **glm-5.3 4**, gemma-4-26b 3, **qwen2.5-coder-32b 2**, deepseek-v4-pro 1. The models the code pool
+    routes to are recorded as failing for being slow on a *minimal* probe. **But the penalty is a
+    probe-result "fail" only** — it does not degrade the model or alter routing (all
+    `last_latency_ms` are <6,500 ms). So my earlier "the fleet is structurally required to prefer fast
+    over deep" was **too strong**: the config penalises depth in the *reported metrics*, not in the
+    routing decision.
+33. **Model liveness is effectively perfect**: `probe='model'` is **5,325 pass / 7 fail (0.13%)**. Only
+    `llama-3.2-11b-vision` (5), `deepseek-r1-qwen-32b` (1) and `glm-4.7-flash` (1) ever fail.
 
-## If you read only four things
+## If you read only five things
 
 The measurements survived; several causal narratives did not.
 
@@ -107,6 +128,9 @@ The measurements survived; several causal narratives did not.
    error `10021`, indefinitely.
 4. **The request logger corrupts `prompt`** for messages-array requests (122 rows) while
    `ops_jobs.payload` stores the same conversations as valid JSON — a logger defect, not a client one.
+5. **The calibration suite cannot measure model quality.** ~85% of its failures are artifacts — 167 of
+   them one probe bug that reports `http=200` as a failure. Fix the instrument before adding any
+   depth/correctness probe to it.
 
 ## Already documented elsewhere — do not re-derive
 
@@ -128,8 +152,7 @@ read it.
 ## Refuted — do not act on these
 
 1. **P0-1 as written** ("add a router rule for code").
-2. **P0-2's stated reason** ("remove `llama-3.2-1b`, `gemma-2b`, `granite-h-micro`,
-   `gemma-2b-it-lora`") — they are already absent, and the neuron-burn justification is refuted
+2. **P0-2's stated reason** — they are already absent, and the neuron-burn justification is refuted
    (correction 28).
 3. **F7/F8** ("the gw-fail guard cannot match its own writer") — true only of the shadowed `worker.js`.
 4. **F3** ("only 10 models are probed") — live `TIER0_WA` has 15 entries -> 18 probed.
@@ -137,13 +160,15 @@ read it.
 6. **"71 workers deployed."** Probe says 55.
 7. **"`qnfo-ai` version drift 5.21.2 / 5.21.3."** Both sources report 5.25.1.
 8. **"The mobile client is sending malformed prompts."** Withdrawn — the logger is.
-9. **"No deploy path exists."** False — it exists and runs hourly; it is unreachable *from here*.
+9. **"No deploy path exists."** False — it exists and runs hourly; unreachable *from here*.
 10. **"The hourly deployer is failing for `qnfo-ai-calibration`."** Refuted by `fleet_deploys` id 9.
-11. **"The gate is absent from the live worker."** The live version is **1.1.5**, which no artifact in
-    this set describes. The *refiling* is proven; the gate's status is unknown.
+11. **"The gate is absent from the live worker."** Live is **1.1.5**; the refiling is proven, the
+    gate's status is unknown.
 12. **"790,847 neurons / $8.70 / 263,723 requests."** Stale by ~43%. See correction 27.
 13. **"A 2B model (gemma-2b-it-lora) is the second-largest neuron consumer."** No gemma-2b entry
     exists in live `cf_analytics`. See correction 28.
+14. **"`latency_max_ms` forces the fleet to prefer fast over deep."** Too strong — it records depth as
+    a probe failure but does not alter routing. See correction 32.
 
 ## Verified and worth acting on
 
@@ -155,6 +180,9 @@ read it.
 | 18 of 55 workers drift; a canonical redeploy would regress the 9 `deployed-ahead` | `fleet_drift_report` |
 | 32 of 87 `ops_jobs` stuck non-terminal, all from 2026-09-13 | `ops_jobs` |
 | Live AI spend 1,130,379 neurons / $12.43 (30 d); 279,664 requests / 187 errors | `cf_analytics` |
+| **The suite's failure signal is ~85% artifact; 167 failures are one probe bug reporting `http=200`** | `ai_calibration_results` |
+| **`latency_max_ms=8000` trips 114 times across 15 models, including the code tier** | `ai_calibration_results` |
+| Model liveness: 5,325 pass / 7 fail (0.13%) | `ai_calibration_results` |
 | `contextAwareTarget` tests `glm-5.3-flash` (1,310,720 ctx) but `return "qwq-32b"` (24,000 ctx, `tools:false`) | live bundle sha `9b536969…`; v5.13.2 `166b022a` |
 | `ops_req_log` has no status/duration column | D1 schema |
 | Tool reliability: `web_search` 51.9% error (~19.5 s timeout), `web_fetch` 46.5%, `email_respond` 0-for-15 | `cloud_ops_events` |
@@ -186,6 +214,6 @@ returns 422; `main` is under concurrent write (one write failed
 2. **The `strategy` column is uninterpreted** — five values, and 19 rows pair `strategy="single"` with
    `model="ensemble"`.
 
-**Provenance note:** 20 artifacts from two sessions, **ten self-corrections** (rows 1-30 above include
-the earlier session's). The set is closed at ADDENDUM 10. Read §"If you read only four things" rather
-than the whole set.
+**Provenance note:** 20 artifacts from two sessions, **eleven self-corrections**. The set is closed at
+ADDENDUM 10; further findings are recorded as corrections here rather than as new addenda. Read
+§"If you read only five things" rather than the whole set.
