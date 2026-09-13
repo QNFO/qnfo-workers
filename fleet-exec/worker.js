@@ -131,7 +131,22 @@ var execDefault = {
       if (!taskId) return json({ ok: false, error: "missing task_id" }, 400);
       const cronName = body.cron_name || "manual";
       const task = await env.AUDIT.prepare("SELECT * FROM fleet_tasks WHERE id = ?1 AND enabled = 1").bind(taskId).first();
-      if (!task) return json({ ok: false, error: "task not found or disabled" }, 404);
+      if (!task) {
+        // ORPHAN-GUARD-1: the scheduler inserts a 'queued' fleet_runs row BEFORE dispatch.
+        // Returning here without touching it leaked one permanently-'queued' row per tick
+        // (agent_issues 713). Claim and close that row before returning.
+        try {
+          const orphan = await env.AUDIT.prepare(
+            "SELECT id FROM fleet_runs WHERE task_id = ?1 AND cron_name = ?2 AND status = 'queued' ORDER BY id DESC LIMIT 1"
+          ).bind(taskId, cronName).first();
+          if (orphan) {
+            await env.AUDIT.prepare(
+              "UPDATE fleet_runs SET status = 'orphaned', finished_at = ?1, error = 'no such enabled task in fleet_tasks' WHERE id = ?2"
+            ).bind(new Date().toISOString(), orphan.id).run();
+          }
+        } catch (e) {}
+        return json({ ok: false, error: "task not found or disabled" }, 404);
+      }
       const started = new Date().toISOString();
       const prior = await env.AUDIT.prepare("SELECT id FROM fleet_runs WHERE task_id = ?1 AND cron_name = ?2 ORDER BY id DESC LIMIT 1").bind(taskId, cronName).first();
       const runId = prior ? prior.id : null;
@@ -178,9 +193,16 @@ var execDefault = {
 return execDefault;
 })();
 
-// fleet-scheduler v0.1.0 - dynamic cron dispatcher
+// fleet-scheduler v0.1.1 - dynamic cron dispatcher
 // Per-minute tick reads fleet_crons from qnfo-audit D1, dispatches due jobs to fleet-executor.
-const VERSION = "fleet-scheduler/0.1.0";
+// v0.1.1 (CRON-ORPHAN-GUARD-1, 2026-09-13): a fleet_crons row whose task_id has no enabled
+// fleet_tasks row used to be dispatched anyway; the executor returned 404 BEFORE updating the
+// 'queued' fleet_runs row the scheduler had just inserted, so every tick leaked one permanently
+// 'queued' row (agent_issues 713: "DISPATCH-QUEUE-NEVER-DRAINS"). The tick now verifies the task
+// exists AND is enabled before dispatch, auto-disables the dangling cron row (reversible), and
+// reaps any 'queued' row that no executor claimed within the claim window.
+const VERSION = "fleet-scheduler/0.1.1";
+const CLAIM_WINDOW_MS = 60 * 60 * 1000;
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
@@ -224,6 +246,17 @@ function nextFire(expr, from) {
   return null;
 }
 
+async function reapOrphanQueued(env, nowIso, cutoffIso) {
+  try {
+    const res = await env.AUDIT.prepare(
+      "UPDATE fleet_runs SET status = 'orphaned', finished_at = ?1, error = 'queued row never claimed by executor within claim window' WHERE status = 'queued' AND started_at < ?2"
+    ).bind(nowIso, cutoffIso).run();
+    return (res && res.meta && res.meta.changes) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
 async function runTick(env) {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -233,6 +266,23 @@ async function runTick(env) {
     const row = due.results[i];
     const next = nextFire(row.cron_expr, now);
     const nextIso = next ? next.toISOString() : null;
+
+    // CRON-ORPHAN-GUARD-1: never dispatch a cron whose task is absent or disabled.
+    let taskOk = false;
+    try {
+      const t = await env.AUDIT.prepare("SELECT id FROM fleet_tasks WHERE id = ?1 AND enabled = 1").bind(row.task_id).first();
+      taskOk = !!t;
+    } catch (e) {
+      taskOk = false;
+    }
+    if (!taskOk) {
+      // Auto-disable the dangling cron (reversible: set enabled=1 to restore) and record why.
+      await env.AUDIT.prepare("UPDATE fleet_crons SET enabled = 0, next_fire = ?1, updated_at = ?2 WHERE name = ?3")
+        .bind(nextIso, nowIso, row.name).run();
+      fired.push({ name: row.name, task: row.task_id, skipped: "task missing or disabled; cron auto-disabled" });
+      continue;
+    }
+
     await env.AUDIT.prepare("INSERT INTO fleet_runs (task_id, cron_name, status, started_at) VALUES (?1, ?2, 'queued', ?3)").bind(row.task_id, row.name, nowIso).run();
     try {
       const resp = await execMod.fetch(new Request("https://fleet-executor/run", {
@@ -246,7 +296,8 @@ async function runTick(env) {
     }
     await env.AUDIT.prepare("UPDATE fleet_crons SET last_fired = ?1, next_fire = ?2, updated_at = ?1 WHERE name = ?3").bind(nowIso, nextIso, row.name).run();
   }
-  return fired;
+  const reaped = await reapOrphanQueued(env, nowIso, new Date(now.getTime() - CLAIM_WINDOW_MS).toISOString());
+  return { fired: fired, reaped_orphans: reaped };
 }
 
 var schedDefault = {
@@ -259,8 +310,8 @@ var schedDefault = {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, version: VERSION });
     if (url.pathname === "/tick" && request.method === "POST") {
-      const fired = await runTick(env);
-      return json({ ok: true, fired: fired });
+      const out = await runTick(env);
+      return json({ ok: true, fired: out.fired, reaped_orphans: out.reaped_orphans });
     }
     return json({ ok: false, error: "not found" }, 404);
   }
