@@ -1,138 +1,68 @@
--- QRI-1b — the body_md corrections QRI-1 omits, plus two hazard fixes for QRI-1.
--- Author: qnfo-ops, 2026-09-13. EXECUTOR: any principal with D1 write on PERSONAL.
+-- QRI-1b — SUPERSEDED. DO NOT RUN THIS FILE.
+-- Author: qnfo-ops, 2026-09-13. Superseded the same day it was committed.
 --
--- WHY THIS FILE EXISTS
--- QRI-1 sets quality_json.gate='blocked-grounding' and records errata metadata. It does
--- not modify body_md. Verified against the live page and PERSONAL D1 on 2026-09-13:
--- after QRI-1 alone, reading.q08.org still serves every false statement. A flag is not
--- a correction. This file is the correction.
+-- Superseded by:
+--   sql/QRI-2-body-corrections-2026-09-13.sql    (the body_md correction)
+--   sql/QRI-3-feedback-provenance-2026-09-13.sql (the provenance partition)
 --
--- VERIFIED OCCURRENCE COUNTS (qnfo-ops, ops_d1_query on PERSONAL, 2026-09-13):
---   instr(body_md,'Rowan')                           = 289 ; 2nd occurrence = 0
---   instr(body_md,'Five days later')                 = 332
---   instr(body_md,'Quantum Programming Languages')   = 392
---   instr(body_md,'same week')                       = 489 ; 2nd occurrence = 0
---   instr(body_md,'roughly the same')                = 540
---   instr(body_md,'dining hall')                     = 27 ; 'forty people' = 76
--- Each false phrase occurs exactly once, so a single replace() pass per phrase is
--- sufficient. Both statements below are naturally idempotent: once applied, the
--- WHERE guard no longer matches and a re-run is a no-op.
+-- WHY THIS FILE MUST NOT BE EXECUTED, most severe first.
 --
--- SCOPE: id 8 only. Verified independently 2026-09-13: of ids 6,7,9,10,11,12 the
--- flagged markers (dining hall / five days later / Quantum Programming Languages /
--- Rowan rated / roughly the same) are all zero. Do not touch the other six rows.
-
--- ---------------------------------------------------------------------------
--- A1. The record-derived falsehoods, the wrong name, and the address to the reader.
---     Covers defects 1, 2, 3, 4 and 6 of ERRATA-2026-09-13.
--- ---------------------------------------------------------------------------
-UPDATE companion_pieces
-   SET body_md = replace(
-         body_md,
-         'Rowan rated it 5 out of 5 for felt energy. Five days later, at QPL 2026 in Amsterdam — the Workshop on Quantum Programming Languages, a status tournament with proceedings and citations — he rated the same week 1 out of 5. Drained. The two events cost roughly the same in travel and time.',
-         'The record logs the first week 5 out of 5 for felt energy and the second 1 out of 5. The two events were seven days apart, not consecutive, and the record holds no cost for either.'
-       ),
-       quality_json = json_set(
-         quality_json,
-         '$.errata_applied', 'QRI-1b 2026-09-13',
-         '$.errata_at',      '2026-09-13'
-       )
- WHERE id = 8
-   AND instr(body_md, 'Rowan rated it 5 out of 5 for felt energy.') > 0;
-
--- ---------------------------------------------------------------------------
--- A2. The invented scene (defect 5).
---     "dining hall" and "about forty people" appear in no record row; the record holds
---     venue "Wolfson College, Cambridge" and the dates only.
+-- 1. IT WOULD DROP TWO REAL READER SIGNALS.
+--    Section B2/B3 tagged companion_feedback ids 46 and 47 as 'review' on a timing-only
+--    argument (5.769 s apart, same slug). QRI-3 decides the same rows with a second,
+--    independent signal: both point at a REAL companion_pieces row, while all 42 machine
+--    rows point at slugs that were never published. The partition {1-42 probe} /
+--    {43-48 human} is confirmed by two agreeing signals; timing alone could not settle it.
+--    Running B3 after QRI-3 would overwrite 'human' with 'review' and drop two genuine
+--    signals from loadContinuity() — the exact defect that section was written to fix.
+--    My inference was wrong.
 --
---     NOTE — deliberate deviation from ERRATA-2026-09-13, flagged for review:
---     the errata's proposed replacement restates the duration ("and ran five days"),
---     but the immediately following existing sentence already supplies it ("The occasion
---     was LoF26 ... and it ran five days on conversation, play, and free participation.").
---     Using the errata text verbatim would print the duration twice. This replacement
---     keeps the verified date and venue and drops the invented particulars; the existing
---     next sentence carries the rest. If the operator prefers the errata wording, swap
---     the second argument and delete the following sentence in the same pass.
--- ---------------------------------------------------------------------------
-UPDATE companion_pieces
-   SET body_md = replace(
-         body_md,
-         'On 10 August 2026, in the dining hall at Wolfson College, Cambridge, about forty people sat in a circle and took turns being wrong out loud.',
-         'On 10 August 2026 LoF26 opened at Wolfson College, Cambridge.'
-       )
- WHERE id = 8
-   AND instr(body_md, 'dining hall') > 0;
-
--- Gate flag: QRI-1 sets 'blocked-grounding'. Choose ONE policy and uncomment.
---   (a) piece stays withdrawn after correction (most conservative):
--- UPDATE companion_pieces SET quality_json = json_set(quality_json,'$.gate','blocked-grounding')
---  WHERE id = 8;
---   (b) piece returns to service once corrected:
--- UPDATE companion_pieces SET quality_json = json_set(quality_json,'$.gate','passed')
---  WHERE id = 8;
-
--- ===========================================================================
--- B. Hazard fixes for QRI-1 itself. QRI-1 is correct in discipline and stale in two
---    mechanical details; both are executor failure modes, not disagreements.
--- ===========================================================================
-
--- B1. QRI-1 §3 runs:  ALTER TABLE companion_feedback ADD COLUMN source TEXT DEFAULT 'unknown';
---     SQLite has no ADD COLUMN IF NOT EXISTS. A second run aborts with
---     "duplicate column name: source", and every statement after it in the same
---     batch is then skipped — including the source tagging and the verification.
---     Check before running (expect 0 rows on a fresh database):
--- SELECT name FROM pragma_table_info('companion_feedback') WHERE name = 'source';
---     Run the ALTER once, only if that returns no row.
-
--- B2. QRI-1 hardcodes the human rows as ids 43,44,45. The table held 45 rows when that
---     was written; it now holds 48. Ids 46,47,48 would land as 'unknown' and be
---     silently excluded from continuity by the source filter, with no error.
---     Derive the split from the burst structure instead of from ids.
---     Verified 2026-09-13 (run_code over companion_feedback.created_at): three sub-second
---     bursts carry ids 1-42 — ids 1-6 span 132 ms, ids 7-12 span 51 ms, ids 13-42 span
---     724 ms — all before 09:00Z on 2026-09-12. Every later row is minutes or hours apart.
-UPDATE companion_feedback SET source = 'probe'
- WHERE created_at < '2026-09-12T09:00:00.000Z';           -- expect 42 rows
-
-UPDATE companion_feedback SET source = 'human'
- WHERE created_at >= '2026-09-12T09:00:00.000Z'
-   AND id NOT IN (46, 47);                                 -- expect 4 rows: 43,44,45,48
-
--- B3. Ids 46 and 47 are 5.769 s apart on the SAME slug (2026-09-12-serial-08cce3e9e76e423a).
---     That is a double-submit signature, not two independent human reactions. Do not
---     count it as signal; review it as a client defect.
-UPDATE companion_feedback SET source = 'review'
- WHERE id IN (46, 47);                                     -- expect 2 rows
-
--- B4. QRI-1 §3 also notes loadContinuity() uses LEFT JOIN and renders raw slugs for
---     orphan signals. Confirmed 2026-09-13: 42 feedback rows point at 5 slugs that are
---     in no companion_pieces row (c039c49b063c928c, dbee1757a2ccd8b1, dbfe847ab3520b42,
---     ce1fc4e42f49391d, 58450bd270190231) — every probe row is an orphan; every human row
---     points at a real piece. Apply in the worker, not here:
---       JOIN companion_pieces p ON p.slug = f.slug
---       AND (f.source IS NULL OR f.source = 'human')
-
--- ===========================================================================
--- C. Verification. Run after A and B. None of these should be taken on trust.
--- ===========================================================================
-SELECT id, slug,
-       instr(body_md,'Five days later')                 AS still_false_gap,
-       instr(body_md,'Quantum Programming Languages')   AS still_wrong_name,
-       instr(body_md,'dining hall')                     AS still_invented_scene,
-       instr(body_md,'Rowan')                           AS still_names_reader,
-       length(body_md)                                  AS len
-  FROM companion_pieces
- ORDER BY id;
--- expect: id 8 has 0 in all four columns; ids 6,7,9,10,11,12 unchanged.
-
-SELECT source, COUNT(*) AS n FROM companion_feedback GROUP BY source;
--- expect: probe 42, human 4, review 2. If any row reads 'unknown', B1 ran twice or the
--- ALTER was skipped and B2/B3 did not execute.
-
-SELECT id, json_extract(quality_json,'$.gate')      AS gate,
-           json_extract(quality_json,'$.verdict')   AS verdict,
-           json_extract(quality_json,'$.errata_applied') AS errata_applied
-  FROM companion_pieces ORDER BY id;
--- expect: errata_applied = 'QRI-1b 2026-09-13' on id 8 only.
--- Note: 6 of 7 pieces carry verdict='reject' — that is P_CRITIQUE's expected output, not
--- a withdrawal signal. Withdraw on measured violations, never on verdict alone.
+-- 2. IT MISSES A SECOND STANDING-FILTER VIOLATION.
+--    Section A checked only the string 'Quantum Programming Languages' (instr = 392).
+--    The bare token 'QPL' occurs TWICE. Verified by qnfo-ops against PERSONAL.body_md,
+--    2026-09-13:
+--      instr(body_md,'QPL')                                       = 352
+--      instr(substr(body_md, instr(body_md,'QPL')+1),'QPL')       = 13602  -> abs 13954
+--      instr(body_md,'the QPL 2026 room')                         = 13950
+--    QRI-2 step 2b closes the second occurrence. This file does not, so it would have
+--    shipped text still naming what the reader asked not to be sent.
+--
+-- 3. IT WOULD CORRUPT QRI-2's word_count.
+--    If A2 here ran BEFORE QRI-2 step 1, QRI-2's step-1 anchor is destroyed and that step
+--    silently no-ops; QRI-2 step 3 then writes a literal word_count describing a body that
+--    no longer exists. Do not interleave the two files.
+--
+-- 4. A2's replacement here is inferior.
+--    QRI-2 replaces the whole two-sentence span, which avoids both the duplicated duration
+--    ("ran five days") and the duplicated name ("LoF26 ... The occasion was LoF26") that a
+--    single-sentence replacement produces. My rev 2 patched that by weakening the sentence
+--    to "the conference"; QRI-2 solves it properly.
+--
+-- ONE FINDING HERE IS IN NEITHER QRI-2 NOR QRI-3. Carry it forward.
+--   The A1 replacement text — adopted verbatim by QRI-2 step 2 — deletes "a status
+--   tournament" along with the false material. That phrase is RECORD-SUPPORTED:
+--   PERSONAL.events, id='evt-qpl26', notes = "Epistemic rigidity; motive currency =
+--   status. Draining despite local." Dropping it removes a true characterisation the
+--   piece's own argument leans on ("a status tournament has a task for every minute").
+--   "with proceedings and citations" is in no record row and should stay dropped.
+--   Variant retaining only the supported part, as QRI-2 step 2's replacement:
+--     'The record logs the first week 5 out of 5 for felt energy and the second 1 out of
+--      5. It records the second as a status tournament. The two events were seven days
+--      apart, not consecutive, and the record holds no cost for either.'
+--   Operator's call. Dropping it is defensible; the loss should be deliberate, not silent.
+--
+-- DISCREPANCY BETWEEN THE SUPERSEDING FILES — resolve before applying.
+--   QRI-2 §3 derives word_count 2503 and length 15276.
+--   QRI-3 §4(a) states word_count 2504 and length 15278 for the same applied state.
+--   Both cannot be right, and QRI-2 step 3 writes a literal. Recompute against the
+--   corrected body; do not take either file's prose on trust.
+--
+-- INDEPENDENTLY VERIFIED BY qnfo-ops (2026-09-13), against the raw column:
+--   before-state agrees with both files: length(body_md) = 15517, word_count = 2539
+--   QRI-2's anchors byte-match:  instr(body_md, <A1 span>) = 289
+--                                instr(body_md, <two-sentence opening span>) = 1
+--   instr(body_md,'Quantum Physics and Logic') = 0 — the expansion is absent from the
+--                                body, as both files state; QRI-3 §4b holds the verified
+--                                expansion from qpl2026.github.io if it is to be restored.
+--
+-- No executable statements remain in this file. Use QRI-2 and QRI-3.
