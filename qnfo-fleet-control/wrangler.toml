@@ -47,9 +47,6 @@ id = "d3768b93a76640be83151b00a8b42717"
 binding = "VEC_CAL"
 index_name = "qnfo-calibration"
 
-[[durable_objects.bindings]]
-name = "FleetAdvisor"
-class_name = "FleetAdvisor"
 
 [[services]]
 binding = "SVC_PERSONAL_API"
@@ -59,11 +56,6 @@ environment = "production"
 [[services]]
 binding = "SVC_QNFO_AI"
 service = "qnfo-ai"
-environment = "production"
-
-[[services]]
-binding = "SVC_QNFO_AUDITOR"
-service = "qnfo-auditor"
 environment = "production"
 
 [[services]]
@@ -80,7 +72,7 @@ environment = "production"
 ADVISOR_ITERS = "3"
 ADVISOR_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 CF_ACCOUNT_ID = "edb167b78c9fb901ea5bca3ce58ccc4b"
-PROBE_WORKERS = "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-paper-reviser,qnfo-outreach,qnfo-research-exec,qnfo-error-selfheal,qnfo-fleet-control,qnfo-auditor,qnfo-social,qnfo-intent-orchestrator,qnfo-cloud-ops,qnfo-gateway,qnfo-infra"
+PROBE_WORKERS = "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-paper-reviser,qnfo-outreach,qnfo-research-exec,qnfo-error-selfheal,qnfo-fleet-control,qnfo-social,qnfo-intent-orchestrator,qnfo-cloud-ops,qnfo-gateway,qnfo-infra"
 REVIEW_MODEL = "@cf/openai/gpt-oss-120b"
 
 # Secrets (set via CF API; values in credential stores / rotated 2026-09-11):

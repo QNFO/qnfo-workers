@@ -452,14 +452,14 @@ export default {
             try {
               // Write the action to self_heal_actions for audit trail
               await env.AUDIT.prepare(
-                'INSERT OR IGNORE INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,datetime('now'),'dispatched',NULL)'
+                "INSERT OR IGNORE INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,datetime('now'),'dispatched',NULL)"
               ).bind('feed-auto-action', af.id, (af.auto_action || '').slice(0, 500)).run();
             } catch (e2) {}
           }
           // Log feed health to cloud_ops_events
           try {
             await env.AUDIT.prepare(
-              'INSERT INTO cloud_ops_events (kind, detail, ts) VALUES ('fleet-feed-consumed', ?, datetime('now'))'
+              "INSERT INTO cloud_ops_events (kind, detail, ts) VALUES ('fleet-feed-consumed', ?, datetime('now'))"
             ).bind('health=' + (feedData.summary && feedData.summary.fleet_health || 'unknown') + ' actionable=' + (feedData.auto_actionable || []).length).run();
           } catch (e3) {}
         }
