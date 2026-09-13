@@ -1,0 +1,76 @@
+-- QRI-2 ADDENDUM — what production actually validates (2026-09-13)
+-- Author: qnfo-ops. Read alongside sql/QRI-2-body-corrections-2026-09-13.sql and
+-- sql/QRI-3-feedback-provenance-2026-09-13.sql.
+--
+-- The body correction in QRI-2 is VERIFIED CORRECT and safe to apply verbatim. This addendum
+-- corrects one COMMENT in it and records two live observations that change the remediation
+-- picture. No statement in QRI-2 needs to change.
+
+-- ---------------------------------------------------------------------------
+-- 1. CORRECTION: QRI-2's "production ... has no gate call at all" is TOO STRONG.
+--
+-- Production v1.1.0 DOES run a `validate` step at the insert site, and it is rejecting runs
+-- right now (companion_runs, live):
+--
+--   436, 439, 442  2026-09-13 06:03-06:06  rejected — "validate: unverified names: Notation
+--                                            Systems, Cognitive Scaffolds, Interdependent
+--                                            Computation, Playful Convergence, Double Fugue,
+--                                            Live Counterpoint"
+--   384            2026-09-12 13:22        rejected — "validate: essay length 3331"
+--   329            2026-09-12 11:24        rejected — "validate: essay length 2811"
+--
+-- So the insert path checks LENGTH and NAMES AGAINST A KB, and has since at least 2026-09-12.
+--
+-- What production lacks is the NEW COMPOSED GATE (lib/gate.js = grounding + voice + addressee).
+-- Two independent proofs:
+--
+--   (a) companion_pieces.id = 8 is live with 7 measured violations and quality_json.gate =
+--       "passed". Had the composed gate run at insert time, gate would read "blocked-grounding".
+--   (b) The 06:0x raw body opens "# Field Notes for Rowan" and was rejected ONLY for names.
+--       The addressee check blocks exactly that heading (reader-as-subject); it did not fire.
+--
+-- CORRECTED STATEMENT: production has no grounding/voice/addressee gate; it does have a
+-- length-and-names validator. QRI-2's remediation conclusion is UNCHANGED — correcting body_md
+-- is still the only action available today that changes what a reader sees on the published piece.
+
+-- ---------------------------------------------------------------------------
+-- 2. NEW: the current failure is DETERMINISTIC, so the retry loop cannot succeed.
+--
+--   434 compose attempt 1 -> 435 composed 3516 -> 436 rejected
+--   437 compose attempt 2 -> 438 composed 3516 -> 439 rejected
+--   440 compose attempt 3 -> 441 composed 3516 -> 442 rejected
+--   443 failed: "no piece survived the gate"
+--
+-- 3516 / 3516 / 3516 — byte-identical output on all three attempts, 324 s total.
+-- Contrast the 04:00 run: 4194 / 4680 / 4944, genuinely different, published on attempt 3
+-- (ok, slug 2026-09-13-notes-ae043d7af833c67b, 04:01:25Z).
+--
+-- Consequence: the 06:00 topic (notation-thought, 2 anchors, concept,concept) is blocked
+-- PERMANENTLY, not transiently. Every scheduled run will fail identically until the topic
+-- rotates or the validator changes. Nothing has published since 04:01.
+
+-- ---------------------------------------------------------------------------
+-- 3. NEW: the repo cannot reproduce production.
+--
+--   personal-companion/worker.js             62,666 B  sha c06edffb22f3cefeed2d7568e1a7275f076320cc
+--   personal-companion/deployed-current.worker.js  62,666 B  SAME SHA — byte-identical
+--
+-- Both open "var __defProp = Object.defineProperty;" — an esbuild bundle, not source.
+-- Live is v1.1.0; the repo holds one 1.0.0-era bundle under two names. Therefore:
+--   * there is no repo source from which the running worker can be rebuilt;
+--   * the hourly v1.1.0 -> 1.0.0 attempt is a downgrade onto a bundle that is NOT the running
+--     code — which is why it fails loudly ("Workflow GenerationFlow must be exported") instead
+--     of silently reverting the page;
+--   * any fix-and-redeploy plan must first recover v1.1.0's source, which is not in this repo and
+--     cannot be read intact from qnfo-ops (62,666 B vs the 32,768-char read ceiling).
+
+-- ---------------------------------------------------------------------------
+-- 4. Run ledger (companion_runs, all rows, live)
+--   stage 364 | rejected 55 | ok 11 | failed 9 | forced 3 | blocked 1
+--   Unexplained, left as such: 11 "ok" runs against only 7 published pieces.
+
+-- ---------------------------------------------------------------------------
+-- 5. Limit: the validate behaviour is inferred from companion_runs.detail strings and piece 8's
+--    stored gate value. The running code cannot be read (§3), so what else the validator checks,
+--    and whether a partial composed gate is present, is UNKNOWN. §1's two proofs are
+--    observational, not source-level.
