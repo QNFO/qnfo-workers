@@ -223,3 +223,8 @@ class_name = "OpsExecWorkflow"
 
 [triggers]
 crons = ["*/30 * * * *"]
+
+[[services]]
+binding = "CONTAINERS_PILOT"
+service = "qnfo-containers-pilot"
+environment = "production"
