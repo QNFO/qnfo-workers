@@ -16,17 +16,18 @@
 // actually lives, verifies each anchor, and applies only additive, reversible edits.
 //
 // WHAT IT CHANGES (all four anchors were read and confirmed present in the repo copy)
-//   1. VERSION 1.0.0 -> 1.3.0
+//   1. VERSION 1.0.0 -> 1.4.0
 //   2. loadLife(): inject the derived relations (durations and gaps) as context, so
 //      the model is TOLD that LoF26 -> QPL is 7 days instead of computing it. This is
 //      the direct fix for the wrong number, independent of any gate.
-//   3. inline lib/grounding.js + lib/voice.js + lib/addressee.js + lib/gate.js
-//      (exports stripped) so the pure gate is available in worker scope without
-//      depending on the module style of a bundled file.
-//      REV 2 (QRI-2): addressee.js was MISSING from this list in rev 1, while
-//      gate.js rev 2 imports checkAddressee from it. Inlining gate.js without
-//      addressee.js produces a worker that throws ReferenceError at the first
-//      gate call. The four modules must be inlined together.
+//   3. inline lib/grounding.js + lib/voice.js + lib/addressee.js + lib/filters.js +
+//      lib/gate.js (exports stripped) so the pure gate is available in worker scope
+//      without depending on the module style of a bundled file.
+//      REV 2 (QRI-2): addressee.js was MISSING from this list in rev 1, while gate.js
+//      rev 2 imports checkAddressee from it. Inlining gate.js without addressee.js
+//      produces a worker that throws ReferenceError at the first gate call.
+//      REV 3 (QRI-3): filters.js added for the same reason - gate.js rev 5 imports
+//      checkStandingFilters from it. All five modules must be inlined together.
 //   4. P_STYLE: add the anti-narration clause (do not write the reader's life in
 //      the first person; never supply a particular the record does not hold).
 //
@@ -40,11 +41,11 @@
 //     text is unverified. --report prints the surrounding context for those sites so
 //     the wiring can be applied precisely instead of guessed.
 //
-// MARKER NOTE: MARK was bumped to v2 in QRI-2. Verified 2026-09-13 that the repo
-// copy of worker.js still declares VERSION "1.0.0" and contains no QRI-1 marker, so
-// the patcher has never been applied and there is no duplicate-inline risk from the
-// marker change. If it HAS been applied by the time you read this, do not re-run
-// without removing the old inline block first.
+// MARKER NOTE: MARK was bumped to v3 in QRI-3. Verified 2026-09-13 that the repo copy
+// of worker.js still declares VERSION "1.0.0" (sha c06edffb) and contains no QRI marker,
+// so the patcher has never been applied and there is no duplicate-inline risk from the
+// marker change. If it HAS been applied by the time you read this, do not re-run without
+// removing the old inline block first.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,8 +53,8 @@ import process from 'node:process';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const WORKER = path.join(HERE, 'worker.js');
-const NEW_VERSION = '1.3.0';
-const MARK = '/* QRI-2-INLINE-GATE v2 */';
+const NEW_VERSION = '1.4.0';
+const MARK = '/* QRI-3-INLINE-GATE v3 */';
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
@@ -108,9 +109,15 @@ function stripModule(file) {
   t = t.replace(/^export\s+/gm, '');                 // exports -> plain declarations
   return t.trim();
 }
-// ORDER MATTERS ONLY FOR READABILITY: these are top-level function declarations in
-// one module scope, so they hoist. gate.js is last because it calls the other three.
-const inlineBlock = [MARK, '', stripModule('grounding.js'), '', stripModule('voice.js'), '', stripModule('addressee.js'), '', stripModule('gate.js'), ''].join('\n');
+// ORDER: filters.js before gate.js for readability; these are top-level declarations in
+// one module scope, so functions hoist. gate.js is last because it calls the other four.
+// ALL FIVE MUST BE PRESENT: gate.js imports from all four others, so omitting any one
+// produces a worker that throws ReferenceError at the first gate call.
+// NOTE (QRI-3): filters.js originally declared a top-level `esc`, which voice.js also
+// declares. Inlined, that is a duplicate declaration and the bundle does not parse. It
+// was renamed `fesc`. If a module is added later, check its top-level names against the
+// others first - the collision is silent until the worker loads.
+const inlineBlock = [MARK, '', stripModule('grounding.js'), '', stripModule('voice.js'), '', stripModule('addressee.js'), '', stripModule('filters.js'), '', stripModule('gate.js'), ''].join('\n');
 const inlineAnchor = 'function json(obj, status) {';
 if (src.includes(MARK)) {
   console.log('  skip  gate modules already inlined');
