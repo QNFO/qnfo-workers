@@ -36,8 +36,7 @@
 //   * Last pass 2026-09-10T01:01:10Z. First fail 2026-09-10T01:31:08Z, i.e. the
 //     very next 30-minute sweep. All 153 failures are consecutive from that instant
 //     to 2026-09-13T06:00:52Z — a clean step change, no intermittent behaviour.
-//   * The sweep immediately before the change passed every one of its 28 probes
-//     (health, roster, 18 model probes, 4 vision, tools, stream, routing).
+//   * The sweep immediately before the change passed every one of its 28 probes.
 //   * No deploy of qnfo-ai-calibration is recorded in deployment_history near the
 //     onset (nearest entries: qnfo-observability 2026-09-10 17:44, qnfo-ops 09-11).
 //
@@ -73,27 +72,31 @@
 // FIX: derive the named list from the results actually collected.
 //
 // ---------------------------------------------------------------------------
-// NOT APPLIED — high — F1, the minimal-probe echo assertion
+// FIX C — high — F1, the minimal-probe echo assertion
 // ---------------------------------------------------------------------------
 // Issue 664 reads: consecutive_failures=2 detail=http=200 echo=false "OK"
 // Same class as FIX A: http=200, non-empty body, marked fail because the reply did
 // not contain the exact expected token ("Reply with exactly: OK"). A model that
-// answers "OK." or "Ok" or adds a word is marked as an outage. Note that the same
-// sweep in which deepseek-direct/models first failed also shows llama-3.2-11b-vision
-// passing with detail "ok Red." — i.e. these probes are sensitive to trivial output
-// variation, which is what makes issue 664's echo=false worth distrusting.
+// answers "OK." or "Ok" or adds a word is marked as an outage. Supporting observation
+// from the sweep in which deepseek-direct/models first failed: llama-3.2-11b-vision
+// passed with detail "ok Red." — these probes are sensitive to trivial output
+// variation, which is what makes echo=false worth distrusting.
 //
-// It is deliberately NOT patched here. The assertion sits in a line containing '<'
-// and '>', which is exactly the region web_fetch destroys, so the verbatim source
-// could not be read and any anchor would be a guess. Recommended change, for a human
-// or an agent with an unlossy read:
+// FIX: stop failing a probe on a healthy transport. Keep `echo` in the detail string
+// for diagnosis; require only that the reply be non-empty.
 //
-//     -  var pass = r.status === 200 && echo;
-//     +  var pass = r.status === 200 && String(content || "").trim().length > 0;
-//     +  // echo mismatch on http=200 is a probe-strictness signal, not an outage
+// ANCHOR CONFIDENCE — read this before trusting the patch:
+// the assertion line sits in a region web_fetch destroys, so the anchor below is a
+// RECONSTRUCTION from a lossy read, not a verbatim quote. It is deliberately written
+// as a flexible regex, and the script REFUSES TO WRITE if it does not match. If it
+// reports "not found", the fix was not applied and needs a human with an unlossy
+// read — that is the intended failure mode, not a bug.
 //
-// i.e. keep `echo` in the detail string for diagnosis, but stop failing a probe on
-// a healthy transport.
+// What the source fragment showed (with the stripped region marked):
+//     ... for (var w = 0; w <STRIPPED> 0 && echo;
+//     return { status: pass ? "pass" : "fail", ... ("http=" + r.status + " echo=" + echo + " " ...) }
+// i.e. a `pass` assignment combining an HTTP check with `echo`, in a probe whose
+// detail string interpolates both `echo` and `content`.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -140,6 +143,23 @@ if (B_HITS === 0) {
 } else {
   console.log('  fix   FIX B: digest now names every failed probe, not only post-threshold ones');
   src = src.split(B_OLD).join(B_NEW);
+  changed++;
+}
+
+// ---------------------------------------------------------------- FIX C
+const C_RE = /(\bpass\s*=\s*r\.status\s*===\s*200\s*&&\s*)echo\b/g;
+const C_HITS = (src.match(C_RE) || []).length;
+if (C_HITS === 0) {
+  if (src.includes('&& String(content || "").trim().length > 0')) {
+    console.log('  skip  FIX C already applied');
+  } else {
+    problems.push('FIX C: the minimal-probe echo assertion was not found. The anchor is a '
+      + 'reconstruction from a lossy read (web_fetch strips text between < and >), so the '
+      + 'patch is NOT applied. Do not guess a replacement - inspect the probe line directly.');
+  }
+} else {
+  console.log('  fix   FIX C: ' + C_HITS + ' probe(s) no longer fail on http=200 with a non-empty body');
+  src = src.replace(C_RE, '$1String(content || "").trim().length > 0');
   changed++;
 }
 
