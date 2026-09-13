@@ -4,6 +4,11 @@ Date: 2026-09-13 · Executor: qnfo-ops (ops-exec) · DB: QNFO_AUDIT
 Mandate: every worker must execute successfully when fired and have a measurable
 outcome / definition-of-done. Workers that fire and produce nothing are cost centres.
 
+> **CORRECTED 2026-09-13.** Two claims in the first revision were wrong and are fixed
+> inline below: the measured=0 count (26 -> **15**) and the strength of the base_url
+> finding (now evidenced by probe transport). See
+> `docs/FLEET-PRUNE-2026-09-13-CORRECTIONS-v2.md` for the diff and reasoning.
+
 ---
 
 ## 1. VERIFIED PRE-FLIGHT (all values read 2026-09-13 ~14:27Z)
@@ -15,6 +20,7 @@ outcome / definition-of-done. Workers that fire and produce nothing are cost cen
 | service_registry rows | 55 | service_discover |
 | Registry vs live roster diff | **0 both directions** | run_code set-diff |
 | Open agent_issues | 44 -> 43 during turn | agent_issues |
+| Open backlog (backlog_status) | **42 -> 51 in ~13 min** | backlog_status |
 | Census verdicts | 35 PRODUCTIVE / 20 non | fleet_worker_census |
 | fleet_tasks enabled | 7 | fleet_tasks |
 | fleet_crons rows | **4** | fleet_crons |
@@ -67,7 +73,7 @@ Genuinely defective: **7**. Thin: **5**. Misclassified by the premise: **7**.
 |---|---|---|
 | qnfo-qwav | census reason: "legacy QWAV research API - candidate for retirement" | retire |
 | qnfo-research-supervisor | STALLED 48h, no cron path, routes[] empty | retire or fold into research-exec |
-| qnfo-fleet-dashboard | probe roster collapsed 82->10, pinned 10 for 27h; registry purpose says "MERGE candidate into fleet-deploy" | merge into fleet-control |
+| qnfo-fleet-dashboard | probe roster collapsed 83->10, pinned 10 for 27h; registry purpose says "MERGE candidate into fleet-deploy" | merge into fleet-control |
 
 ### 4b. MERGE (overlapping capability)
 | Group | Members | Target |
@@ -131,21 +137,23 @@ next_fire is 2026-09-14T08:00 (a Monday). Watch, do not ticket.
 ## 7. RED-TEAM: HOW THIS ANSWER COULD BE WRONG
 
 - **Aggregate open count barely moved (44 -> 43) despite 6 closures.** Concurrent
-  writers closed ~5 and filed ~12 more during the turn. Total rows went 741 -> 752.
-  Consolidating tickets cannot outrun the rate at which they are created — the
-  generator, not the ledger, is the problem.
+  writers closed ~5 and filed ~12 more during the turn. Total rows went 741 -> 752,
+  and backlog_status went 42 -> 51. Consolidating tickets cannot outrun the rate at
+  which they are created — the generator, not the ledger, is the problem.
 - **`state` column is semantically unusable for retirement.** qnfo-backlog-exec and
   qnfo-paper-indexer both carry `state='merged'` while both are LIVE and serving
   /health (200). 'merged' marks provenance, not lifecycle. FLEET-STATE tells me to
   retire ghosts via this column; that would be wrong.
-- **The registry base_url is dead and I confirmed it independently.**
-  https://qnfo-ops.q08.workers.dev/health and `/` both return HTTP 404 from a
-  transport that returns 200 for example.com — while qnfo-ops is definitively live.
-  This CONTRADICTS DoD row 217 (a prior session) which asserts q08 /health returns
-  200. One of the two is wrong; I could not resolve it. Issue 739 sides with me.
+- **The registry base_url is dead.** Verified: `fleet_probe_log.url` is EMPTY and
+  `transport='binding'` for every worker row — only the two zone hostnames are probed
+  over HTTP. So the registry base_url is never exercised by the fleet's own probe path,
+  and my direct fetch of `https://qnfo-ops.q08.workers.dev/health` (HTTP 404, on a
+  transport that returns 200 for example.com) stands. Issue 739 is corroborated;
+  DoD row 217, which asserts those URLs return 200, is contradicted.
 - **Census verdicts are the census's own judgement, not mine.** I did not re-derive
-  req24 for all 55; I am relaying fleet_worker_census. 26 of 55 rows have
-  `measured=0`, so a third of the verdicts rest on unmeasured inputs.
+  req24 for all 55; I am relaying fleet_worker_census. **15** of 55 rows have
+  `measured=0` (verified: total=55, measured_n=40, unmeasured=15), so a quarter of the
+  verdicts rest on unmeasured inputs.
 - **cf_analytics attributes 23,971 of 281,106 requests (8.5%)** to named workers, so
   "LOW-YIELD" cannot be distinguished from "unattributed".
 - **I cannot deploy, delete a CF script, or create a git branch.** Every P0/P1 merge
