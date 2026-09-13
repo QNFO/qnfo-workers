@@ -2,7 +2,7 @@
 
 Twenty files written by two qnfo-ops sessions on 2026-09-13. Several contain claims that later
 verification refuted or reinstated. **This index exists so nobody acts on a superseded one.**
-Last updated by the second session (rows 10-17). **The set is closed — see §"If you read only four".**
+Last updated by the second session (rows 10-17). **The set is closed — no further addenda.**
 
 **Cross-reference:** the seven `FINDING-*` files in `qnfo-ops/` document several of the same defects
 independently and in places more precisely. Read them alongside this set — see row 15 and §"Already
@@ -12,12 +12,12 @@ documented elsewhere".
 
 | # | File | Commit | Status |
 |---|---|---|---|
-| 1 | `qnfo-ai-calibration/patches/2026-09-13-model-depth-and-code-routing.md` | `f79dda65` | **PARTLY SUPERSEDED — see rows 5, 7, 9, 10-17** |
+| 1 | `qnfo-ai-calibration/patches/2026-09-13-model-depth-and-code-routing.md` | `f79dda65` | **PARTLY SUPERSEDED — see rows 5, 7, 9, 10-17 and correction 28** |
 | 2 | `qnfo-ai-calibration/apply-model-depth-fix.mjs` | `fdcf2110` | source hygiene only; targets a shadowed file (row 3) |
 | 3 | `qnfo-ai-calibration/patches/2026-09-13-CORRECTION-shadowed-source.md` | `c2bf88b8` | **authoritative** on which file is live |
 | 4 | `qnfo-ai-calibration/patches/2026-09-13-PROOF-gw-fail-guard-was-absent.md` | `66dd340d` | dated proof; conclusion **extended** by row 11 |
 | 5 | `qnfo-ai-calibration/patches/2026-09-13-CORRECTION2-callers-not-router.md` | `78f56de0` | conclusion **reinstated** by row 9 |
-| 6 | `qnfo-ai/apply-router-ctx-fix.mjs` | `5540bff9` | ready to apply — **but see correction 24: anchors verified against a stale version** |
+| 6 | `qnfo-ai/apply-router-ctx-fix.mjs` | `5540bff9` | ready to apply — **see correction 24: anchors verified against a stale version** |
 | 7 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM-strategy-semantics-unresolved.md` | `5560bb14` | parked the question; **superseded by row 9** |
 | 8 | `qnfo-ai-calibration/patches/README-2026-09-13-model-depth.md` | `ab49e753` | first revision of this file |
 | 9 | `qnfo-ai-calibration/patches/2026-09-13-ADDENDUM2-route-pools-exclude-flash.md` | `1b7624d4` | **authoritative** on the routing question |
@@ -54,8 +54,7 @@ documented elsewhere".
 15. **`ops_ai_log.prompt` is corrupted by the logger** for messages-array requests (122 rows).
     Row 13 §4's attribution to the mobile client is withdrawn.
 16. **A deploy path exists** — `qnfo-fleet-deploy`, `POST /redeploy`, token-gated, hourly. The
-    accurate blocker is **unreachable from this endpoint by design** (`DEPLOY_ADMIN_TOKEN` not in
-    qnfo-ops' deps, `run_code` isolated, `web_fetch` GET-only, self-redeploy refused).
+    accurate blocker is **unreachable from this endpoint by design**.
 17. **`qwen3.8-27b`'s 400s are probe-side, not "real load"** — *"System message must be at the
     beginning."* Genuinely load-driven: `bge-base-en-v1.5` 429 (~90/sweep), coder-32b content-shape
     (~42/sweep).
@@ -68,30 +67,37 @@ documented elsewhere".
 21. **Row 15 §1 is REFUTED.** The deployer did **not** fail for `qnfo-ai-calibration`: `fleet_deploys`
     id 9 shows `1.1.1 -> 1.1.4`, `ok=1`, `2026-09-11 14:01:47`, and there is **no**
     `scanerr:qnfo-ai-calibration`.
-22. **The deployed source is `r2:qnfo-canonical/qnfo-ai-calibration.js` — not the repo file.** At
-    least three artifacts share the label `1.1.4`; the repo `deployed-current.worker.js` I read in
-    full (the one **with** the gate) is not deployed for this worker.
+22. **The deployed source is `r2:qnfo-canonical/qnfo-ai-calibration.js` — not the repo file.**
 23. **The hourly deployer is stuck in two permanent failure loops** — `personal-companion` 26 of 30
     attempts failed, `qnfo-cloud-ops` **25 of 25 failed (0 successes)**, both hourly, error `10021`.
-    ~2 wasted PUTs every hour, indefinitely. This, not calibration, is the deployer defect to fix.
-24. **The deployed calibration artifact is 1.1.5 — one version ahead of every file read here**
-    (`fleet_drift_report`, scan `2026-09-13 06:05:30`). **So the gate's status in the live build is
-    UNKNOWN**, not absent and not present. Every source-based claim in this set — mine and the earlier
-    session's patch anchors alike — was verified against **stale 1.1.4**.
+24. **The deployed calibration artifact is 1.1.5 — one version ahead of every file read here.**
+    **So the gate's status in the live build is UNKNOWN**, not absent and not present.
 25. **There are TWO canonical sources and they disagree.** The drift scan compares GitHub
-    `deployed-current.worker.js`; the deploy path pulls `r2:qnfo-canonical/<worker>.js`. *"'Canonical'
-    has no single answer."* A drift report can therefore be computed against a file that is not the
-    deploy source.
-26. **Fleet drift: 18 of 55 workers mismatch** (9 `deployed-ahead`, 9 `canonical-ahead`; 8 of the
-    latter unverifiable because their deployed version is a `<worker>/fabric-20260910` placeholder).
-    **A canonical redeploy would REGRESS the 9 `deployed-ahead`** — including `qnfo-ai` 5.25.1 ->
-    5.21.3 and `qnfo-ai-calibration` 1.1.5 -> 1.1.4. Auto-heal is armed (`auto_heal=1`, kill-switch
-    `1`) and every cron reports `healed=0`; whether it skips `deployed-ahead` by design or is broken
-    is **not established**.
+    `deployed-current.worker.js`; the deploy path pulls `r2:qnfo-canonical/<worker>.js`.
+26. **Fleet drift: 18 of 55 workers mismatch**; a canonical redeploy would **regress** the 9
+    `deployed-ahead` — including `qnfo-ai` 5.25.1 -> 5.21.3. Auto-heal armed, `healed=0` always.
+27. **My first-turn cost figures were stale by ~43%.** Live `cf_analytics` (2026-09-13T13:30:09Z):
+    **1,130,379 neurons / $12.43** (30 d), **279,664 worker requests / 187 errors** — not
+    790,847 / $8.70 / 263,723 / 146. Any budget argument built on the old numbers is wrong.
+28. **The `gemma-2b-it-lora` claim is REFUTED — and it underpinned P0-2.** Live `cf_analytics`
+    `by_model` contains **no gemma-2b entry at all**. The largest listed consumer is
+    **`kimi-k2.6` 94,553 neurons**, then `qwen2.5-coder-32b-instruct` 25,638, `gpt-oss-120b` 25,018,
+    `glm-5.3-flash` 22,356, `qwen3-30b-a3b-fp8` 4,713, `llama-3.2-11b-vision-instruct` 1,647,
+    `glm-4.7-flash` 1,118, `qwen3.8-27b` 290. **The "a 2B model burns more neurons than most of the
+    roster" argument has no live support.** The largest spend is on *depth* models. (P0-2's
+    conclusion still stands for a different reason — those models are already absent from the roster.)
+29. **The async continuation path is stuck.** `ops_jobs`: **32 of 87 rows (37%) are non-terminal
+    `continuing`**, every one created 2026-09-13 between 06:29 and 13:28Z; the oldest has been stuck
+    6+ hours. Statuses: succeeded 42, **continuing 32**, failed 8, running 5. Payloads run
+    170 KB-837 KB each. This is the mechanism behind the ~52% unclean-ending rate in correction 8.
+30. **Invocation attribution is partial.** `cf_analytics.by_worker` lists 8 entries summing to
+    ~23,000 of 279,664 requests, with `__unknown__` at 20,328. Do not treat it as a full census.
+    (The by_model list is likewise capped: the 8 entries account for ~175,333 of 1,130,379 neurons,
+    15.5%.)
 
 ## If you read only four things
 
-The measurements survived; several causal narratives did not. The four findings that held up:
+The measurements survived; several causal narratives did not.
 
 1. **Refiling is real.** The same `[gw-fail]` title was filed 3× (489 → 654 → 678) despite 489 being
    `resolved` since 09-08. **Do not drain `[gw-fail]` rows** — the resolve is what triggers the refile.
@@ -109,7 +115,7 @@ The measurements survived; several causal narratives did not. The four findings 
 | D1 guard is a raw-text substring scan, proven by probe | `qnfo-ops/FINDING-2026-09-13-d1-guard-false-positive.md` + ADDENDUM 1-3 |
 | closer predicate unsatisfiable; per-model presence over 48 sweeps | `qnfo-ops/FINDING-2026-09-13-gw-fail-tickets-cannot-self-close.md` |
 | canonical drift, with **direction** resolved per worker | `qnfo-ops/FINDING-2026-09-13-canonical-drift-audit.md` + ADDENDUM |
-| the drain is a structural no-op; the backlog is THREE stores (`agent_issues` open vs `issue_ledger` 281 open) | `qnfo-ops/FINDING-2026-09-13-drain-noop-and-alert-storm-reconcile.md` |
+| the drain is a structural no-op; the backlog is THREE stores | `qnfo-ops/FINDING-2026-09-13-drain-noop-and-alert-storm-reconcile.md` |
 | `gemma-4-26b` fixture is a valid **10×10** PNG on the rejection boundary | same file §5 |
 | self-heal tickets name tools the endpoint does not bind — prompt/manifest drift | same file §4 |
 | deploy path, token, kill-switch, two canonical sources, "unreachable by design" | `qnfo-ops/patches/2026-09-13-DEPLOY-PATH-and-version-regression.md` (rev 2) |
@@ -122,7 +128,9 @@ read it.
 ## Refuted — do not act on these
 
 1. **P0-1 as written** ("add a router rule for code").
-2. **P0-2** ("remove `llama-3.2-1b`, `gemma-2b`, `granite-h-micro`, `gemma-2b-it-lora`") — already done.
+2. **P0-2's stated reason** ("remove `llama-3.2-1b`, `gemma-2b`, `granite-h-micro`,
+   `gemma-2b-it-lora`") — they are already absent, and the neuron-burn justification is refuted
+   (correction 28).
 3. **F7/F8** ("the gw-fail guard cannot match its own writer") — true only of the shadowed `worker.js`.
 4. **F3** ("only 10 models are probed") — live `TIER0_WA` has 15 entries -> 18 probed.
 5. **"Run the drain and it will clear a few."**
@@ -131,8 +139,11 @@ read it.
 8. **"The mobile client is sending malformed prompts."** Withdrawn — the logger is.
 9. **"No deploy path exists."** False — it exists and runs hourly; it is unreachable *from here*.
 10. **"The hourly deployer is failing for `qnfo-ai-calibration`."** Refuted by `fleet_deploys` id 9.
-11. **"The gate is absent from the live worker."** Row 11's inference — the live version is **1.1.5**,
-    which no artifact in this set describes. The *refiling* is proven; the gate's status is unknown.
+11. **"The gate is absent from the live worker."** The live version is **1.1.5**, which no artifact in
+    this set describes. The *refiling* is proven; the gate's status is unknown.
+12. **"790,847 neurons / $8.70 / 263,723 requests."** Stale by ~43%. See correction 27.
+13. **"A 2B model (gemma-2b-it-lora) is the second-largest neuron consumer."** No gemma-2b entry
+    exists in live `cf_analytics`. See correction 28.
 
 ## Verified and worth acting on
 
@@ -142,6 +153,8 @@ read it.
 | Live `qnfo-ai-calibration` is **1.1.5**; the deployed source is `r2:qnfo-canonical/…` | `fleet_drift_report` + `fleet_deploys` id 9 |
 | `personal-companion` 26/30 and `qnfo-cloud-ops` 25/25 hourly deploy failures | `fleet_deploys` |
 | 18 of 55 workers drift; a canonical redeploy would regress the 9 `deployed-ahead` | `fleet_drift_report` |
+| 32 of 87 `ops_jobs` stuck non-terminal, all from 2026-09-13 | `ops_jobs` |
+| Live AI spend 1,130,379 neurons / $12.43 (30 d); 279,664 requests / 187 errors | `cf_analytics` |
 | `contextAwareTarget` tests `glm-5.3-flash` (1,310,720 ctx) but `return "qwq-32b"` (24,000 ctx, `tools:false`) | live bundle sha `9b536969…`; v5.13.2 `166b022a` |
 | `ops_req_log` has no status/duration column | D1 schema |
 | Tool reliability: `web_search` 51.9% error (~19.5 s timeout), `web_fetch` 46.5%, `email_respond` 0-for-15 | `cloud_ops_events` |
@@ -173,5 +186,6 @@ returns 422; `main` is under concurrent write (one write failed
 2. **The `strategy` column is uninterpreted** — five values, and 19 rows pair `strategy="single"` with
    `model="ensemble"`.
 
-**Provenance note:** 20 artifacts from two sessions, **seven self-corrections**. The set is closed at
-ADDENDUM 10. Read §"If you read only four things" rather than the whole set.
+**Provenance note:** 20 artifacts from two sessions, **ten self-corrections** (rows 1-30 above include
+the earlier session's). The set is closed at ADDENDUM 10. Read §"If you read only four things" rather
+than the whole set.
