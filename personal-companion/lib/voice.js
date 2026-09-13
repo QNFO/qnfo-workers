@@ -56,14 +56,48 @@
 // recounts a recorded event without naming the venue will not be flagged on
 // particulars. That trade is deliberate and is pinned by tests.
 //
+// REVISION 3 (2026-09-13, QRI-2) - SEVERITY ADDED TO EVERY VIOLATION
+// Rev 2 emitted every violation with no severity, and callers handed them straight
+// to publishPolicy, which blocks on ANY violation. Measured consequence, by
+// executing the committed modules against the real rows:
+//
+//   FALSE BLOCK  check 3 matches a STRAIGHT apostrophe, so the disclaimer in the
+//                serial "The Hand That Signs" (companion_pieces.id=7) -
+//                "Rowan's own handwriting is not the subject here." - produced a
+//                violation and the gate would have WITHDRAWN that piece. But the
+//                note on check 3 above says it is "a review flag, not proof of
+//                impersonation", and the sentence names the reader in order to
+//                EXCLUDE him. Check 1 fired on the same piece for the abstract
+//                "my attention", which this header already records as a known
+//                false positive. Two flags, both documented as unreliable, were
+//                together sufficient to withdraw correct prose.
+//
+// Rev 3 labels every violation: block = attribution-seam, invented-particular
+// (the shipped defect class); warn = impersonation, reader-as-subject (review
+// flags). Additive: a caller reading only `kind` and `span` is unaffected, and the
+// live-fixture blocking count for companion_pieces.id=8 is unchanged (2 grounding
+// + 5 voice = 7).
+//
+// NOTE: gate.js rev 4 does NOT depend on this field - it classifies by kind, so
+// the gate is correct whether or not this revision is the one deployed. That is
+// deliberate: a policy that silently no-ops when its detector is one revision
+// behind is worse than no policy.
+//
+// DELIBERATELY NOT ADDED IN REV 3: no new exported helper. addressee.js already
+// exports `blockingViolations`, and the deploy patcher inlines all four modules
+// into ONE scope with exports stripped, so a second top-level declaration of that
+// name would be a duplicate declaration and the inlined worker would not parse.
+//
 // SCOPE / KNOWN LIMITS
 // Surface checks, not proof of authorship. They flag spans for a policy or a
 // human to judge; they do not decide. Check 2 is scoped to text that also speaks
 // in the first person (a third-person review naming a real person is not
-// flagged). Check 1's "my week|trip|energy|attention|travel" list is
-// deliberately narrow but not exact: an abstract use such as "my attention was on
-// the argument" would be flagged. If the record ever gains a headcount or a room,
-// these checks must be given that row rather than left as blanket rules.
+// flagged). If the record ever gains a headcount or a room, these checks must be
+// given that row rather than left as blanket rules.
+//
+// KNOWN MISS, still open in rev 3: check 3 matches a STRAIGHT apostrophe only, so
+// the typographic form is not caught here. addressee.js rev 2 handles both forms
+// and is composed in by gate.js, so the union covers it. Do not rely on check 3 alone.
 
 const EXP_VERBS = ['rated', 'attended', 'sat', 'visited', 'travelled', 'traveled', 'spoke', 'presented'];
 
@@ -112,7 +146,8 @@ function venueScope(flat, venues, names) {
 }
 
 // opts: { names: ['Rowan'], venues: ['Wolfson College, Cambridge', ...] }
-// Returns [{ kind, span, why }]. Empty array = nothing to block on voice grounds.
+// Returns [{ kind, severity, span, why }]. severity is 'block' or 'warn' (rev 3).
+// Empty array = nothing to block on voice grounds.
 export function checkVoice(text, opts) {
   const o = opts || {};
   const names = (o.names && o.names.length) ? o.names : ['Rowan'];
@@ -121,44 +156,48 @@ export function checkVoice(text, opts) {
   const v = [];
   let m;
 
-  // 1. impersonation
+  // 1. impersonation -- WARN. The list is deliberately narrow but not exact, so
+  //    an abstract "my attention was on the argument" is flagged (see header).
   for (const re of IMPERSONATION) {
     m = re.exec(flat);
     if (m) v.push({
-      kind: 'impersonation', span: m[0],
+      kind: 'impersonation', severity: 'warn', span: m[0],
       why: 'first-person claim of lived experience; the writer attended nothing'
     });
   }
 
-  // 3. reader-as-subject
+  // 3. reader-as-subject -- WARN. The header above calls this "a review flag, not
+  //    proof of impersonation"; companion_pieces.id=7 legitimately discusses a
+  //    real person's property. A warn must not withdraw a piece.
   for (const n of names) {
     m = new RegExp('\\b' + esc(n) + "'s\\b").exec(flat);
     if (m) v.push({
-      kind: 'reader-as-subject', span: m[0],
+      kind: 'reader-as-subject', severity: 'warn', span: m[0],
       why: 'reader named in the possessive: the piece is treating his life as material'
     });
   }
 
-  // 2. attribution-seam (only inside a first-person piece)
+  // 2. attribution-seam -- BLOCK (only inside a first-person piece).
+  //    This is the defect that shipped in companion_pieces.id=8.
   if (hasFirstPerson(flat)) {
     for (const n of names) {
       const re = new RegExp('\\b' + esc(n) + '\\b[^.!?]{0,80}?\\b(?:' + EXP_VERBS.join('|') + ')\\b', 'i');
       m = re.exec(flat);
       if (m) v.push({
-        kind: 'attribution-seam', span: m[0].slice(0, 80),
+        kind: 'attribution-seam', severity: 'block', span: m[0].slice(0, 80),
         why: 'reader named in the third person as the subject of an experience verb, in a piece that speaks in the first person'
       });
     }
   }
 
-  // 4. invented particulars, inside recorded-venue sentences only
+  // 4. invented particulars -- BLOCK, inside recorded-venue sentences only
   const scoped = venueScope(flat, venues, names);
   if (scoped) {
     const sl = scoped.toLowerCase();
     HEADCOUNT.lastIndex = 0;
     while ((m = HEADCOUNT.exec(scoped))) {
       v.push({
-        kind: 'invented-particular', span: m[0],
+        kind: 'invented-particular', severity: 'block', span: m[0],
         why: 'headcount: no record row stores attendance numbers'
       });
     }
@@ -166,14 +205,14 @@ export function checkVoice(text, opts) {
       if (sl.indexOf(r) < 0) continue;
       if (venues.some(x => String(x).toLowerCase().indexOf(r) >= 0)) continue;
       v.push({
-        kind: 'invented-particular', span: r,
+        kind: 'invented-particular', severity: 'block', span: r,
         why: 'room-level venue detail; the record stores the venue only as a coarse string'
       });
     }
     for (const s of SCENES) {
       if (sl.indexOf(s) < 0) continue;
       v.push({
-        kind: 'invented-particular', span: s,
+        kind: 'invented-particular', severity: 'block', span: s,
         why: 'staged scene detail; no record row describes the room'
       });
     }
