@@ -20,6 +20,19 @@ version from `3.6.1-subscribers` to `3.6.1` to drive a drift metric to zero, and
 (`ops-workspace/quniverse/CORRECTION-semver-normalization-ADDENDUM-2026-09-13.md`). The non-semver
 form is a safety mechanism. Leave it.
 
+### Comparator precision — correction to the paragraph above (added 2026-09-13)
+
+The sentence "a build tag parses to `[0]`, so canonical and deployed compare EQUAL" describes the
+**pre-patch** comparator. The corrected rule is staged in `qnfo-fleet-control/version-compare.mjs`
+(5,840 B, sha `86835e1a`), rule 6: an unparseable string such as a build tag is `UNORDERABLE`, and
+`deployDecision()` then returns `'blocked'` — the caller must not redeploy. Under that rule **both**
+forms are safe: a build tag is UNORDERABLE, and a semver canonical compared against an unparseable
+deployed tag is also UNORDERABLE. So the do-not-tidy warning is belt-and-braces rather than
+load-bearing — but **only once the patched comparator is actually deployed**, which is unverified
+here: the live `qnfo-fleet-control` reports 0.4.13 while the repo carries the corrected rule, and
+the patch set is `workflow_dispatch`-only by design (`apply=apply`). Until that dispatch happens,
+keep the build tag.
+
 ## Deferred siblings (stale-canon) — this is the note referenced by the bundle header
 
 The bundle comment block ends with *"those three are deliberately NOT changed here; see the note
@@ -41,17 +54,21 @@ The same defect and the same `scanerr:stale-canon` error kind apply to:
   <worker>/fabric-20260910 verified"` **hourly for all four workers** — ids 1225/1226, 1258/1259,
   1264/1265, 1297/1298, 1303/1304, 1336/1337, 1342/1343, 1375/1376, 1382/1383, 1413/1414 across
   2026-09-13 10:01Z → 14:05Z.
-- The heal's `verified_at` is `qnfo-workers/main/<worker>/deployed-current.worker.js` — a **GitHub
-  path: the source it copied from**, not the R2 canonical it claims to have written. So `healed`
-  proves the copy source was readable, not that the canonical now carries a version.
+- The heal's `verified_at` is `qnfo-workers/main/<worker>/deployed-current.worker.js`. That string
+  is **not a resolvable path**: `main/` is a pre-migration prefix the repo was flattened away from on
+  2026-07-13, and `qnfo-fleet-control/PATCH-2026-09-13-canonical-extraction-and-noself.mjs` §4 records
+  it as *"Verified absent from QNFO/qnfo-workers"*. So `verified_at` is a formatted label from a
+  dangling template — the copy source, not the R2 destination it claims to have written.
+- The canonical store is **R2**: `qnfo-fleet-control/wrangler.toml` declares
+  `binding = "CANONICAL" → bucket_name = "qnfo-canonical"`. That bucket is not bound to the qnfo-ops
+  endpoint, so neither the read-back nor the fix is available here.
 - `fleet_drift_report` still reads `canonical_version = ""` for all four (newest row per worker
-  2026-09-12 11:02).
-- `fleet_deploy_state.scanerr:<worker>` still reads `stale-canon` for the three siblings, last
-  written 2026-09-12 11:01–11:02Z. obsidian-writer's key was cleared 2026-09-13 14:43:11Z.
+  2026-09-12 11:02). `fleet_deploy_state.scanerr:<worker>` still reads `stale-canon` for the three
+  siblings, last written 2026-09-12 11:01–11:02Z. obsidian-writer's key was cleared
+  2026-09-13 14:43:11Z.
 
-**Missing actuator:** the R2 canonical write. The canonical bucket is not bound to the qnfo-ops
-endpoint, so this cannot be closed from here. Do not clear the `scanerr` keys to make the count
-read zero — the condition they record is live, and clearing a flag is not a fix.
+**Do not clear the `scanerr` keys to make the count read zero** — the condition they record is live,
+and clearing a flag is not a fix.
 
 ## Reachability
 
