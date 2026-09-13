@@ -1,4 +1,4 @@
-// qnfo-observability v1.1.5 — canonical fleet observability layer
+// qnfo-observability v1.1.6 — canonical fleet observability layer
 // PURPOSE: makes the QNFO fleet observable to itself.
 //   (1) INGEST  — scheduled trace ingest: Cloudflare Logpush workers_trace_events (R2 qnfo-audit/workers_trace/*.log.gz)
 //                 parsed into structured D1 table worker_logs. Covers ALL workers with zero per-worker code changes.
@@ -9,33 +9,107 @@
 //                 (qnfo-audit.ops_jobs). STATUS METADATA ONLY — never the response body (JOBS-STATUS-PUBLIC-1).
 // CANONICAL SOURCE: QNFO/qnfo-workers/qnfo-observability/worker.js
 // DEPLOY: wrangler deploy (from this dir); bindings AUDIT (qnfo-audit D1) + LOGS (R2 qnfo-audit); cron 17 * * * *.
-//         NOTE: this worker is a MULTI-MODULE worker (imports ./fleet.js). The R2 canonical object
-//         r2:qnfo-canonical/qnfo-observability.js must carry BOTH modules; a canonical holding only
-//         worker.js fails with "No such module \"fleet.js\"" (observed: fleet_deploys id 76,
-//         2026-09-13T14:04:01Z, ok:0).
 //
-// v1.1.5-false-clean-fix (2026-09-13, ops-endpoint session). The integration monitor could report
-//   `healthy, n=0` for a chain whose pending predicate matched NO rows because the status enum in the
-//   medium had changed. Verified against live D1 this session — five chains were false-clean:
+// v1.1.6-single-module (2026-09-13, ops-endpoint session). STRUCTURAL DEPLOY BLOCKER FIXED.
+//   v1.1.4 and earlier did `import { FLEET } from './fleet.js'`, making this a MULTI-MODULE worker.
+//   The control plane deploys from a single R2 key (r2:qnfo-canonical/qnfo-observability.js), and one
+//   key cannot carry two modules — so every deploy failed with:
+//     HTTP 400 code 10021 "No such module \"fleet.js\". imported from \"worker.js\""
+//   (observed: fleet_deploys id 76, 2026-09-13T14:04:01Z, ok:0.)
+//   This was NOT transient and could not be fixed by re-running the deploy: the worker's module
+//   topology was incompatible with the deploy transport. FLEET is now inlined below and the import
+//   is removed. fleet.js is retained in the repo as the human-readable registry snapshot, but it is
+//   no longer a runtime dependency. Any worker that imports a sibling module cannot deploy through a
+//   single-key canonical and must be inlined the same way.
+//
+// v1.1.5-false-clean-fix (2026-09-13). The integration monitor could report `healthy, n=0` for a chain
+//   whose pending predicate matched NO rows because the status enum in the medium had changed.
+//   Verified against live D1 — five chains were false-clean:
 //     alerts    predicate `digested = 0`      -> 0 rows; actual: 'auto' 914, 1 141, NULL 45
 //     outreach  predicate `status='pending'`  -> 0 rows; actual: 'needs-contact' 20, sent 3, skipped 18
 //     revisions predicate `status='queued'`   -> 0 rows; actual: 'needs-substantive-revision' 38, quarantined 23
 //     intents   predicate `status='pending'`  -> 0 rows; actual: 'triaged' 34, deduped 10, done 106
 //     email     predicate `status='received'` -> 0 rows; actual: processed 226, archived 110, spam 45
 //   A monitor that cannot see backlog is worse than no monitor, because it reports health.
-//   Two changes:
-//     (a) Corrected the two predicates whose target enum is unambiguous from live data
-//         (alerts -> NULL/''/0; outreach -> 'needs-contact'), so real backlog is visible again.
-//     (b) Added `total` to every chain. When the pending predicate matches 0 rows while the medium
-//         holds >= 20 rows, the chain now reports `empty-match` and raises an `enum-check`
-//         opportunity, instead of silently asserting `healthy`. This catches enum drift on ANY chain
-//         without guessing semantics. Chains where empty genuinely IS success (ideas, errata,
-//         version-drain) set expectEmpty:true and are exempt from the opportunity.
-//   The score is unaffected: empty-match is not counted as healthy or degraded (see chainScore).
+//   Two changes: (a) corrected the two predicates whose target enum is unambiguous from live data
+//   (alerts -> NULL/''/0; outreach -> 'needs-contact'); (b) added `total` to every chain — when the
+//   pending predicate matches 0 rows while the medium holds >= 20 rows the chain now reports
+//   `empty-match` and raises an `enum-check` opportunity instead of asserting `healthy`. Chains where
+//   empty genuinely IS success (ideas, errata, version-drain, issues, alerts) set expectEmpty.
+//   empty-match is excluded from chainScore: it is an UNKNOWN, not a pass. Counting it as healthy is
+//   what let five stale predicates report green for days.
 
-import { FLEET } from './fleet.js';
+// FLEET registry snapshot, INLINED (was ./fleet.js).
+// REGENERATED 2026-09-13 from qnfo-audit.service_registry (55 rows), cross-checked against
+// qnfo-fleet-dashboard's own Cloudflare API read:
+//   fleet_dashboard_state.fleet.workers      = 55
+//   fleet_dashboard_state.integration.ghost  = []
+//   fleet_dashboard_state.integration.unregistered = []
+// PRIOR VERSION: captured 2026-09-10 with 81 entries; the fleet then underwent a ghost-retirement
+// reconciliation on 2026-09-12 ("dropped 25 ghost scheduled entries, 39 ghost probes, 2 fully-ghost
+// chains"). The stale 81-name list made digest() report ~26 workers as silent that no longer existed.
+// MAINTENANCE: regenerate from service_registry. Do not hand-append. A worker merged into a hub is
+// retired even if its code still runs inside the hub under its own WORKER constant (cf.
+// qnfo-fleet-control bundling qnfo-fleet-advisor + qnfo-fleet-calibrator).
+const FLEET = [
+  "ai-health-prober",
+  "audit-hub",
+  "calendar-api",
+  "companion-hub",
+  "errata-hub",
+  "fleet-exec",
+  "idea-hub",
+  "jnl-pipeline",
+  "obsidian-writer",
+  "osf-integrity-check",
+  "personal-api",
+  "personal-companion",
+  "qnfo-agent-orchestrator",
+  "qnfo-agent-ws",
+  "qnfo-ai",
+  "qnfo-ai-calibration",
+  "qnfo-ai-search",
+  "qnfo-archive",
+  "qnfo-autopilot",
+  "qnfo-backlog-exec",
+  "qnfo-chat-canary",
+  "qnfo-cloud-ops",
+  "qnfo-ddocs-indexer",
+  "qnfo-email",
+  "qnfo-email-orchestrator",
+  "qnfo-events",
+  "qnfo-fleet-control",
+  "qnfo-fleet-dashboard",
+  "qnfo-gateway",
+  "qnfo-impact",
+  "qnfo-infra",
+  "qnfo-intent-orchestrator",
+  "qnfo-ipatent",
+  "qnfo-kaizen",
+  "qnfo-lifecycle",
+  "qnfo-memory-mcp",
+  "qnfo-observability",
+  "qnfo-ops",
+  "qnfo-outreach",
+  "qnfo-paper-explainer",
+  "qnfo-paper-indexer",
+  "qnfo-paper-reviser",
+  "qnfo-pdf",
+  "qnfo-proof",
+  "qnfo-qwav",
+  "qnfo-research-exec",
+  "qnfo-research-supervisor",
+  "qnfo-signal-loop",
+  "qnfo-skill-sync",
+  "qnfo-social",
+  "qnfo-subscribers",
+  "qnfo-tools-mcp",
+  "qnfo-twin-maintain",
+  "radar-hub",
+  "research-daily-brief"
+];
 
-const VERSION = '1.1.5-false-clean-fix';
+const VERSION = '1.1.6-single-module';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
