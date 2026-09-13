@@ -1,26 +1,28 @@
 // personal-companion/lib/gate-composition.test.js
 //
-// Added 2026-09-13 by qnfo-ops (QRI-2). Dependency-free. Run: node lib/gate-composition.test.js
+// Added 2026-09-13 by qnfo-ops. Dependency-free. Run: node lib/gate-composition.test.js
 //
 // WHY THIS FILE EXISTS
 // The QRI-1 suite pinned runGate's behaviour on the DEFECTIVE piece only. It could
-// not have caught the two faults QRI-2 found, because both are about pieces that
-// must NOT be blocked. A gate that blocks everything passes every test written
-// only against a piece that deserves blocking.
+// not have caught the faults QRI-2 and QRI-3 found, because those are about pieces that
+// must NOT be blocked, or about a class the gate did not check at all. A gate that
+// blocks everything passes every test written only against a piece that deserves
+// blocking.
 //
-// The three fixtures below are the three outcomes that matter:
+// The fixtures are the outcomes that matter:
 //   id=8        the defective essay            -> MUST block  (regression guard)
 //   id=7        the legitimate serial          -> MUST pass   (false-block guard)
 //   runs 442    the heading the gate missed    -> MUST block  (false-pass guard)
+//   id=8        contains "QPL"                 -> MUST block  (standing-filter guard, QRI-3)
+//   generic prose containing "the information" -> MUST pass   (omitted-term guard, QRI-3)
 //
-// Fixture 2 is the one QRI-1 lacked. Fixture 3 is the one rev 1 of gate.js lacked.
-//
-// NOTE: this file does not read the database. The fixtures are the verbatim live
-// texts, and the rows are the real PERSONAL.activity rows read on 2026-09-13, so
-// the derived facts are computed by the module under test rather than hard-coded.
+// NOTE: this file does not read the database. The fixtures are the verbatim live texts,
+// and the rows are the real PERSONAL.activity rows read on 2026-09-13, so the derived
+// facts are computed by the module under test rather than hard-coded.
 
 import { runGate } from './gate.js';
 import { deriveTemporalFacts } from './grounding.js';
+import { checkStandingFilters } from './filters.js';
 
 let pass = 0, fail = 0;
 function ok(label, cond, extra) {
@@ -64,17 +66,18 @@ const HEADING = [
 
 const CRITIQUE = { quality: { verdict: 'reject', why: 'adversarial critic output' }, forced: false };
 
-console.log('gate composition (QRI-2)');
+console.log('gate composition (QRI-2 / QRI-3)');
 
 // ---- 1. the defective piece must still block (QRI-1 regression guard)
 const d8 = runGate(Object.assign({ body: DEFECTIVE, facts: facts, kbRows: ROWS }, CRITIQUE));
 ok('id=8 does not publish', d8.publish === false, 'gate=' + d8.gate);
-ok('id=8 blocks on 7 violations', d8.violations.length === 7, 'got ' + d8.violations.length);
+ok('id=8 blocks on 8 violations (7 + standing-filter)', d8.violations.length === 8, 'got ' + d8.violations.length);
 ok('id=8 flags the wrong interval', d8.violations.some(v => v.kind === 'interval'));
 ok('id=8 flags the cost equality', d8.violations.some(v => v.kind === 'comparative-equality'));
 ok('id=8 flags the attribution seam', d8.violations.some(v => v.kind === 'attribution-seam'));
 ok('id=8 flags four invented particulars',
    d8.violations.filter(v => v.kind === 'invented-particular').length === 4);
+ok('id=8 flags the QPL standing filter (QRI-3)', d8.violations.some(v => v.kind === 'standing-filter'));
 
 // ---- 2. the legitimate serial must NOT block (QRI-2 false-block guard)
 const d7 = runGate(Object.assign({ body: LEGITIMATE, facts: facts, kbRows: ROWS }, CRITIQUE));
@@ -105,6 +108,22 @@ ok('forced piece does not publish', df.publish === false && df.gate === 'forced-
 const dClean = runGate({ body: 'The record holds the venue and the dates. The room is not in it.',
                          facts: facts, kbRows: ROWS, quality: { verdict: 'reject' }, forced: false });
 ok('verdict=reject alone does not block', dClean.publish === true);
+
+// ---- 7. standing filters (QRI-3)
+ok('filter: QPL blocks', checkStandingFilters('at QPL 2026 in Amsterdam').length === 1);
+ok('filter: "Quantum Physics and Logic" blocks',
+   checkStandingFilters('the workshop Quantum Physics and Logic met').length === 1);
+ok('filter: CWI blocks', checkStandingFilters('The CWI summer school covered algorithms.').length === 1);
+ok('filter: Gleick blocks', checkStandingFilters('James Gleick wrote about information.').length === 1);
+ok('filter: substring QPLX does NOT block', checkStandingFilters('The QPLX identifier.').length === 0);
+ok('filter: "the information" does NOT block (deliberately omitted term)',
+   checkStandingFilters('The information is not recoverable once the channel closes.').length === 0);
+ok('filter: "the order of time" does NOT block (deliberately omitted term)',
+   checkStandingFilters('The order of time in the record is the only trace.').length === 0);
+ok('filter: clean prose does NOT block',
+   checkStandingFilters('A map is a claim about what matters, and the claim is made by someone with power.').length === 0);
+ok('filter: a custom term list is honoured',
+   checkStandingFilters('a forbidden word', { terms: ['forbidden'] }).length === 1);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
