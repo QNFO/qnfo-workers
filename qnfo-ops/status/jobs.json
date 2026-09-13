@@ -1,7 +1,8 @@
 {
   "surface": "qnfo-ops job status (keyless snapshot)",
   "why": "GET /v1/jobs and /v1/jobs/:id on qnfo-ops are bearer-gated. This file is a public, key-free mirror of job STATUS metadata. It is a snapshot, not a live endpoint.",
-  "observed_through": "2026-09-13T13:40:48.465Z",
+  "observed_through": "2026-09-13T13:45:33.213Z",
+  "snapshot_taken_at": "2026-09-13T13:46:07.618Z",
   "source": "qnfo-audit D1, table ops_jobs (read via the ops endpoint's read-only SQL path)",
   "redaction": {
     "included": ["id", "status", "model", "strategy", "created_at", "updated_at", "response_chars", "has_error"],
@@ -9,13 +10,16 @@
     "reason": "response and payload carry fleet internals and the client's replayed conversation; this file is public and indexable. The spec's publicJobView redacts payload only; this mirror redacts response too, deliberately."
   },
   "totals": {
-    "succeeded": { "n": 46, "with_response": 45, "last_updated": "2026-09-13T13:40:48.465Z" },
+    "succeeded": { "n": 47, "with_response": 46, "last_updated": "2026-09-13T13:45:33.213Z" },
     "continuing": { "n": 39, "with_response": 39, "last_updated": "2026-09-13T13:40:34.195Z" },
-    "running": { "n": 3, "with_response": 0, "last_updated": "2026-09-13T13:40:31.905Z" },
+    "running": { "n": 4, "with_response": 0, "last_updated": "2026-09-13T13:45:18.352Z" },
     "failed": { "n": 8, "with_response": 1, "last_updated": "2026-09-12T13:27:59.053Z" }
   },
+  "snapshot_drift": "The immediately preceding snapshot (observed_through 2026-09-13T13:40:48.465Z) reported succeeded 46 / running 3. Five minutes later: succeeded 47 / running 4. The mirror is self-perturbing - every invocation of the ops endpoint writes an ops_jobs row, so any snapshot of this table is stale within minutes and can never be a consistent read. Treat the numbers as indicative, never as a settled count.",
   "known_defect": "D17: 39 rows hold status='continuing' with a finished answer already written. The terminal status is never written, so any poller reads 'continuing' forever. A public status surface is functionally useless until that is fixed.",
   "jobs_newest_first": [
+    { "id": "job-0de34b1c03d96d", "status": "running", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:45:15.894Z", "updated_at": "2026-09-13T13:45:18.352Z", "response_chars": 0, "has_error": 0 },
+    { "id": "job-ba4db44e03c8f4", "status": "succeeded", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:45:11.680Z", "updated_at": "2026-09-13T13:45:33.213Z", "response_chars": 745, "has_error": 0 },
     { "id": "job-2ff2d931ff8a4f", "status": "succeeded", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:40:33.533Z", "updated_at": "2026-09-13T13:40:48.465Z", "response_chars": 2778, "has_error": 0 },
     { "id": "job-e06897c0ff7013", "status": "running", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:40:26.874Z", "updated_at": "2026-09-13T13:40:31.905Z", "response_chars": 0, "has_error": 0 },
     { "id": "job-220de5e6fea9c4", "status": "running", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:39:36.014Z", "updated_at": "2026-09-13T13:39:41.696Z", "response_chars": 0, "has_error": 0 },
@@ -33,9 +37,7 @@
     { "id": "job-cad76022f35dce", "status": "continuing", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:27:15.669Z", "updated_at": "2026-09-13T13:33:16.071Z", "response_chars": 2530, "has_error": 0 },
     { "id": "job-940e10b1f0b7dc", "status": "succeeded", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:24:22.128Z", "updated_at": "2026-09-13T13:24:31.279Z", "response_chars": 465, "has_error": 0 },
     { "id": "job-212dc10fef9a2f", "status": "succeeded", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:23:08.984Z", "updated_at": "2026-09-13T13:25:11.718Z", "response_chars": 2029, "has_error": 0 },
-    { "id": "job-991bc062ef7815", "status": "continuing", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:23:00.265Z", "updated_at": "2026-09-13T13:29:08.461Z", "response_chars": 499, "has_error": 0 },
-    { "id": "job-0f47675eef43fd", "status": "continuing", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:22:46.935Z", "updated_at": "2026-09-13T13:28:42.635Z", "response_chars": 5284, "has_error": 0 },
-    { "id": "job-bde617c3eed1e3", "status": "continuing", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:22:17.712Z", "updated_at": "2026-09-13T13:24:22.461Z", "response_chars": 1805, "has_error": 0 }
+    { "id": "job-991bc062ef7815", "status": "continuing", "model": "ops-exec", "strategy": "job-workflow", "created_at": "2026-09-13T13:23:00.265Z", "updated_at": "2026-09-13T13:29:08.461Z", "response_chars": 499, "has_error": 0 }
   ],
-  "durable_fix": "patches/2026-09-13-public-job-status-route.md (spec complete, not applied). Blocked on: no deploy tool bound to qnfo-ops; and the repo worker.js (178,352 B) exceeds the 32,768-char read cap with no offset, so the dispatch site cannot be reached to author a correct full-file replacement."
+  "durable_fix": "patches/2026-09-13-public-job-status-route.md (spec complete, not applied). Blocked on: no deploy tool bound to qnfo-ops; and the repo worker.js exceeds the 32,768-char read cap with no offset, so the dispatch site cannot be reached to author a correct full-file replacement."
 }
