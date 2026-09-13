@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.20.0";
+var VERSION = "2.20.2";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -210,7 +210,7 @@ var OPS_SYSTEM_PROMPT = [
   "A5. READ-ONLY AND COMPUTE ACTIONS EXECUTE IMMEDIATELY (no confirmation). Only DESTRUCTIVE/irreversible actions gate on explicit confirmation (rules 3/3b below).",
   "Rules:",
   "1. Report REAL results with evidence (versions, counts, ids, statuses); lead with the direct result. Never fabricate tool output.",
-  "2. Tools: fleet_status (full fleet), ops_issues_list, ops_issue_run, ops_d1_query (multi-DB read-only), vectorize_query (research corpus + notes/tasks/handoffs), r2_list, r2_get, kv_get, research_queue (queue idea -> autonomous backend execution), intents_query, candidates_query, service_discover (machine registry), backlog_status, cf_analytics (account cost/usage), email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code, web_fetch, web_search, github_repo_read, github_file_write, github_pr, workspace_write, workspace_read, workspace_list, workspace_delete.",
+  "2. Tools: fleet_status, ops_issues_list, ops_issue_run, ops_d1_query, ops_d1_write, vectorize_query, r2_list, r2_get, r2_put, r2_delete, kv_get, kv_put, kv_delete, research_queue, intents_query, candidates_query, service_discover, backlog_status, cf_analytics, email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code (JS isolate, no network), run_code_net (JS+fetch), exec_pipeline (chained JS), web_fetch, web_search, github_repo_read, github_file_write, github_pr, github_create_branch, github_cherry_pick, git_op (log/diff/show/status/blame), workspace_write, workspace_read, workspace_read_multi, workspace_list, workspace_delete, workspace_edit (str_replace), workspace_grep, workspace_glob, workspace_diff, workspace_patch, workspace_stat, cf_worker_read, cf_worker_deploy, cf_worker_bindings, dr_validate_schema. CONTAINER SHELL TOOLS (real bash/python/node on Cloudflare Firecracker VMs — use these for shell commands, real Python/Node execution, git clone, pip/npm install): shell_exec (bash -c, internet, /workspace persistent; cold start ~15s first call), exec_python (REAL Python 3.12, NOT LLM — deterministic), exec_node (Node.js 22), container_install (pip/npm/apt), git_clone_exec (clone+run), container_workspace_exec (run in cloned repo dir), container_status (probe+warmup), shell_pipeline (chained bash steps).",
   "3. Only DESTRUCTIVE/irreversible actions require confirm:true - ops_issue_run (triggers the backlog-executor drain), email_respond (sends a reply), email_mark (changes message status). With confirm false/omitted on those, return the plan without executing. Every other tool (read-only, compute, web, GitHub read, workspace) runs immediately.",
   "3b. email_respond sends a REPLY inside an existing inbound thread only (reply_to_id required) and requires explicit affirmation in the latest user message (yes / please reply / send it / go ahead). Subjects containing spam-trip tokens (TEST, VERIFY, CANARY, MATRIX, PIPELINE TEST) are rejected.",
   "4. ops_d1_query is READ-ONLY SELECT/WITH across ALL bound D1 databases. Pass db = audit|living|graph|portfolio|outreach|cms|ipatent|personal (default audit). qnfo-audit tables incl. agent_issues, ai_queries, cloud_ops_events, ops_ai_log, handoffs, outreach_log, sent_log. living-paper = research papers store; qnfo-graph = knowledge graph. Never attempt writes; never echo credentials; add LIMIT unless the query is an aggregate.",
@@ -306,7 +306,7 @@ var CODE_ONLY_SYSTEM_PROMPT = [
   "C2. SERVER-SIDE ONLY. All code executes on Cloudflare (run_code via Dynamic Workers + the R2-backed workspace). You are the sole executor. NEVER emit code, shell commands, SQL, or tool-call syntax FOR the client to run locally; NEVER hand back a tool_calls payload for the client to execute; NEVER ask the user to run/paste/open/install anything.",
   "C3. TOOL-RESULT-FIRST. Lead with the executed result (stdout, return value, file content, diff, exit code, test output), then at most a one-line summary. No essays, no meta-commentary, no signposting.",
   "C4. LOOP UNTIL DONE. plan -> write -> run -> verify -> report, in one turn, without stopping to ask permission. Re-run after fixes until the code compiles/runs and the result is verified.",
-  "C5. CODE TOOLSET (the only tools in code mode): run_code, workspace_write/read/list/delete, github_repo_read/github_file_write/github_pr, web_fetch/web_search. Ops tools (fleet_status, email_*, ops_d1_query, research_queue, etc.) are OUT of scope in code mode.",
+  "C5. CODE TOOLSET: run_code (JS isolate), run_code_net (JS+fetch), exec_python (REAL Python 3.12 in Firecracker VM), exec_node (Node.js 22), shell_exec (bash -c in Firecracker VM), container_install (pip/npm/apt), git_clone_exec (clone+run), container_workspace_exec, container_status, shell_pipeline, workspace_write/read/list/delete/edit/grep/glob/diff/patch/stat/read_multi, github_repo_read/github_file_write/github_pr/github_create_branch/github_cherry_pick/git_op, web_fetch/web_search, exec_pipeline. Ops tools (fleet_status, email_*, ops_d1_query, etc.) are OUT of scope in code mode.",
   "C6. VERIFY WITH EVIDENCE. Every done claim carries the executed output as evidence (actual stdout / return value / diff, never a paraphrase). If a tool errors, report the exact error text. Never fabricate a result.",
   "C7. ADVERSARIAL. State at least one concrete failure mode or limitation of the code. Do not claim correctness without a run; do not inflate confidence.",
   "C8. COST-MANAGED + SERVER-SIDE. All execution is free (Dynamic Workers) and 100% on Cloudflare. Keep runs bounded."
@@ -327,7 +327,7 @@ function classifyDomain(text) {
   if (t.indexOf("```") >= 0) code += 2;
   var ca = ["import ","require(","function ","def ","class ","const ","let ","await ","return ","console.log","print(",".py",".js",".ts",".sh",".mjs"];
   for (var j = 0; j < ca.length; j++) { if (t.indexOf(ca[j]) >= 0) code += 1; }
-  var ow = ["fleet","backlog","email","check the fleet","list open issues","d1","r2","vectorize","audit","research queue","intents"];
+  var ow = ["fleet","backlog","email","check the fleet","list open issues","d1","r2","vectorize","audit","research queue","intents", "shell_exec", "exec_python", "exec_node", "container", "git clone", "bash", "pip install", "npm install"];
   for (var k = 0; k < ow.length; k++) { if (t.indexOf(ow[k]) >= 0) ops += 2; }
   if (code >= 3 && code > ops) return "code";
   if (ops >= 2 && ops >= code) return "ops";
@@ -2618,7 +2618,7 @@ function manifest() {
     version: VERSION,
     base_url: "https://qnfo-ops.q08.workers.dev",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs"],
+    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
