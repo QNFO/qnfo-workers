@@ -90,37 +90,44 @@ documented elsewhere".
     runs: `endpoint` fail **170**, `latency` fail **114**, `tools` fail 39, `model` fail 7,
     `routing` fail 2 (~332 total ≈ 1 per run — the `fail:1` every run reports).
     - **167 of the 170 `endpoint` failures are ONE probe bug.** `deepseek-direct/models`: pass **168**,
-      fail **167**, fail detail **`http=200`**. The GET-endpoint pass condition is
-      `r.status === 200 && r.text.indexOf("deepseek-v4-flash") >= 0` — it requires the literal model
-      name in a `/models` listing. The request succeeds; the assertion is wrong. The other 3 are real
-      60 s timeouts. **Real endpoint services are 1002/1005 = 99.7% healthy.**
+      fail **167**, fail detail **`http=200`**. The GET-endpoint pass condition requires the literal
+      model name `deepseek-v4-flash` in a `/models` listing. The request succeeds; the assertion is
+      wrong. The other 3 are real 60 s timeouts. **Real endpoint services are 1002/1005 = 99.7% healthy.**
     - **`tools`: 296 pass, 24 fail `http=200`, 15 timeout.** The 24 are `deepseek-v4-flash` answering
       without a tool call — model behaviour, not infra.
     - So **167 (50%) of all failures are one probe bug and 114 (34%) are latency trips; only ~50 are
       genuine.** A constant, meaningless `fail:1` per run, sustained for 335 runs.
-    - **Consequence: you cannot enforce "no dumb models" with this instrument.** Adding a
-      code-correctness probe to an 85%-artifact suite would produce unusable signal.
+    - **Consequence: you cannot enforce "no dumb models" with this instrument.**
 32. **`latency_max_ms=8000` fires, and it hits the code tier — but it does not change routing.**
     `probe='latency'` fail n=**114** across 15 models, including **`deepseek-v4-pro-wa` 9,
     `gpt-oss-120b` 8, `kimi-k2.7-code` 8, `kimi-k2.6` 7, `glm-5.3` 4, `qwen2.5-coder-32b` 2.** The
     penalty is a probe-result "fail" only — it does not degrade the model or alter routing (all
     `last_latency_ms` <6,500 ms). My earlier "the fleet is structurally required to prefer fast over
-    deep" was **too strong**: the config penalises depth in the *reported metrics*, not the routing
-    decision.
+    deep" was **too strong**.
 33. **Model liveness is effectively perfect**: `probe='model'` is **5,325 pass / 7 fail (0.13%)**.
 34. **A real correspondent has been left unanswered for seven days.** Email id **552**, from
     `tobias.osborne@itp.uni-hannover.de`, received **2026-09-06T12:07:50.558Z**, status **`processed`**
     — **not `replied`** — while `email_respond` is **0-for-15** on that exact message. A substantive
-    reply was composed at least six times (bodies opening "Hi Tobias,") and never sent. Nothing
-    escalates it: no ticket, no alert that survives correction 35.
+    reply was composed at least six times (bodies opening "Hi Tobias,") and never sent.
 35. **86% of the fleet's own alerts are binned as spam.** Of messages from
     `bounces@cf-bounce.qnfo.org`: **151 of 176 are status `spam`** (25 `archived`). The same subject
-    line sent from `qnfo@qnfo.org` (id 709) is `sent`; from the bounce address it is `spam`. Lifetime:
-    682 emails, **258 spam**, ~59% of which is the fleet's own alert traffic. Discarded examples:
-    `QNFO AI endpoint health alert`, `[research-daily-brief] FAILED`, `Loose threads — 41 item(s) need
-    disposition`, `QNFO register guard: 26 overdue`. **The fleet has alerting for exactly the defect
-    classes this set documents, and it is thrown away.** Converse case: a cold marketing email
-    (`tracxn.com`) was classified `personal` and `processed`.
+    line from `qnfo@qnfo.org` is `sent`; from the bounce address it is `spam`. Lifetime: 682 emails,
+    **258 spam**, ~59% of which is the fleet's own alert traffic. Discarded: `QNFO AI endpoint health
+    alert`, `[research-daily-brief] FAILED`, `Loose threads — 41 item(s) need disposition`,
+    `QNFO register guard: 26 overdue`. Converse: a cold `tracxn.com` marketing email was classified
+    `personal` and `processed`.
+36. **`cloud_ops_events.meta` is truncated at ~500 chars, so for large-argument tool calls the result
+    and error are lost — which is why `email_respond`'s 0-for-15 is undiagnosable.** Sampled
+    `email_respond` error rows store `{"args":{"reply_to_id":552,"subject":"…","body":"Hi Tobias,…"`
+    and are **cut mid-sentence**; `resultOk` never appears. Short-argument calls *do* record it —
+    e.g. `{"args":{"confirm":true},"resultOk":false,"ms":18}`. The truncation is length-driven and
+    removes the only diagnostic field exactly when a call is complex enough to need it. **The cause
+    of the 0-for-15 is therefore not recoverable from this endpoint.** This is the third instance of
+    the same class: `ops_ai_log.ok` (corr. 8), the request logger's `prompt` field (corr. 15), and
+    now `cloud_ops_events.meta`.
+37. **`sent_log` does not exist.** The endpoint's own tool description names `sent_log` among
+    qnfo-audit tables; `SELECT COUNT(*) FROM sent_log` returns
+    `D1_ERROR: no such table: sent_log`. Outbound mail is recorded in `emails` (status `sent`, 289).
 
 ## If you read only six things
 
@@ -137,10 +144,11 @@ The measurements survived; several causal narratives did not.
 5. **The calibration suite cannot measure model quality.** ~85% of its failures are artifacts — 167 of
    them one probe bug reporting `http=200` as a failure. Fix the instrument before adding any
    depth/correctness probe to it.
-6. **Every outward signal is silent or wrong.** `email_respond` 0-for-15; 86% of the fleet's own
-   alerts binned as spam; `telemetry_report`'s `open_self_heal_issues` reads 0 while 6 are open;
-   `telemetry_analyze` launders a standing ticket into a resolved one. **And one human obligation is
-   open: Tobias Osborne's 2026-09-06 reply is unanswered seven days later.**
+6. **Every outward signal is silent or wrong.** `email_respond` 0-for-15 (cause unrecoverable —
+   corr. 36); 86% of the fleet's own alerts binned as spam; `telemetry_report`'s
+   `open_self_heal_issues` reads 0 while 6 are open; `telemetry_analyze` launders a standing ticket
+   into a resolved one. **And one human obligation is open: Tobias Osborne's 2026-09-06 reply is
+   unanswered seven days later.**
 
 ## Already documented elsewhere — do not re-derive
 
@@ -194,6 +202,7 @@ read it.
 | Model liveness: 5,325 pass / 7 fail (0.13%) | `ai_calibration_results` |
 | **Email id 552 unanswered since 2026-09-06; `email_respond` 0-for-15** | `emails` + `cloud_ops_events` |
 | **151 of 176 fleet self-alert emails are `spam`; same subject from `qnfo@` is `sent`** | `emails` |
+| **`cloud_ops_events.meta` truncation destroys `resultOk`/error for large-argument calls** | `cloud_ops_events` |
 | `contextAwareTarget` tests `glm-5.3-flash` (1,310,720 ctx) but `return "qwq-32b"` (24,000 ctx, `tools:false`) | live bundle sha `9b536969…`; v5.13.2 `166b022a` |
 | `ops_req_log` has no status/duration column | D1 schema |
 | Tool reliability: `web_search` 51.9% error (~19.5 s timeout), `web_fetch` 46.5%, `email_respond` 0-for-15 | `cloud_ops_events` |
