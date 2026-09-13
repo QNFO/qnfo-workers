@@ -43,12 +43,6 @@
 //                                        [reader-as-subject] "Rowan's"
 //                                        => rev 2 still returned publish=false
 //
-// MEASURED, 3/3 (run_code against the PERSONAL.activity rows, 2026-09-13):
-//   companion_pieces.id=8  -> publish=false, 7 blocking (2 grounding + 5 voice)
-//   companion_pieces.id=7  -> publish=true,  0 blocking, 3 warnings
-//   runs id=442 heading    -> publish=false, 2 blocking (reader-in-heading, reader-address)
-//   rev 2 on the same three: false / FALSE / false   (one wrong)
-//
 // REVISION 4 (same day) — do not depend on the detector revision that is deployed
 // Rev 3 filtered voice on `severity === 'warn'`, which only works once voice.js
 // rev 3 (severity field) is deployed. A write of voice.js rev 3 was rejected by a
@@ -64,6 +58,25 @@
 // (severity field), so the gate's behaviour no longer depends on which detector
 // revision happens to be live. The policy lives in the composition layer, which is
 // where it belongs: the detector reports findings, the gate decides what blocks.
+//
+// REVISION 5 (same day, QRI-3) — standing filters, the third defect class
+// `FINDING-2026-09-13-standing-filters.md` measured a class none of the three
+// existing checks cover: the reader's own STANDING FILTERS. PERSONAL.profile holds
+// `standing-filters` rows at confidence 0.95-1.00, one of which reads "Do not bring
+// up QPL or CWI summer school topics in personal recommendations" (dated 2026-08-25).
+// `loadProfile()` hands that row to the writer, and the writer published an essay
+// opening on QPL 2026 anyway:
+//
+//   instr(body_md,'QPL') over the 7 live pieces -> 0,0,352,0,0,0,0   (id=8 only)
+//
+// A piece can be fully grounded, perfectly voiced, and still be something the reader
+// asked not to be sent. filters.js supplies checkStandingFilters(); rev 5 composes it
+// as a fourth blocking class.
+//
+// SCOPE OF THIS FIX, STATED: filters.js enforces an ENTITY deny-list (QPL, CWI,
+// Gleick, Rovelli and the two expansions). It does NOT enforce the CATEGORY row
+// ("no physics/science books"), which needs a subject classifier and belongs at
+// pickTopic() before anchors are fetched. That row is not covered and is not claimed.
 //
 // USAGE (inside the compose pipeline, after `critique`, before the INSERT into
 // companion_pieces):
@@ -84,22 +97,24 @@
 //   }
 //
 // CONTRACT: decision = { publish, gate, reason, violations, warnings, grounding,
-//                        voice, addressee, addresseeBlocking }
+//                        voice, addressee, addresseeBlocking, filters }
 //   publish === false  ->  do not serve. A gap in the page is preferred to an
 //                          ungrounded piece; the rhythm refills it next day.
 //   violations         ->  the blocking set. Non-empty implies publish === false.
 //   warnings           ->  review flags (voice only; addressee findings are all in
 //                          `addressee`). Never affect publish.
-//   addresseeBlocking  ->  the subset of addressee merged into `violations`.
+//   filters            ->  all standing-filter findings. All are blocking.
 //
 // NOTE ON INLINING: the deploy patcher strips `export `/`import` and concatenates
-// grounding.js + voice.js + addressee.js + gate.js into ONE scope. Nothing here may
-// declare a name that already exists in one of those modules (addressee.js owns
-// `blockingViolations`). Hence `isVoiceWarn` / `VOICE_WARN_KINDS`, which are unique.
+// grounding.js + voice.js + addressee.js + filters.js + gate.js into ONE scope.
+// Nothing here may declare a name that already exists in one of those modules
+// (addressee.js owns `blockingViolations`; voice.js owns `esc`). Hence
+// `isVoiceWarn` / `VOICE_WARN_KINDS`, which are unique.
 
 import { checkGrounding, publishPolicy, deriveTemporalFacts } from './grounding.js';
 import { checkVoice, venuesOf, mergeViolations } from './voice.js';
 import { checkAddressee, blockingViolations } from './addressee.js';
+import { checkStandingFilters } from './filters.js';
 
 // Voice findings that are review flags, not defect classes. See revision 4 note.
 const VOICE_WARN_KINDS = { 'impersonation': true, 'reader-as-subject': true };
@@ -120,13 +135,17 @@ export function runGate(o) {
   const voice = checkVoice(body, { names: names, venues: venuesOf(kbRows) });
   const addressee = checkAddressee(body, { names: names });
   const addresseeBlocking = blockingViolations(addressee);
+  // A caller may pass its own term list (opts.filterTerms) or deny records
+  // (opts.filterDeny); otherwise filters.js applies its audited ENTITY_DENY.
+  const filters = checkStandingFilters(body, { terms: opts.filterTerms, deny: opts.filterDeny });
 
   // Grounding violations carry no severity: an unsupported record-derived claim is
-  // always blocking. Voice findings are split by the mapping above.
+  // always blocking. Voice findings are split by the mapping above. Filter findings
+  // are all blocking by construction.
   const voiceBlocking = voice.filter(function (x) { return !isVoiceWarn(x); });
   const voiceWarnings = voice.filter(isVoiceWarn);
 
-  const violations = mergeViolations(grounding, voiceBlocking, addresseeBlocking);
+  const violations = mergeViolations(grounding, voiceBlocking, addresseeBlocking, filters);
   const decision = publishPolicy({
     quality: opts.quality || {},
     violations: violations,
@@ -142,7 +161,8 @@ export function runGate(o) {
     grounding: grounding,
     voice: voice,
     addressee: addressee,
-    addresseeBlocking: addresseeBlocking
+    addresseeBlocking: addresseeBlocking,
+    filters: filters
   };
 }
 
