@@ -32,6 +32,28 @@
 // reject CORRECT prose. Revision 2 parses all 11 and, when a digit-bearing
 // range is present but unparseable, returns duration null (not 1) so the row
 // is excluded from matching instead of poisoning it.
+//
+// PARSER HARDENING 2 (revision 3, 2026-09-13) - three measured defects
+// Revision 2's own invariant was "never silently return duration 1", and three
+// paths still violated it or bypassed it. All three were reproduced by executing
+// revision 2 (run_code, 2026-09-13) before being fixed here:
+//
+//   a. SINGLE-DAY ROWS. The real KB row "CWI summer school (28 Aug)" fell through
+//      to the "range is visible but not understood" branch and returned
+//      duration null, because revision 2 taught the parser ranges but not a
+//      single day. Consequence: a single-day event could not support a correct
+//      "one day" claim, and its end-to-start gaps were dropped from the gap set.
+//      A single day is a fact, not a guess, so it is now parsed.
+//   b. THE SILENT DURATION 1. The expression `g.end ? ... : 1` returned 1 whenever
+//      `end` was null while `known` was true - exactly the failure revision 2 set
+//      out to remove. A row whose end is not established now has duration null.
+//   c. NaN GAP POISONING. A row with a null/unparseable date produced
+//      dayNum(null) = NaN, and NaN gaps compare false against every claim, so the
+//      gap set was silently corrupted rather than merely incomplete. Undated rows
+//      are now excluded from the pairing loop.
+//
+// Verified after the fix: the live fixture is still blocked at exactly 7
+// violations (2 grounding + 5 voice) and the control text still passes at 0.
 
 export const MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
                      jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
@@ -46,12 +68,20 @@ const monthOf = s => MON[String(s || '').toLowerCase().slice(0, 3)] || null;
 // Parse a date range from a KB title, anchored to the row's own year.
 // Returns { start, end, known }:
 //   known: true  -> end is set (or equals start for a single-day row)
-//   known: false -> a digit-bearing range is present but was not understood;
+//   known: false -> a digit-bearing range is present but was not understood, or
+//                   the row has no usable date at all;
 //                   duration is UNKNOWN and must not be guessed.
 export function parseRange(title, anchorDate) {
   const y0 = +String(anchorDate).slice(0, 4);
   const t = String(title || '');
   let m;
+
+  // REVISION 3: a row with no usable date cannot anchor anything. Without this,
+  // anchorDate null flowed into `end: null` with `known: true` and produced
+  // duration 1, and into dayNum(null) = NaN in the gap loop.
+  if (!/^\d{4}-\d{2}-\d{2}/.test(String(anchorDate || ''))) {
+    return { start: null, end: null, known: false };
+  }
 
   // 2026-08-10 to 2026-08-14
   m = /(\d{4}-\d{2}-\d{2})\s*(?:to|until|[\u2013\u2014-])\s*(\d{4}-\d{2}-\d{2})/.exec(t);
@@ -90,6 +120,19 @@ export function parseRange(title, anchorDate) {
     }
   }
 
+  // REVISION 3: a SINGLE DAY, not a range. "(28 Aug)" | "(28 August 2026)".
+  // Placed after the range branches, which own the hyphenated and cross-month
+  // forms, and before the unparseable fallback.
+  m = /\(\s*(\d{1,2})\s+([A-Za-z]{3,9})\.?\s*(\d{4})?\s*\)/.exec(t);
+  if (m) {
+    const mo = monthOf(m[2]);
+    if (mo) {
+      const y = m[3] ? +m[3] : y0;
+      const d = iso(y, mo, +m[1]);
+      return { start: d, end: d, known: true };
+    }
+  }
+
   // A range is visible but not understood: say so rather than guess.
   if (/\(\s*\d|\d\s*[\u2013\u2014-]\s*\d|\bto\b|\buntil\b/i.test(t) && /\d/.test(t)) {
     return { start: anchorDate, end: null, known: false };
@@ -104,7 +147,9 @@ export function deriveTemporalFacts(rows) {
     const g = parseRange(r.title, r.date);
     return {
       title: r.title, start: g.start, end: g.end, known: g.known,
-      duration: g.known ? (g.end ? dayNum(g.end) - dayNum(g.start) + 1 : 1) : null,
+      // REVISION 3: was `g.end ? ... : 1`, which emitted duration 1 whenever end was
+      // null. An unestablished end means UNKNOWN duration, never 1.
+      duration: g.known ? (g.end ? dayNum(g.end) - dayNum(g.start) + 1 : null) : null,
       energy: (r.energy === null || r.energy === undefined) ? null : r.energy,
       energy_label: r.energy_label || '',
       venue: r.venue || '', city: r.city || ''
@@ -112,9 +157,13 @@ export function deriveTemporalFacts(rows) {
   });
 
   const gaps = [];
-  for (let i = 0; i < evs.length; i++) {
-    for (let j = i + 1; j < evs.length; j++) {
-      const a = evs[i], b = evs[j];
+  // REVISION 3: pair only rows with a usable date. An undated row produced
+  // dayNum(null) = NaN, and NaN gaps compare false against every claim, so the gap
+  // set was silently corrupted instead of merely incomplete.
+  const dated = evs.filter(e => e.start && /^\d{4}-\d{2}-\d{2}$/.test(e.start));
+  for (let i = 0; i < dated.length; i++) {
+    for (let j = i + 1; j < dated.length; j++) {
+      const a = dated[i], b = dated[j];
       if (dayNum(a.start) > dayNum(b.start)) continue;
       gaps.push({
         from: a.title, to: b.title,
@@ -135,7 +184,7 @@ export function deriveTemporalFacts(rows) {
 export function injectFacts(facts) {
   const out = ['DERIVED RELATIONS (computed from the record; state these exactly, do not recompute)'];
   for (const e of facts.evs) {
-    out.push(`- ${e.title} :: ${e.start}`
+    out.push(`- ${e.title} :: ${e.start || 'DATE NOT RECORDED'}`
       + (e.duration === null
           ? ' :: DURATION NOT ESTABLISHED (range present but not parsed) - do not state a duration for this event'
           : ` to ${e.end} = ${e.duration} days`)
