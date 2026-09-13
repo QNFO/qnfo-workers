@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.19.0";
+var VERSION = "2.20.2";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -210,7 +210,7 @@ var OPS_SYSTEM_PROMPT = [
   "A5. READ-ONLY AND COMPUTE ACTIONS EXECUTE IMMEDIATELY (no confirmation). Only DESTRUCTIVE/irreversible actions gate on explicit confirmation (rules 3/3b below).",
   "Rules:",
   "1. Report REAL results with evidence (versions, counts, ids, statuses); lead with the direct result. Never fabricate tool output.",
-  "2. Tools: fleet_status (full fleet), ops_issues_list, ops_issue_run, ops_d1_query (multi-DB read-only), vectorize_query (research corpus + notes/tasks/handoffs), r2_list, r2_get, kv_get, research_queue (queue idea -> autonomous backend execution), intents_query, candidates_query, service_discover (machine registry), backlog_status, cf_analytics (account cost/usage), email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code, web_fetch, web_search, github_repo_read, github_file_write, github_pr, workspace_write, workspace_read, workspace_list, workspace_delete.",
+  "2. Tools: fleet_status, ops_issues_list, ops_issue_run, ops_d1_query, ops_d1_write, vectorize_query, r2_list, r2_get, r2_put, r2_delete, kv_get, kv_put, kv_delete, research_queue, intents_query, candidates_query, service_discover, backlog_status, cf_analytics, email_check, email_stats, ops_fleet_log, email_mark, email_respond, run_code (JS isolate, no network), run_code_net (JS+fetch), exec_pipeline (chained JS), web_fetch, web_search, github_repo_read, github_file_write, github_pr, github_create_branch, github_cherry_pick, git_op (log/diff/show/status/blame), workspace_write, workspace_read, workspace_read_multi, workspace_list, workspace_delete, workspace_edit (str_replace), workspace_grep, workspace_glob, workspace_diff, workspace_patch, workspace_stat, cf_worker_read, cf_worker_deploy, cf_worker_bindings, dr_validate_schema. CONTAINER SHELL TOOLS (real bash/python/node on Cloudflare Firecracker VMs — use these for shell commands, real Python/Node execution, git clone, pip/npm install): shell_exec (bash -c, internet, /workspace persistent; cold start ~15s first call), exec_python (REAL Python 3.12, NOT LLM — deterministic), exec_node (Node.js 22), container_install (pip/npm/apt), git_clone_exec (clone+run), container_workspace_exec (run in cloned repo dir), container_status (probe+warmup), shell_pipeline (chained bash steps).",
   "3. Only DESTRUCTIVE/irreversible actions require confirm:true - ops_issue_run (triggers the backlog-executor drain), email_respond (sends a reply), email_mark (changes message status). With confirm false/omitted on those, return the plan without executing. Every other tool (read-only, compute, web, GitHub read, workspace) runs immediately.",
   "3b. email_respond sends a REPLY inside an existing inbound thread only (reply_to_id required) and requires explicit affirmation in the latest user message (yes / please reply / send it / go ahead). Subjects containing spam-trip tokens (TEST, VERIFY, CANARY, MATRIX, PIPELINE TEST) are rejected.",
   "4. ops_d1_query is READ-ONLY SELECT/WITH across ALL bound D1 databases. Pass db = audit|living|graph|portfolio|outreach|cms|ipatent|personal (default audit). qnfo-audit tables incl. agent_issues, ai_queries, cloud_ops_events, ops_ai_log, handoffs, outreach_log, sent_log. living-paper = research papers store; qnfo-graph = knowledge graph. Never attempt writes; never echo credentials; add LIMIT unless the query is an aggregate.",
@@ -218,7 +218,7 @@ var OPS_SYSTEM_PROMPT = [
   "6. Answer concisely with Markdown; lead with the direct result and the evidence the tools returned. Plain neutral prose, no persona, no filler, no meta-commentary.",
   "7. Never claim an action succeeded unless the tool returned ok. On error report the exact error text.",
   "8. Every executed tool call is logged to qnfo-audit (ops_ai_log + cloud_ops_events). This log is the audit trail for everything you do.",
-  "9. Quniverse fleet context (Cloudflare account: quniverse, ~54 workers): qnfo-ai = research gateway (qnfo-ai.q08.workers.dev), qnfo-ops = this ops endpoint (qnfo-ops.q08.workers.dev), personal-api = personal twin (personal-api.q08.workers.dev; personal-life only, never crosses into QNFO research), qnfo-intent-orchestrator = ideas/intents stream (research_queue queues RESEARCH ideas there ONLY (batch execution on backend), never ops commands), qnfo-backlog-exec = agent-issue drainer, qnfo-cloud-ops = weekly visibility digest, qnfo-signal-loop = signal-organism L8 re-entry (emits signals from living-paper open-question sections; signals table + signal_worker_boundary 35-row boundary matrix in qnfo-audit D1; boundary default-deny), ideas.qnfo.org (idea-hub) = idea intake hub (/api/sessions, /rss.xml, /sitemap.xml all live), qnfo.org = landing + email-capture (qnfo-subscribers double opt-in pipeline; COALESCE(SUM(...),0) always), fleet.qnfo.org = live fleet dashboard, qnfo-outreach = autonomous outreach agent (ACTIVATION_AT 2026-09-15; kill switch = D1 pipeline_state.external_sends_enabled), qnfo-paper-reviser = adversarial revision loop (all publications target >=2 Zenodo versions). Bound resources: D1 (qnfo-audit, living-paper, qnfo-graph, portfolio-state, qnfo-outreach, qnfo-cms, ipatent-db, personal-life), Vectorize (qwav-research-v2, qnfo-notes, qnfo-tasks, qnfo-handoffs, qnfo-ai-log), R2 (qnfo-releases, qnfo-audit, qnfo-backups, qnfo-skills), KV (equation-cache). QNFO is not an acronym.",
+  "9. Internal fleet context: qnfo-ai = research gateway, qnfo-ops = this ops endpoint, personal-api = personal twin, qnfo-intent-orchestrator = ideas/intents stream (research_queue queues RESEARCH ideas there ONLY (batch execution on backend), never ops commands), qnfo-backlog-exec = agent-issue drainer, qnfo-cloud-ops = weekly visibility digest. Bound resources: D1 (qnfo-audit, living-paper, qnfo-graph, portfolio-state, qnfo-outreach, qnfo-cms, ipatent-db, personal-life), Vectorize (qwav-research-v2, qnfo-notes, qnfo-tasks, qnfo-handoffs, qnfo-ai-log), R2 (qnfo-releases, qnfo-audit, qnfo-backups, qnfo-skills), KV (equation-cache).",
   "10. ADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.",
   "11. SERVER-SIDE-EXECUTION GUARANTEE (binding): the client you serve may be a mobile/Android LLM client (e.g. ChatBox Android) with NO native ability to run code, open files, execute shell commands, or invoke tools on-device - ALL code and tool calls MUST execute server-side on Cloudflare, never on the client device. You are the SOLE executor of every code/tool operation. NEVER emit code, shell commands, SQL, or tool-call syntax FOR the client to run locally, and NEVER ask the user to run/paste/open/install anything on their device (the client cannot do it). For every request involving compute, data, files, web, mail, fleet, or repos, execute it YOURSELF server-side via run_code / ops_d1_query / workspace_* / r2_* / web_fetch / web_search / email_* / fleet_status / github_* and return the COMPLETED result with evidence.",
   "12. OPS-SETTINGS-IMMUTABLE-1 (binding systemwide, 2026-09-09): this endpoint uses canonical settings that are IMMUTABLE across every client (DeepChat, ChatBox, SannaBot): context window 1048576, max output 393216, tool-loop soft budget 300s, Workflow step timeout 15 minutes, CPU ceiling 300s. They MUST NEVER be lowered by any agent, session, process, or env override. The ops-settings-guard.py drift gate enforces them every 30 min; long or CPU-heavy work goes through the durable async path (x-ops-async:1 / POST /v1/jobs), never by reducing these ceilings. Report drift; do not change settings."
@@ -281,6 +281,16 @@ var OPS_TOOLS = [
   { name: "workspace_read_multi", description: "Read up to 20 workspace files in one parallel call. Returns array of {path, ok, content, size, truncated}. Faster than N sequential workspace_read calls.", parameters: { type: "object", properties: { paths: { type: "array", items: { type: "string" }, description: "workspace-relative paths (max 20)" }, maxCharsEach: { type: "number", description: "max chars per file (default 20000, max 100000)" } }, required: ["paths"], additionalProperties: false } },
   { name: "workspace_stat", description: "Get workspace file metadata (exists, size, upload time, etag) without reading content.", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } },
   { name: "exec_pipeline", description: "Chain multiple run_code steps where each step receives the previous step's stdout as __prev (string). Equivalent to a shell pipeline. Max 10 steps. Set continueOnError:true on a step to proceed past failures.", parameters: { type: "object", properties: { steps: { type: "array", items: { type: "object", properties: { code: { type: "string" }, continueOnError: { type: "boolean" } }, required: ["code"] }, description: "array of {code, continueOnError?} steps (max 10)" }, input: { type: "string", description: "initial __prev value for step 1" } }, required: ["steps"], additionalProperties: false } }
+,
+
+  { name: "shell_exec", description: "Execute bash in a Cloudflare Firecracker VM. Full shell: bash, python3.12, node22, npm, pip, git, ripgrep, curl, apt-get. Internet-enabled. /workspace persistent across calls. COLD START: ~10-15s first call; subsequent ~100ms. No secrets inside container.", parameters: { type: "object", properties: { cmd: { type: "string" }, cwd: { type: "string", description: "working directory (default /workspace)" }, env: { type: "object", description: "env vars to set" }, timeout_ms: { type: "number", description: "timeout ms (default 60000, max 300000)" } }, required: ["cmd"], additionalProperties: false } },
+  { name: "exec_python", description: "Execute Python 3.12 code in Cloudflare Container (REAL interpreter, deterministic, not LLM). pip packages installable via container_install. Returns {ok, exit_code, stdout, stderr}.", parameters: { type: "object", properties: { code: { type: "string" }, argv: { type: "array", items: { type: "string" } }, timeout_ms: { type: "number" } }, required: ["code"], additionalProperties: false } },
+  { name: "exec_node", description: "Execute Node.js 22 code in Cloudflare Container. npm packages installable via container_install. Returns {ok, exit_code, stdout, stderr}.", parameters: { type: "object", properties: { code: { type: "string" }, cwd: { type: "string" }, timeout_ms: { type: "number" } }, required: ["code"], additionalProperties: false } },
+  { name: "container_install", description: "Install packages in Cloudflare Container. manager=pip (Python), npm (Node in /workspace), apt (system packages). ADVERSARIAL: resets on scale-to-zero — always install at start of task session.", parameters: { type: "object", properties: { packages: { type: "array", items: { type: "string" } }, manager: { type: "string", enum: ["pip","npm","apt"] }, cwd: { type: "string" }, timeout_ms: { type: "number" } }, required: ["packages"], additionalProperties: false } },
+  { name: "git_clone_exec", description: "Clone a public git repo into /workspace/<name> and optionally run a bash command in it. depth=1 default (fast). Returns clone_result + exec_result.", parameters: { type: "object", properties: { url: { type: "string", description: "public git clone URL" }, cmd: { type: "string", description: "bash command to run after clone" }, branch: { type: "string" }, depth: { type: "number", description: "clone depth (default 1, 0=full)" }, name: { type: "string", description: "local dir name under /workspace" }, timeout_ms: { type: "number" } }, required: ["url"], additionalProperties: false } },
+  { name: "container_workspace_exec", description: "Run a bash command in a /workspace subdirectory. Use for build/test/lint in a cloned repo.", parameters: { type: "object", properties: { cmd: { type: "string" }, dir: { type: "string", description: "subdir under /workspace" }, timeout_ms: { type: "number" } }, required: ["cmd"], additionalProperties: false } },
+  { name: "container_status", description: "Probe Cloudflare Container health and warm it up. Returns {ok, health, status: {containerRunning, initialized}}. Call to pre-warm before time-sensitive shell_exec.", parameters: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "shell_pipeline", description: "Chain up to 20 bash commands sequentially in the same container, sharing /workspace state. Write files to /workspace to pass state between steps. Set continueOnError:true to proceed past failures.", parameters: { type: "object", properties: { steps: { type: "array", items: { type: "object", properties: { cmd: { type: "string" }, cwd: { type: "string" }, continueOnError: { type: "boolean" } }, required: ["cmd"] }, description: "steps array (max 20)" }, timeout_ms: { type: "number", description: "per-step timeout ms (default 60000)" } }, required: ["steps"], additionalProperties: false } }
 ];
 function toolsPayload() {
   return OPS_TOOLS.map(function(t) {
@@ -296,7 +306,7 @@ var CODE_ONLY_SYSTEM_PROMPT = [
   "C2. SERVER-SIDE ONLY. All code executes on Cloudflare (run_code via Dynamic Workers + the R2-backed workspace). You are the sole executor. NEVER emit code, shell commands, SQL, or tool-call syntax FOR the client to run locally; NEVER hand back a tool_calls payload for the client to execute; NEVER ask the user to run/paste/open/install anything.",
   "C3. TOOL-RESULT-FIRST. Lead with the executed result (stdout, return value, file content, diff, exit code, test output), then at most a one-line summary. No essays, no meta-commentary, no signposting.",
   "C4. LOOP UNTIL DONE. plan -> write -> run -> verify -> report, in one turn, without stopping to ask permission. Re-run after fixes until the code compiles/runs and the result is verified.",
-  "C5. CODE TOOLSET (the only tools in code mode): run_code, workspace_write/read/list/delete, github_repo_read/github_file_write/github_pr, web_fetch/web_search. Ops tools (fleet_status, email_*, ops_d1_query, research_queue, etc.) are OUT of scope in code mode.",
+  "C5. CODE TOOLSET: run_code (JS isolate), run_code_net (JS+fetch), exec_python (REAL Python 3.12 in Firecracker VM), exec_node (Node.js 22), shell_exec (bash -c in Firecracker VM), container_install (pip/npm/apt), git_clone_exec (clone+run), container_workspace_exec, container_status, shell_pipeline, workspace_write/read/list/delete/edit/grep/glob/diff/patch/stat/read_multi, github_repo_read/github_file_write/github_pr/github_create_branch/github_cherry_pick/git_op, web_fetch/web_search, exec_pipeline. Ops tools (fleet_status, email_*, ops_d1_query, etc.) are OUT of scope in code mode.",
   "C6. VERIFY WITH EVIDENCE. Every done claim carries the executed output as evidence (actual stdout / return value / diff, never a paraphrase). If a tool errors, report the exact error text. Never fabricate a result.",
   "C7. ADVERSARIAL. State at least one concrete failure mode or limitation of the code. Do not claim correctness without a run; do not inflate confidence.",
   "C8. COST-MANAGED + SERVER-SIDE. All execution is free (Dynamic Workers) and 100% on Cloudflare. Keep runs bounded."
@@ -317,7 +327,7 @@ function classifyDomain(text) {
   if (t.indexOf("```") >= 0) code += 2;
   var ca = ["import ","require(","function ","def ","class ","const ","let ","await ","return ","console.log","print(",".py",".js",".ts",".sh",".mjs"];
   for (var j = 0; j < ca.length; j++) { if (t.indexOf(ca[j]) >= 0) code += 1; }
-  var ow = ["fleet","backlog","email","check the fleet","list open issues","d1","r2","vectorize","audit","research queue","intents"];
+  var ow = ["fleet","backlog","email","check the fleet","list open issues","d1","r2","vectorize","audit","research queue","intents", "shell_exec", "exec_python", "exec_node", "container", "git clone", "bash", "pip install", "npm install"];
   for (var k = 0; k < ow.length; k++) { if (t.indexOf(ow[k]) >= 0) ops += 2; }
   if (code >= 3 && code > ops) return "code";
   if (ops >= 2 && ops >= code) return "ops";
@@ -1719,6 +1729,145 @@ async function execPipeline(env, args) {
   return { ok: true, steps_run: results.length, final_output: prev, results };
 }
 
+
+// ── v2.20.0 Full-stack shell execution via Cloudflare Containers ─────────────────────
+// Architecture: ops-exec (Worker) → qnfo-containers-pilot (Worker+DO) → Firecracker VM
+// Image: nikolaik/python-nodejs:python3.12-nodejs22 (Python 3.12 + Node.js 22 + npm)
+// Startup: auto-installs git + ripgrep + curl via apt-get (~10-15s cold start)
+// Cost: $0.00002/vCPU-sec utilization-based, scale-to-zero when idle ($0 idle cost)
+
+async function containerDispatch(env, route, body, timeoutMs) {
+  const url = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+  const token = env.PILOT_TOKEN;
+  if (!token) return { ok: false, error: "PILOT_TOKEN secret not configured on qnfo-ops" };
+  const timeout = Math.min(Math.max(timeoutMs || 60000, 5000), 300000);
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const resp = await fetch(url + route, {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) return { ok: false, error: "container HTTP " + resp.status + ": " + JSON.stringify(j).slice(0, 300) };
+    return j;
+  } catch (e) {
+    clearTimeout(t);
+    const isTimeout = e && e.name === "AbortError";
+    return { ok: false, error: isTimeout ? "container timeout after " + timeout + "ms (cold start ~15s; retry or increase timeout_ms)" : "container: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+
+function fmtContainer(j) {
+  if (!j || !j.ok) return { ok: false, error: j && j.error || "container error" };
+  const r = j.result || {};
+  return { ok: r.exitCode === 0, exit_code: r.exitCode, stdout: (r.stdout || "").slice(0, 65536), stderr: (r.stderr || "").slice(0, 8192), stdout_truncated: !!r.stdoutTruncated, stderr_truncated: !!r.stderrTruncated };
+}
+
+async function shellExec(env, args) {
+  const cmd = String(args && args.cmd || "").trim();
+  const cwd = args && args.cwd ? String(args.cwd) : null;
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  const env_vars = args && args.env && typeof args.env === "object" ? args.env : {};
+  if (!cmd) return { ok: false, error: "cmd required" };
+  const j = await containerDispatch(env, "/sh", { cmd, cwd, env: env_vars }, timeout);
+  return fmtContainer(j);
+}
+
+async function execPython(env, args) {
+  const code = String(args && args.code || "").trim();
+  const argv = Array.isArray(args && args.argv) ? args.argv.map(String) : [];
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  if (!code) return { ok: false, error: "code required" };
+  const j = await containerDispatch(env, "/exec", { code, argv }, timeout);
+  return fmtContainer(j);
+}
+
+async function execNode(env, args) {
+  const code = String(args && args.code || "").trim();
+  const cwd = args && args.cwd ? String(args.cwd) : null;
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  if (!code) return { ok: false, error: "code required" };
+  const j = await containerDispatch(env, "/node", { code, cwd }, timeout);
+  return fmtContainer(j);
+}
+
+async function containerInstall(env, args) {
+  const packages = Array.isArray(args && args.packages) ? args.packages.map(String) : [String(args && args.packages || "")];
+  const manager = String(args && args.manager || "pip").toLowerCase();
+  const cwd = args && args.cwd ? String(args.cwd) : null;
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 120000, 10000), 300000);
+  if (!packages.length || !packages[0]) return { ok: false, error: "packages required" };
+  if (!["pip","npm","apt"].includes(manager)) return { ok: false, error: "manager must be pip|npm|apt" };
+  let route, body;
+  if (manager === "pip") { route = "/pip"; body = { packages }; }
+  else if (manager === "npm") { route = "/npm"; body = { packages, cwd }; }
+  else { route = "/sh"; body = { cmd: "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends " + packages.join(" ") + " 2>&1 | tail -5" }; }
+  const j = await containerDispatch(env, route, body, timeout);
+  return { ...fmtContainer(j), packages, manager };
+}
+
+async function gitCloneExec(env, args) {
+  const url2 = String(args && args.url || "").trim();
+  const cmd = String(args && args.cmd || "").trim();
+  const branch = args && args.branch ? String(args.branch) : null;
+  const depth = parseInt(args && args.depth, 10) || 1;
+  const name = args && args.name ? String(args.name) : url2.split("/").pop().replace(/\.git$/, "");
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 120000, 10000), 300000);
+  if (!url2) return { ok: false, error: "url required" };
+  const cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name }, timeout);
+  if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result };
+  if (!cmd) return { ok: true, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ) };
+  const execJ = await containerDispatch(env, "/workspace/exec", { dir: name, cmd }, timeout);
+  return { ok: (execJ.result || {}).exitCode === 0, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ), exec_result: fmtContainer(execJ) };
+}
+
+async function containerWorkspaceExec(env, args) {
+  const cmd = String(args && args.cmd || "").trim();
+  const dir = args && args.dir ? String(args.dir) : "";
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 300000);
+  if (!cmd) return { ok: false, error: "cmd required" };
+  const j = await containerDispatch(env, "/workspace/exec", { cmd, dir }, timeout);
+  return fmtContainer(j);
+}
+
+async function containerStatus(env, args) {
+  const url2 = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+  const token = env.PILOT_TOKEN;
+  if (!token) return { ok: false, error: "PILOT_TOKEN not configured" };
+  try {
+    const h = await fetch(url2 + "/health");
+    const hj = await h.json().catch(() => ({}));
+    const s = await fetch(url2 + "/status", { headers: { "Authorization": "Bearer " + token } });
+    const sj = await s.json().catch(() => ({}));
+    return { ok: true, url: url2, health: hj, status: sj };
+  } catch (e) {
+    return { ok: false, error: "container_status: " + (e && e.message || String(e)).slice(0, 200) };
+  }
+}
+
+async function shellPipeline(env, args) {
+  const steps = Array.isArray(args && args.steps) ? args.steps : [];
+  if (!steps.length) return { ok: false, error: "steps array required" };
+  if (steps.length > 20) return { ok: false, error: "max 20 steps" };
+  const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 60000, 5000), 120000);
+  const results = [];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const cmd = String(step && step.cmd || "").trim();
+    const cwd = step && step.cwd ? String(step.cwd) : null;
+    if (!cmd) { results.push({ step: i + 1, ok: false, error: "empty cmd" }); continue; }
+    const j = await containerDispatch(env, "/sh", { cmd, cwd }, timeout);
+    const r = fmtContainer(j);
+    results.push({ step: i + 1, cmd: cmd.slice(0, 100), ...r });
+    if (!r.ok && !(step && step.continueOnError)) return { ok: false, failed_at_step: i + 1, results };
+  }
+  return { ok: true, steps_run: results.length, results };
+}
+
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
   try {
@@ -1782,6 +1931,14 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "workspace_read_multi") res = await workspaceReadMulti(env, args);
     else if (name === "workspace_stat") res = await workspaceStat(env, args);
     else if (name === "exec_pipeline") res = await execPipeline(env, args);
+        else if (name === "shell_exec") res = await shellExec(env, args);
+    else if (name === "exec_python") res = await execPython(env, args);
+    else if (name === "exec_node") res = await execNode(env, args);
+    else if (name === "container_install") res = await containerInstall(env, args);
+    else if (name === "git_clone_exec") res = await gitCloneExec(env, args);
+    else if (name === "container_workspace_exec") res = await containerWorkspaceExec(env, args);
+    else if (name === "container_status") res = await containerStatus(env, args);
+    else if (name === "shell_pipeline") res = await shellPipeline(env, args);
     else res = { ok: false, error: "unknown tool: " + name };
   } catch (e) {
     res = { ok: false, error: "tool crashed: " + (e && e.message ? e.message : String(e)) };
@@ -2461,7 +2618,7 @@ function manifest() {
     version: VERSION,
     base_url: "https://qnfo-ops.q08.workers.dev",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs"],
+    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
@@ -2478,7 +2635,7 @@ async function registryRefresh(env) {
   const now = iso();
   const upsert = /* @__PURE__ */ __name(async function(service, kind, fields) {
     try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=COALESCE(excluded.purpose, purpose), capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
     } catch (e) {
     }
   }, "upsert");
