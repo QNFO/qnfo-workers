@@ -1,105 +1,91 @@
-# BIG PICTURE + ACTION PLAN — 2026-09-13T14:35Z
+# BIG PICTURE + ACTION PLAN — 2026-09-13T14:45Z (REV 2 — corrects the T0 in REV 1)
 
-Supersedes the prose in the 12-document audit and the ~195 workspace audit artifacts for 2026-09-13.
-All numbers below are live tool output from this session, not carried forward.
+Supersedes REV 1 (14:35Z) and the prose in the 12-document audit. All numbers are live tool output.
 
-## 1. BIG PICTURE IN ONE PARAGRAPH
+## 1. BIG PICTURE
 
-The fleet is not down. It is **frozen**. 55 workers are deployed, the ones that are probed answer, and
-spend/error rates are low ($12.45 / 1.13M neurons / 187 errors in 281,106 invocations over 30d = 0.067%).
+The fleet is not down. It is **frozen, and the freeze is currently load-bearing**. 55 workers deployed,
+12 probed healthy, spend/error low ($12.45 / 1.13M neurons / 187 errors in 281,106 invocations, 30d).
 
-What is broken is the *ability to change anything* and the *ability to see anything*.
+**The decisive new fact: 9 of 55 workers are running AHEAD of their canonical artifact.**
+`fleet_drift_report` 14:02-14:04Z, note=`deployed-ahead`:
+personal-api 3.5.0 > v3.2.2-maxout200k · personal-companion 1.1.0 > 1.0.0 · qnfo-ai 5.25.1 > 5.21.3 ·
+qnfo-ai-calibration 1.1.5 > 1.1.4 · qnfo-fleet-control 0.3.4 > 0.3.3 · qnfo-fleet-dashboard 1.5.1 > 1.1.0 ·
+qnfo-ops 2.15.7 > 2.15.6 · qnfo-research-exec 0.8.1 > 0.5.17-research-restored · qnfo-signal-loop 1.1.2 > 1.1.0
 
-The deploy plane's auto-heal was switched OFF at 2026-09-13T14:15:02Z
-(`fleet_deploy_state.auto_heal` -> '0', `enabled` -> '0', rows updated 14:23:10Z) to stop one worker's
-hourly downgrade loop. Since the last successful deploy (qnfo-backlog-exec 1.2.7 -> 1.2.8 at
-14:02:44Z) nothing has shipped. Every known code fix is therefore staged-but-unshippable.
+**Therefore auto_heal is a downgrade engine, not a repair engine.** Turning it on with the canonical
+store in its current state would overwrite qnfo-ai, qnfo-ops, qnfo-fleet-control, qnfo-fleet-dashboard,
+qnfo-research-exec, personal-api, personal-companion, qnfo-ai-calibration and qnfo-signal-loop with
+older artifacts. The `auto_heal=0`/`enabled=0` freeze set at 14:15:02Z is the only thing preventing that.
+This REVERSES the T0 recommendation in REV 1 ("unfreeze, it buys nothing").
 
-In parallel the observability plane is dead: trace ingest cursor frozen since 2026-09-10T10:15:58Z,
-43 of 55 workers unprobed, heartbeat table holds 1 row, cron registry holds 4 rows. The fleet's own
-instruments cannot tell you whether a fix worked.
+**The root cause is the drift comparator, and it has two confirmed defects.**
+(a) *Version-string format defeats it.* The same live worker was judged `canonical-ahead` at 13:01:22
+    (`deployed_version` = `"v1.1.0"`) and `deployed-ahead` at 14:02:05 (`deployed_version` = `"1.1.0"`),
+    with the SAME live build and the SAME canonical 1.0.0. Only the leading "v" changed. The inverted
+    verdict produced by the "v" is what drove personal-companion's 8 hourly downgrade attempts
+    (06:01 -> 13:01Z, all ok=0). They stopped at 14:02:05 when the string lost its "v" — **not** because
+    of the 14:15:02 freeze.
+(b) *Wrong field.* 7 workers report `deployed_version` = `"<worker>/fabric-20260910"` — a fabric deploy
+    tag, not a semver (qnfo-agent-orchestrator, qnfo-archive, qnfo-ddocs-indexer, qnfo-email,
+    qnfo-lifecycle, qnfo-paper-indexer, qnfo-qwav). Those are permanently classified `canonical-ahead`
+    regardless of truth, and they are the `version-format` errors the scanner counts against itself.
 
-Meanwhile the *ticketing* loop runs hotter than the *fixing* loop: 55 new agent_issues filed in the
-last 3 hours, and 4-5 different "open backlog" numbers coexist across parallel ledgers.
-
-And the credential that gates the deploy plane is itself readable through the bound R2 tools.
-
-## 2. WHERE THE FLEET ACTUALLY STANDS (verified this session)
+## 2. STATE (verified this session)
 
 | surface | value | source |
 |---|---|---|
-| workers deployed / probed healthy | 55 / 12 | fleet_status 14:25:59Z |
-| agent_issues open | 39 (28 high, 10 med, 1 low) | qnfo-audit agent_issues |
-| issue_ledger open | 305, rising (247 -> 261 -> 266 -> 270 -> 305) | fleet_audit_runs 09-12..09-13 |
-| agent_issues filed in last 3h | 55 | qnfo-audit |
-| deploy auto-heal | OFF (`auto_heal=0`, `enabled=0`) | fleet_deploy_state 14:23:10Z |
-| last successful deploy | qnfo-backlog-exec 1.2.7 -> 1.2.8, 14:02:44Z | fleet_deploys id 75 |
-| failing deploys today | personal-companion x8 (hourly, all ok=0), qnfo-cloud-ops x2, qnfo-observability x1 | fleet_deploys |
-| trace ingest | frozen since 2026-09-10T10:15:58Z; cursor reset did NOT fix it (issue 702 reopened) | trace_ingest_state, issue 702 |
-| alerts, last 24h | 4 rows (2 error, 2 warning) — the "802 critical" storm is historical, not live | alerts |
-| endpoint self-telemetry 24h | 10,338 calls / 872 failures (8.4%); web_fetch 355, ops_d1_query 273, github_file_write 84 | telemetry_report |
-| email | 682 total, 23/24h, 289 sent, 45 spam | email_stats |
-| R2 credential exposure | 9 objects under backups:credentials/, incl. fleet-deploy-admin-token.txt | r2_list backups |
+| deployed / probed healthy | 55 / 12 | fleet_status 14:25:59Z |
+| drift scan 14:05:46Z | scanned=55 clean=33 drifted=9 ahead=9 healed=1 errors=0 staleCanon=4 healthVer=10 regOpen=99 regOverdue=26 regDue7=51 | fleet_drift_report SCAN |
+| agent_issues open | 39 (28 high, 10 med, 1 low) | agent_issues |
+| issue_ledger open | 305, rising (247 -> 261 -> 266 -> 270 -> 305) | fleet_audit_runs |
+| tickets filed in 3h | 55 | agent_issues |
+| deploy auto-heal | OFF (`auto_heal=0`, `enabled=0` @ 14:23:10Z) | fleet_deploy_state |
+| last deploy attempt / success | id 76 qnfo-observability 14:04:01 ok=0 / id 75 backlog-exec 1.2.7 -> 1.2.8 14:02:44Z ok=1 | fleet_deploys |
+| trace ingest | frozen since 2026-09-10T10:15:58Z; cursor reset failed (issue 702 reopened) | trace_ingest_state |
+| alerts last 24h | 4 rows — the "802 critical" storm is historical | alerts |
+| endpoint 24h | 10,338 calls / 872 failures (8.4%) | telemetry_report |
+| R2 credential exposure | 9 objects under backups:credentials/ incl. fleet-deploy-admin-token.txt | r2_list |
 
 ## 3. ACTION PLAN
 
-Ordered by leverage. The actuator is named because the actuator is the binding constraint.
+Revised order. REV 1's order would have caused a mass downgrade.
 
-**T0-S — remove the credential exposure. Do this before anything else.**
-`qnfo-backups` holds `credentials/fleet-deploy-admin-token.txt` (48 B) and 8 more credential objects
-readable by r2_list/r2_get. The token that gates the deploy plane is readable through the read tools of
-the same plane. No open ticket covered this before this session (now issue 747). Actuator: R2
-delete/move (destructive, gated here) + rotation of the deploy admin token. Rotate even if nothing else
-is done.
-
-**T0 — restore the ability to fix anything: unfreeze the deploy plane, deliberately.**
-`auto_heal=0` was a stopgap aimed at ONE worker. A global freeze also stops the ~5 deploys/day that were
-working. Correct end state: `auto_heal=1` plus a per-worker no-downgrade exclusion for personal-companion.
-Actuator: D1 write on qnfo-audit.fleet_deploy_state for the two state rows (available from this
-endpoint); the per-worker exclusion lives in qnfo-fleet-control source and needs a qnfo-canonical R2
-write + deploy (NOT bound to this endpoint).
-Closes: nothing else can close until this is decided.
-
-**T1 — ship the three dead-consumer fixes (all blocked only by T0).**
-- qnfo-research-exec `NL is not defined` — version_queue v2-drain dead since 2026-09-11T12:41Z (issue 706).
-- qnfo-cloud-ops canonical SyntaxError at worker.js:1:2 — 25 attempts, 0 ok, hourly.
-- qnfo-observability canonical 1.1.4 rejected while the repo fix is v1.1.6 single-module.
-Actuator: qnfo-canonical R2 put + deploy. Not available from this endpoint.
-
-**T2 — repair the instruments before trusting any of them.**
-Trace ingest cursor; the 43-worker probe gap; the 1-row heartbeat; the 4-row cron registry; the 91% of
-invocations with no worker attribution. Until this is done every "is it fixed?" answer is unverifiable.
-
-**T3 — collapse the ledgers. One ledger, one number.**
-305 (issue_ledger) vs 39 (agent_issues) vs four other reported values; 55 tickets in 3h; ~195 audit
-artifacts; 7 FINAL/CLOSING labels. Filing more tickets before this is net-negative.
-
-**T4 — research pipeline.**
-Terminal-failure-never-materializes re-pick loop; 496 malformed Zenodo rows; research-daily-brief
-arXiv 429 with no canonical to patch.
+**T0-a. Keep the freeze ON until T0-c. It is load-bearing.** Do not set `auto_heal=1` first.
+**T0-b. Refresh the canonical store from live for the 9 `deployed-ahead` workers**, so canonical == live.
+Actuator: qnfo-canonical R2 write (NOT bound here) + a deploy-path source.
+**T0-c. Fix the comparator** — normalise the "v" prefix and stop comparing fabric tags as semver.
+The repo already carries the tools: `qnfo-fleet-control/version-compare.mjs`,
+`version-compare.test.mjs`, `PATCH-2026-09-13-downgrade-guard-bundle.mjs`,
+`PATCH-2026-09-13-deploy-subsystem-verified.mjs`. Actuator: canonical R2 + deploy. Not available here.
+**T0-d. Only then unfreeze**, with a per-worker no-downgrade guard as belt-and-braces.
+**T0-S. Remove the credential exposure and rotate the deploy admin token.** Filed as issue 747.
+**T1. Ship the dead-consumer fixes** (research-exec `NL is not defined`; cloud-ops canonical SyntaxError
+`worker.js:1:2`; observability 1.1.4 vs repo 1.1.6) — all blocked by T0-c/T0-d.
+**T2. Repair the instruments** (trace cursor, 43/55 probe gap, 1-row heartbeat, 4-row cron registry,
+91% unattributed invocations). **T3. Collapse the ledgers.** **T4. Research pipeline.**
 
 ## 4. WHAT CHANGED THIS SESSION
 
-One D1 write: a new agent_issue (id 747) for the R2 credential exposure — the only open ticket on it.
-No deploy, no canonical write, no destructive action. Two actions remain gated and were NOT taken:
-`ops_issue_run` (needs explicit "drain it"), and reversing the `auto_heal=0` freeze (a deliberate safety
-action by a sibling session — not silently undone).
+Two D1 writes: agent_issue 747 (R2 credential exposure) and a warning appended to issue 724 so the
+"restore auto_heal=1" framing is not acted on before T0-b. No deploy, no canonical write, no destructive
+action. Gated and NOT taken: `ops_issue_run`, and reversing the `auto_heal=0` freeze.
 
-## 5. FAILURE MODES / OPEN CONTRADICTIONS
+## 5. FAILURE MODES / CORRECTIONS
 
-1. **The causal story for the stopped downgrade loop fails on ordering.** personal-companion's last
-   attempt is 13:01:23Z and there is no 14:01 attempt, but `auto_heal` was only set to 0 at 14:15:02Z —
-   *after* 14:01. The freeze cannot explain the missing 14:01 slot. Something else stopped it.
-2. **A prior claim that "the D1 write is blocked" is refuted.** ops_d1_write executed against
-   qnfo-audit.fleet_deploy_state at 14:15:02Z (status ok). What is genuinely unbound is the
-   qnfo-canonical R2 bucket.
-3. **The source read is capped, not complete.** qnfo-fleet-control/worker.js is 75,875 bytes; the repo
-   read tool truncates at 32,768 regardless of the requested maxChars. The `enabled`/`auto_heal` gating
-   logic is therefore inferred from behaviour, not read.
-4. **The denominator is unreliable.** 43/55 workers are unprobed, so "12 healthy" describes the probe
-   set, not the fleet.
-5. **cf_analytics attributes only 23,971 of 281,106 invocations** to a worker name; per-worker
-   conclusions are unsupported.
-6. **The 39 vs 305 gap was not reconciled here.** Different tables; neither is asserted correct.
-7. The credential exposure is a privilege-boundary failure *only if* some worker bound to qnfo-backups
-   exposes an R2-read route to a lower-privilege caller. That was not verified.
+1. **REV 1's T0 was wrong and is corrected here.** REV 1 said the freeze "buys nothing" and should be
+   reversed. With 9 workers ahead of canonical, reversing it would have downgraded 9 workers including
+   qnfo-ai, qnfo-ops and qnfo-fleet-control. The data that corrects this was one query away in REV 1
+   (`fleet_drift_report`), which I had not run.
+2. **REV 1's failure mode #1 (unexplained missing 14:01 slot) is now RESOLVED**, and the resolution is
+   the "v"-prefix defect above. The 14:01 slot did run — at 14:02:05 — as `deployed-ahead`, so no deploy
+   was attempted. My REV 1 suspicion that "something else stopped it" was correct; the freeze was not
+   the cause.
+3. **The freeze's blocking effect is inferred from a 22-minute window** (14:15:02 -> 14:26Z). No deploy
+   scan boundary has been crossed yet, so "the freeze stops all deploys" is not yet observed.
+4. **The comparator's own semantics are not read.** I have the verdicts and the version strings, not the
+   comparison code. `version-compare.mjs` was not opened.
+5. **The denominator is unreliable** — 43/55 unprobed. **cf_analytics attributes 23,971 of 281,106
+   invocations.** **39 vs 305 unreconciled.** The repo source read caps at 32,768 of 75,875 bytes.
+6. The credential exposure is a privilege-boundary failure only if a worker bound to `qnfo-backups`
+   exposes an R2-read route to a lower-privilege caller — unverified.
