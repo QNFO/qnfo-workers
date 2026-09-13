@@ -1,4 +1,19 @@
-// qnfo-backlog-exec v1.2.8 - agent_issues backlog executor + issue_ledger resolver (cloud-native ops).
+// qnfo-backlog-exec v1.2.9 - agent_issues backlog executor + issue_ledger resolver (cloud-native ops).
+// v1.2.9 (PATCH-2026-09-13-zenodo-research-predicates, qnfo-ops): zenodo-publish +
+//  research-pipeline resolution predicates. Measured live 2026-09-13T14:07Z: the drain returned
+//  {processed:3, closed:0, rechecked:3, escalated:0} with EVERY row carrying
+//  note:"no probe target" - a permanent no-op, the same shape as the v1.2.7 model-health class.
+//  Cause: neither class had a close predicate, so both fell through to the generic recheck forever.
+//  (a) zenodo-publish "VQ error version_queue id=N": version_queue.id is INTEGER and addressable;
+//      close when the row's status is no longer 'error' (the raising condition has cleared).
+//      Verified live: version_queue id=18 status='drafted' -> issue 677 is now closeable.
+//  (b) research-pipeline "TERMINAL research failure N": N is NOT research_queue.id - that column is
+//      a UUID (verified live: 44c884d7-23ae-4aeb-968d-cc7011688619). Binding on N would match
+//      nothing and a "row absent" branch would WRONGLY close a live ticket. The predicate is
+//      therefore CONDITION-scoped: if NO research_queue row still satisfies
+//      (status='failed' AND recover_count>=2) the class has cleared -> close; otherwise keep open
+//      with an INFORMATIVE note. Verified live at write time: 2 rows still satisfy it, so issues
+//      687/688 correctly STAY OPEN and now report the real condition instead of "no probe target".
 // v1.2.8 (PATCH-2026-09-13-issue-ledger-resolver, qnfo-ops): issue_ledger resolution sweep +
 //  dual-counter /health. Measured live 2026-09-13: /health openBacklog=12 (agent_issues) while
 //  issue_ledger held 305 status='open' fingerprints - a 25x apparent divergence. Investigation
@@ -14,18 +29,6 @@
 //  conflated by a dashboard again.
 //  Verified at write time: issue_ledger live ingest (41 rows first_seen 2026-09-13, latest
 //  last_seen 2026-09-13T12:21:31Z), 305 open / 19 resolved / 1 acknowledged, 216 one-shot.
-//
-//  NOTE ON DEPLOY PATH (important): this file is written to BOTH
-//    qnfo-backlog-exec/deployed-current.worker.js   <- candidate #1, the one that WINS
-//    qnfo-backlog-exec/worker.js                    <- candidate #3, shadowed while #1 exists
-//  qnfo-fleet-deploy canonical() takes the FIRST GitHub candidate that returns 200, in order:
-//    qnfo-workers/main/<w>/deployed-current.worker.js
-//    qnfo-ops/main/cloud/<w>/deployed-current.worker.js
-//    qnfo-workers/main/<w>/worker.js
-//    qnfo-ops/main/cloud/<w>/worker.js
-//  v1.2.8 is written to BOTH paths. Prior to this commit deployed-current.worker.js held v1.2.7,
-//  so a v1.2.8 that existed only in worker.js would have been SHADOWED and never deployed -
-//  the exact trap documented in the v1.2.7 note below.
 // v1.2.7 (PATCH-2026-09-13-stale-model-noise, qnfo-ops): model-health / ai-calibration
 //  resolution predicates. Measured live 2026-09-13: the drain ran every ~2 min and reported
 //  {processed:25, closed:0, rechecked:25, escalated:0} with EVERY row carrying
@@ -59,7 +62,7 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.2.8";
+const VERSION = "1.2.9";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -306,6 +309,57 @@ async function run(env) {
       } catch (e) {}
     }
     // ---- end v1.2.7 -----------------------------------------------------------------------
+
+    // ---- v1.2.9: zenodo-publish / research-pipeline resolution predicates ------------------
+    // Measured live 2026-09-13: the drain reported {processed:3, closed:0, rechecked:3} with
+    // note:"no probe target" on ALL 3 open rows. Neither class had a predicate, so they fell
+    // through to the generic recheck on every pass forever - a permanent no-op identical in
+    // shape to the v1.2.7 model-health class. Both classes are D1-resolvable.
+    //
+    // (a) zenodo-publish: "VQ error version_queue id=N (...)" - version_queue.id is INTEGER, so
+    //     the row is addressable. Bind on the numeric id; close when its status is no longer
+    //     'error' (the condition that raised the ticket has cleared).
+    const vq = title.match(/version_queue\s+id=(\d+)/i);
+    if (vq) {
+      try {
+        const q = await env.AUDIT.prepare("SELECT status, version_to, updated_at FROM version_queue WHERE id=?1").bind(Number(vq[1])).first();
+        if (!q || String(q.status).toLowerCase() !== "error") {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: "version_queue#" + vq[1], action: "closed", note: q ? ("version_queue status=" + q.status + " (not error) - condition cleared") : "version_queue row absent - ticket orphaned" });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (VQ " + vq[1] + "): " + (q ? "status=" + q.status : "row absent"), { id: row.id, action: "closed", reason: "zenodo-publish predicate cleared v1.2.9" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, target: "version_queue#" + vq[1], action: "recheck", note: "version_queue STILL error (v" + (q.version_to || "?") + ", updated " + q.updated_at + ")" });
+        continue;
+      } catch (e) {}
+    }
+
+    // (b) research-pipeline: "TERMINAL research failure N" - N is NOT research_queue.id (that
+    //     column is a UUID, verified live: 44c884d7-23ae-4aeb-968d-cc7011688619). Binding on N
+    //     would match nothing and a "row absent" branch would WRONGLY close a live ticket. The
+    //     predicate is therefore CONDITION-scoped, not row-scoped: does ANY research_queue row
+    //     still satisfy the terminal condition (status='failed' AND recover_count>=2)? If none,
+    //     the class has cleared -> close. If some remain, keep open with an INFORMATIVE note -
+    //     never the misleading "no probe target" fall-through.
+    if (/^TERMINAL research failure\b/i.test(title)) {
+      try {
+        const t = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM research_queue WHERE status='failed' AND recover_count>=2").first();
+        const still = t ? Number(t.c || 0) : 0;
+        if (still === 0) {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, action: "closed", note: "research terminal condition cleared: 0 rows with status='failed' AND recover_count>=2" });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (research): no terminal-failed queue rows remain", { id: row.id, action: "closed", reason: "research-pipeline predicate cleared v1.2.9" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, action: "recheck", note: "research terminal condition STILL present: " + still + " queue row(s) status='failed' AND recover_count>=2" });
+        continue;
+      } catch (e) {}
+    }
+    // ---- end v1.2.9 -----------------------------------------------------------------------
 
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
     rechecked++;
