@@ -3,10 +3,10 @@
 Source: qnfo-ops endpoint session. Every value below is a tool return from that session.
 Where two of my own readings disagree, both are reported and the contradiction is left open.
 
-**REVISION 2 (2026-09-13).** Revision 1 asserted that `qnfo-cloud-ops`'s syntax error lived in
-`r2:qnfo-canonical/qnfo-cloud-ops.js` and that the fix was a canonical re-sync. **That was
-wrong**, and the error is corrected in §6.6. The root cause had already been found and fixed
-earlier the same day, and issue 691 is **closed**.
+**REVISION 3.** Adds the reachability correction (§11), the hub consolidation map (§12), and the
+`wrangler.toml` shadow finding (§13). Revision 1's `qnfo-cloud-ops` remediation was wrong and is
+corrected in §6.6; revision 2's claim that the deploy route is unreachable was also wrong and is
+corrected in §11.
 
 ---
 
@@ -40,10 +40,8 @@ The fleet roster is 55 deployed workers (`fleet_status` deployedCount=55). 25 wo
 
 Intersection of the 25 zero-traffic names with the 55 deployed = **0**. Their last activity row
 is frozen at `2026-09-12T09:05` — 29h stale. These are **retired/merged workers whose final
-measurement row was never removed**, i.e. ghosts in the measurement table, not idle live
-workers. They are the pre-merge sources of wave A/B (`radar-hub` = events-radar +
-qnfo-arxiv-radar + qnfo-research-radar + qnfo-citation-watch; `qnfo-fleet-control` = advisor +
-calibrator + deploy; `fleet-exec` = executor + scheduler).
+measurement row was never removed**. §12 identifies them as the absorbed members of the hub
+workers.
 
 **Therefore: do not merge 25 more workers. The consolidation already happened; the
 measurement table was not cleaned up.**
@@ -57,12 +55,12 @@ Of the 55 deployed, 40 are measured. Sorted ascending by `req24` (snapshot 14:06
 | qnfo-paper-explainer | **0** | deployed, zero scheduled requests in 24h |
 | osf-integrity-check | 1 | |
 | qnfo-impact | 1 | |
-| qnfo-twin-maintain | 1 | |
-| radar-hub | 2 | merged worker, near-idle |
+| qnfo-twin-maintain | 1 | `/health` returns **404** — no health route |
+| radar-hub | 2 | hub, 6 radars; near-idle |
 | research-daily-brief | 2 | |
 | qnfo-events | 4 | |
-| audit-hub | 5 | |
-| companion-hub | 5 | |
+| audit-hub | 5 | hub, 4 members; cron-driven |
+| companion-hub | 5 | hub, 4 members; overlaps personal-companion |
 
 9 of 55 (16.4%) are below 10 req/24h; 4 are at or below 1. `qnfo-paper-explainer` is the only
 deployed worker at exactly 0.
@@ -82,7 +80,7 @@ serves public traffic) and would legitimately have no cron. This is a measuremen
 papers.qnfo.org, qnfo-ai, qnfo-fleet-dashboard, qnfo-kaizen, qnfo-ops, qnfo-outreach,
 qnfo-paper-reviser, qnfo-social, qnfo.org — i.e. **9 workers + 1 site**. 46 deployed workers
 are never health-probed. `fleet_heartbeat` holds **1 row** (qnfo-lifecycle);
-`fleet_error_state` is **empty**. Confirms open issue 701.
+`fleet_error_state` is **empty**. Confirms open issue 701, now extended with these numbers.
 
 ## 4. Recurring cron execution is nearly absent
 
@@ -99,21 +97,39 @@ repetition:
 Everything else in `fleet_runs` is a one-shot manual row (`c=1`) from 2026-09-10.
 `fleet_crons` registers only 6 crons, one `enabled=0` with `last_fired=NULL`.
 
-**A cron named `demo-heartbeat-minutely` is the fleet's highest-frequency scheduled task.**
-That is the clearest instance of "firing and nothing happens".
+**A cron named `demo-heartbeat-minutely` is the fleet's highest-frequency scheduled task in
+this ledger.** That is the clearest instance of "firing and nothing happens".
 
-## 5. Cron configuration is not in source control, and `deployed-current.worker.js` is not source
+**Counter-evidence (must be weighed):** `fleet_runs` only covers the `fleet-exec` task engine.
+`qnfo-cloud-ops` declares 22 jobs and its own cron list via `/health`, e.g.
+`15 4 * * * -> release-check`, `0 6,12 * * 1-5 -> email-triage`, `30 6 * * 1-5 -> briefing`,
+`0 7,13 * * 1-5 -> gmail-triage`, `0 8 * * 1-5 -> research-scan`, `0 15 * * 5 -> weekly`,
+`0 4 * * 7 -> weekly-ops`. So **the fleet is not cron-poor overall**; the *ledger* is
+cron-poor. This weakens §4 as a fleet-wide claim and it should be read as scoped to `fleet-exec`.
 
-`qnfo-impact/` in this repo contains **only** `deployed-current.worker.js` — no `worker.js`,
-no `wrangler.toml`. `radar-hub/` has `worker.js` + one patch script, no `wrangler.toml`.
+## 5. Config drift: the repo `wrangler.toml` is a partial shadow of production
 
-Per the closed issue 691, `deployed-current.worker.js` files are **upload-artifact snapshots,
-not source** — at least one held a MIME multipart upload body beginning with a boundary. They
-must not be treated as editable source, and a worker whose canonical resolves only from one has
-no source in version control.
+`qnfo-impact/` contains **only** `deployed-current.worker.js` — no `worker.js`, no
+`wrangler.toml`. `radar-hub/` has `worker.js` + one patch script, no `wrangler.toml`.
 
-So for many workers the cron schedule exists only in the live deployment. The question
-"does this worker run multiple times a day?" cannot be answered from the repo.
+The hubs do have `wrangler.toml`, but they carry **no `[triggers]`/crons section at all**, and
+their bindings are annotated as incomplete:
+
+    # binding SEND_EMAIL: type=send_email (see deployed config)
+    # binding VZ: type=vectorize (see deployed config)
+    # binding BROWSER: type=browser (see deployed config)
+
+`audit-hub/wrangler.toml` (222 B) declares only `name`, `main`, `compatibility_date` and one D1
+binding. `errata-hub/wrangler.toml` (672 B) omits BROWSER and SEND_EMAIL. `companion-hub`
+omits VZ.
+
+**Consequence:** cron triggers and several bindings exist only in the live deployment. The
+question "does this worker run multiple times a day?" is **not answerable from version
+control** — it must be read from each worker's `/health`.
+
+Per closed issue 691, `deployed-current.worker.js` files are **upload-artifact snapshots, not
+source** — at least one held a MIME multipart upload body beginning with a boundary. A worker
+whose canonical resolves only from one has no source in version control.
 
 ---
 
@@ -161,8 +177,7 @@ Four reads of `alerts` in one session, minutes apart:
 
 ~932 rows disappeared between the first and second read, including every `qnfo-pipeline-ops`
 storm row and the 14:16:22 row. **The storm's history is being erased**, so neither "the storm
-continues" nor "the storm has stopped" can be verified from this table. `MAX(created_at)` is
-now 06:02:05Z, which is *earlier* than rows I read at 14:22Z.
+continues" nor "the storm has stopped" can be verified from this table.
 
 I assert neither explanation (concurrent prune vs. a wrong read). Consequence: **no alert count
 in this document is exact.** `qnfo-observability`'s own v1.1.5 note documents a `digested` enum
@@ -201,9 +216,9 @@ Independently corroborated from my own reads this session:
   `import { connect } from "cloudflare:sockets";`.
 
 **`qnfo-observability` — fix exists, undeployed.** Repo `worker.js` is v1.1.6-single-module,
-which inlines `FLEET` and drops `import './fleet.js'`. Canonical R2 is v1.1.4 (multi-module).
-Issue 702 additionally records that the live worker reports 1.2.0 and the ingest cursor is
-stuck, so the staged 1.1.6 patcher is not usable as-is.
+which inlines `FLEET` and drops `import './fleet.js'`. Live `/health` reports **1.2.0**,
+`merged:["qnfo-observability","qnfo-analytics"]`. Issue 702 records the ingest cursor is stuck,
+so the module-topology fix and the cursor fault are separate.
 
 ### 6.7 The observability layer is blind and reports health
 
@@ -212,8 +227,7 @@ stuck, so the staged 1.1.6 patcher is not usable as-is.
     Fleet observability digest: 0 workers logged 0 events in 24h; 0 anomalies
 
 `worker_logs` is frozen at 2026-09-10T11:17:40Z (issue 702). So the digest reports **"0
-anomalies" because it has 0 data**. A monitor that cannot see anything reports health — the
-same failure mode `qnfo-observability` v1.1.5 documented for itself.
+anomalies" because it has 0 data**.
 
 ### 6.8 Two subsystems disagree about model health
 
@@ -226,8 +240,7 @@ Against that, this session's direct aggregate of `ai_model_health`:
     total 20 | @cf/* rows 0 | status='degraded' 0
 
 The advisor's "down:2 / four degraded checkpoints" and `ai_model_health`'s zero degraded rows
-**cannot both be describing the same table**. Unresolved; the advisor's degraded set has no
-traceable source in `ai_model_health`.
+**cannot both be describing the same table**. Unresolved.
 
 ### 6.9 `worker_invocations` is a dead probe table emitting false 5xx
 
@@ -260,18 +273,82 @@ endpoint.
 
 ---
 
-## 8. Remediation queue — every remaining item is deploy-gated
+## 11. CORRECTION — the fleet IS reachable on `q08.workers.dev`; the deploy route EXISTS
 
-The ops endpoint has no deploy route: `qnfo-fleet-control` holds the capability but
-`https://qnfo-fleet-control.q08.workers.dev/health` returns **HTTP 404**, and it is not among
-this endpoint's 12 service bindings. `r2:qnfo-canonical/*` is not among the 4 bound R2 buckets
-(prefixes `canonical` and `qnfo-canonical` both return 0 objects in `audit` and `releases`).
+Revision 2 (and the prior session's note) asserted the deploy route was unreachable because
+`q08.workers.dev` returns 404. **That is wrong.** Direct fetches this session:
 
-Ordered, because several steps are unsafe out of order:
+| URL | result |
+|---|---|
+| `https://qnfo-cloud-ops.q08.workers.dev/health` | **200** — `{"ok":true,"worker":"qnfo-cloud-ops","version":"1.14.1","jobs":[22 jobs],"crons":[...]}` |
+| `https://qnfo-observability.q08.workers.dev/health` | **200** — `{"version":"1.2.0","merged":["qnfo-observability","qnfo-analytics"]}` |
+| `https://qnfo-fleet-control.q08.workers.dev/` | **401** — token-gated, **not** 404 |
+| `https://qnfo-impact.q08.workers.dev/health` | 200 |
+| `https://osf-integrity-check.q08.workers.dev/health` | 200 (live OSF registration report, `checked_at 2026-09-13T14:27:07Z`) |
+| `https://qnfo-paper-explainer.q08.workers.dev/health` | 200 |
+| `https://radar-hub.q08.workers.dev/health` | 200 — `{"radars":6}` |
+| `https://audit-hub.q08.workers.dev/health` | 200 — `{"members":4}` |
+| `https://companion-hub.q08.workers.dev/health` | 200 — `{"members":4}` |
+| `https://errata-hub.q08.workers.dev/health` | 200 — `{"members":3}` |
+| `https://jnl-pipeline.q08.workers.dev/health` | 200 |
+| `https://fleet-exec.q08.workers.dev/health` | 200 |
+| `https://qnfo-twin-maintain.q08.workers.dev/health` | **404** — deployed, no health route |
+
+`qnfo-fleet-control` — the holder of the deploy capability — is **live and answering 401**. It
+is not absent.
+
+**The real blocker is narrower:** `web_fetch` accepts only a URL and a character limit. It
+**cannot send an `Authorization` header**, so this endpoint cannot authenticate to a
+token-gated route. The deploy capability exists and is one credential-bearing HTTP client away.
+That is a materially different situation from "no route exists", and it changes the remediation
+owner from "unblock infrastructure" to "run one authenticated call".
+
+Note also: `qnfo-cloud-ops` `/health` reports version **1.14.1**, which matches
+`fleet_deploys`' last successful target and the repo source — so the drift rows calling it
+`canonical-ahead`/`stale-canon` are comparator artifacts, not real drift.
+
+## 12. Hub consolidation map — the consolidation is DONE
+
+The fleet consolidates through "hub" workers that bundle member modules. Live `/health`
+declarations:
+
+| hub | declares | evidence |
+|---|---|---|
+| `audit-hub` | `members: 4` | v1.0.0 |
+| `companion-hub` | `members: 4` | v1.0.0 |
+| `errata-hub` | `members: 3` | v1.0.0 |
+| `idea-hub` | `merged: [idea-hub, qnfo-thread-ingest]` | v1.0.0 |
+| `qnfo-observability` | `merged: [qnfo-observability, qnfo-analytics]` | v1.2.0 |
+| `radar-hub` | `radars: 6` | v1.0.0 |
+| `fleet-exec` | executor + scheduler | registry: "wave A 2->1" |
+| `qnfo-fleet-control` | advisor + calibrator + deploy | registry: "wave A" |
+
+**Inferred mapping (counts corroborate, member names not directly read):** the 25 ghost names
+in `worker_activity_daily` are the absorbed members. The count match is exact for `errata-hub`
+(3 members = qnfo-errata-publish, qnfo-errata-respond, qnfo-errata-watch — all 3 in the ghost
+list) and consistent for `audit-hub` (4 members; the ghost list contains exactly 4 audit-family
+names: qnfo-auditor, qnfo-blank-audit, qnfo-error-selfheal, qnfo-register-guard). `radar-hub`'s
+6 radars align with the ghost names qnfo-arxiv-radar, qnfo-research-radar, qnfo-citation-watch,
+events-radar, personal-events-radar, job-market-watch.
+
+I label this **inferred**, not verified: I read member *counts*, not member *names*, and no hub
+exposes a member-list route (`/` returns only the hub's own name).
+
+**Actionable merge candidate:** `companion-hub` (4 members, 5 req/24h, v1.0.0) overlaps
+`personal-companion` (543 req/24h, v1.1.0) — same model set (kimi-k2.6 / gpt-oss-120b /
+glm-5.3), same "notes / essay / serial" content loop, and `companion-hub/wrangler.toml` binds
+the same PERSONAL D1 (`e8d6c61a-10b7-4086-b81e-9e6e85afa407`) plus `d-drive` and
+`personal-media` R2. That is a real 2→1, and the only one I would act on from the low-traffic
+set. `audit-hub` is **not** a merge candidate despite req24=5: it is a 14-check auditor,
+cron-driven by design.
+
+---
+
+## 8. Remediation queue
 
 1. **[DONE 14:23Z]** `fleet_deploy_state.auto_heal = 0`. Precondition for everything else.
 2. Deploy `qnfo-observability` v1.1.6-single-module (fix in repo) — noting the live worker is
-   1.2.0 and the cursor fault in 702 is not the module-topology fault, so both need handling.
+   1.2.0 and the cursor fault in 702 is separate from the module-topology fault.
 3. Reconcile canonical `personal-companion` to >= v1.1.0 **and** export `GenerationFlow`,
    *then* fix `qnfo-fleet-control/version-compare.mjs` (the leading-`v` misparse).
    Do not fix 10021 before this.
@@ -282,6 +359,9 @@ Ordered, because several steps are unsafe out of order:
 7. Rotate the 9 `credentials/*` objects and restrict `BACKUPS_R2`.
 8. Stop the `alerts` prune or add snapshot semantics — a monitoring table whose row count moves
    from 1101 to 169 under concurrent reads cannot be used as evidence.
+9. Merge `companion-hub` into `personal-companion` (§12) — the only defensible 2→1.
+10. Add `[triggers]`/crons and the missing bindings to every `wrangler.toml` (§5), or document
+    that production config is authoritative. As it stands, cron schedules are unversioned.
 
 **Already resolved, no action needed:** `qnfo-cloud-ops` (691 closed), `OPEN-ISSUES-BACKLOG`
 (717 closed).
@@ -290,18 +370,22 @@ Ordered, because several steps are unsafe out of order:
 
 - Whether the 15 unmeasured workers are productive. No data.
 - Whether `qnfo-pipeline-ops` is a live worker. It appears in `worker_activity_daily` but not in
-  the 55-worker roster, and shows `req24=0` frozen at 09-12T09:05 while emitting alerts hourly
-  today — so either the alert `source` string is a label written by another worker, or the
-  measurement is blind to it. Unresolved.
+  the 55-worker roster, shows `req24=0` frozen at 09-12T09:05 while emitting alerts hourly, and
+  `https://qnfo-pipeline-ops.q08.workers.dev/health` was not probed. Unresolved.
 - Whether the alert storm is still running (§6.5 — its rows are being deleted).
 - Why the advisor reports `down:2` while `ai_model_health` reports 0 degraded (§6.8).
+- The hub member *names* (§12 — counts only).
 - The deployed revision of `qnfo-pipeline-ops`. `pipeline_state` is absent from live D1.
 
-## 10. Corrections to this document's own revision 1
+## 10. Corrections to this document's own revisions
 
 1. `qnfo-cloud-ops` root cause and remediation were **wrong** (§6.6). It was a MIME multipart
    body in a resolver candidate, already fixed by `927ccb8d`; issue 691 is closed.
 2. A prior turn of this same session reported `ai_model_health` as 25 rows / 5 degraded `@cf/*`
-   rows. The direct aggregate refutes it: **20 rows, 0 `@cf/*`, 0 degraded**. Revision 1
-   inherited that error; it is corrected here.
+   rows. The direct aggregate refutes it: **20 rows, 0 `@cf/*`, 0 degraded**.
 3. `deployed-current.worker.js` was described as source. It is an upload artifact (§5).
+4. **The deploy route was described as unreachable.** Wrong — `q08.workers.dev` answers, and
+   `qnfo-fleet-control` returns 401, not 404 (§11). The blocker is the absence of header support
+   in this endpoint's fetch tool.
+5. §4 was written as a fleet-wide cron claim. It is scoped to the `fleet-exec` ledger only;
+   `qnfo-cloud-ops` alone declares 7+ recurring crons (§4, §11).
