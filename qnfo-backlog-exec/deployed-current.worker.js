@@ -1,56 +1,111 @@
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+// qnfo-backlog-exec v1.2.7 - agent_issues backlog executor (cloud-native ops).
+// v1.2.7 (PATCH-2026-09-13-stale-model-noise, qnfo-ops): model-health / ai-calibration
+//  resolution predicates. Measured live 2026-09-13: the drain ran every ~2 min and reported
+//  {processed:25, closed:0, rechecked:25, escalated:0} with EVERY row carrying
+//  note:"no probe target" - a permanent no-op. Cause: run() only had close predicates for
+//  health-availability, exception/alert-storm (both require workerTarget() to match a worker
+//  name in the title) and the OPEN-ISSUES% noise sweep. 20 of the 25 open rows were
+//  MODEL-DEGRADED / [gw-fail] / [ai-cal], which name MODELS not workers -> workerTarget()
+//  returned null -> they fell through to `recheck` on every pass forever.
+//  Each of those classes has a D1-resolvable predicate, so they are now closeable on
+//  EVIDENCE rather than age. Verified at write time: ai_model_health had 25 rows all
+//  status='ok' (0 degraded) while 10 MODEL-DEGRADED tickets sat open; ai_gateway_failures
+//  24h still showed bge-base 30755 rate-capacity + qwen2.5-coder 13986 content-shape, so
+//  those gw-fail rows are REAL and are deliberately kept open, not closed.
+//
+//  NOTE ON DEPLOY PATH (important): this file is written to BOTH
+//    qnfo-backlog-exec/deployed-current.worker.js   <- candidate #1, the one that WINS
+//    qnfo-backlog-exec/worker.js                    <- candidate #3, shadowed while #1 exists
+//  qnfo-fleet-deploy canonical() takes the FIRST GitHub candidate that returns 200, in order:
+//    qnfo-workers/main/<w>/deployed-current.worker.js
+//    qnfo-ops/main/cloud/<w>/deployed-current.worker.js
+//    qnfo-workers/main/<w>/worker.js
+//    qnfo-ops/main/cloud/<w>/worker.js
+//  Prior to this commit deployed-current.worker.js held v1.2.4 - a DOWNGRADE vs live v1.2.6 -
+//  so the deployer saw canonical 1.2.4 < live 1.2.6 and correctly skipped, while the v1.2.6
+//  source sat in worker.js at the shadowed candidate #3. That is why backlog-exec drift never
+//  healed. With 1.2.7 in BOTH paths the next hourly scan sees an UPGRADE and ships it.
+// v1.2.6 (red-team 2026-09-09): watchdog coverage + created_at normalizer.
+//  - Sweep predicate widened 'OPEN-ISSUES %' -> 'OPEN-ISSUES%': the qnfo-fleet-advisor watchdog
+//    row 'OPEN-ISSUES-BACKLOG' (re-filed every 20 min) has NO space after OPEN-ISSUES and so was
+//    never swept. Verified live: it was the only OPEN-ISSUES-class row still open (#626) while
+//    all numbered siblings had been closed by the sweep. Same self-referential snapshot class;
+//    the >3h age gate is unchanged, so a fresh watchdog row is never closed early.
+//  - createdAgeMs() normalizer: agent_issues.created_at mixes ISO-T ("2026-09-09T19:40:02"),
+//    space-separated ("2026-09-09 18:30:23"), and epoch-ms stored as TEXT ('1788964264232' -
+//    [ai-cal] roster-drift rows). new Date(text) on epoch-ms TEXT yields Invalid Date, so age
+//    math silently broke (age ~= now for the sweep / exception classes). Numeric TEXT is now
+//    parsed as epoch-ms; unparseable values default to age 0 (never age-close on an unknown date).
+// v1.2.5: advisor-noise sweep - qnfo-fleet-advisor files 'OPEN-ISSUES N' snapshot rows
+// every 20 min (self-referential backlog metrics masquerading as tickets). Those rows have
+// no probe target and no resolution predicate, so the drain only rechecked them, burning the
+// 40-row budget and never closing them. Sweep closes any OPEN-ISSUES snapshot older than 3h
+// (superseded dozens of times; cadence is 20 min) BEFORE the drain selects its rows.
+// v1.1.1: drain ordering (priority, then least-recently-watched) so each daily run advances.
+// v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
+// failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
+// All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
+const VERSION = "1.2.7";
+// v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
+// formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
+// v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
+// (CF edge 404 / SVC-BINDING-1); use qnfo-fleet-dashboard fleet_probe_log rows in qnfo-audit
+// as the authoritative 15-min health evidence, edge probe only as fallback.
+// v1.2.0: exception/alert-storm class auto-close - a worker-exception ticket whose target is
+// healthy NOW and has had NO new alert in 24h AND is older than 48h is stale by evidence;
+// close it (health-availability rows already auto-close on probe pass; this extends the same
+// evidence discipline to alert-storm/exception tickets so the backlog cannot accrue ghost items).
+const WORKER = "qnfo-backlog-exec";
+const MAX_ROW = 40;
+const PROBE_TIMEOUT = 8000;
 
-// worker.js
-var VERSION = "1.2.4";
-var WORKER = "qnfo-backlog-exec";
-var MAX_ROW = 40;
-var PROBE_TIMEOUT = 8e3;
 async function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
-__name(json, "json");
-function ts() {
-  return (/* @__PURE__ */ new Date()).toISOString();
+function ts() { return new Date().toISOString(); }
+function nowEpoch() { return Date.now(); }
+
+// v1.2.6: created_at normalizer. Writers store ISO-T, space-separated, or epoch-ms as TEXT.
+// Only number|Date-string handling made TEXT epoch-ms -> Invalid Date -> broken age math.
+// Unparseable -> 0 (age unknown, treated as fresh; never age-close on a date we cannot read).
+function createdAgeMs(ca, now) {
+  if (typeof ca === "number") return now - ca;
+  if (typeof ca === "string") {
+    const t = ca.trim();
+    if (/^\d{10,}$/.test(t)) return now - Number(t); // epoch-ms stored as TEXT
+    const d = new Date(t).getTime();
+    if (Number.isFinite(d)) return now - d;
+  }
+  return 0;
 }
-__name(ts, "ts");
-function nowEpoch() {
-  return Date.now();
-}
-__name(nowEpoch, "nowEpoch");
+
 async function recordEvent(env, kind, text, meta, job, status) {
   try {
-    const id = kind.slice(0, 2) + "-" + (job || WORKER) + "-" + Date.now().toString(36);
-    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, ts(), kind, String(text).slice(0, 800), JSON.stringify(meta || {}).slice(0, 800), job || WORKER, status || "ok").run();
-  } catch (e) {
-  }
+    const id = kind.slice(0,2) + "-" + (job || WORKER) + "-" + Date.now().toString(36);
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+      .bind(id, ts(), kind, String(text).slice(0,800), JSON.stringify(meta||{}).slice(0,800), job || WORKER, status || "ok").run();
+  } catch (e) {}
 }
-__name(recordEvent, "recordEvent");
 async function alert(env, source, level, message) {
-  try {
-    await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(source, level, String(message).slice(0, 500)).run();
-  } catch (e) {
-  }
+  try { await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(source, level, String(message).slice(0,500)).run(); } catch (e) {}
 }
-__name(alert, "alert");
+
 function workerTarget(text) {
   const m = String(text || "").match(/\b(qnfo-[a-z0-9-]+|personal-api(?:-[a-z0-9-]+)?|research-daily-brief|calendar-api|events-radar|qnfo-ai|qnfo-ai-chat)\b/g);
   if (!m) return null;
   return m[0];
 }
-__name(workerTarget, "workerTarget");
+
 async function probeHealthyViaLog(env, name) {
   try {
     const row = await env.AUDIT.prepare("SELECT ok, status, ts FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
     if (row && Number(row.ok) === 1) {
       const age = Date.now() - new Date(row.ts).getTime();
-      if (age < 24 * 3600 * 1e3) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status };
+      if (age < 24 * 3600 * 1000) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status };
     }
-  } catch (e) {
-  }
+  } catch (e) {}
   return null;
 }
-__name(probeHealthyViaLog, "probeHealthyViaLog");
 async function probeHealth(name) {
   const hosts = [name + ".q08.workers.dev", name + ".qnfo.org"];
   for (const h of hosts) {
@@ -60,13 +115,36 @@ async function probeHealth(name) {
       const r = await fetch("https://" + h + "/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-backlog-exec)" }, signal: ctl.signal });
       clearTimeout(timer);
       if (r.ok) return { ok: true, host: h, status: r.status };
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   return { ok: false, host: null, status: 0 };
 }
-__name(probeHealth, "probeHealth");
+
+// v1.2.5 + v1.2.6: advisor-noise sweep. 'OPEN-ISSUES N' AND 'OPEN-ISSUES-BACKLOG' rows are
+// self-referential backlog snapshots (emitted every 20 min by qnfo-fleet-advisor), not actionable
+// tickets: no probe target, no resolution predicate. Anything older than 3h is superseded noise
+// -> close, keep history. v1.2.6 widens the predicate to 'OPEN-ISSUES%' so the space-less
+// watchdog row is covered too.
+async function sweepAdvisorNoise(env) {
+  let closed = 0;
+  const now = nowEpoch();
+  try {
+    const noise = await env.AUDIT.prepare("SELECT id, title, created_at FROM agent_issues WHERE status='open' AND title LIKE 'OPEN-ISSUES%' ORDER BY id").all();
+    const rows = noise.results || [];
+    for (const r of rows) {
+      const ageMs = createdAgeMs(r.created_at, now);
+      if (ageMs > 3 * 3600 * 1000) {
+        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, r.id).run();
+        closed++;
+        await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0,40) + "): superseded, age>3h", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.6" }, WORKER, "ok");
+      }
+    }
+  } catch (e) {}
+  return closed;
+}
+
 async function run(env) {
+  const noiseClosed = await sweepAdvisorNoise(env);
   const rows = await env.AUDIT.prepare("SELECT id, title, description, source, category, priority, status, created_at, updated_at FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, updated_at ASC, id LIMIT ?1").bind(MAX_ROW).all();
   const items = rows.results || [];
   const now = nowEpoch();
@@ -99,15 +177,17 @@ async function run(env) {
     }
     const isExceptionClass = !isHealthAvailability && name && /alert-storm|exception|error-burst|worker-exception|recurring fail/i.test(title);
     if (isExceptionClass && name) {
-      const ca = row.created_at;
-      const ageMs = typeof ca === "number" ? now - ca : now - (new Date(ca).getTime() || 0);
-      if (ageMs > 24 * 3600 * 1e3) {
+      // Recurrence-based stale close: error-selfheal alerts every recurrence (2h windows).
+      // If NO error-selfheal exception/storm alert names this worker in the last 24h, the
+      // class has recovered; the ticket is stale. Health evidence (fleet log or edge probe)
+      // is checked when available but is not required - error-selfheal silence IS the signal.
+      const ageMs = createdAgeMs(row.created_at, now);
+      if (ageMs > 24 * 3600 * 1000) {
         let rec = 0;
         try {
           const ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM alerts WHERE source='qnfo-error-selfheal' AND message LIKE ?1 AND julianday(created_at) >= julianday('now', '-24 hours')").bind("%" + name + "%").first();
           rec = ar ? Number(ar.c || 0) : 0;
-        } catch (e) {
-        }
+        } catch (e) {}
         if (rec === 0) {
           const ev = await probeHealthyViaLog(env, name) || await probeHealth(name);
           await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
@@ -118,24 +198,87 @@ async function run(env) {
         }
       }
     }
+
+    // ---- v1.2.7: model-health / ai-calibration / gw-fail resolution predicates ------------
+    // Rows in these classes name MODELS, not workers, so workerTarget() returned null and they
+    // fell straight through to `recheck` on every run forever (measured: closed:0, rechecked:25,
+    // note "no probe target" on all 25). Each class has a D1-resolvable predicate, so close on
+    // evidence rather than age. Deliberately NO escalation for still-current gw-fail rows: they
+    // are a genuine open defect and escalating every 2 min would be an alert storm.
+    const isModelHealth = /^MODEL-DEGRADED\b/i.test(title);
+    if (isModelHealth) {
+      try {
+        const dg = await env.AUDIT.prepare("SELECT model_id FROM ai_model_health WHERE status='degraded'").all();
+        const degraded = new Set((dg.results || []).map((d) => String(d.model_id)));
+        const named = title.replace(/^MODEL-DEGRADED\s*/i, "").split(",").map((s) => s.trim()).filter(Boolean);
+        const still = named.filter((m) => degraded.has(m));
+        if (degraded.size === 0 || still.length === 0) {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, action: "closed", note: "model-health stale: none of [" + named.slice(0, 4).join(",") + "] degraded now (degraded rows=" + degraded.size + ")" });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (model-health): no named model degraded now", { id: row.id, action: "closed", reason: "model-health predicate cleared v1.2.7" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, action: "recheck", note: "model-health STILL degraded: " + still.join(",") });
+        continue;
+      } catch (e) {}
+    }
+    const probeFail = title.match(/^\[ai-cal\]\s+model probe failing:\s*(\S+)/i);
+    if (probeFail) {
+      try {
+        const model = probeFail[1];
+        const h = await env.AUDIT.prepare("SELECT status FROM ai_model_health WHERE model_id=?1").bind(model).first();
+        if (!h || String(h.status) !== "degraded") {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: model, action: "closed", note: "ai-cal probe-failing stale: ai_model_health status=" + (h ? h.status : "absent") });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (ai-cal " + model + "): health no longer degraded", { id: row.id, target: model, action: "closed", reason: "ai-cal probe predicate cleared v1.2.7" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, target: model, action: "recheck", note: "ai-cal probe STILL failing: " + model });
+        continue;
+      } catch (e) {}
+    }
+    const gwFail = title.match(/^\[gw-fail\]\s+(\d+)\s+(\S+)/);
+    if (gwFail) {
+      try {
+        const model = gwFail[2];
+        const rec = await env.AUDIT.prepare("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE model=?1 AND ts >= ((strftime('%s','now') - 86400) * 1000)").bind(model).first();
+        const n = rec ? Number(rec.n || 0) : 0;
+        if (n === 0) {
+          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          closed++;
+          detail.push({ id: row.id, target: model, action: "closed", note: "gw-fail stale: 0 failures for " + model + " in 24h" });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (gw-fail " + model + "): no recurrence in 24h", { id: row.id, target: model, action: "closed", reason: "gateway-failure predicate cleared v1.2.7" }, WORKER, "ok");
+          continue;
+        }
+        rechecked++;
+        detail.push({ id: row.id, target: model, action: "recheck", note: "gateway failures CURRENT: " + n + "/24h - real defect, root fix pending" });
+        continue;
+      } catch (e) {}
+    }
+    // ---- end v1.2.7 -----------------------------------------------------------------------
+
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
     rechecked++;
-    detail.push({ id: row.id, title: title.slice(0, 60), action: "recheck", note: name ? "probe target " + name : "no probe target" });
+    detail.push({ id: row.id, title: title.slice(0,60), action: "recheck", note: name ? ("probe target " + name) : "no probe target" });
   }
-  const summary = { processed: items.length, closed, rechecked, escalated, detail: detail.slice(0, MAX_ROW) };
-  if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter((d) => d.action === "escalate").map((d) => d.target).join(", "));
-  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ processed: items.length, closed, rechecked, escalated }), { processed: items.length, closed, rechecked, escalated }, WORKER, "ok");
+  const summary = { noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
+  if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter(d=>d.action==="escalate").map(d=>d.target).join(", "));
+  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { noiseClosed: noiseClosed, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
 }
-__name(run, "run");
-var worker_default = {
+
+export default {
   async scheduled(event, env, ctx) {
     try {
       const out = await run(env);
       console.log("backlog-exec", JSON.stringify(out));
     } catch (e) {
-      console.error("backlog-exec", String(e && e.message || e));
-      await alert(env, WORKER, "error", "run failed: " + String(e && e.message || e));
+      console.error("backlog-exec", String((e && e.message) || e));
+      await alert(env, WORKER, "error", "run failed: " + String((e && e.message) || e));
     }
   },
   async fetch(request, env) {
@@ -146,12 +289,8 @@ var worker_default = {
     }
     if (url.pathname === "/run" && request.method === "POST") {
       const out = await run(env);
-      return json({ ok: true, worker: WORKER, version: VERSION, out });
+      return json({ ok: true, worker: WORKER, version: VERSION, out: out });
     }
     return json({ error: "not found" }, 404);
   }
 };
-export {
-  worker_default as default
-};
-//# sourceMappingURL=worker.js.map
