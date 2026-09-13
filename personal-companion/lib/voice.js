@@ -30,7 +30,7 @@
 // reader's own recent events. So the model opens on his life, in his voice, and
 // cites him by name where it is quoting rather than inhabiting.
 //
-// FOUR CHECKS
+// FIVE CHECKS
 //   1. impersonation        - the writer asserting lived experience
 //   2. attribution-seam     - the reader named in the third person as the subject
 //                             of an experience verb, inside a first-person piece
@@ -43,6 +43,8 @@
 //   4. invented-particular  - scene detail the record does not hold (headcount,
 //                             room, staged scene), scoped to sentences that
 //                             mention a recorded venue
+//   5. first-person-attendance (rev 4) - the writer claiming physical presence at
+//                             an event. See the revision 4 note below.
 //
 // REVISION 2 (same day, after running the checks over all four live pieces)
 // Revision 1 flagged particulars anywhere in the text. Measured against the other
@@ -88,6 +90,37 @@
 // into ONE scope with exports stripped, so a second top-level declaration of that
 // name would be a duplicate declaration and the inlined worker would not parse.
 //
+// REVISION 4 (2026-09-13, QRI-2 red team) - THE HOLE REV 3 LEFT OPEN
+// Rev 3 (severity) and rev 4 (this one) are two different fixes for two different
+// defects, and they were written concurrently on the same path. Rev 3 stops the
+// gate from withdrawing correct prose; rev 4 stops it from publishing a false
+// presence claim. Neither substitutes for the other, so both are kept here.
+//
+// Measured by executing rev 2/rev 3 against a constructed minimal edit of the live
+// piece - both factual errors corrected, the name and the invented particulars
+// removed, the presence claim kept:
+//
+//   "... Seven days later, at QPL 2026 in Amsterdam, the week rated 1 out of 5.
+//    Drained. I was there for both, and they differed in what they asked
+//    attention to do."
+//     -> rev 2/3: ZERO findings from any check. publish = true, blockingTotal = 0.
+//
+//   same text with "I was there for both" replaced by "I attended both"
+//     -> rev 2/3: one `impersonation` finding, severity 'warn' as of rev 3, so
+//        publish = true and blockingTotal = 0 anyway.
+//
+// So the detector caught a false claim of presence and the policy published it.
+// Check 5 exists to make the presence claim blocking.
+//
+// SCOPE OF CHECK 5 (deliberate, and narrower than it looks)
+// A presence claim blocks only when the piece ALSO names a recorded venue, and
+// only when the match is not inside quotation marks. Rationale, each pinned by a
+// test: a quoted presence claim belongs to whoever is being quoted (warn); a
+// presence claim in a piece that names no recorded venue is not evidence about
+// the reader's record (warn). The pattern list is narrow on purpose - "I was at a
+// loss", "I was in doubt" and "I was reasoning past the anchors there" are not
+// presence claims, and a false block is as damaging as a false pass.
+//
 // SCOPE / KNOWN LIMITS
 // Surface checks, not proof of authorship. They flag spans for a policy or a
 // human to judge; they do not decide. Check 2 is scoped to text that also speaks
@@ -95,9 +128,22 @@
 // flagged). If the record ever gains a headcount or a room, these checks must be
 // given that row rather than left as blanket rules.
 //
-// KNOWN MISS, still open in rev 3: check 3 matches a STRAIGHT apostrophe only, so
+// KNOWN MISS, still open in rev 4: check 3 matches a STRAIGHT apostrophe only, so
 // the typographic form is not caught here. addressee.js rev 2 handles both forms
 // and is composed in by gate.js, so the union covers it. Do not rely on check 3 alone.
+//
+// KNOWN MISS, UNFIXED (recorded 2026-09-13, QRI-2): a piece that narrates the
+// reader's recorded week from the inside, with no name, no listed experience verb
+// and no presence copula, still produces zero findings. Measured on verbatim live
+// text: "The LoF26 room and the QPL 2026 room differed in what they did to
+// attention. The first leaves intervals - the pause after someone says something
+// wrong, the walk to the next session, the unminuted conversation. The energy
+// ratings were 5 and 1." -> 0 findings, publish = true. This is the class the
+// reader's own question ("who is I?") is about. It is left unfixed because the
+// candidate rule (scene nouns near a recorded event, without a name) could not be
+// validated for false positives across the corpus from this endpoint, and an
+// unvalidated detector that blocks is worse than a recorded miss. It is pinned by
+// a test in gate.test.js so the gap cannot be forgotten.
 
 const EXP_VERBS = ['rated', 'attended', 'sat', 'visited', 'travelled', 'traveled', 'spoke', 'presented'];
 
@@ -115,6 +161,19 @@ const IMPERSONATION = [
   /\bI\s+went\s+to\b/i,
   /\bmy\s+(?:week|trip|stay|visit|energy|attention|travel)\b/i,
   /\bwe\s+(?:sat|attended|travelled|traveled|met)\b/i
+];
+
+// Check 5 (rev 4). Deliberately narrow: "I was at a loss" must not fire, so the
+// generic locative requires a capitalised name after it.
+const ATTENDANCE = [
+  /\bI\s+was\s+there\b/i,
+  /\bI\s+was\s+present\b/i,
+  /\bI\s+(?:have|had)\s+been\s+there\b/i,
+  /\bwe\s+were\s+there\b/i,
+  /\bI\s+went\s+there\b/i,
+  /\bI\s+stayed\s+(?:there|in|at)\b/i,
+  /\bI\s+attended\b/i,
+  /\bI\s+was\s+at\s+(?=[A-Z])/
 ];
 
 const esc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -143,6 +202,19 @@ function venueScope(flat, venues, names) {
     scope = sents.filter(s => names.some(n => s.indexOf(n) >= 0) || hasFirstPerson(s));
   }
   return scope.join(' ');
+}
+
+// Revision 4, for check 5: is the match inside quotation marks? A quoted presence
+// claim belongs to whoever is being quoted. Unique top-level name: the deploy
+// patcher inlines all four modules into one scope, so it must not collide.
+function inQuotes(flat, idx) {
+  let d = 0, s = 0;
+  for (let i = 0; i < idx; i++) {
+    const c = flat[i];
+    if (c === '"') d++; else if (c === '\u201c') d++; else if (c === '\u201d') d--;
+    else if (c === "'") s++;
+  }
+  return d % 2 === 1 || s % 2 === 1;
 }
 
 // opts: { names: ['Rowan'], venues: ['Wolfson College, Cambridge', ...] }
@@ -216,6 +288,33 @@ export function checkVoice(text, opts) {
         why: 'staged scene detail; no record row describes the room'
       });
     }
+  }
+
+  // 5. first-person-attendance -- BLOCK when the piece names a recorded venue and
+  //    the match is not quoted; WARN otherwise. Rev 4.
+  //    Piece-wide co-occurrence, NOT sentence-scoped: the two-word edit measured
+  //    above sits in its own sentence ("I was there for both, and they differed in
+  //    ..."), so a sentence-scoped rule would have missed the very probe this check
+  //    exists for.
+  const venuePresent = venues.some(x => {
+    const head = String(x).split(',')[0].trim().toLowerCase();
+    const l = flat.toLowerCase();
+    return l.indexOf(String(x).toLowerCase()) >= 0 || (head.length >= 4 && l.indexOf(head) >= 0);
+  });
+  for (const re of ATTENDANCE) {
+    m = re.exec(flat);
+    if (!m) continue;
+    const quoted = inQuotes(flat, m.index);
+    const block = venuePresent && !quoted;
+    v.push({
+      kind: 'first-person-attendance',
+      severity: block ? 'block' : 'warn',
+      span: m[0],
+      why: block
+        ? 'first-person presence claim in a piece that names a recorded venue; the writer attended nothing'
+        : (quoted ? 'quoted presence claim; verify attribution'
+                  : 'presence claim outside any recorded venue; verify against the record')
+    });
   }
 
   return v;
