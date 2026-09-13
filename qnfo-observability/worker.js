@@ -109,7 +109,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -392,7 +392,10 @@ async function assessIntegration(env) {
   try { const r = await env.AUDIT.prepare("SELECT DISTINCT script_name FROM worker_logs").all(); traced = (r.results || []).map(function (x) { return x.script_name; }); } catch (e) {}
   try { const r = await env.AUDIT.prepare("SELECT DISTINCT worker_name FROM worker_invocations").all(); invocated = (r.results || []).map(function (x) { return x.worker_name; }); } catch (e) {}
   const probedSet = new Set(probed), tracedSet = new Set(traced), invocatedSet = new Set(invocated);
-  const fleetSize = FLEET.length;
+  // FLEET-SIZE-LIVE-1 (2026-09-13): use live service_registry count instead of hardcoded FLEET array
+  var liveFleetRow = null;
+  try { liveFleetRow = await env.AUDIT.prepare('SELECT COUNT(*) AS c FROM service_registry WHERE state='live'').first(); } catch(e) {}
+  const fleetSize = liveFleetRow ? liveFleetRow.c : FLEET.length;
   const coverage = {
     fleet_size: fleetSize,
     probed: probedSet.size,
