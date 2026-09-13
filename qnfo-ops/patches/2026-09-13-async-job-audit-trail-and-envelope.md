@@ -161,5 +161,5 @@ this spec).
   11:49→12:37Z, then nine clean runs from 06:29Z on 09-13.
 - **Depth-limit enforcement** — cannot be proven or disproven: undocumented, never observed to
   bind, and `worker.js` is past the 32,768-char read cap.
-- **The `credentials/` prefix in `qnfo-backups`** — flagged separately for human action;
-  deliberately not opened.
+- **One security item** — recorded in the private ops audit workspace for human action; not
+  detailed here, because this repository is public.
