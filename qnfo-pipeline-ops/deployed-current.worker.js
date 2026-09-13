@@ -1,4 +1,4 @@
-// qnfo-pipeline-ops v0.5.0-intake-watchdog (2026-09-06)
+// qnfo-pipeline-ops v0.5.5-race-and-triage-fix (2026-09-13)
 // Canonical watchdog worker: every-15-min self-healing loop over the autonomous research pipeline.
 // v0.5.0: ADDED intake-stall watchdog - detects idea_proposals stuck 'new' (never triaged) and a
 //   research_queue sitting empty while the intake backlog exists. Root cause of the 2026-09-03..09-06
@@ -20,8 +20,28 @@
 //   intakeWatchdog (23) combined. The summary now emits only when the condition FINGERPRINT changes,
 //   or every 6h as a re-notify, tracked in the new pipeline_state table. Suppressed runs still write
 //   the cloud_ops_events kind='health' heartbeat, so liveness is unchanged.
+// v0.5.5-race-and-triage-fix (2026-09-13, ops-endpoint session). Three defects, each verified
+//   against live D1 rather than inferred:
+//   (a) escIssue() hand-assigned id = MAX(id)+1 on an AUTOINCREMENT primary key. sqlite_master
+//       confirms agent_issues.id is INTEGER PRIMARY KEY AUTOINCREMENT, so the explicit assignment
+//       was unnecessary AND race-prone against qnfo-fleet-advisor's */20 cron, which collides with
+//       this worker's */15 at :00 and :30. Two writers reading the same MAX(id) mint the same id;
+//       one insert is lost to the PK constraint and is swallowed by escIssue's catch, so the ticket
+//       silently never exists. Now omitted - AUTOINCREMENT assigns and meta.last_row_id returns it.
+//   (b) escIssue() wrote datetime('now') TEXT into columns DECLARED INTEGER. Live typeof() census of
+//       agent_issues: integer/integer 126, integer/text 336, text/text 169, text/integer 55 - four
+//       distinct combinations, so any date-range predicate on this table is not well-defined.
+//       Writes are now epoch-ms integers, matching the declaration and the dominant created_at form.
+//   (c) TRIAGE_URL was dead: GET https://qnfo-idea-triage.q08.workers.dev/health returns HTTP 404
+//       (verified this session). The description string promised "Auto-remediation: triage drain"
+//       while the reachable code performed a health GET and nothing else. The drain is now an actual
+//       POST attempt against the orchestrator's /triage/run, recorded non-fatally, and the
+//       description no longer over-claims.
+//   NOTE ON DEPLOYMENT: the live build is NOT this source. pipeline_state does not exist in live D1,
+//   yet ensureSchema() below creates it on first run - therefore the deployed build predates v0.5.4,
+//   and every drift comparison made against this file has been comparing the repo to itself.
 
-var VERSION = "0.5.4-summary-dedup";
+var VERSION = "0.5.5-race-and-triage-fix";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -32,7 +52,8 @@ var MAX_TERMINAL_REARMS = 3;
 var INTAKE_STALL_MIN = 120;        // minutes before a 'new' proposal is a stall
 var INTAKE_BACKLOG_ALERT_N = 5;    // proposals stuck -> escalate
 var SUMMARY_RENOTIFY_HOURS = 6;    // re-emit an unchanged summary at most this often
-var TRIAGE_URL = "https://qnfo-idea-triage.q08.workers.dev";
+var TRIAGE_URL = "https://qnfo-idea-triage.q08.workers.dev";          // health probe target
+var TRIAGE_DRAIN_URL = "https://qnfo-intent-orchestrator.q08.workers.dev/triage/run"; // drain target
 
 function json(data, status) { return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
 function nowIso() { return new Date().toISOString(); }
@@ -41,9 +62,12 @@ async function escIssue(env, title, desc, cat, prio) {
   try {
     const dup = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND title LIKE ?1").bind("%" + title.slice(0, 60) + "%").first();
     if (dup && Number(dup.n) > 0) return { inserted: false, reason: "dup-open" };
-    const mx = await env.QNFO_AUDIT.prepare("SELECT COALESCE(MAX(id),0) m FROM agent_issues").first();
-    const nid = (mx && Number(mx.m)) + 1;
-    await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind(nid, String(title).slice(0, 180), String(desc).slice(0, 600), WORKER, cat, prio, "open", null).run();
+    // v0.5.5: do NOT hand-assign id. agent_issues.id is INTEGER PRIMARY KEY AUTOINCREMENT;
+    // MAX(id)+1 raced the fleet-advisor cron and silently dropped tickets into the catch below.
+    // created_at/updated_at are declared INTEGER, so write epoch-ms rather than datetime('now').
+    const ts = Date.now();
+    const ins = await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(String(title).slice(0, 180), String(desc).slice(0, 600), WORKER, cat, prio, "open", null, ts, ts).run();
+    const nid = (ins && ins.meta && ins.meta.last_row_id) ? ins.meta.last_row_id : null;
     return { inserted: true, id: nid };
   } catch (e) { return { inserted: false, error: String(e.message).slice(0, 120) }; }
 }
@@ -82,10 +106,19 @@ async function intakeWatchdog(env) {
   const isStall = stalledN >= INTAKE_BACKLOG_ALERT_N && (oldestAgeMin === null || oldestAgeMin >= INTAKE_STALL_MIN);
   if (isStall) {
     const title = "INTAKE-STALL: idea_proposals stuck new (single-issue, self-closes on clear)";
-    const desc = "idea_proposals backlog not being triaged: " + stalledN + " stuck new; oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + "min" : "?") + "; queued=" + h.queued + " researching=" + h.researching + ". Auto-remediation: triage drain. Check qnfo-idea-triage scoreIdea if it recurs.";
+    // v0.5.5: the previous description promised "Auto-remediation: triage drain" while the code
+    // performed only a health GET. It now names the drain route it actually attempts.
+    const desc = "idea_proposals backlog not being triaged: " + stalledN + " stuck new; oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + "min" : "?") + "; queued=" + h.queued + " researching=" + h.researching + ". Drain attempted via " + TRIAGE_DRAIN_URL + " (see triage_drain in this run's outcome). Check qnfo-idea-triage scoreIdea if it recurs.";
     const r = await escIssue(env, title, desc, "research-intake", "high");
     out.action = "escalated";
-    try { const resp = await fetch(TRIAGE_URL + "/health"); out.triage_health = resp.status; } catch (e) {}
+    // v0.5.5: the health probe target and the drain target are different hosts. Record both.
+    try { const resp = await fetch(TRIAGE_URL + "/health"); out.triage_health = resp.status; } catch (e) { out.triage_health = "err"; }
+    // v0.5.5: perform the drain the description always claimed. Non-fatal: a drain failure must
+    // never break the watchdog's own heartbeat, and it is recorded rather than swallowed.
+    try {
+      const dr = await fetch(TRIAGE_DRAIN_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: WORKER, reason: "intake-stall", intake_new: stalledN }) });
+      out.triage_drain = dr.status;
+    } catch (e) { out.triage_drain = "err"; }
     // v0.5.3: only alert on a NEWLY filed ticket. Previously a critical alert was emitted on
     // every 15-min run even when the message said "dup", i.e. the ticket already existed.
     if (r.inserted) {
@@ -96,7 +129,7 @@ async function intakeWatchdog(env) {
   } else {
     // stall cleared or not a stall - self-close any open INTAKE-STALL issue (single-issue lifecycle)
     try {
-      await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=datetime('now') WHERE status='open' AND title LIKE 'INTAKE-STALL%'").run();
+      await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE status='open' AND title LIKE 'INTAKE-STALL%'").bind(Date.now()).run();
       out.action = "cleared";
     } catch (eC) {}
   }
@@ -104,12 +137,10 @@ async function intakeWatchdog(env) {
 }async function recoverStale(env) {
   const r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=NULL, error='stale-recovered', claimed_at=NULL, agent_task_id=NULL WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < datetime('now','-" + STALE_MIN + " minutes')").run();
   return (r && r.meta && r.meta.changes) || 0;
-}
-async function recoverFailed(env) {
+}async function recoverFailed(env) {
   const r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=NULL, error=NULL, claimed_at=NULL, agent_task_id=NULL, completed_at=NULL, recover_count = COALESCE(recover_count,0) + 1 WHERE status='failed' AND COALESCE(recover_count,0) < ?1").bind(MAX_RECOVERS).run();
   return (r && r.meta && r.meta.changes) || 0;
-}
-async function rearmTerminal(env) {
+}async function rearmTerminal(env) {
   let n = 0;
   const rows = await env.QNFO_AUDIT.prepare("SELECT id, source_id, completed_at, created_at FROM research_queue WHERE status='failed' AND COALESCE(recover_count,0) >= ?1 AND COALESCE(terminal_rearms,0) < ?2").bind(MAX_RECOVERS, MAX_TERMINAL_REARMS).all();
   for (const t of (rows.results || [])) {
@@ -121,7 +152,7 @@ async function rearmTerminal(env) {
     if (up && up.meta && up.meta.changes) {
       n++;
       try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "info", "research_queue terminal auto-rearmed id=" + t.id + " (" + String(t.source_id || "?").slice(0, 40) + ", " + Math.round(ageH * 10) / 10 + "h old) -> queued fresh cycle").run(); } catch (e) {}
-      try { await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=datetime('now') WHERE status='open' AND title LIKE ?1").bind("%TERMINAL research failure " + String(t.source_id || "").slice(0, 40) + "%").run(); } catch (e) {}
+      try { await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE status='open' AND title LIKE ?2").bind(Date.now(), "%TERMINAL research failure " + String(t.source_id || "").slice(0, 40) + "%").run(); } catch (e) {}
     }
   }
   return n;
