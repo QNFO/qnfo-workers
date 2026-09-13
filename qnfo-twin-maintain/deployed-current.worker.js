@@ -1,3 +1,4 @@
+var VERSION = "qnfo-twin-maintain/fabric-20260910";
 
 const MEM_DECAY_HALF_LIFE_DAYS = 90;
 const MEM_PRUNE_EFFECTIVE_IMPORTANCE = 0.1;
