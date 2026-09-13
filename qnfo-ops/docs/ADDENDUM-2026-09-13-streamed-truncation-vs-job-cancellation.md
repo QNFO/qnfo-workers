@@ -2,7 +2,7 @@
 
 Date: 2026-09-13 · Author: qnfo-ops · Evidence: live `ops_d1_query` + `github_repo_read` returns from this session.
 Parent: `docs/FIX-reasoning-content-replay-2026-09-13.md` (F14), `patches/2026-09-13-async-job-addendum2-poll-auth-and-continuing-freeze.md` (D17).
-Revision 2 — adds §3a (sweeper attribution, identified after revision 1 was committed).
+Revision 3 — adds §3a (sweeper attribution) and §3b (clean duration falsification of the runtime-ceiling theory).
 
 ---
 
@@ -85,7 +85,25 @@ That single statement explains every property measured in §3:
 
 **The 10-row sweep at `2026-09-13T14:41:28Z` remains UNIDENTIFIED.** Its writer is *not* logged: no `ops_d1_write` in `cloud_ops_events` carries it, and the only `kind='fleet-audit'` event today (`2026-09-13 14:30:03`) is about cron pruning (PR 5), unrelated. It writes an ISO-8601 timestamp without milliseconds, which no tool observed in this fleet produces. Candidates, not distinguished: an in-worker path in a deployed worker, or a holder of direct D1 credentials. `qnfo-ops-jobs-reaper/worker.js` is **not deployed** — absent from the 55-worker fleet, and its own `FINDING-reaper-is-redundant.md` says do not deploy it.
 
-Correlated, not causal: cancelled jobs carry **1.57×** the average payload of succeeded ones (620,358 vs 394,870 chars), and of the 102 jobs >500 KB, **32.4%** were cancelled vs **18.9%** baseline (**1.71×** risk). Cancelled jobs also had *longer* partial responses than successes (4,449 vs 3,151 chars) — i.e. they were still producing output.
+## 3b — The runtime is NOT imposing a duration ceiling: clean falsification via `latency_ms`
+
+`ops_jobs` elapsed time (`updated_at - created_at`) **cannot** measure run duration in this fleet, because sweeps overwrite `updated_at`. Computed that way, `succeeded` rows appear to run up to **26,551 s (7.4 h)** — but those are rows created 7.4 h earlier and promoted by the 13:51 sweep. The column is contaminated by the same defect it would be used to measure, and without `terminal_at` there is no way to separate runner-written terminals from sweep-written ones.
+
+The clean source is `ops_ai_log.latency_ms`, written by the runner and not touched by any sweep. It is populated on **all 211** `source='job'` rows (0 nulls), and 211 rows corresponds 1:1 with the 212 `ops_jobs` rows — so it is whole-job wall time, not per-round.
+
+| source | n | avg | min | **max** |
+|---|---:|---:|---:|---:|
+| other | 961 | 35.8 s | 0.3 s | 326.8 s |
+| chatbox | 468 | 37.7 s | 0.6 s | 254.2 s |
+| mobile | 244 | 157.3 s | 1.3 s | 381.9 s |
+| **job** | **211** | **184.1 s** | 1.0 s | **798.5 s** |
+| deepchat | 21 | 7.4 s | 0.9 s | 46.3 s |
+
+Distribution for `source='job'`: **137 runs over 1 min, 59 over 5 min, 5 over 10 min, max 798.5 s (13.3 min).**
+
+**A job that ran 798.5 seconds to `succeeded` proves the durable path tolerates long generations.** If `ctx.waitUntil` or any runtime lifetime cap were terminating generations mid-flight, those 59 five-minute-plus and 5 ten-minute-plus successful runs would not exist. **The runtime-ceiling theory is not supported for the async job path.**
+
+Correlated, not causal, from §3: cancelled jobs carry **1.57×** the average payload of succeeded ones (620,358 vs 394,870 chars), and of the 102 jobs >500 KB, **32.4%** were cancelled vs **18.9%** baseline (**1.71×** risk). One clean length comparison survives the contamination: among >500 KB jobs, cancelled rows averaged **4,571** response chars vs **3,602** for succeeded — cancelled jobs were producing *more* output, not less, when the sweep hit them.
 
 ## 4 — Where the mid-generation kill actually is: `streamed=1 AND ok=0`
 
@@ -117,14 +135,16 @@ The 9 `streamed=1, ok=0` rows, decomposed — because the average length (159 ch
 
 **Issues 463 and 464 already cover these two signatures — both were closed `wontfix`, and both have been REOPENED on this evidence**, because the signature recurred twice *after* that closure (09-11 and 09-12, both `mobile`; a position-5496 closure does not cover a position-1437 recurrence).
 
-## 5 — Discrimination NOT achieved (the honest limit)
+## 5 — Discrimination NOT achieved for the STREAMING path (the honest limit)
 
-A server-side `ctx.waitUntil` termination and a **client disconnect** produce the *identical* signature. These rows cannot separate them.
+For the streaming rows, a server-side `ctx.waitUntil` termination and a **client disconnect** produce the *identical* signature. These rows cannot separate them.
 
 - `source='mobile'` for 2 of the 3 truncation instances is a point **against** the server-side theory — mobile clients drop connections constantly.
 - But the 2026-09-06T04:33:20.395Z instance carries `source='other'` (not client-originated) with the same unterminated-JSON signature, which supports a non-client cause.
 
-What would settle it: a streamed truncation whose `source` is a cron/job (server-initiated) **and** which is correlated with a concurrent worker invocation ending. Not available from these tables. **The user's diagnosis is not confirmed; it is not refuted either — it is located on the streaming path and left there with the discriminator named.**
+What would settle it: a streamed truncation whose `source` is a cron/job (server-initiated) **and** which is correlated with a concurrent worker invocation ending. Not available from these tables — note that **no `source='job'` row is ever `streamed=1`**, so server-initiated streams do not appear in this table at all.
+
+**Scope of the falsification:** §3b rules out a runtime duration ceiling for the **async job path** (`ops_jobs` / `source='job'`). It does **not** resolve the streaming path, where the symptom the user described actually lives.
 
 ## 6 — `ops_ai_log.ok` is not an error flag
 
@@ -137,7 +157,7 @@ Same class of trap in `cloud_ops_events`: all three `v2-drain` HTTP-504 rows car
 1. **`heartbeat_at` column**, written once per tool round by the runner. `qnfo-ops-jobs-reaper/worker.js`'s own WARNING block names this as the real fix: *"`ops_jobs.updated_at` is NOT a heartbeat … a short threshold therefore REAPS LIVE JOBS."* Verified schema: `ops_jobs` has **neither `heartbeat_at` nor `terminal_at`**.
 2. **Stop agents issuing unfiltered `UPDATE ops_jobs … WHERE status='continuing'`.** This is the identified 30-row kill path (§3a). No threshold fix helps; the statement has no predicate to tune. Any agent-side job maintenance should carry an age/`terminal_at` predicate and a lock.
 3. **Identify the 10-row sweep's writer** (§3a). Until then, no change to job lifecycle is safe.
-4. **`terminal_at`** so sweep-assigned terminals are distinguishable from real ones.
+4. **`terminal_at`** so sweep-assigned terminals are distinguishable from real ones — and so run duration becomes measurable at all (§3b).
 5. **F14**: persist real `reasoning_content` (or stop implying thinking mode on replay). Currently the payload stores only a placeholder, so "pass it back" is not implementable as-is.
 6. **463/464 reopened**; treat the streamed-truncation class as live until the discriminator in §5 is resolved.
 
@@ -146,7 +166,8 @@ Blocked on: no deploy verb on this endpoint; `qnfo-ops/worker.js` is 161,339 B a
 ## 8 — Self-corrections in this addendum
 
 - I first read the 9 streamed failures' 159-char average as *"the signature of a stream cut short."* **The next query falsified it** — the short length is error strings in the `response` column. Same error class as the rest of this session: substituting a related metric for the metric under test.
-- **Revision 1 of this file asserted that *both* sweepers were unidentified. That was wrong for the 30-row path.** The writer's own SQL is in `cloud_ops_events`; I had searched `text` for the label instead of `meta` for the statement, and the label only exists in `ops_jobs.error`. §3a is the correction.
+- **Revision 1 asserted that *both* sweepers were unidentified. That was wrong for the 30-row path.** The writer's own SQL is in `cloud_ops_events`; I had searched `text` for the label instead of `meta` for the statement, and the label only exists in `ops_jobs.error`. §3a is the correction.
+- **I nearly published a 7.4-hour maximum run duration from `ops_jobs` elapsed time.** That figure is an artifact of sweep-assigned `updated_at`; the clean value from `latency_ms` is **798.5 s**. §3b records the correction and the reason the contaminated column cannot be used.
 - The parent doc's "43 occurrences" is an overcount; the error count is 6.
 - The "~20 minute reaper" hypothesis for the 13:51 sweep does not survive the age span (newest victim 128 s).
 - I did **not** file a new ticket for F14 — issue **707** already carries it, with the same window and the same "ZERO occurrences on 2026-09-13" conclusion. Filed nothing rather than a 4th duplicate.
