@@ -5,6 +5,9 @@ Date: 2026-09-13 · Author: qnfo-ops / ops-exec
 internal metric.** Worker: `qnfo-social` (census member, deployable). All figures live
 `ops_d1_query` returns.
 
+**REV 2 (same day):** §6 corrected. The first revision mislabelled my own aggregate column — see
+§7. The correction makes the picture slightly *less* alarming, not more.
+
 ---
 
 ## 1. The state
@@ -15,6 +18,8 @@ posted     23         19
 queued     15         15
 draft       1          0
 ```
+
+Table total: **39 rows**.
 
 - **All 15 queued rows have `notes IS NULL`.**
 - **19 of 23 already-posted rows also have `notes IS NULL`.**
@@ -121,7 +126,30 @@ worker no commit ships at all.
 - **I did not verify the 10 warn↔thread pairings myself**; they are quoted from the staged patch.
   My own independent measurement is the 15 warns and the 15 queued rows, which agree in count but are
   not the same pairing.
-- **`posted_at IS NOT NULL` = 39 while `status='posted'` = 23**, so 16 rows have a posted_at under a
-  different status. I did not characterise those 16; they could include further published content.
+- **Corrected (see §7):** every row with `posted_at IS NOT NULL` also has `status='posted'`. There are
+  no rows with a posted timestamp under a different status.
 - **No live breach claim.** Nothing posted in the last ~23 hours. This is a forward-looking risk plus
   a realised past one (19 of 23 posted rows unverified).
+
+## 7. Correction to REV 1
+
+REV 1 §6 read: *"`posted_at IS NOT NULL` = 39 while `status='posted'` = 23, so 16 rows have a
+posted_at under a different status."* **That was my error.** The `39` came from a `COUNT(*)` that I
+had aliased `posted_total` in an earlier query — it is the **whole table**, not the posted count. I
+then carried the mislabelled figure forward into this document as though it were a `posted_at`
+filter.
+
+Corrected measurement:
+
+```sql
+SELECT status, COUNT(*) n, SUM(CASE WHEN notes IS NULL THEN 1 ELSE 0 END) notes_null
+FROM social_threads WHERE posted_at IS NOT NULL GROUP BY status;
+  posted   20   16
+```
+
+So: 39 rows total; 23 `status='posted'`; 20 of those carry `posted_at`; 3 posted rows have no
+`posted_at`. **No unexplained rows, and no additional published content.** The correction reduces the
+count of published-unverified rows from an implied 34 to 19 — which is still the substance of §1.
+
+This is the same failure class I flagged in the fleet's own dashboards all session: **a column alias
+that names something other than what it measures**, carried forward without re-derivation.
