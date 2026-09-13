@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.16.0";
+var VERSION = "2.17.0";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -268,6 +268,19 @@ var OPS_TOOLS = [
   { name: "cf_worker_bindings", description: "Read live bindings for a Cloudflare Worker via CF API. Use before authoring wrangler.toml for MERGE consolidations (BINDING-PRESERVATION-1). Returns bindings array with type/name and type-specific fields (namespace_id, database_id, etc.).", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name" } }, required: ["worker"], additionalProperties: false } },
   { name: "github_cherry_pick", description: "Graft one or more commits onto origin/main via GitHub Trees+Commits API (WORKTREE-GRAFT-PUSH-1). Server-side equivalent of: git worktree add --detach <tmp> origin/main && git cherry-pick <sha> && git push origin HEAD:main. ADVERSARIAL: does NOT resolve merge conflicts — check for file divergence first.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, commits: { type: "array", items: { type: "string" }, description: "array of commit SHAs to graft in order" }, base: { type: "string", description: "target branch (default main)" } }, required: ["repo","commits"], additionalProperties: false } },
   { name: "dr_validate_schema", description: "Server-side D1 schema validation (JS port of dr_validate_schema.py). Validates required tables/columns in qnfo-audit + living-paper D1 databases directly via bound D1 bindings. Returns {ok, status:'SCHEMA OK'|'SCHEMA ERROR', violations, validated}.", parameters: { type: "object", properties: {}, additionalProperties: false } }
+,
+
+  { name: "workspace_edit", description: "Surgical str_replace edit of a workspace file. Replaces Nth occurrence of old_str with new_str. Returns diff summary + preview. ADVERSARIAL: only replaces the FIRST match by default; pass occurrence:N for later matches.", parameters: { type: "object", properties: { path: { type: "string" }, old_str: { type: "string", description: "exact string to find (must match including whitespace)" }, new_str: { type: "string", description: "replacement string (omit or empty to delete)" }, occurrence: { type: "number", description: "which occurrence to replace, 1-based (default 1)" } }, required: ["path","old_str"], additionalProperties: false } },
+  { name: "workspace_grep", description: "Regex search across workspace files. Returns file + line number + match + optional context lines. Equivalent to grep -rn.", parameters: { type: "object", properties: { pattern: { type: "string", description: "JavaScript regex pattern" }, prefix: { type: "string", description: "directory prefix to scope search" }, maxResults: { type: "number", description: "max matches 1-200 (default 50)" }, contextLines: { type: "number", description: "context lines before/after match 0-5 (default 0)" } }, required: ["pattern"], additionalProperties: false } },
+  { name: "workspace_glob", description: "Discover workspace files by glob pattern. Supports * (any chars except /) and ** (any chars including /). Returns paths with size.", parameters: { type: "object", properties: { pattern: { type: "string", description: "glob pattern e.g. **/*.js or src/*.ts" }, prefix: { type: "string", description: "directory prefix" }, limit: { type: "number", description: "max results 1-500 (default 100)" } }, required: [], additionalProperties: false } },
+  { name: "workspace_diff", description: "Compute unified diff between two workspace files. Returns diff string with added/removed line counts.", parameters: { type: "object", properties: { path_a: { type: "string" }, path_b: { type: "string" }, context: { type: "number", description: "context lines (default 3)" } }, required: ["path_a","path_b"], additionalProperties: false } },
+  { name: "workspace_patch", description: "Apply a unified diff patch to a workspace file. Patch must be in standard @@ -a,b +c,d @@ format.", parameters: { type: "object", properties: { path: { type: "string" }, patch: { type: "string", description: "unified diff string" } }, required: ["path","patch"], additionalProperties: false } },
+  { name: "run_python", description: "Execute Python code via Workers AI code model (@cf/moonshotai/kimi-k2.7-code). Returns stdout. No pip, no subprocess, no file I/O. For complex compute use run_code (JS) instead.", parameters: { type: "object", properties: { code: { type: "string", description: "Python code" } }, required: ["code"], additionalProperties: false } },
+  { name: "run_code_net", description: "Execute JavaScript with outbound fetch() enabled (CDN, external APIs, package resolution). No env secrets. Same structured output as run_code: {ok, output, stdout, stderr, return_value, elapsed_ms}.", parameters: { type: "object", properties: { code: { type: "string", description: "JavaScript code with fetch() access" }, maxOutput: { type: "number", description: "max output chars (default 16000, max 32000)" } }, required: ["code"], additionalProperties: false } },
+  { name: "git_op", description: "Server-side git operations via GitHub REST API. READ-ONLY. ops: log (commit history), diff (compare refs), show (single commit), status (branch comparison), blame (file history), branches (list). For writes use github_file_write + github_cherry_pick.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, op: { type: "string", enum: ["log","diff","show","status","blame","branches"], description: "git operation (default log)" }, ref: { type: "string", description: "branch/tag/SHA (default main)" }, base: { type: "string", description: "base ref for diff/status" }, head: { type: "string", description: "head ref for diff/status" }, sha: { type: "string", description: "commit SHA for show" }, path: { type: "string", description: "file path filter for log/blame" }, limit: { type: "number", description: "max results 1-100 (default 20)" } }, required: ["repo"], additionalProperties: false } },
+  { name: "workspace_read_multi", description: "Read up to 20 workspace files in one parallel call. Returns array of {path, ok, content, size, truncated}. Faster than N sequential workspace_read calls.", parameters: { type: "object", properties: { paths: { type: "array", items: { type: "string" }, description: "workspace-relative paths (max 20)" }, maxCharsEach: { type: "number", description: "max chars per file (default 20000, max 100000)" } }, required: ["paths"], additionalProperties: false } },
+  { name: "workspace_stat", description: "Get workspace file metadata (exists, size, upload time, etag) without reading content.", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } },
+  { name: "exec_pipeline", description: "Chain multiple run_code steps where each step receives the previous step's stdout as __prev (string). Equivalent to a shell pipeline. Max 10 steps. Set continueOnError:true on a step to proceed past failures.", parameters: { type: "object", properties: { steps: { type: "array", items: { type: "object", properties: { code: { type: "string" }, continueOnError: { type: "boolean" } }, required: ["code"] }, description: "array of {code, continueOnError?} steps (max 10)" }, input: { type: "string", description: "initial __prev value for step 1" } }, required: ["steps"], additionalProperties: false } }
 ];
 function toolsPayload() {
   return OPS_TOOLS.map(function(t) {
@@ -584,18 +597,21 @@ async function emailRespond(env, args, userText) {
 }
 __name(emailRespond, "emailRespond");
 async function runCodeTool(env, args) {
+  // v2.17.0: structured stdout/stderr/elapsed_ms, 32KB cap, console.warn/info/debug shim
   const code = String(args && args.code || "");
   if (!code.trim()) return { ok: false, error: "code required" };
   if (!env.LOADER) return { ok: false, error: "Dynamic Workers LOADER binding missing on qnfo-ops - run_code unavailable" };
-  const head = 'export default { async fetch(request, env) { const logs = []; const console = { log: (...a) => logs.push(a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")), error: (...a) => logs.push("ERROR: " + a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")) }; try { const __r = await (async () => { ';
-  const tail = ' })(); const out = logs.length ? logs.join(String.fromCharCode(10)) : __r === void 0 ? "(no return value)" : typeof __r === "string" ? __r : JSON.stringify(__r); return new Response(JSON.stringify({ ok: true, output: String(out).slice(0, 8000) }), { headers: { "Content-Type": "application/json" } }); } catch (e) { return new Response(JSON.stringify({ ok: false, error: String((e && e.message) || e).slice(0, 2000) }), { headers: { "Content-Type": "application/json" } }); } } };';
+  const outCap = Math.min(Math.max(parseInt(args && args.maxOutput, 10) || 32000, 1000), 64000);
+  const capStr = String(outCap);
+  const head = 'export default { async fetch(request, env) { const _t0 = Date.now(); const _out = [], _err = [], _warn = []; const _s = (x) => { try { return typeof x === "string" ? x : JSON.stringify(x) ?? String(x); } catch(e) { return String(x); } }; const console = { log: (...a) => _out.push(a.map(_s).join(" ")), error: (...a) => _err.push(a.map(_s).join(" ")), warn: (...a) => _warn.push(a.map(_s).join(" ")), info: (...a) => _out.push(a.map(_s).join(" ")), debug: (...a) => _out.push(a.map(_s).join(" ")) }; const performance = { now: () => Date.now() - _t0 }; try { const __r = await (async () => { ';
+  const tail = ' })(); const _rv = __r === undefined ? "" : _s(__r); const _stdout = _out.join("\\n") || _rv; return new Response(JSON.stringify({ ok: true, stdout: _stdout.slice(0, ' + capStr + '), stderr: _err.join("\\n").slice(0,4000), warnings: _warn.join("\\n").slice(0,2000), return_value: _rv.slice(0,4000), elapsed_ms: Date.now()-_t0, truncated: _stdout.length>' + capStr + ' }), { headers: { "Content-Type": "application/json" } }); } catch(e) { return new Response(JSON.stringify({ ok: false, error: String((e&&e.message)||e).slice(0,3000), stack: (e&&e.stack||"").slice(0,1000), elapsed_ms: Date.now()-_t0 }), { headers: { "Content-Type": "application/json" } }); } } };';
   try {
     const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + code + tail }, globalOutbound: null });
     const resp = await worker.getEntrypoint().fetch("https://code-exec.invalid/");
     const j = await resp.json();
-    if (j && j.ok) return { ok: true, output: String(j.output || "") };
-    return { ok: false, error: String(j && j.error || "code worker HTTP " + resp.status) };
-  } catch (e) {
+    if (j && j.ok) return { ok: true, output: j.stdout || j.return_value || "", stdout: j.stdout || "", stderr: j.stderr || "", warnings: j.warnings || "", return_value: j.return_value || "", elapsed_ms: j.elapsed_ms, truncated: !!j.truncated };
+    return { ok: false, error: String(j && j.error || "code worker error"), stack: j && j.stack || "", elapsed_ms: j && j.elapsed_ms };
+  } catch(e) {
     return { ok: false, error: "code worker error: " + String(e && e.message || e).slice(0, 2e3) };
   }
 }
@@ -1380,6 +1396,329 @@ async function drValidateSchema(env, args) {
   return { ok: true, status: "SCHEMA OK", violations: [], validated, note: validated + " tables/columns validated across 2 databases" };
 }
 
+
+// ── v2.17.0 Claude Code parity tools ──────────────────────────────────────
+
+// workspace_edit: surgical str_replace edit (Claude Code str_replace_editor)
+async function workspaceEdit(env, args) {
+  const path = String(args && args.path || "").trim();
+  const oldStr = String(args && args.old_str !== undefined ? args.old_str : "");
+  const newStr = String(args && args.new_str !== undefined ? args.new_str : "");
+  const occurrence = Math.max(1, parseInt(args && args.occurrence, 10) || 1);
+  if (!path) return { ok: false, error: "path required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const obj = await env.BACKUPS_R2.get(wsKey(path));
+  if (!obj) return { ok: false, error: "file not found: " + path };
+  const original = await obj.text();
+  let idx = -1, found = 0, from = 0;
+  while (found < occurrence) {
+    const pos = original.indexOf(oldStr, from);
+    if (pos < 0) break;
+    idx = pos; found++; from = pos + 1;
+  }
+  if (idx < 0 || found < occurrence) {
+    const total = (original.split(oldStr).length - 1);
+    return { ok: false, error: "old_str not found (occurrence " + occurrence + "/" + total + " total). Check exact whitespace." };
+  }
+  const updated = original.slice(0, idx) + newStr + original.slice(idx + oldStr.length);
+  await env.BACKUPS_R2.put(wsKey(path), updated);
+  const startLine = original.slice(0, idx).split('\n').length;
+  return { ok: true, path, occurrence, replaced_at_char: idx, replaced_at_line: startLine, old_lines: oldStr.split('\n').length, new_lines: newStr.split('\n').length, size_delta: updated.length - original.length, preview: updated.slice(Math.max(0, idx - 80), idx + newStr.length + 80) };
+}
+
+// workspace_grep: regex search across workspace (Claude Code grep)
+async function workspaceGrep(env, args) {
+  const pattern = String(args && args.pattern || "").trim();
+  const prefix = String(args && args.prefix || "").replace(/^\/+/, "").replace(/\.\./g, "");
+  const maxResults = Math.min(Math.max(parseInt(args && args.maxResults, 10) || 50, 1), 200);
+  const ctxN = Math.min(Math.max(parseInt(args && args.contextLines, 10) || 0, 0), 5);
+  if (!pattern) return { ok: false, error: "pattern required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  let re;
+  try { re = new RegExp(pattern, "gm"); } catch(e) { return { ok: false, error: "invalid regex: " + (e && e.message || String(e)) }; }
+  const listPfx = "ops-workspace/" + (prefix ? prefix.replace(/\/$/, '') + '/' : '');
+  const listed = await env.BACKUPS_R2.list({ prefix: listPfx, limit: 500 });
+  const results = [];
+  for (const obj of listed.objects || []) {
+    if (results.length >= maxResults) break;
+    try {
+      const fo = await env.BACKUPS_R2.get(obj.key);
+      if (!fo) continue;
+      const text = await fo.text();
+      const relPath = obj.key.replace(/^ops-workspace\//, '');
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length && results.length < maxResults; i++) {
+        re.lastIndex = 0;
+        if (re.test(lines[i])) {
+          const r = { file: relPath, line: i + 1, match: lines[i].slice(0, 400) };
+          if (ctxN > 0) r.context = { before: lines.slice(Math.max(0, i - ctxN), i), after: lines.slice(i + 1, Math.min(lines.length, i + 1 + ctxN)) };
+          results.push(r);
+        }
+      }
+    } catch(e) {}
+  }
+  return { ok: true, pattern, prefix: prefix || '(root)', count: results.length, truncated: results.length >= maxResults, results };
+}
+
+// workspace_glob: file discovery by pattern (Claude Code glob)
+async function workspaceGlob(env, args) {
+  const pattern = String(args && args.pattern || "").trim();
+  const prefix = String(args && args.prefix || "").replace(/^\/+/, "").replace(/\.\./g, "");
+  const limit = Math.min(Math.max(parseInt(args && args.limit, 10) || 100, 1), 500);
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const listPfx = "ops-workspace/" + (prefix ? prefix.replace(/\/$/, '') + '/' : '');
+  const listed = await env.BACKUPS_R2.list({ prefix: listPfx, limit });
+  const objects = listed.objects || [];
+  let filtered = objects;
+  if (pattern) {
+    const rx = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\x00').replace(/\*/g, '[^/]*').replace(/\x00/g, '.*');
+    let re; try { re = new RegExp(rx + '$'); } catch(e) { re = null; }
+    if (re) filtered = objects.filter(o => re.test(o.key.replace(/^ops-workspace\//, '')));
+  }
+  return { ok: true, pattern: pattern || '*', prefix: prefix || '(root)', count: filtered.length, truncated: !!listed.truncated, files: filtered.map(o => ({ path: o.key.replace(/^ops-workspace\//, ''), size: o.size, uploaded: o.uploaded })) };
+}
+
+// workspace_diff: unified diff between two workspace files
+async function workspaceDiff(env, args) {
+  const pA = String(args && args.path_a || "").trim();
+  const pB = String(args && args.path_b || "").trim();
+  if (!pA || !pB) return { ok: false, error: "path_a and path_b required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const [oA, oB] = await Promise.all([env.BACKUPS_R2.get(wsKey(pA)), env.BACKUPS_R2.get(wsKey(pB))]);
+  if (!oA) return { ok: false, error: "not found: " + pA };
+  if (!oB) return { ok: false, error: "not found: " + pB };
+  const [tA, tB] = await Promise.all([oA.text(), oB.text()]);
+  const ctx = Math.min(Math.max(parseInt(args && args.context, 10) || 3, 0), 10);
+  // Simple line-by-line diff
+  const lA = tA.split('\n'), lB = tB.split('\n');
+  const hunks = [];
+  let i = 0, j = 0;
+  while (i < lA.length || j < lB.length) {
+    if (i < lA.length && j < lB.length && lA[i] === lB[j]) { i++; j++; continue; }
+    const hunkStart = hunks.length;
+    const aStart = i, bStart = j;
+    const hunkLines = [];
+    // Collect changed block
+    while (i < lA.length || j < lB.length) {
+      if (i < lA.length && j < lB.length && lA[i] === lB[j]) {
+        let eq = 0;
+        while (i + eq < lA.length && j + eq < lB.length && lA[i+eq] === lB[j+eq]) eq++;
+        if (eq >= ctx * 2 + 1) break;
+        for (let k = 0; k < Math.min(eq, ctx); k++) hunkLines.push(' ' + lA[i+k]);
+        i += eq; j += eq;
+      } else if (i < lA.length && (j >= lB.length || lA[i] !== lB[j])) {
+        hunkLines.push('-' + lA[i]); i++;
+      } else {
+        hunkLines.push('+' + lB[j]); j++;
+      }
+    }
+    if (hunkLines.length) {
+      const aCount = hunkLines.filter(l => l[0] !== '+').length;
+      const bCount = hunkLines.filter(l => l[0] !== '-').length;
+      hunks.push('@@ -' + (aStart+1) + ',' + aCount + ' +' + (bStart+1) + ',' + bCount + ' @@\n' + hunkLines.join('\n'));
+    }
+  }
+  const diff = hunks.length ? '--- ' + pA + '\n+++ ' + pB + '\n' + hunks.join('\n') : '--- ' + pA + '\n+++ ' + pB + '\n(no differences)';
+  return { ok: true, path_a: pA, path_b: pB, diff: diff.slice(0, 32000), lines_added: (diff.match(/^\+[^+]/mg)||[]).length, lines_removed: (diff.match(/^-[^-]/mg)||[]).length };
+}
+
+// workspace_patch: apply unified diff to a workspace file
+async function workspacePatch(env, args) {
+  const path = String(args && args.path || "").trim();
+  const patch = String(args && args.patch || "").trim();
+  if (!path || !patch) return { ok: false, error: "path and patch required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const obj = await env.BACKUPS_R2.get(wsKey(path));
+  if (!obj) return { ok: false, error: "file not found: " + path };
+  const original = await obj.text();
+  try {
+    const lines = original.split('\n');
+    const pLines = patch.split('\n');
+    let offset = 0, applied = 0;
+    const result = [...lines];
+    for (let i = 0; i < pLines.length; i++) {
+      const hm = pLines[i].match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (!hm) continue;
+      const origStart = parseInt(hm[1], 10) - 1 + offset;
+      const hunkLines = [];
+      i++;
+      while (i < pLines.length && !pLines[i].startsWith('@@') && !pLines[i].startsWith('---') && !pLines[i].startsWith('+++')) { hunkLines.push(pLines[i]); i++; }
+      i--;
+      const removes = hunkLines.filter(l => l[0] === '-').map(l => l.slice(1));
+      const adds = hunkLines.filter(l => l[0] === '+').map(l => l.slice(1));
+      let rStart = origStart;
+      if (removes.length > 0) {
+        for (let j = Math.max(0, origStart - 3); j < result.length; j++) {
+          if (result[j] === removes[0]) {
+            let match = true;
+            for (let k = 1; k < removes.length; k++) { if (result[j+k] !== removes[k]) { match = false; break; } }
+            if (match) { rStart = j; break; }
+          }
+        }
+      }
+      result.splice(rStart, removes.length, ...adds);
+      offset += adds.length - removes.length;
+      applied++;
+    }
+    const updated = result.join('\n');
+    await env.BACKUPS_R2.put(wsKey(path), updated);
+    return { ok: true, path, hunks_applied: applied, size_delta: updated.length - original.length };
+  } catch(e) {
+    return { ok: false, error: "patch failed: " + (e && e.message || String(e)) };
+  }
+}
+
+// run_python: Python via Workers AI code model
+async function runPython(env, args) {
+  const code = String(args && args.code || "").trim();
+  if (!code) return { ok: false, error: "code required" };
+  if (!env.WAI) return { ok: false, error: "WAI (Workers AI) binding missing" };
+  const t0 = Date.now();
+  try {
+    const result = await env.WAI.run("@cf/moonshotai/kimi-k2.7-code", {
+      messages: [
+        { role: "system", content: "You are a Python interpreter. Execute the code and return ONLY the raw output. No markdown, no explanation." },
+        { role: "user", content: "Execute this Python code and return ONLY the output:\n```python\n" + code + "\n```" }
+      ],
+      max_tokens: 4096
+    });
+    const output = String(result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content) || ""));
+    return { ok: !(/^error:/i.test(output.trim())), output: output.slice(0, 16000), elapsed_ms: Date.now() - t0, model: "@cf/moonshotai/kimi-k2.7-code", note: "Python via Workers AI (no pip/subprocess)" };
+  } catch(e) {
+    return { ok: false, error: "run_python: " + (e && e.message || String(e)).slice(0, 400), elapsed_ms: Date.now() - t0 };
+  }
+}
+
+// run_code_net: JS with outbound fetch enabled
+async function runCodeNet(env, args) {
+  const code = String(args && args.code || "").trim();
+  if (!code) return { ok: false, error: "code required" };
+  if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };
+  const cap = Math.min(Math.max(parseInt(args && args.maxOutput, 10) || 16000, 1000), 32000);
+  const capS = String(cap);
+  const head = 'export default { async fetch(request, env) { const _t0=Date.now(),_o=[],_e=[]; const _s=(x)=>{try{return typeof x==="string"?x:JSON.stringify(x)??String(x);}catch(e){return String(x);}}; const console={log:(...a)=>_o.push(a.map(_s).join(" ")),error:(...a)=>_e.push(a.map(_s).join(" ")),warn:(...a)=>_o.push("[w] "+a.map(_s).join(" ")),info:(...a)=>_o.push(a.map(_s).join(" "))}; try { const __r=await(async()=>{';
+  const tail = '})(); const _rv=__r===undefined?"":_s(__r); const _out=_o.join("\\n")||_rv; return new Response(JSON.stringify({ok:true,stdout:_out.slice(0,'+capS+'),stderr:_e.join("\\n").slice(0,2000),return_value:_rv.slice(0,2000),elapsed_ms:Date.now()-_t0}),{headers:{"Content-Type":"application/json"}}); } catch(e){return new Response(JSON.stringify({ok:false,error:String((e&&e.message)||e).slice(0,2000),elapsed_ms:Date.now()-_t0}),{headers:{"Content-Type":"application/json"}});} }};';
+  try {
+    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + code + tail } });
+    const resp = await worker.getEntrypoint().fetch("https://code-exec-net.invalid/");
+    const j = await resp.json();
+    if (j && j.ok) return { ok: true, output: j.stdout || j.return_value || "", stdout: j.stdout || "", stderr: j.stderr || "", return_value: j.return_value || "", elapsed_ms: j.elapsed_ms };
+    return { ok: false, error: j && j.error || "code worker error", elapsed_ms: j && j.elapsed_ms };
+  } catch(e) {
+    return { ok: false, error: "run_code_net: " + String(e && e.message || e).slice(0, 1000) };
+  }
+}
+
+// git_op: server-side git operations via GitHub REST API
+async function gitOp(env, args) {
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN missing" };
+  const repo = String(args && args.repo || "").trim();
+  const op = String(args && args.op || "log").toLowerCase();
+  const ref = String(args && args.ref || "main").trim();
+  const path = args && args.path ? String(args.path) : null;
+  const limit = Math.min(Math.max(parseInt(args && args.limit, 10) || 20, 1), 100);
+  if (!repo || repo.indexOf("/") < 0) return { ok: false, error: "repo (owner/name) required" };
+  const fmtCommit = c => ({ sha: c.sha && c.sha.slice(0,8), full_sha: c.sha, message: c.commit && c.commit.message && c.commit.message.split('\n')[0], author: c.commit && c.commit.author && c.commit.author.name, date: c.commit && c.commit.author && c.commit.author.date });
+  try {
+    if (op === "log") {
+      const q = "?sha=" + encodeURIComponent(ref) + "&per_page=" + limit + (path ? "&path=" + encodeURIComponent(path) : "");
+      const r = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/commits" + q);
+      if (r.status !== 200) return { ok: false, error: "GitHub " + r.status + ": " + String(r.json && r.json.message || r.text).slice(0,200) };
+      return { ok: true, op, repo, ref, count: (r.json||[]).length, commits: (r.json||[]).map(fmtCommit) };
+    }
+    if (op === "diff") {
+      const base = String(args && args.base || "").trim();
+      const head2 = String(args && args.head || ref).trim();
+      if (!base) return { ok: false, error: "base required for diff" };
+      const r = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/compare/" + encodeURIComponent(base) + "..." + encodeURIComponent(head2));
+      if (r.status !== 200) return { ok: false, error: "GitHub " + r.status + ": " + String(r.json && r.json.message || r.text).slice(0,200) };
+      const j = r.json || {};
+      return { ok: true, op, repo, base, head: head2, ahead_by: j.ahead_by, behind_by: j.behind_by, files_changed: (j.files||[]).length, files: (j.files||[]).map(f => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: (f.patch||"").slice(0,3000) })) };
+    }
+    if (op === "show") {
+      const sha = String(args && args.sha || ref).trim();
+      const r = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/commits/" + encodeURIComponent(sha));
+      if (r.status !== 200) return { ok: false, error: "GitHub " + r.status + ": " + String(r.json && r.json.message || r.text).slice(0,200) };
+      const j = r.json || {};
+      return { ok: true, op, repo, sha: j.sha && j.sha.slice(0,8), full_sha: j.sha, message: j.commit && j.commit.message, author: j.commit && j.commit.author && j.commit.author.name, date: j.commit && j.commit.author && j.commit.author.date, files: (j.files||[]).map(f => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: (f.patch||"").slice(0,2000) })) };
+    }
+    if (op === "status") {
+      const base = String(args && args.base || "main").trim();
+      const head2 = String(args && args.head || ref).trim();
+      const r = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/compare/" + encodeURIComponent(base) + "..." + encodeURIComponent(head2));
+      if (r.status !== 200) return { ok: false, error: "GitHub " + r.status + ": " + String(r.json && r.json.message || r.text).slice(0,200) };
+      const j = r.json || {};
+      return { ok: true, op, repo, base, head: head2, status: j.status, ahead_by: j.ahead_by, behind_by: j.behind_by, total_commits: j.total_commits, files_changed: (j.files||[]).length };
+    }
+    if (op === "blame") {
+      const fp = path || String(args && args.file || "").trim();
+      if (!fp) return { ok: false, error: "path or file required for blame" };
+      const r = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/commits?path=" + encodeURIComponent(fp) + "&per_page=" + limit + "&sha=" + encodeURIComponent(ref));
+      if (r.status !== 200) return { ok: false, error: "GitHub " + r.status + ": " + String(r.json && r.json.message || r.text).slice(0,200) };
+      return { ok: true, op, repo, file: fp, ref, commits: (r.json||[]).map(fmtCommit) };
+    }
+    if (op === "branches") {
+      const r = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/branches?per_page=" + limit);
+      if (r.status !== 200) return { ok: false, error: "GitHub " + r.status + ": " + String(r.json && r.json.message || r.text).slice(0,200) };
+      return { ok: true, op, repo, count: (r.json||[]).length, branches: (r.json||[]).map(b => ({ name: b.name, sha: b.commit && b.commit.sha && b.commit.sha.slice(0,8) })) };
+    }
+    return { ok: false, error: "unknown git op: " + op + ". Supported: log, diff, show, status, blame, branches" };
+  } catch(e) {
+    return { ok: false, error: "git_op: " + (e && e.message || String(e)).slice(0, 300) };
+  }
+}
+
+// workspace_read_multi: parallel multi-file read (Claude Code parallel reads)
+async function workspaceReadMulti(env, args) {
+  const paths = Array.isArray(args && args.paths) ? args.paths.map(String) : [];
+  if (!paths.length) return { ok: false, error: "paths array required" };
+  if (paths.length > 20) return { ok: false, error: "max 20 files per call" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  const maxEach = Math.min(Math.max(parseInt(args && args.maxCharsEach, 10) || 20000, 500), 100000);
+  const files = await Promise.all(paths.map(async p => {
+    try {
+      const obj = await env.BACKUPS_R2.get(wsKey(p));
+      if (!obj) return { path: p, ok: false, error: "not found" };
+      const text = await obj.text();
+      return { path: p, ok: true, size: text.length, content: text.slice(0, maxEach), truncated: text.length > maxEach };
+    } catch(e) { return { path: p, ok: false, error: e && e.message || String(e) }; }
+  }));
+  return { ok: true, count: files.length, files };
+}
+
+// workspace_stat: file metadata without reading content
+async function workspaceStat(env, args) {
+  const path = String(args && args.path || "").trim();
+  if (!path) return { ok: false, error: "path required" };
+  if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
+  try {
+    const obj = await env.BACKUPS_R2.head(wsKey(path));
+    if (!obj) return { ok: true, exists: false, path };
+    return { ok: true, exists: true, path, size: obj.size, uploaded: obj.uploaded, etag: obj.etag };
+  } catch(e) { return { ok: false, error: "stat: " + (e && e.message || String(e)) }; }
+}
+
+// exec_pipeline: chain run_code steps with __prev passing (shell pipeline equivalent)
+async function execPipeline(env, args) {
+  const steps = Array.isArray(args && args.steps) ? args.steps : [];
+  if (!steps.length) return { ok: false, error: "steps array required" };
+  if (steps.length > 10) return { ok: false, error: "max 10 steps" };
+  if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };
+  const results = [];
+  let prev = String(args && args.input || "");
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const code = String(step && step.code || "").trim();
+    if (!code) { results.push({ step: i+1, ok: false, error: "empty code" }); continue; }
+    const injected = "const __prev=" + JSON.stringify(prev) + ";\nconst __step=" + (i+1) + ";\n" + code;
+    const r = await runCodeTool(env, { code: injected, maxOutput: 16000 });
+    results.push({ step: i+1, ok: r.ok, output: r.output || r.error, stdout: r.stdout, stderr: r.stderr, elapsed_ms: r.elapsed_ms });
+    if (!r.ok && !(step && step.continueOnError)) return { ok: false, failed_at_step: i+1, results };
+    prev = r.output || "";
+  }
+  return { ok: true, steps_run: results.length, final_output: prev, results };
+}
+
 async function execTool(env, name, rawArgs, userText, resultCap) {
   let args = {};
   try {
@@ -1432,6 +1771,17 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "cf_worker_bindings") res = await cfWorkerBindings(env, args);
     else if (name === "github_cherry_pick") res = await githubCherryPick(env, args);
     else if (name === "dr_validate_schema") res = await drValidateSchema(env, args);
+        else if (name === "workspace_edit") res = await workspaceEdit(env, args);
+    else if (name === "workspace_grep") res = await workspaceGrep(env, args);
+    else if (name === "workspace_glob") res = await workspaceGlob(env, args);
+    else if (name === "workspace_diff") res = await workspaceDiff(env, args);
+    else if (name === "workspace_patch") res = await workspacePatch(env, args);
+    else if (name === "run_python") res = await runPython(env, args);
+    else if (name === "run_code_net") res = await runCodeNet(env, args);
+    else if (name === "git_op") res = await gitOp(env, args);
+    else if (name === "workspace_read_multi") res = await workspaceReadMulti(env, args);
+    else if (name === "workspace_stat") res = await workspaceStat(env, args);
+    else if (name === "exec_pipeline") res = await execPipeline(env, args);
     else res = { ok: false, error: "unknown tool: " + name };
   } catch (e) {
     res = { ok: false, error: "tool crashed: " + (e && e.message ? e.message : String(e)) };
@@ -1716,7 +2066,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
   const loopDeadlineMs = envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5);
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", 8);
-  const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 32768);
+  const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
   const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
   const _opsToolNames = new Set(OPS_TOOLS.map(function(t) {
@@ -2318,7 +2668,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     const answerCap = clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
     const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
     const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
-    const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 32768);
+    const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
     const opsToolNames = new Set(OPS_TOOLS.map(function(t) {
       return t.name;
     }));
