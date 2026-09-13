@@ -214,14 +214,6 @@ export const REGISTRY = {
       "group": "fleet-ops"
     },
     {
-      "name": "qnfo-impact",
-      "crons": [
-        "0 4 * * *"
-      ],
-      "purpose": "Impact metrics",
-      "group": "engagement"
-    },
-    {
       "name": "qnfo-infra",
       "crons": [
         "0 18 * * *",
