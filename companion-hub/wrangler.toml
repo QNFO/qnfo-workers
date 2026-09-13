@@ -1,7 +1,9 @@
 name = "companion-hub"
 main = "worker.js"
 compatibility_date = "2026-08-01"
+workers_dev = true
 
+# Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)
 [ai]
 binding = "AI"
 
@@ -20,6 +22,9 @@ bucket_name = "personal-media"
 
 [[d1_databases]]
 binding = "PERSONAL"
+database_name = "personal-life"
 database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 
-# binding VZ: type=vectorize (see deployed config)
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"

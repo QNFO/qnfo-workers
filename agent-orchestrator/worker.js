@@ -713,7 +713,7 @@ var agent_orchestrator_default = {
     if (url.pathname === "/health") {
       return Response.json({
         worker: "qnfo-agent-orchestrator",
-        version: "v1.0.0",
+        version: "1.0.1",
         status: "ok",
         bindings: {
           d1_living_paper: !!env.LIVING_PAPER,
