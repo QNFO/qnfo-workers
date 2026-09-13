@@ -1,6 +1,6 @@
 import { REGISTRY } from './registry.js';
 
-const VERSION = '1.0.18';
+const VERSION = '1.2.0';
 const NAME = 'qnfo-fleet-dashboard';
 const PROBE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const ACCOUNT = 'edb167b78c9fb901ea5bca3ce58ccc4b';
@@ -262,6 +262,47 @@ async function liveScripts(env) {
     const list = (j && j.result) || [];
     return list.map(function (x) { return x.id; });
   } catch (e) { return null; }
+}
+// --- structured alerts + autonomous-action surface (machine-readable) ---
+function classifyIssue(text) {
+  const t = String(text || '');
+  if (t.indexOf('probe ') === 0) return 'probe';
+  if (t.indexOf('Integration chain ') === 0) return 'chain';
+  if (t.indexOf('worker(s) with 24h errors') >= 0) return 'analytics';
+  if (t.indexOf('analytics unavailable') === 0) return 'analytics';
+  if (t.indexOf('scheduled worker(s) saw 0 invocations') >= 0) return 'scheduled';
+  return 'audit';
+}
+function structuredIssues(flat) {
+  return flat.map(function (i, idx) {
+    return {
+      key: 'al-' + idx,
+      sev: i.sev,
+      component: i.component || classifyIssue(i.text),
+      actionable: i.actionable !== undefined ? i.actionable : (i.sev === 'err' || i.component === 'probe' || i.component === 'chain' || i.component === 'analytics'),
+      text: i.text
+    };
+  });
+}
+function deriveActions(alerts, integration) {
+  const actions = [];
+  for (const a of alerts) {
+    if (!a.actionable) continue;
+    let action = null;
+    if (a.component === 'probe') action = 'Redeploy/restart worker or verify its /health route (probe down)';
+    else if (a.component === 'chain') action = 'Investigate flow-chain stage signal';
+    else if (a.component === 'scheduled') action = 'Verify cron fires via worker logs (NO-RUN may be adaptive-sampling undercount)';
+    else if (a.component === 'analytics') action = 'Verify CF GraphQL analytics token/permissions';
+    else if (a.component === 'audit' && a.sev === 'err') action = 'Resolve audit failure';
+    if (action) actions.push({ key: a.key, action: action, target: a.component, autonomous: a.component !== 'audit', alert: a.text });
+  }
+  if (integration && integration.drift) {
+    const d = integration.drift;
+    if (d.ghost > 0) actions.push({ key: 'drift-ghost', action: 'Purge ghost service_registry rows', target: 'registry', autonomous: false });
+    if (d.unregistered > 0) actions.push({ key: 'drift-unregistered', action: 'Register live-but-invisible workers', target: 'registry', autonomous: false });
+    if (d.unversioned > 0) actions.push({ key: 'drift-unversioned', action: 'Version workers to strict semver', target: 'registry', autonomous: false });
+  }
+  return actions;
 }
 async function buildState(env, ctx) {
   const nowMs = Date.now();

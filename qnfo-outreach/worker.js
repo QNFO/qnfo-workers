@@ -22,8 +22,8 @@
  */
 import { EmailMessage } from "cloudflare:email";
 
-const VERSION = "0.1.0";
-const ACTIVATION_AT_MS = Date.parse("2026-09-15T00:00:00Z");
+const VERSION = "0.2.1";
+const ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 const WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 const GLOBAL_DAILY_CAP = 8;
 const PER_DOMAIN_DAILY_CAP = 3;
@@ -189,7 +189,7 @@ export default {
     const method = req.method;
     if (path === "/health" || path === "/") {
       return json({ ok: true, worker: "qnfo-outreach", version: VERSION,
-        activation_at: "2026-09-15T00:00:00Z", warmup_from: "2026-09-08T00:00:00Z",
+        activation_at: "2026-09-13T00:00:00Z", warmup_from: "2026-09-08T00:00:00Z",
         cron: "0 11 * * 1-5", mode: Date.now() >= ACTIVATION_AT_MS ? "external-enabled" : "draft+warmup", day: utcDay() });
     }
     if (path === "/api/contacts" && method === "GET") {

@@ -4,18 +4,13 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 // TOOLCALL-1 2026-09-03: WA stream branch passes tools + emits tool_calls SSE; WA multi-turn null-content normalize;
 // client tool_choice forwarded to DeepSeek + Workers AI (was dropped); WA tool-loop history accepted (5006 fix)
-var VERSION = "5.21.5"; // OUT-32K-1 (2026-09-08): MAX_OUT WA ceilings raised per 32K-output mandate (cap-halving retry + contextAwareTarget keep 400s self-healing)
+var VERSION = "5.21.3"; // OUT-32K-1 (2026-09-08): MAX_OUT WA ceilings raised per 32K-output mandate (cap-halving retry + contextAwareTarget keep 400s self-healing)
 // v5.21.2 (FLEET-SELF-AWARE-1): autoRoute excludes degraded models (calibration GW-DEGRADE-1 marks
 // recurring gateway-failure classes degraded); /v1/models exposes health status for introspection.
 // GW-ERROR-SELFHEAL-1 2026-09-05: runWorkersAI schema-adaptive content-shape + 429 retry // ROLE-LABEL-NORMALIZE-1 2026-09-04 (user directive): strip a leading transport role-label wrapper (User message: / Assistant message: / user: / Human: / AI:) from first-user content BEFORE thread-slug + auto-express idea-text + chat-log/feed content, so ChatBox wrapped & clean sends of the same turn collapse to ONE ideas.qnfo thread+title (was: "User message:\n<idea>" made its own t-user-message-* thread duplicating the clean sibling) // MEDIA-NOLOG-1 2026-09-04: mediaCapture skipped for QNFO-AI-Calibration UA - calibration vision probes no longer create media_objects rows / R2 qnfo-media objects (was 1 deduped row per cycle after every purge) // NOLOG-1 2026-09-04: logQuery now skips ai_queries for internal/machine probes (was logging everything; chatbox already filtered) and QNFO-AI-Calibration UA joins the machine probe regex - calibration sweeps no longer pollute query-history/log tables // CAL-HEALTH-1 2026-09-04: ai_model_health consumption - auto routing deprioritizes failing models (loadModelHealth cached 60s) + /v1/models merges live ctx/vision/reasoning overrides written by the qnfo-ai-calibration worker (self-correcting advertisement) // C-1 2026-09-04: contextAwareTarget big-ctx upgrade target qwq-32b(24k)->glm-5.3-flash(1.31M); N-1 corrected stale VISION-OCR-1 mangle claim (red-team finding) // CAPABILITY-TRUTH-1 2026-09-04: catalog-verified ctx/capability corrections (qwq-32b 131072->24000, r1-qwen-32b 32768->80000, glm-5.2 128k->262144, gemma-4-26b 131072->256000 + vision:true + reasoning:true, glm-5.3-flash 1M->1.31M, gpt-oss-120b 131072->128000, deepseek-v4-flash-wa 1M->1.31M, glm-5.3 1M->1.31M, llama-vision 131072->128000, qwen3-30b reasoning:true) + VISION-GW-1: vision requests route via the OpenAI-compat gateway first (direct env.AI.run never delivered images to moonshot/zai models - verified live 2026-09-04: kimi-k2.6/k2.7-code/glm-5.3-flash saw no image while the gateway delivered) // REDTEAM-2026-09-03 SOFT cleanup: /health advertises loader binding (FLEET-SELF-DOC-1); removed dead executeCode(new Function) after LOADER port // CROSS-APP-1 2026-09-03: agent-mode run_code now executes via Dynamic Workers LOADER (compile-at-load; request-time eval is disallowed on Workers) - code execution parity with qnfo-ops across DeepChat/ChatBox Desktop/ChatBox Android // MEDIA-INGEST-1 2026-09-03: every image part sent to the QNFO endpoint is captured to R2 qnfo-media + qnfo-audit.media_objects (sha256 dedupe, 2GiB/21d prune) with auth-gated /v1/media list|bytes|reprocess (OCR via llama vision) // VISION-OCR-1 2026-09-03: image messages survive budget/truncation (contentCharLen image-aware PER_IMAGE_CHARS + clip preserves image parts; was flatten->string -> big photos silently stripped -> "image not provided"); WA stream branch passes vision: effSpec.vision (direct env.AI.run; SUPERSEDED by VISION-GW-1 2026-09-04: gateway delivers images, direct env.AI.run does not for moonshot/zai) // STREAM-TOOL-INDEX-1 2026-09-03: WA stream tool_calls deltas carry numeric index (OpenAI SSE parsers require it) // STREAM-DONE-1 2026-09-03: streamWithLog appends data: [DONE] sentinel (was dropped -> strict SSE/tool-calling clients saw no terminator) // QNFO-2026-09-03: FORMAT-1 stripCOT/stripToolMarkup newline-preserving normalize - blank lines, markdown tables and code fences survive WA+ensemble extraction (GFM clients render); extends 5.16.8 PWA md() // QNFO-2026-09-03: PWA md() headings + GFM tables so endpoint responses render professionally; newline-preservation verified live 5.16.7 // QNFO.OPS.015-ext 2026-09-03: guard covers worker-name health/status phrasing (audit SOFT-3); /v1/models capability advertisement // QNFO.OPS.015: ops-command auto-express guard (research-feed isolation; qnfo-ops endpoint is the home for ops commands)
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-// MODEL-PER-TASK-1 (2026-09-11): vision falls back to a non-Llama frontier vision model.
-// VISION-GW-1: images only reach this family through the compat gateway; a direct
-// env.AI.run with an image_url arrives WITHOUT the image.
-var VISION_FALLBACK = "glm-5.3-flash";
-
 // CAL-HEALTH-1 (2026-09-04): ai_model_health (written by the qnfo-ai-calibration worker)
 // drives auto-routing deprioritization + /v1/models advertisement overrides (self-correcting).
 var _modelHealthCache = null;
@@ -33,12 +28,19 @@ async function loadModelHealth(env) {
 }
 var MODELS = {
   // Workers AI free — original three
+  "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 32768, ctx: 80000, temp: 0.6, topP: 0.95, tools: false, vision: false },
+  "qwen3-30b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen3-30b-a3b-fp8", reasoning: true, maxOut: 16384, ctx: 32768, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
+  "qwen2.5-coder-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen2.5-coder-32b-instruct", reasoning: false, maxOut: 16384, ctx: 32768, temp: 0.2, topP: 0.95, tools: false, vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
+  "glm-5.2": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.2", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: false },
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
+  "qwq-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwq-32b", reasoning: true, maxOut: 16384, ctx: 24000, temp: 0.6, topP: 0.95, tools: false, vision: false },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
   // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
+  "glm-4.7-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-4.7-flash", reasoning: true, maxOut: 32768, ctx: 131072, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // $0.06/M — cheap general default (131k ctx, reasoning)
+  "gemma-4-26b": { tier: 0, family: "google", wa: "@cf/google/gemma-4-26b-a4b-it", reasoning: true, maxOut: 32768, ctx: 256000, temp: 0.7, topP: 0.9, tools: true, vision: true },
   // $0.10/M
   "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
@@ -56,6 +58,7 @@ var MODELS = {
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
   // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
+  "llama-3.2-11b-vision": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-11b-vision-instruct", reasoning: false, maxOut: 4096, ctx: 128000, temp: 0.6, topP: 0.9, tools: false, vision: true },
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
@@ -70,7 +73,15 @@ var MAX_OUT = {
   // Workers AI (tier-0) — output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
+  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": 32768,
+  "@cf/qwen/qwen3-30b-a3b-fp8": 16384,
+  "@cf/qwen/qwen2.5-coder-32b-instruct": 16384,
+  "@cf/zai-org/glm-5.2": 32768,
   "@cf/moonshotai/kimi-k2.6": 32768,
+  "@cf/qwen/qwq-32b": 16384,
+  "@cf/meta/llama-3.2-11b-vision-instruct": 4096,
+  "@cf/zai-org/glm-4.7-flash": 32768,
+  "@cf/google/gemma-4-26b-a4b-it": 32768,
   "@cf/zai-org/glm-5.3-flash": 32768,
   "@cf/openai/gpt-oss-120b": 32768,
   "@cf/deepseek-ai/deepseek-v4-flash-0731": 32768,
@@ -137,7 +148,7 @@ function contextAwareTarget(cls, target, estInput, maxOut) {
   // (1.31M ctx, $0.15/M, vision+reasoning+tools) - the cheapest big-ctx tier-0 model.
   const big = MODELS["glm-5.3-flash"];
   if (big && spec.wa !== big.wa && estInput + out <= modelCtx(big) - CTX_SAFETY_MARGIN) {
-    return "glm-5.3";
+    return "qwq-32b";
   }
   return cls.domain === "science" ? "deepseek-v4-flash-thinking" : "deepseek-v4-flash";
 }
@@ -441,7 +452,7 @@ var ENSEMBLE = {
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
   science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-pro-0813"],
-  general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3-flash"]
+  general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-4.7-flash"]
 };
 var json = /* @__PURE__ */ __name((obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
@@ -528,11 +539,11 @@ function seededPick(pool, key) {
 }
 __name(seededPick, "seededPick");
 var ROUTE_POOLS = {
-  code:     ["kimi-k2.7-code", "glm-5.3", "kimi-k2.7-code", "deepseek-v4-pro-wa", "gpt-oss-120b"],
+  code:     ["kimi-k2.7-code", "glm-5.3", "qwen2.5-coder-32b", "deepseek-v4-pro-wa", "gpt-oss-120b"],
   science:  ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa"],
   legal:    ["deepseek-v4-pro", "glm-5.3", "kimi-k2.6"],
-  creative: ["glm-5.3", "kimi-k2.6", "glm-5.3-flash", "kimi-k2.7-code"],
-  general:  ["glm-5.3-flash", "kimi-k2.6", "kimi-k2.7-code", "deepseek-v4-flash", "glm-5.3-flash"]
+  creative: ["glm-5.3", "gemma-4-26b", "glm-4.7-flash", "qwen3-30b"],
+  general:  ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
 };
 function autoRoute(cls, prompt, health) {
   const h = health || {};
@@ -1170,25 +1181,11 @@ async function mediaProcess(env, id) {
   const buf = await obj.arrayBuffer();
   const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
   const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + b64;
-    // VISION-GW-1: gateway-first. On failure return NO text rather than writing an
-  // image-less (fabricated) description into D1.
-  let text = "";
-  try {
-    const gw = await fetch(GW_COMPAT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
-      body: JSON.stringify({
-        model: "@cf/zai-org/glm-5.3-flash",
-        messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
-        max_tokens: 2048
-      })
-    });
-    if (gw.ok) {
-      const gj = await gw.json();
-      text = String((gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content) || "").trim();
-    }
-  } catch (e) { text = ""; }
-  if (!text) return { ok: false, error: "vision ocr unavailable (gateway)", id: id };
+  const out = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+    messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
+    max_tokens: 1024
+  });
+  const text = String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || "").trim();
   await env.QNFO_AUDIT.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8000), id).run();
   return { ok: true, id, extracted_text: text.slice(0, 8000) };
 }
@@ -1364,16 +1361,16 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
   let spec = MODELS[target];
   if (hasImage && !isEnsemble) {
-    const v = MODELS[VISION_FALLBACK];
+    const v = MODELS["llama-3.2-11b-vision"];
     if (v && (!spec || !spec.vision)) {
-      target = VISION_FALLBACK;
+      target = "llama-3.2-11b-vision";
       spec = v;
     }
   }
   if ((wantsCode || tools && tools.length) && !isEnsemble && !hasImage && (!spec || !spec.tools)) {
-    if (MODELS["kimi-k2.7-code"]?.tools) {
-      target = "kimi-k2.7-code";
-      spec = MODELS["kimi-k2.7-code"];
+    if (MODELS["qwen3-30b"]?.tools) {
+      target = "qwen3-30b";
+      spec = MODELS["qwen3-30b"];
     } else {
       target = "deepseek-v4-flash";
       spec = MODELS["deepseek-v4-flash"];
@@ -1493,7 +1490,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
           return streamWithLog(new Response(streamT, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
         }
         if (!waContent || !String(waContent).trim()) {
-          const wafbCands = [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
+          const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
             if (!wafb || (wafb.wa && wafb.wa === effSpec.wa)) continue;
             if (hasImage && !wafb.vision) continue; // GW-ERROR-SELFHEAL-1: never send image parts to a text model
@@ -1551,7 +1548,7 @@ if (effSpec.api) {
         }
       } catch (e) {
       }
-      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
+      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
       for (const fbSpec of fbCands) {
         if (!fbSpec) continue;
         if (hasImage && !fbSpec.vision) continue; // GW-ERROR-SELFHEAL-1: never send image parts to a text model

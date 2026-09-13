@@ -1,9 +1,9 @@
 // qnfo-fleet-dashboard registry - regenerated 2026-09-12 from service_registry (live fleet, 0 ghosts)
 // Schedules: CF Workers API; purposes curated; device-bound: schtasks live capture
 export const REGISTRY = {
- "version": 4,
- "captured_at": "2026-09-12T06:38:13.038Z",
- "note": "Regenerated 2026-09-12 (ghost retirement reconciliation): dropped 25 ghost scheduled entries, 39 ghost probes, 2 fully-ghost chains. Live = 54 workers (service_registry source of truth).",
+ "version": 5,
+ "captured_at": "2026-09-12T11:00:00.000Z",
+ "note": "Regenerated 2026-09-12 (fleet reconciliation v2): 54 live workers; 54 health probes (added 12 consolidation hubs); 9 flow chains (restored research-intake + fleet-exec, stage labels -> consolidated hubs). Live = 54 workers (service_registry source of truth).",
  "scheduled": [
   {
    "name": "calendar-api",
@@ -450,9 +450,79 @@ export const REGISTRY = {
   {
    "name": "research-daily-brief",
    "url": "https://research-daily-brief.q08.workers.dev/health"
+  },
+  {
+   "name": "ai-health-prober",
+   "url": "https://ai-health-prober.q08.workers.dev/health"
+  },
+  {
+   "name": "audit-hub",
+   "url": "https://audit-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "companion-hub",
+   "url": "https://companion-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "errata-hub",
+   "url": "https://errata-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "idea-hub",
+   "url": "https://idea-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "jnl-pipeline",
+   "url": "https://jnl-pipeline.q08.workers.dev/health"
+  },
+  {
+   "name": "radar-hub",
+   "url": "https://radar-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "fleet-exec",
+   "url": "https://fleet-exec.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-fleet-control",
+   "url": "https://qnfo-fleet-control.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-autopilot",
+   "url": "https://qnfo-autopilot.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-signal-loop",
+   "url": "https://qnfo-signal-loop.q08.workers.dev/health"
+  },
+  {
+   "name": "personal-companion",
+   "url": "https://personal-companion.q08.workers.dev/health"
   }
  ],
  "chains": [
+  {
+   "name": "research-intake",
+   "label": "Research intake (radar -> ideas -> triage)",
+   "stages": [
+    "radar-hub",
+    "idea-hub"
+   ],
+   "checks": [
+    {
+     "label": "untriaged proposals",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'",
+     "max": 10
+    },
+    {
+     "label": "accepted fuel",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')",
+     "min": 1
+    }
+   ]
+  },
   {
    "name": "research-exec",
    "label": "Research execution (queue -> papers)",
@@ -582,6 +652,27 @@ export const REGISTRY = {
      "store": "AUDIT",
      "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'",
      "max": 3
+    }
+   ]
+  },
+  {
+   "name": "fleet-exec",
+   "label": "Dynamic execution layer",
+   "stages": [
+    "fleet-exec"
+   ],
+   "checks": [
+    {
+     "label": "runs 24h",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')",
+     "min": 1
+    },
+    {
+     "label": "rejected artifacts 7d",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')",
+     "max": 0
     }
    ]
   },
