@@ -26,6 +26,14 @@
 // The same gap is why companion_pieces.id=8 shipped reading "Rowan rated it 5 out
 // of 5 for felt energy": no rule in the shipped gate could fire on a one-word name.
 //
+// REVISION 2 (same day) — a measured bug in revision 1
+// Revision 1 built the bare-mention regex with flags 'g' only, so "Rowan" matched
+// and "rowan rated it 5" did NOT. The suite in addressee.test.js caught it:
+// 18 passed, 4 failed. Revision 2 uses flags 'gi'. The three other failures were
+// wrong expectations in the test file, not module faults, and are corrected there.
+// Same discipline grounding.js and voice.js record for their own revision 2: a
+// check that silently misses is worse than no check.
+//
 // THREE CHECKS, TWO SEVERITIES
 //   reader-in-heading  block  the piece's own heading names the addressee
 //   reader-address     block  "for Rowan", "to Rowan", "dear Rowan", "about Rowan"
@@ -38,8 +46,17 @@
 // voice.js records the same trade in its own revision 2. Callers wanting the
 // strict rule filter with blockingViolations().
 //
-// Both apostrophe forms are handled. The name list is a parameter rather than a
-// constant, so no person's name is baked into the fleet's code.
+// NOTE ON OVERLAP, measured: "# Field Notes for Rowan" produces TWO blocking
+// violations — reader-in-heading and reader-address ("for Rowan") — because the
+// address-frame pattern matches inside a heading. That is intended: either alone
+// is sufficient to block, and the caller sees both reasons.
+//
+// NOTE ON THE EMPTY LIST: passing { names: [] } falls back to the default name
+// rather than disabling the check, because an empty array is falsy on .length.
+// To test a different reader, pass that name. To disable the check, do not call it.
+//
+// The name list is a parameter rather than a constant, so no person's name is
+// baked into the fleet's code.
 
 export function checkAddressee(text, opts) {
   var o = opts || {};
@@ -61,13 +78,13 @@ export function checkAddressee(text, opts) {
       }
     }
   }
-  // 2. address frames + 3. bare mention (straight or typographic apostrophe)
+  // 2. address frames + 3. bare mention (straight or typographic apostrophe, any case)
   for (var ni = 0; ni < names.length; ni++) {
     var n = names[ni];
     var mA = new RegExp('\\b(?:for|to|dear|about)\\s+' + esc(n) + '\\b', 'i').exec(flat);
     if (mA) out.push({ kind: 'reader-address', severity: 'block', span: mA[0],
                        why: 'explicit address of the briefing addressee' });
-    var reAny = new RegExp('\\b' + esc(n) + '(?:[\\u2019\\x27]s)?\\b', 'g');
+    var reAny = new RegExp('\\b' + esc(n) + '(?:[\\u2019\\x27]s)?\\b', 'gi'); // rev 2: was 'g'
     var m;
     while ((m = reAny.exec(flat)) !== null) {
       var a = Math.max(0, m.index - 45);
