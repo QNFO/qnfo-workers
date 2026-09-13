@@ -1,10 +1,13 @@
--- 2026-09-13-REMEDIATION.sql   (rev 2 — supersedes rev 1, commit e5a4907)
+-- 2026-09-13-REMEDIATION.sql   (rev 3 — supersedes rev 2, commit c62788d6)
 -- Author: qnfo-ops (ops/audit endpoint). Target DB: qnfo-audit.
 --
 -- This endpoint is READ-ONLY on D1 and cannot deploy, so it could not execute the writes below.
 -- Every statement is scoped and idempotent; none is a bulk delete.
 --
--- ── rev 2 changes (both are corrections to rev 1) ──
+-- ── rev 3 change ──
+--   * Adds FIX 6 (EMAIL SURFACE) — the mailbox warning surface, previously uncovered.
+--
+-- ── rev 2 changes (corrections to rev 1) ──
 --   * FIX 1 rewritten: the phantom rows are RE-TOUCHED EVERY SWEEP (updated_at 13:31:08-13:31:12Z
 --     on 2026-09-13), so a one-shot DELETE is NOT durable — they reappear at the next sweep.
 --     rev 1 said "delete them"; that was wrong as a standalone action. Writer must be fixed first.
@@ -19,6 +22,7 @@
 --   fleet_drift_report cron: scanned=55 clean=33 drifted=8 ahead=10 healed=0 staleCanon=4
 --                            healthVer=10 errKinds={"version-format":17,"stale-canon":4,"health-ver":10}
 --   backlog drain 2026-09-13: processed=12 closed=0 escalated=0 rechecked=12
+--   email 682 total / 23 in 24h / spam 45 (6.6%) / alerts@ mailbox 304 messages
 
 
 -- ══ FIX 0 — FIRST: reconcile the qnfo-ai-calibration source drift. Nothing below is durable without it.
@@ -222,8 +226,54 @@ UPDATE issue_ledger
 --     the other 43 return probe:"api" with healthy:null. fleet_heartbeat holds ONE row
 --     (qnfo-lifecycle, version "fabric-20260910"). The heartbeat table cannot be used as a
 --     staleness signal, and 78% of the fleet has no health signal at all.
+
+
+-- ══ FIX 6 — EMAIL SURFACE (no SQL; config + a decision)
 --
--- RECOMMENDED ORDER (each step is a prerequisite for the next):
+-- Live (email_stats / emails table): 682 total, 23 in 24h. By status: sent 289, processed 226,
+-- archived 110, spam 45, replied 12. By classification: general 422, alerts 176, personal 81,
+-- outreach 2, test 1. Spam is 45/682 = 6.6%.
+--
+-- (a) EVERY INTERNAL ALERT IS DELIVERED TWICE. alerts@qnfo.org holds 304 messages:
+--       alerts@/alerts/processed  151
+--       alerts@/general/sent      123
+--       alerts@/alerts/archived    25
+--       alerts@/general/archived    5
+--     Worked example, same subject, same day:
+--       id 709  qnfo@qnfo.org -> alerts@  "[research-daily-brief] FAILED ..."  general / sent
+--       id 708  bounces@cf-bounce.qnfo.org -> alerts@  same subject            alerts / processed
+--     The direct send is recorded 'sent'; a bounce-rewritten copy is then delivered and recorded
+--     'processed'. Roughly 1:1. Every alert therefore costs 2 messages and the alert mailbox reads
+--     ~2x its true volume.
+-- (b) ALL 176 `alerts` arrive from bounces@cf-bounce.qnfo.org — internal mail is transiting the
+--     Cloudflare bounce/rewrite path rather than the domain's own sending identity. That is an
+--     envelope-sender misconfiguration and is the likely mechanism behind (a).
+-- (c) SUBSCRIPTION CONFIRMATIONS ARE MISROUTED to the alert mailbox:
+--       id 699/698 "Confirm your QNFO subscription" -> alerts@qnfo.org (10:18Z / 10:22Z, 09-12)
+--       id 700 same subject -> qnfo@qnfo.org (10:35Z, 09-12)
+--     Test/double signups are landing in alerts@.
+-- (d) ALERT DELIVERY IS WORKING for the real defects — id 705 and 702 "QNFO AI endpoint health
+--     alert" correspond exactly to the alerts-table worker-health rows (2026-09-13 03:05:42 /
+--     2026-09-12 15:05:23). id 706 "QNFO register guard: 26 overdue / 0 no-executor" matches
+--     fleet_drift_report regOverdue=26. So the alerts surface is not itself broken; it is noisy.
+-- (e) SPAM IS MOSTLY CORRECTLY CLASSIFIED: 33 of 45 are personal-address predatory-publisher and
+--     lead-gen mail (glintopenaccess.org x5, evalsignal.xyz, wishpond, premiersciencenetwork,
+--     "EMAIL LISTS 2026", "casino leads forex leads"), 12 are general-address CF/product marketing
+--     forwarded via cfbounces+ndrdrop@q08.org. NOT reclassified by this audit — status 'spam' is
+--     already the correct terminal state, so marking them would be churn.
+--
+-- ⚠ ONE ITEM DELIBERATELY NOT ACTIONED: id 712, sender
+--   SRS0=8Y4d=fh=ezweb.ne.jp=no-reply@qnfo.org -> qnfo@qnfo.org, subject ISO-2022-JP (base64),
+--   classified general, status spam. This is an SRS-rewritten forward from a Japanese ISP
+--   (ezweb.ne.jp) and may be a legitimate notice rather than spam. Reclassifying it to 'processed'
+--   would be a guess about intent on ambiguous evidence, so it is left as-is for a human call.
+--   VERIFY 6:
+--     SELECT id, sender, recipient, subject, classification, status, received_at
+--       FROM emails WHERE recipient LIKE 'alerts@%' ORDER BY id DESC LIMIT 20;
+--     SELECT classification, status, COUNT(*) FROM emails GROUP BY classification, status;
+
+
+-- ══ RECOMMENDED ORDER (each step is a prerequisite for the next) ══
 --   1. Recover + commit the qnfo-ai-calibration 1.1.5 source as ONE canonical file (FIX 0).
 --   2. Fix internalId() — replace the substring fallback with a total map, or normalise to the
 --      roster key at write time; make the self-clear path target the same key the probe writes.
@@ -234,3 +284,5 @@ UPDATE issue_ledger
 --   6. Replace the SUM(count) metric with count-per-sweep in every consumer.
 --   7. Fix the 4 caller-side payload defects (FIX 4). This is the only step that clears the 7 open
 --      [gw-fail] tickets, and it is the highest-value item in this file.
+--   8. Fix the internal-alert sending path so alerts are not delivered twice via the bounce route
+--      (FIX 6a/6b), and stop routing subscription confirmations to alerts@ (FIX 6c).
