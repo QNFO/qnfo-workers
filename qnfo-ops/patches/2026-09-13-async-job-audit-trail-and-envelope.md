@@ -142,11 +142,13 @@ parameter rather than incidental prose.
 
 ---
 
-## D5 — job status reads are inconsistent, and "authenticated polling" does not fix the client
+## D5 — job status is not authoritative: stale reads, no heartbeat, and a poll route the client cannot use
 
-Added 2026-09-13 after direct poll verification (session ~06:56–06:57Z).
+Added 2026-09-13 after direct poll verification (session ~06:56–07:00Z).
 
-**Measured — read race.** Three queries issued in a single parallel batch, seconds apart:
+### D5a — read race
+
+Three queries issued in a single parallel batch, seconds apart:
 
 | query | `job-ecd8d94f881de7` status | `updated_at` |
 |---|---|---|
@@ -154,38 +156,57 @@ Added 2026-09-13 after direct poll verification (session ~06:56–06:57Z).
 | by id | **`running`** | — |
 | aggregate `GROUP BY status` | 3 running | — |
 
-A later by-id read returned `succeeded` with a 5,056-char `response`. A re-poll minutes later
-counted 2 running. The same job was therefore reported `running` **and** `succeeded` inside one
-batch, straddling its completion at `2026-09-13T06:56:46.953Z`.
+A later by-id read returned `succeeded` with a 5,056-char `response`, and a re-poll minutes later
+counted the aggregate at **27 succeeded / 2 running** — i.e. the row moved into the succeeded
+count. The same job was reported `running` **and** `succeeded` inside one batch, straddling its
+completion at `2026-09-13T06:56:46.953Z`.
 
-**Impact.** D2's remedy ("return 202 + `job_id`, let the client poll") assumes the poll is
-authoritative. It is not. A client can be told `running` for a job that has already finished,
-and will either poll forever or abandon a deliverable that exists on disk.
+### D5b — no liveness signal
 
-**Fix.** One of:
-1. Route status reads for a job to the Durable Object / instance that owns it — no replica
-   reads of the `status` column.
-2. Have `GET /v1/jobs/:id` read the authoritative primary.
-3. Return `updated_at` plus a monotonic `revision` in the poll body, so a client can detect a
-   stale read and retry.
+The two jobs still `running` at re-poll carry `updated_at` only **+2.0 s** and **+3.8 s** after
+`created_at`:
 
-At minimum, document that status is eventually consistent and that **`response IS NOT NULL` is
+| id | created_at | updated_at | delta |
+|---|---|---|---|
+| job-4636deba8a2938 | 2026-09-13T06:52:43.713Z | 2026-09-13T06:52:47.505Z | +3.8 s |
+| job-baa6f8718cf3a2 | 2026-09-13T06:55:46.616Z | 2026-09-13T06:55:48.620Z | +2.0 s |
+
+Every `succeeded` row, by contrast, has `updated_at` at completion: job-39ff45648ce523 **+38.8 s**,
+job-ecd8d94f881de7 **+377.2 s**. So a running job writes `updated_at` once at enqueue and never
+again.
+
+**This is not proof those two jobs are hung.** It is worse: with no heartbeat column, a stalled
+job and a healthy long-running job are **indistinguishable** — and that indistinguishability is
+itself the defect. An orphaned row stays `running` forever, the queue count never reconciles, and
+a polling client waits on a deliverable that will never arrive.
+
+### D5c — the prescribed poll route does not serve the affected client
+
+D2 prescribes exposing `GET /v1/jobs/:id` **authenticated**. That is not sufficient for the
+reported failure. `ops_req_log` records authenticated job polls carrying `Bearer 003…` (55 chars)
+and exactly one unauthenticated poll — `req-87c21c4ec8224e`, `2026-09-12T13:21:56.302Z`,
+`auth_len 0` — which returned **404**. The affected client (a mobile LLM client, ChatBox Android)
+does not hold the endpoint token, so an authenticated-only poll route reproduces the exact
+complaint: *a deliverable that exists and cannot be reached*.
+
+### Fix
+
+1. **Status reads:** route them to the Durable Object / instance that owns the job — no replica
+   reads of the `status` column — or have the poll read the authoritative primary, or return
+   `updated_at` plus a monotonic `revision` so a client can detect a stale read and retry.
+2. **Heartbeat:** add `heartbeat_at` (or a `progress` counter) written by the Workflow on each
+   step, plus a reaper that flips rows with `status='running'` and a stale `heartbeat_at` to
+   `failed` with `error='stalled: no heartbeat'`.
+3. **Client-facing poll:** choose one —
+   - return the deliverable inline in the enqueue envelope when it completes inside the request
+     window (already true for 27 of 49 jobs);
+   - issue a **signed, expiring, job-scoped poll token** alongside the 202 enqueue response, so
+     the client polls with a credential it was actually given;
+   - provide a token-free read path for `response`, keyed by the unguessable `job_id` (128-bit),
+     with rate limiting.
+
+At minimum, document that `status` is eventually consistent and that **`response IS NOT NULL` is
 the only reliable completion signal**.
-
-**Correction to D2's remedy.** D2 prescribes exposing `GET /v1/jobs/:id` **authenticated**. That
-is not sufficient for the reported failure. `ops_req_log` records authenticated job polls
-carrying `Bearer 003…` (55 chars) and exactly one unauthenticated poll — `req-87c21c4ec8224e`,
-`2026-09-12T13:21:56.302Z`, `auth_len 0` — which returned **404**. The affected client (a mobile
-LLM client, ChatBox Android) does not hold the endpoint token, so an authenticated-only poll
-route reproduces the exact complaint: *a deliverable that exists and cannot be reached*.
-
-**Revised fix for the client-facing case.** Choose one:
-1. Return the deliverable inline in the enqueue envelope when it completes inside the request
-   window (already true for 26 of 49 jobs).
-2. Issue a **signed, expiring, job-scoped poll token** alongside the 202 enqueue response, so
-   the client polls with a credential it was actually given.
-3. Provide a token-free read path for `response`, keyed by the unguessable `job_id` (128-bit),
-   with rate limiting.
 
 **Interim workaround (verified, no key required).** `ops_jobs.response` is a plain column in
 `qnfo-audit`; read it via `ops_d1_query`. Every deliverable quoted in this session was retrieved
@@ -193,7 +214,8 @@ this way.
 
 **Verification for D5.** Poll a known-finished job and a known-running job in the same batch
 several times; a status must never regress from `succeeded` to `running`, and
-`response IS NOT NULL` must imply `status='succeeded'`.
+`response IS NOT NULL` must imply `status='succeeded'`. After the heartbeat ships, no row may sit
+at `status='running'` with `heartbeat_at` older than the reaper threshold.
 
 ---
 
@@ -214,8 +236,8 @@ this spec).
   was never recorded, so nothing can be retro-attributed. Their payloads (3,536–520,244 B) do
   **not** form a ceiling: six 2026-09-13 jobs at 480–729 KB execute fine and four deliver.
   The discriminator is **time**, not size — last success 09-12T11:34Z, then six silent deaths
-  11:49→12:37Z, then nine clean runs from 06:29Z on 09-13. Re-confirmed 2026-09-13: 26
-  `succeeded` rows now span 101 B → 675,142 B, and the 3 running rows hold 528,843–875,661 B,
+  11:49→12:37Z, then nine clean runs from 06:29Z on 09-13. Re-confirmed 2026-09-13: 27
+  `succeeded` rows now span 101 B → 675,142 B, and the 2 running rows hold 528,843–875,661 B,
   so **any** payload-ceiling hypothesis is dead.
 - **Depth-limit enforcement** — cannot be proven or disproven: undocumented, never observed to
   bind, and `worker.js` is past the 32,768-char read cap.
