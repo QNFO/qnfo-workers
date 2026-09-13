@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.3";
+var VERSION = "0.8.4";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];

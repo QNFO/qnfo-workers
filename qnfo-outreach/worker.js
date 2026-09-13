@@ -22,8 +22,8 @@
  */
 import { EmailMessage } from "cloudflare:email";
 
-const VERSION = "0.1.0";
-const ACTIVATION_AT_MS = Date.parse("2026-09-15T00:00:00Z");
+const VERSION = "0.2.0";
+const ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 const WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 const GLOBAL_DAILY_CAP = 8;
 const PER_DOMAIN_DAILY_CAP = 3;
