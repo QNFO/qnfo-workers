@@ -1,4 +1,14 @@
-// qnfo-backlog-exec v1.2.9 - agent_issues backlog executor + issue_ledger resolver (cloud-native ops).
+// qnfo-backlog-exec v1.3.0 - agent_issues backlog executor + issue_ledger resolver + ops_jobs reaper.
+// v1.3.0 (PATCH-2026-09-13-ops-jobs-reaper, qnfo-ops): ops_jobs terminal-status reaper (defect D17).
+//  The async-job runner writes `response` but never writes the terminal status, so finished legs
+//  sit in 'continuing'/'running' forever and every status surface lies. Measured live
+//  2026-09-13T14:09Z: ops_jobs held 132 rows - 6 running, 22 continuing, 0 queued, 118 with a
+//  response, and 23 rows carrying a finished answer under a NON-terminal status
+//  (stranded_response=23). Longest-lived ACTIVE row was 16 min old, so a 30-min idle window
+//  cannot touch live work. CORRECTION to the earlier staged note: `updated_at` IS a heartbeat for
+//  these rows - the runner touches it continuously (observed ages 0-16 min on progressing rows) -
+//  so an idle threshold is a defensible predicate, not a guess. Env: OPS_JOB_STALE_MIN (default 30),
+//  OPS_JOB_REAP_CONTINUING (default '1'; set '0' to leave 'continuing' hand-off rows untouched).
 // v1.2.9 (PATCH-2026-09-13-zenodo-research-predicates, qnfo-ops): zenodo-publish +
 //  research-pipeline resolution predicates. Measured live 2026-09-13T14:07Z: the drain returned
 //  {processed:3, closed:0, rechecked:3, escalated:0} with EVERY row carrying
@@ -62,7 +72,7 @@
 // v1.1.0 (self red-team): never auto-close on generic /health alone - a worker can be up while its
 // failing endpoint is broken. Only rows whose OWN resolution predicate passes are closed.
 // All others are left open but marked rechecked (updated_at) so the loop proves it is watching.
-const VERSION = "1.2.9";
+const VERSION = "1.3.0";
 // v1.2.4: datetime-format fix - alerts.created_at mixes ISO-T (error-selfheal) and space (datetime())
 // formats; string >= comparison miscounts because "T" > " " (30h-old alerts looked fresh). Use julianday().
 // v1.2.2: evidence channel fix - public-URL probes from the edge fail for same-account workers
@@ -191,9 +201,57 @@ async function sweepIssueLedger(env) {
   return resolved;
 }
 
+// v1.3.0: ops_jobs terminal-status reaper (defect D17 + D19).
+// D17: the async-job runner writes `response` but never writes the terminal status, so a finished
+// leg sits in 'continuing'/'running' forever and every status surface (including the public job
+// page) misreports it as unfinished. D19: rows that died produce no `error` text at all, so a
+// consumer learns THAT it failed but never WHY.
+// Evidence rules, mirroring sweepIssueLedger: promote on evidence, never DELETE, never overwrite
+// an existing error string, idempotent, batch-capped at 200.
+// Safety: the runner touches updated_at continuously on progressing rows (measured 2026-09-13:
+// active rows 0-16 min old, jobs observed running up to ~11 min), so an idle window of 30 min
+// (OPS_JOB_STALE_MIN) cannot reap live work. This worker's cron is daily (10 1 * * *), so the
+// reaper is a daily sweep, not a live watchdog - a tighter cadence needs a wrangler.toml change.
+// RESIDUAL RISK, stated: flipping 'continuing' -> 'succeeded' changes a hand-off marker. The
+// successor leg already exists as its own row at hand-off time, so chaining should not depend on
+// the predecessor's status - but that could not be verified (qnfo-ops/worker.js is 182,628 B,
+// past this endpoint's 32,768-char read cap). Set OPS_JOB_REAP_CONTINUING=0 to disable that half.
+async function sweepOpsJobs(env) {
+  const out = { promoted: 0, failed: 0, strandedBefore: 0 };
+  const staleMin = Number(env.OPS_JOB_STALE_MIN) > 0 ? Math.floor(Number(env.OPS_JOB_STALE_MIN)) : 30;
+  const reapContinuing = String(env.OPS_JOB_REAP_CONTINUING || "1") !== "0";
+  const statuses = reapContinuing ? "'running','continuing','queued'" : "'running','queued'";
+  try {
+    const stranded = await env.AUDIT.prepare(
+      "SELECT COUNT(*) AS c FROM ops_jobs WHERE status IN ('running','continuing','queued') AND length(COALESCE(response,'')) > 0"
+    ).first();
+    out.strandedBefore = stranded ? Number(stranded.c || 0) : 0;
+    const rows = await env.AUDIT.prepare(
+      "SELECT id, status, updated_at, length(COALESCE(response,'')) AS rl FROM ops_jobs WHERE status IN (" + statuses + ") AND julianday(updated_at) < julianday('now', ?1) ORDER BY updated_at LIMIT 200"
+    ).bind("-" + staleMin + " minutes").all();
+    for (const r of rows.results || []) {
+      if (Number(r.rl) > 0) {
+        await env.AUDIT.prepare("UPDATE ops_jobs SET status='succeeded', updated_at=?1 WHERE id=?2 AND status IN (" + statuses + ")").bind(ts(), r.id).run();
+        out.promoted++;
+      } else {
+        await env.AUDIT.prepare("UPDATE ops_jobs SET status='failed', error=COALESCE(error, ?1), updated_at=?2 WHERE id=?3 AND status IN (" + statuses + ")")
+          .bind("reaper v1.3.0 (INFERRED - no diagnostic was captured): no response within " + staleMin + "m of last write", ts(), r.id).run();
+        out.failed++;
+      }
+    }
+    if (out.promoted + out.failed > 0) {
+      await recordEvent(env, "job-run", "backlog-exec reaped ops_jobs: promoted " + out.promoted + " stranded answer(s) to terminal, failed " + out.failed + " silent row(s) (idle>" + staleMin + "m)", { action: "ops-jobs-reap", promoted: out.promoted, failed: out.failed, stranded_before: out.strandedBefore, stale_min: staleMin }, WORKER, "ok");
+    }
+  } catch (e) {
+    await recordEvent(env, "job-run", "backlog-exec ops_jobs reap failed: " + String((e && e.message) || e), { action: "ops-jobs-reap", error: true }, WORKER, "error");
+  }
+  return out;
+}
+
 async function run(env) {
   const noiseClosed = await sweepAdvisorNoise(env);
   const ledgerResolved = await sweepIssueLedger(env);
+  const jobsReaped = await sweepOpsJobs(env);
   const rows = await env.AUDIT.prepare("SELECT id, title, description, source, category, priority, status, created_at, updated_at FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, updated_at ASC, id LIMIT ?1").bind(MAX_ROW).all();
   const items = rows.results || [];
   const now = nowEpoch();
@@ -365,9 +423,9 @@ async function run(env) {
     rechecked++;
     detail.push({ id: row.id, title: title.slice(0,60), action: "recheck", note: name ? ("probe target " + name) : "no probe target" });
   }
-  const summary = { noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
+  const summary = { noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, jobsReaped: jobsReaped, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated, detail: detail.slice(0, MAX_ROW) };
   if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter(d=>d.action==="escalate").map(d=>d.target).join(", "));
-  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
+  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, jobsReaped: jobsReaped, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }), { noiseClosed: noiseClosed, ledgerResolved: ledgerResolved, jobsReaped: jobsReaped, processed: items.length, closed: closed, rechecked: rechecked, escalated: escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
 }
 
@@ -386,7 +444,8 @@ export default {
     if (url.pathname === "/health") {
       const open = await env.AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status='open'").first().catch(() => null);
       const led = await env.AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status='open'").first().catch(() => null);
-      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1 });
+      const stranded = await env.AUDIT.prepare("SELECT COUNT(*) c FROM ops_jobs WHERE status IN ('running','continuing','queued') AND length(COALESCE(response,'')) > 0").first().catch(() => null);
+      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1 });
     }
     if (url.pathname === "/run" && request.method === "POST") {
       const out = await run(env);
