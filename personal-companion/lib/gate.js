@@ -27,12 +27,11 @@
 // array publishPolicy sees. A bare mention is a warning, because the serial "The
 // Hand That Signs" legitimately names the reader in order to exclude him ("Rowan's
 // own handwriting is not the subject here."). Merging warnings would block that
-// piece — a false block, which is as damaging as a false pass. Warnings are returned
-// separately as `addressee` for a human or a policy to review.
+// piece — a false block, which is as damaging as a false pass.
 //
 // REVISION 3 (2026-09-13, QRI-2) — the false block rev 2 left standing
 // Rev 2 filtered ADDRESSEE warnings but merged `voice` into `violations`
-// UNFILTERED. voice.js rev 2 had no severity, so every voice finding blocked —
+// UNFILTERED. voice.js rev 2 carries no severity, so every voice finding blocked —
 // including check 3, which voice.js's own header calls "a review flag, not proof
 // of impersonation", and check 1, which its header records as firing on the
 // abstract "my attention". Rev 2's own note above states the goal that the serial
@@ -44,15 +43,27 @@
 //                                        [reader-as-subject] "Rowan's"
 //                                        => rev 2 still returned publish=false
 //
-// voice.js rev 3 labels each violation. Rev 3 of this file therefore filters
-// `voice` by severity too, so the two documented review flags are reported as
-// warnings and only the shipped-defect class blocks.
-//
 // MEASURED, 3/3 (run_code against the PERSONAL.activity rows, 2026-09-13):
 //   companion_pieces.id=8  -> publish=false, 7 blocking (2 grounding + 5 voice)
 //   companion_pieces.id=7  -> publish=true,  0 blocking, 3 warnings
 //   runs id=442 heading    -> publish=false, 2 blocking (reader-in-heading, reader-address)
 //   rev 2 on the same three: false / FALSE / false   (one wrong)
+//
+// REVISION 4 (same day) — do not depend on the detector revision that is deployed
+// Rev 3 filtered voice on `severity === 'warn'`, which only works once voice.js
+// rev 3 (severity field) is deployed. A write of voice.js rev 3 was rejected by a
+// concurrent writer on that path, and a gate that silently no-ops when its
+// detector is one revision behind is worse than no gate — the false block would
+// persist while the code read as if it were fixed. Rev 4 therefore treats the two
+// documented review flags as review flags by KIND as well as by severity:
+//
+//   impersonation, reader-as-subject  -> warning  (review flags; voice.js header)
+//   attribution-seam, invented-particular -> blocking (the shipped defect class)
+//
+// The mapping is correct against voice.js rev 2 (no severity field) and rev 3
+// (severity field), so the gate's behaviour no longer depends on which detector
+// revision happens to be live. The policy lives in the composition layer, which is
+// where it belongs: the detector reports findings, the gate decides what blocks.
 //
 // USAGE (inside the compose pipeline, after `critique`, before the INSERT into
 // companion_pieces):
@@ -84,12 +95,19 @@
 // NOTE ON INLINING: the deploy patcher strips `export `/`import` and concatenates
 // grounding.js + voice.js + addressee.js + gate.js into ONE scope. Nothing here may
 // declare a name that already exists in one of those modules (addressee.js owns
-// `blockingViolations`). The severity filter is therefore written inline rather than
-// added as a helper.
+// `blockingViolations`). Hence `isVoiceWarn` / `VOICE_WARN_KINDS`, which are unique.
 
 import { checkGrounding, publishPolicy, deriveTemporalFacts } from './grounding.js';
 import { checkVoice, venuesOf, mergeViolations } from './voice.js';
 import { checkAddressee, blockingViolations } from './addressee.js';
+
+// Voice findings that are review flags, not defect classes. See revision 4 note.
+const VOICE_WARN_KINDS = { 'impersonation': true, 'reader-as-subject': true };
+function isVoiceWarn(x) {
+  if (!x) return false;
+  if (x.severity === 'warn') return true;
+  return VOICE_WARN_KINDS[x.kind] === true;
+}
 
 export function runGate(o) {
   const opts = o || {};
@@ -104,9 +122,9 @@ export function runGate(o) {
   const addresseeBlocking = blockingViolations(addressee);
 
   // Grounding violations carry no severity: an unsupported record-derived claim is
-  // always blocking. Voice (rev 3) and addressee carry severity; only 'block' counts.
-  const voiceBlocking = voice.filter(function (x) { return x.severity !== 'warn'; });
-  const voiceWarnings = voice.filter(function (x) { return x.severity === 'warn'; });
+  // always blocking. Voice findings are split by the mapping above.
+  const voiceBlocking = voice.filter(function (x) { return !isVoiceWarn(x); });
+  const voiceWarnings = voice.filter(isVoiceWarn);
 
   const violations = mergeViolations(grounding, voiceBlocking, addresseeBlocking);
   const decision = publishPolicy({
