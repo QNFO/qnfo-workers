@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.15.5";
+var VERSION = "2.15.6";
 function boundedToolLog(a, cap) {
   a = Array.isArray(a) ? a : [];
   cap = cap || 24000;
@@ -175,7 +175,16 @@ function iso() {
 __name(iso, "iso");
 __name2(iso, "iso");
 function randId(prefix) {
-  return (prefix || "id-") + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6);
+  // JOBS-ENTROPY-1 (2026-09-13): 128-bit crypto-random IDs (crypto.randomUUID) so now-public
+  // job poll URLs are unguessable. The old Math.random()+timestamp form had ~32 bits of entropy
+  // plus a predictable timestamp suffix (enumerable via a public GET /v1/jobs/:id).
+  var rnd = "";
+  try {
+    if (typeof crypto !== "undefined" && crypto && crypto.randomUUID) rnd = crypto.randomUUID().replace(/-/g, "");
+  } catch (e) {
+  }
+  if (!rnd) rnd = Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6);
+  return (prefix || "id-") + rnd;
 }
 __name(randId, "randId");
 __name2(randId, "randId");
@@ -2266,6 +2275,43 @@ async function jobGetRow(env, id) {
 }
 __name(jobGetRow, "jobGetRow");
 __name2(jobGetRow, "jobGetRow");
+var CONTINUATION_PTR_RE = /SERVER-SIDE CONTINUATION STARTED: job ([A-Za-z0-9_-]+)/;
+var PUBLIC_JOBS_RL_MAX = 60;
+var PUBLIC_JOBS_RL_WINDOW_MS = 60000;
+async function resolveChain(env, jobId, seen, maxDepth) {
+  // JOBS-CONTINUE-RECONCILE-1 (2026-09-13): a 'continuing' job delegated to a child (its
+  // response ends with 'SERVER-SIDE CONTINUATION STARTED: job X'). Follow the child chain to
+  // the terminal job and return that terminal status so parents resolve instead of piling up.
+  if (!env || !env.QNFO_AUDIT || !jobId) return null;
+  var s = seen || [];
+  var max = maxDepth || (MAX_CHAIN_DEPTH + 2);
+  if (s.indexOf(jobId) >= 0 || s.length >= max) return null;
+  s.push(jobId);
+  var row = await jobGetRow(env, jobId);
+  if (!row) return "failed";
+  if (row.status === "succeeded" || row.status === "failed" || row.status === "terminated") return row.status;
+  if (row.status !== "continuing") return null;
+  var m = CONTINUATION_PTR_RE.exec(String(row.response || ""));
+  if (!m || !m[1]) return "failed";
+  return await resolveChain(env, m[1], s, max);
+}
+async function publicJobsRateLimited(env, request) {
+  // JOBS-PUBLIC-RATELIMIT-1 (2026-09-13): soft per-IP rate limit on the now-public job-status
+  // routes. Defense-in-depth on top of high-entropy job IDs (the primary protection). KV-backed,
+  // fail-open (unavailable/errored KV -> request proceeds unthrottled).
+  if (!env || !env.EQCACHE_KV || !request) return false;
+  try {
+    var ip = String(request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim();
+    var win = Math.floor(Date.now() / PUBLIC_JOBS_RL_WINDOW_MS);
+    var key = "rl:jobs:" + ip + ":" + win;
+    var cur = await env.EQCACHE_KV.get(key);
+    var n = cur ? (parseInt(String(cur), 10) || 0) + 1 : 1;
+    await env.EQCACHE_KV.put(key, String(n), { expirationTtl: Math.ceil(PUBLIC_JOBS_RL_WINDOW_MS / 1000) * 2 });
+    return n > PUBLIC_JOBS_RL_MAX;
+  } catch (e) {
+    return false;
+  }
+}
 function chainInfo(src) {
   try {
     const c = src && src._chain;
@@ -2778,6 +2824,7 @@ var worker_default = {
     if (path === "/v1/jobs" && method === "GET") {
       // JOBS-STATUS-PUBLIC-1 (2026-09-13): read-only job LIST is public (status metadata
       // only - id/status/model/strategy/error/timestamps; no payload/response/tool_log).
+      if (await publicJobsRateLimited(env, request)) return json({ error: "rate limited (job status)", retry_after: Math.ceil(PUBLIC_JOBS_RL_WINDOW_MS / 1000) }, 429);
       const st = (url.searchParams.get("status") || "").trim();
       const lim = Math.max(1, Math.min(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 100));
       const sel = "SELECT id, status, model, strategy, error, created_at, updated_at FROM ops_jobs";
@@ -2812,6 +2859,7 @@ var worker_default = {
       // JOBS-STATUS-PUBLIC-1 (2026-09-13): read-only job status is a capability URL and is
       // PUBLIC (no bearer) so the continuation poll link opens in a plain browser.
       // tool_log stays behind authOk - it carries raw D1/tool traces.
+      if (await publicJobsRateLimited(env, request)) return json({ error: "rate limited (job status)", retry_after: Math.ceil(PUBLIC_JOBS_RL_WINDOW_MS / 1000) }, 429);
       const jid = decodeURIComponent(path.slice("/v1/jobs/".length));
       if (!jid || jid.indexOf("/") >= 0) return json({ error: "bad job id" }, 400);
       const row = await jobGetRow(env, jid);
@@ -2830,6 +2878,13 @@ var worker_default = {
         }
       }
       const rowF = await jobGetRow(env, jid) || row;
+      if (rowF.status === "continuing") {
+        const _term = await resolveChain(env, jid);
+        if (_term === "succeeded" || _term === "failed" || _term === "terminated") {
+          await jobSet(env, jid, _term, { error: _term === "failed" ? "chain resolved: terminal child failed" : null });
+          rowF.status = _term;
+        }
+      }
       let toolLog = null;
       if (rowF.tool_log) {
         try {
@@ -2864,6 +2919,24 @@ var worker_default = {
       }
     } catch (eS) {
       console.log("ops_jobs sweep failed:", eS && eS.message || eS);
+    }
+    try {
+      if (env.QNFO_AUDIT) {
+        const contGrace = new Date(Date.now() - 10 * 6e4).toISOString();
+        const contRows = await env.QNFO_AUDIT.prepare("SELECT id FROM ops_jobs WHERE status='continuing' AND updated_at < ?1 LIMIT 200").bind(contGrace).all();
+        const contList = contRows && contRows.results || [];
+        for (const cr of contList) {
+          try {
+            const term = await resolveChain(env, cr.id);
+            if (term === "succeeded" || term === "failed" || term === "terminated") {
+              await jobSet(env, cr.id, term, { error: term === "failed" ? "chain resolved: terminal child failed" : null });
+            }
+          } catch (eC) {
+          }
+        }
+      }
+    } catch (eS2) {
+      console.log("ops_jobs continuing sweep failed:", eS2 && eS2.message || eS2);
     }
   },
   async queue(batch, env, ctx) {
