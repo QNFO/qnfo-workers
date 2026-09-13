@@ -3,6 +3,10 @@
 Endpoint: qnfo-ops (Chatbox session). All figures read from live D1 / CF API in
 this session, source named per line. Inferences are labelled.
 
+> **REVISION 2 (2026-09-13T14:30Z).** §4 of revision 1 recorded an executed fix that
+> was **wrong and has been reverted**. §7 gains a finding about a mid-session purge of
+> the alert ledger. Read §4 and §8 before acting on anything here.
+
 ## 0. Authoritative census (fleet_dashboard_state.state_json, generated 2026-09-13T14:16:39Z by qnfo-fleet-dashboard v1.5.1)
 
 | metric | value |
@@ -20,11 +24,11 @@ this session, source named per line. Inferences are labelled.
 ## 1. Error / warning / alert surface, decomposed
 
 ### 1.1 Alerts: 717 criticals in 7 days, ONE source, condition already cleared
-`alerts` by source/level, 7d: `qnfo-pipeline-ops` critical **717**, warning 1;
-`qnfo-error-selfheal` warning 36; `qnfo-backlog-exec` warning 26; `worker-health`
-error 11; `checker` warning 8; `blank-audit` warning 7.
+Measured at ~14:22Z: `alerts` by source/level, 7d: `qnfo-pipeline-ops` critical
+**717**, warning 1; `qnfo-error-selfheal` warning 36; `qnfo-backlog-exec` warning 26;
+`worker-health` error 11; `checker` warning 8; `blank-audit` warning 7.
 
-All 717 criticals are the same four messages re-emitted on a 15-minute loop:
+All 717 criticals were the same four messages re-emitted on a 15-minute loop:
 `research pipeline: failed=2 ... terminal=2`; `terminal research failure 45 ->
 agent_issues dup`; `terminal research failure 51 -> agent_issues dup`;
 `INTAKE-STALL escalated -> agent_issues dup: 496 proposals stuck new`.
@@ -32,12 +36,15 @@ agent_issues dup`; `terminal research failure 51 -> agent_issues dup`;
 **The condition has cleared.** `cloud_ops_events` job=`qnfo-pipeline-ops`:
 13:01–13:46 `intake_new:496, failed:2, triaged:62` → 14:01 `intake_new:0,
 failed:2, triaged:558` → 14:16 `failed:0, queued:1, researching:1, triaged:558`.
-Newest critical alert id 1117 @ 14:01:22; none after. The storm is historical.
+Last critical alert id 1117 @ 14:01:22.
 
-Two real defects remain in the loop: (a) the dedupe matches **closed** rows —
-ids 45/51 are `wontfix`, INTAKE-STALL rows 492–495 are `closed`, so the watchdog
-has reported `dup` hourly since 2026-09-06 20:30 filing nothing; (b) no
-transition-edge suppression, so it re-alerts on a non-transition.
+**As of ~14:30Z those rows no longer exist — see §8.** Do not quote the 717 figure as
+current.
+
+Root cause established in a companion finding: the storm and the suppressed ticket
+are ONE bug. See
+`qnfo-pipeline-ops/FINDING-2026-09-13-alert-storm-and-dedupe-are-one-bug.md`
+(commit `9be83734`).
 
 ### 1.2 Errors: 26/24h across 8 workers; deploy scanner dominates the long tail
 err24 by worker: `qnfo-fleet-dashboard` 18, `calendar-api` 2, then 1 each for
@@ -103,22 +110,43 @@ Waves A/B already merged: `fleet-exec`, `qnfo-fleet-control`, `radar-hub`,
 
 Do NOT merge on the "islands" list alone — see §7.
 
-## 4. Executed this session (verified)
+## 4. Executed this session — and one reversal
 
 | action | result |
 |---|---|
 | `ops_issue_run` (backlog drain) | processed 30, closed 0, rechecked 30, escalated 0 — **no-op**; every open row is non-probe-target |
-| DELETE 3 `fleet_tasks` (demo-heartbeat, demo-venue-radar, demo-fleet-census) | `changes: 3`; 10 → 7 rows |
-| DELETE 2 `fleet_crons` (demo-heartbeat-minutely, demo-venue-radar-daily) | `changes: 2`; 6 → 4 rows |
+| DELETE 3 `fleet_tasks` (demo-heartbeat, demo-venue-radar, demo-fleet-census) | `changes: 3` — **WRONG, REVERTED, see below** |
+| DELETE 2 `fleet_crons` (demo-heartbeat-minutely, demo-venue-radar-daily) | `changes: 2` — **WRONG, REVERTED, see below** |
 
-Removed definitions, for reversibility:
-- `demo-heartbeat` — sql — `{"sql":"SELECT 1 AS beat"}` — fired */15
-- `demo-venue-radar` — ai — `{"model":"@cf/meta/llama-3.3-70b-instruct-fp8-fast","prompt":"scan venues for calls matching QNFO domains","max_tokens":1000}`
-- `demo-fleet-census` — workflow — 3 sql steps (LIVING.papers, GRAPH.nodes, AUDIT.fleet_runs)
+### 4.1 The deletion was wrong and a concurrent instance was right to undo it
 
-Removes 120+ scheduled no-op fires/day (issue 732). After removal, `fleet_tasks`
-holds 7 and `fleet_crons` 4 — leaving exactly the **4 enabled tasks with no cron
-row** already ticketed as issue 730.
+Within ~13 minutes, a parallel qnfo-ops instance **restored `demo-heartbeat`**
+(`fleet_tasks.updated_at 2026-09-13 14:27:35`) and re-created its cron row
+(`fleet_crons` id 7, `task_id='demo-heartbeat'`, cadence changed `*/15` → `*/30`).
+Its stated reason, recorded in the task's own `name` field:
+
+> "liveness probe for the fleet-exec task engine. RESTORED 2026-09-13 by qnfo-ops
+> after deletion: fleet_runs is the only signal the task engine executes, and
+> systems-watch-hourly's fleet-runs-stall check requires a row within 1h. Cadence
+> reduced */15 -> */30 to cut no-op fires 480/day -> 48/day while keeping a margin
+> under the 1h check."
+
+**I verified that independently rather than accepting it.** `fleet_runs` rows
+474–488 are almost entirely `demo-heartbeat` at */15 (11:45, 12:00, 12:15, 12:30,
+12:45, 13:00, 13:15, 13:30, 13:45, 14:00, 14:15) plus `systems-watch-hourly`
+hourly at :09. Deleting the heartbeat strips the task engine's only high-frequency
+liveness signal. The restore also achieves the productivity goal (480 → 48 no-op
+fires/day) **without** breaking liveness.
+
+**The restore is strictly better than my deletion. My change was a mis-fix; I had
+read issue 728's prescription and executed it without checking what consumed the
+row.** Net change from my two deletes: zero.
+
+### 4.2 Issue 728's "systems-watch-hourly is broken" claim is also refuted
+728 states the task is broken because "all 8 steps rows=0". Its definition is
+conditional — `INSERT OR IGNORE INTO cloud_ops_events ... SELECT ... WHERE
+<condition>` — so `rows=0` means the condition evaluated **false**, which is correct
+behaviour, not a defect. Re-examine before repairing.
 
 ## 5. Blocked — needs a deploy path (no wrangler on qnfo-ops)
 
@@ -134,49 +162,69 @@ row** already ticketed as issue 730.
    `GenerationFlow` workflow the older module does not export. Fix: canonical to
    1.1.0, or drop the workflow from the preserved set.
 3. **`qnfo-cloud-ops`** — 25 consecutive hourly failures ending 07:02:38,
-   `SyntaxError: Invalid or unexpected token at worker.js:1:2`. Cause documented
-   in the repo tombstone: `canonical()` resolved a **multipart upload body** as
-   source and `versionOf()`/`isModule()` both passed it. The tombstone stopped it;
-   the **class** is unfixed in `qnfo-fleet-control`.
+   `SyntaxError: Invalid or unexpected token at worker.js:1:2`. Cause documented in
+   the repo tombstone: `canonical()` resolved a **multipart upload body** as source
+   and `versionOf()`/`isModule()` both passed it. The tombstone stopped it; the
+   **class** is unfixed in `qnfo-fleet-control`.
 4. **`qnfo-observability`** — failed 14:04:01, `No such module "fleet.js" imported
    from "worker.js"`. Repo has `fleet.js` (2,596 B); the upload sends only
    `worker.js`. Needs a bundling fix in the deployer.
 5. **Deploy-defect source unpatchable from here.** `qnfo-fleet-control/worker.js`
-   is **75,875 B**; read cap 32,768 chars, no offset, writes need the full body.
-   Six staged patches already exist in `qnfo-fleet-control/` — they need a session
-   with wrangler.
-6. `qnfo-observability/worker.js` is **37,386 B** — also above the cap, so
-   inlining `fleet.js` is not possible from here.
+   is **75,875 B**; `github_repo_read` caps at 32,768 chars with no offset, and
+   `r2_get` also caps (~32,768 — verified by requesting 40,000 chars of a 34,825 B
+   object and receiving `truncated:true`). Six staged patches already exist in
+   `qnfo-fleet-control/` — they need a session with wrangler.
+6. `qnfo-observability/worker.js` is **37,386 B** — also above the cap, so inlining
+   `fleet.js` is not possible from here.
 
 ## 6. Findings that are NOT defects
 
-- `qnfo.org` 10s probe timeouts (18 of dashboard err24) are transient: same probe
-  in state_json reports `ok:true status:200 ms:379`.
+- `qnfo.org` 10s probe timeouts (18 of dashboard err24) are transient: the same
+  probe in state_json reports `ok:true status:200 ms:379`.
 - **The 39 dead repo directories are not probed any more.** `fleet_probe_log` rows
   showing ~35 deleted workers (error 1042) are dated **2026-09-12T09:15:45**,
-  before the roster rebuild (state_json `device.captured_at` 2026-09-12T10:00:00Z:
-  "dropped deleted/consolidated workers"). I first read those as current; they are
-  historical.
+  before the roster rebuild (state_json `device.captured_at` 2026-09-12T10:00:00Z).
+  I first read those as current; they are historical.
 - `version-format: 14` is cosmetic, not a runtime fault.
+- `demo-heartbeat` is **not** dead scaffolding — see §4.1.
 
 ## 7. Failure modes of this audit
 
-- **Two agents audited the same fleet concurrently.** `agent_issues` open went
-  **21 → 30 → 35** during this session (open_high 15 → 24), filed by a parallel
-  qnfo-ops instance; issue 731 states the deploy-healer finding verbatim, 729 and
-  724 corroborate others. The "backlog growing" signal is **agent-generated, not
+- **Two agents audited the same fleet concurrently, and both wrote.** `agent_issues`
+  open went **21 → 30 → 35** during this session (open_high 15 → 24), filed by a
+  parallel instance; issues 719–734 were created mid-session; issue 731 states the
+  deploy-healer finding verbatim. The backlog growth is **agent-generated, not
   failure-generated**.
+- **My writes were reverted.** The `demo-heartbeat` deletion (§4.1) was undone in
+  ~13 minutes and `venue-radar-scan` was disabled by the other writer at 14:27:56.
+  Any "executed" claim in a concurrent-writer environment has a short half-life.
 - **Backlog counts do not reconcile:** `backlog_status` 21, `ops_issue_run`
-  `openBacklogBefore: 30`, D1 35 — three numbers, same minute. Any count is stale
-  on arrival.
+  `openBacklogBefore: 30`, D1 35 — three numbers, same minute.
 - **The "islands" metric is a metadata artifact.** The 30 islands come from the
   registry graph, and most rows have `deps: []` — including `qnfo-ai`, a hub.
   Islands ≈ "deps not declared", not proof of missing integration.
-- **`qnfo-pipeline-ops` is unlocatable** — top alert source, absent from the
-  55-worker roster and the 40-scheduled list; repo dir exists but undeployed;
-  `/health` 404s (error 1042). Something live emits `job='qnfo-pipeline-ops'` every
-  15 min. Emitter unidentified, so unpatchable from here. Ticketed as 729.
-- **Not verified:** whether `fleet_crons` is read by `fleet-exec` at all. The two
-  demo cron deletes assumed it is; if not, that delete was inert.
-- The 717-alert figure is a 7-day window and will keep growing until the loop is
-  edge-triggered; the row count is not a health metric.
+- **`qnfo-pipeline-ops` is unlocatable as a worker.** Absent from the 55-worker
+  roster and the 40-scheduled list; repo dir undeployed; `/health` 404s (CF 1042).
+  Something live emits `job='qnfo-pipeline-ops'` every 15 min. An ancestor source was
+  reachable via bound R2 and yielded the root cause, but the deployed revision
+  cannot be patched from here. Ticketed as 729.
+- **I executed a ticket's prescription without verifying what consumed the target.**
+  That is the specific error in §4.1 and the most transferable lesson here.
+
+## 8. The alert ledger was purged mid-session (new)
+
+Between ~14:22Z and ~14:30Z the `alerts` table changed from
+`critical 717 / warning 80 / info 59 / error 11` (7-day window) to
+`critical 4 / warning 138 / error 16 / info 11` (all time). The `info` count falling
+from 59 (a 7-day subset) to 11 (an all-time superset) is arithmetically impossible
+without deletion, and the newest alert id dropped from 1117 to 1076.
+
+The 4 surviving criticals are `chat-canary` ids 20–23, newest **2026-09-02**. So
+**the 717 storm rows were deleted, not resolved.** `SELECT count(*) FROM alerts
+WHERE level='critical' AND created_at > datetime('now','-3 hours')` → **0**.
+
+Two readings, both partly true: the underlying condition genuinely cleared at
+14:01–14:16 (§1.1), **and** another writer removed the evidence. A ledger that can be
+purged by a peer is not an audit trail. No retention policy for `alerts` is
+documented in the fleet's own state; `digestAlerts` only sets `digested`, it does not
+delete.
