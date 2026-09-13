@@ -394,7 +394,7 @@ async function assessIntegration(env) {
   const probedSet = new Set(probed), tracedSet = new Set(traced), invocatedSet = new Set(invocated);
   // FLEET-SIZE-LIVE-1 (2026-09-13): use live service_registry count instead of hardcoded FLEET array
   var liveFleetRow = null;
-  try { liveFleetRow = await env.AUDIT.prepare('SELECT COUNT(*) AS c FROM service_registry WHERE state='live'').first(); } catch(e) {}
+  try { liveFleetRow = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM service_registry WHERE state='live'").first(); } catch(e) {}
   const fleetSize = liveFleetRow ? liveFleetRow.c : FLEET.length;
   const coverage = {
     fleet_size: fleetSize,

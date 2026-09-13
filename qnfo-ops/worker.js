@@ -3304,3 +3304,9 @@ export {
 };
 //# sourceMappingURL=worker.js.map
 
+
+// AgenticOpsExec Durable Object stub (FLEET-SELF-DOC-1: required by existing DO instances)
+export class AgenticOpsExec {
+  constructor(state, env) { this.state = state; this.env = env; }
+  async fetch(request) { return new Response(JSON.stringify({ ok: true, worker: "AgenticOpsExec" }), { headers: { "Content-Type": "application/json" } }); }
+}
