@@ -59,7 +59,11 @@ function readText(p) {
 
 function firstVersion(text) {
   if (!text) return null;
-  const m = text.match(/var\s+VERSION\s*=\s*"([^"]+)"/);
+  // 2026-09-13 qnfo-ops: this matched only `var VERSION = "..."`, while every modern worker in
+  // this repo declares `const VERSION = "..."`. So `version` was ALWAYS null for them, the
+  // `unapplied` test below could never be true, and check D (VERSION-UNBUMPED) was inert - a
+  // dead check silently reporting nothing. Accept var|let|const.
+  const m = text.match(/(?:var|let|const)\s+VERSION\s*=\s*"([^"]+)"/);
   return m ? m[1] : null;
 }
 
