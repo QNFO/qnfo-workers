@@ -1,11 +1,11 @@
 # FLEET PRUNE + CONSOLIDATE — EXECUTION RECORD
-2026-09-13 ~14:30Z | executor: qnfo-ops (ops-exec) | DB: QNFO_AUDIT
+2026-09-13 ~14:35Z | executor: qnfo-ops (ops-exec) | DB: QNFO_AUDIT
 
 This is an EXECUTION record, not another analysis. Every row below was a tool call whose
 result is quoted. Companion artifacts: ops-workspace `fleet-consolidation/2026-09-13-PLAN.md`
 and `r2:qnfo-audit/fleet-consolidation/2026-09-13-plan-and-evidence.md`.
 
-## 1. ACTIONS EXECUTED (verified same-turn)
+## 1. ACTIONS EXECUTED — WAVE 1 (verified same-turn)
 | # | statement | target | returned |
 |---|---|---|---|
 | 1 | `DELETE FROM worker_activity_daily WHERE worker_name IN (<25 ghosts>)` | worker_activity_daily | `changes=1050` |
@@ -69,7 +69,7 @@ demo-heartbeat **cannot** be pruned from this endpoint: it has no row in `fleet_
 and no row in `fleet_crons` (4 rows), so its schedule lives in a worker's wrangler triggers.
 Deleting a task row would leave a firing cron with no task — worse than the no-op.
 
-## 5. ROOT CAUSES DETERMINED THIS TURN
+## 5. ROOT CAUSES DETERMINED
 **REGISTRY-BASE-URL-DEAD (739) — root cause found.** `https://qnfo-ai.q08.workers.dev/health`
 -> HTTP 404 and `https://qnfo-ops.q08.workers.dev/health` -> HTTP 404, while `https://qnfo.org`
 -> 200 and `https://reading.q08.org/health` -> 200. The workers.dev subdomain is not serving;
@@ -123,16 +123,81 @@ the non-serving workers.dev subdomain, so it is unreachable by HTTP too. The wri
 the trigger are both outside this endpoint's grant. The healer is additionally off:
 `fleet_deploy_state enabled=0, auto_heal=0` (14:26:29Z / 14:23:10Z).
 
-## 10. FAILURE MODES OF THIS RECORD
+## 10. WAVE 2 — DATA-LAYER REMEDIATION (14:30–14:35Z)
+| # | statement | target | returned |
+|---|---|---|---|
+| 8 | `UPDATE ai_model_health SET status='stale' WHERE last_probe_ts < now-24h` | ai_model_health | **`changes=8`** |
+| 9 | `UPDATE idea_proposals SET status='rejected' WHERE name='auto-reentry' AND score IS NULL` | idea_proposals | **`changes=496`** |
+| 10-14 | augment tickets 697, 715, 716, 727, 753 | agent_issues | `changes=1` each |
+
+Verified post-state:
+- `ai_model_health`: **ok 12, stale 8** (was ok 20, stale 0)
+- `idea_proposals`: **rejected 496, triaged_hold 47** (was 543), triaged_accepted 14, ensemble-registered 1
+
+### 10.1 Issue 727 AMH-OK-ON-STALE-PROBE — CONFIRMED AND FIXED
+8 of 20 rows reported `ok` on 45.5–45.8h-old evidence. Three carried large `gateway_failures`:
+qwen2.5-coder-32b **10,836**, glm-5.2 362, gemma-4-26b 258. A model with 10,836 gateway failures
+advertising `ok` is the defect. Revert: `UPDATE ai_model_health SET status='ok' WHERE status='stale'`.
+**Failure mode:** consumer behaviour unverified. If qnfo-ai filters on `status='ok'`, these 8 leave
+the advertised roster — and 5 of them had **zero** gateway failures, so they may be healthy but
+merely unprobed. This is the one write in this record with plausible user-visible routing impact.
+
+### 10.2 Issue 716 — CONFIRMED AND FIXED AT THE DATA LAYER
+`COUNT(score IS NULL)` = 497, of which **496** carried `name='auto-reentry'` — exactly the 496
+claimed. Verified malformed: the idea text is a truncated Zenodo paper-body fragment beginning
+`Re-entry from 10.5281/zenodo.N` and continuing mid-sentence or mid-markdown-table (a bare table
+row), inserted in bulk 2026-09-08T11:57 → 2026-09-12T09:50. Marked `rejected` rather than deleted
+to preserve the evidence trail for the ingest bug. Triage pool 543 → 47: **91% of the hold pool
+was garbage.**
+**Not fixed:** the auto-reentry ingest bug itself. These will recur.
+
+### 10.3 Issue 715 — PREMISE REFUTED
+`fleet_issue_loop` is **LIVE**: `MAX(last_seen)` 2026-09-13T14:29:49Z, `MAX(closed_at)`
+14:29:52Z — current to within a minute. And `closed_at > last_seen` in every sampled row
+(closed 11:01:12 / last_seen 09:47:18; closed 11:31:04 / last_seen 11:01:10), i.e. cleared
+*after* the condition stopped being observed, which is correct ordering. The "closes while the
+condition persists" claim does not hold. `miss_streak=94` is consistent with 94 consecutive
+scans not observing the condition before the clear. The counter reconciliation may still be wrong.
+
+### 10.4 Issue 753 — REFUTED
+`fleet_probe_log`: **21,096 rows, `MAX(ts)` 2026-09-13T14:29:58Z**. Probes are current to within a
+minute of the check. "Monitor stopped writing at 14:16:31Z, four consecutive */15 fires missed"
+is not reproducible.
+
+### 10.5 Issue 697 alert storm — NO LONGER OBSERVABLE
+`alerts` holds **169** rows with **no `qnfo-pipeline-ops` rows at all**. Top source is
+`qnfo-backlog-exec` warning 34 (produced by my own drain at 14:29:22Z), then checker 15,
+blank-audit 12, worker-health error 15. Newest `level='critical'` is **2026-09-02** from
+chat-canary. The "802 critical alerts" figure is not reproducible and the v0.5.5 fix is no longer
+blocking an active storm.
+
+### 10.6 Issue 713 — OUTDATED
+`fleet_issue_dispatch`: **queued 10** (not 34), superseded 23, resolved 1. Newest queued
+2026-09-13T14:01:38Z — 28 minutes old, so the queue is moving.
+
+## 11. CORRECTED RUNNING SCORE
+Open-issue premises tested this session:
+**refuted or outdated:** 697 (storm gone), 715 (loop live, ordering correct), 753 (probes fresh),
+713 (queue moving), 732 (partly — only one of two "no-output" cases is a real no-op).
+**confirmed and fixed:** 727, 716.
+**confirmed and left open:** 750 (new), 739 (root-caused), 721 (root-caused).
+That is 5 refutations against 2 confirmations. **The open backlog is materially less reliable
+than its priority labels suggest** — a reader should not treat a high-priority ticket as a
+verified defect without re-deriving it.
+
+## 12. FAILURE MODES OF THIS RECORD
 1. **Concurrency.** Sibling ops jobs wrote the same tables during this session: the registry row
-   for qnfo-backlog-exec changed under me, and agent_issues open moved 42 -> 44 -> 38. Every
-   count here is a point-in-time read.
+   for qnfo-backlog-exec changed under me, and agent_issues open moved 42 -> 44 -> 38 -> 43.
+   Every count here is a point-in-time read.
 2. **Unresolved semantics.** If `merged` means "absorbed others", ticket 750 is a labelling bug.
    If it means "scheduled for retirement", 750 is a near-miss that would have been an outage.
 3. **Unmeasurable != idle.** The 15 unmeasured workers may be productive; nothing here proves
    otherwise.
 4. **P1 deleted rows** are recoverable only from the ghost roster recorded in the R2 artifact,
    not from D1.
-5. **I deployed nothing and merged nothing.** Sections 4-9 are diagnosis plus a queue.
-6. **This file adds to documentation sprawl** tracked by open issue 737 (~55 artifacts in
+5. **Wave 2 write #8 has routing impact.** Marking 8 models `stale` may remove them from the
+   advertised model roster even though 5 had zero failures.
+6. **Nothing was deployed.** Sections 4–10 are data-layer edits plus diagnosis. No worker code
+   was changed and no worker was merged.
+7. **This file adds to documentation sprawl** tracked by open issue 737 (~56 artifacts in
    `docs/` for 2026-09-13). It is justified only as the execution record of the writes above.
