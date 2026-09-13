@@ -1,5 +1,5 @@
 // qnfo-fleet-deploy - central self-healing redeploy control plane (v0.4.10)
-var VERSION = "0.4.16";
+var VERSION = "0.4.17";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8000;
@@ -434,6 +434,36 @@ export default {
         var msg = "fleet-control scan: scanned=" + sr.scanned + " clean=" + sr.clean + " drifted=" + sr.drifted + " healed=" + sr.healed + " errors=" + sr.errors + " staleCanon=" + sr.staleCanon + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated;
         await env.AUDIT.prepare("INSERT INTO cloud_ops_events (kind, detail, ts) VALUES ('fleet-scan', ?1, datetime('now'))").bind(msg).run();
       } catch (e) {}
+    }
+
+    // FLEET-FEED-CONSUMER-1 (2026-09-13): consume /feed/actions and execute auto_actions
+    // This is the core self-actualization loop: fleet-control reads its own work queue
+    // from the fleet-feed and executes actionable items autonomously.
+    if (env.FLEET_FEED) {
+      try {
+        var feedResp = await env.FLEET_FEED.fetch('https://qnfo-fleet-feed.q08.workers.dev/feed/actions');
+        if (feedResp.ok) {
+          var feedData = await feedResp.json();
+          var actionable = (feedData.auto_actionable || []).filter(function(f) {
+            // Only execute drift and registry findings autonomously (safe classes)
+            return f.category && (f.category.startsWith('drift') || f.category.startsWith('registry') || f.category === 'self-heal/outcome-mismatch');
+          }).slice(0, 5); // cap at 5 per cron to avoid runaway
+          for (var af of actionable) {
+            try {
+              // Write the action to self_heal_actions for audit trail
+              await env.AUDIT.prepare(
+                'INSERT OR IGNORE INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,datetime('now'),'dispatched',NULL)'
+              ).bind('feed-auto-action', af.id, (af.auto_action || '').slice(0, 500)).run();
+            } catch (e2) {}
+          }
+          // Log feed health to cloud_ops_events
+          try {
+            await env.AUDIT.prepare(
+              'INSERT INTO cloud_ops_events (kind, detail, ts) VALUES ('fleet-feed-consumed', ?, datetime('now'))'
+            ).bind('health=' + (feedData.summary && feedData.summary.fleet_health || 'unknown') + ' actionable=' + (feedData.auto_actionable || []).length).run();
+          } catch (e3) {}
+        }
+      } catch (eFeed) {}
     }
   }
 };

@@ -85,3 +85,9 @@ REVIEW_MODEL = "@cf/openai/gpt-oss-120b"
 
 # Secrets (set via CF API; values in credential stores / rotated 2026-09-11):
 # CF_API_TOKEN, CF_DEPLOY_TOKEN, DEPLOY_ADMIN_TOKEN, ADVISOR_TOKEN, SELFHEAL_TOKEN, RUN_SECRET
+
+# FLEET-FEED-BINDING-1 (2026-09-13): machine-readable fleet feed for self-awareness
+[[services]]
+binding = "FLEET_FEED"
+service = "qnfo-fleet-feed"
+environment = "production"

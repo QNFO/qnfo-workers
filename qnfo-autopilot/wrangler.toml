@@ -46,3 +46,9 @@ environment = "production"
 binding = "SB_LIFECYCLE"
 service = "qnfo-lifecycle"
 environment = "production"
+
+# FLEET-FEED-BINDING-1 (2026-09-13): machine-readable fleet feed for self-awareness
+[[services]]
+binding = "FLEET_FEED"
+service = "qnfo-fleet-feed"
+environment = "production"
