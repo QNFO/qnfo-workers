@@ -10,10 +10,14 @@
 //
 // The three fixtures below are the three outcomes that matter:
 //   id=8        the defective essay            -> MUST block  (regression guard)
-//   id=7        the legitimate serial           -> MUST pass   (false-block guard)
-//   runs 442    the heading the gate missed     -> MUST block  (false-pass guard)
+//   id=7        the legitimate serial          -> MUST pass   (false-block guard)
+//   runs 442    the heading the gate missed    -> MUST block  (false-pass guard)
 //
 // Fixture 2 is the one QRI-1 lacked. Fixture 3 is the one rev 1 of gate.js lacked.
+//
+// NOTE: this file does not read the database. The fixtures are the verbatim live
+// texts, and the rows are the real PERSONAL.activity rows read on 2026-09-13, so
+// the derived facts are computed by the module under test rather than hard-coded.
 
 import { runGate } from './gate.js';
 import { deriveTemporalFacts } from './grounding.js';
@@ -58,22 +62,22 @@ const HEADING = [
   'A note on scaffolds and double fugue. I take the convergence to be real.'
 ].join('\n');
 
-const noForced = { quality: { verdict: 'reject', why: 'adversarial critic output' }, forced: false };
+const CRITIQUE = { quality: { verdict: 'reject', why: 'adversarial critic output' }, forced: false };
 
 console.log('gate composition (QRI-2)');
 
 // ---- 1. the defective piece must still block (QRI-1 regression guard)
-const d8 = runGate(Object.assign({ body: DEFECTIVE, facts: facts, kbRows: ROWS }, noForced));
+const d8 = runGate(Object.assign({ body: DEFECTIVE, facts: facts, kbRows: ROWS }, CRITIQUE));
 ok('id=8 does not publish', d8.publish === false, 'gate=' + d8.gate);
 ok('id=8 blocks on 7 violations', d8.violations.length === 7, 'got ' + d8.violations.length);
 ok('id=8 flags the wrong interval', d8.violations.some(v => v.kind === 'interval'));
 ok('id=8 flags the cost equality', d8.violations.some(v => v.kind === 'comparative-equality'));
 ok('id=8 flags the attribution seam', d8.violations.some(v => v.kind === 'attribution-seam'));
-ok('id=8 flags invented particulars', d8.violations.filter(v => v.kind === 'invented-particular').length === 4);
+ok('id=8 flags four invented particulars',
+   d8.violations.filter(v => v.kind === 'invented-particular').length === 4);
 
 // ---- 2. the legitimate serial must NOT block (QRI-2 false-block guard)
-const d7 = runGate(Object.assign({ body: LEGITIMATE, facts: facts, kbRows: ROWS }, noFrozen(noForced)));
-function noFrozen(o) { return o; }
+const d7 = runGate(Object.assign({ body: LEGITIMATE, facts: facts, kbRows: ROWS }, CRITIQUE));
 ok('id=7 publishes', d7.publish === true, 'gate=' + d7.gate + ' violations=' + d7.violations.length);
 ok('id=7 has zero blocking violations', d7.violations.length === 0);
 ok('id=7 reports the possessive as a warning, not a block',
@@ -82,12 +86,14 @@ ok('id=7 reports the abstract first person as a warning',
    d7.warnings.some(v => v.kind === 'impersonation'));
 
 // ---- 3. the heading miss must block (QRI-2 false-pass guard)
-const d442 = runGate(Object.assign({ body: HEADING, facts: facts, kbRows: ROWS }, noForced));
+const d442 = runGate(Object.assign({ body: HEADING, facts: facts, kbRows: ROWS }, CRITIQUE));
 ok('runs id=442 does not publish', d442.publish === false, 'gate=' + d442.gate);
-ok('runs id=442 blocks on the heading', d442.addresseeBlocking.some(v => v.kind === 'reader-in-heading'));
-ok('runs id=442 blocks on the address frame', d442.addresseeBlocking.some(v => v.kind === 'reader-address'));
+ok('runs id=442 blocks on the heading',
+   d442.addresseeBlocking.some(v => v.kind === 'reader-in-heading'));
+ok('runs id=442 blocks on the address frame',
+   d442.addresseeBlocking.some(v => v.kind === 'reader-address'));
 
-// ---- 4. the policy must not suppress the shipped defect class by kind
+// ---- 4. the policy must not suppress the shipped defect class
 ok('attribution-seam is never a warning', d8.warnings.every(v => v.kind !== 'attribution-seam'));
 ok('invented-particular is never a warning', d8.warnings.every(v => v.kind !== 'invented-particular'));
 
