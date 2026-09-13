@@ -1,0 +1,113 @@
+name: apply-staged-patchers
+
+# THE MISSING PIECE IN THE DEPLOY CHAIN.
+#
+# Context (2026-09-13 fleet audit):
+#   qnfo-fleet-deploy resolves a deploy payload as:
+#     1. R2 qnfo-canonical/<worker>.js  (only if fresh, <30 min)
+#     2. GitHub raw, first 200 not starting with "404:":
+#          a. qnfo-workers/main/<n>/deployed-current.worker.js
+#          b. qnfo-ops/main/cloud/<n>/deployed-current.worker.js
+#          c. qnfo-workers/main/<n>/worker.js          <- the real source
+#          d. qnfo-ops/main/cloud/<n>/worker.js
+#     3. stale R2
+#   Candidate (a) shadows (c). A stale mirror at (a) makes the comparator see
+#   "deployed-ahead", so scan() skips the heal forever and no committed fix lands.
+#
+#   For qnfo-research-exec that shadow is now broken: (a) is a "404:" tombstone
+#   (commit 45a8e360), so resolution falls through to (c) worker.js. But worker.js
+#   still carries the unpatched bundle, and qnfo-research-exec/apply-research-exec-fix.mjs
+#   needs a Node runner that does not exist anywhere in this repo.
+#
+#   This workflow is that runner. It is MANUAL-ONLY (workflow_dispatch, no push
+#   trigger) and defaults to --check, so nothing is written unless a human sets
+#   apply=apply. The patchers are fail-closed: on any anchor mismatch they write
+#   nothing and exit non-zero.
+#
+#   After a successful apply+commit, the next hourly fleet scan should drift-detect
+#   and redeploy. Verify with:
+#     SELECT id, source_path, canonical_version, note FROM fleet_drift_report
+#      WHERE worker='qnfo-research-exec' ORDER BY id DESC LIMIT 1;
+#     -- expect source_path ending worker.js and a version newer than 0.8.1
+#
+#   NOTE: an apply=apply run writes to the repo AND, via the scanner, to production
+#   within ~1 hour. Treat it as an irreversible production change and review the
+#   --check output in the job log first.
+
+on:
+  workflow_dispatch:
+    inputs:
+      patcher:
+        description: "Patcher path, relative to repo root"
+        required: true
+        default: "qnfo-research-exec/apply-research-exec-fix.mjs"
+      mode:
+        description: "check = dry run, apply = write"
+        required: true
+        type: choice
+        options: [check, apply]
+        default: check
+      commit:
+        description: "Commit the patched file back to this branch"
+        required: true
+        type: choice
+        options: ["no", "yes"]
+        default: "no"
+      branch:
+        description: "Branch to commit to"
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Reject a patcher path outside the repo
+        run: |
+          case "${{ inputs.patcher }}" in
+            /*|*..*) echo "refusing absolute or traversing path"; exit 2 ;;
+            *.mjs)   echo "ok: ${{ inputs.patcher }}" ;;
+            *)       echo "refusing: patcher must be a .mjs file"; exit 2 ;;
+          esac
+          test -f "${{ inputs.patcher }}" || { echo "no such patcher"; exit 2; }
+
+      - name: Dry run (always) — records anchors and refusals in the log
+        run: node "${{ inputs.patcher }}" --check || true
+
+      - name: Apply
+        if: ${{ inputs.mode == 'apply' }}
+        run: node "${{ inputs.patcher }}" --apply
+
+      - name: Show resulting diff
+        if: ${{ inputs.mode == 'apply' }}
+        run: git --no-pager diff --stat && git --no-pager diff | head -200
+
+      - name: Commit and push
+        if: ${{ inputs.mode == 'apply' && inputs.commit == 'yes' }}
+        run: |
+          if git diff --quiet; then
+            echo "patcher wrote nothing (fail-closed on an anchor mismatch, or already applied) — nothing to commit"
+            exit 0
+          fi
+          git config user.name  "qnfo-patcher-bot"
+          git config user.email "patcher-bot@qnfo.org"
+          git add -A
+          git commit -m "chore(patcher): apply ${{ inputs.patcher }} [skip ci]
+
+          Run by workflow_dispatch on ${{ github.sha }}.
+          Fail-closed: the patcher writes nothing unless every anchor matches exactly.
+          The hourly fleet scan will redeploy from candidate (c) worker.js once the
+          version marker advances."
+          git push origin HEAD:${{ inputs.branch }}
