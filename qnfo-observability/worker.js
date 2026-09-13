@@ -5,12 +5,14 @@
 //   (2) LOG API — POST /log direct structured events (optional client snippet), GET /workers/logs query.
 //   (3) SUMMARY — GET /fleet/summary joins worker_logs + fleet_probe_log + worker_invocations into one view.
 //   (4) DIGEST  — hourly digest writes cloud_ops_events (kind=fleet-observability-digest) + alerts on error-ratio anomalies.
+//   (5) JOBS    — GET /jobs + GET /jobs/<id>: keyless read-only view of the qnfo-ops async-job ledger
+//                 (qnfo-audit.ops_jobs). STATUS METADATA ONLY — never the response body (JOBS-STATUS-PUBLIC-1).
 // CANONICAL SOURCE: QNFO/qnfo-workers/qnfo-observability/worker.js
 // DEPLOY: wrangler deploy (from this dir); bindings AUDIT (qnfo-audit D1) + LOGS (R2 qnfo-audit); cron 17 * * * *.
 
 import { FLEET } from './fleet.js';
 
-const VERSION = '1.1.3';
+const VERSION = '1.1.4';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -423,6 +425,31 @@ export default {
       const agg = await env.AUDIT.prepare(`SELECT script_name, COUNT(*) n, SUM(CASE WHEN outcome != 'ok' OR status >= 500 THEN 1 ELSE 0 END) bad, MAX(ts_ms) last_ts FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(Date.now() - 86400000).all();
       return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: FLEET.length, probes: latestProbe, log_stats: agg.results || [] });
     }
-    return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/ingest', '/log', '/workers/logs', '/fleet/summary'] }, 404);
+    // JOBS-STATUS-PUBLIC-1 (2026-09-13, v1.1.4): keyless read-only view of the qnfo-ops async-job ledger.
+    // WHY: the operator requirement is that a job status link be visible WITHOUT a key. The ops bearer is the
+    // master key for chats + job creation, so requiring it to read a status code is wrong. This surface is the
+    // status half; the deliverable body stays bearer-gated on qnfo-ops because ops_jobs.response can contain
+    // mailbox contents and D1 rows. SCOPE: additive, after all existing routes, wrapped fail-closed.
+    if (p === '/jobs' || p.startsWith('/jobs/')) {
+      try {
+        const cols = 'id, status, model, strategy, created_at, updated_at, length(response) AS response_len, length(tool_log) AS tool_log_len, substr(error,1,200) AS error';
+        const id = p.startsWith('/jobs/') ? decodeURIComponent(p.slice(6)) : (url.searchParams.get('id') || '');
+        if (id) {
+          const row = await env.AUDIT.prepare('SELECT ' + cols + ' FROM ops_jobs WHERE id = ?').bind(id).first();
+          if (!row) return json({ ok: false, error: 'no such job', id: id }, 404);
+          return json({ ok: true, source: NAME, version: VERSION, note: 'status metadata only; the response body is bearer-gated on qnfo-ops', job: row });
+        }
+        const limit = Math.min(Number(url.searchParams.get('limit') || 25), 100);
+        const st = url.searchParams.get('status') || '';
+        const rows = st
+          ? await env.AUDIT.prepare('SELECT ' + cols + ' FROM ops_jobs WHERE status = ? ORDER BY created_at DESC LIMIT ?').bind(st, limit).all()
+          : await env.AUDIT.prepare('SELECT ' + cols + ' FROM ops_jobs ORDER BY created_at DESC LIMIT ?').bind(limit).all();
+        const agg = await env.AUDIT.prepare('SELECT status, COUNT(*) n FROM ops_jobs GROUP BY status').all();
+        return json({ ok: true, source: NAME, version: VERSION, note: 'status metadata only; the response body is bearer-gated on qnfo-ops', counts: agg.results || [], jobs: rows.results || [] });
+      } catch (e) {
+        return json({ ok: false, error: String(e && e.message ? e.message : e).slice(0, 200) }, 500);
+      }
+    }
+    return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/ingest', '/log', '/workers/logs', '/fleet/summary', '/integration', '/trend', '/jobs', '/jobs/<id>'] }, 404);
   }
 };
