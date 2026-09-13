@@ -8,7 +8,7 @@
 // sample was also empty whenever the model returned an empty string, which is why issue #676
 // was filed with a blank detail ("checker empty or unparseable: "); it now falls back to the
 // raw response shape so the failure is diagnosable.
-var VERSION = '0.5.3-failclosed';
+var VERSION = '0.5.3';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 

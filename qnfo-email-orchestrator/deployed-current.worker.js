@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var MODEL = "@cf/zai-org/glm-5.3-flash";
-var VERSION = "0.3.4-glm53";
+var VERSION = "0.3.4";
 var OUTREACH_MARKERS = ["primon", "zeta partition", "madelung", "measurement", "ultrametric", "p-adic", "adelic", "identity, aggregation", "empirical filter", "pre-arithmetic", "formalism 25", "hierarchy distance", "spectral statistics", "landauer", "exchange phase", "logical scalar", "laws of form", "qudit", "joules-per-solution", "arxiv:", "10.5281/zenodo", "zenodo", "qubit delusion", "manifesto for honest computation", "consilience", "q-calculus", "notation problem"];
 var QNFO_DOMAINS = ["qnfo.org", "qwav.org", "qwav.tech", "qwav.net", "qwav.uk", "q-wave.tech", "q08.org"];
 var DOC = {
