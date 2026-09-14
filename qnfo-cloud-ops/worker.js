@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.14.2-email-lookup"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.14.3-buffer-graphql"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -1656,39 +1656,46 @@ async function jobEngagement(env) {
       }
     }
   } catch (e) { out.bsky_error = String(e && e.message || e); }
-  // 2) Buffer (Mastodon / LinkedIn / X) - token-gated, graceful 401
+  // 2) Buffer (Mastodon / LinkedIn / X) - GraphQL API (api.buffer.com, Bearer key).
+  // The legacy REST API (api.bufferapp.com/1) is deprecated and 401s for current
+  // personal keys; migrated 2026-09-14 (was failing 401 since 2026-09-02).
   try {
     if (!env.BUFFER_TOKEN) { out.buffer = "no token"; }
     else {
-      const B = "https://api.bufferapp.com/1";
-      const pr = await fetch(B + "/profiles.json?access_token=" + env.BUFFER_TOKEN, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
-      if (pr.status === 401) { out.buffer = "unauthorized (reconnect required)"; row("buffer", "auth", "auth_status", 0, "401 unauthorized"); }
-      else if (!pr.ok) { out.buffer = "HTTP " + pr.status; }
+      const gql = async (query) => {
+        const r = await fetch("https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
+        if (!r.ok) throw new Error("buffer http " + r.status);
+        return r.json();
+      };
+      const orgR = await gql("{ account { organizations { id } } }");
+      const orgs = (orgR && orgR.data && orgR.data.account && orgR.data.account.organizations) || [];
+      if (!orgs.length) { out.buffer = "no organization"; row("buffer", "auth", "auth_status", 0, "no-org"); }
       else {
-        const profiles = await pr.json();
-        let likes = 0, comments = 0, shares = 0, reach = 0, counted = 0;
-        for (const prof of (profiles || []).slice(0, 4)) {
+        const orgId = orgs[0].id;
+        const chR = await gql("{ channels(input: { organizationId: \"" + orgId + "\" }) { id service isDisconnected } }");
+        const channels = (chR && chR.data && chR.data.channels) || [];
+        let posts = 0, metrics = 0; const bySvc = {};
+        for (const ch of channels) {
+          if (ch.isDisconnected) continue;
           try {
-            const ur = await fetch(B + "/profiles/" + prof.id + "/updates/sent.json?access_token=" + env.BUFFER_TOKEN + "&count=10", { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
-            if (!ur.ok) continue;
-            const updates = await ur.json();
-            for (const u of updates || []) {
-              const ir = await fetch(B + "/updates/" + u.id + "/interactions.json?access_token=" + env.BUFFER_TOKEN, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION } });
-              if (!ir.ok) continue;
-              const inter = await ir.json();
-              const f = inter.favorites || 0, c = inter.comments || 0, rt = inter.retweets || 0, sh = inter.shares || 0, re = inter.reach || 0;
-              likes += f; comments += c; shares += rt + sh; reach += re; counted++;
-              row("buffer", String(u.id), "likes", f);
-              row("buffer", String(u.id), "comments", c);
-              row("buffer", String(u.id), "shares", rt + sh);
-              row("buffer", String(u.id), "reach", re);
+            const pR = await gql("query { posts(first: 20, input: { organizationId: \"" + orgId + "\", filter: { status: [sent], channelIds: [\"" + ch.id + "\"] } }) { edges { node { id channelId metrics { type name value unit } } } } }");
+            const edges = (pR && pR.data && pR.data.posts && pR.data.posts.edges) || [];
+            for (const e of edges) {
+              const node = e && e.node; if (!node) continue;
+              posts++;
+              for (const m of (node.metrics || [])) {
+                metrics++;
+                row("buffer", String(node.id), String(m.name || m.type || "metric"), Number(m.value) || 0, String(m.type || "") + (m.unit ? "/" + m.unit : ""));
+              }
+              bySvc[ch.service] = (bySvc[ch.service] || 0) + 1;
             }
           } catch (e2) {}
         }
-        out.buffer = { updates: counted, likes, comments, shares, reach };
+        out.buffer = { channels: channels.length, posts, metrics, by_service: bySvc };
+        row("buffer", "auth", "auth_status", 1, "ok (graphql)");
       }
     }
-  } catch (e) { out.buffer_error = String(e && e.message || e); }
+  } catch (e) { out.buffer = "error: " + String(e && e.message || e); row("buffer", "auth", "auth_status", 0, String(e && e.message || e).slice(0, 80)); }
   try {
     if (stmts.length) {
       const batch = stmts.slice(0, 100);
