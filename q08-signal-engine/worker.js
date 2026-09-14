@@ -815,7 +815,7 @@ export default {
       if (prev) return json({ ok: true, updated: false, note: "vote already recorded" });
       var rate = await env.DB.prepare("SELECT COUNT(*) n FROM q08_feedback WHERE ip_key = ? AND created_at > datetime('now','-1 hour')").bind(ipKey).first().catch(function(){ return { n: 0 }; });
       if ((rate && rate.n || 0) >= 5) return json({ ok: false, error: "rate limited" }, 429);
-      await env.DB.prepare("INSERT INTO q08_feedback (slug, signal, ip_key, created_at) VALUES (?,?,?,?)").bind(fslug, s, ipKey, nowIso()).run();
+      await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, created_at) VALUES (?,?,?,?)").bind(fslug, s, ipKey, nowIso()).run();
       return json({ ok: true, recorded: s });
     }
     if (path === "/feed.xml") {
