@@ -32,7 +32,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.5.0";
+var VERSION = "0.6.2";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -227,6 +227,7 @@ var Q08_DIRECTIVE = [
   "- No first person. No preamble or meta-commentary.",
   "- 700-1100 words.",
   "- Output: valid Markdown, H1 title first, then the essay. The H1 title must be concrete and intriguing, not abstract (never 'An Analysis of X' or 'A Critique of Y').",
+  "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
 
 function buildPrompt(friction, fewShot) {
@@ -363,10 +364,11 @@ async function persistPiece(env, piece, signal, story, model) {
   ).run();
   // Persist piece
   await env.DB.prepare(
-    "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at) VALUES (?,?,?,?,?,?,?,?)"
+    "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json) VALUES (?,?,?,?,?,?,?,?,?)"
   ).bind(
     pieceId, "sig-" + salt, slug, title, body,
-    signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso()
+    signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso(),
+    JSON.stringify(buildSources(story))
   ).run();
   // Seed prompt pool with structure skeleton (H2/H3 headings only)
   var skeleton = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
@@ -482,6 +484,52 @@ async function generate(env) {
 // ---------------------------------------------------------------------------
 // 9. HTML rendering
 // ---------------------------------------------------------------------------
+var MATH_HEAD = "<script>window.MathJax={tex:{inlineMath:[[\"\\\\(\",\"\\\\)\"]],displayMath:[[\"$$\",\"$$\"],[\"\\\\[\",\"\\\\]\"]],processEscapes:true},svg:{scale:1.1,fontCache:\"global\"},options:{skipHtmlTags:[\"script\",\"noscript\",\"style\",\"textarea\",\"pre\",\"code\"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState===\"complete\"){setTimeout(__mq,150)}else{window.addEventListener(\"load\",function(){setTimeout(__mq,150)})}</script><script async src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js\" onerror=\"this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg.js';document.head.appendChild(s);\"></script>";
+function safeUrl(u) {
+  var x = String(u || "").trim();
+  return /^https?:\/\//i.test(x) ? x : "";
+}
+
+function renderSources(sj) {
+  var arr = [];
+  try { arr = JSON.parse(sj || "[]"); } catch (e) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  var items = [];
+  for (var s of arr) {
+    if (typeof s === "string") s = { url: s };
+    if (!s || typeof s !== "object") continue;
+    var url = safeUrl(s.url || s.href);
+    if (!url) continue;
+    var label = escHtml(s.label || s.title || url);
+    items.push('<li><a href="' + escHtml(url) + '" rel="noopener noreferrer">' + label + "</a></li>");
+  }
+  if (!items.length) return "";
+  return '<section class="refs"><h2>Sources &amp; further reading</h2><ul>' + items.join("") + "</ul></section>";
+}
+
+function buildSources(story) {
+  var out = [], src = story.source || "hn", u = String(story.url || "").trim();
+  if (src === "github") {
+    var repo = String(story.id || "").replace(/^.*?([^\/]+\/[^\/]+)$/, "$1");
+    out.push({ label: "GitHub repository: " + (repo || story.title), url: u || "https://github.com/" + repo });
+  } else if (src === "arxiv") {
+    out.push({ label: "arXiv: " + String(story.title || "").slice(0, 120), url: u || "https://arxiv.org/abs/" + story.id });
+  } else {
+    if (u) { var host = ""; try { host = new URL(u).hostname.replace(/^www\./, ""); } catch (e) {} out.push({ label: host || u, url: u }); }
+    if (story.id) out.push({ label: "Hacker News discussion", url: "https://news.ycombinator.com/item?id=" + story.id });
+  }
+  return out;
+}
+
+function mdEmph(x) {
+  var parts = String(x).split(/(\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g);
+  for (var i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) continue;
+    parts[i] = parts[i].replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/_(.+?)_/g, "<em>$1</em>");
+  }
+  return parts.join("");
+}
+
 var CSS = `
 :root{--bg:#f9f7f4;--fg:#1c1a18;--mut:#6b6560;--line:#e0d9d0;--acc:#5a3e2b;--max:42rem}
 @media(prefers-color-scheme:dark){:root{--bg:#161412;--fg:#e8e3dc;--mut:#9a938b;--line:#2e2a25;--acc:#c9956e}}
@@ -511,6 +559,12 @@ article .lede{font-size:.97rem;color:var(--mut);line-height:1.6}
 .piece em{font-style:italic}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);font-size:.82rem;color:var(--mut)}
 .chip{display:inline-block;font-size:.75rem;padding:.15rem .5rem;border-radius:3px;background:var(--line);color:var(--mut);margin-right:.4rem}
+.refs{margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--line)}
+.refs h2{font-size:.95rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:400;margin-bottom:.8rem}
+.refs ul{margin:0;padding-left:1.2rem}
+.refs li{margin-bottom:.4rem;font-size:.92rem}
+.refs a{color:var(--acc)}
+.refs a:hover{text-decoration:underline}
 `;
 
 function renderIndex(pieces) {
@@ -525,7 +579,7 @@ function renderIndex(pieces) {
       '</article>',
     ].join("\n");
   }).join("\n");
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>q08</title><meta name=description content="Systems-level critique of technical industry friction. Cold, structural, timeless."><style>' + CSS + '</style></head><body><div class=wrap><header><h1>q08</h1><p>Systems-level critique. Structural. Timeless.</p><nav><a href="/">Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a><a href="/health">Status</a></nav></header>' + (items || '<p style="color:var(--mut)">No pieces published yet. Check back soon.</p>') + '<footer>q08 &mdash; autonomous signal engine &mdash; updated continuously</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>q08</title><meta name=description content="Systems-level critique of technical industry friction. Cold, structural, timeless."><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1>q08</h1><p>Systems-level critique. Structural. Timeless.</p><nav><a href="/">Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a><a href="/health">Status</a></nav></header>' + (items || '<p style="color:var(--mut)">No pieces published yet. Check back soon.</p>') + '<footer>q08 &mdash; autonomous signal engine &mdash; updated continuously</footer></div></body></html>';
 }
 
 function mdToHtml(md) {
@@ -542,9 +596,9 @@ function mdToHtml(md) {
     if (h1) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h1>" + escHtml(h1[1]) + "</h1>"); }
     else if (h2) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h2>" + escHtml(h2[1]) + "</h2>"); }
     else if (h3) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h3>" + escHtml(h3[1]) + "</h3>"); }
-    else if (li) { if (!inUl) { out.push("<ul>"); inUl=true; } out.push("<li>" + escHtml(li[1]).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/_(.+?)_/g,"<em>$1</em>") + "</li>"); }
+    else if (li) { if (!inUl) { out.push("<ul>"); inUl=true; } out.push("<li>" + mdEmph(escHtml(li[1])) + "</li>"); }
     else if (blank) { if (inUl) { out.push("</ul>"); inUl=false; } }
-    else { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<p>" + escHtml(line).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/_(.+?)_/g,"<em>$1</em>") + "</p>"); }
+    else { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<p>" + mdEmph(escHtml(line)) + "</p>"); }
   }
   if (inUl) out.push("</ul>");
   return out.join("\n");
@@ -552,14 +606,15 @@ function mdToHtml(md) {
 
 function renderPiece(p) {
   var body = mdToHtml(p.body_md || "");
+  var refs = renderSources(p.sources_json);
   var date = (p.published_at || "").slice(0, 10);
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style></head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + refs + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
 }
 
 function renderFeed(pieces) {
   var items = pieces.map(function(p) {
     var date = new Date(p.published_at || Date.now()).toUTCString();
-    var desc = (p.body_md || "").replace(/[<>&"]/g, function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];}).slice(0, 500);
+    var desc = (p.body_md || "").replace(/\\/g, "").replace(/[<>&"]/g, function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];}).slice(0, 500);
     return "<item><title>" + escHtml(p.title) + "</title><link>https://q08.org/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + "...</description></item>";
   }).join("\n");
   return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>q08</title><link>https://q08.org</link><description>Systems-level critique. Structural. Timeless.</description>' + items + '</channel></rss>';
