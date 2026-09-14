@@ -2,19 +2,27 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.0";
+import { WorkflowEntrypoint } from "cloudflare:workers";
+var VERSION = "1.3.3";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
   "@cf/zai-org/glm-5.3"
 ];
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-var GEN_MAX_TOKENS = 9e3;
-var GEN_TIMEOUT_MS = 9e4;
+var GEN_MAX_TOKENS = 14e3;
 var CRITIQUE_TIMEOUT_MS = 3e4;
 var EMBED_TIMEOUT_MS = 3e4;
 var SIM_THRESHOLD = 0.9;
-var ACCEPT_FLOOR = 5;
+var WRITER_MODEL = "deepseek-chat";
+var WRITER_MODEL_ESSAY = "deepseek-reasoner";
+var CRITIC_MODEL = "deepseek-chat";
+var WRITER_TIMEOUT_MS = 3e5;
+var WRITER_URL = "https://api.deepseek.com/chat/completions";
+var ACCEPT_FLOOR_NOTES = 4;
+var ACCEPT_FLOOR_ESSAY = 5;
+var MAX_PIECES_PER_DAY = 5;
+var GEN_HOURS_UTC = [4, 8, 12, 16, 20];
 var BANNED_MODELS = ["llama", "mistral", "gemma-7b", "gemma-4-26b", "qwen3-30b", "qwen2.5", "r1-distill", "qwq-", "-8b", "-11b", "-7b", "-flash", "-fp8-fast", "-lora", "-mini", "-small"];
 function modelAllowed(m) {
   var low = String(m || "").toLowerCase();
@@ -31,20 +39,46 @@ function L() {
 __name(L, "L");
 var RHYTHM = ["notes", "essay", "notes", "essay", "notes", "essay", "serial"];
 var TOPICS = [
-  { id: "ultrametric-music", cat: "math.NT", wiki: "Ultrametric space", a: "p-adic geometry", b: "musical tuning" },
-  { id: "form-distinction", cat: "cs.LO", wiki: "Laws of Form", a: "the calculus of indications", b: "programming language semantics" },
-  { id: "landauer-biology", cat: "cond-mat.stat-mech", wiki: "Landauer's principle", a: "the thermodynamics of erasure", b: "cellular proofreading" },
-  { id: "decoherence-epistemics", cat: "quant-ph", wiki: "Quantum decoherence", a: "decoherence", b: "the epistemology of testimony" },
-  { id: "play-mathematics", cat: "q-bio.NC", wiki: "Play (activity)", a: "animal play", b: "mathematical conjecture" },
-  { id: "counterpoint-categories", cat: "math.CT", wiki: "Counterpoint", a: "species counterpoint", b: "adjunction" },
-  { id: "fungal-networks", cat: "q-bio.PE", wiki: "Mycorrhizal network", a: "mycorrhizal exchange", b: "gossip protocols" },
-  { id: "bremermann-economics", cat: "quant-ph", wiki: "Bremermann's limit", a: "the Bremermann bound", b: "discounting" },
-  { id: "ignorance-instruments", cat: "physics.hist-ph", wiki: "Ignorance", a: "manufactured ignorance", b: "instrument design" },
-  { id: "symmetry-craft", cat: "cond-mat.mtrl-sci", wiki: "Crystallographic point group", a: "crystallographic point groups", b: "ornament" },
-  { id: "search-taste", cat: "cs.LG", wiki: "Multi-armed bandit", a: "exploration in learning", b: "scientific taste" },
-  { id: "notation-thought", cat: "math.LO", wiki: "Notation", a: "notation", b: "what can be thought" },
-  { id: "entropy-meaning", cat: "cs.IT", wiki: "Entropy (information theory)", a: "Shannon entropy", b: "the meaning of a phrase" },
-  { id: "kuramoto-ensemble", cat: "nlin.PS", wiki: "Kuramoto model", a: "coupled oscillators", b: "ensemble discipline" }
+  { id: "coffeehouse-public", cat: "cs.CY", wiki: "Coffeehouse", rel: ["Public sphere", "Coffee", "Third place"], a: "the history of coffeehouses", b: "the birth of public space" },
+  { id: "walking-thinking", cat: "q-bio.NC", wiki: "Walking", rel: ["Psychogeography", "Fl\xE2neur", "Peripatetic school"], a: "walking", b: "the practice of thinking" },
+  { id: "ruins-memory", cat: "q-bio.NC", wiki: "Ruin", rel: ["Romanticism", "Palimpsest", "Ozymandias"], a: "ruins", b: "how memory works" },
+  { id: "fermentation-time", cat: "q-bio.PE", wiki: "Fermentation", rel: ["Fermentation in food processing", "Sourdough", "Yeast"], a: "fermentation", b: "the patience of slow transformation" },
+  { id: "translation-loss", cat: "cs.CL", wiki: "Untranslatability", rel: ["Translation", "Linguistic relativity", "Sapir-Whorf hypothesis"], a: "translation", b: "what refuses translation" },
+  { id: "boredom-creativity", cat: "q-bio.NC", wiki: "Boredom", rel: ["Attention", "Flow (psychology)", "Default mode network"], a: "boredom", b: "the conditions for creativity" },
+  { id: "maps-territory", cat: "cs.CY", wiki: "Map", rel: ["Map-territory relation", "Terra nullius", "Cartography"], a: "maps", b: "the territory they claim to describe" },
+  { id: "craft-quality", cat: "econ.GN", wiki: "Craft", rel: ["Craftsmanship", "Arts and Crafts movement", "Virtuoso"], a: "craft", b: "what quality means" },
+  { id: "garden-wildness", cat: "q-bio.PE", wiki: "Garden", rel: ["Wilderness", "Landscape architecture", "Botanical garden"], a: "gardens", b: "the idea of wildness" },
+  { id: "collecting-order", cat: "cs.SI", wiki: "Collecting", rel: ["Museum", "Cabinets of curiosities", "Hoarding"], a: "collecting", b: "the desire for order" },
+  { id: "silence-music", cat: "cs.SD", wiki: "Silence", rel: ["John Cage", "Rest (music)", "Soundscape"], a: "silence", b: "music" },
+  { id: "handwriting-identity", cat: "cs.HC", wiki: "Handwriting", rel: ["Graphology", "Signature", "Calligraphy"], a: "handwriting", b: "identity" },
+  { id: "season-ritual", cat: "cs.CY", wiki: "Season", rel: ["Solstice", "Harvest festival", "Liturgical year"], a: "the seasons", b: "ritual time" },
+  { id: "domestication-coevolution", cat: "q-bio.PE", wiki: "Domestication", rel: ["Co-evolution", "Neoteny", "Selective breeding"], a: "domestication", b: "coevolution" },
+  { id: "play-rules", cat: "cs.GT", wiki: "Play (activity)", rel: ["Homo Ludens", "Game", "Ludus"], a: "play", b: "rules" },
+  { id: "attention-time", cat: "econ.GN", wiki: "Attention economy", rel: ["Information overload", "Continuous partial attention", "Digital detox"], a: "attention", b: "how time is spent" },
+  { id: "notation-thought", cat: "cs.CL", wiki: "Musical notation", rel: ["Tablature", "Figured bass", "Laban notation"], a: "notation systems", b: "how they shape what can be thought" },
+  { id: "threshold-architecture", cat: "cs.CY", wiki: "Threshold", rel: ["Liminal space", "Vestibule", "Portal"], a: "thresholds in architecture", b: "the psychology of crossing" },
+  { id: "debt-memory", cat: "econ.GN", wiki: "Debt", rel: ["Jubilee (biblical)", "Odious debt", "Gift economy"], a: "debt", b: "social memory" },
+  { id: "color-perception", cat: "q-bio.NC", wiki: "Color", rel: ["Color theory", "Opponent process", "Munsell color system"], a: "colour perception", b: "the physics of light" },
+  { id: "archive-forgetting", cat: "cs.DL", wiki: "Archive", rel: ["Memory institution", "Apophenia", "Deaccessioning"], a: "archives", b: "the logic of forgetting" },
+  { id: "rhythm-time", cat: "cs.SD", wiki: "Rhythm", rel: ["Metre (music)", "Polyrhythm", "Entrainment (chronobiology)"], a: "musical rhythm", b: "how bodies keep time" },
+  { id: "market-price", cat: "econ.GN", wiki: "Price", rel: ["Price signal", "Auction theory", "Just price"], a: "prices", b: "what they actually measure" },
+  { id: "street-city", cat: "cs.CY", wiki: "Street", rel: ["Jane Jacobs", "Haussmann's renovation of Paris", "Shared space"], a: "streets", b: "what cities are for" },
+  { id: "tool-hand", cat: "cs.HC", wiki: "Tool", rel: ["Extended mind", "Affordance", "Heidegger's hammer"], a: "tools", b: "the hand that uses them" },
+  { id: "dialect-belonging", cat: "cs.CL", wiki: "Dialect", rel: ["Code-switching", "Diglossia", "Language death"], a: "dialects", b: "where belonging lives in speech" },
+  { id: "canal-infrastructure", cat: "cs.CY", wiki: "Canal", rel: ["Erie Canal", "Amsterdam canals", "Lock (water transport)"], a: "canals", b: "how infrastructure shapes a city" },
+  { id: "portrait-likeness", cat: "cs.CY", wiki: "Portrait", rel: ["Self-portrait", "Physiognomy", "Likeness"], a: "portrait painting", b: "what likeness means" },
+  { id: "index-knowledge", cat: "cs.IR", wiki: "Index (publishing)", rel: ["Back-of-book index", "Commonplace book", "Concordance"], a: "indexes", b: "the structure of knowledge" },
+  { id: "repair-object", cat: "econ.GN", wiki: "Repair", rel: ["Kintsugi", "Right to repair", "Planned obsolescence"], a: "repair", b: "what an object's life means" },
+  { id: "tide-prediction", cat: "physics.ao-ph", wiki: "Tide", rel: ["Tidal force", "Harmonic analysis", "Kelvin's tide predictor"], a: "tide prediction", b: "the history of mechanical computing" },
+  { id: "font-reading", cat: "cs.HC", wiki: "Typography", rel: ["Readability", "Legibility", "Type design"], a: "typefaces", b: "how they shape reading" },
+  { id: "smell-place", cat: "q-bio.NC", wiki: "Olfaction", rel: ["Odor", "Proust phenomenon", "Smell map"], a: "smell", b: "the memory of places" },
+  { id: "border-sovereignty", cat: "cs.CY", wiki: "Border", rel: ["Schengen Area", "Checkpoint Charlie", "Demilitarized zone"], a: "borders", b: "what sovereignty costs" },
+  { id: "library-public", cat: "cs.DL", wiki: "Public library", rel: ["Carnegie library", "Free library movement", "Library science"], a: "public libraries", b: "the idea of free access" },
+  { id: "bread-culture", cat: "q-bio.PE", wiki: "Bread", rel: ["Sourdough", "Baguette", "Wonder Bread"], a: "bread", b: "what industrial food did to culture" },
+  { id: "measurement-standard", cat: "physics.gen-ph", wiki: "Measurement", rel: ["Metre", "International System of Units", "Calibration"], a: "measurement standards", b: "how they become invisible" },
+  { id: "clock-time", cat: "cs.CY", wiki: "Clock", rel: ["Mechanical watch", "Atomic clock", "Time zone"], a: "clocks", b: "the social construction of time" },
+  { id: "staircase-movement", cat: "cs.CY", wiki: "Staircase", rel: ["Escalator", "Grand staircase", "Accessibility"], a: "staircases", b: "how buildings direct movement" },
+  { id: "footnote-scholarship", cat: "cs.DL", wiki: "Footnote", rel: ["Annotation", "Marginalia", "Citation"], a: "footnotes", b: "the hidden argument of scholarship" }
 ];
 var BANNED = [
   "delve",
@@ -88,7 +122,7 @@ var P_STYLE = L(
   "You are writing for one reader: Rowan.",
   "Never reproduce any heading, label, bullet, or phrasing from the briefing, or from these instructions, inside the piece. The briefing is addressed to you, not to the reader.",
   "Not for an audience, not for a journal, not for a metric.",
-  "He works on the seams between mathematics, music, information physics, computation, consciousness and epistemology. Fragmentation offends him; he can feel a missing connection as a kind of wrongness.",
+  "He works at the seams between fields \u2014 history, music, design, language, craft, economics, biology, cities, computation \u2014 wherever two ways of knowing touch. Fragmentation offends him; he can feel a missing connection as a kind of wrongness.",
   "He reads for the pleasure of a true thing well put. He is not impressed by fluency, by volume, or by enthusiasm.",
   "",
   "Voice: plain scholarly prose. Concrete before abstract. Short declaratives, occasionally a long sentence that earns its length.",
@@ -111,15 +145,16 @@ var P_STYLE = L(
   "- One section must state the strongest objection to the piece's own central claim, in the objector's own terms, and say how bad it is."
 );
 var P_ESSAY = L(
-  "FORM: cross-domain essay, 900 to 1500 words.",
-  "Take one seam between two fields and walk it. Do not survey. Argue.",
+  "FORM: essay, 2000 to 2800 words. This is long-form. One sustained line of thought, carried to the end; do not stop while the argument is still thin, and do not pad.",
+  "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
+  "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
+  "You are given real source material below. Mine it. Use the specific names, dates, numbers, mechanisms and cases it contains; a piece that could have been written without reading the sources has failed.",
   "Cover, in this order, without labelling the parts in the text:",
-  "1. a concrete particular that opens the seam",
-  "2. the technical content of side A, accurately enough that a practitioner would not wince",
-  "3. the technical content of side B, to the same standard",
-  "4. the bridge as an explicit claim, marked either as a structural correspondence or as an analogy you are proposing",
-  "5. under a heading, the strongest objection to the bridge",
-  "6. what would have to be true for the bridge to be more than a rhyme"
+  "1. open on a concrete particular that puts the reader inside the subject",
+  "2. develop what is actually going on, in specific detail drawn from the material, so a reader who knows the subject does not wince",
+  "3. build your argument step by step, giving the evidence and reasoning for each step and anticipating a sceptical reader at every turn",
+  "4. under a heading, the strongest objection to your argument, in the objector's own terms, answered or honestly conceded",
+  "5. what would have to be true for your argument to hold, and what observation would falsify it"
 );
 var P_NOTES = L(
   "FORM: curated field notes, between 3 and 5 items.",
@@ -144,10 +179,9 @@ var P_CRITIQUE = L(
   "Score each dimension 0 to 10. Be harsh: a 7 means genuinely good.",
   "specificity: does it hang on concrete checkable particulars, or could it have been written about anything?",
   "argument: is there a claim that could be wrong, or only gestures?",
-  "bridge: is the cross-domain connection stated precisely, or is it a rhyme dressed as a theorem?",
   "objection: is the stated objection the strongest available one, or a straw man?",
   "voice: plain scholarly prose free of filler, tells, and self-reference?",
-  'Return JSON only: {"specificity":n,"argument":n,"bridge":n,"objection":n,"voice":n,"verdict":"accept" or "reject","why":"one sentence"}'
+  'Return JSON only: {"specificity":n,"argument":n,"objection":n,"voice":n,"verdict":"accept" or "reject","why":"one sentence"}'
 );
 var P_BRIDGE = L(
   "You tighten a cross-domain bridge until it is precise and falsifiable.",
@@ -437,7 +471,8 @@ async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS companion_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT NOT NULL, form TEXT, model TEXT, topic TEXT, status TEXT, detail TEXT, ms INTEGER)",
     "CREATE TABLE IF NOT EXISTS companion_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, signal TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS companion_series (id INTEGER PRIMARY KEY AUTOINCREMENT, series TEXT UNIQUE NOT NULL, title TEXT, thesis TEXT, chapters INTEGER DEFAULT 0, last_lines TEXT, updated_at TEXT)",
-    "CREATE TABLE IF NOT EXISTS companion_seeds (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, source TEXT, form TEXT, used_at TEXT)"
+    "CREATE TABLE IF NOT EXISTS companion_seeds (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, source TEXT, form TEXT, used_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS companion_subscribers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, status TEXT NOT NULL DEFAULT 'pending', token TEXT NOT NULL, created_at TEXT NOT NULL, confirmed_at TEXT)"
   ];
   for (var i = 0; i < stmts.length; i++) {
     await env.PERSONAL.prepare(stmts[i]).run();
@@ -537,22 +572,50 @@ __name(loadContinuity, "loadContinuity");
 async function pickTopic(env, form) {
   var used = [];
   try {
-    var r = await env.PERSONAL.prepare("SELECT key FROM companion_seeds ORDER BY used_at DESC LIMIT 24").all();
+    var r = await env.PERSONAL.prepare(
+      "SELECT DISTINCT key FROM companion_seeds WHERE used_at > datetime('now','-7 days')"
+    ).all();
     var rr = r.results || [];
     for (var i = 0; i < rr.length; i++) used.push(rr[i].key);
   } catch (e) {
     used = [];
   }
-  var fresh = [];
-  for (var j = 0; j < TOPICS.length; j++) if (used.indexOf(TOPICS[j].id) < 0) fresh.push(TOPICS[j]);
-  var pool = fresh.length ? fresh : TOPICS;
-  var day = amsDayKey(/* @__PURE__ */ new Date());
-  var n = Number(day.slice(8, 10)) || 0;
-  var off = form === "serial" ? 5 : form === "notes" ? 9 : 0;
-  var pick = pool[(n + off) % pool.length];
+  var cooled = {};
   try {
-    await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?)").bind(pick.id, "rotation", form, nowIso()).run();
+    var cr = await env.PERSONAL.prepare(
+      "SELECT topic, SUM(CASE WHEN status IN ('failed','forced') THEN 1 ELSE 0 END) f FROM companion_runs WHERE topic != '' AND run_at > datetime('now','-14 days') GROUP BY topic"
+    ).all();
+    var crr = cr.results || [];
+    for (var ci = 0; ci < crr.length; ci++) if (Number(crr[ci].f) >= 2) cooled[crr[ci].topic] = true;
   } catch (e) {
+    cooled = {};
+  }
+  var fresh = [];
+  for (var j = 0; j < TOPICS.length; j++) {
+    if (used.indexOf(TOPICS[j].id) < 0 && !cooled[TOPICS[j].id]) fresh.push(TOPICS[j]);
+  }
+  if (!fresh.length) {
+    for (var k = 0; k < TOPICS.length; k++) {
+      if (!cooled[TOPICS[k].id]) fresh.push(TOPICS[k]);
+    }
+  }
+  var pool = fresh.length ? fresh : TOPICS.slice();
+  var entropy = String(Date.now()) + String(Math.random()) + form;
+  var hashBuf = new TextEncoder().encode(entropy);
+  var digest = await crypto.subtle.digest("SHA-256", hashBuf);
+  var bytes = new Uint8Array(digest);
+  var idx = (bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3]) >>> 0;
+  idx = idx % pool.length;
+  var pick = pool[idx];
+  try {
+    await env.PERSONAL.prepare(
+      "INSERT INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?) ON CONFLICT(key) DO UPDATE SET used_at=excluded.used_at, form=excluded.form"
+    ).bind(pick.id, "rotation", form, nowIso()).run();
+  } catch (e) {
+    try {
+      await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?)").bind(pick.id, "rotation", form, nowIso()).run();
+    } catch (e2) {
+    }
   }
   return pick;
 }
@@ -575,38 +638,61 @@ async function fetchArxiv(cat) {
 }
 __name(fetchArxiv, "fetchArxiv");
 async function fetchWiki(title) {
-  var url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title);
+  var url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&format=json&titles=" + encodeURIComponent(title);
   var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
   if (!resp.ok) return null;
   var j = await resp.json();
-  var text = squish(j.extract || "");
+  var pages = j && j.query && j.query.pages || {};
+  var pk = Object.keys(pages)[0];
+  var p = pages[pk] || {};
+  var text = squish(p.extract || "");
   if (!text) return null;
-  return { kind: "concept", ref: j.content_urls && j.content_urls.desktop && j.content_urls.desktop.page ? j.content_urls.desktop.page : url, title: squish(j.title || title), text: text.slice(0, 1100) };
+  return { kind: "concept", ref: "https://en.wikipedia.org/wiki/" + encodeURIComponent(p.title || title), title: squish(p.title || title), text: text.slice(0, 12e3) };
 }
 __name(fetchWiki, "fetchWiki");
-async function callModel(env, messages, maxTokens, timeoutMs) {
-  var lastErr = "";
-  var tryN = MODELS.length < 2 ? MODELS.length : 2;
-  for (var i = 0; i < tryN; i++) {
-    try {
-      var resp = await env.AI.run(MODELS[i], {
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.7
-      }, { gateway: { id: "default" }, signal: AbortSignal.timeout(timeoutMs) });
-      var text = "";
-      if (resp && typeof resp.response === "string" && resp.response.length > 0) text = resp.response;
-      if (!text && resp && resp.choices && resp.choices[0] && resp.choices[0].message) {
-        var msg = resp.choices[0].message;
-        if (typeof msg.content === "string" && msg.content.length > 0) text = msg.content;
+async function fetchWikiSearch(query) {
+  var url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&srlimit=1&redirects=1";
+  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
+  if (!resp.ok) return null;
+  var j = await resp.json();
+  var hits = j && j.query && j.query.search || [];
+  if (!hits.length) return null;
+  return await fetchWiki(hits[0].title);
+}
+__name(fetchWikiSearch, "fetchWikiSearch");
+async function callModel(env, messages, maxTokens, timeoutMs, model) {
+  var useModel = model || WRITER_MODEL;
+  var isReasoner = String(useModel).indexOf("reasoner") >= 0;
+  try {
+    var mt = isReasoner ? Math.min(Number(maxTokens) || 16e3, 16e3) : Math.min(Number(maxTokens) || 4e3, 14e3);
+    var body = { model: useModel, messages, max_tokens: mt, stream: false };
+    body.temperature = isReasoner ? 1 : 0.7;
+    var resp = await fetch(WRITER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs || 9e4)
+    });
+    if (!resp.ok) {
+      var errText = "";
+      try {
+        errText = await resp.text();
+      } catch (e2) {
       }
-      if (typeof text === "string" && text.trim().length > 80) return { model: MODELS[i], text };
-      lastErr = "empty or truncated output from " + MODELS[i] + " len=" + String(text || "").length;
-    } catch (e) {
-      lastErr = MODELS[i] + ": " + String(e && e.message || e);
+      return { model: useModel, text: null, error: "HTTP " + resp.status + " " + errText.slice(0, 200) };
     }
+    var j = await resp.json();
+    var msg = j && j.choices && j.choices[0] && j.choices[0].message;
+    if (!msg) return null;
+    var text = msg.content || "";
+    if (typeof text === "string" && text.trim().length > 80) return { model: useModel, text };
+    if (msg.reasoning_content && String(msg.reasoning_content).length > 100) {
+      return { model: useModel, text: null, error: "reasoner emitted reasoning only (no prose); rlen=" + String(msg.reasoning_content).length };
+    }
+    return null;
+  } catch (e) {
+    return { model: useModel, text: null, error: String(e && e.message || e) };
   }
-  throw new Error("all models failed: " + lastErr);
 }
 __name(callModel, "callModel");
 function renderInline(s) {
@@ -747,11 +833,11 @@ var CSS = L(
   "footer{margin-top:3.4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--mut);font-size:.78rem}"
 );
 function page(title, inner, extraHead) {
-  return "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=" + String.fromCharCode(34) + "width=device-width,initial-scale=1" + String.fromCharCode(34) + "><title>" + escHtml(title) + "</title><style>" + CSS + "</style>" + (extraHead || "") + "</head><body><div class=wrap>" + inner + "</div></body></html>";
+  return "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=" + String.fromCharCode(34) + "width=device-width,initial-scale=1" + String.fromCharCode(34) + "><title>" + escHtml(title) + "</title><link rel=alternate type=application/rss+xml title=Reading href=/feed.xml><meta name=description content='A personal companion that writes one piece at a time - essays, field notes, and long-form serials.'><style>" + CSS + "</style>" + (extraHead || "") + "</head><body><div class=wrap>" + inner + "</div></body></html>";
 }
 __name(page, "page");
 function shell(inner) {
-  return "<header class=mast><h1>Reading</h1><p>Written for one reader. Private.</p></header>" + inner;
+  return "<header class=mast><h1><a href=/>Reading</a></h1><p>Written for one reader. Private.</p><nav class=forms><a href=/subscribe>subscribe</a><a href=/feed.xml>rss</a></nav></header>" + inner;
 }
 __name(shell, "shell");
 function renderIndex(pieces, keyQS, filter) {
@@ -769,7 +855,10 @@ function renderIndex(pieces, keyQS, filter) {
 }
 __name(renderIndex, "renderIndex");
 function renderPiece(p, keyQS) {
-  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + (p.lede ? "<p class=lede>" + escHtml(p.lede) + "</p>" : "") + renderBody(p.body_md);
+  var bodyMd = String(p.body_md || "");
+  var startsHeading = /^\s*#/.test(bodyMd);
+  var ledeHtml = !startsHeading && p.lede ? "<p class=lede>" + escHtml(p.lede) + "</p>" : "";
+  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + ledeHtml + renderBody(bodyMd);
   var fb = "<div class=fb>Was this worth your time? <a href=/api/f?slug=" + p.slug + "&s=good>yes</a><a href=/api/f?slug=" + p.slug + "&s=flat>flat</a><a href=/api/f?slug=" + p.slug + "&s=no>no</a></div>";
   var foot = "<footer><a href=/ " + keyQS + ">back to index</a></footer>";
   return page(p.title, shell(body + fb + foot));
@@ -778,8 +867,8 @@ __name(renderPiece, "renderPiece");
 function anchorsBlock(topic, anchors, life, profile) {
   var lines = [];
   lines.push("--- briefing. Never reproduce any wording from this briefing in the piece. ---");
-  lines.push("seam, field A: " + topic.a);
-  lines.push("seam, field B: " + topic.b);
+  lines.push("subject: " + topic.a);
+  lines.push("lens: " + topic.b);
   lines.push("");
   lines.push("source material, concrete and checkable; the only things you may assert as fact:");
   for (var i = 0; i < anchors.length; i++) {
@@ -821,31 +910,42 @@ function extractSection(md, needle) {
   return out.join(" ").trim();
 }
 __name(extractSection, "extractSection");
-function firstParagraph(md) {
+function extractLede(md) {
   var lines = String(md).split(NL);
-  var buf = [];
-  for (var i = 0; i < lines.length; i++) {
-    var t = lines[i].trim();
-    if (!t) {
-      if (buf.length) break;
-      continue;
-    }
-    if (t.indexOf("#") === 0) continue;
-    if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) continue;
-    buf.push(t);
-    if (buf.join(" ").length > 90) break;
+  var i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  var startsHeading = i < lines.length && lines[i].trim().indexOf("#") === 0;
+  while (i < lines.length && lines[i].trim().indexOf("#") === 0) {
+    i++;
+    while (i < lines.length && !lines[i].trim()) i++;
   }
-  return buf.join(" ").slice(0, 400);
+  var buf = [];
+  while (i < lines.length) {
+    var t = lines[i].trim();
+    if (!t) break;
+    if (t.indexOf("#") === 0) break;
+    if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) break;
+    buf.push(t);
+    i++;
+  }
+  var lede = buf.join(" ").trim();
+  var rest = startsHeading ? String(md).trim() : lines.slice(i).join(NL).trim();
+  return { lede: lede, rest: rest, startsHeading: startsHeading };
 }
-__name(firstParagraph, "firstParagraph");
+__name(extractLede, "extractLede");
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
   var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. Include one section headed exactly: ## The strongest objection";
   var sys = [P_STYLE, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular from the source material. Name the paper, the theorem, the number, or the place. A sentence that could have been written without the source material is a failed sentence.";
-  var lenRule = concreteRule + " " + (form === "essay" ? "Length: 1000 to 1300 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1300 to 1700 words. This is a requirement, not a suggestion." : "Length: four items, each 110 to 170 words. This is a requirement, not a suggestion.");
-  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous attempt was rejected by an adversarial reader for this reason: " + feedback + " Write a fresh piece that fixes that." : ""].join(NL);
-  var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, GEN_TIMEOUT_MS);
+  var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1500 to 2200 words. This is a requirement, not a suggestion." : "Length: four items, each 110 to 170 words. This is a requirement, not a suggestion.");
+  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : ""].join(NL);
+  var writerModel = form === "notes" ? WRITER_MODEL : WRITER_MODEL_ESSAY;
+  var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, WRITER_TIMEOUT_MS, writerModel);
+  if (!r || !r.text) {
+    var errMsg = r && r.error ? r.error : "callModel returned null";
+    return { piece: null, model: writerModel, raw: "", error: errMsg };
+  }
   var md = String(r.text || "").trim();
   if (md.indexOf("```") === 0) {
     var f = md.indexOf(NL);
@@ -862,13 +962,13 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
   }
   if (!title) title = topic.a + " and " + topic.b;
   var objection = extractSection(md, "objection");
+  var ledeObj = extractLede(md);
   return {
     piece: {
       title: title.slice(0, 300),
       subtitle: "",
-      lede: firstParagraph(md),
-      body_md: md,
-      bridge: { a: topic.a, b: topic.b, kind: "proposed analogy" },
+      lede: ledeObj.lede,
+      body_md: ledeObj.rest,
       objection: objection || (form === "notes" ? "Each item stands or falls on its own." : "")
     },
     model: r.model,
@@ -877,16 +977,16 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
 }
 __name(composePiece, "composePiece");
 async function critiquePiece(env, piece, form) {
-  var band = form === "essay" ? "900 to 1500 words" : form === "serial" ? "1200 to 1800 words" : "3 to 5 items of 90 to 200 words each";
-  var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
-  var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS);
+  var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1500 to 2200 words" : "3 to 5 items of 90 to 200 words each";
+  var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
+  var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL);
   return parseJsonLoose(r.text);
 }
 __name(critiquePiece, "critiquePiece");
 async function sharpenBridge(env, piece, form) {
   try {
     var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6e3);
-    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS);
+    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL);
     var j = parseJsonLoose(r && r.text);
     if (j && j.bridge && j.bridge.a && j.bridge.b) {
       piece.bridge = j.bridge;
@@ -905,8 +1005,8 @@ function validatePiece(piece, form) {
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
   var md = String(piece.body_md);
   var wc = wordCount(md);
-  if (form === "essay" && (wc < 550 || wc > 2400)) problems.push("essay length " + wc);
-  if (form === "serial" && (wc < 700 || wc > 2600)) problems.push("serial length " + wc);
+  if (form === "essay" && (wc < 1700 || wc > 3200)) problems.push("essay length " + wc);
+  if (form === "serial" && (wc < 1200 || wc > 2800)) problems.push("serial length " + wc);
   if (form === "notes") {
     var items = countHeadings(md, 2);
     if (items < 3) problems.push("notes items " + items);
@@ -917,7 +1017,6 @@ function validatePiece(piece, form) {
   if (hasEmoji(md)) problems.push("emoji present");
   if (!piece.title || String(piece.title).length < 4) problems.push("no title");
   if (form !== "notes" && wc >= 700 && (!piece.objection || String(piece.objection).length < 40)) problems.push("objection too thin");
-  if (!piece.bridge || !piece.bridge.a || !piece.bridge.b) problems.push("no bridge declared");
   return { ok: problems.length === 0, problems, words: wc };
 }
 __name(validatePiece, "validatePiece");
@@ -946,7 +1045,7 @@ async function persistPiece(env, piece, form, topic, model, quality, words) {
   var anchorJson = JSON.stringify({ topic: topic.id, seam: [topic.a, topic.b], bridge: piece.bridge || null });
   await env.PERSONAL.prepare(
     "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
-  ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 600), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
+  ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 2000), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
   try {
     var vecs = await embed(env, [String(piece.title) + NL + String(piece.lede || "") + NL + String(piece.body_md).slice(0, 5e3)]);
     if (vecs.length && env.VZ) {
@@ -991,7 +1090,7 @@ async function sendMail(env, piece, slug, day) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
     var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
-    var body = (piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
+    var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : (piece.lede ? piece.lede + NL + NL : "")) + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
     var resp = await env.EMAIL.fetch("https://email.internal/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
@@ -1015,6 +1114,149 @@ async function mailOut(env, slug, origin) {
   }
 }
 __name(mailOut, "mailOut");
+async function sendOne(env, to, subject, body) {
+  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  try {
+    var resp = await env.EMAIL.fetch("https://email.internal/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
+      body: JSON.stringify({ to, from: "rowan.quni@qnfo.org", subject, body })
+    });
+    return { ok: resp.ok, status: resp.status };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(sendOne, "sendOne");
+function subBase(env, origin) {
+  return origin || "https://reading.q08.org";
+}
+__name(subBase, "subBase");
+function escXml(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+__name(escXml, "escXml");
+function toRfc822(d) {
+  try {
+    return new Date(d).toUTCString();
+  } catch (e) {
+    return (/* @__PURE__ */ new Date()).toUTCString();
+  }
+}
+__name(toRfc822, "toRfc822");
+function subscribePage(msg) {
+  var Q = String.fromCharCode(34);
+  return "<div class=sub>" + (msg ? "<p>" + escHtml(msg) + "</p>" : "") + "<form method=post action=/subscribe><input type=email name=email placeholder=" + Q + "you@example.com" + Q + " required><button type=submit>Subscribe</button></form><p class=mut>One email per new piece. Unsubscribe anytime.</p></div>";
+}
+__name(subscribePage, "subscribePage");
+async function handleSubscribe(request, env, u, p) {
+  try {
+    await ensureSchema(env);
+  } catch (e) {
+  }
+  if (p === "/confirm") {
+    var t0 = u.searchParams.get("t") || "";
+    await env.PERSONAL.prepare("UPDATE companion_subscribers SET status = 'confirmed', confirmed_at = ? WHERE token = ? AND status != 'unsubscribed'").bind(nowIso(), t0).run();
+    return html(page("Confirmed", shell(subscribePage("You are subscribed. Thank you."))));
+  }
+  if (p === "/unsubscribe") {
+    var t1 = u.searchParams.get("t") || "";
+    await env.PERSONAL.prepare("UPDATE companion_subscribers SET status = 'unsubscribed' WHERE token = ?").bind(t1).run();
+    return html(page("Unsubscribed", shell(subscribePage("You have been unsubscribed."))));
+  }
+  var email = "";
+  try {
+    var ct = request.headers.get("Content-Type") || "";
+    if (ct.indexOf("application/json") >= 0) {
+      var b = await request.json();
+      email = b && b.email || "";
+    } else if (ct.indexOf("form") >= 0) {
+      var fd = await request.formData();
+      email = fd.get("email") || "";
+    }
+  } catch (e) {
+  }
+  email = String(email || u.searchParams.get("email") || "").trim().toLowerCase();
+  if (!email) {
+    return html(page("Subscribe", shell("<h2>Subscribe</h2>" + subscribePage(""))));
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return html(page("Subscribe", shell("<h2>Subscribe</h2>" + subscribePage("Enter a valid email address."))), 400);
+  }
+  var token = await sha16(email + ":" + (env.COMPANION_KEY || "pc") + ":sub");
+  await env.PERSONAL.prepare("INSERT INTO companion_subscribers(email, status, token, created_at) VALUES(?, 'pending', ?, ?) ON CONFLICT(email) DO UPDATE SET token = excluded.token, status = CASE WHEN status = 'confirmed' THEN 'confirmed' ELSE 'pending' END").bind(email, token, nowIso()).run();
+  var link = subBase(env, u.origin) + "/confirm?t=" + token;
+  await sendOne(env, email, "Confirm your subscription", "Tap to confirm: " + link);
+  return html(page("Subscribe", shell("<h2>Almost there</h2>" + subscribePage("Check your inbox for a confirmation link."))));
+}
+__name(handleSubscribe, "handleSubscribe");
+async function feedXml(env, u) {
+  try {
+    await ensureSchema(env);
+  } catch (e) {
+  }
+  var q = await env.PERSONAL.prepare("SELECT slug, title, lede, day, created_at FROM companion_pieces ORDER BY id DESC LIMIT 30").all();
+  var rows = q.results || [];
+  var base = subBase(env, u.origin);
+  var items = "";
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var link = base + "/p/" + r.slug;
+    items += "<item><title>" + escXml(r.title) + "</title><link>" + link + "</link><guid>" + link + "</guid><pubDate>" + toRfc822(r.created_at || r.day) + "</pubDate><description>" + escXml(String(r.lede || "").slice(0, 400)) + "</description></item>";
+  }
+  var Q = String.fromCharCode(34);
+  var xml = "<?xml version=" + Q + "1.0" + Q + " encoding=" + Q + "UTF-8" + Q + "?><rss version=" + Q + "2.0" + Q + "><channel><title>Reading</title><link>" + base + "</link><description>Written for one reader. Shared with anyone who wants to follow along.</description>" + items + "</channel></rss>";
+  return new Response(xml, { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
+}
+__name(feedXml, "feedXml");
+async function broadcast(env, slug, origin) {
+  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  try {
+    var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(slug).all();
+    var prow = (pr.results || [])[0];
+    if (!prow) return { ok: false, error: "no piece" };
+    var q = await env.PERSONAL.prepare("SELECT email, token FROM companion_subscribers WHERE status = 'confirmed' LIMIT 500").all();
+    var subs = q.results || [];
+    var base = subBase(env, origin);
+    var link = base + "/p/" + slug;
+    var sent = 0, failed = 0;
+    for (var i = 0; i < subs.length; i++) {
+      var s = subs[i];
+      var body = (/^\s*#/.test(String(prow.body_md || "")) ? "" : (prow.lede ? prow.lede + NL + NL : "")) + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
+      var rr = await sendOne(env, s.email, prow.title, body);
+      if (rr && rr.ok) sent++;
+      else failed++;
+    }
+    return { ok: true, sent, failed, total: subs.length };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(broadcast, "broadcast");
+async function sendDigest(env) {
+  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  try {
+    var day = amsDayKey(new Date());
+    var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? ORDER BY id ASC").bind(day).all();
+    var rows = pr.results || [];
+    if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
+    var q = await env.PERSONAL.prepare("SELECT email, token FROM companion_subscribers WHERE status = 'confirmed' LIMIT 500").all();
+    var subs = q.results || [];
+    var base = "https://reading.q08.org";
+    var list = rows.map(function(r){ return "- " + r.title + " — " + base + "/p/" + r.slug; }).join(NL);
+    var sent = 0, failed = 0;
+    for (var i = 0; i < subs.length; i++) {
+      var s = subs[i];
+      var body = "Reading — daily digest (" + day + ")" + NL + NL + list + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
+      var rr = await sendOne(env, s.email, "Reading — daily digest", body);
+      if (rr && rr.ok) sent++; else failed++;
+    }
+    return { ok: true, pieces: rows.length, sent: sent, failed: failed, total: subs.length };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(sendDigest, "sendDigest");
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -1030,32 +1272,43 @@ async function generate(env, form, opts) {
     var continuity = await loadContinuity(env, form);
     await logRun(env, form, "", topic.id, "stage", "context " + profile.length + "/" + life.length + "/" + continuity.length, Date.now() - t0);
     var anchors = [];
+    var seen = {};
     var dayN = Number(amsDayKey(/* @__PURE__ */ new Date()).slice(8, 10)) || 0;
+    var addAnchor = /* @__PURE__ */ __name(function(a) {
+      if (a && a.title && !seen[a.title]) {
+        seen[a.title] = true;
+        anchors.push(a);
+      }
+    }, "addAnchor");
     try {
-      var papers = await fetchArxiv(topic.cat);
-      for (var i = 0; i < papers.length; i++) anchors.push(papers[i]);
+      addAnchor(await fetchWiki(topic.wiki));
     } catch (e) {
     }
     try {
-      var w = await fetchWiki(topic.wiki);
-      if (w) anchors.push(w);
+      addAnchor(await fetchWikiSearch(String(topic.a || "")));
+    } catch (e) {
+    }
+    try {
+      addAnchor(await fetchWikiSearch(String(topic.b || "")));
+    } catch (e) {
+    }
+    try {
+      for (var ri = 0; ri < (topic.rel || []).length; ri++) addAnchor(await fetchWiki(topic.rel[ri]));
     } catch (e) {
     }
     if (anchors.length < 3) {
-      var fbCats = ["quant-ph", "math.NT", "cond-mat.stat-mech", "cs.IT", "math.CT"];
       try {
-        var more = await fetchArxiv(fbCats[dayN % fbCats.length]);
-        for (var m2 = 0; m2 < more.length && anchors.length < 4; m2++) anchors.push(more[m2]);
+        var papers = await fetchArxiv(topic.cat);
+        for (var i = 0; i < papers.length && anchors.length < 4; i++) addAnchor(papers[i]);
       } catch (e) {
       }
     }
     if (anchors.length < 3) {
-      var fbWiki = ["Ultrametric space", "Laws of Form", "Entropy (information theory)", "Counterpoint", "Kuramoto model"];
+      var fbWiki = ["Coffeehouse", "Walking", "Ruin", "Craft", "Silence"];
       var fw = fbWiki[dayN % fbWiki.length];
       if (fw !== topic.wiki) {
         try {
-          var w2 = await fetchWiki(fw);
-          if (w2) anchors.push(w2);
+          addAnchor(await fetchWiki(fw));
         } catch (e) {
         }
       }
@@ -1071,7 +1324,7 @@ async function generate(env, form, opts) {
     var attempt = 0;
     var best = null;
     var feedback = "";
-    while (attempt < 3) {
+    while (attempt < 5) {
       attempt++;
       await logRun(env, form, "", topic.id, "stage", "compose attempt " + attempt, Date.now() - t0);
       var comp = await composePiece(env, form, topic, anchors, life, profile, continuity, feedback);
@@ -1084,12 +1337,18 @@ async function generate(env, form, opts) {
       var v = validatePiece(piece, form);
       if (v.ok) {
         var badNames = unverifiedNames(piece, anchors, topic);
-        if (badNames.length) {
-          v = { ok: false, problems: ["unverified names: " + badNames.slice(0, 6).join(", ")], words: v.words };
+        var citeBad = [];
+        for (var bi = 0; bi < badNames.length; bi++) {
+          var nm = badNames[bi];
+          if (/[0-9]{4}/.test(nm) || /et al/i.test(nm) || /, ?[A-Z]/.test(nm)) citeBad.push(nm);
+        }
+        if (citeBad.length) {
+          v = { ok: false, problems: ["unverified citations: " + citeBad.slice(0, 6).join(", ")], words: v.words };
         }
       }
       if (!v.ok) {
         await logRun(env, form, model, topic.id, "rejected", "validate: " + v.problems.join("; ") + " || raw: " + String(comp.raw || "").slice(0, 500), Date.now() - t0);
+        feedback = "The previous draft failed validation for these reasons: " + v.problems.join("; ") + ". Fix them and try again.";
         continue;
       }
       var dup = await similarExists(env, String(piece.title) + NL + String(piece.body_md), null);
@@ -1097,11 +1356,25 @@ async function generate(env, form, opts) {
         await logRun(env, form, model, topic.id, "rejected", "too similar to " + dup.slug + " (" + dup.score.toFixed(3) + ")", Date.now() - t0);
         continue;
       }
+      var titleLow = String(piece.title || "").toLowerCase().trim();
+      if (titleLow.length > 4) {
+        try {
+          var dtCheck = await env.PERSONAL.prepare(
+            "SELECT slug FROM companion_pieces WHERE lower(title) = ? LIMIT 1"
+          ).bind(titleLow).all();
+          if ((dtCheck.results || []).length > 0) {
+            await logRun(env, form, model, topic.id, "rejected", "duplicate title: " + piece.title, Date.now() - t0);
+            feedback = "The previous draft had a title that already exists. Choose a completely different angle and title.";
+            continue;
+          }
+        } catch (e) {
+        }
+      }
       await sharpenBridge(env, piece, form);
       await logRun(env, form, model, topic.id, "stage", "critique", Date.now() - t0);
       var crit = await critiquePiece(env, piece, form);
       var q = crit || {};
-      var dims = ["specificity", "argument", "bridge", "objection", "voice"];
+      var dims = ["specificity", "argument", "objection", "voice"];
       var worst = 10;
       var worstName = "";
       for (var d = 0; d < dims.length; d++) {
@@ -1112,11 +1385,11 @@ async function generate(env, form, opts) {
           worstName = dims[d];
         }
       }
-      if (worst < ACCEPT_FLOOR) {
+      var floorForForm = form === "notes" ? ACCEPT_FLOOR_NOTES : ACCEPT_FLOOR_ESSAY;
+      if (worst < floorForForm) {
         await logRun(env, form, model, topic.id, "rejected", "critique " + worstName + "=" + worst + " :: " + String(q.why || ""), Date.now() - t0);
-        feedback = "weakest dimension was " + worstName + ". " + String(q.why || "");
+        feedback = "REVISE the previous draft: keep its strong parts, fix its weak ones. Previous scores: specificity=" + q.specificity + " argument=" + q.argument + " bridge=" + q.bridge + " objection=" + q.objection + " voice=" + q.voice + ". Weakest was " + worstName + ". Why: " + String(q.why || "") + ".";
         q.gate = "forced";
-        best = { piece, quality: q, words: v.words };
         continue;
       }
       q.gate = "passed";
@@ -1126,6 +1399,9 @@ async function generate(env, form, opts) {
     if (!best) {
       await logRun(env, form, model, topic.id, "failed", "no piece survived the gate", Date.now() - t0);
       return { ok: false, error: "no piece survived the gate" };
+    }
+    if (best.quality && best.quality.gate === "forced") {
+      await logRun(env, form, model, topic.id, "forced", "gate not passed (forced fallback)", Date.now() - t0);
     }
     var slug = await persistPiece(env, best.piece, form, topic, model, best.quality, best.words);
     await logRun(env, form, model, topic.id, "ok", slug, Date.now() - t0);
@@ -1150,7 +1426,7 @@ var worker_default = {
         last = (r2.results || [])[0] || null;
       } catch (e) {
       }
-      return json({ ok: true, version: VERSION, pieces: n, last, rhythm: RHYTHM, models: MODELS });
+      return json({ ok: true, version: VERSION, pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
     }
     if (!authorized(request, env)) {
       return json({ error: { message: "unauthorized: append ?k=KEY" } }, 401);
@@ -1277,6 +1553,10 @@ var worker_default = {
           var o = await generate(env, want, {});
           if (o && o.ok && u.searchParams.get("mail") === "1") {
             await mailOut(env, o.slug, u.origin);
+            try {
+              await broadcast(env, o.slug, "https://reading.q08.org");
+            } catch (e) {
+            }
           }
         })().catch(function() {
         }));
@@ -1303,6 +1583,12 @@ var worker_default = {
     if (env.COMPANION_KEY && u.searchParams.get("k")) {
       cookie = "pc_key=" + env.COMPANION_KEY + "; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax";
     }
+    if (p === "/subscribe" || p === "/confirm" || p === "/unsubscribe") {
+      return handleSubscribe(request, env, u, p);
+    }
+    if (p === "/feed.xml" || p === "/feed" || p === "/rss") {
+      return feedXml(env, u);
+    }
     if (p === "/" || p === "") {
       var filter = u.searchParams.get("form") || "";
       var sql2 = filter ? "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT 200" : "SELECT slug, form, title, lede, word_count, day FROM companion_pieces ORDER BY id DESC LIMIT 200";
@@ -1324,24 +1610,93 @@ var worker_default = {
     return json({ error: { message: "not found", version: VERSION } }, 404);
   },
   async scheduled(event, env, ctx) {
-    var form = RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
+    if (event.cron === "0 21 * * *") {
+      ctx.waitUntil(sendDigest(env).catch(function() {}));
+      return;
+    }
     ctx.waitUntil((async function() {
-      var out = await generate(env, form, {});
-      if (out.ok) {
-        try {
-          var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(out.slug).all();
-          var prow = (pr.results || [])[0];
-          if (prow && env.EMAIL) {
-            prow.link = "https://personal-companion.q08.workers.dev/p/" + out.slug + (env.COMPANION_KEY ? "?k=" + env.COMPANION_KEY : "");
-            await sendMail(env, prow, out.slug, prow.day);
+      try {
+        var nowUtc = /* @__PURE__ */ new Date();
+        var utcHour = nowUtc.getUTCHours();
+        var isGenHour = GEN_HOURS_UTC.indexOf(utcHour) >= 0;
+        if (isGenHour) {
+          var day = amsDayKey(nowUtc);
+          var dayCount = await env.PERSONAL.prepare(
+            "SELECT COUNT(*) n FROM companion_pieces WHERE day = ?"
+          ).bind(day).all();
+          var todayN = ((dayCount.results || [])[0] || {}).n || 0;
+          if (todayN < MAX_PIECES_PER_DAY) {
+            var form = RHYTHM[amsWeekday(nowUtc)];
+            var out = await generate(env, form, {});
+            if (out && out.ok) {
+              try {
+                var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(out.slug).all();
+                var prow = (pr.results || [])[0];
+                if (prow) {
+                  prow.link = "https://reading.q08.org/p/" + out.slug;
+                  await sendMail(env, prow, out.slug, prow.day);
+                }
+              } catch (e) {
+              }
+            }
           }
-        } catch (e) {
         }
+        await steward(env);
+      } catch (e) {
       }
     })());
   }
 };
+async function steward(env) {
+  try {
+    await ensureSchema(env);
+    var n = Date.now();
+    var okr = await env.PERSONAL.prepare("SELECT run_at FROM companion_runs WHERE status = 'ok' ORDER BY id DESC LIMIT 1").all();
+    var lastOk = (okr.results || [])[0];
+    var h = lastOk ? (n - new Date(lastOk.run_at).getTime()) / 36e5 : null;
+    var r = await env.PERSONAL.prepare("SELECT status FROM companion_runs WHERE run_at > datetime('now','-24 hours') AND status IN ('ok','failed','rejected') ORDER BY id DESC LIMIT 200").all();
+    var rows = r.results || [];
+    var a = 0, o = 0;
+    for (var i = 0; i < rows.length; i++) {
+      a++;
+      if (rows[i].status === "ok") o++;
+    }
+    var ar = a ? o / a : null;
+    var d = "";
+    if (h === null || h > 48) d = "stall: no successful piece in " + (h === null ? "ever" : h.toFixed(1) + "h");
+    else if (ar !== null && a >= 8 && ar < 0.1) d = "collapse: accept rate " + Math.round(ar * 100) + "% over " + a + " attempts";
+    if (d) await env.PERSONAL.prepare("INSERT INTO companion_runs(run_at, form, model, topic, status, detail, ms) VALUES(?,?,?,?,?,?,?)").bind(nowIso(), "steward", "", "steward", "alert", d, 0).run();
+  } catch (e) {
+  }
+}
+__name(steward, "steward");
+var GenerationFlow = class extends WorkflowEntrypoint {
+  static {
+    __name(this, "GenerationFlow");
+  }
+  async run(event, step) {
+    var form = event && event.payload && event.payload.form || RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
+    var out = await step.do("generate", { timeout: "300 seconds" }, async () => {
+      return await generate(this.env, form, {});
+    });
+    if (out && out.ok) {
+      await step.do("publish", { timeout: "120 seconds" }, async () => {
+        try {
+          var pr = await this.env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(out.slug).all();
+          var prow = (pr.results || [])[0];
+          if (prow && this.env.EMAIL) {
+            prow.link = "https://reading.q08.org/p/" + out.slug;
+            await sendMail(this.env, prow, out.slug, prow.day);
+          }
+        } catch (e) {
+        }
+      });
+    }
+    return out;
+  }
+};
 export {
+  GenerationFlow,
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
