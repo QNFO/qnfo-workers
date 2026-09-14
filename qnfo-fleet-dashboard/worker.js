@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.6.3";
+var VERSION = "1.6.4"; // FIX-5 (2026-09-14): concrete chain remediation
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -787,8 +787,16 @@ function execTargetFor(category, resource) {
     return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
   }
   if (category === "integration-chain") {
+    // FIX-5 (2026-09-14): concrete auto-remediation per chain instead of blanket no-action.
+    // Each chain maps to its consumer worker's trigger endpoint.
     if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research pipeline (research-exec /run)" };
-    return { safe: false, noAction: true, note: "chain has no safe producer action; owner must inspect the sink" };
+    if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
+    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log" };
+    if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: true, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "run observability ingest to digest alerts" };
+    if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
+    if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
+    return { safe: false, noAction: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
+  }
   }
   if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
   if (category === "probe") return { safe: false, noAction: true, note: "probe is re-verified automatically next cycle; no action" };

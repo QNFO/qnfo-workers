@@ -946,7 +946,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.11";
+var VERSION = "0.4.18"; // FIX-7 (2026-09-14): identity fix
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1407,7 +1407,7 @@ var worker_default = {
     var p = u.pathname;
     var ah = request.headers.get("Authorization") || "";
     var auth = ah.indexOf("Bearer ") === 0 ? ah.slice(7) : ah;
-    if (p === "/health") return json({ status: "ok", worker: "qnfo-fleet-deploy", version: VERSION, enabled: await enabled(env), auto_heal: await autoHeal(env) });
+    if (p === "/health") return json({ status: "ok", worker: "qnfo-fleet-control", version: VERSION, enabled: await enabled(env), auto_heal: await autoHeal(env) });
     var admin = auth && env.DEPLOY_ADMIN_TOKEN && auth === env.DEPLOY_ADMIN_TOKEN;
     var sh = auth && env.SELFHEAL_TOKEN && auth === env.SELFHEAL_TOKEN;
     if (!admin && !sh) return json({ error: "unauthorized" }, 401);

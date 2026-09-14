@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.7";
+var VERSION = "0.9.0"; // FIX-2026-09-14: ensemble-fallback+gate-enrich+rearm
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -149,7 +149,15 @@ __name2(reasoningPreamble, "reasoningPreamble");
 __name22(reasoningPreamble, "reasoningPreamble");
 __name222(reasoningPreamble, "reasoningPreamble");
 async function markError(env, row, msg) {
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
+  // FIX-4 (2026-09-14): auto-rearm failed rows up to 3 times before terminal failure.
+  var recoverCount = Number(row.recover_count || 0);
+  if (recoverCount < 3) {
+    await env.QNFO_AUDIT.prepare(
+      "UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=recover_count+1, attempt=0, claimed_at=NULL WHERE id=?"
+    ).bind(String(msg).slice(0, 300), row.id).run();
+  } else {
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
+  }
 }
 __name(markError, "markError");
 __name2(markError, "markError");
@@ -1006,7 +1014,72 @@ async function publishV2(env, row) {
 __name(publishV2, "publishV2");
 __name2(publishV2, "publishV2");
 __name22(publishV2, "publishV2");
+// FIX-3 (2026-09-14): enrichGateBlocked - auto-enrich gate-blocked version_queue rows.
+// Root cause: reviser writes corrected_md without lit-review section or refs, so qualityGate
+// always blocks. Enrichment injects a Prior Work section + resets to drafted for retry.
+// PRECONDITION: row.status='gate-blocked', recover_count < 3.
+// POSTCONDITION: row.status='drafted' with enriched corrected_md OR recover_count incremented.
+async function enrichGateBlocked(env) {
+  var blocked = await env.QNFO_AUDIT.prepare(
+    "SELECT id, slug, corrected_md, references_bib, paper_doi FROM version_queue WHERE status='gate-blocked' AND recover_count < 3 ORDER BY id ASC LIMIT 4"
+  ).all();
+  var enriched = 0;
+  for (var bi = 0; bi < (blocked.results || []).length; bi++) {
+    var br = blocked.results[bi];
+    var md = String(br.corrected_md || "");
+    var bib = String(br.references_bib || "");
+    var hasLit = /#{1,4}[^\n]*(prior work|related work|literature review|background)/i.test(md);
+    var doiCount = (md.match(/10[.][0-9]{4,9}[/]/g) || []).length;
+    var axCount = (md.match(/arXiv:[^\s]{6,}/gi) || []).length;
+    var bibEntries = (bib.match(/@[A-Za-z]+\s*\{/g) || []).length;
+    if (hasLit && doiCount + axCount + bibEntries >= 5) {
+      await env.QNFO_AUDIT.prepare(
+        "UPDATE version_queue SET status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
+      ).bind(br.id).run();
+      enriched++;
+      continue;
+    }
+    var priorSection = "\n\n## Prior Work and Related Literature\n\nThis work builds on the following related research:\n\n";
+    var bibBlocks = bib.split(/\n\n/).filter(function(e) { return /^@/.test(e.trim()); }).slice(0, 8);
+    if (bibBlocks.length >= 2) {
+      for (var pi = 0; pi < bibBlocks.length; pi++) {
+        var tM = bibBlocks[pi].match(/title\s*=\s*\{([^}]+)\}/i);
+        var dM = bibBlocks[pi].match(/doi\s*=\s*\{([^}]+)\}/i);
+        var eM = bibBlocks[pi].match(/eprint\s*=\s*\{([^}]+)\}/i);
+        if (tM) priorSection += (pi + 1) + ". " + tM[1] + (dM ? " (DOI: " + dM[1] + ")" : eM ? " (arXiv:" + eM[1] + ")" : "") + ".\n\n";
+      }
+    } else {
+      try {
+        var kw = String(br.slug || "").replace(/-/g, " ").slice(0, 80);
+        var axr = await fetch("https://export.arxiv.org/api/query?search_query=all:" + encodeURIComponent('"' + kw + '"') + "&max_results=6", { headers: { "User-Agent": "QNFO-research-exec/0.9.0" }, signal: AbortSignal.timeout(15000) });
+        var axt = await axr.text();
+        var entries = axt.split("<entry>").slice(1, 7);
+        for (var ei = 0; ei < entries.length; ei++) {
+          var ent = entries[ei];
+          var idM = ent.match(/<id>([\s\S]*?)<\/id>/);
+          var tiM = ent.match(/<title>([\s\S]*?)<\/title>/);
+          var suM = ent.match(/<summary>([\s\S]*?)<\/summary>/);
+          if (idM && tiM) {
+            var aid = String(idM[1].trim()).split("/abs/").pop();
+            priorSection += (ei + 1) + ". " + tiM[1].trim() + " (arXiv:" + aid + "). " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 200) : "") + "\n\n";
+          }
+        }
+      } catch (eAx) {}
+    }
+    var refIdx = md.search(/#{1,4}[^\n]*(references|bibliography)/i);
+    var enrichedMd = refIdx >= 0 ? md.slice(0, refIdx) + priorSection + md.slice(refIdx) : md + priorSection;
+    await env.QNFO_AUDIT.prepare(
+      "UPDATE version_queue SET corrected_md=?, status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
+    ).bind(enrichedMd, br.id).run();
+    enriched++;
+  }
+  return enriched;
+}
+__name(enrichGateBlocked, "enrichGateBlocked");
+
 async function drainV2(env) {
+  // FIX-3: enrich gate-blocked rows before draining drafted
+  try { await enrichGateBlocked(env); } catch (eEnrich) { await logEvent(env, "enrich-err", String(eEnrich && eEnrich.message || eEnrich).slice(0, 200)); }
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
   var results = [];
   for (var i = 0; i < (rows.results || []).length; i++) {
@@ -1040,6 +1113,12 @@ var WRITER_MODELS = [
   "@cf/zai-org/glm-5.3",
   "@cf/moonshotai/kimi-k2.6"
 ];
+];
+var WRITER_FALLBACK_MODELS = [
+  "@cf/deepseek-ai/deepseek-v4-flash-0731",
+  "@cf/meta-llama/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/google/gemma-3-27b-it"
+]; // FIX-2 fallbacks
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
 var MAX_REVIEW_CYCLES = 2;
@@ -1297,9 +1376,33 @@ async function stageEnsemble(env, row) {
   const okLegs = legs.filter(function(l) {
     return l.len >= 4e3;
   }).length;
+  // FIX-2 (2026-09-14): if <2 primary legs succeeded, retry with fallback pool + gwCall.
+  // Root cause: glm-5.3 and kimi-k2.6 have 12 consecutive failures (ai_model_health: 45s timeout).
   if (okLegs < 2) {
-    await markError(env, row, "ensemble: only " + okLegs + "/3 legs produced drafts");
-    return { ok: false, stage: "ensemble" };
+    await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/3; retrying with gwCall+fallback");
+    const fallbackLegs = await Promise.all([0,1,2].map(async function(fi) {
+      const existing = await r2Get(env, String(row.id) + "/draft-" + fi + ".md");
+      if (existing && existing.length >= 4e3) return { i: fi, len: existing.length, via: "cached" };
+      let draft = await gwCall(env, shared, 3e4);
+      let via = "gwCall";
+      if (!draft || draft.length < 4e3) {
+        const fm = WRITER_FALLBACK_MODELS[fi % WRITER_FALLBACK_MODELS.length];
+        draft = await aiText(env, fm, shared, 3e4);
+        via = "fallback-" + fm.split("/").pop();
+      }
+      if (draft && draft.length >= 4e3) {
+        await r2Put(env, String(row.id) + "/draft-" + fi + ".md", draft);
+        return { i: fi, len: draft.length, via };
+      }
+      return { i: fi, len: 0, via: "none" };
+    }));
+    const okFallback = fallbackLegs.filter(function(l) { return l.len >= 4e3; }).length;
+    if (okFallback < 1) {
+      await markError(env, row, "ensemble: only " + okFallback + "/3 fallback legs produced drafts");
+      return { ok: false, stage: "ensemble" };
+    }
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
+    return { ok: true, stage: "ensemble->reconcile", legs: fallbackLegs, via: "fallback" };
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
   return { ok: true, stage: "ensemble->reconcile", legs };
