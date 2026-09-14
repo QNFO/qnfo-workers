@@ -1,5 +1,5 @@
 /**
- * q08-signal-engine — v0.3.0
+ * q08-signal-engine — v0.7.0
  *
  * What it is
  *   The external signal engine for q08.org. Scrapes high-friction technical
@@ -14,12 +14,13 @@
  *   persist (D1 q08-signal) -> serve HTML
  *
  * Register (the reading.q08.org signature, applied to external signals)
- *   Engaging long-form prose with a hook opening and why-a-reader-should-care
- *   framing. Surprising cross-domain connections woven throughout (historical
- *   parallels, adjacent-field analogies). Timeless and name-free: no dates,
- *   no products, no handles, no emotional vocabulary. A structural flaw named,
- *   failure modes walked through as prose, a minimal alternative framework
- *   proposed. NO bullet lists. NO tables.
+ *   Systemic, not specific: the signal incident opens the essay; the essay
+ *   itself names the general structural pattern it instantiates. Cold structural
+ *   objectivity — no management-consulting abstractions. Structures vary per
+ *   piece; section skeletons of recent pieces are injected as banned patterns.
+ *   Each draft must carry a 'worth your time' self-verdict that gates
+ *   publication, and readers vote yes/flat/no, which ranks the few-shot pool.
+ *   Timeless and name-free. NO bullet lists. NO tables.
  *
  * Bindings
  *   DB          — D1 q08-signal (signal_log, published_pieces, prompt_pool, engine_runs)
@@ -32,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.6.2";
+var VERSION = "0.7.0";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -207,35 +208,45 @@ async function extractGitHubFriction(fullName, description) {
 // These are jargon placeholders, not analysis. The prompt must name and ban
 // this failure mode explicitly, and model the correct register with contrast examples.
 var Q08_DIRECTIVE = [
-  "You are the writer for q08.org — long-form analytical essays for a curious, technically-literate reader who wants to understand why things break and what that reveals.",
-  "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow and enjoy.",
+  "You are the writer for q08.org — long-form essays on why things break, for a reader who wants the structural cause, not the incident report.",
+  "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow.",
   "",
-  "OPENING (the hook): begin with 2-4 sentences that make a reader want to keep reading. Do not start with a definition or 'This essay...'. Open with a concrete observation, a striking tension, or a question that reveals why this matters. Establish in the first paragraph why a reader should care.",
+  "SYSTEMIC, NOT SPECIFIC: the incident that produced the signal is the entry point, never the subject. Name the general class of system the incident instantiates — the pattern that would have produced the same failure anywhere. Your central claim must survive even if this particular incident had never existed. An essay that stays inside its incident is rejected.",
   "",
-  "BODY: write flowing prose paragraphs. NO bullet lists. NO numbered lists. NO tables. Use 2-4 H2 subheadings, but every section is prose, never lists.",
-  "Weave at least two surprising connections through the essay: historical parallels, cross-domain analogies, or timeless structural patterns that illuminate the friction from an unexpected angle. The signature of this publication is 'connections a reader did not expect, woven honestly.'",
-  "Make every claim concrete: name the actual mechanism, the actual constraint, the actual failure — never a category label or a capitalized abstraction.",
+  "REGISTER: cold structural objectivity. An engineer describing a mechanism, not a consultant describing a market. Write the way a precise bug report reads: specific, unimpressed, exact.",
   "",
-  "ARC (three movements, written as prose):",
-  "1. Identify the underlying structural flaw — the single cause that, if removed, would dissolve most of the friction.",
-  "2. Walk through the failure modes as prose, each with a concrete cause and consequence.",
-  "3. Close with a minimal alternative framework: what the system becomes when the flaw is removed, described concretely and specifically.",
+  "STRUCTURE: let the material dictate the shape. No required arc, no three-movement template. Banned section headers, exactly: 'How the Flaw Manifests', 'Cascading Failures', 'A Minimal Alternative', 'A Minimal Framework', 'Connections Across Disciplines', 'Echoes from the Past', 'A Path Forward', 'The Lens Restored', 'Lessons for the Future', 'Unexpected Parallels', 'The Broader Lesson', and any header of the form 'The [Adjective] [Lever/Bottleneck/Premise/Flaw]: X'. Never name a section after its rhetorical function.",
+  "",
+  "OPENING: begin inside the problem. The first sentence must name a mechanism or observation so specific it could not open any other essay.",
+  "",
+  "CONCRETENESS: name the actual mechanism, number, or constraint. Technical artifacts — formats, languages, theorems, algorithms — may be named; they are the material. Company names, brand names, and platform names are banned. A sentence without a specific referent is a sentence to rewrite.",
+  "",
+  "CONNECTIONS: at most two cross-domain connections, each load-bearing — it must change how the reader understands the mechanism. Stock props are banned: no guild stamps, no telescopes, no alchemy, no philosopher's stones, no printing presses, no sonar, no camera apertures, no legal contracts, no aerospace redundancy. If the analogy would fit a different essay equally well, cut it.",
+  "",
+  "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact — not a summary, not a resolution, not a flourish.",
   "",
   "CONSTRAINTS (hard):",
-  "- Timeless: no dates, no current events, no named products, companies, platforms, or websites.",
-  "- No personal names, no usernames, no @handles. No emotional vocabulary. No hedging ('it seems', 'perhaps').",
-  "- No first person. No preamble or meta-commentary.",
-  "- 700-1100 words.",
-  "- Output: valid Markdown, H1 title first, then the essay. The H1 title must be concrete and intriguing, not abstract (never 'An Analysis of X' or 'A Critique of Y').",
-  "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
+  "- Timeless: no dates, no current events.",
+  "- No personal names, no usernames, no @handles. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
+  "- No first person. No preamble, no meta-commentary about the essay itself.",
+  "- 700-1100 words. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
+  "- Output: valid Markdown, H1 title first, then the essay. The title must be concrete and specific to this signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
+  "- Mathematical notation: inline math as \\(...\\), display math as \\[\\...]. Use only these delimiters; never single-dollar signs.",
+  "- After the essay, a final line: 'worth your time: yes|flat|no — one clause of justification'. This is a calibration verdict, not prose: state honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. A verdict of 'no' rejects the essay."
 ].join("\n");
 
-function buildPrompt(friction, fewShot) {
+function buildPrompt(friction, fewShot, recentStructures) {
   var parts = [Q08_DIRECTIVE];
   if (fewShot && fewShot.length > 0) {
-    parts.push("\n--- HIGH-PERFORMING STRUCTURE EXAMPLES ---");
+    parts.push("\n--- PROVEN EXEMPLAR STRUCTURES (quality floor, not templates to copy) ---");
     for (var ex of fewShot.slice(0, 2)) {
-      parts.push(ex.structure_md.slice(0, 600));
+      parts.push(ex.structure_md.slice(0, 400));
+    }
+  }
+  if (recentStructures && recentStructures.length > 0) {
+    parts.push("\n--- RECENT STRUCTURES ON THIS SITE (BANNED PATTERNS — diverge from every one) ---");
+    for (var s of recentStructures.slice(0, 6)) {
+      parts.push(s.slice(0, 200));
     }
   }
   parts.push("\n--- SIGNAL ---");
@@ -304,6 +315,12 @@ var BANNED_BABBLE = [
 ];
 var BANNED_HANDLES = /@\w+/g;
 var BAD_TITLE_RE = /^(an? |the )?(analysis|critique|examination|exploration|overview|review|understanding|study|assessment|investigation) of /i;
+var TITLE_FORMULA_RE = /^when .+ meets .+$/i;
+var TITLE_COLON_RE = /: the (hidden|invisible|unseen|silent|quiet) /i;
+var BANNED_H2_RE = /^#+\s+(how the flaw manifests|cascading failures|a minimal (alternative|framework|approach)|connections across disciplines|echoes from the past|a path forward|the lens restored|lessons for the future|the pattern across disciplines|unexpected parallels|the broader lesson)\b/i;
+var FORMULA_H2_RE = /^#+\s+the (hidden|invisible|unseen|unspoken|silent|quiet) (lever|bottleneck|premise|flaw|cost|gear|engine|handoff|mismatch)\b/i;
+var STOCK_PROPS_RE = /\b(guild stamps?|telescopes?|galileo|alchem|philosopher.s stone|printing press|movable type|sonar|aperture|legal contracts?|aerospace redundancy|vellum)\b/i;
+var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
 
 function gate(text) {
   // Enforce LONG-FORM PROSE with a hook, not lists:
@@ -325,6 +342,17 @@ function gate(text) {
   for (var phrase of BANNED_BABBLE) {
     if (body.includes(phrase)) { problems.push("management-babble: '" + phrase + "'"); break; }
   }
+  for (var hl of text.split("\n")) {
+    var ht = hl.trim();
+    if (BANNED_H2_RE.test(ht)) { problems.push("banned section header: '" + ht.slice(0, 50) + "'"); break; }
+    if (FORMULA_H2_RE.test(ht)) { problems.push("formula section header: '" + ht.slice(0, 50) + "'"); break; }
+  }
+  if (TITLE_FORMULA_RE.test(title)) problems.push("formula title 'When X Meets Y'");
+  else if (TITLE_COLON_RE.test(title)) problems.push("formula title 'X: The Hidden Z'");
+  var sp = body.match(STOCK_PROPS_RE);
+  if (sp) problems.push("stock analogy prop: '" + sp[1] + "'");
+  var sr = body.match(SOFT_REGISTER_RE);
+  if (sr) problems.push("soft register: '" + sr[1] + "'");
 
   var lines = text.split("\n");
   var bulletLines = 0, tableLines = 0, paraLines = 0;
@@ -337,6 +365,13 @@ function gate(text) {
   if (bulletLines > 0) problems.push("bullet lists (" + bulletLines + " lines) — long-form prose required");
   if (tableLines > 0) problems.push("tables (" + tableLines + " lines) — prose required");
   if (paraLines < 6) problems.push("insufficient prose (" + paraLines + " substantial paragraphs)");
+
+  var verdictMatch = text.match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
+  if (!verdictMatch) problems.push("missing or malformed 'worth your time' verdict line");
+  else if (verdictMatch[1] === "no") problems.push("self-verdict 'no' — essay does not clear the worth-reading bar");
+  var essayText = text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
+  var lastCh = essayText.slice(-1);
+  if (lastCh !== "." && lastCh !== "!" && lastCh !== "?" && lastCh !== "\u201d" && lastCh !== "\u2019") problems.push("truncated ending — essay must end on a full stop");
 
   return { ok: problems.length === 0, problems };
 }
@@ -377,6 +412,10 @@ async function persistPiece(env, piece, signal, story, model) {
       "INSERT INTO prompt_pool (id, piece_id, structure_md, active) VALUES (?,?,?,1)"
     ).bind("pp-" + salt, pieceId, skeleton).run();
   }
+  // Bound the pool: keep only the 40 newest skeletons.
+  await env.DB.prepare(
+    "DELETE FROM prompt_pool WHERE id NOT IN (SELECT id FROM prompt_pool ORDER BY created_at DESC LIMIT 40)"
+  ).run().catch(function(){});
   return { slug, title, pieceId };
 }
 
@@ -384,27 +423,37 @@ async function persistPiece(env, piece, signal, story, model) {
 // 7. Feedback loop — promote top 15%, purge bottom 15%
 // ---------------------------------------------------------------------------
 async function feedbackScan(env) {
-  // Rank prompt_pool by reads (from published_pieces joined)
+  // Rank prompt_pool by READER VERDICTS (worth your time?) — votes, not views.
   var rows = await env.DB.prepare(
-    "SELECT pp.id, pp.piece_id, pp.structure_md, p.reads FROM prompt_pool pp JOIN published_pieces p ON p.id=pp.piece_id WHERE pp.active=1 ORDER BY p.reads DESC"
+    "SELECT pp.id, pp.piece_id, pp.structure_md, p.slug, p.reads, " +
+    "(SELECT COUNT(*) FROM q08_feedback f WHERE f.slug = p.slug AND f.signal = 'good') AS g, " +
+    "(SELECT COUNT(*) FROM q08_feedback f WHERE f.slug = p.slug AND f.signal IN ('flat','no')) AS b " +
+    "FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 1"
   ).all();
   var all = rows.results || [];
-  if (all.length < 4) return { promoted: 0, purged: 0 };
-  var topK    = Math.max(1, Math.floor(all.length * 0.15));
-  var bottomK = Math.max(1, Math.floor(all.length * 0.15));
-  var topIds    = all.slice(0, topK).map(r => r.id);
-  var bottomIds = all.slice(-bottomK).map(r => r.id);
-  // Promote top (mark active=2 = few-shot exemplar)
-  for (var id of topIds) {
-    await env.DB.prepare("UPDATE prompt_pool SET active=2 WHERE id=?").bind(id).run();
+  var promoted = 0, purged = 0;
+  for (var r of all) {
+    var g = Number(r.g) || 0, b = Number(r.b) || 0;
+    if (g + b > 0) {
+      await env.DB.prepare("UPDATE published_pieces SET feedback_score = ? WHERE slug = ?").bind(g / (g + b), r.slug).run().catch(function(){});
+    }
   }
-  // Purge bottom (deactivate)
-  for (var id of bottomIds) {
-    await env.DB.prepare("UPDATE prompt_pool SET active=0 WHERE id=?").bind(id).run();
+  if (all.length < 4) return { promoted: promoted, purged: purged };
+  // Promote only structures with proven reader value: at least 2 yes votes, 2:1 yes ratio.
+  var proven = all.filter(function(r){ var g = Number(r.g) || 0, b = Number(r.b) || 0; return g >= 2 && g >= 2 * b; });
+  var topK = Math.max(1, Math.floor(proven.length * 0.5));
+  for (var i = 0; i < Math.min(topK, proven.length); i++) {
+    await env.DB.prepare("UPDATE prompt_pool SET active = 2 WHERE id = ?").bind(proven[i].id).run();
+    promoted++;
   }
-  return { promoted: topIds.length, purged: bottomIds.length };
+  // Deactivate structures with proven negative reader value.
+  var neg = all.filter(function(r){ var g = Number(r.g) || 0, b = Number(r.b) || 0; return b > 0 && b > g; });
+  for (var j = 0; j < neg.length; j++) {
+    await env.DB.prepare("UPDATE prompt_pool SET active = 0 WHERE id = ?").bind(neg[j].id).run();
+    purged++;
+  }
+  return { promoted: promoted, purged: purged };
 }
-
 // ---------------------------------------------------------------------------
 // 8. Main generation cycle
 // ---------------------------------------------------------------------------
@@ -451,22 +500,38 @@ async function generate(env) {
   if (!story) {
     return { ok: false, reason: "no candidate yielded sufficient friction (" + candidates.length + " available)" };
   }
-  // Fetch few-shot exemplars from prompt pool (top performers)
+  // Few-shot only from pieces with proven reader value (reads or verdicts); otherwise none.
   var exemplars = await env.DB.prepare(
-    "SELECT structure_md FROM prompt_pool WHERE active=2 ORDER BY performance_score DESC LIMIT 2"
+    "SELECT pp.structure_md FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 2 AND (p.reads > 0 OR p.feedback_score > 0) ORDER BY pp.performance_score DESC, p.feedback_score DESC LIMIT 2"
   ).all();
   var fewShot = (exemplars.results || []);
+  // Recent structures as divergence priming: the model must NOT repeat them.
+  var recentRows = await env.DB.prepare(
+    "SELECT structure_md FROM prompt_pool ORDER BY created_at DESC LIMIT 6"
+  ).all();
+  var recentStructures = (recentRows.results || []).map(function(r){ return r.structure_md; });
   // Compose
-  var prompt = buildPrompt(friction, fewShot);
+  var prompt = buildPrompt(friction, fewShot, recentStructures);
   var piece  = await compose(env, prompt);
-  // Gate
+  // Gate — one corrective retry on failure
   var gateResult = gate(piece.text);
+  if (!gateResult.ok) {
+    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected for these reasons; fix only these issues ---\n" + gateResult.problems.join("; ");
+    var retryPiece = null;
+    try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
+    if (retryPiece && retryPiece.text) {
+      var retryGate = gate(retryPiece.text);
+      if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
+    }
+  }
   if (!gateResult.ok) {
     await env.DB.prepare(
       "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error) VALUES (?,?,?,?,?,?,?,?)"
     ).bind(stories.length, candidates.length, 0, (story.source||"hn") + ":" + story.title.slice(0, 80), piece.model, Date.now()-t0, "gate_failed", gateResult.problems.join("; ")).run();
     return { ok: false, reason: "gate failed: " + gateResult.problems.join("; ") };
   }
+  // Strip the calibration verdict line from the published body (it gates, it does not print).
+  piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
   // Feedback loop (async, non-blocking)
@@ -557,6 +622,9 @@ article .lede{font-size:.97rem;color:var(--mut);line-height:1.6}
 .piece li{margin-bottom:.3rem}
 .piece strong{font-weight:600}
 .piece em{font-style:italic}
+.fb{margin:2.2rem 0 0;padding-top:1.2rem;border-top:1px solid var(--line);font-size:.92rem;color:var(--mut)}
+.fb a{margin:0 .7rem 0 0;color:var(--acc);text-decoration:none}
+.fb a:hover{text-decoration:underline}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);font-size:.82rem;color:var(--mut)}
 .chip{display:inline-block;font-size:.75rem;padding:.15rem .5rem;border-radius:3px;background:var(--line);color:var(--mut);margin-right:.4rem}
 .refs{margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--line)}
@@ -607,8 +675,9 @@ function mdToHtml(md) {
 function renderPiece(p) {
   var body = mdToHtml(p.body_md || "");
   var refs = renderSources(p.sources_json);
+  var fb = '<div class="fb">Was this worth your time? <a href="/api/f?slug=' + escHtml(p.slug) + '&s=good">yes</a><a href="/api/f?slug=' + escHtml(p.slug) + '&s=flat">flat</a><a href="/api/f?slug=' + escHtml(p.slug) + '&s=no">no</a></div>';
   var date = (p.published_at || "").slice(0, 10);
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + refs + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + fb + refs + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
 }
 
 function renderFeed(pieces) {
@@ -735,6 +804,20 @@ export default {
       return json({ ok: true, worker: WORKER, version: VERSION, out });
     }
 
+    if (path === "/api/f") {
+      var s = (url.searchParams.get("s") || "").toLowerCase();
+      var fslug = String(url.searchParams.get("slug") || "").slice(0, 200);
+      if (s !== "good" && s !== "flat" && s !== "no") return json({ ok: false, error: "s must be good|flat|no" }, 400);
+      if (!fslug) return json({ ok: false, error: "slug required" }, 400);
+      var ip = String(req.headers.get("cf-connecting-ip") || "anon");
+      var ipKey = await sha16(ip + ":" + fslug);
+      var prev = await env.DB.prepare("SELECT id FROM q08_feedback WHERE ip_key = ? AND slug = ?").bind(ipKey, fslug).first().catch(function(){ return null; });
+      if (prev) return json({ ok: true, updated: false, note: "vote already recorded" });
+      var rate = await env.DB.prepare("SELECT COUNT(*) n FROM q08_feedback WHERE ip_key = ? AND created_at > datetime('now','-1 hour')").bind(ipKey).first().catch(function(){ return { n: 0 }; });
+      if ((rate && rate.n || 0) >= 5) return json({ ok: false, error: "rate limited" }, 429);
+      await env.DB.prepare("INSERT INTO q08_feedback (slug, signal, ip_key, created_at) VALUES (?,?,?,?)").bind(fslug, s, ipKey, nowIso()).run();
+      return json({ ok: true, recorded: s });
+    }
     if (path === "/feed.xml") {
       var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 20").all();
       return new Response(renderFeed(rows.results || []), { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
