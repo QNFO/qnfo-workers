@@ -1113,7 +1113,6 @@ var WRITER_MODELS = [
   "@cf/zai-org/glm-5.3",
   "@cf/moonshotai/kimi-k2.6"
 ];
-];
 var WRITER_FALLBACK_MODELS = [
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
   "@cf/meta-llama/llama-3.3-70b-instruct-fp8-fast",

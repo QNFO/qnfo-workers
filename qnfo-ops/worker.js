@@ -71,6 +71,7 @@ async function authOk(header, env) {
   if (k2) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k2)); if (timingSafeEqual(a, b)) return true; }
   if (k3) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k3)); if (timingSafeEqual(a, b)) return true; } // OPS_CLIENT_KEY for ChatBox/SannaBot/Android
   return false;
+}
 __name(authOk, "authOk");
 function timingSafeEqual(a, b) {
   const aa = new Uint8Array(a);

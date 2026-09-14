@@ -797,7 +797,6 @@ function execTargetFor(category, resource) {
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
     return { safe: false, noAction: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
   }
-  }
   if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
   if (category === "probe") return { safe: false, noAction: true, note: "probe is re-verified automatically next cycle; no action" };
   if (category === "gateway") return { safe: false, noAction: true, note: "gateway classes self-clear via qnfo-ai-calibration sweep (30m); no human gate" };
