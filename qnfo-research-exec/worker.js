@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.2"; // FIX-TITLE-SYNC (2026-09-14): publishV2 writes title (WEBSITE-SYNC-COLUMNS-1)
+var VERSION = "0.9.3"; // FIX-TITLE-MULTILINE (2026-09-14): extractTitle handles multi-line H1 titles
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -708,8 +708,23 @@ function extractTitle(md, fallback) {
     var tm = fm[1].match(/^title:\s*["']?([^"'\n]+)["']?\s*$/im);
     if (tm) return tm[1].trim();
   }
-  var h = m.match(/^#\s+(.+)$/m);
-  if (h) return h[1].trim();
+  // H1 (some bodies wrap the title across lines). Collect continuation lines
+  // until blank line, next heading, or author/DOI/date metadata.
+  var hm = m.match(/^#\s+(.+)$/m);
+  if (hm) {
+    var lines = m.split(/\r?\n/);
+    var idx = -1;
+    for (var i = 0; i < lines.length; i++) { if (/^#\s+/.test(lines[i])) { idx = i; break; } }
+    var full = lines[idx].replace(/^#\s+/, "").trim();
+    for (var j = idx + 1; j < lines.length; j++) {
+      var t = lines[j].trim();
+      if (!t) break;
+      if (/^#/.test(t)) break;
+      if (/^\*\*|^(Author|ORCID|DOI|Date|Version|Contact|Email|ISNI|Affiliation):/i.test(t)) break;
+      full += " " + t;
+    }
+    return full.replace(/\s+/g, " ").trim();
+  }
   return fallback || "";
 }
 function qualityGate(row, minLen, minRefs) {
