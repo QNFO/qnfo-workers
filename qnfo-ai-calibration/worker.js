@@ -13,7 +13,7 @@
 // DEPLOY: wrangler deploy (secrets: QNFO_ROUTER_KEY, OPS_KEY, PT_KEY, DEEPSEEK_KEY, CF_API_TOKEN)
 // CANONICAL SOURCE: qnfo-workers/qnfo-ai-calibration (FLEET-SELF-DOC-1)
 // ROUTES: GET /health | GET /manifest | POST /run (auth) | GET /results (auth) | GET /
-var VERSION = "1.1.4"; // GW-DEGRADE-2 (2026-09-08): gateway failure classes are keyed by full CF model id (@cf/...) but ai_model_health rows use internal roster ids - added reverse map + correct row targeting // GW-DEGRADE-1 (2026-09-08): recurring gateway-failure classes (prevCount>0 or count>=2 in sweep) now mark ai_model_health status degraded so health-aware routing (qnfo-ai loadModelHealth) deprioritizes/skips them; stopped classes self-clear to ok on absence (mirrors probe-path semantics) // GW-FAIL-DEDUP-1 (2026-09-06): respect prior dispositions - skip re-filing gw-fail when a wontfix/closed/resolved ticket already exists for the model (stops the 5-ticket-per-sweep regeneration loop)
+var VERSION = "1.1.6"; // GW-DEGRADE-2 (2026-09-08): gateway failure classes are keyed by full CF model id (@cf/...) but ai_model_health rows use internal roster ids - added reverse map + correct row targeting // GW-DEGRADE-1 (2026-09-08): recurring gateway-failure classes (prevCount>0 or count>=2 in sweep) now mark ai_model_health status degraded so health-aware routing (qnfo-ai loadModelHealth) deprioritizes/skips them; stopped classes self-clear to ok on absence (mirrors probe-path semantics) // GW-FAIL-DEDUP-1 (2026-09-06): respect prior dispositions - skip re-filing gw-fail when a wontfix/closed/resolved ticket already exists for the model (stops the 5-ticket-per-sweep regeneration loop)
 // GW-WATCH-1 2026-09-05: autonomous AI Gateway failure sweep (detect -> D1 -> issue -> auto-close) // SVC-BINDING-1: same-account workers.dev fetches 404 at the edge from inside a Worker (verified live 2026-09-04) - internal probes use service bindings (QNFO_AI/QNFO_OPS/PT_API); DeepSeek/catalog stay public
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var OPS = "https://qnfo-ops.q08.workers.dev";
@@ -348,7 +348,7 @@ async function gatewayFailureSweep(env, t0) {
         var hrow = await env.QNFO_AUDIT.prepare("SELECT model_id FROM ai_model_health WHERE model_id = ?1").bind(targetId).first();
         if (recurring) {
           if (hrow) await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status='degraded', updated_at=?1 WHERE model_id=?2").bind(new Date().toISOString(), targetId).run();
-          else await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO ai_model_health (model_id, status, updated_at) VALUES (?1,'degraded',?2)").bind(targetId, new Date().toISOString()).run();
+          else if (String(targetId).indexOf("@cf/") !== 0) await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO ai_model_health (model_id, status, updated_at) VALUES (?1,'degraded',?2)").bind(targetId, new Date().toISOString()).run();
         } else if (hrow && hrow.model_id) {
           var cur = await env.QNFO_AUDIT.prepare("SELECT status FROM ai_model_health WHERE model_id = ?1").bind(targetId).first();
           if (cur && cur.status === "degraded") await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status='ok', updated_at=?1 WHERE model_id=?2").bind(new Date().toISOString(), targetId).run();

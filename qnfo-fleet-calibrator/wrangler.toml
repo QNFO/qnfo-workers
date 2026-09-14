@@ -37,9 +37,6 @@ service = "qnfo-ai"
 binding = "SVC_QNFO_INFRA"
 service = "qnfo-infra"
 
-[[services]]
-binding = "SVC_QNFO_AUDITOR"
-service = "qnfo-auditor"
 
 [[services]]
 binding = "SVC_PERSONAL_API"
