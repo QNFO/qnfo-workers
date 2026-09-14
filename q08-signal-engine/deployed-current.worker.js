@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.0";
+var VERSION = "0.7.1";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -787,6 +787,13 @@ export default {
     }
 
     if (path === "/run" && req.method === "POST") {
+      // Unauthenticated trigger: bound abuse with a per-IP rate limit (crons call generate() directly).
+      var runIp = String(req.headers.get("cf-connecting-ip") || "anon");
+      var runIk = await sha16("run:" + runIp);
+      var runRate = await env.DB.prepare("SELECT COUNT(*) n FROM q08_run_rate WHERE ip_key=? AND created_at > datetime('now','-1 hour')").bind(runIk).first().catch(function(){ return { n: 0 }; });
+      if ((runRate && runRate.n || 0) >= 5) return json({ ok: false, error: "rate limited" }, 429);
+      await env.DB.prepare("INSERT INTO q08_run_rate (ip_key, created_at) VALUES (?,?)").bind(runIk, nowIso()).run().catch(function(){});
+      await env.DB.prepare("DELETE FROM q08_run_rate WHERE created_at < datetime('now','-24 hours')").run().catch(function(){});
       // Detach: generate() takes 30-90s (HN fetch + LLM). Return immediately,
       // run in background via waitUntil so the HTTP response is not blocked.
       var async_mode = url.searchParams.get("async") !== "0";
