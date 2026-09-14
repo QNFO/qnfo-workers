@@ -496,7 +496,7 @@ async function finalize(env, row, slug, doi, paperUrl) {
       const hit = tokens.some((t) => hay.includes(t));
       if (!hit) continue;
       await env.QNFO_AUDIT.prepare(
-        "INSERT OR IGNORE INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,?4,?5,'queued',?6)"
+        "INSERT OR IGNORE INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,?4,?5,'pending',?6)"
       ).bind(crypto.randomUUID(), slug, name, c.email, "cited/related work match", new Date().toISOString()).run();
       queued++;
     }

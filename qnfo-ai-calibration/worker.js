@@ -332,13 +332,17 @@ async function gatewayFailureSweep(env, t0) {
       var dispo = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status IN ('wontfix','closed','resolved') LIMIT 1").bind("%" + b.model + "%").first();
       var prev = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND status = ?2 AND ts < ?3 AND ts > ?4").bind(b.model, b.status, lastTs, lastTs - 45 * 60 * 1000).first();
       var prevCount = prev ? Number(prev.c || 0) : 0;
-      if (!dispo && (b.count >= 2 || prevCount > 0)) {
+      // TRANSIENT-CLASS-FIX (2026-09-14): 'rate-capacity' (429 "Capacity temporarily exceeded") is a
+      // transient condition the router self-heals on retry; it must NOT open a standing agent issue.
+      // Only non-transient classes (content-shape, image-input, tool-args-json, upstream) are filed.
+      if (!dispo && clsLabel !== 'rate-capacity' && (b.count >= 2 || prevCount > 0)) {
         await fileIssue(env, title, "gateway failures in sweep window: " + b.count + "x status=" + b.status + " class=" + clsLabel + " sample=" + String(b.sample || "").slice(0, 200) + ". Router-level self-heal handles content-shape/rate classes; escalate if this class persists.", "high");
       }
     } catch (e) {}
     // GW-DEGRADE-1: recurring class -> ai_model_health degraded (router deprioritizes), absence -> ok
     try {
-      var recurring = (b.count >= 2) || prevCount > 0;
+      // Transient rate-capacity must not mark a model degraded — a capacity blip is not degradation.
+      var recurring = clsLabel !== 'rate-capacity' && ((b.count >= 2) || prevCount > 0);
       var targetId = internalId(b.model);
       try {
         var hrow = await env.QNFO_AUDIT.prepare("SELECT model_id FROM ai_model_health WHERE model_id = ?1").bind(targetId).first();
@@ -358,8 +362,9 @@ async function gatewayFailureSweep(env, t0) {
       var ttl = openTitles.results[oi].title;
       var modelPart = ttl.replace(/^\[gw-fail\] \d+ /, "");
       try {
-        var recent = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND ts > ?2").bind(modelPart, t0 - 24 * 3600 * 1000).first();
-        if (!recent || Number(recent.c || 0) === 0) await closeIssue(env, ttl, "no failures for 24h");
+        // Ignore transient capacity classes when deciding to auto-close (they self-heal on retry).
+        var recent = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND error_class != 'rate-capacity' AND ts > ?2").bind(modelPart, t0 - 24 * 3600 * 1000).first();
+        if (!recent || Number(recent.c || 0) === 0) await closeIssue(env, ttl, "no non-transient failures for 24h");
       } catch (e) {}
     }
   } catch (e) {}

@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.2';
+const VERSION = '1.2.4';
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -262,8 +262,12 @@ async function digest(env, ingestResult) {
       await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, 0)').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + r.bad + '/' + r.n + ' last 24h)').run();
     }
   }
-  const id = 'fleet-obs-' + new Date().toISOString().slice(0, 13) + '-digest';
-  await env.AUDIT.prepare('INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+  // RECURRENCE-FIX (2026-09-14): id was hour-granular ('fleet-obs-<YYYY-MM-DDTHH>-digest'), so any
+  // second call to digest() within the same hour hit a TEXT PRIMARY KEY collision on cloud_ops_events
+  // and threw (scriptThrewException x95/24h: cron + repeated /run/ingest). Minute-unique + INSERT OR
+  // REPLACE makes the digest idempotent and collision-free.
+  const id = 'fleet-obs-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '') + '-digest';
+  await env.AUDIT.prepare('INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(id, nowIso(), 'fleet-observability-digest', 'Fleet observability digest: ' + rows.length + ' workers logged ' + summary.total_events_24h + ' events in 24h; ' + summary.anomalies.length + ' anomalies', JSON.stringify(summary), NAME, 'ok').run();
   return summary;
 }
@@ -325,16 +329,20 @@ const INTEGRATION_CHAINS = [
   { id: 'intents', name: 'Intent intake -> orchestrator', producer: 'calendar-api / edge', consumer: 'qnfo-intent-orchestrator', medium: 'intents',
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM intents WHERE status = 'pending'",
     total: "SELECT COUNT(*) n FROM intents",
-    max: 20, minOk: null, expectEmpty: false, want: 'pending <= 20' },
+    max: 20, minOk: null, expectEmpty: true, want: 'pending <= 20 (0 = drained)' },
   { id: 'version-drain', name: 'Reviser -> research-exec publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'version_queue',
-    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM version_queue WHERE status = 'drafted'",
+    // v1.2.4: gate-blocked rows are STUCK (QUALITY-GATE-1), not drained. They were invisible because the
+    // chain only counted 'drafted' — a 23-row gate-blocked backlog reported "none". Include them.
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM version_queue WHERE status IN ('drafted','gate-blocked')",
     total: "SELECT COUNT(*) n FROM version_queue",
-    max: 5, minOk: null, expectEmpty: true, want: 'drafted <= 5' },
-  { id: 'outreach', name: 'Outreach queue -> campaign engine', producer: 'register / ops', consumer: 'qnfo-outreach', medium: 'outreach_queue',
-    // v1.1.5: was status='pending' (0 rows). Live enum uses 'needs-contact' for unworked items (20 rows).
-    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status = 'needs-contact'",
+    max: 5, minOk: null, expectEmpty: true, want: 'drafted+gate-blocked <= 5 (gate-blocked = stuck, QUALITY-GATE-1)' },
+  { id: 'outreach', name: 'Outreach queue -> send drain', producer: 'radar-hub / idea-hub / qnfo-cloud-ops', consumer: 'qnfo-cloud-ops (jobOutreach)', medium: 'outreach_queue',
+    // STATUS-DRIFT-FIX (2026-09-14): the chain watched 'needs-contact', which NO writer emits. Live writers
+    // emit 'pending' (radar-hub, qnfo-cloud-ops) or 'queued' (idea-hub, qnfo-idea-triage — drifted); the
+    // consumer (qnfo-cloud-ops jobOutreach) drains 'pending','needs-email'. Watch the real enum.
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status IN ('pending','needs-email','queued')",
     total: "SELECT COUNT(*) n FROM outreach_queue",
-    max: 20, minOk: null, expectEmpty: false, want: 'needs-contact <= 20' },
+    max: 20, minOk: null, expectEmpty: false, want: 'pending+needs-email <= 20 (sends gated until 2026-09-15)' },
   { id: 'issues', name: 'Chat failures -> kaizen digest', producer: 'ops gateway', consumer: 'qnfo-kaizen', medium: 'agent_issues',
     sql: "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'",
     total: "SELECT COUNT(*) n FROM agent_issues",
@@ -348,9 +356,9 @@ const INTEGRATION_CHAINS = [
   { id: 'email', name: 'Inbound email -> triage', producer: 'SMTP gateway', consumer: 'qnfo-email workers', medium: 'emails',
     sql: "SELECT COUNT(*) n FROM emails WHERE status = 'received'",
     total: "SELECT COUNT(*) n FROM emails",
-    max: 10, minOk: null, expectEmpty: false, want: 'unprocessed <= 10' },
+    max: 10, minOk: null, expectEmpty: true, want: 'unprocessed <= 10 (received unused; 0 = drained)' },
   { id: 'research', name: 'Research queue -> execution', producer: 'supervisor / radars', consumer: 'qnfo-research-exec', medium: 'research_queue',
-    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')",
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('pending','researching','ensemble-draft','claimed')",
     total: "SELECT COUNT(*) n FROM research_queue",
     max: 10, minOk: null, expectEmpty: false, want: 'queued/active <= 10' },
   { id: 'revisions', name: 'Revision log -> publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'paper_revision_log',
@@ -571,10 +579,12 @@ async function evReview(env) {
 export default {
   // PRECONDITION: cron trigger 17 * * * *. POSTCONDITION: ingest + digest executed hourly, server-side.
   async scheduled(controller, env, ctx) {
-    await ensureSchema(env);
-    const r = await ingestTrace(env);
-    const summary = await digest(env, r);
-    await assessIntegration(env);
+    try {
+      await ensureSchema(env);
+      const r = await ingestTrace(env);
+      const summary = await digest(env, r);
+      await assessIntegration(env);
+    } catch (e) { console.error('scheduled failed', String(e && e.message || e)); }
     ctx.waitUntil(Promise.resolve());
   },
 
@@ -626,9 +636,11 @@ export default {
       }
     }
     if (p === '/run/ingest') {
-      const r = await ingestTrace(env);
-      const summary = await digest(env, r);
-      return json({ ok: true, ingest: r, summary: { workers_seen_24h: summary.workers_seen_24h, anomalies: summary.anomalies.length } });
+      try {
+        const r = await ingestTrace(env);
+        const summary = await digest(env, r);
+        return json({ ok: true, ingest: r, summary: { workers_seen_24h: summary.workers_seen_24h, anomalies: summary.anomalies.length } });
+      } catch (e) { return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500); }
     }
     if (p === '/log' && req.method === 'POST') {
       let body = {}; try { body = await req.json(); } catch (e) { return json({ ok: false, error: 'invalid json' }, 400); }
