@@ -220,13 +220,22 @@ function isPersonalName(phrase) {
 }
 var NAME_RE = /\b[A-Z][a-z]{2,13} [A-Z][a-z]{2,15}\b/g;
 var EMOTION_WORDS = ["frustrated", "angry", "upset", "excited", "thrilled", "disappointed", "outraged", "amazing", "terrible", "horrible"];
+// Personal attribution patterns: name appears after "by ", "from ", "according to ", etc.
+var ATTRIBUTION_RE = /\b(?:by|from|according to|says|said|argues|argued|claims|claimed|wrote|writes|noted|notes|stated|states|per|via)\s+([A-Z][a-z]{2,12}\s+[A-Z][a-z]{2,14})\b/gi;
 function gate(text) {
   var problems = [];
   if (text.length < 400) problems.push("too short (" + text.length + " chars)");
-  // Check for personal names (not structural compound nouns)
-  var candidates = text.match(NAME_RE) || [];
-  var names = candidates.filter(isPersonalName);
-  if (names.length > 0) problems.push("contains personal names: " + names.slice(0, 3).join(", "));
+  // Only flag names in personal attribution context (not structural compound nouns)
+  var attributions = [];
+  var m;
+  ATTRIBUTION_RE.lastIndex = 0;
+  while ((m = ATTRIBUTION_RE.exec(text)) !== null) {
+    var phrase = m[1];
+    if (!STRUCTURAL_TERMS.test(phrase.split(" ")[0]) && !STRUCTURAL_TERMS.test(phrase.split(" ")[1])) {
+      attributions.push(phrase);
+    }
+  }
+  if (attributions.length > 0) problems.push("personal attribution: " + attributions.slice(0, 2).join(", "));
   var handles = text.match(HANDLE_RE) || [];
   if (handles.length > 0) problems.push("contains handles: " + handles.slice(0, 3).join(", "));
   for (var w of EMOTION_WORDS) {
