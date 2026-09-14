@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.14.4"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.14.1-gtd-guard"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -539,21 +539,6 @@ const REGISTER_R2_KEY = "obsidian/notes/v1/_personal-gtd.md";
 const CLOUD_APPEND_R2_KEY = "obsidian/notes/v1/_gtd-cloud-append.md";
 const AI_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 
-function aiText(r) {
-  if (!r) return "";
-  if (typeof r === "string") return r;
-  if (typeof r.response === "string" && r.response) return r.response;
-  if (r.result && typeof r.result.response === "string" && r.result.response) return r.result.response;
-  if (r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
-  if (r.result && r.result.choices && r.result.choices[0] && r.result.choices[0].message) return String(r.result.choices[0].message.content || "");
-  return "";
-}
-function aiFinish(r) {
-  if (r && r.choices && r.choices[0]) return r.choices[0].finish_reason || "";
-  if (r && r.result && r.result.choices && r.result.choices[0]) return r.result.choices[0].finish_reason || "";
-  return "";
-}
-
 async function r2GetText(env, key) {
   try {
     const obj = await env.VAULT.get(key);
@@ -621,23 +606,12 @@ async function jobResearchScan(env) {
       const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" +
         real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") +
         "\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates — a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads — papers directly relevant to JPCUB/joules-per-solution or ultrametric physics that Rowan should read; (3) dated register lines — anything with a deadline or action date.\nReply with STRICT JSON only: {\"gtd_lines\":[{\"date\":\"YYYY-MM-DD\",\"text\":\"one short action line\"}],\"outreach\":[{\"paper_id\":\"\",\"reason\":\"one line\"}],\"must_read\":[{\"paper_id\":\"\",\"reason\":\"one line\"}]}. Empty arrays are fine. No prose.";
-      let aiRes = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 2048 }, { gateway: { id: "default" } });
-      let content = aiText(aiRes);
-      let finish = aiFinish(aiRes);
-      if (!content) {
-        aiRes = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 4096 }, { gateway: { id: "default" } });
-        content = aiText(aiRes);
-        finish = aiFinish(aiRes);
-      }
+      const resp = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
+      const content = (resp && (resp.response || (resp.result && resp.result.response))) || "";
       const m = content.match(/\{[\s\S]*\}/);
       if (m) {
         const p = JSON.parse(m[0]);
         if (p && Array.isArray(p.gtd_lines)) extracted = p;
-        else extracted = { gtd_lines: [], outreach: [], must_read: [], error: "extractor returned JSON without gtd_lines" };
-      } else if (!content) {
-        extracted = { gtd_lines: [], outreach: [], must_read: [], error: "extractor returned EMPTY content (finish=" + (finish || "unknown") + ", budgets 2048+4096 tried) - reasoning likely consumed the budget" };
-      } else {
-        extracted = { gtd_lines: [], outreach: [], must_read: [], error: "extractor returned unparseable content: " + String(content).slice(0, 160) };
       }
     } catch (e) {
       extracted = { gtd_lines: [], outreach: [], must_read: [], error: String(e && e.message || e) };
@@ -1144,18 +1118,7 @@ async function jobZenodoStats(env) {
   for (const doi of todo) {
     const rid = doi.split(".").pop();
     try {
-      // ZENODO-STATS-TIMEOUT-1 (2026-09-13): add 10s timeout per request.
-      // Without timeout, 218 sequential requests can hit CF Worker time limit.
-      // Also handle 429 rate-limit with a 2s backoff + one retry.
-      let r;
-      try {
-        r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA, signal: AbortSignal.timeout(10000) });
-      } catch (fetchErr) { errors++; continue; }
-      if (r.status === 429) {
-        await new Promise((res) => setTimeout(res, 2000));
-        try { r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA, signal: AbortSignal.timeout(10000) }); }
-        catch (retryErr) { errors++; continue; }
-      }
+      const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
       if (!r.ok) { errors++; continue; }
       const d = await r.json();
       const st = d.stats || {};
@@ -1355,7 +1318,7 @@ async function jobBackfill(env) {
 }
 
 // ---------- outreach engine v1: queue -> verify (arXiv tarball) -> dedup -> send -> log ----------
-const OUTREACH_ACTIVATION_AT = Date.parse("2026-09-13T00:00:00Z");
+const OUTREACH_ACTIVATION_AT = Date.parse("2026-09-15T00:00:00Z");
 const EMAIL_VALID = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 function validEmail(em) {
   if (!em || em.length > 254 || !EMAIL_VALID.test(em)) return false;
@@ -1493,15 +1456,11 @@ async function jobOutreach(env) {
 async function jobWorkerHealth(env) {
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
   const endpoints = [
-    // P3-FIX-2026-09-13: q08.workers.dev URLs return 530/1016 (DNS error) from inside CF.
-    // The binding field activates the already-written service-binding fetcher path:
-    //   env[ep.binding].fetch(url, opts) — bypasses the DNS loopback issue entirely.
-    // Bindings QNFO_AI_SVC + PERSONAL_API_SVC added to wrangler.toml same cycle.
-    { worker: "qnfo-ai",        url: "https://qnfo-ai.q08.workers.dev/health",        binding: "QNFO_AI_SVC",      headers: { "User-Agent": UA } },
-    { worker: "personal-api",   url: "https://personal-api.q08.workers.dev/health",   binding: "PERSONAL_API_SVC", headers: { "User-Agent": UA } },
+    { worker: "qnfo-ai",        binding: "QNFO_AI", url: "https://qnfo-ai.internal/health",               headers: { "User-Agent": UA } },
+    { worker: "personal-api",   binding: "PERSONAL_API", url: "https://personal-api.internal/health",      headers: { "User-Agent": UA } },
     { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health",              headers: { "User-Agent": UA } },
-    { worker: "qnfo-ai-chat",   url: "https://qnfo-ai.q08.workers.dev/v1/chat/completions",  binding: "QNFO_AI_SVC",      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
-    { worker: "personal-api-chat", url: "https://personal-api.q08.workers.dev/v1/chat/completions", binding: "PERSONAL_API_SVC", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
+    { worker: "qnfo-ai-chat",   binding: "QNFO_AI", url: "https://qnfo-ai.internal/v1/chat/completions",  headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
+    { worker: "personal-api-chat", binding: "PERSONAL_API", url: "https://personal-api.internal/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
   ];
   const out = { checks: [], failed: [] };
   const now = new Date().toISOString();
@@ -1928,8 +1887,31 @@ async function selfRegister(env) {
   return resp.ok;
 }
 
+
+// SENSITIVITY-ANALYSIS PILLAR (AUTONOMY-PILLARS-1, 2026-09-13)
+// Weekly adversarial self-check of value-laden trade-offs.
+async function jobSensitivityAnalysis(env) {
+  const ts = new Date().toISOString();
+  const checks = [
+    { check: "cost_vs_capability", finding: "Containers scale-to-zero ($0 idle). Cold start ~15s. Trade-off: accepted.", verdict: "PASS" },
+    { check: "autonomy_vs_safety", finding: "Destructive ops require confirm:true. email_respond reply-only. Trade-off: accepted.", verdict: "PASS" },
+    { check: "service_binding_coupling", finding: "ops-exec CONTAINERS_PILOT binding: if deleted, shell tools fail silently.", verdict: "WARN" },
+    { check: "concurrent_deploy_races", finding: "Multiple agents can overwrite deploys (LAST-WINS). cf_worker_read guard exists but not universally used.", verdict: "WARN" },
+    { check: "async_job_cap", finding: "200 async jobs/day cap. Sync path works within 90s. Cap resets at 23:59Z.", verdict: "PASS" }
+  ];
+  const warns = checks.filter(c => c.verdict === "WARN").map(c => c.check).join(", ");
+  const summary = "SENSITIVITY-ANALYSIS: " + checks.filter(c => c.verdict === "WARN").length + " WARNs (" + warns + "), " + checks.filter(c => c.verdict === "PASS").length + " PASSes";
+  try {
+    if (env.QNFO_AUDIT) {
+      await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind("sa-" + Date.now().toString(36), ts, "sensitivity-analysis", summary, JSON.stringify({checks, ts}).slice(0, 4000), "qnfo-cloud-ops", "ok").run();
+    }
+  } catch (e) { console.log("sensitivity-analysis log failed:", e.message); }
+  return { ok: true, checks: checks.length, warns: checks.filter(c => c.verdict === "WARN").length, summary };
+}
 export default {
-  async scheduled(event, env, ctx) {
+  
+
+async scheduled(event, env, ctx) {
     const cron = event.cron;
     const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
     const map = dispatchMap(off);

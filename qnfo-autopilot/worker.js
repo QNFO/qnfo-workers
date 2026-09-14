@@ -7,7 +7,7 @@
 //       all scheduled workers, autonomous + receipted).
 //   (3) DAILY DIGEST — writes kind=autopilot-cycle / daily-digest events (proactive reporting).
 // CANONICAL: QNFO/qnfo-workers/qnfo-autopilot/worker.js. DEPLOY: wrangler (D1 AUDIT + cron 5 * * * *).
-const VERSION = '0.3.0';
+const VERSION = '0.2.0';
 const NAME = 'qnfo-autopilot';
 const DASH = 'https://fleet.qnfo.org/api/state';
 const UA = 'qnfo-autopilot/' + VERSION;
@@ -139,16 +139,16 @@ async function publishReport(env) {
 }
 
 const CF_API = 'https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b';
-const EVOLVE_MODEL = '@cf/deepseek-ai/deepseek-v4-pro-0813';
+const EVOLVE_MODEL = '@cf/moonshotai/kimi-k2.6';
 
 // SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
 // Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
-const COVERAGE = [
+const COVERAGE = ['paper-hub', 'jnl-pipeline', 
   'qnfo-email', 'qnfo-ai-search', 'obsidian-writer', 'qnfo-lifecycle',
-  'calendar-api', 'personal-events-radar', 'jnl-watch', 'jnl-referee', 'jnl-reviser', 'jnl-zenodo',
-  'job-market-watch', 'radar-hub', 'qnfo-events', 'qnfo-archive', 'qnfo-blank-audit', 'qnfo-chat-canary',
-  'qnfo-ddocs-indexer', 'qnfo-idea-miner', 'qnfo-idea-triage', 'qnfo-impact', 'qnfo-paper-explainer', 'qnfo-paper-indexer',
-  'qnfo-proof', 'qnfo-thread-ingest', 'qnfo-register-guard', 'qnfo-scorecard'
+  'calendar-api', 
+  'radar-hub', 'qnfo-events', 'qnfo-archive',  'qnfo-chat-canary',
+  'qnfo-ddocs-indexer',   'qnfo-impact',  
+  'qnfo-proof', 'qnfo-thread-ingest',  
 ];
 function sbName(w) { return 'SB_' + w.toUpperCase().replace(/[^A-Z0-9]+/g, '_'); }
 const SERVICE_BINDINGS = {};
@@ -409,38 +409,6 @@ async function thinkLoop(env) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    // FLEET-FEED-CONSUMER-1: read own work queue from fleet-feed and auto-execute SQL actions
-    if (env.FLEET_FEED) {
-      try {
-        var fr = await env.FLEET_FEED.fetch('https://qnfo-fleet-feed.q08.workers.dev/feed/self?worker=qnfo-autopilot');
-        if (fr.ok) {
-          var fd = await fr.json();
-          var actionable = (fd.findings || []).filter(function(f) {
-            return f.auto_action && f.severity_int >= 2 &&
-              (f.category === 'self-heal/outcome-mismatch' || f.category.startsWith('freshness') || f.category.startsWith('ai-model') || f.category.startsWith('registry'));
-          }).slice(0, 10);
-          for (var af of actionable) {
-            var sql = af.auto_action;
-            if (sql && /^(UPDATE|INSERT|DELETE)/i.test(sql.trim())) {
-              try { await env.AUDIT.prepare(sql).run(); } catch(e2) {}
-            }
-            try {
-              await env.AUDIT.prepare(
-                "INSERT OR IGNORE INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,datetime('now'),'executed',datetime('now'))"
-              ).bind('feed-auto-exec', af.id, (af.auto_action||'').slice(0,500)).run();
-            } catch(e3) {}
-          }
-          // Write feed health summary to cloud_ops_events
-          try {
-            var s = fd.summary || {};
-            await env.AUDIT.prepare(
-              "INSERT INTO cloud_ops_events (kind, detail, ts) VALUES ('autopilot-feed-sweep', ?, datetime('now'))"
-            ).bind('fleet_health=' + (s.fleet_health||'?') + ' findings=' + (s.total||0) + ' auto_exec=' + actionable.length).run();
-          } catch(e4) {}
-        }
-      } catch(eFeed) {}
-    }
-
     await ensureSchema(env);
     ctx.waitUntil((async function () { try { await cycle(env); } catch (e) {} })());
     ctx.waitUntil((async function () { try { await autonomousApply(env); } catch (e) {} })());

@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.2";
+var VERSION = "0.3.2-glm53";
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {

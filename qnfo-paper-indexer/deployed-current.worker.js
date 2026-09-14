@@ -1,100 +1,3 @@
-// MERGED qnfo-paper-indexer <- qnfo-impact (absorbed 2026-09-13)
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-
-// worker.js
-var VERSION = "0.1.0";
-function auth(req, env) {
-  if (!env.IMPACT_TOKEN) return true;
-  const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!t) return false;
-  const a = new TextEncoder().encode(t), b = new TextEncoder().encode(env.IMPACT_TOKEN);
-  if (a.byteLength !== b.byteLength) return false;
-  let d = 0;
-  for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i];
-  return d === 0;
-}
-__name(auth, "auth");
-async function ensureSchema(env) {
-  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS citation_stats (id TEXT PRIMARY KEY, doi TEXT, source TEXT, metric TEXT, value REAL, collected_at TEXT)").run();
-  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS impact_scores (doi TEXT PRIMARY KEY, score REAL, updated_at TEXT)").run();
-}
-__name(ensureSchema, "ensureSchema");
-async function fetchJson(url, timeoutMs = 2e4) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "QNFO/qnfo-impact/0.1 (mailto:rowan@qnfo.org)" } });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch (e) {
-    return null;
-  } finally {
-    clearTimeout(t);
-  }
-}
-__name(fetchJson, "fetchJson");
-async function runImpact(env, commit, limit) {
-  await ensureSchema(env);
-  const out = { papers: 0, stats: [], errors: [] };
-  if (!commit) {
-    const n2 = await env.LIVING_PAPER.prepare("SELECT COUNT(*) c FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL").first();
-    return { preview: true, papersWithDoi: n2 ? n2.c : 0 };
-  }
-  const n = Math.min(limit || 50, 100);
-  const papers = await env.LIVING_PAPER.prepare("SELECT slug, doi, zenodo_doi FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL ORDER BY created_at DESC LIMIT ?1").bind(n).all();
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  for (const p of papers.results || []) {
-    const doi = p.zenodo_doi || p.doi;
-    if (!doi) continue;
-    out.papers++;
-    const entry = { slug: p.slug, doi, sources: {} };
-    let crCited;
-    if (!doi.startsWith("10.5281/zenodo")) {
-      const cr = await fetchJson("https://api.crossref.org/works/" + encodeURIComponent(doi));
-      crCited = cr?.message && cr.message["is-referenced-by-count"];
-    }
-    const crCited2 = typeof crCited === "number" ? crCited : void 0;
-    if (typeof crCited2 === "number") entry.sources.crossref = crCited2;
-    const oa = await fetchJson("https://api.openalex.org/works/doi:" + encodeURIComponent(doi));
-    const oaCited = oa?.cited_by_count;
-    if (typeof oaCited === "number") entry.sources.openalex = oaCited;
-    const zn = await fetchJson("https://zenodo.org/api/records?q=doi:" + encodeURIComponent('"' + doi + '"') + "&size=1");
-    const rec = zn && zn.hits && zn.hits.hits && zn.hits.hits[0];
-    if (rec) {
-      let views = 0, downloads = 0;
-      const st = rec.stats || {};
-      if (st.views || st.downloads) {
-        views = st.views || 0;
-        downloads = st.downloads || 0;
-      } else {
-        for (const f of rec.files || []) {
-          views += f.views || 0;
-          downloads += f.downloads || 0;
-        }
-      }
-      if (views || downloads) entry.sources.zenodo = { views, downloads };
-    }
-    const cited = (entry.sources.openalex || 0) + (entry.sources.crossref || 0);
-    const dls = entry.sources.zenodo && entry.sources.zenodo.downloads || 0;
-    const vws = entry.sources.zenodo && entry.sources.zenodo.views || 0;
-    const score = Math.round((cited + dls / 50 + vws / 500) * 1e3) / 1e3;
-    try {
-      for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex], ["zenodo", "views", entry.sources.zenodo && entry.sources.zenodo.views], ["zenodo", "downloads", entry.sources.zenodo && entry.sources.zenodo.downloads]]) {
-        if (value !== void 0 && value !== null) {
-          await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO citation_stats (id, doi, source, metric, value, collected_at) VALUES (?1,?2,?3,?4,?5,?6)").bind(crypto.randomUUID(), doi, src, metric, value, now).run();
-        }
-      }
-      await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO impact_scores (doi, score, updated_at) VALUES (?1,?2,?3)").bind(doi, score, now).run();
-    } catch (e) {
-      out.errors.push({ slug: p.slug, error: String(e && e.message || e).slice(0, 200) });
-    }
-    out.stats.push(entry);
-  }
-  return out;
-}
-__name(runImpact, "runImpact");
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -260,45 +163,49 @@ var worker_default = {
     const slug = url.searchParams.get("slug");
     if (path === "/webhook" || path === "/index") {
       const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      if (token !== env.INDEX_TOKEN && token !== INDEX_TOKEN) return json({ error: "unauthorized" }, 401);
+      if (token !== env.INDEX_TOKEN && token !== INDEX_TOKEN) {
+        return json({ error: "unauthorized \u2014 X-Index-Token required" }, 401);
+      }
     }
     try {
       switch (path) {
         case "/health":
-          return json({ status: "ok", worker: "qnfo-paper-indexer", version: "3.0.0-merged-impact", features: ["on-demand-webhook","on-demand-batch","scheduled-daily","citation-impact"], bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
-        case "/count": {
+          return json({
+            status: "ok",
+            worker: "qnfo-paper-indexer",
+            version: "2.2-scheduled-daily",
+            features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily"],
+            bindings: { ai: !!env.AI, d1: !!env.LIVING_PAPER, vz: !!env.PAPER_VZ }
+          });
+        case "/count":
           const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state").first();
           return json({ count: c ? c.c : 0, worker: "qnfo-paper-indexer" });
-        }
-        case "/webhook": return await handleWebhook(env, slug);
-        case "/index": return await handleIndex(env, url);
-        case "/cron/debug": return json({ worker: "qnfo-paper-indexer", version: "3.0.0-merged-impact", crons: ["5 6 * * *","0 4 * * *"] });
-        case "/run": {
-          const commit = url.searchParams.get("commit") === "1";
-          if (commit && !auth(request, env)) return json({ error: "unauthorized" }, 401);
-          return json(await runImpact(env, commit, parseInt(url.searchParams.get("limit") || "50", 10)));
-        }
-        case "/stats": {
-          const rows = await env.QNFO_AUDIT.prepare("SELECT doi, score, updated_at FROM impact_scores ORDER BY score DESC LIMIT 20").all();
-          return json({ top: rows.results });
-        }
-        default: return json({ error: "not found" }, 404);
+        case "/webhook":
+          return await handleWebhook(env, slug);
+        case "/index":
+          return await handleIndex(env, url);
+        case "/cron/debug":
+          return json({ worker: "qnfo-paper-indexer", version: "2.2-scheduled-daily", cron: "0 6 * * *", note: "daily scheduled batch index (dedup-aware)" });
+        default:
+          return json({ error: "not found" }, 404);
       }
-    } catch (e) { return json({ error: "internal error", detail: e.message }, 500); }
+    } catch (e) {
+      return json({ error: "internal error", detail: e.message }, 500);
+    }
   },
   async scheduled(event, env, ctx) {
     const cron = event.cron;
-    console.log("[qnfo-paper-indexer] cron:", cron);
+    console.log("[qnfo-paper-indexer] cron triggered:", cron);
     try {
-      if (cron === "0 4 * * *") {
-        const r = await runImpact(env, true, 50);
-        console.log("[qnfo-impact] scheduled:", JSON.stringify({ papers: r.papers, errors: r.errors.length }));
-      } else {
-        const fakeUrl = new URL("https://internal/?offset=0&limit=300");
-        const result = await handleIndex(env, fakeUrl);
-        console.log("[qnfo-paper-indexer] scheduled index:", JSON.stringify(result));
-      }
-    } catch (e) { console.error("[qnfo-paper-indexer] scheduled error:", e.message); }
+      const fakeUrl = new URL("https://internal/?offset=0&limit=300");
+      const result = await handleIndex(env, fakeUrl);
+      console.log("[qnfo-paper-indexer] scheduled index:", JSON.stringify(result));
+    } catch (e) {
+      console.error("[qnfo-paper-indexer] scheduled error:", e.message);
+    }
   }
 };
-export { worker_default as default };
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map

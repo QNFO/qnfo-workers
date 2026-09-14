@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.21.0";
+var VERSION = "2.26.0";
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -491,10 +491,7 @@ async function d1Query(env, args) {
   const raw = String(args && args.sql || "").trim();
   const sql = raw.replace(/;\s*$/, "");
   if (!/^(select|with)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only" };
-  // OPS-D1-WRITE-GUARD-FIX-1 (2026-09-13): strip quoted strings before multi-statement check
-  // Old check tripped on datetime('now'), 'dispatched', etc. inside string literals
-  var _sqlNoStr = sql.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""');
-  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(_sqlNoStr)) return { ok: false, rejected: true, error: "single write statement only" };
+  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, rejected: true, error: "single read statement only" };
   if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
   if (!/\blimit\s+\d+/i.test(sql) && !/^\s*select\s+(count|sum|avg|min|max)\s*\(/i.test(sql) && !/\bgroup\s+by\b/i.test(sql) && !/select\s+sqlite_version/i.test(sql)) return { ok: false, rejected: true, error: "add LIMIT n (aggregate exempt)" };
   const bind = DB_MAP[String(args && args.db || "audit")] || DB_MAP.audit;
@@ -1740,19 +1737,34 @@ async function execPipeline(env, args) {
 // Cost: $0.00002/vCPU-sec utilization-based, scale-to-zero when idle ($0 idle cost)
 
 async function containerDispatch(env, route, body, timeoutMs) {
-  const url = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+  // SERVICE-BINDING-PRIORITY-1 (v2.20.3): use CONTAINERS_PILOT service binding when available
+  // (same-zone Worker-to-Worker HTTP returns 1042; service bindings bypass the edge).
+  // Falls back to outbound HTTP for external/dev callers.
   const token = env.PILOT_TOKEN;
   if (!token) return { ok: false, error: "PILOT_TOKEN secret not configured on qnfo-ops" };
   const timeout = Math.min(Math.max(timeoutMs || 60000, 5000), 300000);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const resp = await fetch(url + route, {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal
-    });
+    let resp;
+    if (env.CONTAINERS_PILOT && env.CONTAINERS_PILOT.fetch) {
+      // Service binding path (no 1042, no network hop, ~0ms overhead)
+      resp = await env.CONTAINERS_PILOT.fetch("https://containers-pilot.internal" + route, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      });
+    } else {
+      // HTTP fallback (external callers, dev mode)
+      const url = String(env.SHELL_EXEC_URL || "https://qnfo-containers-pilot.q08.workers.dev").replace(/\/+$/, "");
+      resp = await fetch(url + route, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      });
+    }
     clearTimeout(t);
     const j = await resp.json().catch(() => ({}));
     if (!resp.ok) return { ok: false, error: "container HTTP " + resp.status + ": " + JSON.stringify(j).slice(0, 300) };
@@ -1881,20 +1893,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
   const t0 = Date.now();
   let res;
   try {
-    if (name === "fleet_status") {
-      res = await fleetStatus(env);
-      // FLEET-FEED-WIRE-1: append fleet-feed summary to fleet_status response
-      if (env.FLEET_FEED) {
-        try {
-          var ffr = await env.FLEET_FEED.fetch('https://qnfo-fleet-feed.q08.workers.dev/feed/summary');
-          if (ffr.ok) {
-            var ffd = await ffr.json();
-            res.feed_summary = ffd.summary;
-            res.feed_top = (ffd.top_findings || []).slice(0, 3);
-          }
-        } catch(eFf) {}
-      }
-    }
+    if (name === "fleet_status") res = await fleetStatus(env);
     else if (name === "ops_issues_list") res = await listIssues(env, args);
     else if (name === "ops_issue_run") res = await triggerBacklog(env, args, userText);
     else if (name === "ops_d1_query") res = await d1Query(env, args);
@@ -2789,6 +2788,14 @@ async function createJobFromBody(env, body) {
   return { id: jobId, model: "ops-exec" };
 }
 __name(createJobFromBody, "createJobFromBody");
+// AgenticOpsExec Durable Object stub (added v2.24.0 to preserve DO class from concurrent deploy)
+// The concurrent agent v2.23.0 introduced this class; we preserve it to avoid deleting DO instances.
+export class AgenticOpsExec {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+  async fetch(request) {
+    return new Response(JSON.stringify({ ok: true, worker: "qnfo-ops", class: "AgenticOpsExec", version: VERSION }), { headers: { "Content-Type": "application/json" } });
+  }
+}
 var OpsExecWorkflow = class extends WorkflowEntrypoint {
   static {
     __name(this, "OpsExecWorkflow");
@@ -2963,6 +2970,7 @@ var worker_default = {
       bindings.intent_token = !!env.INTENT_TOKEN;
       bindings.cf_api_token = !!env.CF_API_TOKEN;
       bindings.registry_token = !!env.REGISTRY_TOKEN;
+      bindings.containers_pilot = !!(env.CONTAINERS_PILOT && env.CONTAINERS_PILOT.fetch);
       bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.ai = !!env.WAI;
       return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings, generatedAt: iso() });
@@ -3304,9 +3312,3 @@ export {
 };
 //# sourceMappingURL=worker.js.map
 
-
-// AgenticOpsExec Durable Object stub (FLEET-SELF-DOC-1: required by existing DO instances)
-export class AgenticOpsExec {
-  constructor(state, env) { this.state = state; this.env = env; }
-  async fetch(request) { return new Response(JSON.stringify({ ok: true, worker: "AgenticOpsExec" }), { headers: { "Content-Type": "application/json" } }); }
-}

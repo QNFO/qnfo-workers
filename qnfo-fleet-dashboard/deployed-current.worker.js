@@ -1,78 +1,56 @@
-// qnfo-fleet-dashboard v1.2.0 - canonical source (rebuilt 2026-09-12)
-
-// esbuild keepNames helper (must precede all __name() calls; the bundle was
-// edited post-build and lost this definition -> upload validation 10021
-// "__name is not defined".
-var __name = (target, value) => Object.defineProperty(target, "name", { value, configurable: true });
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // registry.js
 var REGISTRY = {
-  "version": 4,
-  "captured_at": "2026-09-12T10:00:00Z",
-  "note": "Regenerated 2026-09-12 (fleet-consolidation cleanup): scheduled + health_probes rebuilt from live CF scripts (54 workers, 40 cron), dropped deleted/consolidated workers, chain stages repointed to live workers, worker /health probing moved to CF-API liveness (workers.dev subrequest is broken from within a Worker). v2 (1.3.0): self HTTP probe replaced by an internal self-assert (a Worker cannot reliably fetch its own custom domain - it returns 522); domain probes carry kind=domain and no longer emit a script-missing label (hostnames are not script ids); probe issues require 2+ failures in 30m (anti-transient).",
+  "version": 3,
+  "captured_at": "2026-09-10T08:07:26Z",
+  "note": "Regenerated 2026-09-10 (fleet remediation): dropped deleted workers, added fleet-executor/fleet-scheduler probes, live-list fallback probes v1.0.13",
   "scheduled": [
-    {
-      "name": "ai-health-prober",
-      "crons": [
-        "15 * * * *"
-      ],
-      "purpose": "AI health prober loop",
-      "group": "fleet-ai"
-    },
-    {
-      "name": "audit-hub",
-      "crons": [
-        "23 6 * * 1",
-        "30 4 * * *",
-        "40 4 * * *",
-        "45 1,13 * * *"
-      ],
-      "purpose": "Audit hub (auditor + blank-audit merged)",
-      "group": "fleet-ops"
-    },
     {
       "name": "calendar-api",
       "crons": [
         "17 * * * *"
       ],
       "purpose": "Calendar/email intent sync",
-      "group": "intent-email"
+      "group": "intent-email",
+      "modified_on": "2026-09-03T04:46:55.755286Z"
     },
     {
-      "name": "companion-hub",
+      "name": "events-radar",
       "crons": [
-        "0 */12 * * *",
-        "0 2 * * *",
-        "0 6 * * *"
+        "0 5 * * 1"
       ],
-      "purpose": "Personal companion hub",
-      "group": "personal"
+      "purpose": "Weekly research events radar",
+      "group": "engagement",
+      "modified_on": "2026-09-02T11:14:48.653431Z"
     },
     {
-      "name": "fleet-exec",
+      "name": "jnl-referee",
       "crons": [
-        "* * * * *"
-      ],
-      "purpose": "Dynamic execution layer dispatcher",
-      "group": "fleet"
-    },
-    {
-      "name": "idea-hub",
-      "crons": [
-        "0 * * * *",
-        "*/10 * * * *"
-      ],
-      "purpose": "Idea hub (miner + triage merged)",
-      "group": "engagement"
-    },
-    {
-      "name": "jnl-pipeline",
-      "crons": [
-        "*/10 * * * *",
         "23 */2 * * *"
       ],
-      "purpose": "Journal pipeline (watch + referee merged)",
-      "group": "research-publish"
+      "purpose": "Journal referee queue (intake/submissions)",
+      "group": "research-publish",
+      "modified_on": "2026-09-08T12:32:53.94401Z"
+    },
+    {
+      "name": "jnl-watch",
+      "crons": [
+        "*/10 * * * *"
+      ],
+      "purpose": "Journal listings watch",
+      "group": "research-publish",
+      "modified_on": "2026-09-08T09:33:10.93916Z"
+    },
+    {
+      "name": "job-market-watch",
+      "crons": [
+        "0 7 * * 2"
+      ],
+      "purpose": "Academic job market radar",
+      "group": "engagement",
+      "modified_on": "2026-09-08T09:33:48.774356Z"
     },
     {
       "name": "osf-integrity-check",
@@ -80,31 +58,44 @@ var REGISTRY = {
         "0 9 1 * *"
       ],
       "purpose": "OSF integrity sweep",
-      "group": "research-publish"
+      "group": "research-publish",
+      "modified_on": "2026-09-01T11:56:24.297281Z"
     },
     {
       "name": "personal-api",
       "crons": [
         "5 5 * * *"
       ],
-      "purpose": "Personal twin API maintenance",
-      "group": "personal"
+      "purpose": "Personal twin daily maintenance",
+      "group": "personal",
+      "modified_on": "2026-09-08T15:21:42.726887Z"
     },
     {
-      "name": "personal-companion",
+      "name": "personal-events-radar",
       "crons": [
-        "0 6 * * *"
+        "30 5 * * 2"
       ],
-      "purpose": "Personal companion loop",
-      "group": "personal"
+      "purpose": "Personal events radar",
+      "group": "personal",
+      "modified_on": "2026-09-03T04:46:37.651045Z"
     },
     {
-      "name": "qnfo-ai",
+      "name": "personal-life-indexer",
       "crons": [
-        "23 3 * * *"
+        "0 */12 * * *"
       ],
-      "purpose": "AI gateway maintenance",
-      "group": "fleet-ai"
+      "purpose": "Personal life index refresh",
+      "group": "personal",
+      "modified_on": "2026-08-20T17:19:11.088746Z"
+    },
+    {
+      "name": "personal-life-maintain",
+      "crons": [
+        "0 2 * * *"
+      ],
+      "purpose": "Personal knowledge maintenance",
+      "group": "personal",
+      "modified_on": "2026-09-01T07:27:59.931823Z"
     },
     {
       "name": "qnfo-ai-calibration",
@@ -112,7 +103,17 @@ var REGISTRY = {
         "*/30 * * * *"
       ],
       "purpose": "AI model calibration probes",
-      "group": "fleet-ai"
+      "group": "fleet-ai",
+      "modified_on": "2026-09-08T10:24:30.073334Z"
+    },
+    {
+      "name": "qnfo-analytics",
+      "crons": [
+        "15 6 * * *"
+      ],
+      "purpose": "Fleet analytics daily snapshot",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-05T20:19:58.04525Z"
     },
     {
       "name": "qnfo-archive",
@@ -120,15 +121,27 @@ var REGISTRY = {
         "0 4 * * *"
       ],
       "purpose": "Archive sweep",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-07-30T12:05:58.320447Z"
     },
     {
-      "name": "qnfo-autopilot",
+      "name": "qnfo-arxiv-radar",
       "crons": [
-        "5 * * * *"
+        "30 8 * * *"
       ],
-      "purpose": "Autopilot closed-loop driver",
-      "group": "fleet"
+      "purpose": "arXiv radar daily",
+      "group": "research-publish",
+      "modified_on": "2026-09-01T18:02:45.962281Z"
+    },
+    {
+      "name": "qnfo-auditor",
+      "crons": [
+        "45 1,13 * * *",
+        "45 6 * * 1"
+      ],
+      "purpose": "Fleet auditor (2x daily + weekly)",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-04T02:07:58.107269Z"
     },
     {
       "name": "qnfo-backlog-exec",
@@ -136,16 +149,36 @@ var REGISTRY = {
         "10 1 * * *"
       ],
       "purpose": "Deferred backlog executor",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-09-08T09:58:13.652469Z"
+    },
+    {
+      "name": "qnfo-blank-audit",
+      "crons": [
+        "40 4 * * *"
+      ],
+      "purpose": "Blank/empty audit sweep",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-02T20:34:47.549905Z"
     },
     {
       "name": "qnfo-chat-canary",
       "crons": [
         "15 */3 * * *",
-        "19 6 * * *"
+        "30 6 * * *"
       ],
       "purpose": "Chat canary probes",
-      "group": "fleet-ai"
+      "group": "fleet-ai",
+      "modified_on": "2026-09-03T04:57:33.036401Z"
+    },
+    {
+      "name": "qnfo-citation-watch",
+      "crons": [
+        "0 11 1,15 * *"
+      ],
+      "purpose": "Citation watch (2x monthly)",
+      "group": "engagement",
+      "modified_on": "2026-09-03T05:51:42.890352Z"
     },
     {
       "name": "qnfo-cloud-ops",
@@ -154,15 +187,15 @@ var REGISTRY = {
         "0 4 1 * *",
         "0 4 * * 7",
         "0 5 * * 1",
+        "0 6 * * 1",
         "0 6,12 * * 1-5",
+        "0 6 * * 6",
         "0 7,13 * * 1-5",
         "0 7 * * 7",
         "0 8 * * 1-5",
         "0 9 * * 1-5",
         "0 9 3 9 *",
         "10 3 * * *",
-        "11 6 * * 1",
-        "13 6 * * 6",
         "15 4 * * *",
         "15 5 * * 1",
         "20 4 * * *",
@@ -173,7 +206,8 @@ var REGISTRY = {
         "5 3,15 * * *"
       ],
       "purpose": "Cloud ops weekly digests + lifecycle",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T13:53:56.176994Z"
     },
     {
       "name": "qnfo-ddocs-indexer",
@@ -181,7 +215,8 @@ var REGISTRY = {
         "37 */2 * * *"
       ],
       "purpose": "Deep-docs indexer",
-      "group": "research-publish"
+      "group": "research-publish",
+      "modified_on": "2026-09-04T09:55:53.595087Z"
     },
     {
       "name": "qnfo-email-orchestrator",
@@ -189,7 +224,44 @@ var REGISTRY = {
         "0 */3 * * *"
       ],
       "purpose": "Email intent orchestration",
-      "group": "intent-email"
+      "group": "intent-email",
+      "modified_on": "2026-09-08T12:32:37.440974Z"
+    },
+    {
+      "name": "qnfo-errata-publish",
+      "crons": [
+        "30 * * * *"
+      ],
+      "purpose": "Errata autopublish",
+      "group": "research-publish",
+      "modified_on": "2026-09-04T14:40:11.345189Z"
+    },
+    {
+      "name": "qnfo-errata-respond",
+      "crons": [
+        "15 * * * *"
+      ],
+      "purpose": "Errata response",
+      "group": "research-publish",
+      "modified_on": "2026-09-08T12:28:19.796173Z"
+    },
+    {
+      "name": "qnfo-errata-watch",
+      "crons": [
+        "0 * * * *"
+      ],
+      "purpose": "Errata watch",
+      "group": "research-publish",
+      "modified_on": "2026-09-08T12:27:54.638827Z"
+    },
+    {
+      "name": "qnfo-error-selfheal",
+      "crons": [
+        "17 * * * *"
+      ],
+      "purpose": "Error self-heal loop",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-06T20:50:21.971742Z"
     },
     {
       "name": "qnfo-events",
@@ -197,27 +269,65 @@ var REGISTRY = {
         "15 */6 * * *"
       ],
       "purpose": "Events processing",
-      "group": "engagement"
+      "group": "engagement",
+      "modified_on": "2026-09-04T02:04:15.974811Z"
     },
     {
-      "name": "qnfo-fleet-control",
+      "name": "qnfo-fleet-advisor",
       "crons": [
-        "0 * * * *",
+        "*/20 * * * *"
+      ],
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T19:39:55.631442Z"
+    },
+    {
+      "name": "qnfo-fleet-calibrator",
+      "crons": [
         "0 3 * * *",
         "0 4 1 * *",
-        "*/20 * * * *",
         "30 3 * * 1"
       ],
-      "purpose": "Fleet control plane (advisor+calibrator+deploy merged)",
-      "group": "fleet"
+      "purpose": "Fleet calibration",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-04T05:10:58.967275Z"
     },
     {
       "name": "qnfo-fleet-dashboard",
       "crons": [
         "*/15 * * * *"
       ],
-      "purpose": "Fleet dashboard refresh",
-      "group": "fleet-ops"
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T08:46:19.690839Z"
+    },
+    {
+      "name": "qnfo-fleet-deploy",
+      "crons": [
+        "0 * * * *"
+      ],
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T19:46:37.469575Z"
+    },
+    {
+      "name": "qnfo-idea-miner",
+      "crons": [
+        "0 * * * *"
+      ],
+      "purpose": "Idea mining",
+      "group": "engagement",
+      "modified_on": "2026-09-08T13:56:50.208807Z"
+    },
+    {
+      "name": "qnfo-idea-triage",
+      "crons": [
+        "0 * * * *",
+        "*/10 * * * *"
+      ],
+      "purpose": "Idea triage",
+      "group": "engagement",
+      "modified_on": "2026-09-06T21:00:11.897514Z"
     },
     {
       "name": "qnfo-impact",
@@ -225,16 +335,18 @@ var REGISTRY = {
         "0 4 * * *"
       ],
       "purpose": "Impact metrics",
-      "group": "engagement"
+      "group": "engagement",
+      "modified_on": "2026-09-01T09:56:57.809672Z"
     },
     {
       "name": "qnfo-infra",
       "crons": [
         "0 18 * * *",
-        "21 6 * * *"
+        "30 6 * * *"
       ],
       "purpose": "Infra state snapshots",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-09-05T20:44:04.55895Z"
     },
     {
       "name": "qnfo-intent-orchestrator",
@@ -243,7 +355,8 @@ var REGISTRY = {
         "30 6 * * *"
       ],
       "purpose": "Intent digest/routing",
-      "group": "intent-email"
+      "group": "intent-email",
+      "modified_on": "2026-09-05T20:47:40.888348Z"
     },
     {
       "name": "qnfo-kaizen",
@@ -252,7 +365,8 @@ var REGISTRY = {
         "0 2 * * *"
       ],
       "purpose": "Kaizen watchtower + meta loop",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-09-08T13:56:25.25014Z"
     },
     {
       "name": "qnfo-lifecycle",
@@ -262,23 +376,14 @@ var REGISTRY = {
         "0 3 * * *",
         "0 4 * * *",
         "0 5 * * *",
+        "0 6 * * *",
         "0 7 * * *",
         "0 8 * * 1",
-        "*/30 * * * *",
-        "9 6 * * *"
+        "*/30 * * * *"
       ],
       "purpose": "Lifecycle scheduled ops",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-observability",
-      "crons": [
-        "*/15 * * * *",
-        "15 6 * * *",
-        "17 * * * *"
-      ],
-      "purpose": "Observability telemetry",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-09-01T07:12:40.986974Z"
     },
     {
       "name": "qnfo-ops",
@@ -286,7 +391,8 @@ var REGISTRY = {
         "*/30 * * * *"
       ],
       "purpose": "Ops AI gateway health loop",
-      "group": "fleet-ai"
+      "group": "fleet-ai",
+      "modified_on": "2026-09-09T15:45:22.800385Z"
     },
     {
       "name": "qnfo-outreach",
@@ -294,23 +400,26 @@ var REGISTRY = {
         "0 11 * * 1-5"
       ],
       "purpose": "Outreach campaign engine",
-      "group": "engagement"
+      "group": "engagement",
+      "modified_on": "2026-09-02T22:32:56.771754Z"
     },
     {
       "name": "qnfo-paper-explainer",
       "crons": [
         "0 14 * * *"
       ],
-      "purpose": "Paper explainer generation",
-      "group": "research-publish"
+      "purpose": "",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T09:18:46.234969Z"
     },
     {
       "name": "qnfo-paper-indexer",
       "crons": [
-        "5 6 * * *"
+        "0 6 * * *"
       ],
       "purpose": "Paper indexer",
-      "group": "research-publish"
+      "group": "research-publish",
+      "modified_on": "2026-08-12T13:07:52.596336Z"
     },
     {
       "name": "qnfo-paper-reviser",
@@ -318,7 +427,26 @@ var REGISTRY = {
         "37 */4 * * *"
       ],
       "purpose": "Publication reviser loop",
-      "group": "research-publish"
+      "group": "research-publish",
+      "modified_on": "2026-09-09T07:53:16.479808Z"
+    },
+    {
+      "name": "qnfo-pipeline-ops",
+      "crons": [
+        "*/15 * * * *"
+      ],
+      "purpose": "Pipeline ops watchdog",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-08T09:30:57.480789Z"
+    },
+    {
+      "name": "qnfo-register-guard",
+      "crons": [
+        "30 4 * * *"
+      ],
+      "purpose": "task_dod_register honesty guard",
+      "group": "fleet-ops",
+      "modified_on": "2026-09-09T14:42:35.985201Z"
     },
     {
       "name": "qnfo-research-exec",
@@ -326,15 +454,19 @@ var REGISTRY = {
         "*/10 * * * *"
       ],
       "purpose": "Research version_queue drain",
-      "group": "research-publish"
+      "group": "research-publish",
+      "modified_on": "2026-09-09T07:59:38.174179Z"
     },
     {
-      "name": "qnfo-signal-loop",
+      "name": "qnfo-research-radar",
       "crons": [
-        "0 * * * *"
+        "0 6 1 * *",
+        "0 8 * * 7",
+        "0 9 * * 7"
       ],
-      "purpose": "Signal loop processor",
-      "group": "fleet"
+      "purpose": "Research radar",
+      "group": "research-publish",
+      "modified_on": "2026-09-01T17:45:42.480341Z"
     },
     {
       "name": "qnfo-skill-sync",
@@ -342,7 +474,8 @@ var REGISTRY = {
         "0 3 * * *"
       ],
       "purpose": "Skill sync",
-      "group": "fleet-ops"
+      "group": "fleet-ops",
+      "modified_on": "2026-09-03T13:39:39.932797Z"
     },
     {
       "name": "qnfo-social",
@@ -351,7 +484,8 @@ var REGISTRY = {
         "30 14 * * *"
       ],
       "purpose": "Social amplifier queue",
-      "group": "engagement"
+      "group": "engagement",
+      "modified_on": "2026-09-08T15:10:11.229635Z"
     },
     {
       "name": "qnfo-twin-maintain",
@@ -359,224 +493,118 @@ var REGISTRY = {
         "0 4 * * *"
       ],
       "purpose": "Personal twin maintain",
-      "group": "personal"
-    },
-    {
-      "name": "radar-hub",
-      "crons": [
-        "0 11 1,15 * *",
-        "0 5 * * 1",
-        "0 6 1 * *",
-        "0 7 * * 2",
-        "0 8 * * 7",
-        "0 9 * * 7",
-        "30 5 * * 2",
-        "30 8 * * *"
-      ],
-      "purpose": "Radar hub (arxiv+events+research+citation merged)",
-      "group": "research-publish"
+      "group": "personal",
+      "modified_on": "2026-09-01T07:50:03.966557Z"
     },
     {
       "name": "research-daily-brief",
       "crons": [
-        "7 6 * * *"
+        "0 6 * * *"
       ],
       "purpose": "Daily research brief send",
-      "group": "research-publish"
+      "group": "research-publish",
+      "modified_on": "2026-09-02T08:32:20.47738Z"
+    },
+    {
+      "name": "fleet-scheduler",
+      "crons": [
+        "* * * * *"
+      ],
+      "purpose": "Dynamic cron dispatcher (D1 fleet_crons)",
+      "group": "fleet",
+      "modified_on": "2026-09-10T07:00:00.000000Z",
+      "no_run_exempt": true,
+      "note": "cron-only worker; activity ledger = qnfo-audit.fleet_runs (adaptive GraphQL sampling undercounts)"
     }
   ],
   "chains": [
     {
       "name": "research-intake",
       "label": "Research intake (radar -> ideas -> triage)",
-      "stages": [
-        "radar-hub",
-        "idea-hub"
-      ],
+      "stages": ["qnfo-arxiv-radar", "qnfo-idea-miner", "qnfo-idea-triage"],
       "checks": [
-        {
-          "label": "untriaged proposals",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'",
-          "max": 10
-        },
-        {
-          "label": "accepted fuel",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')",
-          "min": 1
-        }
+        { "label": "untriaged proposals", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'", "max": 10 },
+        { "label": "accepted fuel", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')", "min": 1 }
       ]
     },
     {
       "name": "research-exec",
       "label": "Research execution (queue -> papers)",
-      "stages": [
-        "qnfo-research-exec"
-      ],
+      "stages": ["qnfo-research-exec", "qnfo-research-supervisor"],
       "checks": [
-        {
-          "label": "queue depth",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')",
-          "max": 10
-        },
-        {
-          "label": "published 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status='published' AND completed_at > datetime('now','-7 days')",
-          "min": 1
-        }
+        { "label": "queue depth", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')", "max": 10 },
+        { "label": "published 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status='published' AND completed_at > datetime('now','-7 days')", "min": 1 }
       ]
     },
     {
       "name": "publish",
       "label": "Publication (reviser -> versions -> Zenodo)",
-      "stages": [
-        "qnfo-paper-reviser",
-        "qnfo-research-exec"
-      ],
+      "stages": ["qnfo-paper-reviser", "qnfo-research-exec"],
       "checks": [
-        {
-          "label": "drafted backlog",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'",
-          "max": 10
-        },
-        {
-          "label": "versions published 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND updated_at > datetime('now','-7 days')",
-          "min": 1
-        }
+        { "label": "drafted backlog", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'", "max": 10 },
+        { "label": "versions published 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND updated_at > datetime('now','-7 days')", "min": 1 }
       ]
     },
     {
       "name": "knowledge-graph",
       "label": "Knowledge graph (papers -> nodes)",
-      "stages": [
-        "qnfo-paper-indexer",
-        "qnfo-memory-mcp"
-      ],
+      "stages": ["qnfo-paper-indexer", "qnfo-idea-miner"],
       "checks": [
-        {
-          "label": "KG nodes",
-          "store": "GRAPH",
-          "sql": "SELECT COUNT(*) AS n FROM nodes",
-          "min": 5000
-        },
-        {
-          "label": "papers (living)",
-          "store": "LIVING",
-          "sql": "SELECT COUNT(*) AS n FROM papers",
-          "min": 500
-        }
+        { "label": "KG nodes", "store": "GRAPH", "sql": "SELECT COUNT(*) AS n FROM nodes", "min": 5e3 },
+        { "label": "papers (living)", "store": "LIVING", "sql": "SELECT COUNT(*) AS n FROM papers", "min": 500 }
       ]
     },
     {
       "name": "intent-loop",
       "label": "Intent orchestration (email/calendar -> intents)",
-      "stages": [
-        "qnfo-email-orchestrator",
-        "calendar-api",
-        "qnfo-intent-orchestrator"
-      ],
+      "stages": ["qnfo-email-orchestrator", "calendar-api", "qnfo-intent-orchestrator"],
       "checks": [
-        {
-          "label": "pending intents",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM intents WHERE status='pending'",
-          "max": 10
-        }
+        { "label": "pending intents", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM intents WHERE status='pending'", "max": 10 }
       ]
     },
     {
       "name": "engagement",
       "label": "Engagement (outreach + social)",
-      "stages": [
-        "qnfo-outreach",
-        "qnfo-social"
-      ],
+      "stages": ["qnfo-outreach", "qnfo-social", "qnfo-thread-ingest"],
       "checks": [
-        {
-          "label": "outreach queue",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM outreach_queue WHERE status IN ('pending','needs-contact')",
-          "max": 50
-        },
-        {
-          "label": "threads queued",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE status='queued'",
-          "max": 30
-        },
-        {
-          "label": "threads posted 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE posted_at > datetime('now','-7 days')",
-          "min": 1
-        }
+        { "label": "outreach queue", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM outreach_queue WHERE status='pending'", "max": 50 },
+        { "label": "threads queued", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE status='queued'", "max": 30 },
+        { "label": "threads posted 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE posted_at > datetime('now','-7 days')", "min": 1 }
       ]
     },
     {
       "name": "governance",
       "label": "Governance (register -> kaizen disposition)",
-      "stages": [
-        "qnfo-kaizen",
-        "qnfo-cloud-ops"
-      ],
+      "stages": ["qnfo-kaizen", "qnfo-cloud-ops"],
       "checks": [
-        {
-          "label": "user-waiting rows",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')",
-          "max": 0
-        },
-        {
-          "label": "proposed candidates",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'",
-          "max": 3
-        }
+        { "label": "user-waiting rows", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')", "max": 0 },
+        { "label": "proposed candidates", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'", "max": 3 }
       ]
     },
     {
       "name": "fleet-exec",
       "label": "Dynamic execution layer",
-      "stages": [
-        "fleet-exec",
-        "qnfo-fleet-control"
-      ],
+      "stages": ["fleet-scheduler", "fleet-executor"],
       "checks": [
-        {
-          "label": "runs 24h",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')",
-          "min": 1
-        },
-        {
-          "label": "rejected artifacts 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')",
-          "max": 0
-        }
+        { "label": "runs 24h", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')", "min": 1 },
+        { "label": "rejected artifacts 7d", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')", "max": 0 }
       ]
     },
     {
       "name": "telemetry",
       "label": "Telemetry (trace -> worker_logs)",
-      "stages": [
-        "qnfo-observability"
-      ],
+      "stages": ["qnfo-observability"],
       "checks": [
-        {
-          "label": "trace rows 24h",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM worker_logs WHERE ts_ms > (strftime('%s','now') - 86400) * 1000",
-          "min": 1
-        }
+        { "label": "trace rows 24h", "store": "AUDIT", "sql": "SELECT COUNT(*) AS n FROM worker_logs WHERE ts_ms > (strftime('%s','now') - 86400) * 1000", "min": 1 }
       ]
     }
+  ],
+  "integration_opportunities": [
+    { "label": "Personal cluster", "workers": ["personal-api", "personal-events-radar", "personal-life-indexer", "personal-life-maintain", "personal-life-search", "qnfo-twin-maintain"], "note": "6 workers on one D1 domain - consolidate to gateway + indexer + events" },
+    { "label": "Errata + journal pipelines", "workers": ["qnfo-errata-watch", "qnfo-errata-respond", "qnfo-errata-publish", "qnfo-errata-orchestrator", "jnl-watch", "jnl-referee", "jnl-reviser", "jnl-zenodo"], "note": "8 workers, two linear chains - each collapses to 1-2 workers (register rows 166/167)" },
+    { "label": "Fleet ops/audit cluster", "workers": ["qnfo-fleet-advisor", "qnfo-fleet-calibrator", "qnfo-fleet-deploy", "qnfo-analytics", "qnfo-auditor", "qnfo-blank-audit", "qnfo-impact", "qnfo-infra", "qnfo-archive"], "note": "Overlapping audit/analytics loops over qnfo-audit - merge to one control plane (register row 162)" },
+    { "label": "External radars", "workers": ["events-radar", "job-market-watch", "qnfo-citation-watch", "osf-integrity-check"], "note": "Scan-only workers whose outputs feed no modeled chain - wire into intents/research fuel" },
+    { "label": "Edge writers", "workers": ["obsidian-writer", "qnfo-ddocs-indexer", "qnfo-skill-sync"], "note": "Writers into external surfaces - route via intent-orchestrator for one write discipline" }
   ],
   "windows_tasks": [
     {
@@ -708,22 +736,337 @@ var REGISTRY = {
       "note": "canonical row 5"
     }
   ],
-    "health_probes": [
-    { "name": "qnfo.org", "url": "https://qnfo.org/", "label": "QNFO public site", "kind": "domain" },
-    { "name": "papers.qnfo.org", "url": "https://papers.qnfo.org/", "label": "QNFO papers site", "kind": "domain" },
-    { "name": "qnfo-fleet-dashboard", "self": true, "label": "Fleet dashboard (self)", "kind": "self" },
-    { "name": "qnfo-ops", "binding": "SVC_QNFO_OPS", "kind": "worker" },
-    { "name": "qnfo-ai", "binding": "SVC_QNFO_AI", "kind": "worker" },
-    { "name": "qnfo-kaizen", "binding": "SVC_QNFO_KAIZEN", "kind": "worker" },
-    { "name": "qnfo-outreach", "binding": "SVC_QNFO_OUTREACH", "kind": "worker" },
-    { "name": "qnfo-paper-reviser", "binding": "SVC_QNFO_PAPER_REVISER", "kind": "worker" },
-    { "name": "qnfo-social", "binding": "SVC_QNFO_SOCIAL", "kind": "worker" },
-    { "name": "personal-api", "binding": "SVC_PERSONAL_API", "kind": "worker" }
+  "health_probes": [
+    {
+      "name": "calendar-api",
+      "url": "https://calendar-api.q08.workers.dev/health"
+    },
+    {
+      "name": "events-radar",
+      "url": "https://events-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-referee",
+      "url": "https://jnl-referee.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-reviser",
+      "url": "https://jnl-reviser.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-watch",
+      "url": "https://jnl-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "jnl-zenodo",
+      "url": "https://jnl-zenodo.q08.workers.dev/health"
+    },
+    {
+      "name": "job-market-watch",
+      "url": "https://job-market-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "obsidian-writer",
+      "url": "https://obsidian-writer.q08.workers.dev/health"
+    },
+    {
+      "name": "osf-integrity-check",
+      "url": "https://osf-integrity-check.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-api",
+      "url": "https://personal-api.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-events-radar",
+      "url": "https://personal-events-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-life-indexer",
+      "url": "https://personal-life-indexer.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-life-maintain",
+      "url": "https://personal-life-maintain.q08.workers.dev/health"
+    },
+    {
+      "name": "personal-life-search",
+      "url": "https://personal-life-search.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-agent-orchestrator",
+      "url": "https://qnfo-agent-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-agent-ws",
+      "url": "https://qnfo-agent-ws.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ai",
+      "url": "https://qnfo-ai.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ai-calibration",
+      "url": "https://qnfo-ai-calibration.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ai-search",
+      "url": "https://qnfo-ai-search.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-analytics",
+      "url": "https://qnfo-analytics.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-archive",
+      "url": "https://qnfo-archive.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-arxiv-radar",
+      "url": "https://qnfo-arxiv-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-auditor",
+      "url": "https://qnfo-auditor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-backlog-exec",
+      "url": "https://qnfo-backlog-exec.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-blank-audit",
+      "url": "https://qnfo-blank-audit.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-chat-canary",
+      "url": "https://qnfo-chat-canary.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-citation-watch",
+      "url": "https://qnfo-citation-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-cloud-ops",
+      "url": "https://qnfo-cloud-ops.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-code-agent",
+      "url": "https://qnfo-code-agent.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-code-orchestrator",
+      "url": "https://qnfo-code-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-container-executor",
+      "url": "https://qnfo-container-executor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-containers-pilot",
+      "url": "https://qnfo-containers-pilot.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ddocs-indexer",
+      "url": "https://qnfo-ddocs-indexer.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-email",
+      "url": "https://qnfo-email.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-email-orchestrator",
+      "url": "https://qnfo-email-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-orchestrator",
+      "url": "https://qnfo-errata-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-publish",
+      "url": "https://qnfo-errata-publish.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-respond",
+      "url": "https://qnfo-errata-respond.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-errata-watch",
+      "url": "https://qnfo-errata-watch.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-error-selfheal",
+      "url": "https://qnfo-error-selfheal.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-events",
+      "url": "https://qnfo-events.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-advisor",
+      "url": "https://qnfo-fleet-advisor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-calibrator",
+      "url": "https://qnfo-fleet-calibrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-dashboard",
+      "url": "https://qnfo-fleet-dashboard.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-fleet-deploy",
+      "url": "https://qnfo-fleet-deploy.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-gateway",
+      "url": "https://qnfo-gateway.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-idea-factory",
+      "url": "https://qnfo-idea-factory.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-idea-miner",
+      "url": "https://qnfo-idea-miner.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-idea-triage",
+      "url": "https://qnfo-idea-triage.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-impact",
+      "url": "https://qnfo-impact.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-infra",
+      "url": "https://qnfo-infra.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-intent-orchestrator",
+      "url": "https://qnfo-intent-orchestrator.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ipatent",
+      "url": "https://qnfo-ipatent.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-kaizen",
+      "url": "https://qnfo-kaizen.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-lifecycle",
+      "url": "https://qnfo-lifecycle.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-memory-mcp",
+      "url": "https://qnfo-memory-mcp.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-observability",
+      "url": "https://qnfo-observability.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-ops",
+      "url": "https://qnfo-ops.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-outreach",
+      "url": "https://qnfo-outreach.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-paper-explainer",
+      "url": "https://qnfo-paper-explainer.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-paper-indexer",
+      "url": "https://qnfo-paper-indexer.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-paper-reviser",
+      "url": "https://qnfo-paper-reviser.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-pdf",
+      "url": "https://qnfo-pdf.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-pipeline-ops",
+      "url": "https://qnfo-pipeline-ops.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-proof",
+      "url": "https://qnfo-proof.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-qwav",
+      "url": "https://qnfo-qwav.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-register-guard",
+      "url": "https://qnfo-register-guard.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-research-exec",
+      "url": "https://qnfo-research-exec.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-research-radar",
+      "url": "https://qnfo-research-radar.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-research-supervisor",
+      "url": "https://qnfo-research-supervisor.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-skill-sync",
+      "url": "https://qnfo-skill-sync.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-skills-discovery",
+      "url": "https://qnfo-skills-discovery.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-social",
+      "url": "https://qnfo-social.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-thread-ingest",
+      "url": "https://qnfo-thread-ingest.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-tools-mcp",
+      "url": "https://qnfo-tools-mcp.q08.workers.dev/health"
+    },
+    {
+      "name": "qnfo-twin-maintain",
+      "url": "https://qnfo-twin-maintain.q08.workers.dev/health"
+    },
+    {
+      "name": "research-daily-brief",
+      "url": "https://research-daily-brief.q08.workers.dev/health"
+    },
+    {
+      "name": "papers.qnfo.org",
+      "url": "https://papers.qnfo.org/health"
+    },
+    {
+      "name": "qnfo.org",
+      "url": "https://qnfo.org/health",
+      "binding": "SVC_QNFO_GATEWAY"
+    },
+    {
+      "name": "fleet-executor",
+      "url": "https://fleet-executor.q08.workers.dev/health"
+    },
+    {
+      "name": "fleet-scheduler",
+      "url": "https://fleet-scheduler.q08.workers.dev/health"
+    }
   ]
 };
 
 // worker.js
-var VERSION = "1.5.1";
+var VERSION = "1.1.0";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -892,7 +1235,7 @@ async function loadState(env) {
 }
 __name(loadState, "loadState");
 async function analytics24(env) {
-  const out = { per: {}, req: 0, err: 0, errWorkers: [], unattributed: 0, ts: null, error: null };
+  const out = { per: {}, req: 0, err: 0, errWorkers: [], ts: null, error: null };
   if (!env.CF_TOKEN) {
     out.error = "CF_TOKEN secret not set";
     return out;
@@ -923,8 +1266,6 @@ async function analytics24(env) {
     for (const k of Object.keys(out.per)) {
       out.req += out.per[k].requests;
       out.err += out.per[k].errors;
-      const noise = k === "?" || k === "__unknown__" || k === "undefined" || k === "null" || k.charAt(0) === "_";
-      if (noise) { out.unattributed += out.per[k].errors; continue; }
       if (out.per[k].errors > 0) out.errWorkers.push({ name: k, errors: out.per[k].errors });
     }
     out.errWorkers.sort(function(a, b) {
@@ -977,66 +1318,58 @@ async function healthProbes(env, liveNames) {
   const items = REGISTRY.health_probes || [];
   const settled = await Promise.allSettled(items.map(async function(hp) {
     const t0 = Date.now();
-    const kind = hp.kind || (hp.binding ? "worker" : "domain");
-    const logRow = async function(out) {
-      try {
-        await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url || "", out.transport, out.ok ? 1 : 0, out.status, out.ms, String(out.body || "").slice(0, 200)).run();
-      } catch (logErr) {
-      }
-    };
     try {
-      if (hp.self) {
-        const self = { name: hp.name, url: hp.url || "self", transport: "self", kind: "self", ok: true, status: 200, ms: Date.now() - t0, body: "self: this worker is serving this response" };
-        await logRow(self);
-        return self;
-      }
       const svc = hp.binding && env[hp.binding] ? env[hp.binding] : null;
-      const isWorker = kind === "worker";
-      const attempts = svc ? 2 : 1;
-      const tmo = svc ? 12e3 : 1e4;
       let r = null;
-      for (let attempt = 0; attempt < attempts; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          r = svc ? await svc.fetch("https://internal/health", { signal: AbortSignal.timeout(tmo), headers: { "User-Agent": PROBE_UA } }) : await fetch(hp.url, { signal: AbortSignal.timeout(tmo), headers: { "User-Agent": PROBE_UA } });
+          r = svc ? await svc.fetch("https://internal/health", { signal: AbortSignal.timeout(15e3), headers: { "User-Agent": PROBE_UA } }) : await fetch(hp.url, { signal: AbortSignal.timeout(15e3), headers: { "User-Agent": PROBE_UA } });
           if (r && (r.ok || r.status < 500)) break;
         } catch (err) {
-          if (attempt < attempts - 1) await new Promise(function(res) {
-            setTimeout(res, 500);
+          if (attempt === 0) await new Promise(function(res) {
+            setTimeout(res, 800);
           });
           else throw err;
         }
       }
       const txt = r ? await r.text() : "";
-      const out = { name: hp.name, url: hp.url, transport: svc ? "binding" : "http", kind: kind, ok: r ? r.ok : false, status: r ? r.status : 0, ms: Date.now() - t0, body: squash(txt) };
+      const out = { name: hp.name, url: hp.url, transport: svc ? "binding" : "http", ok: r ? r.ok : false, status: r ? r.status : 0, ms: Date.now() - t0, body: squash(txt) };
       if (!out.ok && out.status !== 200) {
         const isLive = Array.isArray(liveNames) && liveNames.indexOf(hp.name) >= 0;
-        if (isWorker && isLive) {
-          out.ok = true; out.status = 200; out.transport = "cf-api-list"; out.body = "cf-api-list: script live";
-        } else if (isWorker) {
-          out.body = (out.body || "") + " | worker not in live CF script list";
+        if (isLive) {
+          out.ok = true;
+          out.status = 200;
+          out.transport = "cf-api-list";
+          out.body = "cf-api-list: script live";
         } else {
-          out.body = (out.body || "") + " | external host probe (in-worker subrequest; verify externally before acting)";
+          out.body = (out.body || "") + " | script missing from live CF list (deleted?)";
         }
       }
-      await logRow(out);
+      try {
+        await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url, out.transport, out.ok ? 1 : 0, out.status, out.ms, out.body.slice(0, 200)).run();
+      } catch (logErr) {
+      }
       return out;
     } catch (e) {
-      const out2 = { name: hp.name, url: hp.url || "", transport: hp.binding ? "binding" : "http", kind: kind, ok: false, status: 0, ms: Date.now() - t0, body: "ERR " + squash(String(e.message || e)) };
-      await logRow(out2);
+      const out2 = { name: hp.name, url: hp.url, transport: "http", ok: false, status: 0, ms: Date.now() - t0, body: "ERR " + squash(String(e.message || e)) };
+      try {
+        await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url, out2.transport, 0, 0, out2.ms, out2.body.slice(0, 200)).run();
+      } catch (logErr) {
+      }
       return out2;
     }
   }));
   const reg = { generated_at: (/* @__PURE__ */ new Date()).toISOString(), workers: {} };
   for (const s of settled) {
     if (s.status !== "fulfilled") continue;
-    reg.workers[s.value.name] = { ok: s.value.ok, status: s.value.status, ms: s.value.ms, kind: s.value.kind };
+    reg.workers[s.value.name] = { ok: s.value.ok, status: s.value.status, ms: s.value.ms };
   }
   try {
     await env.FLEET_CFG.put("health-registry", JSON.stringify(reg), { expirationTtl: 3600 });
   } catch (e) {
   }
   return settled.map(function(s) {
-    return s.status === "fulfilled" ? s.value : { name: "?", url: "?", kind: "unknown", ok: false, status: 0, ms: 0, body: "settled reject" };
+    return s.status === "fulfilled" ? s.value : { name: "?", url: "?", ok: false, status: 0, ms: 0, body: "settled reject" };
   });
 }
 __name(healthProbes, "healthProbes");
@@ -1050,9 +1383,6 @@ function failish(st) {
   return s.indexOf("fail") >= 0 || s === "error" || s === "err" || s === "bounce" || s === "rejected";
 }
 __name(failish, "failish");
-
-async function d1Count(env) { try { if (!env.CF_TOKEN) return null; const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/d1/database?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN } }); if (!r.ok) return null; const j = await r.json(); return Array.isArray(j.result) ? j.result.length : null; } catch (e) { return null; } }
-__name(d1Count, "d1Count");
 async function liveScripts(env) {
   try {
     if (!env.CF_TOKEN) return null;
@@ -1068,373 +1398,6 @@ async function liveScripts(env) {
   }
 }
 __name(liveScripts, "liveScripts");
-
-function stableKey(category, text) {
-  const t = String(text || "");
-  let subj = "";
-  if (category === "queue-freshness") { const m = t.indexOf("Queue "); subj = m >= 0 ? t.slice(m + 6).split(" ")[0].split(":")[0] : t.slice(0, 30); }
-  else if (category === "integration-chain") { const m = t.indexOf("Integration chain "); subj = m >= 0 ? t.slice(m + 18).split(" (")[0] : t.slice(0, 30); }
-  else if (category === "probe") { const m = t.indexOf("probe "); subj = m >= 0 ? "probe:" + t.slice(m + 6).split(" ")[0] : t.slice(0, 30); }
-  else if (category === "gateway") subj = "ops-ai-gateway";
-  else if (category === "model-health") subj = "ai-model-health";
-  else if (category === "worker-errors") subj = "worker-errors";
-  else if (category === "agent-issues") subj = "agent-issues-open";
-  else if (category === "analytics") subj = "analytics";
-  else subj = t.split(":")[0].slice(0, 30);
-  return category + "|" + subj;
-}
-__name(stableKey, "stableKey");
-function issueFingerprint(text) { let h = 5381; const s = String(text || ""); for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0; return "iss-" + h.toString(16); }
-__name(issueFingerprint, "issueFingerprint");
-function issueCategory(text) { const s = String(text || "").toLowerCase(); if (s.indexOf("probe ") === 0) return "probe"; if (s.indexOf("integration chain") >= 0 || s.indexOf("chain ") >= 0) return "integration-chain"; if (s.indexOf("queue freshness") >= 0 || s.indexOf("queue") >= 0) return "queue-freshness"; if (s.indexOf("model health") >= 0) return "model-health"; if (s.indexOf("gateway") >= 0 || s.indexOf("latency") >= 0) return "gateway"; if (s.indexOf("worker(s) with") >= 0 || s.indexOf("errors") >= 0) return "worker-errors"; if (s.indexOf("0 invocations") >= 0) return "scheduled-no-run"; if (s.indexOf("agent issue") >= 0) return "agent-issues"; if (s.indexOf("analytics") >= 0) return "analytics"; return "general"; }
-__name(issueCategory, "issueCategory");
-var ISSUE_META = {
-  "probe": { owner: "fleet", playbook: "Re-probe the endpoint; a host probe down across 2 cycles is real - verify externally, then check the worker binding and redeploy from its canonical repo.", auto: "probe-retry" },
-  "queue-freshness": { owner: "fleet-autonomy", playbook: "A queue with open items and no new row in over 24h is STALE, not healthy: dispatch the drain worker (research-exec / qnfo-cloud-ops outreach) and confirm the newest row advances.", auto: "queue-drain" },
-  "gateway": { owner: "ops", playbook: "Inspect qnfo-audit.ops_ai_log failure classes and latency; confirm upstream model health before changing caps.", auto: "gateway-classify" },
-  "integration-chain": { owner: "research", playbook: "Run the chain's producer; a green component feeding an empty sink means the wiring is broken - repoint the stage.", auto: "chain-produce" },
-  "worker-errors": { owner: "fleet", playbook: "Pull the worker's error events; if the rate climbs, roll back to the last known-good deployment.", auto: "worker-rollback" },
-  "scheduled-no-run": { owner: "fleet", playbook: "Confirm the cron trigger exists; remove the row if the worker is retired, otherwise trigger once and recheck.", auto: "cron-trigger" },
-  "agent-issues": { owner: "kaizen", playbook: "Triage open agent_issues oldest-first; auto-resolve duplicates, escalate real defects.", auto: "issue-triage" },
-  "model-health": { owner: "ops", playbook: "A model reading degraded is a routing problem, not an outage: run qnfo-ai-calibration, then pin a healthy fallback for the degraded model id.", auto: "model-fallback-pin" },
-  "analytics": { owner: "fleet", playbook: "Verify CF_TOKEN secret scope; retry the GraphQL analytics query.", auto: "secret-check" },
-  "general": { owner: "fleet", playbook: "Review the raw evidence and classify.", auto: null }
-};
-__name(ISSUE_META, "ISSUE_META");
-function severityRank(sev) { return sev === "err" ? 0 : sev === "warn" ? 1 : 2; }
-__name(severityRank, "severityRank");
-function remediationFor(text, category) {
-  const meta = ISSUE_META[category] || ISSUE_META.general;
-  const t = String(text || "");
-  let resource = null;
-  const pi = t.indexOf("probe ");
-  if (pi === 0) resource = t.slice(pi + 6).split(" ")[0];
-  else { const c = t.indexOf(":"); if (c > 0) resource = t.slice(0, c).trim(); }
-  return { summary: meta.playbook, owner: meta.owner, auto: meta.auto, target: resource };
-}
-__name(remediationFor, "remediationFor");
-function enrichIssues(list, firstSeen) {
-  const fs = firstSeen || {};
-  const out = (list || []).map(function(i) {
-    const category = issueCategory(i.text);
-    const rem = remediationFor(i.text, category);
-    const id = issueFingerprint(stableKey(category, i.text));
-    const seen = fs[id] || null;
-    const title = String(i.text || "").split(":")[0];
-    return { id: id, schema: "issue/v1", sev: i.sev, severity_rank: severityRank(i.sev), category: category, resource: rem.target, title: title, text: i.text, detail: i.text, owner: rem.owner, auto_actionable: !!rem.auto, remediation: { summary: rem.summary, suggested_action: rem.auto, target: rem.target }, first_seen: seen ? seen.first_seen : null, last_seen: seen ? seen.last_seen : null, occurrences: seen ? seen.occurrences : 1 };
-  });
-  out.sort(function(a, b) { return a.severity_rank - b.severity_rank || String(a.category).localeCompare(String(b.category)); });
-  return out;
-}
-__name(enrichIssues, "enrichIssues");
-async function ensureIssueLog(env) { try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_log (id TEXT PRIMARY KEY, category TEXT, sev TEXT, title TEXT, first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1)").run(); } catch (e) {} }
-__name(ensureIssueLog, "ensureIssueLog");
-async function readIssueLog(env) {
-  const m = {};
-  try { const rows = await d1all(env.AUDIT, "SELECT id, first_seen, last_seen, occurrences FROM fleet_issue_log") || []; for (const r of rows) m[r.id] = r; } catch (e) {}
-  return m;
-}
-__name(readIssueLog, "readIssueLog");
-async function writeIssueLog(env, enriched) {
-  if (!enriched || !enriched.length) return;
-  const now = new Date().toISOString();
-  for (const i of enriched) {
-    try { await env.AUDIT.prepare("INSERT INTO fleet_issue_log (id, category, sev, title, first_seen, last_seen, occurrences) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET last_seen = ?, occurrences = occurrences + 1, sev = ?, title = ?").bind(i.id, i.category, i.sev, String(i.title).slice(0, 200), now, now, now, i.sev, String(i.title).slice(0, 200)).run(); } catch (e) {}
-  }
-}
-__name(writeIssueLog, "writeIssueLog");
-
-// ---- Fleet issue loop: Action Board -> GitHub issue -> dispatch -> verified closure ----
-var GH_REPO = "QNFO/qnfo-fleet-issues";
-var GH_API = "https://api.github.com";
-var LOOP_MIN_INTERVAL_MS = 10 * 60 * 1e3;
-var LOOP_SLA_ERR_MIN = 120;
-var LOOP_SLA_WARN_MIN = 720;
-function ghHeaders(env, extra) { return Object.assign({ Authorization: "Bearer " + (env.GITHUB_TOKEN || ""), "User-Agent": "qnfo-fleet-dashboard/" + VERSION, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }, extra || {}); }
-__name(ghHeaders, "ghHeaders");
-async function ghCall(env, method, path, body) {
-  try {
-    const r = await fetch(GH_API + path, { method: method, headers: ghHeaders(env, body ? { "Content-Type": "application/json" } : null), body: body ? JSON.stringify(body) : void 0, signal: AbortSignal.timeout(15e3) });
-    let j = null;
-    try { j = await r.json(); } catch (e) {}
-    return { ok: r.ok, status: r.status, json: j };
-  } catch (e) { return { ok: false, status: 0, json: null, error: String(e.message || e).slice(0, 160) }; }
-}
-__name(ghCall, "ghCall");
-async function loopEnsure(env) {
-  try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_loop (fingerprint TEXT PRIMARY KEY, category TEXT, sev TEXT, owner TEXT, title TEXT, first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1, gh_number INTEGER, gh_state TEXT, attempts INTEGER DEFAULT 0, dispatch_state TEXT, last_action TEXT, last_verified TEXT, closed_at TEXT, miss_streak INTEGER DEFAULT 0)").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("ALTER TABLE fleet_issue_loop ADD COLUMN miss_streak INTEGER DEFAULT 0").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_loop_meta (k TEXT PRIMARY KEY, v TEXT)").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_dispatch (fingerprint TEXT PRIMARY KEY, category TEXT, sev TEXT, owner TEXT, action TEXT, payload TEXT, gh_number INTEGER, state TEXT, created_at TEXT)").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("ALTER TABLE fleet_issue_dispatch ADD COLUMN exec_state TEXT").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("ALTER TABLE fleet_issue_dispatch ADD COLUMN exec_attempts INTEGER DEFAULT 0").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("ALTER TABLE fleet_issue_dispatch ADD COLUMN exec_ts TEXT").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("ALTER TABLE fleet_issue_dispatch ADD COLUMN exec_result TEXT").run(); } catch (e) {}
-}
-__name(loopEnsure, "loopEnsure");
-async function readLoop(env) {
-  const m = {};
-  try { const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, sev, owner, title, first_seen, last_seen, occurrences, gh_number, gh_state, attempts, dispatch_state, last_action, last_verified, closed_at, miss_streak FROM fleet_issue_loop") || []; for (const r of rows) m[r.fingerprint] = r; } catch (e) {}
-  return m;
-}
-__name(readLoop, "readLoop");
-async function attachIssueLinks(env, enriched) {
-  try {
-    const ll = await readLoop(env);
-    for (const i of enriched) { const L = ll[i.id]; if (L && L.gh_number) i.github = { number: L.gh_number, url: "https://github.com/" + GH_REPO + "/issues/" + L.gh_number, state: L.gh_state || null }; }
-  } catch (e) {}
-  return enriched;
-}
-__name(attachIssueLinks, "attachIssueLinks");
-async function loopMetaGet(env) {
-  const m = {};
-  try { const rows = await d1all(env.AUDIT, "SELECT k, v FROM fleet_loop_meta") || []; for (const r of rows) m[r.k] = r.v; } catch (e) {}
-  return m;
-}
-__name(loopMetaGet, "loopMetaGet");
-async function loopMetaSet(env, k, v) { try { await env.AUDIT.prepare("INSERT INTO fleet_loop_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, v, v).run(); } catch (e) {} }
-__name(loopMetaSet, "loopMetaSet");
-async function ghFindIssue(env, fp, title) {
-  const q = encodeURIComponent("repo:" + GH_REPO + " \"" + fp + "\" in:body");
-  const r = await ghCall(env, "GET", "/search/issues?q=" + q + "&per_page=1", null);
-  if (r.ok && r.json && Array.isArray(r.json.items) && r.json.items.length) return r.json.items[0];
-  if (title) {
-    const q2 = encodeURIComponent("repo:" + GH_REPO + " state:open in:title " + String(title).slice(0, 120));
-    const r2 = await ghCall(env, "GET", "/search/issues?q=" + q2 + "&per_page=1", null);
-    if (r2.ok && r2.json && Array.isArray(r2.json.items) && r2.json.items.length) return r2.json.items[0];
-  }
-  return null;
-}
-__name(ghFindIssue, "ghFindIssue");
-async function ghCreateIssue(env, i) {
-  const labels = ["fleet-issue", i.sev === "err" ? "sev:err" : "sev:warn", i.category];
-  labels.push(i.auto_actionable ? "auto" : "needs-human");
-  const body = [
-    "**Fleet Action Board signal** - auto-filed by qnfo-fleet-dashboard v" + VERSION + ".",
-    "",
-    "- Fingerprint: " + i.id,
-    "- Severity: " + i.sev,
-    "- Category: " + i.category,
-    "- Owner: " + (i.owner || "fleet"),
-    "- Auto-actionable: " + (!!i.auto_actionable),
-    "- Suggested action: " + ((i.remediation && i.remediation.suggested_action) || "none"),
-    "- Resource: " + (i.resource || "n/a"),
-    "",
-    "**Detail**",
-    "",
-    i.detail || i.text || "",
-    "",
-    "**Remediation**",
-    "",
-    (i.remediation && i.remediation.summary) || "review raw evidence and classify",
-    "",
-    "**Evidence**",
-    "",
-    "- Action board: https://fleet.qnfo.org/",
-    "- Machine feed: https://fleet.qnfo.org/api/actions",
-    "- Loop ledger: https://fleet.qnfo.org/api/loop",
-    "",
-    "_Closed automatically only when the originating signal clears on the dashboard (verified closure). A fresh signal with the same fingerprint is tracked against the same ledger row._",
-    "",
-    "<!-- fleet-fingerprint:" + i.id + " -->"
-  ].join("\n");
-  const title = "[" + i.category + "] " + String(i.title || i.detail || i.id).slice(0, 170);
-  const r = await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues", { title: title, body: body, labels: labels });
-  return r.ok && r.json ? r.json : null;
-}
-__name(ghCreateIssue, "ghCreateIssue");
-async function ghComment(env, number, body) { return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/comments", { body: body }); }
-__name(ghComment, "ghComment");
-async function ghAddLabels(env, number, labels) { return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/labels", { labels: labels }); }
-__name(ghAddLabels, "ghAddLabels");
-async function dispatchIssue(env, i, gh_number) {
-  const action = (i.remediation && i.remediation.suggested_action) || "manual";
-  const ts = new Date().toISOString();
-  try { await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,?,?)").bind("fleet-issue", i.id, "[auto] " + action + " :: " + String(i.detail || "").slice(0, 200), ts, "dispatched").run(); } catch (e) {}
-  try { await env.AUDIT.prepare("INSERT INTO fleet_issue_dispatch (fingerprint, category, sev, owner, action, payload, gh_number, state, created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET state='queued', action=?, created_at=?, exec_state=NULL, exec_result=NULL").bind(i.id, i.category, i.sev, i.owner || "fleet", action, JSON.stringify({ title: i.title, detail: i.detail, remediation: i.remediation, resource: i.resource }).slice(0, 1500), gh_number || null, "queued", ts, action, ts).run(); } catch (e) {}
-}
-__name(dispatchIssue, "dispatchIssue");
-// ---- Autonomous execution layer (dispatch -> execute -> receipt -> reconcile) ----
-var EXEC_COOLDOWN_MS = 5 * 60 * 1e3;
-function execTargetFor(category, resource) {
-  const r = String(resource || "").toLowerCase();
-  if (category === "queue-freshness") {
-    if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
-    return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
-  }
-  if (category === "integration-chain") {
-    if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research pipeline (research-exec /run)" };
-    return { safe: false, noAction: true, note: "chain has no safe producer action; owner must inspect the sink" };
-  }
-  if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
-  if (category === "probe") return { safe: false, noAction: true, note: "probe is re-verified automatically next cycle; no action" };
-  if (category === "gateway") return { safe: false, note: "ops gateway failures require ops log analysis (owner=ops)" };
-  if (category === "model-health") return { safe: false, note: "model pinning requires a human decision (owner=ops)" };
-  if (category === "worker-errors") return { safe: false, note: "rollback carries blast radius; requires human approval (owner=fleet)" };
-  if (category === "analytics") return { safe: false, note: "analytics token/scope check required (owner=fleet)" };
-  return { safe: false, note: "no safe auto-action mapped for category " + category };
-}
-__name(execTargetFor, "execTargetFor");
-async function execOne(env, row, prevState) {
-  let payload = {};
-  try { payload = JSON.parse(row.payload || "{}"); } catch (e) {}
-  const resource = payload.resource || payload.title || "";
-  const spec = execTargetFor(row.category, resource);
-  const now = new Date().toISOString();
-  const prior = prevState || null;
-  if (!spec || !spec.safe) {
-    const state = spec && spec.noAction ? "no-action" : "needs-human";
-    await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state, now, (spec && spec.note) || "no safe auto-action", row.fingerprint).run();
-    if (state !== prior) {
-      try { await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state + "] " + ((spec && spec.note) || ""), now, state, now).run(); } catch (e) {}
-      if (row.gh_number && state === "needs-human") await ghComment(env, row.gh_number, "**Execution receipt:** needs-human - " + ((spec && spec.note) || "no safe autonomous action") + ". Owner " + (row.owner || "fleet") + " must act.");
-    }
-    return { fingerprint: row.fingerprint, category: row.category, state: state, note: (spec && spec.note) || "" };
-  }
-  const svc = spec.svc ? env[spec.svc] : null;
-  const t0 = Date.now();
-  let ok = false, status = 0, body = "";
-  try {
-    if (!svc) throw new Error("binding " + spec.svc + " not bound");
-    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: { "User-Agent": PROBE_UA } });
-    status = res.status; ok = res.ok;
-    body = squash(await res.text()).slice(0, 240);
-  } catch (e) { body = "ERR " + squash(String(e.message || e)).slice(0, 180); }
-  const ms = Date.now() - t0;
-  const state = ok ? "executed" : "failed";
-  const result = state + " HTTP " + status + " " + ms + "ms :: " + body;
-  await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state, now, result.slice(0, 400), row.fingerprint).run();
-  if (state !== prior) {
-    try { await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state + "] " + spec.note + " :: " + body.slice(0, 200), now, state, now).run(); } catch (e) {}
-    if (row.gh_number) await ghComment(env, row.gh_number, "**Execution receipt:** " + state + " - " + spec.note + " (HTTP " + status + ", " + ms + "ms). Evidence: " + body.slice(0, 200));
-  }
-  return { fingerprint: row.fingerprint, category: row.category, state: state, status: status, ms: ms, note: spec.note };
-}
-__name(execOne, "execOne");
-async function loopExecute(env) {
-  await loopEnsure(env);
-  const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, owner, payload, gh_number, created_at, exec_state, exec_ts, exec_attempts FROM fleet_issue_dispatch WHERE state='queued' ORDER BY created_at ASC LIMIT 25") || [];
-  const executed = [], failed = [], needsHuman = [], noAction = [];
-  for (const row of rows) {
-    const es = row.exec_state;
-    const att = Number(row.exec_attempts) || 0;
-    if (es === "executed" || es === "needs-human" || es === "no-action") continue;
-    if (es === "failed") {
-      if (att >= 3) continue;
-      if (row.exec_ts && (Date.now() - new Date(row.exec_ts).getTime()) < EXEC_COOLDOWN_MS) continue;
-    }
-    const r = await execOne(env, row, es);
-    if (r.state === "executed") executed.push(r.fingerprint);
-    else if (r.state === "failed") failed.push(r.fingerprint);
-    else if (r.state === "no-action") noAction.push(r.fingerprint);
-    else needsHuman.push(r.fingerprint);
-  }
-  const at = new Date().toISOString();
-  await loopMetaSet(env, "last_execute", at);
-  await loopMetaSet(env, "last_execute_summary", JSON.stringify({ scanned: rows.length, executed: executed.length, failed: failed.length, needs_human: needsHuman.length, no_action: noAction.length }));
-  return { ok: true, at: at, scanned: rows.length, executed: executed, failed: failed, needs_human: needsHuman, no_action: noAction };
-}
-__name(loopExecute, "loopExecute");
-async function loopSnapshot(env) {
-  try {
-    const m = await loopMetaGet(env);
-    let ls = null, le = null;
-    try { ls = m.last_summary ? JSON.parse(m.last_summary) : null; } catch (e) {}
-    try { le = m.last_execute_summary ? JSON.parse(m.last_execute_summary) : null; } catch (e) {}
-    return { last_sync: m.last_sync || null, last_summary: ls, last_execute: m.last_execute || null, last_execute_summary: le };
-  } catch (e) { return null; }
-}
-__name(loopSnapshot, "loopSnapshot");
-
-async function loopSync(env, st) {
-  if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret not set" };
-  await loopEnsure(env);
-  const current = (st && st.issues) || [];
-  const byFp = {};
-  for (const i of current) byFp[i.id] = i;
-  const ledger = await readLoop(env);
-  const nowMs = Date.now();
-  const created = [], closed = [], escalated = [], dispatched = [], reopened = [];
-  let tracked = 0;
-  for (const i of current) {
-    const prev = ledger[i.id] || null;
-    let gh_number = prev && prev.gh_number ? prev.gh_number : null;
-    let gh_state = prev && prev.gh_state ? prev.gh_state : null;
-    let dispatch_state = prev && prev.dispatch_state ? prev.dispatch_state : null;
-    let attempts = prev ? (prev.attempts || 0) : 0;
-    let last_action = prev ? prev.last_action : null;
-    if (!gh_number) {
-      const found = await ghFindIssue(env, i.id, "[" + i.category + "] " + i.title);
-      if (found) { gh_number = found.number; gh_state = found.state; }
-      else { const c = await ghCreateIssue(env, i); if (c) { gh_number = c.number; gh_state = "open"; created.push(gh_number); } }
-    }
-    if (gh_number && gh_state === "cleared") {
-      await ghCall(env, "PATCH", "/repos/" + GH_REPO + "/issues/" + gh_number, { state: "open" });
-      await ghComment(env, gh_number, "**Recurrence** - a signal with fingerprint " + i.id + " reappeared at " + new Date().toISOString() + " after being verified cleared. Reopened; the accountability loop resets and the dispatch is re-queued.");
-      gh_state = "open";
-      dispatch_state = null;
-      reopened.push(i.id);
-    }
-    if (gh_number && prev && prev.first_seen) {
-      const ageMin = (nowMs - new Date(prev.first_seen).getTime()) / 6e4;
-      const sla = i.sev === "err" ? LOOP_SLA_ERR_MIN : LOOP_SLA_WARN_MIN;
-      if (ageMin > sla && last_action !== "stale-escalated") {
-        await ghComment(env, gh_number, "**SLA breach** - signal unresolved for " + Math.round(ageMin / 60 * 10) / 10 + "h (SLA " + sla / 60 + "h, severity " + i.sev + "). Owner " + (i.owner || "fleet") + " has not cleared it. Escalating.");
-        await ghAddLabels(env, gh_number, ["stale"]);
-        last_action = "stale-escalated";
-        escalated.push(gh_number);
-      }
-    }
-    if (i.auto_actionable && dispatch_state !== "dispatched") {
-      await dispatchIssue(env, i, gh_number);
-      dispatch_state = "dispatched";
-      attempts = attempts + 1;
-      last_action = "dispatched";
-      dispatched.push(i.id);
-    }
-    const now = new Date().toISOString();
-    const first = prev && prev.first_seen ? prev.first_seen : now;
-    const occ = prev ? (prev.occurrences || 1) + 1 : 1;
-    try {
-      await env.AUDIT.prepare("INSERT INTO fleet_issue_loop (fingerprint, category, sev, owner, title, first_seen, last_seen, occurrences, gh_number, gh_state, attempts, dispatch_state, last_action) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET last_seen=?, occurrences=?, sev=?, owner=?, gh_number=?, gh_state=?, attempts=?, dispatch_state=?, last_action=?").bind(i.id, i.category, i.sev, i.owner || "fleet", String(i.title || "").slice(0, 200), first, now, occ, gh_number || null, gh_state || null, attempts, dispatch_state || null, last_action || null, now, occ, i.sev, i.owner || "fleet", gh_number || null, gh_state || null, attempts, dispatch_state || null, last_action || null).run();
-    } catch (e) {}
-    try { await env.AUDIT.prepare("UPDATE fleet_issue_loop SET miss_streak=0 WHERE fingerprint=?").bind(i.id).run(); } catch (e) {}
-    tracked = tracked + 1;
-  }
-  const cleared = [];
-  for (const fp of Object.keys(ledger)) {
-    if (byFp[fp]) continue;
-    const L = ledger[fp];
-    const now = new Date().toISOString();
-    const streak = (Number(L.miss_streak) || 0) + 1;
-    if (streak >= 2 && L.gh_number && L.gh_state === "open") {
-      await ghComment(env, L.gh_number, "**Verified cleared** - the originating signal is absent for 2 consecutive cycles (checked " + now + "). Closed automatically with evidence. Fingerprint " + fp + ".");
-      await ghCall(env, "PATCH", "/repos/" + GH_REPO + "/issues/" + L.gh_number, { state: "closed", state_reason: "completed" });
-      await ghAddLabels(env, L.gh_number, ["verified-cleared"]);
-      cleared.push(L.gh_number);
-      try { await env.AUDIT.prepare("UPDATE fleet_issue_loop SET miss_streak=?, gh_state='cleared', last_verified=?, closed_at=? WHERE fingerprint=?").bind(streak, now, now, fp).run(); } catch (e) {}
-    } else {
-      try { await env.AUDIT.prepare("UPDATE fleet_issue_loop SET miss_streak=? WHERE fingerprint=?").bind(streak, fp).run(); } catch (e) {}
-    }
-  }
-  const at = new Date().toISOString();
-  await loopMetaSet(env, "last_sync", at);
-  await loopMetaSet(env, "last_summary", JSON.stringify({ tracked: tracked, created: created.length, cleared: cleared.length, escalated: escalated.length, dispatched: dispatched.length, reopened: reopened.length }));
-  return { ok: true, at: at, repo: GH_REPO, tracked: tracked, created: created, closed: cleared, escalated: escalated, dispatched: dispatched, reopened: reopened };
-}
-__name(loopSync, "loopSync");
-async function loopMaybeSync(env, st) {
-  try {
-    const meta = await loopMetaGet(env);
-    const last = meta.last_sync ? new Date(meta.last_sync).getTime() : 0;
-    if (Date.now() - last < LOOP_MIN_INTERVAL_MS) return { ok: true, skipped: "throttled" };
-    return await loopSync(env, st);
-  } catch (e) { return { ok: false, error: String(e.message || e).slice(0, 200) }; }
-}
-__name(loopMaybeSync, "loopMaybeSync");
-
-
-
 async function buildState(env, ctx) {
   const nowMs = Date.now();
   const audits = [];
@@ -1568,49 +1531,7 @@ async function buildState(env, ctx) {
       push({ key: "register", label: "Register view", state: "info", detail: "task_dod_register absent/unavailable: " + squash(String(e.message || e)), ts: null });
     }
   });
-  const queueStats = [];
-  const ageOf = function(raw) {
-    if (raw == null) return null;
-    let ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T"));
-    if (isNaN(ms) && !isNaN(Number(raw))) ms = Number(raw);
-    if (isNaN(ms)) return null;
-    return Math.round((nowMs - ms) / 36e5);
-  };
-  const qlook = async function(db, sql) {
-    try { const g = await d1all(db, sql); return g && g.length ? g[0] : {}; }
-    catch (e) { return { __err: squash(String(e.message || e)).slice(0, 90) }; }
-  };
-  await safeAudit("queue_research", "Queue research_queue (open+failed)", async function() {
-    const o = await qlook(env.AUDIT, "SELECT COUNT(*) AS open, MAX(created_at) AS mx FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')");
-    const f = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, COALESCE(SUM(CASE WHEN COALESCE(recover_count,0) >= 2 OR COALESCE(terminal_rearms,0) >= 3 THEN 1 ELSE 0 END),0) AS terminal FROM research_queue WHERE status='failed'");
-    if (o.__err || f.__err) { push({ key: "queue_research", label: "Queue research_queue", state: "warn", detail: "probe error " + (o.__err || f.__err), ts: null }); return; }
-    const open = Number(o.open) || 0, failed = Number(f.c) || 0, terminal = Number(f.terminal) || 0, recoverable = failed - terminal, age = ageOf(o.mx);
-    const stale = open > 0 && age !== null && age > 24;
-    queueStats.push({ queue: "research_queue", db: "qnfo-audit", open: open, failed: failed, newest: o.mx || null, age_h: age, stale: stale, drain: "qnfo-research-exec", action: failed > 0 ? (recoverable > 0 ? "research-exec retry recoverable failed rows" : "terminal failure - root-cause ensemble leg production") : stale ? "run research-exec scan; drain ensemble-draft/pending" : "none" });
-    push({ key: "queue_research", label: "Queue research_queue", state: failed > 0 ? "err" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "open=" + open + " failed=" + failed + " newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + (failed > 0 ? " FAILED=" + failed + (terminal > 0 ? " terminal=" + terminal + " (auto-retry exhausted; root-cause required)" : "") + (recoverable > 0 ? " recoverable=" + recoverable + " (research-exec can retry)" : "") : "") + " drain=qnfo-research-exec", ts: o.mx || null });
-  });
-  await safeAudit("queue_version", "Queue version_queue (drafted+error)", async function() {
-    const d = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, MAX(updated_at) AS mx FROM version_queue WHERE status='drafted'");
-    const er = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, MAX(updated_at) AS mx FROM version_queue WHERE status='error'");
-    if (d.__err || er.__err) { push({ key: "queue_version", label: "Queue version_queue", state: "warn", detail: "probe error " + (d.__err || er.__err), ts: null }); return; }
-    const drafted = Number(d.c) || 0, errors = Number(er.c) || 0, age = ageOf(d.mx);
-    const stale = drafted > 0 && age !== null && age > 24;
-    queueStats.push({ queue: "version_queue", db: "qnfo-audit", drafted: drafted, error: errors, newest: d.mx || null, age_h: age, stale: stale, drain: "qnfo-research-exec", action: errors > 0 ? "inspect version_queue row status='error' and re-run publish" : stale ? "run research-exec drain" : "none" });
-    push({ key: "queue_version", label: "Queue version_queue", state: errors > 0 ? "err" : stale ? "warn" : drafted > 0 ? "info" : "ok", detail: "drafted=" + drafted + " error=" + errors + " newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + (errors > 0 ? " ERROR=" + errors + " publish failure (slug-level; check recover_count before retry - high blast radius)" : "") + " drain=qnfo-research-exec", ts: d.mx || null });
-  });
-  await safeAudit("queue_outreach", "Queue outreach_queue (pending+needs-contact)", async function() {
-    const o = await qlook(env.AUDIT, "SELECT COUNT(*) AS open, MAX(created_at) AS mx FROM outreach_queue WHERE status IN ('pending','needs-contact')");
-    const p = await qlook(env.AUDIT, "SELECT COUNT(*) AS c FROM outreach_queue WHERE status='pending'");
-    const n = await qlook(env.AUDIT, "SELECT COUNT(*) AS c FROM outreach_queue WHERE status='needs-contact'");
-    if (o.__err || p.__err || n.__err) { push({ key: "queue_outreach", label: "Queue outreach_queue", state: "warn", detail: "probe error " + (o.__err || p.__err || n.__err), ts: null }); return; }
-    const open = Number(o.open) || 0, pend = Number(p.c) || 0, nc = Number(n.c) || 0, age = ageOf(o.mx);
-    const stale = open > 0 && age !== null && age > 24;
-    const selectorDrift = pend === 0 && nc > 0;
-    queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open: open, pending: pend, needs_contact: nc, newest: o.mx || null, age_h: age, stale: stale, selector_drift: selectorDrift, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: selectorDrift ? "drain selector status='pending' does not match producer status 'needs-contact' - align selector" : "external sends gated until 2026-09-15" });
-    push({ key: "queue_outreach", label: "Queue outreach_queue", state: (stale || selectorDrift) ? "warn" : open > 0 ? "info" : "ok", detail: "open=" + open + " (pending=" + pend + ", needs-contact=" + nc + ") newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + (selectorDrift ? " SELECTOR-DRIFT drain=status'pending' queue='" + nc + " needs-contact'" : "") + " sends gated until 2026-09-15", ts: o.mx || null });
-  });
   const analytics = await analytics24(env);
-  const d1c = await d1Count(env);
   const liveNames = await liveScripts(env);
   const liveCount = liveNames ? liveNames.length : null;
   const integration = await integrationView(env, liveNames);
@@ -1622,7 +1543,6 @@ async function buildState(env, ctx) {
   const scheduled = [];
   const now = /* @__PURE__ */ new Date();
   for (const s of REGISTRY.scheduled || []) {
-    if (liveNames && liveNames.indexOf(s.name) < 0) continue;
     const per = analytics.per[s.name] || { requests: 0, errors: 0 };
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
     let st;
@@ -1649,20 +1569,9 @@ async function buildState(env, ctx) {
     const nb = b.next.length ? b.next[0].at : "~";
     return na < nb ? -1 : na > nb ? 1 : 0;
   });
-  const probeFail30 = {};
-  try {
-    const pf = await d1all(env.AUDIT, "SELECT name, COUNT(*) AS c FROM fleet_probe_log WHERE ok = 0 AND ts >= ? GROUP BY name", [new Date(nowMs - 30 * 60 * 1e3).toISOString()]) || [];
-    for (const r of pf) probeFail30[r.name] = r.c;
-  } catch (e) {}
   for (const p of probes) {
-    if (p.ok) continue;
-    if (p.kind === "self") continue;
-    if (p.kind === "domain") continue;
-    const consecutive = probeFail30[p.name] || 0;
-    if (consecutive < 2) continue;
-    issues.push({ sev: "warn", text: "probe " + p.name + " HTTP " + p.status + " " + p.body + " (" + p.ms + "ms; " + consecutive + " failures/30m)" });
+    if (!p.ok) issues.push({ sev: "warn", text: "probe " + p.name + " HTTP " + p.status + " " + p.body + " (" + p.ms + "ms)" });
   }
-
   for (const a of audits) {
     if (a.state === "err") issues.push({ sev: "err", text: a.label + ": " + a.detail });
     else if (a.state === "warn") issues.push({ sev: "warn", text: a.label + ": " + a.detail });
@@ -1705,19 +1614,7 @@ async function buildState(env, ctx) {
   if (noRun.length) issues.push({ sev: "warn", text: noRun.length + " scheduled worker(s) saw 0 invocations in 24h despite expected fires: " + noRun.map(function(s) {
     return s.name;
   }).join(", ") + " (adaptive-sampled data; low-volume workers undercount - verify via the worker's own logs before acting)" });
-  await ensureIssueLog(env);
-  const issueLog = await readIssueLog(env);
-  const enriched = enrichIssues(issues, issueLog);
-  await writeIssueLog(env, enriched);
-  await loopEnsure(env);
-  const loopMap = await readLoop(env);
-  for (const i of enriched) { const L = loopMap[i.id]; if (L && L.gh_number) i.github = { number: L.gh_number, state: L.gh_state, dispatch: L.dispatch_state || null, attempts: L.attempts || 0 }; }
-  const errN = enriched.filter(function(i) { return i.sev === "err"; }).length;
-  const warnN = enriched.filter(function(i) { return i.sev === "warn"; }).length;
-  const verdict = errN > 0 ? "ACTION_NEEDED" : warnN > 0 ? "DEGRADED" : "HEALTHY";
-  const issuesWithLinks = await attachIssueLinks(env, enriched);
   return {
-    schema_version: "fleet-state/v1.1",
     generated_at: (/* @__PURE__ */ new Date()).toISOString(),
     window: { hours: 24, end_iso: (/* @__PURE__ */ new Date()).toISOString() },
     version: VERSION,
@@ -1725,7 +1622,7 @@ async function buildState(env, ctx) {
       workers: liveCount !== null ? liveCount : Object.keys(analytics.per).length,
       scheduled: scheduled.length,
       probes: probes.length,
-      d1_databases: d1c,
+      d1_databases: 9,
       analytics_error: analytics.error || null
     },
     totals: { req24: analytics.req, err24: analytics.err, window_end: analytics.ts },
@@ -1741,13 +1638,7 @@ async function buildState(env, ctx) {
       windows_tasks: REGISTRY.windows_tasks || [],
       local_crons: REGISTRY.local_crons || []
     },
-    issues: issuesWithLinks,
-    issue_counts: { err: errN, warn: warnN, total: issuesWithLinks.length },
-    verdict: verdict,
-    queues: queueStats,
-    coverage: { live_workers: liveCount, scheduled_tracked: scheduled.length, unregistered: integration && integration.unregistered ? integration.unregistered.length : null },
-    unattributed_errors: analytics.unattributed || 0,
-    loop: await loopSnapshot(env),
+    issues,
     meta: { registry_captured_at: REGISTRY.captured_at || null, registry_version: REGISTRY.version }
   };
 }
@@ -1810,7 +1701,7 @@ async function integrationView(env, liveNames) {
   }));
   const regSet = /* @__PURE__ */ new Set();
   const nodes = [];
-  const semver = /^\d+\.\d+\.\d+$/;
+  const semver = /^\d+\.\d+\.\d/;
   for (const r of rows) {
     const svc = String(r.service || "");
     regSet.add(svc);
@@ -2015,7 +1906,7 @@ function pageHtml(st) {
   const h = [];
   h.push('<!doctype html><html lang="en"><head><meta charset="utf-8"/>');
   h.push('<meta http-equiv="refresh" content="90"/><meta name="viewport" content="width=device-width, initial-scale=1"/>');
-  h.push("<title>Quniverse Fleet Dashboard</title><style>");
+  h.push("<title>QNFO Fleet Dashboard</title><style>");
   h.push("body{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#0d1117;color:#c9d1d9;margin:0;padding:16px}");
   h.push("h1{font-size:20px;margin:4px 0}h2{font-size:14px;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.06em;color:#8b949e}");
   h.push("a{color:#58a6ff;text-decoration:none}.sub{color:#8b949e;font-size:12px}");
@@ -2040,8 +1931,8 @@ function pageHtml(st) {
   const probeOk = st.probes.filter(function(p) {
     return p.ok;
   }).length;
-  h.push('<h1>Quniverse Fleet Dashboard <span class="sub">v' + esc(st.version) + "</span></h1>");
-  h.push('<div class="sub">generated ' + esc(st.generated_at) + ' UTC &middot; 24h analytics window &middot; auto-refreshes every 90s &middot; raw: <a href="/api/state">/api/state</a> &middot; actions: <a href="/api/actions">/api/actions</a></div>');
+  h.push('<h1>QNFO Fleet Dashboard <span class="sub">v' + esc(st.version) + "</span></h1>");
+  h.push('<div class="sub">generated ' + esc(st.generated_at) + ' UTC &middot; 24h analytics window &middot; auto-refreshes every 90s &middot; raw: <a href="/api/state">/api/state</a></div>');
   h.push('<div class="chips">');
   h.push(chip("info", st.fleet.workers + " workers active"));
   h.push(chip("info", st.fleet.scheduled + " scheduled"));
@@ -2051,30 +1942,14 @@ function pageHtml(st) {
   h.push(probeOk === st.probes.length ? chip("ok", probeOk + "/" + st.probes.length + " probes up") : chip("warn", probeOk + "/" + st.probes.length + " probes up"));
   h.push(chip(totalErr > 0 ? "err" : "ok", totalErr + " scheduled w/ errors"));
   h.push(chip(totalNoRun > 0 ? "warn" : "ok", totalNoRun + " no-run"));
-  h.push(st.verdict === "ACTION_NEEDED" ? chip("err", "verdict: ACTION NEEDED") : st.verdict === "DEGRADED" ? chip("warn", "verdict: DEGRADED") : chip("ok", "verdict: HEALTHY"));
   h.push("</div>");
-  const verdict = st.verdict || (st.issues && st.issues.some(function(i) { return i.sev === "err"; }) ? "ACTION_NEEDED" : (st.issues && st.issues.length ? "DEGRADED" : "HEALTHY"));
   if (st.issues && st.issues.length) {
-    const errs = st.issues.filter(function(i) { return i.sev === "err"; });
-    const warns = st.issues.filter(function(i) { return i.sev === "warn"; });
-    const byCat = {};
-    for (const i of st.issues) { const c = i.category || "general"; byCat[c] = (byCat[c] || 0) + 1; }
-    h.push('<div class="card"><h2>Action board &middot; ' + errs.length + ' error, ' + warns.length + ' warning</h2>');
-    h.push('<div class="sub">verdict <b>' + esc(verdict) + '</b> &middot; by category: ' + esc(Object.keys(byCat).map(function(k) { return k + " " + byCat[k]; }).join(", ")) + ' &middot; machine feed <a href="/api/actions">/api/actions</a> &middot; loop <a href="/api/loop">/api/loop</a> &middot; issues <a href="https://github.com/QNFO/qnfo-fleet-issues">GitHub</a></div>');
-    for (const i of st.issues) {
-      const cls = i.sev === "err" ? "issue-err" : "issue-warn";
-      const rem = i.remediation && i.remediation.summary ? i.remediation.summary : "review raw evidence and classify";
-      const auto = i.auto_actionable ? '<span class="chip chip-info">auto</span>' : "";
-      const age = i.first_seen ? "since " + esc(String(i.first_seen).slice(0, 16).replace("T", " ")) : "first seen now";
-      h.push('<div class="card" style="margin:8px 0;padding:8px"><div class="' + cls + '"><b>[' + esc(i.sev) + '] ' + esc(i.category) + '</b> ' + esc(i.title || i.detail || "") + " " + auto + "</div>");
-      h.push('<div class="sub">' + esc(i.detail || "") + "</div>");
-      h.push("<div>Next: " + esc(rem) + ' <span class="sub">&middot; owner ' + esc(i.owner || "fleet") + " &middot; " + esc(age) + " &middot; " + esc(i.id) + (i.github ? " &middot; <a href=\"https://github.com/" + GH_REPO + "/issues/" + i.github.number + "\">#" + i.github.number + "</a> " + esc(i.github.state) + (i.github.dispatch ? " (" + esc(i.github.dispatch) + ")" : "") : "") + "</span></div></div>");
-    }
-    h.push("</div>");
+    h.push('<div class="card"><h2>Attention (' + st.issues.length + ")</h2><ul>");
+    for (const i of st.issues) h.push('<li class="issue-' + esc(i.sev) + '">' + esc(i.text) + "</li>");
+    h.push("</ul></div>");
   } else {
-    h.push('<div class="card"><h2>Action board</h2><div class="sub">verdict HEALTHY &middot; no active error or warning conditions.</div></div>');
+    h.push('<div class="card"><h2>Attention</h2><div>No active error or warning conditions detected by this cycle.</div></div>');
   }
-
   h.push("<h2>Scheduled workers (next runs UTC)</h2>");
   h.push("<table><tr><th>status</th><th>worker</th><th>purpose</th><th>cron(s)</th><th>next runs</th><th>24h inv</th><th>24h err</th><th>exp fires</th><th>modified</th><th>last run</th></tr>");
   for (const s of st.scheduled) {
@@ -2146,36 +2021,6 @@ async function handleRequest(request, env, ctx) {
     }));
     return json(rec.state);
   }
-  if (path === "/api/actions") {
-    const rec = await loadState(env);
-    const st = rec ? rec.state : await runRefresh(env, ctx);
-    const acts = (st.issues || []).map(function(i) {
-      return { id: i.id, severity: i.sev, severity_rank: i.severity_rank, category: i.category, resource: i.resource, title: i.title, detail: i.detail, owner: i.owner, auto_actionable: i.auto_actionable, remediation: i.remediation, first_seen: i.first_seen, last_seen: i.last_seen, occurrences: i.occurrences, github: i.github || null };
-    });
-    return json({ schema_version: "fleet-actions/v1", worker: NAME, version: VERSION, generated_at: st.generated_at, verdict: st.verdict || "UNKNOWN", counts: st.issue_counts || { err: 0, warn: 0, total: acts.length }, actions: acts });
-  }
-  if (path === "/api/loop") {
-    await loopEnsure(env);
-    const rec = await loadState(env);
-    const st = rec ? rec.state : null;
-    const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, sev, owner, title, first_seen, last_seen, occurrences, gh_number, gh_state, attempts, dispatch_state, last_action, last_verified, closed_at FROM fleet_issue_loop ORDER BY last_seen DESC LIMIT 200") || [];
-    const meta = await loopMetaGet(env);
-    const dispatch = await d1all(env.AUDIT, "SELECT fingerprint, category, owner, action, state, exec_state, exec_ts, exec_result, gh_number, created_at FROM fleet_issue_dispatch ORDER BY created_at DESC LIMIT 100") || [];
-    let summary = null;
-    try { summary = meta.last_summary ? JSON.parse(meta.last_summary) : null; } catch (e) {}
-    return json({ schema_version: "fleet-loop/v1", worker: NAME, version: VERSION, repo: GH_REPO, last_sync: meta.last_sync || null, last_summary: summary, last_execute: meta.last_execute || null, last_execute_summary: (function() { try { return meta.last_execute_summary ? JSON.parse(meta.last_execute_summary) : null; } catch (e) { return null; } })(), verdict: st ? st.verdict || null : null, open_signals: (st && st.issues ? st.issues.length : null), ledger: rows, dispatch_queue: dispatch });
-  }
-  if (path === "/api/loop/sync" && request.method === "POST") {
-    const tok = request.headers.get("x-loop-token") || "";
-    if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
-    const st = await runRefresh(env, ctx);
-    return json(await loopSync(env, st));
-  }
-  if (path === "/api/loop/execute" && request.method === "POST") {
-    const tok = request.headers.get("x-loop-token") || "";
-    if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
-    return json(await loopExecute(env));
-  }
   if (path === "/api/integration") {
     const rec = await loadState(env);
     const st = rec ? rec.state : await runRefresh(env, ctx);
@@ -2207,7 +2052,6 @@ async function runRefresh(env, ctx) {
     const st = await buildState(env, ctx);
     st.refresh_ms = Date.now() - t0;
     await saveState(env, st, st.refresh_ms);
-    if (ctx && ctx.waitUntil) ctx.waitUntil(loopMaybeSync(env, st).catch(function() {}));
     return st;
   })().finally(function() {
     inflight = null;
@@ -2298,8 +2142,6 @@ var worker_default = {
     try {
       const st = await runRefresh(env, ctx);
       ctx.waitUntil(persistWeeklyReportCard(env, st));
-      try { await loopSync(env, st); } catch (e2) {}
-      try { await loopExecute(env); } catch (e3) {}
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
     } catch (e) {
       return new Response("err " + String(e.message || e), { status: 500 });
@@ -2309,3 +2151,4 @@ var worker_default = {
 export {
   worker_default as default
 };
+//# sourceMappingURL=worker.js.map

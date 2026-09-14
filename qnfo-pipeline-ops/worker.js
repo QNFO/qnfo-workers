@@ -1,4 +1,4 @@
-// qnfo-pipeline-ops v0.5.5-race-and-triage-fix (2026-09-13)
+// qnfo-pipeline-ops v0.5.0-intake-watchdog (2026-09-06)
 // Canonical watchdog worker: every-15-min self-healing loop over the autonomous research pipeline.
 // v0.5.0: ADDED intake-stall watchdog - detects idea_proposals stuck 'new' (never triaged) and a
 //   research_queue sitting empty while the intake backlog exists. Root cause of the 2026-09-03..09-06
@@ -6,42 +6,8 @@
 //   response-envelope change; runModel only read r.response/r.result, not choices[0].message.content),
 //   so proposals stayed 'new' forever and NOTHING alerted. Now pipeline-ops alarms on this class in
 //   <=15 min, and auto-triggers a triage drain when the triage worker is reachable.
-// v0.5.3-alert-dedup (2026-09-13, fleet audit): escalateTerminal() and intakeWatchdog() emitted a
-//   CRITICAL alert on every 15-min run even when the message itself said "-> agent_issues dup",
-//   i.e. the condition was already tracked by an open ticket. Measured: 765 critical alerts,
-//   ~96/day for two unchanged terminal failures. Both now gate on r.inserted, matching the
-//   convention escalateVersion() already uses in this same file. The per-run heartbeat is
-//   preserved by run()'s cloud_ops_events kind='health' row.
-// v0.5.4-summary-dedup (2026-09-13, fleet audit follow-up): v0.5.3 gated only the two inner
-//   emitters. Alert attribution by message shape showed the LARGEST emitter was untouched: run()'s
-//   own summary alert fired level='critical' every 15 min because terminalFailures() returns the two
-//   permanent failures (recover_count >= MAX_RECOVERS, already ticketed as agent_issues 644/651).
-//   409 of the 765 critical alerts were that single line - more than escalateTerminal (333) and
-//   intakeWatchdog (23) combined. The summary now emits only when the condition FINGERPRINT changes,
-//   or every 6h as a re-notify, tracked in the new pipeline_state table. Suppressed runs still write
-//   the cloud_ops_events kind='health' heartbeat, so liveness is unchanged.
-// v0.5.5-race-and-triage-fix (2026-09-13, ops-endpoint session). Three defects, each verified
-//   against live D1 rather than inferred:
-//   (a) escIssue() hand-assigned id = MAX(id)+1 on an AUTOINCREMENT primary key. sqlite_master
-//       confirms agent_issues.id is INTEGER PRIMARY KEY AUTOINCREMENT, so the explicit assignment
-//       was unnecessary AND race-prone against qnfo-fleet-advisor's */20 cron, which collides with
-//       this worker's */15 at :00 and :30. Two writers reading the same MAX(id) mint the same id;
-//       one insert is lost to the PK constraint and is swallowed by escIssue's catch, so the ticket
-//       silently never exists. Now omitted - AUTOINCREMENT assigns and meta.last_row_id returns it.
-//   (b) escIssue() wrote datetime('now') TEXT into columns DECLARED INTEGER. Live typeof() census of
-//       agent_issues: integer/integer 126, integer/text 336, text/text 169, text/integer 55 - four
-//       distinct combinations, so any date-range predicate on this table is not well-defined.
-//       Writes are now epoch-ms integers, matching the declaration and the dominant created_at form.
-//   (c) TRIAGE_URL was dead: GET https://qnfo-idea-triage.q08.workers.dev/health returns HTTP 404
-//       (verified this session). The description string promised "Auto-remediation: triage drain"
-//       while the reachable code performed a health GET and nothing else. The drain is now an actual
-//       POST attempt against the orchestrator's /triage/run, recorded non-fatally, and the
-//       description no longer over-claims.
-//   NOTE ON DEPLOYMENT: the live build is NOT this source. pipeline_state does not exist in live D1,
-//   yet ensureSchema() below creates it on first run - therefore the deployed build predates v0.5.4,
-//   and every drift comparison made against this file has been comparing the repo to itself.
 
-var VERSION = "0.5.5-race-and-triage-fix";
+var VERSION = "0.5.2-intake-alert-gate";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -51,9 +17,7 @@ var R_RETRY_HOURS = 6;
 var MAX_TERMINAL_REARMS = 3;
 var INTAKE_STALL_MIN = 120;        // minutes before a 'new' proposal is a stall
 var INTAKE_BACKLOG_ALERT_N = 5;    // proposals stuck -> escalate
-var SUMMARY_RENOTIFY_HOURS = 6;    // re-emit an unchanged summary at most this often
-var TRIAGE_URL = "https://qnfo-idea-triage.q08.workers.dev";          // health probe target
-var TRIAGE_DRAIN_URL = "https://qnfo-intent-orchestrator.q08.workers.dev/triage/run"; // drain target
+var TRIAGE_URL = "https://qnfo-idea-triage.q08.workers.dev";
 
 function json(data, status) { return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
 function nowIso() { return new Date().toISOString(); }
@@ -62,12 +26,9 @@ async function escIssue(env, title, desc, cat, prio) {
   try {
     const dup = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND title LIKE ?1").bind("%" + title.slice(0, 60) + "%").first();
     if (dup && Number(dup.n) > 0) return { inserted: false, reason: "dup-open" };
-    // v0.5.5: do NOT hand-assign id. agent_issues.id is INTEGER PRIMARY KEY AUTOINCREMENT;
-    // MAX(id)+1 raced the fleet-advisor cron and silently dropped tickets into the catch below.
-    // created_at/updated_at are declared INTEGER, so write epoch-ms rather than datetime('now').
-    const ts = Date.now();
-    const ins = await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(String(title).slice(0, 180), String(desc).slice(0, 600), WORKER, cat, prio, "open", null, ts, ts).run();
-    const nid = (ins && ins.meta && ins.meta.last_row_id) ? ins.meta.last_row_id : null;
+    const mx = await env.QNFO_AUDIT.prepare("SELECT COALESCE(MAX(id),0) m FROM agent_issues").first();
+    const nid = (mx && Number(mx.m)) + 1;
+    await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind(nid, String(title).slice(0, 180), String(desc).slice(0, 600), WORKER, cat, prio, "open", null).run();
     return { inserted: true, id: nid };
   } catch (e) { return { inserted: false, error: String(e.message).slice(0, 120) }; }
 }
@@ -75,7 +36,6 @@ async function escIssue(env, title, desc, cat, prio) {
 async function ensureSchema(env) {
   try { await env.QNFO_AUDIT.prepare("ALTER TABLE research_queue ADD COLUMN recover_count INTEGER DEFAULT 0").run(); } catch (e) {}
   try { await env.QNFO_AUDIT.prepare("ALTER TABLE research_queue ADD COLUMN terminal_rearms INTEGER DEFAULT 0").run(); } catch (e) {}
-  try { await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS pipeline_state (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT)").run(); } catch (e) {}
 }
 
 async function health(env) {
@@ -106,30 +66,17 @@ async function intakeWatchdog(env) {
   const isStall = stalledN >= INTAKE_BACKLOG_ALERT_N && (oldestAgeMin === null || oldestAgeMin >= INTAKE_STALL_MIN);
   if (isStall) {
     const title = "INTAKE-STALL: idea_proposals stuck new (single-issue, self-closes on clear)";
-    // v0.5.5: the previous description promised "Auto-remediation: triage drain" while the code
-    // performed only a health GET. It now names the drain route it actually attempts.
-    const desc = "idea_proposals backlog not being triaged: " + stalledN + " stuck new; oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + "min" : "?") + "; queued=" + h.queued + " researching=" + h.researching + ". Drain attempted via " + TRIAGE_DRAIN_URL + " (see triage_drain in this run's outcome). Check qnfo-idea-triage scoreIdea if it recurs.";
+    const desc = "idea_proposals backlog not being triaged: " + stalledN + " stuck new; oldest " + (oldestAgeMin !== null ? Math.round(oldestAgeMin) + "min" : "?") + "; queued=" + h.queued + " researching=" + h.researching + ". Auto-remediation: triage drain. Check qnfo-idea-triage scoreIdea if it recurs.";
     const r = await escIssue(env, title, desc, "research-intake", "high");
     out.action = "escalated";
-    // v0.5.5: the health probe target and the drain target are different hosts. Record both.
-    try { const resp = await fetch(TRIAGE_URL + "/health"); out.triage_health = resp.status; } catch (e) { out.triage_health = "err"; }
-    // v0.5.5: perform the drain the description always claimed. Non-fatal: a drain failure must
-    // never break the watchdog's own heartbeat, and it is recorded rather than swallowed.
+    try { const resp = await fetch(TRIAGE_URL + "/health"); out.triage_health = resp.status; } catch (e) {}
     try {
-      const dr = await fetch(TRIAGE_DRAIN_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: WORKER, reason: "intake-stall", intake_new: stalledN }) });
-      out.triage_drain = dr.status;
-    } catch (e) { out.triage_drain = "err"; }
-    // v0.5.3: only alert on a NEWLY filed ticket. Previously a critical alert was emitted on
-    // every 15-min run even when the message said "dup", i.e. the ticket already existed.
-    if (r.inserted) {
-      try {
-        await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "INTAKE-STALL escalated -> agent_issues ok: " + stalledN + " proposals stuck new").run();
-      } catch (e) {}
-    }
+      await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "INTAKE-STALL escalated -> agent_issues " + (r.inserted ? "ok" : "dup") + ": " + stalledN + " proposals stuck new").run();
+    } catch (e) {}
   } else {
     // stall cleared or not a stall - self-close any open INTAKE-STALL issue (single-issue lifecycle)
     try {
-      await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE status='open' AND title LIKE 'INTAKE-STALL%'").bind(Date.now()).run();
+      await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=datetime('now') WHERE status='open' AND title LIKE 'INTAKE-STALL%'").run();
       out.action = "cleared";
     } catch (eC) {}
   }
@@ -137,10 +84,12 @@ async function intakeWatchdog(env) {
 }async function recoverStale(env) {
   const r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=NULL, error='stale-recovered', claimed_at=NULL, agent_task_id=NULL WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < datetime('now','-" + STALE_MIN + " minutes')").run();
   return (r && r.meta && r.meta.changes) || 0;
-}async function recoverFailed(env) {
+}
+async function recoverFailed(env) {
   const r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=NULL, error=NULL, claimed_at=NULL, agent_task_id=NULL, completed_at=NULL, recover_count = COALESCE(recover_count,0) + 1 WHERE status='failed' AND COALESCE(recover_count,0) < ?1").bind(MAX_RECOVERS).run();
   return (r && r.meta && r.meta.changes) || 0;
-}async function rearmTerminal(env) {
+}
+async function rearmTerminal(env) {
   let n = 0;
   const rows = await env.QNFO_AUDIT.prepare("SELECT id, source_id, completed_at, created_at FROM research_queue WHERE status='failed' AND COALESCE(recover_count,0) >= ?1 AND COALESCE(terminal_rearms,0) < ?2").bind(MAX_RECOVERS, MAX_TERMINAL_REARMS).all();
   for (const t of (rows.results || [])) {
@@ -152,7 +101,7 @@ async function intakeWatchdog(env) {
     if (up && up.meta && up.meta.changes) {
       n++;
       try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "info", "research_queue terminal auto-rearmed id=" + t.id + " (" + String(t.source_id || "?").slice(0, 40) + ", " + Math.round(ageH * 10) / 10 + "h old) -> queued fresh cycle").run(); } catch (e) {}
-      try { await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE status='open' AND title LIKE ?2").bind(Date.now(), "%TERMINAL research failure " + String(t.source_id || "").slice(0, 40) + "%").run(); } catch (e) {}
+      try { await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=datetime('now') WHERE status='open' AND title LIKE ?1").bind("%TERMINAL research failure " + String(t.source_id || "").slice(0, 40) + "%").run(); } catch (e) {}
     }
   }
   return n;
@@ -166,13 +115,7 @@ async function escalateTerminal(env, terminal) {
     const title = "TERMINAL research failure " + String(t.source_id || t.id || "?").slice(0, 40);
     const desc = "research_queue terminal (recover_count " + (t.recover_count || 0) + " >= " + MAX_RECOVERS + "): " + String(t.error || "no error").slice(0, 400);
     const r = await escIssue(env, title, desc, "research-pipeline", "high");
-    // v0.5.3: gate on r.inserted. Previously this emitted a CRITICAL alert every 15 min even
-    // when the message read "-> agent_issues dup" (the ticket already existed). Measured:
-    // 765 critical alerts, ~96/day for two unchanged terminal failures. escalateVersion()
-    // below already used this pattern; escalateTerminal() now matches it.
-    if (r.inserted) {
-      try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "terminal research failure " + String(t.source_id || t.id || "?").slice(0, 40) + " -> agent_issues ok: " + String(t.error || "").slice(0, 200)).run(); } catch (e) {}
-    }
+    try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "critical", "terminal research failure " + String(t.source_id || t.id || "?").slice(0, 40) + " -> agent_issues " + (r.inserted ? "ok" : "dup") + ": " + String(t.error || "").slice(0, 200)).run(); } catch (e) {}
   }
 }
 async function versionErrors(env) {
@@ -219,38 +162,14 @@ async function run(env) {
   const intake = await intakeWatchdog(env);
   const stalled = h.researching + h.review;
   const intakeEscalating = intake && intake.action === "escalated";
-  let summaryState = "none";
   if (h.failed > 0 || stalled > 0 || terminal.length > 0 || vErr.length > 0 || intakeEscalating) {
     const level = terminal.length > 0 || intakeEscalating ? "critical" : (h.failed > 0 || vErr.length > 0 ? "warning" : "info");
     const msg = "research pipeline: failed=" + h.failed + " stalled=" + stalled + " published=" + h.published + " recovered=" + recovered + " vqErr=" + vErr.length + " rearmed=" + rearmed + " rTerm=" + rearmedTerminal + " intake=" + (intake && intake.action !== "none" ? intake.action : "ok") + (terminal.length ? " terminal=" + terminal.length : "");
-    // v0.5.4: fingerprint-gate the summary. The previous unconditional emit produced 409 critical
-    // alerts (the single largest emitter) for a condition that cannot clear - the two permanent
-    // terminal failures, already ticketed as agent_issues 644/651. Emit on change, or re-notify
-    // every SUMMARY_RENOTIFY_HOURS. The cloud_ops_events heartbeat below is unaffected.
-    const fp = [level, h.failed, stalled, terminal.length, vErr.length, intakeEscalating ? 1 : 0, rearmed, rearmedTerminal].join("|");
-    let due = true;
-    try {
-      const prev = await env.QNFO_AUDIT.prepare("SELECT v, updated_at FROM pipeline_state WHERE k='summary_fp'").first();
-      if (prev && prev.v === fp && prev.updated_at) {
-        const ts = String(prev.updated_at);
-        const ms = Date.parse(ts.replace(" ", "T") + (ts.indexOf("Z") >= 0 ? "" : "Z"));
-        if (isFinite(ms)) {
-          const ageH = (Date.now() - ms) / 36e5;
-          if (ageH >= 0 && ageH < SUMMARY_RENOTIFY_HOURS) due = false;
-        }
-      }
-    } catch (e) {}
-    if (due) {
-      summaryState = "emitted";
-      try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, level, msg).run(); } catch (e) {}
-      try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO pipeline_state (k, v, updated_at) VALUES ('summary_fp', ?, datetime('now'))").bind(fp).run(); } catch (e) {}
-    } else {
-      summaryState = "suppressed-unchanged";
-    }
+    try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, level, msg).run(); } catch (e) {}
   }
   await digestAlerts(env);
   try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind("po-" + Date.now().toString(36) + "-" + Math.floor(Math.random()*1e6).toString(36), nowIso(), "health", JSON.stringify(h), JSON.stringify({ intake: intake }), WORKER, "ok").run(); } catch (e) {}
-  return Object.assign({ recovered: recovered, recoveredStale: recoveredStale, recoveredFailed: recoveredFailed, rearmedTerminal: rearmedTerminal, terminal: terminal.length, vqErr: vErr.length, rearmed: rearmed, intake: intake, summary: summaryState }, h);
+  return Object.assign({ recovered: recovered, recoveredStale: recoveredStale, recoveredFailed: recoveredFailed, rearmedTerminal: rearmedTerminal, terminal: terminal.length, vqErr: vErr.length, rearmed: rearmed, intake: intake }, h);
 }
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); },

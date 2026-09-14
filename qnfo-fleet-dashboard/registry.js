@@ -1,709 +1,825 @@
-// qnfo-fleet-dashboard registry - regenerated from the DEPLOYED worker (registry v4, captured 2026-09-12T10:00:00Z)
-// REGISTRY-LAG-PARITY-1: the repo previously held a stale v3/2026-09-10 snapshot; this syncs the file to the live deployed registry.
+// qnfo-fleet-dashboard registry - regenerated 2026-09-12 from service_registry (live fleet, 0 ghosts)
+// Schedules: CF Workers API; purposes curated; device-bound: schtasks live capture
 export const REGISTRY = {
-  "version": 4,
-  "captured_at": "2026-09-12T10:00:00Z",
-  "note": "Regenerated 2026-09-12 (fleet-consolidation cleanup): scheduled + health_probes rebuilt from live CF scripts (54 workers, 40 cron), dropped deleted/consolidated workers, chain stages repointed to live workers, worker /health probing moved to CF-API liveness (workers.dev subrequest is broken from within a Worker). v2 (1.3.0): self HTTP probe replaced by an internal self-assert (a Worker cannot reliably fetch its own custom domain - it returns 522); domain probes carry kind=domain and no longer emit a script-missing label (hostnames are not script ids); probe issues require 2+ failures in 30m (anti-transient).",
-  "scheduled": [
+ "version": 5,
+ "captured_at": "2026-09-12T11:00:00.000Z",
+ "note": "Regenerated 2026-09-12 (fleet reconciliation v2): 54 live workers; 54 health probes (added 12 consolidation hubs); 9 flow chains (restored research-intake + fleet-exec, stage labels -> consolidated hubs). Live = 54 workers (service_registry source of truth).",
+ "scheduled": [
+  {
+   "name": "calendar-api",
+   "crons": [
+    "17 * * * *"
+   ],
+   "purpose": "Calendar/email intent sync",
+   "group": "intent-email",
+   "modified_on": "2026-09-03T04:46:55.755286Z"
+  },
+  {
+   "name": "osf-integrity-check",
+   "crons": [
+    "0 9 1 * *"
+   ],
+   "purpose": "OSF integrity sweep",
+   "group": "research-publish",
+   "modified_on": "2026-09-01T11:56:24.297281Z"
+  },
+  {
+   "name": "personal-api",
+   "crons": [
+    "5 5 * * *"
+   ],
+   "purpose": "Personal twin daily maintenance",
+   "group": "personal",
+   "modified_on": "2026-09-08T15:21:42.726887Z"
+  },
+  {
+   "name": "qnfo-ai-calibration",
+   "crons": [
+    "*/30 * * * *"
+   ],
+   "purpose": "AI model calibration probes",
+   "group": "fleet-ai",
+   "modified_on": "2026-09-08T10:24:30.073334Z"
+  },
+  {
+   "name": "qnfo-archive",
+   "crons": [
+    "0 4 * * *"
+   ],
+   "purpose": "Archive sweep",
+   "group": "fleet-ops",
+   "modified_on": "2026-07-30T12:05:58.320447Z"
+  },
+  {
+   "name": "qnfo-backlog-exec",
+   "crons": [
+    "10 1 * * *"
+   ],
+   "purpose": "Deferred backlog executor",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-08T09:58:13.652469Z"
+  },
+  {
+   "name": "qnfo-chat-canary",
+   "crons": [
+    "15 */3 * * *",
+    "30 6 * * *"
+   ],
+   "purpose": "Chat canary probes",
+   "group": "fleet-ai",
+   "modified_on": "2026-09-03T04:57:33.036401Z"
+  },
+  {
+   "name": "qnfo-cloud-ops",
+   "crons": [
+    "0 15 * * 5",
+    "0 4 1 * *",
+    "0 4 * * 7",
+    "0 5 * * 1",
+    "0 6 * * 1",
+    "0 6,12 * * 1-5",
+    "0 6 * * 6",
+    "0 7,13 * * 1-5",
+    "0 7 * * 7",
+    "0 8 * * 1-5",
+    "0 9 * * 1-5",
+    "0 9 3 9 *",
+    "10 3 * * *",
+    "15 4 * * *",
+    "15 5 * * 1",
+    "20 4 * * *",
+    "30 3 * * 1",
+    "30 5 * * 1",
+    "30 6 * * 1-5",
+    "30 7 * * 1-5",
+    "5 3,15 * * *"
+   ],
+   "purpose": "Cloud ops weekly digests + lifecycle",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-09T13:53:56.176994Z"
+  },
+  {
+   "name": "qnfo-ddocs-indexer",
+   "crons": [
+    "37 */2 * * *"
+   ],
+   "purpose": "Deep-docs indexer",
+   "group": "research-publish",
+   "modified_on": "2026-09-04T09:55:53.595087Z"
+  },
+  {
+   "name": "qnfo-email-orchestrator",
+   "crons": [
+    "0 */3 * * *"
+   ],
+   "purpose": "Email intent orchestration",
+   "group": "intent-email",
+   "modified_on": "2026-09-08T12:32:37.440974Z"
+  },
+  {
+   "name": "qnfo-events",
+   "crons": [
+    "15 */6 * * *"
+   ],
+   "purpose": "Events processing",
+   "group": "engagement",
+   "modified_on": "2026-09-04T02:04:15.974811Z"
+  },
+  {
+   "name": "qnfo-fleet-dashboard",
+   "crons": [
+    "*/15 * * * *"
+   ],
+   "purpose": "",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-09T08:46:19.690839Z"
+  },
+  {
+   "name": "qnfo-impact",
+   "crons": [
+    "0 4 * * *"
+   ],
+   "purpose": "Impact metrics",
+   "group": "engagement",
+   "modified_on": "2026-09-01T09:56:57.809672Z"
+  },
+  {
+   "name": "qnfo-infra",
+   "crons": [
+    "0 18 * * *",
+    "30 6 * * *"
+   ],
+   "purpose": "Infra state snapshots",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-05T20:44:04.55895Z"
+  },
+  {
+   "name": "qnfo-intent-orchestrator",
+   "crons": [
+    "0 6 * * *",
+    "30 6 * * *"
+   ],
+   "purpose": "Intent digest/routing",
+   "group": "intent-email",
+   "modified_on": "2026-09-05T20:47:40.888348Z"
+  },
+  {
+   "name": "qnfo-kaizen",
+   "crons": [
+    "0 10 * * 1",
+    "0 2 * * *"
+   ],
+   "purpose": "Kaizen watchtower + meta loop",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-08T13:56:25.25014Z"
+  },
+  {
+   "name": "qnfo-lifecycle",
+   "crons": [
+    "0 * * * *",
+    "0 0 1 * *",
+    "0 3 * * *",
+    "0 4 * * *",
+    "0 5 * * *",
+    "0 6 * * *",
+    "0 7 * * *",
+    "0 8 * * 1",
+    "*/30 * * * *"
+   ],
+   "purpose": "Lifecycle scheduled ops",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-01T07:12:40.986974Z"
+  },
+  {
+   "name": "qnfo-ops",
+   "crons": [
+    "*/30 * * * *"
+   ],
+   "purpose": "Ops AI gateway health loop",
+   "group": "fleet-ai",
+   "modified_on": "2026-09-09T15:45:22.800385Z"
+  },
+  {
+   "name": "qnfo-outreach",
+   "crons": [
+    "0 11 * * 1-5"
+   ],
+   "purpose": "Outreach campaign engine",
+   "group": "engagement",
+   "modified_on": "2026-09-02T22:32:56.771754Z"
+  },
+  {
+   "name": "qnfo-paper-explainer",
+   "crons": [
+    "0 14 * * *"
+   ],
+   "purpose": "",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-09T09:18:46.234969Z"
+  },
+  {
+   "name": "qnfo-paper-indexer",
+   "crons": [
+    "0 6 * * *"
+   ],
+   "purpose": "Paper indexer",
+   "group": "research-publish",
+   "modified_on": "2026-08-12T13:07:52.596336Z"
+  },
+  {
+   "name": "qnfo-paper-reviser",
+   "crons": [
+    "37 */4 * * *"
+   ],
+   "purpose": "Publication reviser loop",
+   "group": "research-publish",
+   "modified_on": "2026-09-09T07:53:16.479808Z"
+  },
+  {
+   "name": "qnfo-research-exec",
+   "crons": [
+    "*/10 * * * *"
+   ],
+   "purpose": "Research version_queue drain",
+   "group": "research-publish",
+   "modified_on": "2026-09-09T07:59:38.174179Z"
+  },
+  {
+   "name": "qnfo-skill-sync",
+   "crons": [
+    "0 3 * * *"
+   ],
+   "purpose": "Skill sync",
+   "group": "fleet-ops",
+   "modified_on": "2026-09-03T13:39:39.932797Z"
+  },
+  {
+   "name": "qnfo-social",
+   "crons": [
+    "0 6 * * *",
+    "30 14 * * *"
+   ],
+   "purpose": "Social amplifier queue",
+   "group": "engagement",
+   "modified_on": "2026-09-08T15:10:11.229635Z"
+  },
+  {
+   "name": "qnfo-twin-maintain",
+   "crons": [
+    "0 4 * * *"
+   ],
+   "purpose": "Personal twin maintain",
+   "group": "personal",
+   "modified_on": "2026-09-01T07:50:03.966557Z"
+  },
+  {
+   "name": "research-daily-brief",
+   "crons": [
+    "0 6 * * *"
+   ],
+   "purpose": "Daily research brief send",
+   "group": "research-publish",
+   "modified_on": "2026-09-02T08:32:20.47738Z"
+  }
+ ],
+ "health_probes": [
+  {
+   "name": "calendar-api",
+   "url": "https://calendar-api.q08.workers.dev/health"
+  },
+  {
+   "name": "obsidian-writer",
+   "url": "https://obsidian-writer.q08.workers.dev/health"
+  },
+  {
+   "name": "osf-integrity-check",
+   "url": "https://osf-integrity-check.q08.workers.dev/health"
+  },
+  {
+   "name": "personal-api",
+   "url": "https://personal-api.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-agent-orchestrator",
+   "url": "https://qnfo-agent-orchestrator.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-agent-ws",
+   "url": "https://qnfo-agent-ws.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-ai",
+   "url": "https://qnfo-ai.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-ai-calibration",
+   "url": "https://qnfo-ai-calibration.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-ai-search",
+   "url": "https://qnfo-ai-search.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-archive",
+   "url": "https://qnfo-archive.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-backlog-exec",
+   "url": "https://qnfo-backlog-exec.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-chat-canary",
+   "url": "https://qnfo-chat-canary.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-cloud-ops",
+   "url": "https://qnfo-cloud-ops.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-ddocs-indexer",
+   "url": "https://qnfo-ddocs-indexer.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-email",
+   "url": "https://qnfo-email.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-email-orchestrator",
+   "url": "https://qnfo-email-orchestrator.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-events",
+   "url": "https://qnfo-events.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-fleet-dashboard",
+   "url": "https://qnfo-fleet-dashboard.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-gateway",
+   "url": "https://qnfo-gateway.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-impact",
+   "url": "https://qnfo-impact.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-infra",
+   "url": "https://qnfo-infra.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-intent-orchestrator",
+   "url": "https://qnfo-intent-orchestrator.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-ipatent",
+   "url": "https://qnfo-ipatent.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-kaizen",
+   "url": "https://qnfo-kaizen.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-lifecycle",
+   "url": "https://qnfo-lifecycle.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-memory-mcp",
+   "url": "https://qnfo-memory-mcp.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-observability",
+   "url": "https://qnfo-observability.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-ops",
+   "url": "https://qnfo-ops.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-outreach",
+   "url": "https://qnfo-outreach.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-paper-explainer",
+   "url": "https://qnfo-paper-explainer.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-paper-indexer",
+   "url": "https://qnfo-paper-indexer.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-paper-reviser",
+   "url": "https://qnfo-paper-reviser.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-pdf",
+   "url": "https://qnfo-pdf.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-proof",
+   "url": "https://qnfo-proof.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-qwav",
+   "url": "https://qnfo-qwav.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-research-exec",
+   "url": "https://qnfo-research-exec.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-research-supervisor",
+   "url": "https://qnfo-research-supervisor.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-skill-sync",
+   "url": "https://qnfo-skill-sync.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-social",
+   "url": "https://qnfo-social.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-tools-mcp",
+   "url": "https://qnfo-tools-mcp.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-twin-maintain",
+   "url": "https://qnfo-twin-maintain.q08.workers.dev/health"
+  },
+  {
+   "name": "research-daily-brief",
+   "url": "https://research-daily-brief.q08.workers.dev/health"
+  },
+  {
+   "name": "ai-health-prober",
+   "url": "https://ai-health-prober.q08.workers.dev/health"
+  },
+  {
+   "name": "audit-hub",
+   "url": "https://audit-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "companion-hub",
+   "url": "https://companion-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "errata-hub",
+   "url": "https://errata-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "idea-hub",
+   "url": "https://idea-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "jnl-pipeline",
+   "url": "https://jnl-pipeline.q08.workers.dev/health"
+  },
+  {
+   "name": "radar-hub",
+   "url": "https://radar-hub.q08.workers.dev/health"
+  },
+  {
+   "name": "fleet-exec",
+   "url": "https://fleet-exec.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-fleet-control",
+   "url": "https://qnfo-fleet-control.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-autopilot",
+   "url": "https://qnfo-autopilot.q08.workers.dev/health"
+  },
+  {
+   "name": "qnfo-signal-loop",
+   "url": "https://qnfo-signal-loop.q08.workers.dev/health"
+  },
+  {
+   "name": "personal-companion",
+   "url": "https://personal-companion.q08.workers.dev/health"
+  }
+ ],
+ "chains": [
+  {
+   "name": "research-intake",
+   "label": "Research intake (radar -> ideas -> triage)",
+   "stages": [
+    "radar-hub",
+    "idea-hub"
+   ],
+   "checks": [
     {
-      "name": "ai-health-prober",
-      "crons": [
-        "15 * * * *"
-      ],
-      "purpose": "AI health prober loop",
-      "group": "fleet-ai"
+     "label": "untriaged proposals",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'",
+     "max": 10
     },
     {
-      "name": "audit-hub",
-      "crons": [
-        "23 6 * * 1",
-        "30 4 * * *",
-        "40 4 * * *",
-        "45 1,13 * * *"
-      ],
-      "purpose": "Audit hub (auditor + blank-audit merged)",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "calendar-api",
-      "crons": [
-        "17 * * * *"
-      ],
-      "purpose": "Calendar/email intent sync",
-      "group": "intent-email"
-    },
-    {
-      "name": "companion-hub",
-      "crons": [
-        "0 */12 * * *",
-        "0 2 * * *",
-        "0 6 * * *"
-      ],
-      "purpose": "Personal companion hub",
-      "group": "personal"
-    },
-    {
-      "name": "fleet-exec",
-      "crons": [
-        "* * * * *"
-      ],
-      "purpose": "Dynamic execution layer dispatcher",
-      "group": "fleet"
-    },
-    {
-      "name": "idea-hub",
-      "crons": [
-        "0 * * * *",
-        "*/10 * * * *"
-      ],
-      "purpose": "Idea hub (miner + triage merged)",
-      "group": "engagement"
-    },
-    {
-      "name": "jnl-pipeline",
-      "crons": [
-        "*/10 * * * *",
-        "23 */2 * * *"
-      ],
-      "purpose": "Journal pipeline (watch + referee merged)",
-      "group": "research-publish"
-    },
-    {
-      "name": "osf-integrity-check",
-      "crons": [
-        "0 9 1 * *"
-      ],
-      "purpose": "OSF integrity sweep",
-      "group": "research-publish"
-    },
-    {
-      "name": "personal-api",
-      "crons": [
-        "5 5 * * *"
-      ],
-      "purpose": "Personal twin API maintenance",
-      "group": "personal"
-    },
-    {
-      "name": "personal-companion",
-      "crons": [
-        "0 6 * * *"
-      ],
-      "purpose": "Personal companion loop",
-      "group": "personal"
-    },
-    {
-      "name": "qnfo-ai",
-      "crons": [
-        "23 3 * * *"
-      ],
-      "purpose": "AI gateway maintenance",
-      "group": "fleet-ai"
-    },
-    {
-      "name": "qnfo-ai-calibration",
-      "crons": [
-        "*/30 * * * *"
-      ],
-      "purpose": "AI model calibration probes",
-      "group": "fleet-ai"
-    },
-    {
-      "name": "qnfo-archive",
-      "crons": [
-        "0 4 * * *"
-      ],
-      "purpose": "Archive sweep",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-autopilot",
-      "crons": [
-        "5 * * * *"
-      ],
-      "purpose": "Autopilot closed-loop driver",
-      "group": "fleet"
-    },
-    {
-      "name": "qnfo-backlog-exec",
-      "crons": [
-        "10 1 * * *"
-      ],
-      "purpose": "Deferred backlog executor",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-chat-canary",
-      "crons": [
-        "15 */3 * * *",
-        "19 6 * * *"
-      ],
-      "purpose": "Chat canary probes",
-      "group": "fleet-ai"
-    },
-    {
-      "name": "qnfo-cloud-ops",
-      "crons": [
-        "0 15 * * 5",
-        "0 4 1 * *",
-        "0 4 * * 7",
-        "0 5 * * 1",
-        "0 6,12 * * 1-5",
-        "0 7,13 * * 1-5",
-        "0 7 * * 7",
-        "0 8 * * 1-5",
-        "0 9 * * 1-5",
-        "0 9 3 9 *",
-        "10 3 * * *",
-        "11 6 * * 1",
-        "13 6 * * 6",
-        "15 4 * * *",
-        "15 5 * * 1",
-        "20 4 * * *",
-        "30 3 * * 1",
-        "30 5 * * 1",
-        "30 6 * * 1-5",
-        "30 7 * * 1-5",
-        "5 3,15 * * *"
-      ],
-      "purpose": "Cloud ops weekly digests + lifecycle",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-ddocs-indexer",
-      "crons": [
-        "37 */2 * * *"
-      ],
-      "purpose": "Deep-docs indexer",
-      "group": "research-publish"
-    },
-    {
-      "name": "qnfo-email-orchestrator",
-      "crons": [
-        "0 */3 * * *"
-      ],
-      "purpose": "Email intent orchestration",
-      "group": "intent-email"
-    },
-    {
-      "name": "qnfo-events",
-      "crons": [
-        "15 */6 * * *"
-      ],
-      "purpose": "Events processing",
-      "group": "engagement"
-    },
-    {
-      "name": "qnfo-fleet-control",
-      "crons": [
-        "0 * * * *",
-        "0 3 * * *",
-        "0 4 1 * *",
-        "*/20 * * * *",
-        "30 3 * * 1"
-      ],
-      "purpose": "Fleet control plane (advisor+calibrator+deploy merged)",
-      "group": "fleet"
-    },
-    {
-      "name": "qnfo-fleet-dashboard",
-      "crons": [
-        "*/15 * * * *"
-      ],
-      "purpose": "Fleet dashboard refresh",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-infra",
-      "crons": [
-        "0 18 * * *",
-        "21 6 * * *"
-      ],
-      "purpose": "Infra state snapshots",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-intent-orchestrator",
-      "crons": [
-        "0 6 * * *",
-        "30 6 * * *"
-      ],
-      "purpose": "Intent digest/routing",
-      "group": "intent-email"
-    },
-    {
-      "name": "qnfo-kaizen",
-      "crons": [
-        "0 10 * * 1",
-        "0 2 * * *"
-      ],
-      "purpose": "Kaizen watchtower + meta loop",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-lifecycle",
-      "crons": [
-        "0 * * * *",
-        "0 0 1 * *",
-        "0 3 * * *",
-        "0 4 * * *",
-        "0 5 * * *",
-        "0 7 * * *",
-        "0 8 * * 1",
-        "*/30 * * * *",
-        "9 6 * * *"
-      ],
-      "purpose": "Lifecycle scheduled ops",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-observability",
-      "crons": [
-        "*/15 * * * *",
-        "15 6 * * *",
-        "17 * * * *"
-      ],
-      "purpose": "Observability telemetry",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-ops",
-      "crons": [
-        "*/30 * * * *"
-      ],
-      "purpose": "Ops AI gateway health loop",
-      "group": "fleet-ai"
-    },
-    {
-      "name": "qnfo-outreach",
-      "crons": [
-        "0 11 * * 1-5"
-      ],
-      "purpose": "Outreach campaign engine",
-      "group": "engagement"
-    },
-    {
-      "name": "qnfo-paper-explainer",
-      "crons": [
-        "0 14 * * *"
-      ],
-      "purpose": "Paper explainer generation",
-      "group": "research-publish"
-    },
-    {
-      "name": "qnfo-paper-indexer",
-      "crons": [
-        "5 6 * * *"
-      ],
-      "purpose": "Paper indexer",
-      "group": "research-publish"
-    },
-    {
-      "name": "qnfo-paper-reviser",
-      "crons": [
-        "37 */4 * * *"
-      ],
-      "purpose": "Publication reviser loop",
-      "group": "research-publish"
-    },
-    {
-      "name": "qnfo-research-exec",
-      "crons": [
-        "*/10 * * * *"
-      ],
-      "purpose": "Research version_queue drain",
-      "group": "research-publish"
-    },
-    {
-      "name": "qnfo-signal-loop",
-      "crons": [
-        "0 * * * *"
-      ],
-      "purpose": "Signal loop processor",
-      "group": "fleet"
-    },
-    {
-      "name": "qnfo-skill-sync",
-      "crons": [
-        "0 3 * * *"
-      ],
-      "purpose": "Skill sync",
-      "group": "fleet-ops"
-    },
-    {
-      "name": "qnfo-social",
-      "crons": [
-        "0 6 * * *",
-        "30 14 * * *"
-      ],
-      "purpose": "Social amplifier queue",
-      "group": "engagement"
-    },
-    {
-      "name": "qnfo-twin-maintain",
-      "crons": [
-        "0 4 * * *"
-      ],
-      "purpose": "Personal twin maintain",
-      "group": "personal"
-    },
-    {
-      "name": "radar-hub",
-      "crons": [
-        "0 11 1,15 * *",
-        "0 5 * * 1",
-        "0 6 1 * *",
-        "0 7 * * 2",
-        "0 8 * * 7",
-        "0 9 * * 7",
-        "30 5 * * 2",
-        "30 8 * * *"
-      ],
-      "purpose": "Radar hub (arxiv+events+research+citation merged)",
-      "group": "research-publish"
-    },
-    {
-      "name": "research-daily-brief",
-      "crons": [
-        "7 6 * * *"
-      ],
-      "purpose": "Daily research brief send",
-      "group": "research-publish"
+     "label": "accepted fuel",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')",
+     "min": 1
     }
-  ],
-  "chains": [
+   ]
+  },
+  {
+   "name": "research-exec",
+   "label": "Research execution (queue -> papers)",
+   "stages": [
+    "qnfo-research-exec",
+    "qnfo-research-supervisor"
+   ],
+   "checks": [
     {
-      "name": "research-intake",
-      "label": "Research intake (radar -> ideas -> triage)",
-      "stages": [
-        "radar-hub",
-        "idea-hub"
-      ],
-      "checks": [
-        {
-          "label": "untriaged proposals",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status='new'",
-          "max": 10
-        },
-        {
-          "label": "accepted fuel",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('triaged_accepted','ensemble-registered')",
-          "min": 1
-        }
-      ]
+     "label": "queue depth",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')",
+     "max": 10
     },
     {
-      "name": "research-exec",
-      "label": "Research execution (queue -> papers)",
-      "stages": [
-        "qnfo-research-exec"
-      ],
-      "checks": [
-        {
-          "label": "queue depth",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')",
-          "max": 10
-        },
-        {
-          "label": "published 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status='published' AND completed_at > datetime('now','-7 days')",
-          "min": 1
-        }
-      ]
-    },
-    {
-      "name": "publish",
-      "label": "Publication (reviser -> versions -> Zenodo)",
-      "stages": [
-        "qnfo-paper-reviser",
-        "qnfo-research-exec"
-      ],
-      "checks": [
-        {
-          "label": "drafted backlog",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'",
-          "max": 10
-        },
-        {
-          "label": "versions published 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND updated_at > datetime('now','-7 days')",
-          "min": 1
-        }
-      ]
-    },
-    {
-      "name": "knowledge-graph",
-      "label": "Knowledge graph (papers -> nodes)",
-      "stages": [
-        "qnfo-paper-indexer",
-        "qnfo-memory-mcp"
-      ],
-      "checks": [
-        {
-          "label": "KG nodes",
-          "store": "GRAPH",
-          "sql": "SELECT COUNT(*) AS n FROM nodes",
-          "min": 5e3
-        },
-        {
-          "label": "papers (living)",
-          "store": "LIVING",
-          "sql": "SELECT COUNT(*) AS n FROM papers",
-          "min": 500
-        }
-      ]
-    },
-    {
-      "name": "intent-loop",
-      "label": "Intent orchestration (email/calendar -> intents)",
-      "stages": [
-        "qnfo-email-orchestrator",
-        "calendar-api",
-        "qnfo-intent-orchestrator"
-      ],
-      "checks": [
-        {
-          "label": "pending intents",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM intents WHERE status='pending'",
-          "max": 10
-        }
-      ]
-    },
-    {
-      "name": "engagement",
-      "label": "Engagement (outreach + social)",
-      "stages": [
-        "qnfo-outreach",
-        "qnfo-social"
-      ],
-      "checks": [
-        {
-          "label": "outreach queue",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM outreach_queue WHERE status IN ('pending','needs-contact')",
-          "max": 50
-        },
-        {
-          "label": "threads queued",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE status='queued'",
-          "max": 30
-        },
-        {
-          "label": "threads posted 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE posted_at > datetime('now','-7 days')",
-          "min": 1
-        }
-      ]
-    },
-    {
-      "name": "governance",
-      "label": "Governance (register -> kaizen disposition)",
-      "stages": [
-        "qnfo-kaizen",
-        "qnfo-cloud-ops"
-      ],
-      "checks": [
-        {
-          "label": "user-waiting rows",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')",
-          "max": 0
-        },
-        {
-          "label": "proposed candidates",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'",
-          "max": 3
-        }
-      ]
-    },
-    {
-      "name": "fleet-exec",
-      "label": "Dynamic execution layer",
-      "stages": [
-        "fleet-exec",
-        "qnfo-fleet-control"
-      ],
-      "checks": [
-        {
-          "label": "runs 24h",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')",
-          "min": 1
-        },
-        {
-          "label": "rejected artifacts 7d",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')",
-          "max": 0
-        }
-      ]
-    },
-    {
-      "name": "telemetry",
-      "label": "Telemetry (trace -> worker_logs)",
-      "stages": [
-        "qnfo-observability"
-      ],
-      "checks": [
-        {
-          "label": "trace rows 24h",
-          "store": "AUDIT",
-          "sql": "SELECT COUNT(*) AS n FROM worker_logs WHERE ts_ms > (strftime('%s','now') - 86400) * 1000",
-          "min": 1
-        }
-      ]
+     "label": "published 7d",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM research_queue WHERE status='published' AND completed_at > datetime('now','-7 days')",
+     "min": 1
     }
-  ],
-  "windows_tasks": [
+   ]
+  },
+  {
+   "name": "publish",
+   "label": "Publication (reviser -> versions -> Zenodo)",
+   "stages": [
+    "qnfo-paper-reviser",
+    "qnfo-research-exec"
+   ],
+   "checks": [
     {
-      "name": "QNFO-ModelKey-Guard",
-      "status": "Ready",
-      "last": "9/7/2026 7:25:01 PM",
-      "lastres": "0",
-      "next": "9/7/2026 7:55:00 PM",
-      "schedule": "Minute (every 30)"
+     "label": "drafted backlog",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='drafted'",
+     "max": 10
     },
     {
-      "name": "QNFO-DeepChat-Backup",
-      "status": "Ready",
-      "last": "9/7/2026 9:19:54 AM",
-      "lastres": "-2147020576",
-      "next": "9/8/2026 6:45:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO-AgentDB-Daily-Backup",
-      "status": "Ready",
-      "last": "9/6/2026 9:30:01 PM",
-      "lastres": "0",
-      "next": "9/7/2026 9:30:00 PM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_DeepChat_Backup_Daily",
-      "status": "Ready",
-      "last": "9/7/2026 3:54:46 PM",
-      "lastres": "-2147020576",
-      "next": "9/8/2026 9:30:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_Snapshot_Purge",
-      "status": "Ready",
-      "last": "9/7/2026 4:34:52 AM",
-      "lastres": "-2147020576",
-      "next": "9/8/2026 3:00:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_Skill_Pull_Daily",
-      "status": "Ready",
-      "last": "9/7/2026 9:19:54 AM",
-      "lastres": "-2147020576",
-      "next": "9/8/2026 6:30:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_Chat_Log_Push",
-      "status": "Ready",
-      "last": "9/7/2026 9:19:54 AM",
-      "lastres": "-2147020576",
-      "next": "9/8/2026 5:25:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_Tape_Prune_Daily",
-      "status": "Ready",
-      "last": "9/7/2026 9:19:54 AM",
-      "lastres": "-2147020576",
-      "next": "9/8/2026 5:35:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_FS_Maintenance_Daily",
-      "status": "Ready",
-      "last": "9/7/2026 3:54:46 PM",
-      "lastres": "1",
-      "next": "9/8/2026 9:40:00 AM",
-      "schedule": "Daily"
-    },
-    {
-      "name": "QNFO_DeepChat_Reload",
-      "status": "Ready",
-      "last": "9/7/2026 7:36:01 PM",
-      "lastres": "0",
-      "next": "9/7/2026 7:46:00 PM",
-      "schedule": "Minute (every 10)"
-    },
-    {
-      "name": "QNFO_Obsidian_Sync",
-      "status": "Ready",
-      "last": "9/7/2026 7:38:01 PM",
-      "lastres": "3",
-      "next": "9/7/2026 7:53:00 PM",
-      "schedule": "Minute (every 15)"
-    },
-    {
-      "name": "QNFO_Obsidian_Cloud_Bridge",
-      "status": "Disabled",
-      "last": "11/30/1999",
-      "lastres": "267011",
-      "next": "N/A",
-      "schedule": "Daily"
+     "label": "versions published 7d",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND updated_at > datetime('now','-7 days')",
+     "min": 1
     }
-  ],
-  "local_crons": [
+   ]
+  },
+  {
+   "name": "knowledge-graph",
+   "label": "Knowledge graph (papers -> nodes)",
+   "stages": [
+    "qnfo-paper-indexer"
+   ],
+   "checks": [
     {
-      "id": "aa67d355",
-      "name": "QNFO Data Freshness Sync (calendar/email to orchestrator)",
-      "cron": "12 5 * * *",
-      "note": "canonical row 1"
+     "label": "KG nodes",
+     "store": "GRAPH",
+     "sql": "SELECT COUNT(*) AS n FROM nodes",
+     "min": 5000
     },
     {
-      "id": "42b1988c",
-      "name": "Fleet Drift and Self-Improvement Audit",
-      "cron": "30 5 * * 1",
-      "note": "canonical row 2"
-    },
-    {
-      "id": "c7f96688",
-      "name": "Local config/credential guard",
-      "cron": "device-triggered",
-      "note": "canonical row 3"
-    },
-    {
-      "id": "2055e49c",
-      "name": "Device-bound maintenance one-shot",
-      "cron": "one-shot",
-      "note": "canonical row 4"
-    },
-    {
-      "id": "6e91c844",
-      "name": "Front-end local cron mirror guard",
-      "cron": "device-triggered",
-      "note": "canonical row 5"
+     "label": "papers (living)",
+     "store": "LIVING",
+     "sql": "SELECT COUNT(*) AS n FROM papers",
+     "min": 500
     }
-  ],
-  "health_probes": [
-    { "name": "qnfo.org", "url": "https://qnfo.org/", "label": "QNFO public site", "kind": "domain" },
-    { "name": "papers.qnfo.org", "url": "https://papers.qnfo.org/", "label": "QNFO papers site", "kind": "domain" },
-    { "name": "qnfo-fleet-dashboard", "self": true, "label": "Fleet dashboard (self)", "kind": "self" },
-    { "name": "qnfo-ops", "binding": "SVC_QNFO_OPS", "kind": "worker" },
-    { "name": "qnfo-ai", "binding": "SVC_QNFO_AI", "kind": "worker" },
-    { "name": "qnfo-kaizen", "binding": "SVC_QNFO_KAIZEN", "kind": "worker" },
-    { "name": "qnfo-outreach", "binding": "SVC_QNFO_OUTREACH", "kind": "worker" },
-    { "name": "qnfo-paper-reviser", "binding": "SVC_QNFO_PAPER_REVISER", "kind": "worker" },
-    { "name": "qnfo-social", "binding": "SVC_QNFO_SOCIAL", "kind": "worker" },
-    { "name": "personal-api", "binding": "SVC_PERSONAL_API", "kind": "worker" }
-  ]
+   ]
+  },
+  {
+   "name": "intent-loop",
+   "label": "Intent orchestration (email/calendar -> intents)",
+   "stages": [
+    "qnfo-email-orchestrator",
+    "calendar-api",
+    "qnfo-intent-orchestrator"
+   ],
+   "checks": [
+    {
+     "label": "pending intents",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM intents WHERE status='pending'",
+     "max": 10
+    }
+   ]
+  },
+  {
+   "name": "engagement",
+   "label": "Engagement (outreach + social)",
+   "stages": [
+    "qnfo-outreach",
+    "qnfo-social"
+   ],
+   "checks": [
+    {
+     "label": "outreach queue",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM outreach_queue WHERE status='pending'",
+     "max": 50
+    },
+    {
+     "label": "threads queued",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE status='queued'",
+     "max": 30
+    },
+    {
+     "label": "threads posted 7d",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM social_threads WHERE posted_at > datetime('now','-7 days')",
+     "min": 1
+    }
+   ]
+  },
+  {
+   "name": "governance",
+   "label": "Governance (register -> kaizen disposition)",
+   "stages": [
+    "qnfo-kaizen",
+    "qnfo-cloud-ops"
+   ],
+   "checks": [
+    {
+     "label": "user-waiting rows",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')",
+     "max": 0
+    },
+    {
+     "label": "proposed candidates",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM kaizen_candidates WHERE status='proposed'",
+     "max": 3
+    }
+   ]
+  },
+  {
+   "name": "fleet-exec",
+   "label": "Dynamic execution layer",
+   "stages": [
+    "fleet-exec"
+   ],
+   "checks": [
+    {
+     "label": "runs 24h",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM fleet_runs WHERE started_at > datetime('now','-1 day')",
+     "min": 1
+    },
+    {
+     "label": "rejected artifacts 7d",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM codeparse_events WHERE status='rejected' AND ts > datetime('now','-7 days')",
+     "max": 0
+    }
+   ]
+  },
+  {
+   "name": "telemetry",
+   "label": "Telemetry (trace -> worker_logs)",
+   "stages": [
+    "qnfo-observability"
+   ],
+   "checks": [
+    {
+     "label": "trace rows 24h",
+     "store": "AUDIT",
+     "sql": "SELECT COUNT(*) AS n FROM worker_logs WHERE ts_ms > (strftime('%s','now') - 86400) * 1000",
+     "min": 1
+    }
+   ]
+  }
+ ],
+ "windows_tasks": [
+  {
+   "name": "QNFO-ModelKey-Guard",
+   "status": "Ready",
+   "last": "9/7/2026 7:25:01 PM",
+   "lastres": "0",
+   "next": "9/7/2026 7:55:00 PM",
+   "schedule": "Minute (every 30)"
+  },
+  {
+   "name": "QNFO-DeepChat-Backup",
+   "status": "Ready",
+   "last": "9/7/2026 9:19:54 AM",
+   "lastres": "-2147020576",
+   "next": "9/8/2026 6:45:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO-AgentDB-Daily-Backup",
+   "status": "Ready",
+   "last": "9/6/2026 9:30:01 PM",
+   "lastres": "0",
+   "next": "9/7/2026 9:30:00 PM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_DeepChat_Backup_Daily",
+   "status": "Ready",
+   "last": "9/7/2026 3:54:46 PM",
+   "lastres": "-2147020576",
+   "next": "9/8/2026 9:30:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_Snapshot_Purge",
+   "status": "Ready",
+   "last": "9/7/2026 4:34:52 AM",
+   "lastres": "-2147020576",
+   "next": "9/8/2026 3:00:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_Skill_Pull_Daily",
+   "status": "Ready",
+   "last": "9/7/2026 9:19:54 AM",
+   "lastres": "-2147020576",
+   "next": "9/8/2026 6:30:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_Chat_Log_Push",
+   "status": "Ready",
+   "last": "9/7/2026 9:19:54 AM",
+   "lastres": "-2147020576",
+   "next": "9/8/2026 5:25:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_Tape_Prune_Daily",
+   "status": "Ready",
+   "last": "9/7/2026 9:19:54 AM",
+   "lastres": "-2147020576",
+   "next": "9/8/2026 5:35:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_FS_Maintenance_Daily",
+   "status": "Ready",
+   "last": "9/7/2026 3:54:46 PM",
+   "lastres": "1",
+   "next": "9/8/2026 9:40:00 AM",
+   "schedule": "Daily"
+  },
+  {
+   "name": "QNFO_DeepChat_Reload",
+   "status": "Ready",
+   "last": "9/7/2026 7:36:01 PM",
+   "lastres": "0",
+   "next": "9/7/2026 7:46:00 PM",
+   "schedule": "Minute (every 10)"
+  },
+  {
+   "name": "QNFO_Obsidian_Sync",
+   "status": "Ready",
+   "last": "9/7/2026 7:38:01 PM",
+   "lastres": "3",
+   "next": "9/7/2026 7:53:00 PM",
+   "schedule": "Minute (every 15)"
+  },
+  {
+   "name": "QNFO_Obsidian_Cloud_Bridge",
+   "status": "Disabled",
+   "last": "11/30/1999",
+   "lastres": "267011",
+   "next": "N/A",
+   "schedule": "Daily"
+  }
+ ],
+ "local_crons": [
+  {
+   "id": "aa67d355",
+   "name": "QNFO Data Freshness Sync (calendar/email to orchestrator)",
+   "cron": "12 5 * * *",
+   "note": "canonical row 1"
+  },
+  {
+   "id": "42b1988c",
+   "name": "Fleet Drift and Self-Improvement Audit",
+   "cron": "30 5 * * 1",
+   "note": "canonical row 2"
+  },
+  {
+   "id": "c7f96688",
+   "name": "Local config/credential guard",
+   "cron": "device-triggered",
+   "note": "canonical row 3"
+  },
+  {
+   "id": "2055e49c",
+   "name": "Device-bound maintenance one-shot",
+   "cron": "one-shot",
+   "note": "canonical row 4"
+  },
+  {
+   "id": "6e91c844",
+   "name": "Front-end local cron mirror guard",
+   "cron": "device-triggered",
+   "note": "canonical row 5"
+  }
+ ]
 };

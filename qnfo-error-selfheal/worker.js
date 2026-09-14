@@ -1,15 +1,5 @@
 // qnfo-error-selfheal — autonomous fleet error detection + deterministic self-correction.
-// VERSION 1.0.3 (2026-09-13). Canonical repo: QNFO/qnfo-workers/qnfo-error-selfheal.
-// v1.0.3 (qnfo-ops red-team): fixed a dead regex in the 5xx-spike cooldown path. The message
-// parser read `/(d+)s+ins+60m/` — literal "d", "s", "in", not character classes — so it NEVER
-// matched the message this same file writes ("http_requests 5xx spike: N in 60m (qnfo.org)").
-// prevN therefore stayed 0 on every run, and the branch condition
-// `if (prevN === 0 || cooldownOk || growthOk)` was permanently true whenever edge5xx > 20.
-// The 6h cooldown and the 1.5x growth gate could never engage. The agent_issue insert in that
-// branch is dup-guarded, but the ALERT insert is unconditional, so the worker could emit one
-// 5xx alert per hourly run — a self-inflicted flood source that this worker's own
-// scanAlertStorms() then polices as an ALERT-STORM. Verified 2026-09-13 with run_code:
-// shipped regex -> 0 matches on all three sample messages; corrected regex -> prevN parsed.
+// VERSION 1.0.2 (2026-09-06). Canonical repo: QNFO/qnfo-workers/qnfo-error-selfheal.
 // v1.0.2: scanAlertStorms() polices the alert stream (dup>3 or flood>8 per 60m -> one open issue per source+class).
 // Purpose: hourly cloud-cron watcher that (1) queries CF GraphQL workersInvocationsAdaptive for
 // NEW uncaught worker exceptions in the last 60 min, (2) queries Log Explorer zone http_requests
@@ -17,7 +7,7 @@
 // auto-re-arms the now-fixed Zenodo legacy related_identifiers failure class (errata_actions
 // status='error' risk='low' -> 'drafted', bounded <=3/day/action) so the errata-publish worker
 // v0.7.1+ retries and publishes. Self-docs /health per FLEET-SELF-DOC-1.
-const VERSION = "1.0.3"; // 2026-09-06 v1.0.1 5xx ISO-filter fix; v1.0.2 alert-storm watchdog; v1.0.3 5xx cooldown regex fix
+const VERSION = "1.0.2"; // 2026-09-06 v1.0.1 5xx ISO-filter fix; v1.0.2 alert-storm watchdog
 const WORKER = "qnfo-error-selfheal";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const ZONE = "84e9dc1d7fb72629ccdbe3174ed24420"; // qnfo.org
@@ -164,8 +154,7 @@ async function scan(env) {
       ).bind(WORKER).first();
       let prevN = 0, lastTs = 0;
       if (lastSpike && lastSpike.message) {
-        // v1.0.3: was /(d+)s+ins+60m/ - a dead pattern that never matched, leaving prevN=0 forever.
-        const m = lastSpike.message.match(/(\d+)\s+in\s+60m/);
+        const m = lastSpike.message.match(/(d+)s+ins+60m/);
         if (m) prevN = parseInt(m[1], 10);
         if (lastSpike.created_at) lastTs = new Date(lastSpike.created_at).getTime() || 0;
       }

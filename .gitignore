@@ -1,6 +1,3 @@
 
 # wrangler auth cache — never commit
 .wrangler/
-
-# wrangler build output - never commit
-dist/
