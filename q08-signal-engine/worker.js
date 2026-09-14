@@ -180,13 +180,22 @@ async function scrapeArxiv() {
   out.sort(function(a,b){ return b.volatility_score - a.volatility_score; });
   return out.slice(0, 12);
 }
-async function extractGitHubFriction(fullName) {
-  var url = "https://api.github.com/repos/" + fullName + "/issues?state=open&sort=comments&direction=desc&per_page=5";
-  var resp = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/vnd.github+json" } });
-  if (!resp.ok) return { core_concept: fullName, friction_point: "", signal_strength: "Low" };
-  var issues = await resp.json();
-  var friction = (issues||[]).map(function(i){ return (i.title||"") + ": " + String(i.body||"").replace(/\s+/g," ").slice(0,300); }).join(" ");
-  return { core_concept: fullName, friction_point: friction.slice(0,800), signal_strength: (issues||[]).length>=3?"Medium":"Low", comment_count: (issues||[]).length };
+async function extractGitHubFriction(fullName, description) {
+  var parts = [];
+  if (description) parts.push(description);
+  try {
+    var url = "https://api.github.com/repos/" + fullName + "/issues?state=open&sort=comments&direction=desc&per_page=5";
+    var resp = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/vnd.github+json" } });
+    if (resp.ok) {
+      var issues = await resp.json();
+      for (var i of (issues||[])) {
+        if (i.pull_request) continue;
+        parts.push((i.title||"") + ": " + String(i.body||"").replace(/\s+/g," ").slice(0,300));
+      }
+    }
+  } catch (e) {}
+  var friction = parts.join(" ").slice(0, 800);
+  return { core_concept: fullName, friction_point: friction, signal_strength: parts.length >= 3 ? "Medium" : "Low", comment_count: parts.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -423,14 +432,22 @@ async function generate(env) {
   // Source diversity: prefer a source other than the last one used
   var lastRun = await env.DB.prepare("SELECT top_signal FROM engine_runs WHERE top_signal != '' ORDER BY id DESC LIMIT 1").first();
   var lastSource = lastRun ? (String(lastRun.top_signal||"").split(":")[0]) : "";
-  var story = candidates.find(s => (s.source||"hn") !== lastSource) || candidates[0];
-  // Extract friction — source-specific
-  var friction;
-  if ((story.source||"hn") === "github") friction = await extractGitHubFriction(story.id);
-  else if ((story.source||"hn") === "arxiv") friction = { core_concept: story.title, friction_point: String(story.abstract||story.title||"").slice(0,800), signal_strength: "Medium" };
-  else friction = await extractFriction(story.id);
-  if (!friction.friction_point || friction.friction_point.length < 60) {
-    return { ok: false, reason: "insufficient friction from " + (story.source||"hn") + ":" + story.id };
+  var diverse = candidates.find(function(s){ return (s.source||"hn") !== lastSource; });
+  var ordered = diverse ? [diverse].concat(candidates.filter(function(s){ return s !== diverse; })) : candidates;
+  // Try candidates until one yields sufficient friction (sparse GitHub/arXiv fall through)
+  var story = null, friction = null;
+  for (var ci = 0; ci < Math.min(ordered.length, 8); ci++) {
+    var cand = ordered[ci];
+    var f = null;
+    try {
+      if ((cand.source||"hn") === "github") f = await extractGitHubFriction(cand.id, cand.description || "");
+      else if ((cand.source||"hn") === "arxiv") f = { core_concept: cand.title, friction_point: (String(cand.title||"") + ". " + String(cand.abstract||"")).slice(0,800), signal_strength: "Medium" };
+      else f = await extractFriction(cand.id);
+    } catch (e) { f = null; }
+    if (f && f.friction_point && f.friction_point.length >= 60) { story = cand; friction = f; break; }
+  }
+  if (!story) {
+    return { ok: false, reason: "no candidate yielded sufficient friction (" + candidates.length + " available)" };
   }
   // Fetch few-shot exemplars from prompt pool (top performers)
   var exemplars = await env.DB.prepare(
