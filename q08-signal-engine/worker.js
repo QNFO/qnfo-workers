@@ -30,7 +30,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.1.0";
+var VERSION = "0.2.0";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -138,20 +138,42 @@ async function extractFriction(storyId, topK) {
 // ---------------------------------------------------------------------------
 // 3. Prompt construction — q08 register
 // ---------------------------------------------------------------------------
+// The register problem: LLMs default to management-consulting prose when asked
+// for "systems-level critique" — producing capitalized nominalizations like
+// "Knowledge Work", "Systemic Vulnerability", "Architectural Context".
+// These are jargon placeholders, not analysis. The prompt must name and ban
+// this failure mode explicitly, and model the correct register with contrast examples.
 var Q08_DIRECTIVE = [
-  "Take this external industrial tension. Strip out names, handles, and emotional vocabulary.",
-  "Reframe the argument into a timeless, systems-level architecture critique.",
-  "Requirements:",
-  "- Use strict structural scaffolding: H2 and H3 headers, bulleted taxonomies, high visual scannability.",
-  "- Write with cold, structural objectivity. No first person. No hedging.",
-  "- Do NOT mention the source website, platform, or specific users.",
-  "- Weave together multiple, diverse threads from the friction signal.",
-  "- Address the underlying structural flaw.",
-  "- Provide a 3-point taxonomy of the failure modes.",
-  "- Outline a minimal alternative framework.",
-  "- Synthesize diverse information honestly and objectively.",
-  "- Length: 600–900 words. Timeless — no references to current events or dates.",
-  "Output format: valid Markdown starting with a H1 title, then the body. No preamble, no meta-commentary.",
+  "You are writing for q08.org. The register is cold, structural, and factual.",
+  "Your input is a raw friction signal from a technical community debate.",
+  "Your output is a timeless essay that dissects the structural cause of that friction.",
+  "",
+  "## WHAT TO WRITE",
+  "- Concrete declarative sentences about how systems actually fail.",
+  "  Example: 'A deployment pipeline that cannot roll back is not a pipeline — it is a one-way valve.'",
+  "- H2 and H3 headers that name the specific mechanism, not an abstraction.",
+  "  Example: '## Why the boundary between config and code keeps collapsing'",
+  "  NOT: '## Architectural Context' or '## Systemic Vulnerability'",
+  "- Bulleted lists that enumerate specific failure conditions, not categories.",
+  "  Example: '- The schema migrates forward but the rollback path is never tested'",
+  "  NOT: '- Knowledge Work challenges' or '- Operational Complexity'",
+  "- A 3-point taxonomy of the specific failure modes (named as mechanisms, not as nouns).",
+  "- A minimal alternative framework: what the system would look like if the flaw were removed.",
+  "- 600–900 words. Timeless — no dates, no current events, no named products or companies.",
+  "",
+  "## WHAT NOT TO WRITE",
+  "- DO NOT use capitalized compound nouns as section headers or as stand-alone concepts.",
+  "  Banned: 'Knowledge Work', 'Systemic Vulnerability', 'Architectural Context',",
+  "  'Operational Excellence', 'Digital Transformation', 'Strategic Alignment',",
+  "  'Cognitive Load', 'Technical Debt', 'Value Stream', 'Organizational Friction'.",
+  "  These are placeholders. Replace them with the actual mechanism.",
+  "- DO NOT name the source website, platform, forum, or any specific users or handles.",
+  "- DO NOT use hedging language: 'it seems', 'perhaps', 'one might argue'.",
+  "- DO NOT use emotional vocabulary: 'frustrated', 'excited', 'amazing', 'terrible'.",
+  "- DO NOT write a preamble or meta-commentary. Start directly with the H1 title.",
+  "- DO NOT use first person.",
+  "",
+  "Output format: valid Markdown. Start with a H1 title. Then the body. Nothing before the H1.",
 ].join("\n");
 
 function buildPrompt(friction, fewShot) {
@@ -219,29 +241,44 @@ function isPersonalName(phrase) {
   return true;
 }
 var NAME_RE = /\b[A-Z][a-z]{2,13} [A-Z][a-z]{2,15}\b/g;
-var EMOTION_WORDS = ["frustrated", "angry", "upset", "excited", "thrilled", "disappointed", "outraged", "amazing", "terrible", "horrible"];
-// Personal attribution patterns: name appears after "by ", "from ", "according to ", etc.
-var ATTRIBUTION_RE = /\b(?:by|from|according to|says|said|argues|argued|claims|claimed|wrote|writes|noted|notes|stated|states|per|via)\s+([A-Z][a-z]{2,12}\s+[A-Z][a-z]{2,14})\b/gi;
+// BANNED_CAPS: capitalized compound nouns that are management-consulting placeholders,
+// not structural analysis. Their presence means the prompt directive was ignored.
+// These are checked as exact phrase matches (case-insensitive) in the body text.
+var BANNED_CAPS = [
+  "knowledge work", "systemic vulnerability", "architectural context",
+  "operational excellence", "digital transformation", "strategic alignment",
+  "cognitive load", "value stream", "organizational friction", "technical debt",
+  "change management", "best practices", "lessons learned", "key takeaways",
+  "moving forward", "going forward", "at the end of the day",
+];
+var BANNED_HANDLES = /@\w+/g;
 function gate(text) {
+  // Gate checks:
+  // 1. Minimum length — too short means the model gave up or was rate-limited.
+  // 2. Structural scaffolding — at least one H2/H3 and one bullet list.
+  // 3. No @handles — the prompt directive should have suppressed these.
+  // 4. No banned capitalized nominalizations — these signal management-consulting
+  //    register, not the cold structural objectivity the q08 register requires.
+  //    If these appear, the prompt failed and the piece must be regenerated.
   var problems = [];
+  var body = text.toLowerCase();
+
   if (text.length < 400) problems.push("too short (" + text.length + " chars)");
-  // Only flag names in personal attribution context (not structural compound nouns)
-  var attributions = [];
-  var m;
-  ATTRIBUTION_RE.lastIndex = 0;
-  while ((m = ATTRIBUTION_RE.exec(text)) !== null) {
-    var phrase = m[1];
-    if (!STRUCTURAL_TERMS.test(phrase.split(" ")[0]) && !STRUCTURAL_TERMS.test(phrase.split(" ")[1])) {
-      attributions.push(phrase);
+
+  var handles = (text.match(BANNED_HANDLES) || []).filter(function(h) { return h !== "@cf"; });
+  if (handles.length > 0) problems.push("handles: " + handles.slice(0, 3).join(", "));
+
+  for (var phrase of BANNED_CAPS) {
+    if (body.includes(phrase)) {
+      problems.push("management-consulting placeholder: '" + phrase + "' — rewrite as a concrete mechanism");
+      break; // one is enough to reject; don't pile on
     }
   }
-  if (attributions.length > 0) problems.push("personal attribution: " + attributions.slice(0, 2).join(", "));
-  var handles = text.match(HANDLE_RE) || [];
-  if (handles.length > 0) problems.push("contains handles: " + handles.slice(0, 3).join(", "));
-  for (var w of EMOTION_WORDS) {
-    if (text.toLowerCase().includes(w)) { problems.push("emotional vocabulary: " + w); break; }
-  }
-  if (!text.includes("##") && !text.includes("- ")) problems.push("missing structural scaffolding (H2/bullets)");
+
+  var hasH2 = /^##\s/m.test(text);
+  var hasBullet = /^[-*]\s/m.test(text);
+  if (!hasH2 || !hasBullet) problems.push("missing structural scaffolding (needs ## headers AND - bullets)");
+
   return { ok: problems.length === 0, problems };
 }
 
