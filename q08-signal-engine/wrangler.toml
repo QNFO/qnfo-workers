@@ -16,7 +16,13 @@ binding = "EMAIL"
 service = "qnfo-email"
 environment = "production"
 
-[triggers]
-crons = ["0 */2 * * *"]
+[[services]]
+binding = "SOCIAL"
+service = "qnfo-social"
+environment = "production"
 
-# ROUTER_TOKEN: optional; if set, routes through qnfo-ai service binding instead of Workers AI direct
+[triggers]
+crons = ["0 */2 * * *", "0 17 * * *"]
+
+# Secrets: EMAIL_API_KEY (qnfo-email bearer), SOCIAL_TOKEN (qnfo-social bearer).
+# Both degrade gracefully to "skip" if unset.

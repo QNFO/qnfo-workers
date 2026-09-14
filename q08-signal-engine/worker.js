@@ -32,7 +32,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.3.0";
+var VERSION = "0.4.0";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -135,6 +135,55 @@ async function extractFriction(storyId, topK) {
     signal_strength: strength + " (" + comments.length + " comments)",
     comment_count:  comments.length,
   };
+}
+
+// --- GitHub (intent signals): trending repos with open issues ---
+async function scrapeGitHub() {
+  var since = new Date(Date.now() - 7*24*3600*1000).toISOString().slice(0,10);
+  var url = "https://api.github.com/search/repositories?q=created:%3E" + since + "+stars:%3E50&sort=stars&order=desc&per_page=20";
+  var resp = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/vnd.github+json" } });
+  if (!resp.ok) throw new Error("github " + resp.status);
+  var data = await resp.json();
+  var out = [];
+  for (var r of (data.items || [])) {
+    var stars = r.stargazers_count || 0, issues = r.open_issues_count || 0;
+    var issueRatio = stars > 0 ? issues/stars : 0;
+    out.push({ source:"github", id: r.full_name, title: r.full_name, url: r.html_url, points: stars, num_comments: issues, ratio: Math.round(issueRatio*100)/100, volatility_score: Math.round((stars/10 + 10*Math.min(issueRatio,2))*10)/10, description: r.description||"" });
+  }
+  out.sort(function(a,b){ return b.volatility_score - a.volatility_score; });
+  return out.slice(0, 15);
+}
+
+// --- arXiv (narrative signals): recent abstracts matching high-intent keywords ---
+var ARXIV_KEYWORDS = ["distributed system","consensus","fault tolerance","compiler","programming language","database","security","privacy","machine learning","infrastructure","network","operating system","formal verification","cryptography","scalability","reliability","architecture","verification","protocol"];
+async function scrapeArxiv() {
+  var q = "cat:cs.DC OR cat:cs.CR OR cat:cs.DB OR cat:cs.PL OR cat:cs.OS OR cat:cs.NI OR cat:cs.SY OR cat:cs.SE OR cat:cs.AR";
+  var url = "http://export.arxiv.org/api/query?search_query=" + encodeURIComponent(q) + "&sortBy=submittedDate&sortOrder=descending&max_results=30";
+  var resp = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+  if (!resp.ok) throw new Error("arxiv " + resp.status);
+  var xml = await resp.text();
+  var out = [];
+  for (var e of xml.split("<entry>").slice(1)) {
+    var title = ((e.match(/<title>([\s\S]*?)<\/title>/)||[,""])[1]||"").replace(/\s+/g," ").trim();
+    var abs = ((e.match(/<summary>([\s\S]*?)<\/summary>/)||[,""])[1]||"").replace(/\s+/g," ").trim();
+    var idm = (e.match(/<id>([\s\S]*?)<\/id>/)||[,""])[1]||"";
+    var arxid = idm.split("/abs/")[1] || idm.trim();
+    var low = (title + " " + abs).toLowerCase();
+    var hits = 0;
+    for (var k of ARXIV_KEYWORDS) if (low.includes(k)) hits++;
+    if (hits === 0 || !arxid) continue;
+    out.push({ source:"arxiv", id: arxid, title: title, url: "https://arxiv.org/abs/" + arxid, points: hits, num_comments: 0, ratio: 0, volatility_score: hits*20, abstract: abs });
+  }
+  out.sort(function(a,b){ return b.volatility_score - a.volatility_score; });
+  return out.slice(0, 12);
+}
+async function extractGitHubFriction(fullName) {
+  var url = "https://api.github.com/repos/" + fullName + "/issues?state=open&sort=comments&direction=desc&per_page=5";
+  var resp = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/vnd.github+json" } });
+  if (!resp.ok) return { core_concept: fullName, friction_point: "", signal_strength: "Low" };
+  var issues = await resp.json();
+  var friction = (issues||[]).map(function(i){ return (i.title||"") + ": " + String(i.body||"").replace(/\s+/g," ").slice(0,300); }).join(" ");
+  return { core_concept: fullName, friction_point: friction.slice(0,800), signal_strength: (issues||[]).length>=3?"Medium":"Low", comment_count: (issues||[]).length };
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +344,7 @@ async function persistPiece(env, piece, signal, story, model) {
   await env.DB.prepare(
     "INSERT OR IGNORE INTO signal_log (id, source, source_id, title, url, points, num_comments, ratio, volatility_score, friction_point, signal_strength, status, processed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
   ).bind(
-    "sig-" + (story.id || salt), "hn", String(story.id || ""),
+    "sig-" + salt, (story.source || "hn"), (story.source || "hn") + ":" + String(story.id || ""),
     story.title, story.url, story.points, story.num_comments,
     story.ratio, story.volatility_score,
     signal.friction_point, signal.signal_strength, "published", nowIso()
@@ -304,8 +353,8 @@ async function persistPiece(env, piece, signal, story, model) {
   await env.DB.prepare(
     "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at) VALUES (?,?,?,?,?,?,?,?)"
   ).bind(
-    pieceId, "sig-" + (story.id || salt), slug, title, body,
-    signal.core_concept, "hn:" + story.id, nowIso()
+    pieceId, "sig-" + salt, slug, title, body,
+    signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso()
   ).run();
   // Seed prompt pool with structure skeleton (H2/H3 headings only)
   var skeleton = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
@@ -355,21 +404,30 @@ async function generate(env) {
   if (todayN >= MAX_PER_DAY) {
     return { ok: false, reason: "daily cap reached (" + todayN + "/" + MAX_PER_DAY + ")" };
   }
-  // Scrape + rank
-  var stories = await scrapeHN();
-  if (!stories.length) return { ok: false, reason: "no stories scraped" };
-  // Skip already-processed story IDs today
+  // Scrape + rank — three sources (break the filter bubble)
+  var stories = [];
+  try { stories = stories.concat(await scrapeHN()); } catch (e) {}
+  try { stories = stories.concat(await scrapeGitHub()); } catch (e) {}
+  try { stories = stories.concat(await scrapeArxiv()); } catch (e) {}
+  if (!stories.length) return { ok: false, reason: "no signals scraped" };
+  // Skip already-processed signal IDs today (source-scoped)
   var processed = await env.DB.prepare(
-    "SELECT source_id FROM signal_log WHERE source='hn' AND processed_at >= ?1"
+    "SELECT source_id FROM signal_log WHERE processed_at >= ?1"
   ).bind(utcDay() + "T00:00:00.000Z").all();
   var processedIds = new Set((processed.results || []).map(r => String(r.source_id)));
-  var candidates = stories.filter(s => !processedIds.has(String(s.id)));
-  if (!candidates.length) return { ok: false, reason: "all top stories already processed today" };
-  var story = candidates[0];
-  // Extract friction
-  var friction = await extractFriction(story.id);
-  if (!friction.friction_point || friction.friction_point.length < 100) {
-    return { ok: false, reason: "insufficient friction extracted from story " + story.id };
+  var candidates = stories.filter(s => !processedIds.has(String((s.source||"hn") + ":" + s.id)));
+  if (!candidates.length) return { ok: false, reason: "all signals already processed today" };
+  // Source diversity: prefer a source other than the last one used
+  var lastRun = await env.DB.prepare("SELECT top_signal FROM engine_runs WHERE top_signal != '' ORDER BY id DESC LIMIT 1").first();
+  var lastSource = lastRun ? (String(lastRun.top_signal||"").split(":")[0]) : "";
+  var story = candidates.find(s => (s.source||"hn") !== lastSource) || candidates[0];
+  // Extract friction — source-specific
+  var friction;
+  if ((story.source||"hn") === "github") friction = await extractGitHubFriction(story.id);
+  else if ((story.source||"hn") === "arxiv") friction = { core_concept: story.title, friction_point: String(story.abstract||story.title||"").slice(0,800), signal_strength: "Medium" };
+  else friction = await extractFriction(story.id);
+  if (!friction.friction_point || friction.friction_point.length < 60) {
+    return { ok: false, reason: "insufficient friction from " + (story.source||"hn") + ":" + story.id };
   }
   // Fetch few-shot exemplars from prompt pool (top performers)
   var exemplars = await env.DB.prepare(
@@ -384,18 +442,20 @@ async function generate(env) {
   if (!gateResult.ok) {
     await env.DB.prepare(
       "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error) VALUES (?,?,?,?,?,?,?,?)"
-    ).bind(stories.length, candidates.length, 0, story.title.slice(0, 120), piece.model, Date.now()-t0, "gate_failed", gateResult.problems.join("; ")).run();
+    ).bind(stories.length, candidates.length, 0, (story.source||"hn") + ":" + story.title.slice(0, 80), piece.model, Date.now()-t0, "gate_failed", gateResult.problems.join("; ")).run();
     return { ok: false, reason: "gate failed: " + gateResult.problems.join("; ") };
   }
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
   // Feedback loop (async, non-blocking)
   feedbackScan(env).catch(() => {});
+  // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
+  postToSocial(env, saved.title, saved.slug).catch(() => {});
   // Log run
   await env.DB.prepare(
     "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status) VALUES (?,?,?,?,?,?,?)"
-  ).bind(stories.length, candidates.length, 1, story.title.slice(0, 120), piece.model, Date.now()-t0, "ok").run();
-  return { ok: true, slug: saved.slug, title: saved.title, model: piece.model, story: story.title };
+  ).bind(stories.length, candidates.length, 1, (story.source||"hn") + ":" + story.title.slice(0, 80), piece.model, Date.now()-t0, "ok").run();
+  return { ok: true, slug: saved.slug, title: saved.title, model: piece.model, source: (story.source||"hn"), story: story.title };
 }
 
 // ---------------------------------------------------------------------------
@@ -487,6 +547,59 @@ function renderFeed(pieces) {
 // ---------------------------------------------------------------------------
 // 10. Worker export
 // ---------------------------------------------------------------------------
+// ============ Email + Social ============
+async function sha16(s) {
+  var enc = new TextEncoder();
+  var buf = await crypto.subtle.digest("SHA-256", enc.encode(String(s)));
+  return Array.from(new Uint8Array(buf)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
+}
+async function sendEmail(env, to, subject, body) {
+  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  try {
+    var resp = await env.EMAIL.fetch("https://email.internal/send", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") }, body: JSON.stringify({ to: to, from: "qnfo@qnfo.org", subject: subject, body: body }) });
+    return { ok: resp.ok, status: resp.status };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+async function sendDigest(env) {
+  var day = utcDay();
+  var pieces = await env.DB.prepare("SELECT slug, title FROM published_pieces WHERE published_at >= ?1 ORDER BY published_at ASC").bind(day + "T00:00:00.000Z").all();
+  var rows = pieces.results || [];
+  if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
+  var subs = await env.DB.prepare("SELECT email, token FROM subscribers WHERE status='confirmed' LIMIT 500").all();
+  var list = rows.map(function(r){ return "- " + r.title + " - https://q08.org/p/" + r.slug; }).join("\n");
+  var sent = 0;
+  for (var s of (subs.results || [])) {
+    var body = "q08 - daily digest (" + day + ")\n\n" + list + "\n\nUnsubscribe: https://q08.org/unsubscribe?t=" + s.token;
+    var r = await sendEmail(env, s.email, "q08 - daily digest", body);
+    if (r && r.ok) sent++;
+  }
+  return { ok: true, pieces: rows.length, subscribers: (subs.results||[]).length, sent: sent };
+}
+async function postToSocial(env, title, slug) {
+  if (!env.SOCIAL || !env.SOCIAL_TOKEN) return { ok: false, skip: "no social binding or token" };
+  try {
+    var text = (title + " - https://q08.org/p/" + slug).slice(0, 290);
+    var resp = await env.SOCIAL.fetch("https://social.internal/post", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.SOCIAL_TOKEN }, body: JSON.stringify({ text: text }) });
+    return { ok: resp.ok, status: resp.status };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+async function handleSubscribe(req, env, url) {
+  var email = "";
+  try {
+    var ct = req.headers.get("Content-Type") || "";
+    if (ct.indexOf("application/json") >= 0) { var b = await req.json(); email = b && b.email || ""; }
+    else if (ct.indexOf("form") >= 0) { var fd = await req.formData(); email = fd.get("email") || ""; }
+  } catch (e) {}
+  email = String(email || url.searchParams.get("email") || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return html('<h2>Subscribe</h2><form method=post action=/subscribe><input type=email name=email required><button>Subscribe</button></form><p>Enter a valid email address.</p>', 400);
+  }
+  var token = await sha16(email + ":q08:sub");
+  await env.DB.prepare("INSERT INTO subscribers(email, status, token, created_at) VALUES(?, 'pending', ?, ?) ON CONFLICT(email) DO UPDATE SET token=excluded.token, status=CASE WHEN status='confirmed' THEN 'confirmed' ELSE 'pending' END").bind(email, token, nowIso()).run();
+  await sendEmail(env, email, "Confirm your q08 subscription", "Tap to confirm: https://q08.org/confirm?t=" + token);
+  return html("<h2>Almost there</h2><p>Check your inbox for a confirmation link.</p>");
+}
+
 export default {
   async fetch(req, env, ctx) {
     var url  = new URL(req.url);
@@ -531,6 +644,9 @@ export default {
       return html(renderPiece(piece));
     }
 
+    if (path === "/subscribe") return await handleSubscribe(req, env, url);
+    if (path === "/confirm") { var t0 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='confirmed', confirmed_at=? WHERE token=? AND status!='unsubscribed'").bind(nowIso(), t0).run(); return html("<h2>Subscribed</h2><p>You are subscribed. The daily digest arrives each evening.</p>"); }
+    if (path === "/unsubscribe") { var t1 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='unsubscribed' WHERE token=?").bind(t1).run(); return html("<h2>Unsubscribed</h2><p>You have been removed from the daily digest.</p>"); }
     if (path === "/api/pieces") {
       var rows = await env.DB.prepare("SELECT slug, title, core_concept, published_at, reads FROM published_pieces ORDER BY published_at DESC LIMIT 50").all();
       return json(rows.results || []);
@@ -552,6 +668,7 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
+    if (controller.cron === "0 17 * * *") { ctx.waitUntil(sendDigest(env)); return; }
     ctx.waitUntil(generate(env).catch(async (e) => {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
