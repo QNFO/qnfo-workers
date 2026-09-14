@@ -23,10 +23,6 @@ binding = "EMAIL"
 service = "qnfo-email"
 environment = "production"
 
-[[services]]
-binding = "SOCIAL"
-service = "qnfo-social"
-environment = "production"
 
 [triggers]
 crons = ["0 */2 * * *", "0 17 * * *"]

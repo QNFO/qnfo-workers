@@ -596,14 +596,6 @@ async function sendDigest(env) {
   }
   return { ok: true, pieces: rows.length, subscribers: (subs.results||[]).length, sent: sent };
 }
-async function postToSocial(env, title, slug) {
-  if (!env.SOCIAL || !env.SOCIAL_TOKEN) return { ok: false, skip: "no social binding or token" };
-  try {
-    var text = (title + " - https://q08.org/p/" + slug).slice(0, 290);
-    var resp = await env.SOCIAL.fetch("https://social.internal/post", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.SOCIAL_TOKEN }, body: JSON.stringify({ text: text }) });
-    return { ok: resp.ok, status: resp.status };
-  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
-}
 // IndexNow: instant search-index ping for a newly published URL (no auth needed).
 async function pingIndexNow(env, url) {
   try {
