@@ -14,7 +14,7 @@ import { connect } from "cloudflare:sockets";
 // job failures, new DeepChat stable release, cost alert >$90, NLnet one-shot.
 // Author: QNFO. Deployed via Cloudflare API. Canonical source: QNFO/qnfo-ops/cloud/scheduler/worker.js
 
-const VERSION = "1.14.1-gtd-guard"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
+const VERSION = "1.14.2-email-lookup"; // RECORD-ROUTE-1 (2026-09-06): POST /record inserts guard results into cloud_ops_events (thin-client guard scripts -> cloud audit trail) // GW-ERROR-SELFHEAL-1 (2026-09-05): embedText 429 backoff retry // SELF-REGISTER-1 (2026-09-04): self-document to the qnfo-ops machine-readable service registry on /health (QNFO_OPS binding + REGISTRY_TOKEN) // outreach activation gate + email validation (2026-09-03 RED-TEAM legacy-drain gate) // visibility digest adds Ops AI section (WHAT-ELSE P0-2 2026-09-03)
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const WORKER_NAME = "qnfo-cloud-ops";
@@ -1330,11 +1330,31 @@ function validEmail(em) {
 
 const OUTREACH_FROM = { email: "rowan.quni@qnfo.org", name: "Rowan Brad Quni-Gudzinas" };
 
+// OUTREACH-EMAIL-LOOKUP (#886): arXiv HTML render carries the author block incl.
+// emails; the e-print LaTeX tarball alone frequently fails (binary tar headers).
+// HTML first, e-print fallback. Returns a lowercased, junk-filtered address or null.
 async function verifyArxivEmail(env, paperId) {
-  const id = String(paperId || "").trim().replace(/^arXiv:/i, "").replace(/v\d+$/, "");
-  if (!/^\d{4}\.\d{4,5}$/.test(id)) return null;
+  const raw = String(paperId || "").trim().replace(/^arXiv:/i, "");
+  const bare = raw.replace(/v\d+$/, "");
+  if (!/^\d{4}\.\d{4,5}$/.test(bare)) return null;
+  const junk = /noreply|no-reply|example|\.png|\.jpg|\.gif|arxiv|elsevier|springer|overleaf|latex|biblatex|hyperref|sentry|w3\.org/i;
+  const good = (em) => !junk.test(em) && em.length < 80 && (em.split("@")[1] || "").includes(".");
+  const pick = (text) => {
+    const m = String(text).match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+    for (const em of m) if (good(em)) return em.toLowerCase();
+    return null;
+  };
+  const vers = /v\d+$/.test(raw) ? [raw, bare] : [bare + "v1", bare];
+  for (const v of vers) {
+    try {
+      const r = await fetch("https://arxiv.org/html/" + v, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+      if (!r.ok) continue;
+      const em = pick(await r.text());
+      if (em) return em;
+    } catch (e) {}
+  }
   try {
-    const r = await fetch("https://export.arxiv.org/e-print/" + id, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    const r = await fetch("https://export.arxiv.org/e-print/" + bare, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
     if (!r.ok) return null;
     const buf = await r.arrayBuffer();
     let text = "";
@@ -1342,17 +1362,9 @@ async function verifyArxivEmail(env, paperId) {
       const ds = new DecompressionStream("gzip");
       const stream = new Blob([buf]).stream().pipeThrough(ds);
       const reader = stream.getReader();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        text += new TextDecoder().decode(value);
-        if (text.length > 5000000) break; // arXiv sources can be large; emails live in the .tex (anywhere in the tar)
-      }
+      while (true) { const { value, done } = await reader.read(); if (done) break; text += new TextDecoder().decode(value); if (text.length > 5000000) break; }
     } catch (e) { text = new TextDecoder().decode(buf); }
-    const m = text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
-    const junk = /noreply|no-reply|example|\.png|\.jpg|\.gif|arxiv|elsevier|springer|overleaf|latex|biblatex|hyperref/i;
-    for (const em of m) if (!junk.test(em) && em.length < 80) return em;
-    return null;
+    return pick(text);
   } catch (e) { return null; }
 }
 
@@ -1372,7 +1384,7 @@ async function jobOutreach(env) {
   const CAP = 3;
   let rows;
   try {
-    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status='pending' ORDER BY created_at ASC LIMIT 10").all();
+    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status IN ('pending','needs-email') ORDER BY created_at ASC LIMIT 10").all();
   } catch (e) { return { status: "error", notes: { error: String(e && e.message || e) } }; }
   const pending = (rows.results || []).filter((r) => r.email || r.paper_id);
   out.pending = pending.length;
@@ -1382,7 +1394,7 @@ async function jobOutreach(env) {
     try {
       if (!email) {
         email = await verifyArxivEmail(env, r.paper_id);
-        if (!email) { out.skipped_no_email++; continue; }
+        if (!email) { out.skipped_no_email++; await env.AUDIT.prepare("UPDATE outreach_queue SET status='needs-email', error='email lookup failed (HTML+e-print)' WHERE id=?1 AND status='pending'").bind(r.id).run().catch(function(){}); continue; }
         await env.AUDIT.prepare("UPDATE outreach_queue SET email=?1 WHERE id=?2").bind(email, r.id).run();
       }
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
