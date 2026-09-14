@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.0"; // FIX-2026-09-14: ensemble-fallback+gate-enrich+rearm
+var VERSION = "0.9.1"; // FIX-HARD-1 (2026-09-14): replace invalid fallback models with verified-working
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -1114,9 +1114,9 @@ var WRITER_MODELS = [
   "@cf/moonshotai/kimi-k2.6"
 ];
 var WRITER_FALLBACK_MODELS = [
-  "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/meta-llama/llama-3.3-70b-instruct-fp8-fast",
-  "@cf/google/gemma-3-27b-it"
+  "@cf/zai-org/glm-5.3", // verified ok (ai_model_health 2026-09-14)
+  "@cf/zai-org/glm-5.3-flash", // verified ok (ai_model_health 2026-09-14)
+  "@cf/openai/gpt-oss-120b" // verified ok (ai_model_health 2026-09-14)
 ]; // FIX-2 fallbacks
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
