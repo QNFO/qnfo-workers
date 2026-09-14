@@ -1,7 +1,14 @@
-// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry + agent_issue escalation (was v0.5.1-failopen).
+// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose. v0.5.3-failclosed (2026-09-13): the fact-checker now fails CLOSED. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry + agent_issue escalation (was v0.5.1-failopen).
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN. D1: DB (qnfo-audit.social_threads). AI: env.AI.
 // Cron posts oldest queued thread. /compose drafts a thread from title+abstract (draft -> approve -> queued).
-var VERSION = '0.5.2-checker-heal';
+// v0.5.3 CHECKER-FAILCLOSED-1: checkThread returned [] when both parse attempts failed, and both
+// callers do `issues.length === 0 ? 'queued' : 'draft'` - so a broken checker AUTO-QUEUED the
+// thread for posting. [] means "checked and faithful"; returning it on failure published
+// unchecked content. It now returns null (unverified) -> always 'draft' + alert. The escalation
+// sample was also empty whenever the model returned an empty string, which is why issue #676
+// was filed with a blank detail ("checker empty or unparseable: "); it now falls back to the
+// raw response shape so the failure is diagnosable.
+var VERSION = '0.5.4-failclosed-buffer';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 
@@ -74,6 +81,21 @@ function extractText(ai) {
   return '';
 }
 
+// v0.5.3: structural fingerprint of an unhandled AI response, so a fail-closed escalation
+// carries something diagnosable instead of an empty string (issue #676).
+function describeShape(o) {
+  try {
+    if (o === null || o === undefined) return String(o);
+    if (typeof o !== 'object') return 'type=' + typeof o;
+    var keys = Object.keys(o).slice(0, 8).join(',');
+    var inner = o.result || o.response;
+    if (inner && typeof inner === 'object') keys += ' > ' + Object.keys(inner).slice(0, 8).join(',');
+    return '{' + keys + '}';
+  } catch (e) { return 'unreadable'; }
+}
+
+// Returns: [] = checked and faithful; [{post,issue},...] = problems found;
+// null = CHECKER UNAVAILABLE (fail-closed - callers must NOT auto-queue).
 async function checkThread(env, title, abstract, posts) {
   const base = [
     "Given a paper (title + abstract = ground truth) and a social media thread (candidate), list every claim in the thread that is NOT supported by the title or abstract.",
@@ -99,22 +121,29 @@ async function checkThread(env, title, abstract, posts) {
     }
     return null;
   }
-  let text = extractText(await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 1000 })).trim();
+  const ai1 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 1000 });
+  let text = extractText(ai1).trim();
   let issues = parseIssues(text);
+  let diagText = text;
+  let lastAi = ai1;
   if (issues === null) {
-    const retryText = extractText(await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 1000 })).trim();
+    const ai2 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 1000 });
+    const retryText = extractText(ai2).trim();
+    diagText = retryText;
+    lastAi = ai2;
     issues = parseIssues(retryText);
     if (issues === null) {
-      const sample = String(retryText || text || '').slice(0, 150);
-      await logAlert(env, 'checker', 'warn', 'checker output unusable after retry; posting without fact-check (fail-open): ' + sample);
+      const sample = String(diagText || text || '').slice(0, 150);
+      const diag = sample || ('empty model output; response shape=' + describeShape(lastAi));
+      await logAlert(env, 'checker', 'warn', 'checker output unusable after retry; holding as draft (fail-closed, NOT queued): ' + diag);
       try {
         const dup = await env.DB.prepare("SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND title LIKE 'SOCIAL-CHECKER-FAILOPEN%'").first();
         if (!dup || Number(dup.n) === 0) {
           const mx = await env.DB.prepare("SELECT COALESCE(MAX(id),0) m FROM agent_issues").first();
-          await env.DB.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind(Number(mx.m) + 1, 'SOCIAL-CHECKER-FAILOPEN: fact-checker unusable after retry', 'checker empty or unparseable: ' + sample, 'qnfo-social', 'fleet-self-improve', 'medium', 'open', null).run();
+          await env.DB.prepare("INSERT INTO agent_issues (id, title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind(Number(mx.m) + 1, 'SOCIAL-CHECKER-FAILOPEN: fact-checker unusable after retry', 'checker empty or unparseable: ' + diag, 'qnfo-social', 'fleet-self-improve', 'medium', 'open', null).run();
         }
       } catch (eE) {}
-      return [];
+      return null;
     }
   }
   return issues;
@@ -181,10 +210,12 @@ async function autoScan(env) {
       const posts = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
       if (posts.length < 3) continue;
       const issues = await checkThread(env, title, abstract, posts);
-      const status = issues.length === 0 ? 'queued' : 'draft';
+      // v0.5.3: null (checker unavailable) is NOT clean - hold as draft.
+      const status = issues && issues.length === 0 ? 'queued' : 'draft';
       const slug = 'scan-' + (doi.split('/').pop() || Date.now().toString(36));
-      await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, issues.length ? JSON.stringify(issues) : null).run();
-      if (issues.length) await logAlert(env, 'scan', 'warning', 'draft flagged for review: ' + slug + ' (' + issues.length + ' issue(s))');
+      const notes = issues && issues.length ? JSON.stringify(issues) : (issues === null ? JSON.stringify([{ post: 0, issue: 'checker unavailable - unverified, held as draft' }]) : null);
+      await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, notes).run();
+      if (!issues || issues.length) await logAlert(env, 'scan', 'warning', 'held as draft: ' + slug + ' (' + (issues === null ? 'checker unavailable' : issues.length + ' issue(s)') + ')');
       drafted++;
       if (created > newest) newest = created;
     }
@@ -197,8 +228,6 @@ async function autoScan(env) {
 }
 
 // ---------- Buffer cross-post (GraphQL: Mastodon + LinkedIn + X) ----------
-// Reference: qnfo-paper-explainer. Token: BUFFER_TOKEN (present on this worker).
-// Best-effort: a Buffer failure must never block the Bluesky post.
 async function bufferGql(env, query) {
   const r = await fetch("https://api.buffer.com", {
     method: "POST",
@@ -319,10 +348,12 @@ export default {
         if (posts.length < 3) return new Response(JSON.stringify({ error: 'compose produced too few posts', raw: text.slice(0, 500) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
         const slug = String(b.slug || ('draft-' + Date.now().toString(36)));
         const issues = await checkThread(env, title, abstract, posts);
-        const status = issues.length === 0 ? 'queued' : 'draft';
-        await env.DB.prepare("INSERT INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, issues.length ? JSON.stringify(issues) : null).run();
-        if (issues.length) await logAlert(env, 'compose', 'warning', 'draft flagged for review: ' + slug + ' (' + issues.length + ' issue(s))');
-        return new Response(JSON.stringify({ ok: true, slug: slug, status: status, auto_approved: status === 'queued', issues: issues, posts: posts.slice(0, 6) }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        // v0.5.3: null (checker unavailable) is NOT clean - hold as draft.
+        const status = issues && issues.length === 0 ? 'queued' : 'draft';
+        const notes = issues && issues.length ? JSON.stringify(issues) : (issues === null ? JSON.stringify([{ post: 0, issue: 'checker unavailable - unverified, held as draft' }]) : null);
+        await env.DB.prepare("INSERT INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, notes).run();
+        if (!issues || issues.length) await logAlert(env, 'compose', 'warning', 'held as draft: ' + slug + ' (' + (issues === null ? 'checker unavailable' : issues.length + ' issue(s)') + ')');
+        return new Response(JSON.stringify({ ok: true, slug: slug, status: status, auto_approved: status === 'queued', checker: issues === null ? 'unavailable' : 'ok', issues: issues, posts: posts.slice(0, 6) }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/approve' && m === 'POST') {
         const b = await request.json();
