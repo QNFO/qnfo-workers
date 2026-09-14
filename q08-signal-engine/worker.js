@@ -437,7 +437,7 @@ function renderFeed(pieces) {
 // 10. Worker export
 // ---------------------------------------------------------------------------
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     var url  = new URL(req.url);
     var path = url.pathname.replace(/\/+$/, "") || "/";
 
@@ -449,6 +449,19 @@ export default {
     }
 
     if (path === "/run" && req.method === "POST") {
+      // Detach: generate() takes 30-90s (HN fetch + LLM). Return immediately,
+      // run in background via waitUntil so the HTTP response is not blocked.
+      var async_mode = url.searchParams.get("async") !== "0";
+      if (async_mode) {
+        var runId = Date.now().toString(36);
+        ctx.waitUntil(generate(env).then(async (out) => {
+          await env.DB.prepare("UPDATE engine_runs SET error=? WHERE id=(SELECT MAX(id) FROM engine_runs)")
+            .bind("run-id:" + runId + " result:" + JSON.stringify(out).slice(0,200)).run().catch(()=>{});
+        }).catch(async (e) => {
+          await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'error',?)").bind(String(e&&e.message||e).slice(0,500)).run().catch(()=>{});
+        }));
+        return json({ ok: true, worker: WORKER, version: VERSION, mode: "async", run_id: runId, note: "generating in background; poll /api/runs or /health for result" });
+      }
       var out = await generate(env);
       return json({ ok: true, worker: WORKER, version: VERSION, out });
     }
