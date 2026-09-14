@@ -21,7 +21,7 @@ Autonomous signal engine serving https://q08.org — systems-level critiques of 
 ## Math rendering (MATH-RENDER-FLEET-1)
 Every HTML page (piece + index) loads MathJax 3 `tex-svg` with a jsDelivr→unpkg fallback and an explicit load-time typeset. Delimiters: inline `\(...\)`, display `\[...\]` / `$$...$$`.
 
-**Single-dollar `$...$` is deliberately DISABLED.** q08 prose is LLM-generated and can contain currency (`$5 million`), which MathJax would typeset as garbage under `$...$`. The canonical head snippet lives in `qnfo-workers` as `math_head.html` (see repo root note) and is shared across fleet surfaces.
+**Single-dollar `$...$` is deliberately DISABLED.** q08 prose is LLM-generated and can contain currency (`$5 million`), which MathJax would typeset as garbage under `$...$`. The canonical head snippet lives here as `q08-signal-engine/math_head.html` and is shared across fleet surfaces.
 
 `mdEmph()` protects math spans so the `_…_ → <em>` pass cannot corrupt subscripts.
 
