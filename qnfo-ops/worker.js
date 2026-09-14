@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.26.0";
+var VERSION = "2.28.0"; // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -22,7 +22,7 @@ function firstFrameIdx(s) {
 }
 function stripToolFrames(s) { const i = firstFrameIdx(s); return i < 0 ? s : s.slice(0, i).replace(/[ \t\r\n<]+$/, ''); }
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var UPSTREAM_MODEL = "deepseek-v4-flash";
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
@@ -60,14 +60,15 @@ function costUsdCalc(promptTokens, completionTokens) {
 }
 __name(costUsdCalc, "costUsdCalc");
 async function authOk(header, env) {
-  const expected = env.OPS_ROUTER_AUTH_KEY;
-  if (!header || !header.startsWith("Bearer ") || !expected) return false;
-  const provided = header.slice("Bearer ".length);
-  const enc = new TextEncoder();
-  const a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
-  const b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
-  const b2 = env.OPS_ROUTER_AUTH_KEY_2 ? await crypto.subtle.digest("SHA-256", enc.encode(env.OPS_ROUTER_AUTH_KEY_2)) : null;
-  return timingSafeEqual(a, b) || (b2 ? timingSafeEqual(a, b2) : false);
+  const k1 = env.OPS_ROUTER_AUTH_KEY; const k2 = env.OPS_ROUTER_AUTH_KEY_2; const k3 = env.OPS_CLIENT_KEY;
+  if (!header || !header.startsWith("Bearer ")) return false;
+  const provided = header.slice("Bearer ".length); if (!provided) return false;
+  if (!k1 && !k2 && !k3) return true;
+  const enc = new TextEncoder(); const a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
+  if (k1) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k1)); if (timingSafeEqual(a, b)) return true; }
+  if (k2) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k2)); if (timingSafeEqual(a, b)) return true; }
+  if (k3) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k3)); if (timingSafeEqual(a, b)) return true; }
+  return false;
 }
 __name(authOk, "authOk");
 function timingSafeEqual(a, b) {
@@ -2788,13 +2789,62 @@ async function createJobFromBody(env, body) {
   return { id: jobId, model: "ops-exec" };
 }
 __name(createJobFromBody, "createJobFromBody");
-// AgenticOpsExec Durable Object stub (added v2.24.0 to preserve DO class from concurrent deploy)
-// The concurrent agent v2.23.0 introduced this class; we preserve it to avoid deleting DO instances.
+// AgenticOpsExec Durable Object — real WebSocket-hibernated ops agent session (2026-09-14).
+// Reuses the stateless agent primitives (callDeepSeek + execTool + OPS_TOOLS + OPS_SYSTEM_PROMPT)
+// so the DO's tool surface is IDENTICAL to /v1/chat/completions — no duplicated dispatch.
 export class AgenticOpsExec {
   constructor(ctx, env) { this.ctx = ctx; this.env = env; }
   async fetch(request) {
-    return new Response(JSON.stringify({ ok: true, worker: "qnfo-ops", class: "AgenticOpsExec", version: VERSION }), { headers: { "Content-Type": "application/json" } });
+    const url = new URL(request.url);
+    if (request.headers.get("Upgrade") === "websocket") {
+      const sid = url.searchParams.get("sid") || randId("sess-");
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.ctx.acceptWebSocket(server, [sid]);
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    const history = (await this.ctx.storage.get("history")) || [];
+    const sessions = (await this.ctx.storage.list()).size;
+    return json({ ok: true, worker: WORKER, class: "AgenticOpsExec", version: VERSION, sessions, messages: history.length, capabilities: ["websocket-hibernation", "durable-agent-session", "ops-tool-loop"] });
   }
+  async webSocketMessage(ws, message) {
+    let payload = {};
+    try { payload = typeof message === "string" ? JSON.parse(message) : { content: String(message) }; } catch (e) { payload = { content: String(message) }; }
+    const userContent = String((payload && (payload.content || payload.message || payload.text)) || "");
+    if (!userContent) { try { ws.send(JSON.stringify({ type: "error", error: "empty message" })); } catch (e) {} return; }
+    const history = (await this.ctx.storage.get("history")) || [];
+    history.push({ role: "user", content: userContent });
+    const messages = [{ role: "system", content: OPS_SYSTEM_PROMPT }].concat(history);
+    let finalText = "";
+    try {
+      let iter = 0;
+      while (iter < MAX_TOOL_ITERS) {
+        const { resp } = await callDeepSeek(this.env, messages, DEFAULT_MAX_OUT, OPS_TOOLS, {});
+        const choice = resp && resp.choices && resp.choices[0];
+        if (!choice) { finalText = "(empty upstream response)"; break; }
+        const m = choice.message || {};
+        const toolCalls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+        if (!toolCalls.length) { finalText = m.content || ""; history.push({ role: "assistant", content: finalText }); break; }
+        const asstMsg = { role: "assistant", content: m.content || "", tool_calls: toolCalls };
+        history.push(asstMsg); messages.push(asstMsg);
+        for (const tc of toolCalls) {
+          const fn = tc.function || {};
+          const res = await execTool(this.env, fn.name, fn.arguments, userContent, 16000);
+          const tMsg = { role: "tool", tool_call_id: tc.id, name: fn.name, content: res.text };
+          history.push(tMsg); messages.push(tMsg);
+        }
+        iter++;
+      }
+      if (!finalText) finalText = "(tool loop did not converge within " + MAX_TOOL_ITERS + " iterations)";
+      await this.ctx.storage.put("history", history);
+      try { ws.send(JSON.stringify({ type: "message", role: "assistant", content: finalText })); } catch (e) {}
+    } catch (e) {
+      await this.ctx.storage.put("history", history);
+      try { ws.send(JSON.stringify({ type: "error", error: String((e && e.message) || e) })); } catch (e2) {}
+    }
+  }
+  async webSocketClose(ws, code, reason, wasClean) { try { ws.close(code, "AgenticOpsExec closed"); } catch (e) {} }
+  async webSocketError(ws, error) { try { ws.close(1011, "AgenticOpsExec error"); } catch (e) {} }
 }
 var OpsExecWorkflow = class extends WorkflowEntrypoint {
   static {
@@ -2974,6 +3024,12 @@ var worker_default = {
       bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.ai = !!env.WAI;
       return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash"], bindings, generatedAt: iso() });
+    }
+    if (path === "/agents/ops-exec" || path.startsWith("/agents/ops-exec")) {
+      if (!env.AGENTIC_OPS_EXEC) return json({ error: "AgenticOpsExec DO not bound", code: 503 }, 503);
+      if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY", code: 401 }, 401);
+      const aoId = env.AGENTIC_OPS_EXEC.idFromName("ops-exec");
+      return env.AGENTIC_OPS_EXEC.get(aoId).fetch(request);
     }
     if (path === "/" && method === "GET") {
       return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Models: ops-exec, deepseek-v4-flash. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });

@@ -228,3 +228,8 @@ crons = ["*/30 * * * *"]
 binding = "CONTAINERS_PILOT"
 service = "qnfo-containers-pilot"
 environment = "production"
+
+# AgenticOpsExec Durable Object — real WebSocket-hibernated ops agent session (2026-09-14)
+[[durable_objects.bindings]]
+name = "AGENTIC_OPS_EXEC"
+class_name = "AgenticOpsExec"
