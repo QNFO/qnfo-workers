@@ -39,6 +39,9 @@ var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPag
 var HN_ITEMS  = "https://hn.algolia.com/api/v1/items/";
 var ROUTER    = "https://qnfo-ai.internal/v1/chat/completions";
 var UA        = "q08-signal-engine/0.1.0 (+https://q08.org)";
+var ORIGIN = "https://q08.org";
+// IndexNow: search-engine instant indexing (Bing, Yandex, Seznam, Naver).
+var INDEXNOW_KEY = "3f8a1c9e7b2d6045a1f3c8e5b9d20147";
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -451,6 +454,7 @@ async function generate(env) {
   feedbackScan(env).catch(() => {});
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
   await queueForDistribution(env, saved.title, saved.slug);
+  pingIndexNow(env, ORIGIN + "/p/" + saved.slug).catch(() => {});
   // Log run
   await env.DB.prepare(
     "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status) VALUES (?,?,?,?,?,?,?)"
@@ -583,6 +587,18 @@ async function postToSocial(env, title, slug) {
     return { ok: resp.ok, status: resp.status };
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
+// IndexNow: instant search-index ping for a newly published URL (no auth needed).
+async function pingIndexNow(env, url) {
+  try {
+    var resp = await fetch("https://api.indexnow.org/indexnow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host: "q08.org", key: INDEXNOW_KEY, keyLocation: ORIGIN + "/" + INDEXNOW_KEY + ".txt", urlList: [url] })
+    });
+    return { ok: resp.ok, status: resp.status };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+
 // Distribution via qnfo-social (Bluesky + Buffer cross-post). Tokenless:
 // write to the shared social_threads queue in qnfo-audit; qnfo-social's cron
 // picks it up and cross-posts. Buffer covers Mastodon + LinkedIn + X.
@@ -659,6 +675,7 @@ export default {
       return html(renderPiece(piece));
     }
 
+    if (path === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     if (path === "/subscribe") return await handleSubscribe(req, env, url);
     if (path === "/confirm") { var t0 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='confirmed', confirmed_at=? WHERE token=? AND status!='unsubscribed'").bind(nowIso(), t0).run(); return html("<h2>Subscribed</h2><p>You are subscribed. The daily digest arrives each evening.</p>"); }
     if (path === "/unsubscribe") { var t1 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='unsubscribed' WHERE token=?").bind(t1).run(); return html("<h2>Unsubscribed</h2><p>You have been removed from the daily digest.</p>"); }
