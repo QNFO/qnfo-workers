@@ -196,6 +196,43 @@ async function autoScan(env) {
   }
 }
 
+// ---------- Buffer cross-post (GraphQL: Mastodon + LinkedIn + X) ----------
+// Reference: qnfo-paper-explainer. Token: BUFFER_TOKEN (present on this worker).
+// Best-effort: a Buffer failure must never block the Bluesky post.
+async function bufferGql(env, query) {
+  const r = await fetch("https://api.buffer.com", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.BUFFER_TOKEN || ""), "User-Agent": "qnfo-social/" + VERSION },
+    body: JSON.stringify({ query })
+  });
+  if (!r.ok) throw new Error("buffer gql " + r.status);
+  return r.json();
+}
+async function bufferPost(env, text) {
+  if (!env.BUFFER_TOKEN) return { skipped: "no BUFFER_TOKEN" };
+  const results = [];
+  try {
+    const orgRes = await bufferGql(env, "{ account { organizations { id } } }");
+    const orgs = (orgRes && orgRes.data && orgRes.data.account && orgRes.data.account.organizations) || [];
+    if (!orgs.length) return { error: "no buffer org" };
+    const orgId = orgs[0].id;
+    const chRes = await bufferGql(env, "{ channels(input: { organizationId: \"" + orgId + "\" }) { id service isDisconnected } }");
+    const channels = (chRes && chRes.data && chRes.data.channels) || [];
+    for (const svc of ["mastodon", "linkedin", "twitter"]) {
+      const ch = channels.find((c) => c.service === svc && !c.isDisconnected);
+      if (!ch) { results.push({ platform: svc, status: "no-channel" }); continue; }
+      try {
+        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(text) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: shareNow }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
+        const r = await bufferGql(env, mutation);
+        const cp = r && r.data && r.data.createPost;
+        if (cp && cp.post) results.push({ platform: svc, status: "ok", post_id: cp.post.id });
+        else results.push({ platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) });
+      } catch (e) { results.push({ platform: svc, status: "error", error: String(e && e.message || e) }); }
+    }
+  } catch (e) { results.push({ status: "error", error: String(e && e.message || e) }); }
+  return { results };
+}
+
 export default {
   async scheduled(event, env) {
     if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
@@ -208,8 +245,11 @@ export default {
       if (!Array.isArray(posts) || !posts.length) throw new Error('bad posts payload');
       const s = await session(env);
       const uris = await postThread(s, posts);
+      // Buffer cross-post (Mastodon + LinkedIn + X) — best-effort, never blocks Bluesky
+      let bufferResult = null;
+      try { bufferResult = await bufferPost(env, posts[0]); } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
       await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
-      console.log('cron posted thread', row.slug, uris[0]);
+      console.log('cron posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
     } catch (e) {
       await env.DB.prepare("UPDATE social_threads SET status='failed', error=?, retry_count=retry_count+1 WHERE id=?").bind(String(e).slice(0, 300), row.id).run();
       await logAlert(env, 'cron', 'error', 'cron post failed ' + row.slug + ': ' + String(e));
@@ -229,6 +269,11 @@ export default {
         const s = await session(env);
         const r = await postText(s, String(b.text || ''));
         return new Response(JSON.stringify({ ok: true, uri: r.uri }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/cross' && m === 'POST') {
+        const b = await request.json();
+        const res = await bufferPost(env, String(b.text || '').slice(0, 280));
+        return new Response(JSON.stringify({ ok: true, buffer: res }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/thread' && m === 'POST') {
         const b = await request.json();

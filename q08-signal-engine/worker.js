@@ -32,7 +32,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.4.0";
+var VERSION = "0.5.0";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -450,7 +450,7 @@ async function generate(env) {
   // Feedback loop (async, non-blocking)
   feedbackScan(env).catch(() => {});
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
-  postToSocial(env, saved.title, saved.slug).catch(() => {});
+  await queueForDistribution(env, saved.title, saved.slug);
   // Log run
   await env.DB.prepare(
     "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status) VALUES (?,?,?,?,?,?,?)"
@@ -581,6 +581,18 @@ async function postToSocial(env, title, slug) {
     var text = (title + " - https://q08.org/p/" + slug).slice(0, 290);
     var resp = await env.SOCIAL.fetch("https://social.internal/post", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.SOCIAL_TOKEN }, body: JSON.stringify({ text: text }) });
     return { ok: resp.ok, status: resp.status };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+// Distribution via qnfo-social (Bluesky + Buffer cross-post). Tokenless:
+// write to the shared social_threads queue in qnfo-audit; qnfo-social's cron
+// picks it up and cross-posts. Buffer covers Mastodon + LinkedIn + X.
+async function queueForDistribution(env, title, slug) {
+  if (!env.AUDIT) return { ok: false, skip: "no audit binding" };
+  try {
+    var text = (title + " \u2014 https://q08.org/p/" + slug).slice(0, 280);
+    var id = "q08-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await env.AUDIT.prepare("INSERT OR IGNORE INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'queued')").bind(id, String(title || "").slice(0, 300), JSON.stringify([text])).run();
+    return { ok: true, queued: id };
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
 async function handleSubscribe(req, env, url) {
