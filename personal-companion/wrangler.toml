@@ -18,4 +18,19 @@ bucket_name = "personal-media"
 binding = "PERSONAL"
 database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 
-# binding VZ: type=vectorize (see deployed config)
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"
+
+[[workflows]]
+name = "companion-generation"
+binding = "GEN_FLOW"
+class_name = "GenerationFlow"
+schedules = ["0 4,8,12,16,20 * * *"]
+
+[triggers]
+crons = ["0 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
