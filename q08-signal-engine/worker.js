@@ -32,7 +32,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.5.0";
+var VERSION = "0.5.2";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -226,6 +226,7 @@ var Q08_DIRECTIVE = [
   "- No personal names, no usernames, no @handles. No emotional vocabulary. No hedging ('it seems', 'perhaps').",
   "- No first person. No preamble or meta-commentary.",
   "- 700-1100 words.",
+  "- Mathematical notation: use LaTeX. Inline math between \\( and \\), display math between \\[ and \\]. Never place a formula in backticks, and never leave a symbol chain as plain prose when the relationship (an exponent, a norm, a limit, a bound) is what the sentence turns on.",
   "- Output: valid Markdown, H1 title first, then the essay. The H1 title must be concrete and intriguing, not abstract (never 'An Analysis of X' or 'A Critique of Y').",
 ].join("\n");
 
@@ -343,7 +344,7 @@ function gate(text) {
 // ---------------------------------------------------------------------------
 // 6. Persist + serve
 // ---------------------------------------------------------------------------
-async function persistPiece(env, piece, signal, story, model) {
+async function persistPiece(env, piece, signal, story, model, sources) {
   var salt = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   var slug  = utcDay() + "-" + slugify(piece.title || signal.core_concept) + "-" + salt.slice(-6);
   var pieceId = "p-" + salt;
@@ -363,10 +364,11 @@ async function persistPiece(env, piece, signal, story, model) {
   ).run();
   // Persist piece
   await env.DB.prepare(
-    "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at) VALUES (?,?,?,?,?,?,?,?)"
+    "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json) VALUES (?,?,?,?,?,?,?,?,?)"
   ).bind(
     pieceId, "sig-" + salt, slug, title, body,
-    signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso()
+    signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso(),
+    JSON.stringify(sources || [])
   ).run();
   // Seed prompt pool with structure skeleton (H2/H3 headings only)
   var skeleton = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
@@ -466,7 +468,14 @@ async function generate(env) {
     return { ok: false, reason: "gate failed: " + gateResult.problems.join("; ") };
   }
   // Persist
-  var saved = await persistPiece(env, piece, friction, story, piece.model);
+  // Q08-SOURCES-1: primary origin + discussion thread, then the runner-up
+  // signals the engine had ranked at composition time ("more information").
+  var sources = sourceLinks(story.source || "hn", String(story.id || ""), story.url);
+  var related = candidates.filter(function(s) { return s !== story && s.url; }).slice(0, 3).map(function(s) {
+    return { label: hostLabel(s.url) + " — " + String(s.title || "").slice(0, 70), url: s.url };
+  });
+  sources = sources.concat(related);
+  var saved = await persistPiece(env, piece, friction, story, piece.model, sources);
   // Feedback loop (async, non-blocking)
   feedbackScan(env).catch(() => {});
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
@@ -511,7 +520,80 @@ article .lede{font-size:.97rem;color:var(--mut);line-height:1.6}
 .piece em{font-style:italic}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);font-size:.82rem;color:var(--mut)}
 .chip{display:inline-block;font-size:.75rem;padding:.15rem .5rem;border-radius:3px;background:var(--line);color:var(--mut);margin-right:.4rem}
+.piece .sources{margin-top:2.5rem;border-top:1px solid var(--line);padding-top:1.1rem;font-size:.85rem;line-height:1.5}
+.piece .sources h2{font-size:.74rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 .5rem}
+.piece .sources ul{list-style:none;margin:0;padding:0}
+.piece .sources li{margin-bottom:.28rem}
+.piece .sources a{color:var(--acc);text-decoration:none;word-break:break-word}
+.piece .sources a:hover{text-decoration:underline}
+mjx-container{overflow-x:auto;overflow-y:hidden}
 `;
+
+// MATH-RENDER-1 — canonical math head (fleet standard).
+//   PRECONDITION : every HTML surface that may carry LaTeX delimiters
+//                  \(  \)   \[  \]   $  $   $$  $$  must include this head.
+//   POSTCONDITION: each delimited expression is handed to MathJax verbatim and
+//                  typeset into an <mjx-container> element in the served page.
+//   INVARIANT    : each delimiter must be exactly ONE backslash char followed by
+//                  its bracket. Backslashes are assembled at runtime so no
+//                  source-level escape layer can swallow them — an earlier
+//                  revision shipped the literal six-character token \u005C(
+//                  and therefore typeset nothing at all.
+var BS = String.fromCharCode(92);
+var MATH_HEAD =
+  // Two backslashes in the SERVED source: the browser's JS parser consumes one
+  // level when it evaluates the delimiter string literal, so '\\(' reaches
+  // MathJax as the two-character token \( . Emitting a single backslash here
+  // produces '\\(' -> "(" and silently disables the delimiter (MATH-RENDER-1).
+  "<script>window.MathJax={tex:{inlineMath:[['$','$'],['" + BS + BS + "(','" + BS + BS + ")']]," +
+  "displayMath:[['$$','$$'],['" + BS + BS + "[','" + BS + BS + "]']],processEscapes:true}," +
+  "options:{skipHtmlTags:['script','noscript','style','textarea','pre','code'],enableMenu:false}};</scr" + "ipt>" +
+  // Loader tries three independent CDNs in order; single-quoted URLs keep the
+  // emitted script free of escaping layers.
+  "<script>(function(){var u=['https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js'," +
+  "'https://unpkg.com/mathjax@3/es5/tex-svg.js'," +
+  "'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js'];var i=0;" +
+  "function n(){if(i>=u.length)return;var s=document.createElement('script');s.src=u[i++];s.async=true;s.onerror=n;document.head.appendChild(s);}n();})();</scr" + "ipt>";
+
+// Emit the math head only for documents that actually contain math, so pages
+// without formulas load no third-party script.
+function hasMath(s) { return /\\\(|\\\[|\$/.test(String(s || "")); }
+function mathHeadFor(text) { return hasMath(text) ? MATH_HEAD : ""; }
+
+// Q08-SOURCES-1 — the origin URLs of the signal an essay was composed from.
+//   PRECONDITION : story is one of the scraper shapes (hn | github | arxiv).
+//   POSTCONDITION: a de-duplicated list of {label,url} pointing at the primary
+//                  artifact and, for forum signals, the discussion thread.
+//   INVARIANT    : rendered by the template, never by the model — the essay
+//                  register forbids naming outside entities inside prose.
+function hostLabel(u) {
+  try { return String(u).replace(/^https?:\/\//, "").split("/")[0].replace(/^www\./, ""); }
+  catch (e) { return String(u); }
+}
+function sourceLinks(kind, sourceId, url) {
+  var id = String(sourceId == null ? "" : sourceId);
+  var i = id.indexOf(":");
+  if (i >= 0) id = id.slice(i + 1);
+  var links = [];
+  if (kind === "hn") {
+    if (url) links.push({ label: hostLabel(url), url: url });
+    if (id) links.push({ label: "Hacker News discussion", url: "https://news.ycombinator.com/item?id=" + id });
+  } else if (kind === "github") {
+    links.push({ label: "GitHub repository: " + id, url: url || ("https://github.com/" + id) });
+  } else if (kind === "arxiv") {
+    links.push({ label: "arXiv:" + id, url: url || ("https://arxiv.org/abs/" + id) });
+  } else if (url) {
+    links.push({ label: hostLabel(url), url: url });
+  }
+  return links.filter(function(l) { return !!l.url; });
+}
+function renderSources(links) {
+  if (!links || !links.length) return "";
+  var items = links.map(function(l) {
+    return '<li><a href=\'' + escHtml(l.url) + '\' target="_blank" rel="noopener nofollow">' + escHtml(l.label) + '</a></li>';
+  }).join("");
+  return '<div class="sources"><h2>Sources</h2><ul>' + items + '</ul></div>';
+}
 
 function renderIndex(pieces) {
   var items = pieces.map(function(p) {
@@ -525,7 +607,19 @@ function renderIndex(pieces) {
       '</article>',
     ].join("\n");
   }).join("\n");
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>q08</title><meta name=description content="Systems-level critique of technical industry friction. Cold, structural, timeless."><style>' + CSS + '</style></head><body><div class=wrap><header><h1>q08</h1><p>Systems-level critique. Structural. Timeless.</p><nav><a href="/">Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a><a href="/health">Status</a></nav></header>' + (items || '<p style="color:var(--mut)">No pieces published yet. Check back soon.</p>') + '<footer>q08 &mdash; autonomous signal engine &mdash; updated continuously</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>q08</title><meta name=description content="Systems-level critique of technical industry friction. Cold, structural, timeless."><style>' + CSS + '</style>' + mathHeadFor(items) + '</head><body><div class=wrap><header><h1>q08</h1><p>Systems-level critique. Structural. Timeless.</p><nav><a href="/">Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a><a href="/health">Status</a></nav></header>' + (items || '<p style="color:var(--mut)">No pieces published yet. Check back soon.</p>') + '<footer>q08 &mdash; autonomous signal engine &mdash; updated continuously</footer></div></body></html>';
+}
+
+function mdInline(s) {
+  // MATH-RENDER-1: protect math regions from inline emphasis so underscores/asterisks
+  // inside \(...\), \[...\] and $$...$$ are not consumed by the bold/italic regexes.
+  var slots = [];
+  var t = escHtml(s).replace(/\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$\$[\s\S]+?\$\$/g, function(m){ slots.push(m); return "\u0000M" + (slots.length - 1) + "\u0000"; });
+  t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/_(.+?)_/g, "<em>$1</em>");
+  // Q08-LINKS-1: markdown links become real anchors.
+  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener nofollow">$1</a>');
+  t = t.replace(/\u0000M(\d+)\u0000/g, function(_, i){ return slots[+i]; });
+  return t;
 }
 
 function mdToHtml(md) {
@@ -542,25 +636,28 @@ function mdToHtml(md) {
     if (h1) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h1>" + escHtml(h1[1]) + "</h1>"); }
     else if (h2) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h2>" + escHtml(h2[1]) + "</h2>"); }
     else if (h3) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h3>" + escHtml(h3[1]) + "</h3>"); }
-    else if (li) { if (!inUl) { out.push("<ul>"); inUl=true; } out.push("<li>" + escHtml(li[1]).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/_(.+?)_/g,"<em>$1</em>") + "</li>"); }
+    else if (li) { if (!inUl) { out.push("<ul>"); inUl=true; } out.push("<li>" + mdInline(li[1]) + "</li>"); }
     else if (blank) { if (inUl) { out.push("</ul>"); inUl=false; } }
-    else { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<p>" + escHtml(line).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/_(.+?)_/g,"<em>$1</em>") + "</p>"); }
+    else { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<p>" + mdInline(line) + "</p>"); }
   }
   if (inUl) out.push("</ul>");
   return out.join("\n");
 }
 
-function renderPiece(p) {
+function renderPiece(p, sources) {
   var body = mdToHtml(p.body_md || "");
   var date = (p.published_at || "").slice(0, 10);
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style></head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style>' + mathHeadFor(p.body_md) + '</head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + renderSources(sources) + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
 }
 
 function renderFeed(pieces) {
   var items = pieces.map(function(p) {
     var date = new Date(p.published_at || Date.now()).toUTCString();
     var desc = (p.body_md || "").replace(/[<>&"]/g, function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];}).slice(0, 500);
-    return "<item><title>" + escHtml(p.title) + "</title><link>https://q08.org/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + "...</description></item>";
+    var srcs = [];
+    try { srcs = JSON.parse(p.sources_json || "[]") || []; } catch (e) { srcs = []; }
+    var srcTxt = srcs.length ? " Sources: " + srcs.map(function(s) { return s.url; }).join(" | ") : "";
+    return "<item><title>" + escHtml(p.title) + "</title><link>https://q08.org/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + srcTxt + "...</description></item>";
   }).join("\n");
   return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>q08</title><link>https://q08.org</link><description>Systems-level critique. Structural. Timeless.</description>' + items + '</channel></rss>';
 }
@@ -681,7 +778,7 @@ export default {
     }
 
     if (path === "/feed.xml") {
-      var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 20").all();
+      var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at, sources_json FROM published_pieces ORDER BY published_at DESC LIMIT 20").all();
       return new Response(renderFeed(rows.results || []), { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
     }
 
@@ -691,7 +788,15 @@ export default {
       if (!piece) return html("<h1>Not found</h1>", 404);
       // Increment read count
       env.DB.prepare("UPDATE published_pieces SET reads=reads+1 WHERE slug=?").bind(slug).run().catch(() => {});
-      return html(renderPiece(piece));
+      // Q08-SOURCES-1: origin URLs, stored at publish time; legacy rows fall
+      // back to the signal_log row they were composed from.
+      var srcs = [];
+      try { srcs = JSON.parse(piece.sources_json || "[]") || []; } catch (e) { srcs = []; }
+      if ((!srcs || !srcs.length) && piece.signal_id) {
+        var sig = await env.DB.prepare("SELECT source, source_id, url FROM signal_log WHERE id=?").bind(piece.signal_id).first();
+        if (sig) srcs = sourceLinks(sig.source, sig.source_id, sig.url);
+      }
+      return html(renderPiece(piece, srcs));
     }
 
     if (path === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
