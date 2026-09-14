@@ -1,23 +1,25 @@
 /**
- * q08-signal-engine — v0.1.0
+ * q08-signal-engine — v0.3.0
  *
  * What it is
  *   The external signal engine for q08.org. Scrapes high-friction technical
- *   discussions from Hacker News (and later GitHub Trending / arXiv), ranks
- *   them by a volatility score, extracts the structural friction point, then
- *   composes a timeless systems-level essay via the qnfo-ai router and
- *   publishes it to q08.org.
+ *   discussions from Hacker News, ranks them by a volatility score, extracts
+ *   the structural friction point, then composes a long-form analytical essay
+ *   and publishes it to q08.org.
  *
- * Architecture (per notes _26257092731.md + _26257093042.md)
+ * Architecture
  *   cron (every 2h) -> scrape_hn -> volatility_rank -> pick_top ->
- *   extract_friction -> build_prompt -> compose (qnfo-ai) ->
- *   gate (no names / no handles / no emotional vocab) ->
+ *   extract_friction -> build_prompt -> compose (Workers AI) ->
+ *   gate (long-form prose: no bullets / no tables / no names / no handles) ->
  *   persist (D1 q08-signal) -> serve HTML
  *
- * Register
- *   Cold, structural, systems-level objectivity. H3 scaffolding.
- *   Bulleted taxonomies. No names. No handles. No emotional vocabulary.
- *   Timeless. Weave multiple diverse threads. Synthesize honestly.
+ * Register (the reading.q08.org signature, applied to external signals)
+ *   Engaging long-form prose with a hook opening and why-a-reader-should-care
+ *   framing. Surprising cross-domain connections woven throughout (historical
+ *   parallels, adjacent-field analogies). Timeless and name-free: no dates,
+ *   no products, no handles, no emotional vocabulary. A structural flaw named,
+ *   failure modes walked through as prose, a minimal alternative framework
+ *   proposed. NO bullet lists. NO tables.
  *
  * Bindings
  *   DB          — D1 q08-signal (signal_log, published_pieces, prompt_pool, engine_runs)
