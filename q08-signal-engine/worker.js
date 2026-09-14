@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.2";
+var VERSION = "0.7.3";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -217,9 +217,11 @@ var Q08_DIRECTIVE = [
   "",
   "STRUCTURE: let the material dictate the shape. No required arc, no three-movement template. Banned section headers, exactly: 'How the Flaw Manifests', 'Cascading Failures', 'A Minimal Alternative', 'A Minimal Framework', 'Connections Across Disciplines', 'Echoes from the Past', 'A Path Forward', 'The Lens Restored', 'Lessons for the Future', 'Unexpected Parallels', 'The Broader Lesson', and any header of the form 'The [Adjective] [Lever/Bottleneck/Premise/Flaw]: X'. Never name a section after its rhetorical function.",
   "",
-  "OPENING: begin inside the problem. The first sentence must name a mechanism or observation so specific it could not open any other essay.",
+  "OPENING: begin inside a concrete particular from the signal — the exact mechanism, number, or observed behavior. Never open on an aphorism or a general claim. If the first sentence could belong to any essay, rewrite it.",
   "",
-  "CONCRETENESS: name the actual mechanism, number, or constraint. Technical artifacts — formats, languages, theorems, algorithms — may be named; they are the material. Company names, brand names, and platform names are banned. A sentence without a specific referent is a sentence to rewrite.",
+  "CONCRETENESS: name the real things — people, companies, platforms, formats, artifacts — exactly as they are. Anonymizing the material ('a large search company', 'a video platform') is a register failure: it drains the essay of information. A sentence without a specific referent is a sentence to rewrite.",
+  "",
+  "INFORMATION DENSITY: mine the signal for its specific facts — numbers, names, measurements, mechanisms, quoted text — and put them in the essay. An essay that could have been written without reading the signal is rejected.",
   "",
   "CONNECTIONS: at most two cross-domain connections, each load-bearing — it must change how the reader understands the mechanism. Stock props are banned: no guild stamps, no telescopes, no alchemy, no philosopher's stones, no printing presses, no sonar, no camera apertures, no legal contracts, no aerospace redundancy. If the analogy would fit a different essay equally well, cut it.",
   "",
@@ -228,10 +230,10 @@ var Q08_DIRECTIVE = [
   "VERDICT (mandatory final line, this is the last line of your output, after the essay): write exactly 'worth your time: yes|flat|no — one clause of justification'. State honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. 'no' rejects the essay; 'flat' means it barely clears the bar. Omitting this line is a rejection on its own.",
   "",
   "CONSTRAINTS (hard):",
-  "- Timeless: no dates, no current events.",
-  "- No personal names, no usernames, no @handles. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
+  "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
+  "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
   "- No first person. No preamble, no meta-commentary about the essay itself.",
-  "- 700-1100 words. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
+  "- 1200-1800 words. This is a requirement, not a suggestion: essays under this length are rejected. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
   "- Output: valid Markdown, H1 title first, then the essay. The title must be concrete and specific to this signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
   "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
@@ -275,7 +277,7 @@ async function compose(env, prompt) {
     try {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 2000,
+        max_tokens: 3000,
         temperature: 0.65,
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
@@ -330,7 +332,7 @@ function gate(text) {
   var problems = [];
   var body = text.toLowerCase();
 
-  if (text.length < 600) problems.push("too short for long-form (" + text.length + " chars)");
+  if (text.length < 4000) problems.push("too short for long-form (" + text.length + " chars; 1200-1800 words required)");
 
   var titleMatch = text.match(/^#\s+(.+)$/m);
   var title = titleMatch ? titleMatch[1].trim() : "";
