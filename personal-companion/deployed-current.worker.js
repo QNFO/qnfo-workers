@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "1.2.0";
+var VERSION = "1.3.2";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -855,7 +855,10 @@ function renderIndex(pieces, keyQS, filter) {
 }
 __name(renderIndex, "renderIndex");
 function renderPiece(p, keyQS) {
-  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + (p.lede ? "<p class=lede>" + escHtml(p.lede) + "</p>" : "") + renderBody(p.body_md);
+  var bodyMd = String(p.body_md || "");
+  var startsHeading = /^\s*#/.test(bodyMd);
+  var ledeHtml = !startsHeading && p.lede ? "<p class=lede>" + escHtml(p.lede) + "</p>" : "";
+  var body = "<div class=meta>" + formLabel(p.form) + " &middot; " + p.day + " &middot; " + p.word_count + " words</div><h2>" + escHtml(p.title) + "</h2>" + (p.subtitle ? "<p class=meta>" + escHtml(p.subtitle) + "</p>" : "") + ledeHtml + renderBody(bodyMd);
   var fb = "<div class=fb>Was this worth your time? <a href=/api/f?slug=" + p.slug + "&s=good>yes</a><a href=/api/f?slug=" + p.slug + "&s=flat>flat</a><a href=/api/f?slug=" + p.slug + "&s=no>no</a></div>";
   var foot = "<footer><a href=/ " + keyQS + ">back to index</a></footer>";
   return page(p.title, shell(body + fb + foot));
@@ -907,23 +910,29 @@ function extractSection(md, needle) {
   return out.join(" ").trim();
 }
 __name(extractSection, "extractSection");
-function firstParagraph(md) {
+function extractLede(md) {
   var lines = String(md).split(NL);
-  var buf = [];
-  for (var i = 0; i < lines.length; i++) {
-    var t = lines[i].trim();
-    if (!t) {
-      if (buf.length) break;
-      continue;
-    }
-    if (t.indexOf("#") === 0) continue;
-    if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) continue;
-    buf.push(t);
-    if (buf.join(" ").length > 90) break;
+  var i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  var startsHeading = i < lines.length && lines[i].trim().indexOf("#") === 0;
+  while (i < lines.length && lines[i].trim().indexOf("#") === 0) {
+    i++;
+    while (i < lines.length && !lines[i].trim()) i++;
   }
-  return buf.join(" ").slice(0, 400);
+  var buf = [];
+  while (i < lines.length) {
+    var t = lines[i].trim();
+    if (!t) break;
+    if (t.indexOf("#") === 0) break;
+    if (t.indexOf("- ") === 0 || t.indexOf("> ") === 0) break;
+    buf.push(t);
+    i++;
+  }
+  var lede = buf.join(" ").trim();
+  var rest = startsHeading ? String(md).trim() : lines.slice(i).join(NL).trim();
+  return { lede: lede, rest: rest, startsHeading: startsHeading };
 }
-__name(firstParagraph, "firstParagraph");
+__name(extractLede, "extractLede");
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
   var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. Include one section headed exactly: ## The strongest objection";
@@ -953,12 +962,13 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
   }
   if (!title) title = topic.a + " and " + topic.b;
   var objection = extractSection(md, "objection");
+  var ledeObj = extractLede(md);
   return {
     piece: {
       title: title.slice(0, 300),
       subtitle: "",
-      lede: firstParagraph(md),
-      body_md: md,
+      lede: ledeObj.lede,
+      body_md: ledeObj.rest,
       objection: objection || (form === "notes" ? "Each item stands or falls on its own." : "")
     },
     model: r.model,
@@ -1035,7 +1045,7 @@ async function persistPiece(env, piece, form, topic, model, quality, words) {
   var anchorJson = JSON.stringify({ topic: topic.id, seam: [topic.a, topic.b], bridge: piece.bridge || null });
   await env.PERSONAL.prepare(
     "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
-  ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 600), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
+  ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 2000), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
   try {
     var vecs = await embed(env, [String(piece.title) + NL + String(piece.lede || "") + NL + String(piece.body_md).slice(0, 5e3)]);
     if (vecs.length && env.VZ) {
@@ -1080,7 +1090,7 @@ async function sendMail(env, piece, slug, day) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
     var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
-    var body = (piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
+    var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : (piece.lede ? piece.lede + NL + NL : "")) + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
     var resp = await env.EMAIL.fetch("https://email.internal/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
@@ -1212,7 +1222,7 @@ async function broadcast(env, slug, origin) {
     var sent = 0, failed = 0;
     for (var i = 0; i < subs.length; i++) {
       var s = subs[i];
-      var body = (prow.lede ? prow.lede + NL + NL : "") + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
+      var body = (/^\s*#/.test(String(prow.body_md || "")) ? "" : (prow.lede ? prow.lede + NL + NL : "")) + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
       var rr = await sendOne(env, s.email, prow.title, body);
       if (rr && rr.ok) sent++;
       else failed++;
