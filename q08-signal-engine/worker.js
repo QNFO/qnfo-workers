@@ -170,42 +170,33 @@ function buildPrompt(friction, fewShot) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. LLM composition via qnfo-ai service binding
+// 4. LLM composition via Workers AI binding (no token required)
 // ---------------------------------------------------------------------------
+// Model priority: frontier-scale non-reasoning writers only.
+// Banned: llama, mistral, gemma-7b, -flash, -fp8-fast, -mini, -small (per fleet policy).
+var COMPOSE_MODELS = [
+  "@cf/openai/gpt-oss-120b",
+  "@cf/moonshotai/kimi-k2.6",
+  "@cf/zai-org/glm-5.3",
+];
+
 async function compose(env, prompt) {
-  var body = JSON.stringify({
-    model: "auto",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.65,
-    max_tokens: 2000,
-  });
-  var resp;
-  if (env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
-    resp = await env.QNFO_AI.fetch(ROUTER, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + (env.ROUTER_TOKEN || ""),
-        "User-Agent": UA,
-      },
-      body,
-    });
-  } else {
-    resp = await fetch("https://qnfo-ai.q08.workers.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + (env.ROUTER_TOKEN || ""),
-        "User-Agent": UA,
-      },
-      body,
-    });
+  var lastErr;
+  for (var modelId of COMPOSE_MODELS) {
+    try {
+      var resp = await env.AI.run(modelId, {
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 2000,
+        temperature: 0.65,
+      }, { signal: AbortSignal.timeout(120000) });
+      // Workers AI returns {response: string} for chat models
+      var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
+      if (text && text.length > 200) return { text, model: modelId };
+    } catch (e) {
+      lastErr = e;
+    }
   }
-  if (!resp.ok) throw new Error("compose " + resp.status + " " + await resp.text().catch(() => ""));
-  const data = await resp.json();
-  const text = (data.choices || [])[0]?.message?.content || "";
-  const model = data.model || "unknown";
-  return { text, model };
+  throw new Error("all compose models failed: " + String(lastErr && lastErr.message || lastErr).slice(0, 200));
 }
 
 // ---------------------------------------------------------------------------
