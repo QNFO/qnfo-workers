@@ -575,7 +575,17 @@ async function sha16(s) {
   return Array.from(new Uint8Array(buf)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
 }
 async function sendEmail(env, to, subject, body) {
-  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  // Tokenless path: native Email Routing send binding (q08.org). No API key needed.
+  if (env.SEND_EMAIL) {
+    try {
+      await env.SEND_EMAIL.send({ to: to, from: "digest@q08.org", subject: subject, text: body });
+      return { ok: true, via: "send_email" };
+    } catch (e) {
+      return { ok: false, error: "send_email: " + String(e && e.message || e) };
+    }
+  }
+  // Fallback: qnfo-email HTTP API (requires EMAIL_API_KEY).
+  if (!env.EMAIL) return { ok: false, error: "no email path" };
   try {
     var resp = await env.EMAIL.fetch("https://email.internal/send", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") }, body: JSON.stringify({ to: to, from: "qnfo@qnfo.org", subject: subject, body: body }) });
     return { ok: resp.ok, status: resp.status };
