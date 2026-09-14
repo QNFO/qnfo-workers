@@ -1345,14 +1345,22 @@ async function verifyArxivEmail(env, paperId) {
     return null;
   };
   const vers = /v\d+$/.test(raw) ? [raw, bare] : [bare + "v1", bare];
-  for (const v of vers) {
-    try {
-      const r = await fetch("https://arxiv.org/html/" + v, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
-      if (!r.ok) continue;
-      const em = pick(await r.text());
-      if (em) return em;
-    } catch (e) {}
+  // HTML renderers: arXiv's own /html/ (LaTeX, post-2023) then ar5iv (wider coverage).
+  for (const host of ["https://arxiv.org/html/", "https://ar5iv.labs.arxiv.org/html/"]) {
+    for (const v of vers) {
+      try {
+        const r = await fetch(host + v, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+        if (!r.ok) continue;
+        const em = pick(await r.text());
+        if (em) return em;
+      } catch (e) {}
+    }
   }
+  // arXiv metadata: some authors place a contact address in the comments field.
+  try {
+    const r = await fetch("https://export.arxiv.org/api/query?id_list=" + encodeURIComponent(bare) + "&max_results=1", { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
+    if (r.ok) { const em = pick(await r.text()); if (em) return em; }
+  } catch (e) {}
   try {
     const r = await fetch("https://export.arxiv.org/e-print/" + bare, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" } });
     if (!r.ok) return null;
