@@ -1,0 +1,24 @@
+name = "q08-signal-engine"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "q08-signal"
+database_id = "10fd74b7-c4b3-43c7-9ca5-855213f44a69"
+
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[triggers]
+crons = ["0 */2 * * *"]
+
+# secret: ROUTER_TOKEN (qnfo-ai bearer; set via wrangler secret put)
