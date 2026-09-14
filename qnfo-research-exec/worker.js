@@ -4,30 +4,48 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.0-artifact-deposit";
+var __defProp22 = Object.defineProperty;
+var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+var __defProp222 = Object.defineProperty;
+var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
+var VERSION = "0.8.7";
 var WORKER = "qnfo-research-exec";
-var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.2"];
-var MAX_NOTE = 4e3;
+var NL = String.fromCharCode(10);
+var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
 var ROUTER = "https://qnfo-ai.internal/v1/chat/completions";
+function routerFetch(env, url, opts) {
+  if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
+    return env.QNFO_AI.fetch(url, opts);
+  }
+  return fetch(url, opts);
+}
+__name(routerFetch, "routerFetch");
+__name2(routerFetch, "routerFetch");
 var GATEWAY_MODEL = "deepseek-v4-flash";
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
 __name(json, "json");
 __name2(json, "json");
+__name22(json, "json");
+__name222(json, "json");
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 __name(nowIso, "nowIso");
 __name2(nowIso, "nowIso");
+__name22(nowIso, "nowIso");
+__name222(nowIso, "nowIso");
 function slugify(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "paper";
 }
 __name(slugify, "slugify");
 __name2(slugify, "slugify");
+__name22(slugify, "slugify");
+__name222(slugify, "slugify");
 async function logEvent(env, kind, text, status) {
   try {
     const id = "re-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
@@ -37,6 +55,8 @@ async function logEvent(env, kind, text, status) {
 }
 __name(logEvent, "logEvent");
 __name2(logEvent, "logEvent");
+__name22(logEvent, "logEvent");
+__name222(logEvent, "logEvent");
 async function runModel(env, prompt, maxTokens) {
   for (let i = 0; i < MODELS.length; i++) {
     const model = MODELS[i];
@@ -66,6 +86,8 @@ async function runModel(env, prompt, maxTokens) {
 }
 __name(runModel, "runModel");
 __name2(runModel, "runModel");
+__name22(runModel, "runModel");
+__name222(runModel, "runModel");
 async function gatewayPaper(env, prompt) {
   if (!env.ROUTER_TOKEN) {
     await logEvent(env, "ai-error", "gateway: no ROUTER_TOKEN");
@@ -76,7 +98,7 @@ async function gatewayPaper(env, prompt) {
     ctrl.abort();
   }, 12e4);
   try {
-    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     if (!r.ok) {
       await logEvent(env, "ai-error", "gateway " + r.status);
       return "";
@@ -95,6 +117,8 @@ async function gatewayPaper(env, prompt) {
 }
 __name(gatewayPaper, "gatewayPaper");
 __name2(gatewayPaper, "gatewayPaper");
+__name22(gatewayPaper, "gatewayPaper");
+__name222(gatewayPaper, "gatewayPaper");
 function cleanTitle(md) {
   const m = String(md || "").match(/^#\s+([^#\n]{8,140})$/m);
   if (!m) return "";
@@ -104,6 +128,8 @@ function cleanTitle(md) {
 }
 __name(cleanTitle, "cleanTitle");
 __name2(cleanTitle, "cleanTitle");
+__name22(cleanTitle, "cleanTitle");
+__name222(cleanTitle, "cleanTitle");
 function cleanAbstract(md) {
   const m = String(md || "").match(/##\s*Abstract\s*\n\s*([\s\S]{60,2000})/i);
   if (!m) return "";
@@ -113,16 +139,22 @@ function cleanAbstract(md) {
 }
 __name(cleanAbstract, "cleanAbstract");
 __name2(cleanAbstract, "cleanAbstract");
+__name22(cleanAbstract, "cleanAbstract");
+__name222(cleanAbstract, "cleanAbstract");
 function reasoningPreamble(md) {
   return /^(Let me|The user|First, let|Okay|Alright|Here's|I'll|I need)/i.test(String(md || "").trim());
 }
 __name(reasoningPreamble, "reasoningPreamble");
 __name2(reasoningPreamble, "reasoningPreamble");
+__name22(reasoningPreamble, "reasoningPreamble");
+__name222(reasoningPreamble, "reasoningPreamble");
 async function markError(env, row, msg) {
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
 }
 __name(markError, "markError");
 __name2(markError, "markError");
+__name22(markError, "markError");
+__name222(markError, "markError");
 async function zenodo(env, method, path, body, attempt) {
   const sep = path.indexOf("?") >= 0 ? "&" : "?";
   const url = "https://zenodo.org/api/deposit/depositions" + path + sep + "access_token=" + env.ZENODO_TOKEN;
@@ -154,12 +186,16 @@ async function zenodo(env, method, path, body, attempt) {
 }
 __name(zenodo, "zenodo");
 __name2(zenodo, "zenodo");
+__name22(zenodo, "zenodo");
+__name222(zenodo, "zenodo");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
   });
 }
 __name(bibEsc, "bibEsc");
+__name2(bibEsc, "bibEsc");
+__name22(bibEsc, "bibEsc");
 function parseRefLine(raw) {
   var s = String(raw || "").replace(/^\s*\d+[.)]\s*/, "").trim();
   var aEnd = s.indexOf("(");
@@ -182,11 +218,15 @@ function parseRefLine(raw) {
   return { authors, year, title, rest, arxiv, doi };
 }
 __name(parseRefLine, "parseRefLine");
+__name2(parseRefLine, "parseRefLine");
+__name22(parseRefLine, "parseRefLine");
 function refKey(p, i) {
   var a = (p.authors || "").replace(/[^A-Za-z]/g, "").slice(0, 14) || "ref";
   return (a + (p.year || "")).toLowerCase() + "_" + i;
 }
 __name(refKey, "refKey");
+__name2(refKey, "refKey");
+__name22(refKey, "refKey");
 function buildProvenance(bodyMd, title, slug) {
   var body = String(bodyMd || "");
   var lines = body.split(/\r?\n/);
@@ -236,6 +276,8 @@ function buildProvenance(bodyMd, title, slug) {
   ] };
 }
 __name(buildProvenance, "buildProvenance");
+__name2(buildProvenance, "buildProvenance");
+__name22(buildProvenance, "buildProvenance");
 async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
   if (!env.ZENODO_TOKEN) return { ok: false, error: "no ZENODO_TOKEN" };
   var pkg = buildProvenance(bodyMd, title, slug);
@@ -309,6 +351,8 @@ async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
 }
 __name(publishToZenodo, "publishToZenodo");
 __name2(publishToZenodo, "publishToZenodo");
+__name22(publishToZenodo, "publishToZenodo");
+__name222(publishToZenodo, "publishToZenodo");
 async function publishStage(env, row) {
   const slug = row.paper_slug;
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
@@ -335,6 +379,8 @@ async function publishStage(env, row) {
 }
 __name(publishStage, "publishStage");
 __name2(publishStage, "publishStage");
+__name22(publishStage, "publishStage");
+__name222(publishStage, "publishStage");
 async function latestRecord(env, recId) {
   try {
     var r = await fetch("https://zenodo.org/api/records/" + recId + "/latest", { headers: { "User-Agent": "QNFO-research-exec/0.5.1" } });
@@ -344,6 +390,8 @@ async function latestRecord(env, recId) {
   return null;
 }
 __name(latestRecord, "latestRecord");
+__name2(latestRecord, "latestRecord");
+__name22(latestRecord, "latestRecord");
 function mdToLatex(md) {
   var body = String(md).replace(/^\uFEFF/, "");
   var fm = {};
@@ -366,6 +414,8 @@ function mdToLatex(md) {
     }
   }
   __name(flush, "flush");
+  __name2(flush, "flush");
+  __name22(flush, "flush");
   for (var i = 0; i < sl.length; i++) {
     var ln2 = sl[i];
     var h = ln2.match(/^(#{1,4})\s+(.*)$/);
@@ -436,6 +486,8 @@ function mdToLatex(md) {
     O.push("");
   }
   __name(tbl, "tbl");
+  __name2(tbl, "tbl");
+  __name22(tbl, "tbl");
   for (var b = 0; b < blocks.length; b++) {
     var blk = blocks[b];
     if (blk.type === "h") {
@@ -536,10 +588,14 @@ function mdToLatex(md) {
   return out.join("\n");
 }
 __name(mdToLatex, "mdToLatex");
+__name2(mdToLatex, "mdToLatex");
+__name22(mdToLatex, "mdToLatex");
 function esc(s) {
   return String(s).replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}").replace(/\^/g, "\\textasciicircum{}");
 }
 __name(esc, "esc");
+__name2(esc, "esc");
+__name22(esc, "esc");
 function inl(s) {
   var str = String(s);
   var math = [];
@@ -548,16 +604,22 @@ function inl(s) {
     return "\0" + (math.length - 1) + "";
   }
   __name(pm, "pm");
+  __name2(pm, "pm");
+  __name22(pm, "pm");
   function pc() {
     return "" + (cmd.length - 1) + "";
   }
   __name(pc, "pc");
+  __name2(pc, "pc");
+  __name22(pc, "pc");
   function rs(x) {
     return String(x).replace(/\x00(\d+)\x01/g, function(m, k) {
       return math[Number(k)];
     });
   }
   __name(rs, "rs");
+  __name2(rs, "rs");
+  __name22(rs, "rs");
   str = str.replace(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+)\s*\^\s*(\d+)/g, function(m, a, b, c) {
     math.push("$" + a + "\\times " + b + "^{" + c + "}$");
     return pm();
@@ -614,6 +676,8 @@ function inl(s) {
   return str;
 }
 __name(inl, "inl");
+__name2(inl, "inl");
+__name22(inl, "inl");
 async function latexCompile(tex) {
   var fd = new FormData();
   fd.append("engine", "pdflatex");
@@ -627,77 +691,99 @@ async function latexCompile(tex) {
   return { ok: false, err: "non-pdf " + ct, log: String(await r.text()).slice(0, 1200) };
 }
 __name(latexCompile, "latexCompile");
+__name2(latexCompile, "latexCompile");
+__name22(latexCompile, "latexCompile");
 function qualityGate(row, minLen, minRefs) {
   var NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
   var md = String(row && row.corrected_md || "");
   var len = md.length;
   var reasons = [];
   if (len < minLen) reasons.push("body_len=" + len + "<" + minLen);
-  var litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review)", "i");
+  var litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review|background)", "i");
   var doiRe = new RegExp("10[.][0-9]{4,9}/", "g");
   var axRe = new RegExp("(?:arxiv[.]org/|arXiv:[" + NLc + TBc + " ]*[0-9]{4}[.][0-9]{4,5})", "gi");
   var lit = litRe.test(md);
   var refs = (md.match(doiRe) || []).length + (md.match(axRe) || []).length;
+  var bibHead = md.search(new RegExp("#{1,4}[^" + NLc + "]*(references|bibliography)", "i"));
+  if (bibHead >= 0) {
+    var bibTail = md.slice(bibHead);
+    var numEntries = bibTail.match(new RegExp("^[" + TBc + " ]*(?:\\[[0-9]{1,3}\\]|[0-9]{1,3}[.])[" + TBc + " ]", "gm")) || [];
+    var linkEntries = bibTail.match(new RegExp("^[" + TBc + " ]*[-*][" + TBc + " ]+.+?((19|20)[0-9]{2})", "gm")) || [];
+    refs = refs + numEntries.length + linkEntries.length;
+  }
+  var citeLines = md.match(new RegExp("@[A-Za-z][A-Za-z0-9_-]*[0-9]{4}[a-z]?[" + TBc + " ]*:", "g")) || [];
+  refs = refs + citeLines.length;
+  var bibRaw = String(row && row.references_bib || "");
+  var bibEntries = bibRaw.match(new RegExp("@[A-Za-z]+[" + TBc + " ]*\\{", "g")) || [];
+  refs = refs + bibEntries.length;
   if (!lit && refs < minRefs) reasons.push("lit_review=0 AND refs=" + refs + "<" + minRefs);
   var hasFence = md.indexOf(BQc + BQc + BQc) >= 0;
   var tableRe = new RegExp("^[" + NLc + TBc + " ]*[|][-:| ]+[|]", "m");
   var hasTable = tableRe.test(md);
   var hasNumeric = /(?:simulat|numerical experiment|computed|verified (?:numerically|in code)|implementation artifact)/i.test(md);
-  if (!hasFence && !hasTable && !hasNumeric) reasons.push("no_verification_marker");
+  var hasVerifyArtifact = !!(row && (row.verify_script && String(row.verify_script).trim().length > 0 || row.verify_output && String(row.verify_output).trim().length > 0));
+  if (!hasFence && !hasTable && !hasNumeric && !hasVerifyArtifact) reasons.push("no_verification_marker");
   if (!reasons.length) return { ok: true };
   return { ok: false, reason: "quality gate: " + reasons.join("; ") };
 }
 __name(qualityGate, "qualityGate");
-
+__name2(qualityGate, "qualityGate");
+__name22(qualityGate, "qualityGate");
 async function depositToGithub(env, slug, title, md, doi) {
-  if (!env.GITHUB_TOKEN) return { ok: false, error: 'no github token' };
-  var owner = 'QNFO', repo = 'qnfo-research';
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "no github token" };
+  var owner = "QNFO", repo = "qnfo-research";
   var prog = programFor(slug);
-  var dir = prog === 'papers' ? 'papers/' + slug : prog + '/' + slug;
-  var readme = '# ' + (title || slug) + NL + NL + 'DOI: ' + doi + NL + NL + 'Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)' + NL + 'License: CC BY 4.0' + NL + NL + 'Auto-deposited by qnfo-research-exec (artifact-deposition P3).';
-  var files = [['paper.md', md || ''], ['README.md', readme]];
+  var dir = prog === "papers" ? "papers/" + slug : prog + "/" + slug;
+  var readme = "# " + (title || slug) + NL + NL + "DOI: " + doi + NL + NL + "Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)" + NL + "License: CC BY 4.0" + NL + NL + "Auto-deposited by qnfo-research-exec (artifact-deposition P3).";
+  var files = [["paper.md", md || ""], ["README.md", readme]];
   var out = [];
   for (var i = 0; i < files.length; i++) {
     var name = files[i][0], content = files[i][1];
-    var path = dir + '/' + name;
-    var body = JSON.stringify({ message: 'auto-deposit: ' + slug + ' (' + (doi || 'no-doi') + ')', content: b64(content), branch: 'main' });
+    var path = dir + "/" + name;
+    var body = JSON.stringify({ message: "auto-deposit: " + slug + " (" + (doi || "no-doi") + ")", content: b64(content), branch: "main" });
     try {
-      var r = await fetch('https://api.github.com/repos/' + owner + '/' + repo + '/contents/' + path, { method: 'PUT', headers: { Authorization: 'Bearer ' + env.GITHUB_TOKEN, 'User-Agent': 'QNFO-research-exec/0.8.0', 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' }, body });
+      var r = await fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, { method: "PUT", headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "QNFO-research-exec/0.8.0", "Content-Type": "application/json", Accept: "application/vnd.github+json" }, body });
       var j = await r.json();
-      out.push({ file: name, status: r.status, sha: j && j.content && j.content.sha || '' });
+      out.push({ file: name, status: r.status, sha: j && j.content && j.content.sha || "" });
       if (r.status === 201 || r.status === 200) {
         try {
-          await env.QNFO_AUDIT.prepare('INSERT INTO publication_artifacts (publication_id, artifact_type, artifact_name, sha256, file_size_bytes, created_at) VALUES (?, ?, ?, ?, ?, datetime(now))').bind(doi || slug, 'github-md', path, String(j.content && j.content.sha || ''), String(content).length).run();
-        } catch (ePa) {}
+          await env.QNFO_AUDIT.prepare("INSERT INTO publication_artifacts (publication_id, artifact_type, artifact_name, sha256, file_size_bytes, created_at) VALUES (?, ?, ?, ?, ?, datetime(now))").bind(doi || slug, "github-md", path, String(j.content && j.content.sha || ""), String(content).length).run();
+        } catch (ePa) {
+        }
       }
     } catch (e) {
       out.push({ file: name, error: String(e && e.message || e).slice(0, 120) });
     }
   }
   try {
-    await env.QNFO_AUDIT.prepare('INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime(now), artifact-deposit, qnfo-research-exec, ?)').bind((slug + ' -> github ' + JSON.stringify(out)).slice(0, 450)).run();
-  } catch (eL) {}
-  return { ok: out.some(function(o) { return o.status === 200 || o.status === 201; }), files: out };
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime(now), artifact-deposit, qnfo-research-exec, ?)").bind((slug + " -> github " + JSON.stringify(out)).slice(0, 450)).run();
+  } catch (eL) {
+  }
+  return { ok: out.some(function(o) {
+    return o.status === 200 || o.status === 201;
+  }), files: out };
 }
-__name(depositToGithub, 'depositToGithub');
-
+__name(depositToGithub, "depositToGithub");
+__name2(depositToGithub, "depositToGithub");
+__name22(depositToGithub, "depositToGithub");
 function programFor(slug) {
-  var x = String(slug || '');
-  if (x.indexOf('jpcub') >= 0 || x.indexOf('joules-per') >= 0 || x.indexOf('joules') >= 0) return 'joules-per-compute-benchmark';
-  if (x.indexOf('ultrametric') >= 0 || x.indexOf('silent-radix') >= 0 || x.indexOf('radix') >= 0) return 'silent-radix';
-  if (x.indexOf('helix') >= 0) return 'alpha-pi-helix';
-  if (x.indexOf('adelic') >= 0) return 'adelic-freedom';
-  if (x.indexOf('primon') >= 0 || x.indexOf('arithmetic-quantum') >= 0) return 'arithmetic-quantum-thermodynamics';
-  if (x.indexOf('margolus') >= 0) return 'margolus-levitin';
-  if (x.indexOf('topological-spin') >= 0) return 'topological-spin';
-  if (x.indexOf('landauer') >= 0 || x.indexOf('surface-code') >= 0 || x.indexOf('decoherence') >= 0 || x.indexOf('latency') >= 0) return 'jpcub-qec';
-  return 'papers';
+  var x = String(slug || "");
+  if (x.indexOf("jpcub") >= 0 || x.indexOf("joules-per") >= 0 || x.indexOf("joules") >= 0) return "joules-per-compute-benchmark";
+  if (x.indexOf("ultrametric") >= 0 || x.indexOf("silent-radix") >= 0 || x.indexOf("radix") >= 0) return "silent-radix";
+  if (x.indexOf("helix") >= 0) return "alpha-pi-helix";
+  if (x.indexOf("adelic") >= 0) return "adelic-freedom";
+  if (x.indexOf("primon") >= 0 || x.indexOf("arithmetic-quantum") >= 0) return "arithmetic-quantum-thermodynamics";
+  if (x.indexOf("margolus") >= 0) return "margolus-levitin";
+  if (x.indexOf("topological-spin") >= 0) return "topological-spin";
+  if (x.indexOf("landauer") >= 0 || x.indexOf("surface-code") >= 0 || x.indexOf("decoherence") >= 0 || x.indexOf("latency") >= 0) return "jpcub-qec";
+  return "papers";
 }
-__name(programFor, 'programFor');
-
+__name(programFor, "programFor");
+__name2(programFor, "programFor");
+__name22(programFor, "programFor");
 async function publishV2(env, row) {
-  var slug = row.slug || 'paper';
-  var minLen = Number(env.QUALITY_MIN_LEN || 8000);
+  var slug = row.slug || "paper";
+  var minLen = Number(env.QUALITY_MIN_LEN || 8e3);
   var minRefs = Number(env.QUALITY_MIN_REFS || 5);
   if (String(env.QUALITY_GATE_OFF || "") !== "1") {
     var gate = qualityGate(row, minLen, minRefs);
@@ -705,14 +791,15 @@ async function publishV2(env, row) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
       try {
         await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'quality-gate', 'BLOCK', ?, 'QUALITY-GATE-1', 'qnfo-research-exec', 'P1')").bind(gate.reason.slice(0, 300)).run();
-      } catch (eG) {}
+      } catch (eG) {
+      }
       try {
         await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'quality-gate-block', 'qnfo-research-exec', ?)").bind(("slug=" + String(row.slug || "?") + " " + gate.reason).slice(0, 450)).run();
-      } catch (eE) {}
+      } catch (eE) {
+      }
       return { ok: false, stage: "gate", error: gate.reason };
     }
   }
-
   var recId = String(row.paper_doi || "").split("zenodo.").pop() || "";
   if (!recId) {
     await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
@@ -917,6 +1004,8 @@ async function publishV2(env, row) {
   return { ok: true, stage: "v2", doi: newDoi };
 }
 __name(publishV2, "publishV2");
+__name2(publishV2, "publishV2");
+__name22(publishV2, "publishV2");
 async function drainV2(env) {
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
   var results = [];
@@ -931,9 +1020,10 @@ async function drainV2(env) {
         try {
           var prlDoi = String(pv2.doi || r.new_doi || "");
           var Q = String.fromCharCode(39);
-          var prlSql = "UPDATE paper_revision_log SET status=" + Q + "published" + Q + ", new_doi=?, updated_at=datetime(" + Q + "now" + Q + ") WHERE slug=? AND status=" + Q + "queued" + Q + " AND COALESCE(version_to," + Q + "2.0.0" + Q + ")=? " ;
+          var prlSql = "UPDATE paper_revision_log SET status=" + Q + "published" + Q + ", new_doi=?, updated_at=datetime(" + Q + "now" + Q + ") WHERE slug=? AND status=" + Q + "queued" + Q + " AND COALESCE(version_to," + Q + "2.0.0" + Q + ")=? ";
           await env.QNFO_AUDIT.prepare(prlSql).bind(prlDoi, String(r.slug || ""), String(r.version_to || "2.0.0")).run();
-        } catch (ePrl) {}
+        } catch (ePrl) {
+        }
       }
     } catch (e) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(r.id).run();
@@ -943,20 +1033,14 @@ async function drainV2(env) {
   return results;
 }
 __name(drainV2, "drainV2");
-// ============================================================
-// QNFO RESEARCH PIPELINE v0.6.0 (2026-09-09) — quality remediation
-// User directive: autonomous papers must be indistinguishable from ops papers.
-// Stages: ground -> ensemble(3 legs) -> reconcile -> review/revise loop (<=2)
-//         -> verify (containers-pilot Python) -> publish (extended provenance)
-//         -> GitHub artifact push (PROVENANCE standard).
-// Replaces the single-shot genNote/genPaper path. RESEARCH_HALT still honored.
-// ============================================================
+__name2(drainV2, "drainV2");
+__name22(drainV2, "drainV2");
 var WRITER_MODELS = [
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/zai-org/glm-5.2",
-  "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+  "@cf/zai-org/glm-5.3",
+  "@cf/moonshotai/kimi-k2.6"
 ];
-var MIN_PAPER_CHARS = 15000;
+var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
 var MAX_REVIEW_CYCLES = 2;
 var PILOT = "https://qnfo-containers-pilot.q08.workers.dev";
@@ -964,24 +1048,31 @@ var GH_API = "https://api.github.com";
 var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
-
 async function aiText(env, model, prompt, maxTokens) {
+  const cappedTokens = Math.min(maxTokens, 4096);
   try {
-    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens, temperature: 0.3 });
+    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
     if (typeof r === "string") return r;
-    if (r && typeof r.response === "string") return r.response;
+    if (r && typeof r.response === "string" && r.response) return r.response;
+    if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
+    await logEvent(env, "ai-warn", "aiText model=" + model + " returned unexpected shape: " + JSON.stringify(r).slice(0, 200));
     return "";
   } catch (e) {
+    await logEvent(env, "ai-error", "aiText model=" + model + " threw: " + String(e && e.message || e).slice(0, 200));
     return "";
   }
 }
 __name(aiText, "aiText");
+__name2(aiText, "aiText");
+__name22(aiText, "aiText");
 async function gwCall(env, prompt, maxTokens) {
   if (!env.ROUTER_TOKEN) return "";
   const ctrl = new AbortController();
-  const t = setTimeout(function() { ctrl.abort(); }, 240000);
+  const t = setTimeout(function() {
+    ctrl.abort();
+  }, 24e4);
   try {
-    const r = await fetch(ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) return "";
     const j = await r.json();
@@ -993,28 +1084,46 @@ async function gwCall(env, prompt, maxTokens) {
   }
 }
 __name(gwCall, "gwCall");
+__name2(gwCall, "gwCall");
+__name22(gwCall, "gwCall");
 async function r2Put(env, key, text) {
-  try { await env.MIRROR.put("pipeline/" + key, text); return true; } catch (e) { return false; }
+  try {
+    await env.MIRROR.put("pipeline/" + key, text);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 __name(r2Put, "r2Put");
+__name2(r2Put, "r2Put");
+__name22(r2Put, "r2Put");
 async function r2Get(env, key) {
   try {
     const o = await env.MIRROR.get("pipeline/" + key);
     if (!o) return "";
     return await o.text();
-  } catch (e) { return ""; }
+  } catch (e) {
+    return "";
+  }
 }
 __name(r2Get, "r2Get");
+__name2(r2Get, "r2Get");
+__name22(r2Get, "r2Get");
 async function sha256hex(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  return Array.from(new Uint8Array(buf)).map(function(b) {
+    return b.toString(16).padStart(2, "0");
+  }).join("");
 }
 __name(sha256hex, "sha256hex");
+__name2(sha256hex, "sha256hex");
+__name22(sha256hex, "sha256hex");
 function b64(s) {
   return btoa(unescape(encodeURIComponent(s)));
 }
 __name(b64, "b64");
-
+__name2(b64, "b64");
+__name22(b64, "b64");
 var WRITER_PROMPT = [
   "You are one of three independent research writers producing a full-length preprint for open publication. All three writers receive the SAME input block; write independently and do not imitate a template beyond the required structure.",
   "Requirements:",
@@ -1032,7 +1141,6 @@ var WRITER_PROMPT = [
   "- Write for an adjacent-field expert; define jargon once.",
   "INPUT BLOCK:"
 ].join("\n");
-
 var RECONCILE_PROMPT = [
   "You are the reconciling editor. Three independent writers produced drafts on the same input block. Produce the SINGLE reconciled preprint.",
   "Steps:",
@@ -1046,10 +1154,9 @@ var RECONCILE_PROMPT = [
   "8. Output ONLY the paper markdown. No meta-commentary.",
   "DRAFTS:"
 ].join("\n");
-
 var REVIEW_PROMPT = [
   "You are an adversarial reviewer. Audit this preprint for publication readiness. Output STRICT JSON only:",
-  "{\"verdict\":\"pass\"|\"revise\",\"hard\":[{\"id\":string,\"severity\":\"HARD\",\"claim\":string,\"reason\":string,\"fix\":string}],\"soft\":[{\"id\":string,\"severity\":\"SOFT\",\"claim\":string,\"reason\":string,\"fix\":string}]}",
+  '{"verdict":"pass"|"revise","hard":[{"id":string,"severity":"HARD","claim":string,"reason":string,"fix":string}],"soft":[{"id":string,"severity":"SOFT","claim":string,"reason":string,"fix":string}]}',
   "Audit dimensions:",
   "1. Citation integrity: every reference in '## References' MUST appear in the provided BIBLIOGRAPHY with its machine identifier; invented/unsourced/unverifiable references = HARD.",
   "2. Quantitative honesty: any quantitative claim NOT derived with shown arithmetic in the paper AND NOT labeled as a projection with stated assumptions = HARD.",
@@ -1058,23 +1165,20 @@ var REVIEW_PROMPT = [
   "5. Prose gates: meta-commentary, reasoning preamble, 'Let me', '[to verify]' markers, placeholder text = HARD.",
   "6. Depth: superficial literature treatment, unexplained jargon, unstated limitations = SOFT.",
   "7. Divergence honesty: Appendix A present when drafts diverged = SOFT if missing.",
-  "verdict = \"revise\" iff hard is non-empty. Do not pad hard with soft issues.",
+  'verdict = "revise" iff hard is non-empty. Do not pad hard with soft issues.',
   "PAPER:"
 ].join("\n");
-
 var REVISE_PROMPT = [
   "You are the revising author. Apply the reviewer's HARD fixes to the paper. Return ONLY the full revised paper markdown with the same required structure and headings.",
   "For each fix: correct the quantitative claim using the computed value, remove or move-to-Discussion-as-explicitly-labeled-hypothesis unverifiable claims, replace invented references with bibliography entries (or remove the sentence), fix structure and length. Do not add new unsupported claims. Output ONLY the paper.",
   "FIXES (JSON):"
 ].join("\n");
-
 var VERIFY_EXTRACT_PROMPT = [
   "Extract every QUANTITATIVE claim from this paper that can be independently computed. Output STRICT JSON array:",
-  "[{\"id\":\"Q1\",\"statement\":\"...\",\"inputs\":\"named numbers with values\",\"formula\":\"math in plain text\"}]",
+  '[{"id":"Q1","statement":"...","inputs":"named numbers with values","formula":"math in plain text"}]',
   "Include only claims whose inputs and formula are stated in the paper. If none, output [].",
   "PAPER:"
 ].join("\n");
-
 var VERIFY_GEN_PROMPT = [
   "Write ONE self-contained Python 3 script (stdlib only: math, fractions) that independently computes each claim from its stated inputs and prints for each:",
   "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
@@ -1082,7 +1186,6 @@ var VERIFY_GEN_PROMPT = [
   "Output the script inside a single python fenced block, nothing else.",
   "CLAIMS (JSON):"
 ].join("\n");
-
 async function stageGround(env, row) {
   const idea = row.idea || row.summary || "";
   const rid = String(row.id);
@@ -1100,7 +1203,8 @@ async function stageGround(env, row) {
       const titleM = t.match(/<title>([\s\S]*?)<\/title>/);
       const sumM = t.match(/<summary>([\s\S]*?)<\/summary>/);
       if (titleM && sumM) srcText = "TITLE: " + titleM[1].trim() + "\n\nABSTRACT: " + sumM[1].replace(/\s+/g, " ").trim();
-    } catch (e) {}
+    } catch (e) {
+    }
   }
   const q = idea.replace(/\b\d{4}\.\d{4,5}(v\d+)?\b/g, " ").replace(/\s+/g, " ").trim().slice(0, 150);
   const bib = [];
@@ -1117,17 +1221,20 @@ async function stageGround(env, row) {
       if (idM && tiM) {
         const aid = String(idM[1].trim()).split("/abs/").pop();
         if (ax && aid === ax[1]) continue;
-        if (bib.some(function (b) { return b.id === "arXiv:" + aid; })) continue;
+        if (bib.some(function(b) {
+          return b.id === "arXiv:" + aid;
+        })) continue;
         const entry = "arXiv:" + aid + " | " + tiM[1].trim() + "\n  " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 400) : "");
         bib.push({ n: bib.length + 1, id: "arXiv:" + aid, text: entry });
         arxivHits += (arxivHits ? "\n" : "") + entry;
       }
       if (bib.length >= 14) break;
     }
-  } catch (e) {}
+  } catch (e) {
+  }
   let corpus = "";
   try {
-    const r = await fetch(ROUTER + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
+    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
     if (r.ok) {
       const j = await r.json();
       const hits = (j.results || []).slice(0, 6);
@@ -1140,14 +1247,17 @@ async function stageGround(env, row) {
         corpus += (corpus ? "\n" : "") + entry;
       }
     }
-  } catch (e) {}
-  const bibBlock = bib.map(function (b) { return "[" + b.n + "] " + b.text; }).join("\n") || "(bibliography empty - writers must state this limitation)";
+  } catch (e) {
+  }
+  const bibBlock = bib.map(function(b) {
+    return "[" + b.n + "] " + b.text;
+  }).join("\n") || "(bibliography empty - writers must state this limitation)";
   const grounding = [
     "# Grounding block - source: " + rid,
     "## Research idea",
     idea,
     "## Existing paper under revision (remediation only)",
-    existing ? existing.slice(0, 24000) : "(none - new paper)",
+    existing ? existing.slice(0, 24e3) : "(none - new paper)",
     "## Source material (fetched from arXiv)",
     srcText || "(no arXiv source embedded in idea)",
     "## Related literature (arXiv, real identifiers)",
@@ -1156,85 +1266,125 @@ async function stageGround(env, row) {
     corpus || "(none retrieved)",
     "## Bibliography (cite ONLY these; keep this exact order and numbering)",
     bibBlock
-].join("\n\n");
+  ].join("\n\n");
   await r2Put(env, rid + "/grounding.md", grounding);
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ensemble', context=? WHERE id=?").bind(JSON.stringify({ pipeline: PIPELINE_VERSION, bibCount: bib.length, srcFetched: !!srcText }).slice(0, 6000), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ensemble', context=? WHERE id=?").bind(JSON.stringify({ pipeline: PIPELINE_VERSION, bibCount: bib.length, srcFetched: !!srcText }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "ground->ensemble", bibCount: bib.length };
 }
 __name(stageGround, "stageGround");
-
+__name2(stageGround, "stageGround");
+__name22(stageGround, "stageGround");
 async function stageEnsemble(env, row) {
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
-  if (!grounding) { await markError(env, row, "ensemble: grounding missing"); return { ok: false, stage: "ensemble" }; }
+  if (!grounding) {
+    await markError(env, row, "ensemble: grounding missing");
+    return { ok: false, stage: "ensemble" };
+  }
   const shared = WRITER_PROMPT + "\n\n" + grounding;
-  const legs = await Promise.all(WRITER_MODELS.map(async function (m, i) {
-    let draft = await aiText(env, m, shared, 30000);
+  const legs = await Promise.all(WRITER_MODELS.map(async function(m, i) {
+    let draft = await aiText(env, m, shared, 3e4);
     let via = "workers-ai";
-    if (!draft || draft.length < 4000) { draft = await gwCall(env, shared, 30000); via = "gateway-fallback"; }
-    if (draft && draft.length >= 4000) { await r2Put(env, String(row.id) + "/draft-" + i + ".md", draft); return { i: i, len: draft.length, via: via }; }
-    return { i: i, len: 0, via: "none" };
+    if (!draft || draft.length < 4e3) {
+      draft = await gwCall(env, shared, 3e4);
+      via = "gateway-fallback";
+    }
+    if (draft && draft.length >= 4e3) {
+      await r2Put(env, String(row.id) + "/draft-" + i + ".md", draft);
+      return { i, len: draft.length, via };
+    }
+    return { i, len: 0, via: "none" };
   }));
-  const okLegs = legs.filter(function (l) { return l.len >= 4000; }).length;
-  if (okLegs < 2) { await markError(env, row, "ensemble: only " + okLegs + "/3 legs produced drafts"); return { ok: false, stage: "ensemble" }; }
+  const okLegs = legs.filter(function(l) {
+    return l.len >= 4e3;
+  }).length;
+  if (okLegs < 2) {
+    await markError(env, row, "ensemble: only " + okLegs + "/3 legs produced drafts");
+    return { ok: false, stage: "ensemble" };
+  }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
-  return { ok: true, stage: "ensemble->reconcile", legs: legs };
+  return { ok: true, stage: "ensemble->reconcile", legs };
 }
 __name(stageEnsemble, "stageEnsemble");
-
+__name2(stageEnsemble, "stageEnsemble");
+__name22(stageEnsemble, "stageEnsemble");
 async function stageReconcile(env, row) {
   const parts = [];
   for (let i = 0; i < 3; i++) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
-    if (d) parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24000));
+    if (d) parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
   }
-  if (parts.length < 2) { await markError(env, row, "reconcile: drafts missing"); return { ok: false, stage: "reconcile" }; }
-  const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 30000);
-  if (!reconciled || reconciled.length < 10000) { await markError(env, row, "reconcile: output too short (" + (reconciled ? reconciled.length : 0) + ")"); return { ok: false, stage: "reconcile" }; }
+  if (parts.length < 2) {
+    await markError(env, row, "reconcile: drafts missing");
+    return { ok: false, stage: "reconcile" };
+  }
+  const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
+  if (!reconciled || reconciled.length < 1e4) {
+    await markError(env, row, "reconcile: output too short (" + (reconciled ? reconciled.length : 0) + ")");
+    return { ok: false, stage: "reconcile" };
+  }
   await r2Put(env, String(row.id) + "/reconciled.md", reconciled);
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0 }).slice(0, 6000), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "reconcile->review", len: reconciled.length };
 }
 __name(stageReconcile, "stageReconcile");
-
+__name2(stageReconcile, "stageReconcile");
+__name22(stageReconcile, "stageReconcile");
 async function stageReview(env, row) {
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   let ctx = { cycles: 0 };
-  try { ctx = JSON.parse(row.context || "{}"); } catch (e) {}
-  const bib = (grounding.split("## Bibliography")[1] || "").slice(0, 8000);
-  const revRaw = await gwCall(env, REVIEW_PROMPT + "\n\n" + paper.slice(0, 34000) + "\n\nBIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib, 12000);
+  try {
+    ctx = JSON.parse(row.context || "{}");
+  } catch (e) {
+  }
+  const bib = (grounding.split("## Bibliography")[1] || "").slice(0, 8e3);
+  const revRaw = await gwCall(env, REVIEW_PROMPT + "\n\n" + paper.slice(0, 34e3) + "\n\nBIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib, 12e3);
   let findings = { verdict: "revise", hard: [{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }], soft: [] };
-  try { const m = String(revRaw).match(/\{[\s\S]*\}/); if (m) findings = JSON.parse(m[0]); } catch (e) {}
+  try {
+    const m = String(revRaw).match(/\{[\s\S]*\}/);
+    if (m) findings = JSON.parse(m[0]);
+  } catch (e) {
+  }
   if (!Array.isArray(findings.hard)) findings.hard = [];
   if (!Array.isArray(findings.soft)) findings.soft = [];
   const cycle = ctx.cycles || 0;
-  await r2Put(env, String(row.id) + "/review-report-" + cycle + ".md", String(revRaw).slice(0, 30000));
-  const hard = findings.hard.filter(function (f) { return String(f.severity || "").toUpperCase() === "HARD"; });
+  await r2Put(env, String(row.id) + "/review-report-" + cycle + ".md", String(revRaw).slice(0, 3e4));
+  const hard = findings.hard.filter(function(f) {
+    return String(f.severity || "").toUpperCase() === "HARD";
+  });
   if (hard.length && cycle < MAX_REVIEW_CYCLES) {
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(hard));
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length }).slice(0, 6000), row.id).run();
-    return { ok: true, stage: "review->revise", hard: hard.length, cycle: cycle };
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "review->revise", hard: hard.length, cycle };
   }
-  await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify({ hard: hard, soft: findings.soft }));
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='verify', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardLeft: hard.length, verdict: findings.verdict || "?" }).slice(0, 6000), row.id).run();
-  return { ok: true, stage: "review->verify", hardLeft: hard.length, cycle: cycle };
+  await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify({ hard, soft: findings.soft }));
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='verify', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardLeft: hard.length, verdict: findings.verdict || "?" }).slice(0, 6e3), row.id).run();
+  return { ok: true, stage: "review->verify", hardLeft: hard.length, cycle };
 }
 __name(stageReview, "stageReview");
-
+__name2(stageReview, "stageReview");
+__name22(stageReview, "stageReview");
 async function stageRevise(env, row) {
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const fixes = await r2Get(env, String(row.id) + "/fixes.json");
   let ctx = { cycles: 0 };
-  try { ctx = JSON.parse(row.context || "{}"); } catch (e) {}
-  const revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8000) + "\n\nPAPER:\n" + paper.slice(0, 34000), 30000);
-  if (!revised || revised.length < 10000) { await markError(env, row, "revise: output too short"); return { ok: false, stage: "revise" }; }
+  try {
+    ctx = JSON.parse(row.context || "{}");
+  } catch (e) {
+  }
+  const revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
+  if (!revised || revised.length < 1e4) {
+    await markError(env, row, "revise: output too short");
+    return { ok: false, stage: "revise" };
+  }
   await r2Put(env, String(row.id) + "/reconciled.md", revised);
   const c2 = (ctx.cycles || 0) + 1;
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: c2 }).slice(0, 6000), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: c2 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "revise->review", cycle: c2 };
 }
 __name(stageRevise, "stageRevise");
-
+__name2(stageRevise, "stageRevise");
+__name22(stageRevise, "stageRevise");
 function finalGates(paper) {
   const fixes = [];
   if (String(paper).length < MIN_PAPER_CHARS) fixes.push({ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length " + String(paper).length + " < " + MIN_PAPER_CHARS, fix: "Expand with literature review, explicit derivations, and discussion to 15000+ characters." });
@@ -1244,66 +1394,91 @@ function finalGates(paper) {
   const refCount = (refsPart.match(/\[\d+\]/g) || []).length;
   if (refCount < MIN_REFS) fixes.push({ id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references " + refCount + " < " + MIN_REFS, fix: "Ground claims in at least 8 cited works from the bibliography with substantive context." });
   if (/(Let me|The user|I'll|I need to|Okay,|Alright,|Here's what)/i.test(String(paper).slice(0, 500))) fixes.push({ id: "gate-preamble", severity: "HARD", claim: "reasoning preamble", reason: "meta text at body start", fix: "Remove all thinking/planning text; output only the paper." });
-  return { ok: fixes.length === 0, fixes: fixes, reason: fixes.map(function (f) { return f.id; }).join(",") };
+  return { ok: fixes.length === 0, fixes, reason: fixes.map(function(f) {
+    return f.id;
+  }).join(",") };
 }
 __name(finalGates, "finalGates");
-
+__name2(finalGates, "finalGates");
+__name22(finalGates, "finalGates");
 async function stageVerify(env, row) {
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   let ctx = {};
-  try { ctx = JSON.parse(row.context || "{}"); } catch (e) {}
-  const exRaw = await gwCall(env, VERIFY_EXTRACT_PROMPT + "\n\n" + paper.slice(0, 34000), 8000);
+  try {
+    ctx = JSON.parse(row.context || "{}");
+  } catch (e) {
+  }
+  const exRaw = await gwCall(env, VERIFY_EXTRACT_PROMPT + "\n\n" + paper.slice(0, 34e3), 8e3);
   let claims = [];
-  try { const m = String(exRaw).match(/\[[\s\S]*\]/); if (m) claims = JSON.parse(m[0]); } catch (e) {}
-  claims = (Array.isArray(claims) ? claims : []).filter(function (c) { return c && c.statement; }).slice(0, 8);
+  try {
+    const m = String(exRaw).match(/\[[\s\S]*\]/);
+    if (m) claims = JSON.parse(m[0]);
+  } catch (e) {
+  }
+  claims = (Array.isArray(claims) ? claims : []).filter(function(c) {
+    return c && c.statement;
+  }).slice(0, 8);
   if (!claims.length) {
-    await r2Put(env, String(row.id) + "/verification.md", "# Verification\n\nNo quantitative claims were found; the paper is qualitative. Results are framed as qualitative analysis with explicit limitations.\n\nExtraction output:\n" + String(exRaw).slice(0, 3000));
-    const gates = finalGates(paper);
-    if (!gates.ok) {
-      await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(gates.fixes));
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, verifyPass: 1 }).slice(0, 6000), row.id).run();
-      return { ok: true, stage: "verify->revise", gate: gates.reason };
+    await r2Put(env, String(row.id) + "/verification.md", "# Verification\n\nNo quantitative claims were found; the paper is qualitative. Results are framed as qualitative analysis with explicit limitations.\n\nExtraction output:\n" + String(exRaw).slice(0, 3e3));
+    const gates2 = finalGates(paper);
+    if (!gates2.ok) {
+      await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(gates2.fixes));
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, verifyPass: 1 }).slice(0, 6e3), row.id).run();
+      return { ok: true, stage: "verify->revise", gate: gates2.reason };
     }
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='publish', status='review' WHERE id=?").bind(row.id).run();
     return { ok: true, stage: "verify->publish", claims: 0 };
   }
-  const genRaw = await gwCall(env, VERIFY_GEN_PROMPT + "\n\n" + JSON.stringify(claims) + "\n\nPAPER (context):\n" + paper.slice(0, 20000), 12000);
+  const genRaw = await gwCall(env, VERIFY_GEN_PROMPT + "\n\n" + JSON.stringify(claims) + "\n\nPAPER (context):\n" + paper.slice(0, 2e4), 12e3);
   let code = genRaw;
   const cm = String(genRaw).match(/```python\n([\s\S]*?)```/);
   if (cm) code = cm[1];
-  if (!code || code.length < 40) { await markError(env, row, "verify: no verification script generated"); return { ok: false, stage: "verify" }; }
+  if (!code || code.length < 40) {
+    await markError(env, row, "verify: no verification script generated");
+    return { ok: false, stage: "verify" };
+  }
   await r2Put(env, String(row.id) + "/verification.py", code);
   let out = "";
   try {
-    const r = await fetch(PILOT + "/exec", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.PILOT_TOKEN }, body: JSON.stringify({ code: code }) });
+    const r = await fetch(PILOT + "/exec", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.PILOT_TOKEN }, body: JSON.stringify({ code }) });
     const j = await r.json();
-    out = String((j && (j.stdout || j.output || j.error)) || "no output").slice(0, 20000);
-  } catch (e) { out = "EXEC ERROR: " + String(e && e.message || e).slice(0, 200); }
+    out = String(j && (j.stdout || j.output || j.error) || "no output").slice(0, 2e4);
+  } catch (e) {
+    out = "EXEC ERROR: " + String(e && e.message || e).slice(0, 200);
+  }
   const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n";
   await r2Put(env, String(row.id) + "/verification.md", verifMd);
   const mismatch = /match\s*=\s*no/i.test(out) || /VERIFICATION SUMMARY[^\n]*mismatch\s*[1-9]/i.test(out);
   const gates = finalGates(paper);
   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
     const fixes = gates.fixes.slice();
-    if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: out.slice(0, 2000), fix: "Correct each quantitative claim to match the independently computed value, or move the claim to the Discussion as an explicitly-labeled hypothesis with stated assumptions." });
+    if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: out.slice(0, 2e3), fix: "Correct each quantitative claim to match the independently computed value, or move the claim to the Discussion as an explicitly-labeled hypothesis with stated assumptions." });
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(fixes));
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, verifyPass: 1 }).slice(0, 6000), row.id).run();
-    return { ok: true, stage: "verify->revise", mismatch: mismatch, gate: gates.reason };
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, verifyPass: 1 }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "verify->revise", mismatch, gate: gates.reason };
   }
-  if (mismatch || !gates.ok) { await markError(env, row, "verify: unresolved after revision - mismatch=" + mismatch + " gates=" + gates.reason); return { ok: false, stage: "verify" }; }
+  if (mismatch || !gates.ok) {
+    await markError(env, row, "verify: unresolved after revision - mismatch=" + mismatch + " gates=" + gates.reason);
+    return { ok: false, stage: "verify" };
+  }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='publish', status='review' WHERE id=?").bind(row.id).run();
   return { ok: true, stage: "verify->publish", claims: claims.length };
 }
 __name(stageVerify, "stageVerify");
-
+__name2(stageVerify, "stageVerify");
+__name22(stageVerify, "stageVerify");
 async function ghReq(env, path) {
   try {
     const r = await fetch(GH_API + path, { headers: { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", "Accept": "application/vnd.github+json" } });
     if (!r.ok) return null;
     return await r.json();
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 __name(ghReq, "ghReq");
+__name2(ghReq, "ghReq");
+__name22(ghReq, "ghReq");
 async function pushArtifactsToGitHub(env, slug, files) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "no GITHUB_TOKEN" };
   try {
@@ -1325,11 +1500,14 @@ async function pushArtifactsToGitHub(env, slug, files) {
       const r = await fetch(GH_API + "/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + cycle + "/" + slug + "/" + f.path, { method: "PUT", headers: { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", "Accept": "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify(body) });
       results.push({ path: f.path, status: r.status });
     }
-    return { ok: true, cycle: cycle, results: results };
-  } catch (e) { return { ok: false, error: String(e && e.message || e).slice(0, 200) }; }
+    return { ok: true, cycle, results };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 200) };
+  }
 }
 __name(pushArtifactsToGitHub, "pushArtifactsToGitHub");
-
+__name2(pushArtifactsToGitHub, "pushArtifactsToGitHub");
+__name22(pushArtifactsToGitHub, "pushArtifactsToGitHub");
 async function collectArtifacts(env, rid) {
   const rr1 = await r2Get(env, rid + "/review-report-1.md");
   const rr0 = await r2Get(env, rid + "/review-report-0.md");
@@ -1338,7 +1516,7 @@ async function collectArtifacts(env, rid) {
     ["writer-a-draft.md", "draft-0.md"],
     ["writer-b-draft.md", "draft-1.md"],
     ["writer-c-draft.md", "draft-2.md"],
-    ["review-report.md", rr1 ? "review-report-1.md" : (rr0 ? "review-report-0.md" : null)],
+    ["review-report.md", rr1 ? "review-report-1.md" : rr0 ? "review-report-0.md" : null],
     ["verification.md", "verification.md"],
     ["verification.py", "verification.py"]
   ];
@@ -1346,7 +1524,7 @@ async function collectArtifacts(env, rid) {
   for (const d of defs) {
     if (!d[1]) continue;
     const content = await r2Get(env, rid + "/" + d[1]);
-    if (content) out.push({ file: d[0], content: content, r2key: d[1] });
+    if (content) out.push({ file: d[0], content, r2key: d[1] });
   }
   const manifest = { pipeline: PIPELINE_VERSION, files: {} };
   for (const a of out) manifest.files[a.file] = { sha256: await sha256hex(a.content), bytes: a.content.length };
@@ -1354,43 +1532,79 @@ async function collectArtifacts(env, rid) {
   return out;
 }
 __name(collectArtifacts, "collectArtifacts");
-
+__name2(collectArtifacts, "collectArtifacts");
+__name22(collectArtifacts, "collectArtifacts");
 async function publishStageV2(env, row) {
   const slug = row.paper_slug;
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
-  if (!paper) { await markError(env, row, "paper row missing for slug " + slug); return { ok: false, stage: "publish" }; }
+  if (!paper) {
+    await markError(env, row, "paper row missing for slug " + slug);
+    return { ok: false, stage: "publish" };
+  }
   const artifacts = await collectArtifacts(env, String(row.id));
-  const extras = artifacts.map(function (a) { return { file: a.file, content: a.content }; });
+  const extras = artifacts.map(function(a) {
+    return { file: a.file, content: a.content };
+  });
   const pub = await publishToZenodo(env, paper.title, paper.abstract, paper.body_md, slug, extras);
-  if (!pub.ok) { await markError(env, row, "zenodo: " + pub.error); return { ok: false, stage: "publish" }; }
+  if (!pub.ok) {
+    await markError(env, row, "zenodo: " + pub.error);
+    return { ok: false, stage: "publish" };
+  }
   await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi, pub.record, slug).run();
-  try { await env.MIRROR.put("papers/" + slug + ".md", paper.body_md); } catch (e) {}
+  try {
+    await env.MIRROR.put("papers/" + slug + ".md", paper.body_md);
+  } catch (e) {
+  }
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi, paper.title, "bluesky", "queued", "auto", 0, pub.record, "https://papers.qnfo.org/papers/" + slug + "/").run();
-  } catch (e) {}
-  const ghFiles = artifacts.map(function (a) { return { path: a.file, content: a.content }; });
+  } catch (e) {
+  }
+  const ghFiles = artifacts.map(function(a) {
+    return { path: a.file, content: a.content };
+  });
   const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=? WHERE id=?").bind(pub.doi, nowIso(), row.id).run();
-  return { ok: true, stage: "publish->published", doi: pub.doi, slug: slug, github: ghr };
+  return { ok: true, stage: "publish->published", doi: pub.doi, slug, github: ghr };
 }
 __name(publishStageV2, "publishStageV2");
-
+__name2(publishStageV2, "publishStageV2");
+__name22(publishStageV2, "publishStageV2");
 async function remediationPublish(env, row) {
   const slug = row.paper_slug;
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const existing = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
-  if (!existing) { await markError(env, row, "remediation: slug missing " + slug); return { ok: false, stage: "publish" }; }
-  if (!paper || paper.length < MIN_PAPER_CHARS) { await markError(env, row, "remediation: final body too short"); return { ok: false, stage: "publish" }; }
+  if (!existing) {
+    await markError(env, row, "remediation: slug missing " + slug);
+    return { ok: false, stage: "publish" };
+  }
+  if (!paper || paper.length < MIN_PAPER_CHARS) {
+    await markError(env, row, "remediation: final body too short");
+    return { ok: false, stage: "publish" };
+  }
   const prov = buildProvenance(paper, existing.title || "", slug);
   const artifacts = await collectArtifacts(env, String(row.id));
-  const verifPy = artifacts.find(function (a) { return a.file === "verification.py"; });
-  const verifMd = artifacts.find(function (a) { return a.file === "verification.md"; });
-  const grounding = artifacts.find(function (a) { return a.file === "grounding.md"; });
-  const bibFile = prov.files.find(function (f) { return f.file === "references.bib"; });
-  const auditFile = prov.files.find(function (f) { return f.file === "citation-audit.md"; });
-  const readmeFile = prov.files.find(function (f) { return f.file === "README.md"; });
-  const planFile = prov.files.find(function (f) { return f.file === "PROJECT-PLAN.md"; });
+  const verifPy = artifacts.find(function(a) {
+    return a.file === "verification.py";
+  });
+  const verifMd = artifacts.find(function(a) {
+    return a.file === "verification.md";
+  });
+  const grounding = artifacts.find(function(a) {
+    return a.file === "grounding.md";
+  });
+  const bibFile = prov.files.find(function(f) {
+    return f.file === "references.bib";
+  });
+  const auditFile = prov.files.find(function(f) {
+    return f.file === "citation-audit.md";
+  });
+  const readmeFile = prov.files.find(function(f) {
+    return f.file === "README.md";
+  });
+  const planFile = prov.files.find(function(f) {
+    return f.file === "PROJECT-PLAN.md";
+  });
   await env.QNFO_AUDIT.prepare("INSERT INTO version_queue (paper_doi, slug, title, version_from, version_to, corrected_md, references_bib, citation_audit, due_diligence, project_plan, readme_md, verify_script, verify_output, status, created_at, updated_at) VALUES (?1,?2,?3,?4,'2.0.0',?5,?6,?7,?8,?9,?10,?11,?12,'drafted',datetime('now'),datetime('now'))").bind(
     existing.doi || "",
     slug,
@@ -1399,21 +1613,24 @@ async function remediationPublish(env, row) {
     paper,
     bibFile ? bibFile.content : null,
     auditFile ? auditFile.content : null,
-    grounding ? grounding.content.slice(0, 50000) : null,
+    grounding ? grounding.content.slice(0, 5e4) : null,
     planFile ? planFile.content : null,
     readmeFile ? readmeFile.content : null,
     verifPy ? verifPy.content : null,
     verifMd ? verifMd.content : null
   ).run();
-  const ghFiles = artifacts.map(function (a) { return { path: a.file, content: a.content }; });
+  const ghFiles = artifacts.map(function(a) {
+    return { path: a.file, content: a.content };
+  });
   const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', published_at=? WHERE id=?").bind(nowIso(), row.id).run();
   await logEvent(env, "remediation", "queued newversion for " + slug + " -> 2.0.0", "ok");
-  return { ok: true, stage: "publish->version-queued", slug: slug, github: ghr };
+  return { ok: true, stage: "publish->version-queued", slug, github: ghr };
 }
 __name(remediationPublish, "remediationPublish");
-
+__name2(remediationPublish, "remediationPublish");
+__name22(remediationPublish, "remediationPublish");
 async function run(env) {
   await logEvent(env, "heartbeat", "run");
   try {
@@ -1435,7 +1652,10 @@ async function run(env) {
       }
     }
     row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY score DESC LIMIT 1").first();
-    if (!row) { await logEvent(env, "idle", "no work"); return { status: "ok", claimed: 0 }; }
+    if (!row) {
+      await logEvent(env, "idle", "no work");
+      return { status: "ok", claimed: 0 };
+    }
     const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage='ground', claimed_at=?, attempt=attempt+1 WHERE id=? AND status='queued'").bind(nowIso(), row.id).run();
     if (!up || !up.meta || !up.meta.changes) return { status: "ok", claimed: 0 };
     await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ")");
@@ -1451,16 +1671,10 @@ async function run(env) {
 }
 __name(run, "run");
 __name2(run, "run");
-
+__name22(run, "run");
+__name222(run, "run");
 var worker_default = {
-    async scheduled(event, env, ctx) {
-    // v0.5.17-research-restored: research-exec is the SINGLE research_queue stage-machine
-    // owner (proven publisher: 09-03/09-04 note->draft->publish->published with real DOIs
-    // 22278600/22278842/22279728/22280745 via direct Workers-AI models). drainV2 (version_queue)
-    // then run() (research_queue). triage is intake-only (score/enqueue). Canonical 2026-09-06:
-    // the triage->agent-orchestrator dispatch path NEVER completed a paper (100% 60-min watchdog
-    // timeout, zero advance/publish actions in pipeline_tasks) and its claim+dispatch raced this
-    // worker (row 9ea237fc failed 20:21). run() honors RESEARCH_HALT kill-switch.
+  async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
       try {
         var drained = await drainV2(env);
@@ -1475,7 +1689,8 @@ var worker_default = {
         await logEvent(env, "error", "run threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
     })());
-  },  async fetch(request, env) {
+  },
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
     if (url.pathname === "/run" && request.method === "POST") {
