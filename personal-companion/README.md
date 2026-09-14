@@ -111,11 +111,23 @@ wired, the quality gate described above is aspirational.
 
 ## Version
 
-**CORRECTED (rev 2).** This repo holds **v1.0.0**. The live deployment serves **v1.1.0**, whose
-source is **not in this repo**. `deployed-current.worker.js` is **byte-identical** to
-`worker.js` (`sha c06edffb`, 62,666 B) and is therefore mislabelled — it is not the deployed
-source. `wrangler.toml` sets `main = "worker.js"`, so a deploy from this directory would ship
-the v1.0.0 source and silently discard whatever v1.1.0 carries.
+**CORRECTED (rev 3, 2026-09-14).** The rev-2 statement below is superseded. Ground truth, live-verified this session (reading.q08.org /health + CF schedules API + R2 list):
 
-See `FINDING-2026-09-13-deploy-source-mismatch.md`. **Obtain and commit the v1.1.0 source
-before any deploy.**
+- `worker.js` (this repo, 89,584 B) carries `VERSION = "1.2.0"`, the `GenerationFlow` export, 40 topics, and `GEN_HOURS_UTC` [4,8,12,16,20] — it is the **live source** (health returns `version: "1.2.0"`, `topics: 40`, `max_per_day: 5`).
+- `deployed-current.worker.js` (64,012 B) is **stale** (still the old 1.0.0 bundle). Regenerate before any deploy: `wrangler deploy --dry-run --outdir dist && cp dist/worker.js deployed-current.worker.js`.
+- The R2 canonical `qnfo-canonical/personal-companion.js` is **still 62,666 B (1.0.0)**, last modified 2026-09-14T08:01:26Z. The hourly deploy loop reads this and **keeps attempting to downgrade live 1.2.0 -> 1.0.0**; it fails only on the missing `GenerationFlow` export (HTTP 400 code 10021). **ACTIVE DOWNGRADE RISK** — if the canonical bundle ever becomes valid, the downgrade lands and reading.q08.org loses 1.2.0. Refresh the canonical to 1.2.0 first.
+
+See `FINDING-2026-09-13-deploy-source-mismatch.md` and `audits/2026-09-13-CORRECTION-canonical-repair-order-personal-companion.md`.
+
+---
+
+**ORIGINAL rev 2 (superseded).**
+
+> **CORRECTED (rev 2).** This repo holds **v1.0.0**. The live deployment serves **v1.1.0**, whose
+> source is **not in this repo**. `deployed-current.worker.js` is **byte-identical** to
+> `worker.js` (`sha c06edffb`, 62,666 B) and is therefore mislabelled — it is not the deployed
+> source. `wrangler.toml` sets `main = "worker.js"`, so a deploy from this directory would ship
+> the v1.0.0 source and silently discard whatever v1.1.0 carries.
+>
+> See `FINDING-2026-09-13-deploy-source-mismatch.md`. **Obtain and commit the v1.1.0 source
+> before any deploy.**

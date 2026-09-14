@@ -3,7 +3,7 @@
 //   - "cadence" run: inbox scan + outreach reply follow-through + day action
 //   - results logged to cadence_runs D1 only — NO self-mail receipt (policy 2026-09-09)
 //   - day actions currently: Wednesday response-check
-// ENV: OUTREACH_DB (D1), EMAIL_SERVICE (qnfo-email service binding), OUTREACH_SECRET
+// ENV: OUTREACH_DB (D1), EMAIL (qnfo-email service binding), OUTREACH_SECRET
 var VERSION = "0.3.5-glm53-nomail";
 var NAMESPACE = "email-orchestrator";
 var DAY_ACTIONS = ["wednesday-response-check"];
@@ -64,7 +64,7 @@ export default {
     var out = { ok: true, service: NAMESPACE, version: VERSION, time: new Date().toISOString(), uptime: (Date.now() - (globalThis.__start || Date.now())) };
     if (!globalThis.__start) globalThis.__start = Date.now();
     try { var r = await env.OUTREACH_DB.prepare("SELECT COUNT(*) c FROM cadence_runs").first(); out.db = "ok (" + (r ? r.c : "?") + " rows)"; } catch (e) { out.db = "ERR " + e.message; out.ok = false; }
-    if (!env.EMAIL_SERVICE) { out.email_service = "missing binding"; out.ok = false; } else { out.email_service = "bound"; }
+    if (!env.EMAIL) { out.email_service = "missing binding"; out.ok = false; } else { out.email_service = "bound"; }
     out.features = ["cadence", "d1-log-only", "no-self-mail"];
     return this.cors(json(out));
   },
@@ -88,20 +88,20 @@ export default {
     var result = { date: day, dry: dry, started: now.toISOString(), mode: dry ? "dry" : "live" };
     // INBOX
     try {
-      var ib = await env.EMAIL_SERVICE.fetch("https://email/inbox?h=168", { method: "GET" });
+      var ib = await env.EMAIL.fetch("https://email/inbox?h=168", { method: "GET" });
       var ibj = await ib.json();
       if (ibj.ok) result.inbox = { total: ibj.messages ? ibj.messages.length : 0, last24h: ibj.last24h || null }; else result.inbox = { error: ibj.error || "inbox fetch failed" };
     } catch (e) { result.inbox = { error: "inbox exception " + e.message }; }
     // OUTREACH REPLIES
     result.replies = [];
     try {
-      var ore = await env.EMAIL_SERVICE.fetch("https://email/outreach/replies", { method: "GET" });
+      var ore = await env.EMAIL.fetch("https://email/outreach/replies", { method: "GET" });
       var orej = await ore.json();
       if (orej.ok && orej.replies) result.replies = orej.replies.map(function (x) { return { from: x.from, response_type: x.response_type, reason: x.reason || "", duplicate: !!x.duplicate }; });
     } catch (e) { /* skip */ }
     // FOLLOW-UP-DUE (silent >14d; no auto-follow-up per policy)
     try {
-      var fu = await env.EMAIL_SERVICE.fetch("https://email/outreach/followup?days=14", { method: "GET" });
+      var fu = await env.EMAIL.fetch("https://email/outreach/followup?days=14", { method: "GET" });
       var fuj = await fu.json();
       result.followup_eligible = fuj.ok ? (fuj.count || 0) : -1;
       result.followup_due = fuj.ok ? (fuj.due || []) : [];
@@ -117,14 +117,14 @@ export default {
     }
     // SCAN (optional meta)
     try {
-      var sc = await env.EMAIL_SERVICE.fetch("https://email/scan?limit=2", { method: "GET" });
+      var sc = await env.EMAIL.fetch("https://email/scan?limit=2", { method: "GET" });
       var scj = await sc.json();
       if (scj.ok && scj.scan && scj.scan.length) result.scan = scj.scan.slice(0, 2);
     } catch (e) { /* skip */ }
     // WEEKLY (only when it is Saturday and not dry; never emails anyone)
     if (!dry && wd === 6) {
       try {
-        var wr = await env.EMAIL_SERVICE.fetch("https://email/outreach/weekly?mode=live", { method: "GET" });
+        var wr = await env.EMAIL.fetch("https://email/outreach/weekly?mode=live", { method: "GET" });
         var wrj = await wr.json();
         result.weekly = wrj.ok ? wrj : { error: wrj.error || "weekly failed" };
       } catch (e) { result.weekly = { error: e.message }; }
