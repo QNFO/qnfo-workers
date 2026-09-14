@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.1";
+var VERSION = "0.7.2";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -225,18 +225,20 @@ var Q08_DIRECTIVE = [
   "",
   "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact — not a summary, not a resolution, not a flourish.",
   "",
+  "VERDICT (mandatory final line, this is the last line of your output, after the essay): write exactly 'worth your time: yes|flat|no — one clause of justification'. State honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. 'no' rejects the essay; 'flat' means it barely clears the bar. Omitting this line is a rejection on its own.",
+  "",
   "CONSTRAINTS (hard):",
   "- Timeless: no dates, no current events.",
   "- No personal names, no usernames, no @handles. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
   "- No first person. No preamble, no meta-commentary about the essay itself.",
   "- 700-1100 words. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
   "- Output: valid Markdown, H1 title first, then the essay. The title must be concrete and specific to this signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
-  "- Mathematical notation: inline math as \\(...\\), display math as \\[\\...]. Use only these delimiters; never single-dollar signs.",
-  "- After the essay, a final line: 'worth your time: yes|flat|no — one clause of justification'. This is a calibration verdict, not prose: state honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. A verdict of 'no' rejects the essay."
+  "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
 
 function buildPrompt(friction, fewShot, recentStructures) {
   var parts = [Q08_DIRECTIVE];
+  parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no — justification'.");
   if (fewShot && fewShot.length > 0) {
     parts.push("\n--- PROVEN EXEMPLAR STRUCTURES (quality floor, not templates to copy) ---");
     for (var ex of fewShot.slice(0, 2)) {
@@ -522,6 +524,18 @@ async function generate(env) {
     if (retryPiece && retryPiece.text) {
       var retryGate = gate(retryPiece.text);
       if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
+      else if (retryGate.problems.length === 1 && /verdict/i.test(retryGate.problems[0]) && retryGate.problems[0].indexOf("self-verdict") < 0) {
+        // Verdict-only micro-call: one cheap compose asking for exactly the verdict line.
+        try {
+          var vp = await compose(env, "You have written an essay that passed all editorial checks. Output exactly one line, nothing else, in this form:\nworth your time: yes|flat|no — one clause of justification\nUse flat only if a reader gains little beyond the source material; use no if the piece is not worth publishing.");
+          var vm2 = (vp && vp.text || "").match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
+          if (vm2) {
+            retryPiece.text = retryPiece.text.replace(/\s*$/, "") + "\n\n" + vm2[0];
+            retryGate = gate(retryPiece.text);
+            if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
+          }
+        } catch (e) {}
+      }
     }
   }
   if (!gateResult.ok) {
@@ -799,13 +813,14 @@ export default {
       var async_mode = url.searchParams.get("async") !== "0";
       if (async_mode) {
         var runId = Date.now().toString(36);
+        await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'running',?)").bind("run-id:" + runId + " async generation started").run().catch(function(){});
         ctx.waitUntil(generate(env).then(async (out) => {
           await env.DB.prepare("UPDATE engine_runs SET error=? WHERE id=(SELECT MAX(id) FROM engine_runs)")
             .bind("run-id:" + runId + " result:" + JSON.stringify(out).slice(0,200)).run().catch(()=>{});
         }).catch(async (e) => {
           await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'error',?)").bind(String(e&&e.message||e).slice(0,500)).run().catch(()=>{});
         }));
-        return json({ ok: true, worker: WORKER, version: VERSION, mode: "async", run_id: runId, note: "generating in background; poll /api/runs or /health for result" });
+        return json({ ok: true, worker: WORKER, version: VERSION, mode: "async", run_id: runId, note: "generating in background; poll /api/runs or /health. Async runs may be cut short by the platform after ~30s; the cron path is the reliable one." });
       }
       var out = await generate(env);
       return json({ ok: true, worker: WORKER, version: VERSION, out });
