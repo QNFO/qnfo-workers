@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.1"; // FIX-HARD-1 (2026-09-14): replace invalid fallback models with verified-working
+var VERSION = "0.9.2"; // FIX-TITLE-SYNC (2026-09-14): publishV2 writes title (WEBSITE-SYNC-COLUMNS-1)
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -701,6 +701,17 @@ async function latexCompile(tex) {
 __name(latexCompile, "latexCompile");
 __name2(latexCompile, "latexCompile");
 __name22(latexCompile, "latexCompile");
+function extractTitle(md, fallback) {
+  var m = String(md || "");
+  var fm = m.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (fm) {
+    var tm = fm[1].match(/^title:\s*["']?([^"'\n]+)["']?\s*$/im);
+    if (tm) return tm[1].trim();
+  }
+  var h = m.match(/^#\s+(.+)$/m);
+  if (h) return h[1].trim();
+  return fallback || "";
+}
 function qualityGate(row, minLen, minRefs) {
   var NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
   var md = String(row && row.corrected_md || "");
@@ -816,7 +827,8 @@ async function publishV2(env, row) {
   var latest = await latestRecord(env, recId);
   if (latest && latest.metadata && String(latest.metadata.version || "") === String(row.version_to || "")) {
     var adoptedDoi = latest.doi || "10.5281/zenodo." + latest.id;
-    await env.LIVING_PAPER.prepare("UPDATE papers SET body_md=?, version=?, doi=?, zenodo_doi=?, updated_at=datetime('now') WHERE slug=?").bind(row.corrected_md || "", row.version_to || "2.0.0", adoptedDoi, adoptedDoi, slug).run();
+    var adoptedTitle = extractTitle(row.corrected_md || "", row.title);
+    await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, updated_at=datetime('now') WHERE slug=?").bind(adoptedTitle, row.corrected_md || "", row.version_to || "2.0.0", adoptedDoi, adoptedDoi, slug).run();
     if (env.GRAPH_DB) {
       try {
         var nodeA = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("zenodo-10-5281-zenodo-" + recId).first();
@@ -980,7 +992,8 @@ async function publishV2(env, row) {
     return { ok: false, stage: "v2", error: "publish failed: " + JSON.stringify(pub).slice(0, 200) };
   }
   var newDoi = pub.doi;
-  await env.LIVING_PAPER.prepare("UPDATE papers SET body_md=?, version=?, doi=?, zenodo_doi=?, updated_at=datetime('now') WHERE slug=?").bind(row.corrected_md || "", row.version_to || "2.0.0", newDoi, newDoi, slug).run();
+  var newTitle = extractTitle(row.corrected_md || "", row.title);
+  await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, updated_at=datetime('now') WHERE slug=?").bind(newTitle, row.corrected_md || "", row.version_to || "2.0.0", newDoi, newDoi, slug).run();
   if (env.GRAPH_DB) {
     try {
       var node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("zenodo-10-5281-zenodo-" + recId).first();
