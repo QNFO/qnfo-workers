@@ -30,7 +30,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.2.0";
+var VERSION = "0.3.0";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -144,36 +144,26 @@ async function extractFriction(storyId, topK) {
 // These are jargon placeholders, not analysis. The prompt must name and ban
 // this failure mode explicitly, and model the correct register with contrast examples.
 var Q08_DIRECTIVE = [
-  "You are writing for q08.org. The register is cold, structural, and factual.",
-  "Your input is a raw friction signal from a technical community debate.",
-  "Your output is a timeless essay that dissects the structural cause of that friction.",
+  "You are the writer for q08.org — long-form analytical essays for a curious, technically-literate reader who wants to understand why things break and what that reveals.",
+  "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow and enjoy.",
   "",
-  "## WHAT TO WRITE",
-  "- Concrete declarative sentences about how systems actually fail.",
-  "  Example: 'A deployment pipeline that cannot roll back is not a pipeline — it is a one-way valve.'",
-  "- H2 and H3 headers that name the specific mechanism, not an abstraction.",
-  "  Example: '## Why the boundary between config and code keeps collapsing'",
-  "  NOT: '## Architectural Context' or '## Systemic Vulnerability'",
-  "- Bulleted lists that enumerate specific failure conditions, not categories.",
-  "  Example: '- The schema migrates forward but the rollback path is never tested'",
-  "  NOT: '- Knowledge Work challenges' or '- Operational Complexity'",
-  "- A 3-point taxonomy of the specific failure modes (named as mechanisms, not as nouns).",
-  "- A minimal alternative framework: what the system would look like if the flaw were removed.",
-  "- 600–900 words. Timeless — no dates, no current events, no named products or companies.",
+  "OPENING (the hook): begin with 2-4 sentences that make a reader want to keep reading. Do not start with a definition or 'This essay...'. Open with a concrete observation, a striking tension, or a question that reveals why this matters. Establish in the first paragraph why a reader should care.",
   "",
-  "## WHAT NOT TO WRITE",
-  "- DO NOT use capitalized compound nouns as section headers or as stand-alone concepts.",
-  "  Banned: 'Knowledge Work', 'Systemic Vulnerability', 'Architectural Context',",
-  "  'Operational Excellence', 'Digital Transformation', 'Strategic Alignment',",
-  "  'Cognitive Load', 'Technical Debt', 'Value Stream', 'Organizational Friction'.",
-  "  These are placeholders. Replace them with the actual mechanism.",
-  "- DO NOT name the source website, platform, forum, or any specific users or handles.",
-  "- DO NOT use hedging language: 'it seems', 'perhaps', 'one might argue'.",
-  "- DO NOT use emotional vocabulary: 'frustrated', 'excited', 'amazing', 'terrible'.",
-  "- DO NOT write a preamble or meta-commentary. Start directly with the H1 title.",
-  "- DO NOT use first person.",
+  "BODY: write flowing prose paragraphs. NO bullet lists. NO numbered lists. NO tables. Use 2-4 H2 subheadings, but every section is prose, never lists.",
+  "Weave at least two surprising connections through the essay: historical parallels, cross-domain analogies, or timeless structural patterns that illuminate the friction from an unexpected angle. The signature of this publication is 'connections a reader did not expect, woven honestly.'",
+  "Make every claim concrete: name the actual mechanism, the actual constraint, the actual failure — never a category label or a capitalized abstraction.",
   "",
-  "Output format: valid Markdown. Start with a H1 title. Then the body. Nothing before the H1.",
+  "ARC (three movements, written as prose):",
+  "1. Identify the underlying structural flaw — the single cause that, if removed, would dissolve most of the friction.",
+  "2. Walk through the failure modes as prose, each with a concrete cause and consequence.",
+  "3. Close with a minimal alternative framework: what the system becomes when the flaw is removed, described concretely and specifically.",
+  "",
+  "CONSTRAINTS (hard):",
+  "- Timeless: no dates, no current events, no named products, companies, platforms, or websites.",
+  "- No personal names, no usernames, no @handles. No emotional vocabulary. No hedging ('it seems', 'perhaps').",
+  "- No first person. No preamble or meta-commentary.",
+  "- 700-1100 words.",
+  "- Output: valid Markdown, H1 title first, then the essay. The H1 title must be concrete and intriguing, not abstract (never 'An Analysis of X' or 'A Critique of Y').",
 ].join("\n");
 
 function buildPrompt(friction, fewShot) {
@@ -241,43 +231,48 @@ function isPersonalName(phrase) {
   return true;
 }
 var NAME_RE = /\b[A-Z][a-z]{2,13} [A-Z][a-z]{2,15}\b/g;
-// BANNED_CAPS: capitalized compound nouns that are management-consulting placeholders,
-// not structural analysis. Their presence means the prompt directive was ignored.
-// These are checked as exact phrase matches (case-insensitive) in the body text.
-var BANNED_CAPS = [
-  "knowledge work", "systemic vulnerability", "architectural context",
-  "operational excellence", "digital transformation", "strategic alignment",
-  "cognitive load", "value stream", "organizational friction", "technical debt",
-  "change management", "best practices", "lessons learned", "key takeaways",
-  "moving forward", "going forward", "at the end of the day",
+// BANNED_BABBLE: management-consulting phrases wrong in any register.
+var BANNED_BABBLE = [
+  "digital transformation", "operational excellence", "strategic alignment",
+  "moving forward", "going forward", "at the end of the day", "circle back",
+  "key takeaways", "lessons learned", "best practices", "thought leadership",
+  "game changer", "synergies",
 ];
 var BANNED_HANDLES = /@\w+/g;
+var BAD_TITLE_RE = /^(an? |the )?(analysis|critique|examination|exploration|overview|review|understanding|study|assessment|investigation) of /i;
+
 function gate(text) {
-  // Gate checks:
-  // 1. Minimum length — too short means the model gave up or was rate-limited.
-  // 2. Structural scaffolding — at least one H2/H3 and one bullet list.
-  // 3. No @handles — the prompt directive should have suppressed these.
-  // 4. No banned capitalized nominalizations — these signal management-consulting
-  //    register, not the cold structural objectivity the q08 register requires.
-  //    If these appear, the prompt failed and the piece must be regenerated.
+  // Enforce LONG-FORM PROSE with a hook, not lists:
+  // 1. length 2. concrete title 3. no handles 4. no babble 5. prose-dominant.
   var problems = [];
   var body = text.toLowerCase();
 
-  if (text.length < 400) problems.push("too short (" + text.length + " chars)");
+  if (text.length < 600) problems.push("too short for long-form (" + text.length + " chars)");
+
+  var titleMatch = text.match(/^#\s+(.+)$/m);
+  var title = titleMatch ? titleMatch[1].trim() : "";
+  if (!title) problems.push("no H1 title");
+  else if (BAD_TITLE_RE.test(title)) problems.push("dry/abstract title '" + title.slice(0, 60) + "'");
+  else if (title.length > 100) problems.push("title too long");
 
   var handles = (text.match(BANNED_HANDLES) || []).filter(function(h) { return h !== "@cf"; });
   if (handles.length > 0) problems.push("handles: " + handles.slice(0, 3).join(", "));
 
-  for (var phrase of BANNED_CAPS) {
-    if (body.includes(phrase)) {
-      problems.push("management-consulting placeholder: '" + phrase + "' — rewrite as a concrete mechanism");
-      break; // one is enough to reject; don't pile on
-    }
+  for (var phrase of BANNED_BABBLE) {
+    if (body.includes(phrase)) { problems.push("management-babble: '" + phrase + "'"); break; }
   }
 
-  var hasH2 = /^##\s/m.test(text);
-  var hasBullet = /^[-*]\s/m.test(text);
-  if (!hasH2 || !hasBullet) problems.push("missing structural scaffolding (needs ## headers AND - bullets)");
+  var lines = text.split("\n");
+  var bulletLines = 0, tableLines = 0, paraLines = 0;
+  for (var line of lines) {
+    var t = line.trim();
+    if (/^[-*]\s/.test(t)) bulletLines++;
+    else if (t.startsWith("|")) tableLines++;
+    else if (t.length > 45) paraLines++;
+  }
+  if (bulletLines > 0) problems.push("bullet lists (" + bulletLines + " lines) — long-form prose required");
+  if (tableLines > 0) problems.push("tables (" + tableLines + " lines) — prose required");
+  if (paraLines < 6) problems.push("insufficient prose (" + paraLines + " substantial paragraphs)");
 
   return { ok: problems.length === 0, problems };
 }
