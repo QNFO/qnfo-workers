@@ -1087,19 +1087,9 @@ async function logRun(env, form, model, topic, status, detail, ms) {
 }
 __name(logRun, "logRun");
 async function sendMail(env, piece, slug, day) {
-  if (!env.EMAIL) return { ok: false, error: "no email binding" };
-  try {
-    var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
-    var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : (piece.lede ? piece.lede + NL + NL : "")) + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
-    var resp = await env.EMAIL.fetch("https://email.internal/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
-      body: JSON.stringify({ to: "rwnquni@outlook.com", from: "rowan.quni@qnfo.org", subject, body })
-    });
-    return { ok: resp.ok, status: resp.status };
-  } catch (e) {
-    return { ok: false, error: String(e && e.message || e) };
-  }
+  var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
+  var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : (piece.lede ? piece.lede + NL + NL : "")) + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
+  return await sendOne(env, "rwnquni@outlook.com", subject, body);
 }
 __name(sendMail, "sendMail");
 async function mailOut(env, slug, origin) {
@@ -1115,7 +1105,16 @@ async function mailOut(env, slug, origin) {
 }
 __name(mailOut, "mailOut");
 async function sendOne(env, to, subject, body) {
-  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  // Tokenless path: native Email Routing send binding. No EMAIL_API_KEY needed.
+  if (env.SEND_EMAIL) {
+    try {
+      await env.SEND_EMAIL.send({ to: to, from: "rowan.quni@qnfo.org", subject: subject, text: body });
+      return { ok: true, via: "send_email" };
+    } catch (e) {
+      return { ok: false, error: "send_email: " + String(e && e.message || e) };
+    }
+  }
+  if (!env.EMAIL) return { ok: false, error: "no email path" };
   try {
     var resp = await env.EMAIL.fetch("https://email.internal/send", {
       method: "POST",

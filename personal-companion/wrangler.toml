@@ -2,6 +2,12 @@ name = "personal-companion"
 main = "worker.js"
 compatibility_date = "2026-08-01"
 
+# Native Email Routing send binding — tokenless (no EMAIL_API_KEY needed).
+# Fixes owner nudge + digest which silently failed with an unset key.
+send_email = [
+  { name = "SEND_EMAIL" }
+]
+
 [ai]
 binding = "AI"
 
