@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "1.3.2";
+var VERSION = "1.3.3";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1233,6 +1233,30 @@ async function broadcast(env, slug, origin) {
   }
 }
 __name(broadcast, "broadcast");
+async function sendDigest(env) {
+  if (!env.EMAIL) return { ok: false, error: "no email binding" };
+  try {
+    var day = amsDayKey(new Date());
+    var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? ORDER BY id ASC").bind(day).all();
+    var rows = pr.results || [];
+    if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
+    var q = await env.PERSONAL.prepare("SELECT email, token FROM companion_subscribers WHERE status = 'confirmed' LIMIT 500").all();
+    var subs = q.results || [];
+    var base = "https://reading.q08.org";
+    var list = rows.map(function(r){ return "- " + r.title + " — " + base + "/p/" + r.slug; }).join(NL);
+    var sent = 0, failed = 0;
+    for (var i = 0; i < subs.length; i++) {
+      var s = subs[i];
+      var body = "Reading — daily digest (" + day + ")" + NL + NL + list + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
+      var rr = await sendOne(env, s.email, "Reading — daily digest", body);
+      if (rr && rr.ok) sent++; else failed++;
+    }
+    return { ok: true, pieces: rows.length, sent: sent, failed: failed, total: subs.length };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(sendDigest, "sendDigest");
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -1586,6 +1610,10 @@ var worker_default = {
     return json({ error: { message: "not found", version: VERSION } }, 404);
   },
   async scheduled(event, env, ctx) {
+    if (event.cron === "0 21 * * *") {
+      ctx.waitUntil(sendDigest(env).catch(function() {}));
+      return;
+    }
     ctx.waitUntil((async function() {
       try {
         var nowUtc = /* @__PURE__ */ new Date();
@@ -1601,10 +1629,6 @@ var worker_default = {
             var form = RHYTHM[amsWeekday(nowUtc)];
             var out = await generate(env, form, {});
             if (out && out.ok) {
-              try {
-                await broadcast(env, out.slug, "https://reading.q08.org");
-              } catch (e) {
-              }
               try {
                 var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(out.slug).all();
                 var prow = (pr.results || [])[0];
@@ -1663,10 +1687,6 @@ var GenerationFlow = class extends WorkflowEntrypoint {
           if (prow && this.env.EMAIL) {
             prow.link = "https://reading.q08.org/p/" + out.slug;
             await sendMail(this.env, prow, out.slug, prow.day);
-            try {
-              await broadcast(this.env, out.slug, "https://reading.q08.org");
-            } catch (e) {
-            }
           }
         } catch (e) {
         }

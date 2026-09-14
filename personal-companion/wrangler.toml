@@ -29,7 +29,7 @@ class_name = "GenerationFlow"
 schedules = ["0 4,8,12,16,20 * * *"]
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "0 21 * * *"]
 
 [observability]
 enabled = true
