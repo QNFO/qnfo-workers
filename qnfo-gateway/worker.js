@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.4"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.6.1"; // Worker Contract v1: VERSION constant == /health version (line-1045 health handler)
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 

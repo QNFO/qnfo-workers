@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.29.1";
+var VERSION = "2.29.2";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2699,11 +2699,11 @@ async function regAuthOk(header, env) {
 }
 __name(regAuthOk, "regAuthOk");
 __name2(regAuthOk, "regAuthOk");
+var CANON_BASE = { "qnfo-ops": "https://ops.qnfo.org", "qnfo-ai": "https://ai.qnfo.org", "q08-signal-engine": "https://q08.org", "personal-companion": "https://reading.q08.org", "qnfo-fleet-dashboard": "https://fleet.qnfo.org", "idea-hub": "https://ideas.qnfo.org", "paper-hub": "https://papers.qnfo.org", "papers-hub": "https://papers.qnfo.org" };
 async function registryRegister(env, body) {
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
   const service = String(body && body.service || "").trim();
   if (!service) return { ok: false, error: "service required" };
-  const CANON_BASE = { "qnfo-ops": "https://ops.qnfo.org", "qnfo-ai": "https://ai.qnfo.org", "q08-signal-engine": "https://q08.org", "personal-companion": "https://reading.q08.org", "qnfo-fleet-dashboard": "https://fleet.qnfo.org", "idea-hub": "https://ideas.qnfo.org", "paper-hub": "https://papers.qnfo.org", "papers-hub": "https://papers.qnfo.org" };
   const canonBase = CANON_BASE[service] || body.base_url || null;
   await ensureSchema(env);
   try {
@@ -2799,7 +2799,7 @@ async function registryRefresh(env) {
     } catch (e) {
     }
   }, "upsert");
-  await upsert("qnfo-ops", "worker", { version: VERSION, base_url: "https://qnfo-ops.q08.workers.dev", purpose: "ops endpoint + service registry + queue/query", capabilities: manifest().capabilities, routes: ROUTES, tools: OPS_TOOLS.map(function(t) {
+  await upsert("qnfo-ops", "worker", { version: VERSION, base_url: CANON_BASE["qnfo-ops"] || "https://qnfo-ops.q08.workers.dev", purpose: "ops endpoint + service registry + queue/query", capabilities: manifest().capabilities, routes: ROUTES, tools: OPS_TOOLS.map(function(t) {
     return { name: t.name, description: t.description };
   }), models: ["ops-exec", "deepseek-v4-flash"], deps: manifest().deps });
   let apiList = [];
@@ -2823,7 +2823,14 @@ async function registryRefresh(env) {
   for (const f of FLEET) {
     const h = await probeService(env, f, "/health");
     if (h.ok && h.body) {
-      await upsert(f.name, "worker", { version: h.body.version || "", base_url: "https://" + f.name + ".q08.workers.dev", purpose: h.body.purpose || null, capabilities: h.body.capabilities || [], routes: h.body.routes || [], tools: h.body.tools || [], models: h.body.models || [], deps: [] });
+      var exVer = h.body.version || null;
+      if (!exVer) {
+        try {
+          var ex = await env.QNFO_AUDIT.prepare("SELECT version FROM service_registry WHERE service=?1").bind(f.name).first();
+          exVer = ex && ex.version ? ex.version : null;
+        } catch (e) {}
+      }
+      await upsert(f.name, "worker", { version: exVer, base_url: CANON_BASE[f.name] || "https://" + f.name + ".q08.workers.dev", purpose: h.body.purpose || null, capabilities: h.body.capabilities || [], routes: h.body.routes || [], tools: h.body.tools || [], models: h.body.models || [], deps: [] });
       rich++;
     }
   }
