@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.7";
+var VERSION = "0.7.8";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -221,9 +221,7 @@ var Q08_DIRECTIVE = [
   "",
   "CONCRETENESS: name the real things — people, companies, platforms, formats, artifacts — exactly as they are. Anonymizing the material ('a large search company', 'a video platform') is a register failure: it drains the essay of information. A sentence without a specific referent is a sentence to rewrite.",
   "",
-  "INFORMATION DENSITY: mine the signal for its specific facts — numbers, names, measurements, mechanisms, quoted text — and put them in the essay. An essay that could have been written without reading the signal is rejected.",
-  "",
-  "NO INVENTION: never invent a number, count, price, percentage, quotation, or mechanism that the signal does not supply. Use the signal's figures exactly. Never harden a general statement into a precise one: 'several bucks' is not '$2–$3'; 'proxies' is not '30 residential proxies'. A reader who checks must find the figure behind it. Fabricated precision is the worst failure this publication can commit.",
+  "FACTS (hard, non-negotiable): every specific fact — number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt — must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit — a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
   "",
   "PROSE, NOT SCHEME: write prose, not a specification. Never enumerate with '(1) ... (2) ...' in running text, and never write like a design document; the reader is a person, not a reviewer.",
   "",
@@ -361,6 +359,10 @@ function gate(text) {
   if (sp) problems.push("stock analogy prop: '" + sp[1] + "'");
   var sr = body.match(SOFT_REGISTER_RE);
   if (sr) problems.push("soft register: '" + sr[1] + "'");
+  if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric — no fabricated scores");
+  if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier — no fabricated IDs");
+  var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
+  if (curAmt && curAmt.length) problems.push("large currency amount(s) " + curAmt.slice(0, 3).join(", ") + " — likely fabricated; use the signal's figures or none");
 
   var lines = text.split("\n");
   var bulletLines = 0, tableLines = 0, paraLines = 0;
