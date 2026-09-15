@@ -2,6 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
+var VERSION = "1.0.1";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -50,9 +51,22 @@ async function ensureStateTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS ddocs_index_state (rkey TEXT PRIMARY KEY, hash TEXT, chunks INTEGER, indexed_at TEXT, error INTEGER DEFAULT 0)").run();
 }
 __name(ensureStateTable, "ensureStateTable");
-async function processObject(env, key) {
-  const prefix = env.DDOC_PREFIX || "2026-09-04";
-  if (!key.startsWith(prefix + "/")) return { key, skipped: true, reason: "wrong_prefix" };
+async function resolvePrefix(env) {
+  if (env.DDOC_PREFIX) return env.DDOC_PREFIX;
+  try {
+    const top = await env.DDOCS.list({ delimiter: "/", limit: 100 });
+    const dirs = (top.delimitedPrefixes || []).filter((p) => /^\d{4}-\d{2}-\d{2}\/$/.test(p));
+    if (dirs.length) {
+      dirs.sort();
+      return dirs[dirs.length - 1].replace(/\/$/, "");
+    }
+  } catch (e) {
+  }
+  return "";
+}
+__name(resolvePrefix, "resolvePrefix");
+async function processObject(env, key, prefix) {
+  if (prefix && !key.startsWith(prefix + "/")) return { key, skipped: true, reason: "wrong_prefix" };
   if (SKIP_FRAG.some((f) => key.includes(f))) return { key, skipped: true, reason: "skip_fragment" };
   const ext = extOf(key);
   if (!TEXT_EXTS.has(ext)) return { key, skipped: true, reason: "not_text" };
@@ -64,7 +78,7 @@ async function processObject(env, key) {
   const hash = await sha256hex(text);
   const prev = await env.AUDIT.prepare("SELECT hash FROM ddocs_index_state WHERE rkey=?1").bind(key).first();
   if (prev && prev.hash === hash) return { key, skipped: true, reason: "unchanged" };
-  const rel = key.slice(prefix.length + 1);
+  const rel = prefix ? key.slice(prefix.length + 1) : key;
   const chunks = chunkText(text);
   if (!chunks.length) return { key, skipped: true, reason: "no_chunks" };
   const vectors = [];
@@ -74,7 +88,7 @@ async function processObject(env, key) {
     for (let j = 0; j < batch.length; j++) {
       const idx = i + j;
       const id = (await sha256hex(rel + "#" + idx)).slice(0, 40);
-      vectors.push({ id, values: result.data[j], metadata: { path: rel, bucket: "qnfo-ddocs", plane: "qnfo", ext, chunk: String(idx), total: String(chunks.length), src: "ddocs-indexer-v1", r2key: key } });
+      vectors.push({ id, values: result.data[j], metadata: { path: rel, bucket: "qnfo-ddocs", plane: "qnfo", ext, chunk: String(idx), total: String(chunks.length), src: "ddocs-indexer-v1.0.1", r2key: key } });
     }
   }
   for (let i = 0; i < vectors.length; i += VZ_BATCH) {
@@ -86,17 +100,19 @@ async function processObject(env, key) {
 __name(processObject, "processObject");
 async function handleIndex(env, url) {
   const limit = Math.min(Number(url.searchParams.get("limit") || DEFAULT_LIMIT) || DEFAULT_LIMIT, 200);
-  const prefix = url.searchParams.get("prefix") || (env.DDOC_PREFIX || "2026-09-04") + "/";
+  const explicit = url.searchParams.get("prefix");
+  const prefix = explicit !== null ? explicit : await resolvePrefix(env);
+  const listPrefix = prefix ? prefix + "/" : "";
   let cursor = url.searchParams.get("cursor") || void 0;
   let done = 0, skipped = 0, errors = 0, chunksTotal = 0, nextCursor = null, scanned = 0;
   while (done + skipped < limit) {
-    const listed = await env.DDOCS.list({ prefix, cursor, limit: Math.min(100, limit - done - skipped + 20) });
+    const listed = await env.DDOCS.list({ prefix: listPrefix, cursor, limit: Math.min(100, limit - done - skipped + 20) });
     if (!listed.objects.length) break;
     scanned += listed.objects.length;
     for (const o of listed.objects) {
       if (done + skipped >= limit) break;
       try {
-        const r = await processObject(env, o.key);
+        const r = await processObject(env, o.key, prefix);
         if (r.indexed) {
           done++;
           chunksTotal += r.chunks;
@@ -113,13 +129,14 @@ async function handleIndex(env, url) {
     if (!listed.truncated) break;
     if (scanned > limit * 6) break;
   }
-  return json({ success: true, batch: { indexed: done, skipped, errors, chunks: chunksTotal }, scanned, nextCursor, cursor: url.searchParams.get("cursor") || null });
+  return json({ success: true, worker: "qnfo-ddocs-indexer", version: VERSION, effective_prefix: prefix || "(all)", batch: { indexed: done, skipped, errors, chunks: chunksTotal }, scanned, nextCursor, cursor: url.searchParams.get("cursor") || null });
 }
 __name(handleIndex, "handleIndex");
 async function handleStats(env) {
   const st = await env.AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(chunks),0) AS chunks FROM ddocs_index_state").first();
   const un = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM ddocs_index_state WHERE error!=0").first();
-  return json({ success: true, indexed: st ? st.n : 0, chunks: st ? st.chunks : 0, errors: un ? un.n : 0, worker: "qnfo-ddocs-indexer" });
+  const fresh = await env.AUDIT.prepare("SELECT MAX(indexed_at) AS newest FROM ddocs_index_state").first();
+  return json({ success: true, worker: "qnfo-ddocs-indexer", version: VERSION, effective_prefix: await resolvePrefix(env) || "(all)", indexed: st ? st.n : 0, chunks: st ? st.chunks : 0, errors: un ? un.n : 0, newest_indexed_at: fresh ? fresh.newest : null });
 }
 __name(handleStats, "handleStats");
 var worker_default = {
@@ -129,7 +146,7 @@ var worker_default = {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-ddocs-indexer", index: "qnfo-ddocs", version: "v1.0-server-side", bindings: { ai: !!env.AI, r2: !!env.DDOCS, vz: !!env.DDOC_VZ, d1: !!env.AUDIT } });
+    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-ddocs-indexer", index: "qnfo-ddocs", version: VERSION, bindings: { ai: !!env.AI, r2: !!env.DDOCS, vz: !!env.DDOC_VZ, d1: !!env.AUDIT } });
     if (url.pathname === "/index" || url.pathname === "/stats") {
       const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       if (token !== env.INDEX_TOKEN) return json({ error: "unauthorized" }, 401);

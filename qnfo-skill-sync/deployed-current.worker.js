@@ -1,24 +1,21 @@
-// qnfo-skill-sync v1.1.0 - QNFO.INF.KAIZEN.W6-8 (2026-08-21)
-// W6: extractor v2 uses error_sample evidence; normalized titles stored + deduped
-// W7: auto-close stale kaizen-ai issues (>30d untouched); never user-sourced
-// W8: issue source = extracted skill name (lights up qnfo-kaizen incident scoring)
-// Also: /log/chat persists error_count + error_sample; per-batch processed marking
-// (no silent loss: logs only marked processed after their batch is extracted)
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// worker.js
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
-
+__name(json, "json");
 function base64Encode(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
 }
-
+__name(base64Encode, "base64Encode");
 async function readJson(req) {
   try {
     return await req.json();
@@ -26,18 +23,17 @@ async function readJson(req) {
     return null;
   }
 }
-
+__name(readJson, "readJson");
 async function githubFetch(env, path, init = {}) {
   const headers = {
     "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
     "Accept": "application/vnd.github+json",
     "User-Agent": "qnfo-skill-sync",
-    ...(init.headers || {})
+    ...init.headers || {}
   };
   return fetch(`https://api.github.com${path}`, { ...init, headers });
 }
-
-// W6: normalize titles for dedup + display (session/run ids collapse to <id>)
+__name(githubFetch, "githubFetch");
 function normalizeTitle(t) {
   if (!t) return t;
   let s = String(t).trim();
@@ -45,8 +41,8 @@ function normalizeTitle(t) {
   s = s.replace(/\s+/g, " ");
   return s.slice(0, 500);
 }
-
-var EXTRACT_PROMPT = `Analyze DeepChat session records and extract ONLY real, actionable issues, errors, or optimization opportunities.
+__name(normalizeTitle, "normalizeTitle");
+var EXTRACT_PROMPT = `You are the QNFO kaizen issue extractor. Analyze DeepChat session records and extract ONLY real, actionable issues, errors, or optimization opportunities.
 
 Session record format:
 - title: the session's first user message (context only - a task prompt, NOT evidence of failure)
@@ -66,8 +62,7 @@ SESSION RECORDS:
 {summaries}
 
 OUTPUT:`;
-
-export default {
+var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const method = request.method;
@@ -83,7 +78,7 @@ export default {
     if (url.pathname === "/health") {
       return json({
         worker: "qnfo-skill-sync",
-        version: "v1.1.2",
+        version: "1.1.2",
         status: "ok",
         changelog: ["W6 extractor v2 + normalized dedup", "W7 stale issue auto-close", "W8 skill-source issues", "error_sample persisted", "v1.1.1 lock TTL reclaim", "v1.1.2 TTL 20min + async cap 30 rows"],
         bindings: { d1: !!env.AUDIT_DB, r2: !!env.SKILLS_BUCKET, ai: !!env.AI, github_token: !!env.GITHUB_TOKEN },
@@ -108,7 +103,7 @@ export default {
         (body.summary || "").slice(0, 8e3),
         body.error_flag ? 1 : 0,
         body.error_count || 0,
-        (body.error_sample || "").slice(0, 1000),
+        (body.error_sample || "").slice(0, 1e3),
         createdAt
       ).run();
       return json({ success: true, id: res.meta.last_row_id });
@@ -196,7 +191,7 @@ export default {
     if (url.pathname === "/") {
       return json({
         worker: "qnfo-skill-sync",
-        version: "v1.1.2",
+        version: "1.1.2",
         endpoints: {
           "POST /log/chat": "Ingest DeepChat session log { session_id, title, summary, message_count, error_flag?, error_count?, error_sample? }",
           "POST /issues": "Create issue { title, description?, category?, priority?, source? }",
@@ -215,19 +210,15 @@ export default {
     ctx.waitUntil(runKaizenCycle(env));
   }
 };
-
 async function runKaizenCycle(env, limit = 100) {
   const started = Date.now();
-  const report = { date: new Date().toISOString().slice(0, 10), extracted: 0, issues: 0, staleClosed: 0, reportUrl: null, errors: [] };
-  // v1.1.1: reclaim stale locks. A cycle killed mid-run (e.g. waitUntil wall-clock
-  // limit) leaves the lock row behind; without this the daily cron skips forever.
+  const report = { date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), extracted: 0, issues: 0, staleClosed: 0, reportUrl: null, errors: [] };
   try {
     const reclaimed = await env.AUDIT_DB.prepare(
       "DELETE FROM kaizen_locks WHERE lock_key = 'cycle' AND started_at < ?"
-    ).bind(started - 20 * 60 * 1000).run();
+    ).bind(started - 20 * 60 * 1e3).run();
     if (reclaimed.meta.changes > 0) report.staleLockReclaimed = true;
   } catch (e) {
-    // table may not exist yet; the create-fallback below handles it
   }
   try {
     const lock = await env.AUDIT_DB.prepare(
@@ -248,7 +239,6 @@ async function runKaizenCycle(env, limit = 100) {
     }
   }
   try {
-    // W7: auto-close stale kaizen-ai issues (>30 days untouched). Never user-sourced.
     try {
       const stale = await env.AUDIT_DB.prepare(
         "UPDATE agent_issues SET status = 'wontfix', updated_at = ? WHERE source = 'kaizen-ai' AND status = 'open' AND updated_at < ?"
@@ -266,13 +256,14 @@ async function runKaizenCycle(env, limit = 100) {
         const batch = logs.results.slice(bi, bi + BATCH);
         const summaries = batch.map((l) => {
           const flag = l.error_flag ? " [ERROR]" : "";
-          const es = l.error_sample ? `\n  error_sample: ${String(l.error_sample).slice(0, 500)}` : "";
+          const es = l.error_sample ? `
+  error_sample: ${String(l.error_sample).slice(0, 500)}` : "";
           return `- Session ${l.session_id}${flag}: ${l.title || "untitled"}
   summary: ${(l.summary || "").slice(0, 300)}${es}`;
         }).join("\n");
         const aiResp = await env.AI.run(
-          "@cf/qwen/qwen3-30b-a3b-fp8",
-          { messages: [{ role: "user", content: EXTRACT_PROMPT.replace("{summaries}", summaries) }], max_tokens: 1024, temperature: 0.2 }
+          "@cf/zai-org/glm-5.3",
+          { messages: [{ role: "user", content: EXTRACT_PROMPT.replace("{summaries}", summaries) }], max_tokens: 2048, temperature: 0.2 }
         );
         let items = [];
         if (Array.isArray(aiResp?.response)) {
@@ -285,7 +276,7 @@ async function runKaizenCycle(env, limit = 100) {
           else if (typeof aiResp?.content === "string") text = aiResp.content;
           else text = JSON.stringify(aiResp);
           const cleaned = text.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
-          const firstJsonBlock = (s) => {
+          const firstJsonBlock = /* @__PURE__ */ __name((s) => {
             const open2 = s.indexOf("{");
             const openArr = s.indexOf("[");
             let start;
@@ -309,14 +300,17 @@ async function runKaizenCycle(env, limit = 100) {
               }
             }
             return null;
-          };
+          }, "firstJsonBlock");
           const block = firstJsonBlock(cleaned);
           if (block) {
             try {
               const parsed = JSON.parse(block);
               if (!Array.isArray(parsed) && typeof parsed === "object") {
                 for (const k of ["issues", "items", "results", "findings"]) {
-                  if (Array.isArray(parsed[k])) { items = parsed[k]; break; }
+                  if (Array.isArray(parsed[k])) {
+                    items = parsed[k];
+                    break;
+                  }
                 }
                 if (items.length === 0 && Object.values(parsed).some((v) => v && typeof v === "object" && !Array.isArray(v))) {
                   items = Object.values(parsed).filter((v) => v && typeof v === "object" && !Array.isArray(v));
@@ -337,11 +331,9 @@ async function runKaizenCycle(env, limit = 100) {
           if (!item.title) continue;
           const priority = ["high", "medium", "low"].includes(item.priority) ? item.priority : "medium";
           const category = ["error", "optimization", "request", "infrastructure"].includes(item.category) ? item.category : "optimization";
-          // W6: normalized title (stored) - kills "Error in Session <id>" spam
           const normTitle = normalizeTitle(item.title);
           if (!normTitle) continue;
-          // W8: skill-scoped source when the extractor identified a skill
-          const source = (typeof item.skill === "string" && item.skill.trim()) ? item.skill.trim().toLowerCase().slice(0, 100) : "kaizen-ai";
+          const source = typeof item.skill === "string" && item.skill.trim() ? item.skill.trim().toLowerCase().slice(0, 100) : "kaizen-ai";
           const dup = await env.AUDIT_DB.prepare(
             "SELECT id FROM agent_issues WHERE title = ? AND source = ? AND status = 'open' LIMIT 1"
           ).bind(normTitle, source).first();
@@ -361,7 +353,6 @@ async function runKaizenCycle(env, limit = 100) {
           ).run();
           report.extracted++;
         }
-        // Mark this batch processed only AFTER successful extraction (no silent loss)
         for (const l of batch) {
           await env.AUDIT_DB.prepare("UPDATE chat_logs SET processed = 1 WHERE id = ?").bind(l.id).run();
         }
@@ -375,7 +366,7 @@ async function runKaizenCycle(env, limit = 100) {
     const body = [
       `# Kaizen Report - ${report.date}`,
       "",
-      `- Generated: ${new Date().toISOString()}`,
+      `- Generated: ${(/* @__PURE__ */ new Date()).toISOString()}`,
       `- Chat logs scanned: ${logs.results.length}`,
       `- Issues extracted: ${report.extracted}`,
       `- Stale auto-closed: ${report.staleClosed || 0}`,
@@ -410,7 +401,7 @@ async function runKaizenCycle(env, limit = 100) {
           message: `kaizen: daily report ${report.date} [bot]`,
           content: b64,
           branch: env.SKILLS_BRANCH,
-          ...(sha ? { sha } : {})
+          ...sha ? { sha } : {}
         })
       });
       if (putResp.ok) {
@@ -419,7 +410,7 @@ async function runKaizenCycle(env, limit = 100) {
         if (pr.commit?.sha) {
           await env.SKILLS_BUCKET.put("_sync/last-snapshot.json", JSON.stringify({
             sha: pr.commit.sha,
-            at: new Date().toISOString(),
+            at: (/* @__PURE__ */ new Date()).toISOString(),
             report: report.date
           }), { httpMetadata: { contentType: "application/json" } });
         }
@@ -439,7 +430,7 @@ async function runKaizenCycle(env, limit = 100) {
           const head = await gh.json();
           await env.SKILLS_BUCKET.put("_sync/last-snapshot.json", JSON.stringify({
             sha: head.sha,
-            at: new Date().toISOString(),
+            at: (/* @__PURE__ */ new Date()).toISOString(),
             report: report.date
           }), { httpMetadata: { contentType: "application/json" } });
         }
@@ -458,3 +449,8 @@ async function runKaizenCycle(env, limit = 100) {
   report.durationMs = Date.now() - started;
   return report;
 }
+__name(runKaizenCycle, "runKaizenCycle");
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map
