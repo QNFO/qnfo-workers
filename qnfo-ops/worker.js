@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.27.0"; // FIX-6 (2026-09-14): multi-client auth + OPS_CLIENT_KEY
+var VERSION = "2.29.0"; // DO per-session history keying (sid) 2026-09-15 // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -70,16 +70,14 @@ function costUsdCalc(promptTokens, completionTokens) {
 }
 __name(costUsdCalc, "costUsdCalc");
 async function authOk(header, env) {
-  // FIX-6: multi-client auth - accept OPS_ROUTER_AUTH_KEY, OPS_ROUTER_AUTH_KEY_2, OPS_CLIENT_KEY
   const k1 = env.OPS_ROUTER_AUTH_KEY; const k2 = env.OPS_ROUTER_AUTH_KEY_2; const k3 = env.OPS_CLIENT_KEY;
   if (!header || !header.startsWith("Bearer ")) return false;
   const provided = header.slice("Bearer ".length); if (!provided) return false;
-  if (!k1 && !k2 && !k3) return true; // open mode (no keys configured)
+  if (!k1 && !k2 && !k3) return true;
   const enc = new TextEncoder(); const a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
-  const b2 = null; // legacy slot kept for compat
   if (k1) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k1)); if (timingSafeEqual(a, b)) return true; }
   if (k2) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k2)); if (timingSafeEqual(a, b)) return true; }
-  if (k3) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k3)); if (timingSafeEqual(a, b)) return true; } // OPS_CLIENT_KEY for ChatBox/SannaBot/Android
+  if (k3) { const b = await crypto.subtle.digest("SHA-256", enc.encode(k3)); if (timingSafeEqual(a, b)) return true; }
   return false;
 }
 __name(authOk, "authOk");
