@@ -381,6 +381,18 @@ async function processPaper(env, paper, mode) {
     }
     return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
   }
+  // FIX-REVISER-GARBAGE (2026-09-14): reject non-paper AI output (reasoning preamble / outline fragment).
+  var _rv = String(revised || "");
+  var _badHead = /^(s***|s*#{1,3}s***|[a-z ]*complexity assessment|here is|heres|here's|the provided topic|let me|i'll|okay|alright|first,)/i.test(_rv);
+  var _outline = /(detailed, merged outline|merged outline|Chapter d+: .* (cont$|continued)|continuation of the .*outline)/i.test(_rv.slice(0, 600));
+  var _hasHeading = /^#s+S/m.test(_rv);
+  var _hasBody = _rv.length >= 1500;
+  if (!_hasBody || _badHead || _outline || !_hasHeading) {
+    if (!dry) {
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, error, created_at, updated_at) VALUES (?, ?, ?, ?, 'needs-substantive-revision', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), ("AI revision rejected: " + (_badHead ? "reasoning-preamble" : _outline ? "outline-fragment" : !_hasHeading ? "no-h1" : "too-short")).slice(0, 200)).run();
+    }
+    return { slug: paper.slug, rejected: true, reason: _badHead ? "reasoning-preamble" : _outline ? "outline-fragment" : !_hasHeading ? "no-h1" : "too-short", issues: auditSummary, doi };
+  }
   const versionTo = bumpVersion(paper.version);
   const edits = applyEdits(paper.body_md || "", low);
   let revised = applyVersionMarkers(edits.md, versionTo);

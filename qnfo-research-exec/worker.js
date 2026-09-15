@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.3"; // FIX-TITLE-MULTILINE (2026-09-14): extractTitle handles multi-line H1 titles
+var VERSION = "0.9.4"; // FIX-GATE-TERMINAL (2026-09-14): terminalize gate-blocked after N attempts (no infinite loop)
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -1047,6 +1047,36 @@ __name22(publishV2, "publishV2");
 // always blocks. Enrichment injects a Prior Work section + resets to drafted for retry.
 // PRECONDITION: row.status='gate-blocked', recover_count < 3.
 // POSTCONDITION: row.status='drafted' with enriched corrected_md OR recover_count incremented.
+// FIX-GATE-TERMINAL (2026-09-14): terminalize gate-blocked rows that exhausted enrichment.
+// PRECONDITION: rows with status='gate-blocked' AND recover_count >= MAX_GATE_ATTEMPTS.
+// POSTCONDITION: version_queue.status='wontfix'; paper_revision_log.status='needs-substantive-revision';
+//   gov_gate_log RESOLVE entry. Prevents the infinite enrich<->block loop (RECURRENCE-ZERO-1).
+var MAX_GATE_ATTEMPTS = 3;
+async function terminalizeGateBlocked(env) {
+  var rows = await env.QNFO_AUDIT.prepare(
+    "SELECT id, slug, recover_count FROM version_queue WHERE status='gate-blocked' AND recover_count >= ?"
+  ).bind(MAX_GATE_ATTEMPTS).all();
+  var done = 0;
+  for (var i = 0; i < (rows.results || []).length; i++) {
+    var r = rows.results[i];
+    await env.QNFO_AUDIT.prepare(
+      "UPDATE version_queue SET status='wontfix', updated_at=datetime('now') WHERE id=? AND status='gate-blocked'"
+    ).bind(r.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare(
+        "UPDATE paper_revision_log SET status='needs-substantive-revision', error='QUALITY-GATE-1 not satisfiable after ' || ? || ' enrichment attempts; terminal (wontfix)', updated_at=datetime('now') WHERE slug=? AND status='queued'"
+      ).bind(MAX_GATE_ATTEMPTS, String(r.slug || "")).run();
+    } catch (e) {}
+    try {
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'quality-gate', 'RESOLVE', ?, 'QUALITY-GATE-1', 'qnfo-research-exec', 'P1')"
+      ).bind(("terminal-wontfix slug=" + String(r.slug || "?") + " after " + MAX_GATE_ATTEMPTS + " attempts").slice(0, 300)).run();
+    } catch (e) {}
+    done++;
+  }
+  return done;
+}
+__name(terminalizeGateBlocked, "terminalizeGateBlocked");
 async function enrichGateBlocked(env) {
   var blocked = await env.QNFO_AUDIT.prepare(
     "SELECT id, slug, corrected_md, references_bib, paper_doi FROM version_queue WHERE status='gate-blocked' AND recover_count < 3 ORDER BY id ASC LIMIT 4"
@@ -1106,6 +1136,8 @@ async function enrichGateBlocked(env) {
 __name(enrichGateBlocked, "enrichGateBlocked");
 
 async function drainV2(env) {
+  // FIX-GATE-TERMINAL: terminalize exhausted rows first so they leave the enrich loop
+  try { await terminalizeGateBlocked(env); } catch (eTerm) { await logEvent(env, "terminal-err", String(eTerm && eTerm.message || eTerm).slice(0, 200)); }
   // FIX-3: enrich gate-blocked rows before draining drafted
   try { await enrichGateBlocked(env); } catch (eEnrich) { await logEvent(env, "enrich-err", String(eEnrich && eEnrich.message || eEnrich).slice(0, 200)); }
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
