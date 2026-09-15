@@ -985,7 +985,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.12";
+var VERSION = "0.4.13";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -998,8 +998,9 @@ __name(json, "json");
 __name2(json, "json");
 function versionOf(code) {
   code = code || "";
+  var cands = [];
   var i = code.indexOf("VERSION");
-  while (i >= 0 && i < code.length) {
+  while (i >= 0 && i < code.length && cands.length < 24) {
     var j = code.indexOf("=", i);
     if (j < 0 || j - i > 15) {
       i = code.indexOf("VERSION", i + 1);
@@ -1017,9 +1018,16 @@ function versionOf(code) {
       i = code.indexOf("VERSION", i + 1);
       continue;
     }
-    return code.slice(k + 1, q);
+    cands.push(code.slice(k + 1, q));
+    i = code.indexOf("VERSION", q + 1);
   }
-  return null;
+  if (!cands.length) return null;
+  // Prefer semver-shaped values (d.d[.d][-suffix]); a fabric tag like
+  // "name/fabric-20260910" must never win over "1.8.0".
+  for (var a = 0; a < cands.length; a++) {
+    if (/^\d+\.\d+(\.\d+)?([-.][A-Za-z0-9.-]{0,24})?$/.test(cands[a]) && cands[a].indexOf("/") < 0) return cands[a];
+  }
+  return cands[0];
 }
 __name(versionOf, "versionOf");
 __name2(versionOf, "versionOf");
