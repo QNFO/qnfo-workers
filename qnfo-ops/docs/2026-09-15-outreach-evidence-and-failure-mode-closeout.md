@@ -150,7 +150,8 @@ dead column, not evidence.
 | **Commit `120dda8a`** — `qnfo-outreach/schema.sql` mirrors both columns for fresh installs | ok |
 | Syntax validation of the committed bundle | `node --check` (Node **v22.23.2**), parsed as ESM → **SYNTAX OK** |
 | Ledger column contract validated against live schema | `emails` has `message_id UNIQUE NOT NULL, sender, recipient, subject, body_text, body_html, headers_json, classification, status, received_at` — INSERT matches |
-| 4 tickets filed in `agent_issues` | ids **919, 920, 921, 922** |
+| 4 tickets filed in `agent_issues` | ids **919, 920, 921, 925** (read back: 919 OUTREACH-RETRY-1/medium, 920 OUTREACH-EVIDENCE-1/high, 921 CF-WORKER-DEPLOY-BINDING-WIPE-1/high, 925 OPS-D1-QUERY-GUARD-1/low — all `status='open'`) |
+| Closeout persisted | ops-workspace `audits/2026-09-15-…closeout.md` (12,545 B) + this file (commit `75bd76d2`) |
 
 Tickets: `OUTREACH-EVIDENCE-1` (high), `CF-WORKER-DEPLOY-BINDING-WIPE-1` (high),
 `OUTREACH-RETRY-1` (medium), `OPS-D1-QUERY-GUARD-1` (low).
@@ -164,6 +165,10 @@ can restore them. Committing to the repo is the correct path: `qnfo-outreach/wra
 all five bindings and cron `0 11 * * 1-5`, so the repo deploy path ships the fix with bindings intact.
 `deployed-current.worker.js` was deliberately **not** touched — it must mirror the *live* bundle,
 which is still 0.2.1.
+
+**Verified post-condition:** live `qnfo-outreach` is still `version 0.2.1`, size 13,384 B, and all 5
+bindings are intact (`cf_worker_bindings` → LIVING_PAPER, OUTREACH_D1, OUTREACH_TOKEN, QNFO_AUDIT,
+SEND_EMAIL). Nothing was deployed and nothing was wiped.
 
 **Consequence, stated plainly:** until the deploy runs, the live worker is still v0.2.1, so the next
 weekday cron (2026-09-16 11:00Z) will again discard `messageId`. Expected residual damage: at most 8
