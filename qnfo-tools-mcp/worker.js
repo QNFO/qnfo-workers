@@ -112,6 +112,7 @@ async function callTool(env, name, args) {
     return { count: j.count || 0, intents: (j.intents || []).map(x => ({ id: x.id, type: x.type, domain: x.domain, summary: x.summary || x.desire.slice(0, 100), due: x.due, status: x.status, created_at: x.created_at })) };
   }
   if (name === 'personal_search') {
+    if (!env.PL_SEARCH) return { error: 'personal_search backend unavailable (personal-life-search not deployed; STALE-BINDING-FIX 2026-09-15)' };
     const r = await env.PL_SEARCH.fetch(PL_SEARCH + '/search?q=' + encodeURIComponent(String(args.q || '').slice(0, 300)) + '&topK=' + k);
     const j = await r.json();
     if (!r.ok) return { error: j.error || ('HTTP ' + r.status) };

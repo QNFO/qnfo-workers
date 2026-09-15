@@ -3,7 +3,7 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
-# qnfo-autopilot v0.1.0 - L4 decide-loop: fleet's own deferred-work executor.
+# qnfo-autopilot v0.3.1 - L4 decide-loop: fleet's own deferred-work executor.
 # Purpose: drain the open-work queue autonomously (overdue census -> receipts), snapshot per-worker
 # activity into D1, and self-report daily. This is the answer to "stop deferring to future agent sessions".
 # Canonical source: QNFO/qnfo-workers/qnfo-autopilot/worker.js
@@ -22,11 +22,8 @@ binding = "AI"
 
 # SERVICE-BINDING-1 (2026-09-10): synchronous runtime-verify for seed workers.
 # Service bindings bypass egress->workers.dev=1042 (same-account workers.dev fetch 404s from a Worker).
-[[services]]
-binding = "SB_CITATION_WATCH"
-service = "qnfo-citation-watch"
-environment = "production"
-
+# SB_CITATION_WATCH removed 2026-09-15: qnfo-citation-watch no longer deployed (worker consolidation);
+# binding was never referenced in code (verified by grep) and blocked every redeploy (API code 10144).
 [[services]]
 binding = "SB_EMAIL"
 service = "qnfo-email"

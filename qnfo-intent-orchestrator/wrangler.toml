@@ -26,10 +26,9 @@ index_name = "personal-life"
 binding = "VZ_R"
 index_name = "qnfo-ai-log"
 
-[[services]]
-binding = "PLS"
-service = "personal-life-search"
-
+# STALE-BINDING-FIX (2026-09-15): PLS -> personal-life-search removed. Target returns 404
+# (worker no longer deployed). Intent `activity` path already try/catch-guarded -> degrades
+# gracefully. Dead binding otherwise blocks redeploy (API code 10144).
 [[services]]
 binding = "QNFO_AI"
 service = "qnfo-ai"

@@ -61,11 +61,9 @@ binding = "SVC_QNFO_AI"
 service = "qnfo-ai"
 environment = "production"
 
-[[services]]
-binding = "SVC_QNFO_AUDITOR"
-service = "qnfo-auditor"
-environment = "production"
-
+# STALE-BINDING-FIX (2026-09-15): SVC_QNFO_AUDITOR -> qnfo-auditor removed. Target worker
+# no longer deployed (consolidation); binding was never referenced in code. A dead service
+# binding blocks ANY redeploy (Cloudflare API code 10144) - verified on qnfo-autopilot.
 [[services]]
 binding = "SVC_QNFO_INFRA"
 service = "qnfo-infra"
