@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.9";
+var VERSION = "0.7.10";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -328,7 +328,7 @@ var TITLE_COLON_RE = /: the (hidden|invisible|unseen|silent|quiet) /i;
 var BANNED_H2_RE = /^#+\s+(how the flaw manifests|cascading failures|a minimal (alternative|framework|approach)|connections across disciplines|echoes from the past|a path forward|the lens restored|lessons for the future|the pattern across disciplines|unexpected parallels|the broader lesson)\b/i;
 var FORMULA_H2_RE = /^#+\s+the (hidden|invisible|unseen|unspoken|silent|quiet) (lever|bottleneck|premise|flaw|cost|gear|engine|handoff|mismatch)\b/i;
 var STOCK_PROPS_RE = /\b(telescopes?|galileo|alchem|philosopher.s stone|sonar|aperture|aerospace redundancy)\b/i;
-var HISTORICAL_RE = /\b(\d{3}0s|1[0-9]th century|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient (greece|rome)|roman empire|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial era|belle ?poque|preindustrial|nineteenth century|eighteenth century|seventeenth century|sixteenth century|fifteenth century)\b/i;
+var HISTORICAL_RE = /\b([0-9]+th century|\d{3,4}0s|19[0-9]{2}|18[0-9]{2}|1[0-7][0-9]{2}|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient|roman|greek|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial|belle ?poque|preindustrial|great depression|south sea|tulip|dot-com|dotcom|hanseatic|medici|silk road|printing press|gutenberg|panic of|railway mania)\b/i;
 var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
 
 function gate(text) {
@@ -593,11 +593,7 @@ function safeUrl(u) {
 
 function renderSources(sj) {
   var arr = [];
-  try {
-    arr = JSON.parse(sj || "[]");
-  } catch (e) {
-    arr = [];
-  }
+  try { arr = JSON.parse(sj || "[]"); } catch (e) { arr = []; }
   if (!Array.isArray(arr)) arr = [];
   var items = [];
   for (var s of arr) {
@@ -620,14 +616,7 @@ function buildSources(story) {
   } else if (src === "arxiv") {
     out.push({ label: "arXiv: " + String(story.title || "").slice(0, 120), url: u || "https://arxiv.org/abs/" + story.id });
   } else {
-    if (u) {
-      var host = "";
-      try {
-        host = new URL(u).hostname.replace(/^www\./, "");
-      } catch (e) {
-      }
-      out.push({ label: host || u, url: u });
-    }
+    if (u) { var host = ""; try { host = new URL(u).hostname.replace(/^www\./, ""); } catch (e) {} out.push({ label: host || u, url: u }); }
     if (story.id) out.push({ label: "Hacker News discussion", url: "https://news.ycombinator.com/item?id=" + story.id });
   }
   return out;
