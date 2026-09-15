@@ -24,3 +24,8 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 # Secrets (set via wrangler secret put):
 # SYNC_TOKEN
+
+# PAPER_VZ -> qwav-research-v2 (768-dim, bge-base-en-v1.5) — Ask QNFO RAG (replaces retired qnfo-qwav)
+[[vectorize]]
+binding = "PAPER_VZ"
+index_name = "qwav-research-v2"

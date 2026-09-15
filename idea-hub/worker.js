@@ -531,6 +531,46 @@ var m0 = (function() {
     __name(normTs, "normTs");
     __name2(normTs, "normTs");
     __name22(normTs, "normTs");
+    const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
+const CHAT_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV research corpus context. Cite paper titles when you draw on them. If the corpus does not contain an answer, say so plainly. Keep answers concise, precise, and faithful to the source papers.";
+    async function searchCorpus(query, env, topK) {
+      try {
+        const embedResult = await env.AI.run(EMBED_MODEL, { text: [query] });
+        const vector = embedResult && embedResult.data && embedResult.data[0] || (Array.isArray(embedResult) ? embedResult[0] : null);
+        if (!vector) return [];
+        const matches = await env.PAPER_VZ.query(vector, { topK, returnMetadata: "all" });
+        const out = [];
+        for (const m of matches.matches || []) {
+          const slug = m.metadata && (m.metadata.slug || m.metadata.path || m.metadata.key) || null;
+          let title = null, body = "";
+          if (slug) {
+            try {
+              const row = await env.LIVING_PAPER.prepare("SELECT title, abstract, body_md FROM papers WHERE slug = ?1 LIMIT 1").bind(String(slug).replace(/\.md$/, "")).first();
+              if (row) { title = row.title; body = (row.body_md || row.abstract || "").replace(/^---[\s\S]*?---\s*/, "").slice(0, 2500); }
+            } catch (e) {}
+          }
+          if (!title && m.metadata && m.metadata.title) title = m.metadata.title;
+          if (!body && m.metadata && (m.metadata.text || m.metadata.abstract)) body = String(m.metadata.text || m.metadata.abstract || "").slice(0, 2500);
+          out.push({ slug: slug ? String(slug).replace(/\.md$/, "") : null, file: title || slug || m.id, title: title || slug || m.id, text: body });
+        }
+        return out;
+      } catch (e) { return []; }
+    }
+    __name(searchCorpus, "searchCorpus");
+    __name2(searchCorpus, "searchCorpus");
+    __name22(searchCorpus, "searchCorpus");
+    function parseChat(resp) {
+      let c = "";
+      if (resp && typeof resp.response === "string") c = resp.response;
+      else if (resp && resp.choices && resp.choices[0]) c = resp.choices[0].message && resp.choices[0].message.content || resp.choices[0].text || "";
+      else if (resp && resp.result && resp.result.response) c = resp.result.response;
+      else if (resp && resp.result && resp.result.choices && resp.result.choices[0]) c = resp.result.choices[0].message && resp.result.choices[0].message.content || "";
+      return String(c || "").trim();
+    }
+    __name(parseChat, "parseChat");
+    __name2(parseChat, "parseChat");
+    __name22(parseChat, "parseChat");
     async function handleAsk(url, request, env) {
       let body;
       try {
@@ -542,11 +582,20 @@ var m0 = (function() {
       if (!query) return json({ error: "Missing query" }, 400);
       try {
         const [qwavResp, threadRes] = await Promise.all([
-          fetch("https://qnfo-qwav.q08.workers.dev/ai/ask", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "User-Agent": "qnfo-idea-factory/2.0" },
-            body: JSON.stringify({ query })
-          }).then((r) => r.json()).catch(() => ({ error: "ask backend unreachable" })),
+          (async () => {
+            if (!env.AI || !env.PAPER_VZ) return { answer: null, sources: [], model: null, error: "Corpus Q&A bindings unavailable" };
+            const results = await searchCorpus(query, env, 6);
+            const sources = results.map((r) => ({ file: r.file, slug: r.slug, score: r.score }));
+            if (!results.length) return { answer: "The corpus has no matching research on that question yet.", sources: [], model: CHAT_MODEL };
+            const context = results.map((r, i) => "[" + (i + 1) + "] " + (r.title || "untitled") + (r.slug ? " (slug: " + r.slug + ")" : "") + "\n" + r.text).join("\n\n");
+            const userPrompt = "QUESTION:\n" + query + "\n\nCORPUS CONTEXT (use ONLY this; if it does not answer the question, say so plainly):\n" + context;
+            try {
+              const aiResp = await env.AI.run(CHAT_MODEL, { messages: [ { role: "system", content: ASK_SYSTEM_PROMPT }, { role: "user", content: userPrompt } ], max_tokens: 1024, temperature: 0.3 }, { gateway: { id: "default" } });
+              return { answer: parseChat(aiResp) || "(no answer returned)", sources, model: CHAT_MODEL };
+            } catch (e) {
+              return { answer: "Found " + results.length + " matching research sources (semantic search worked, answer model unavailable).", sources, model: null, error: e.message };
+            }
+          })(),
           relatedThreads(query, env)
         ]);
         const threads = [];
