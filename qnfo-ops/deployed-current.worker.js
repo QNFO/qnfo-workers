@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.28.0"; // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
+var VERSION = "2.28.1"; // DO tool-format fix 2026-09-15 // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -2819,7 +2819,7 @@ export class AgenticOpsExec {
     try {
       let iter = 0;
       while (iter < MAX_TOOL_ITERS) {
-        const { resp } = await callDeepSeek(this.env, messages, DEFAULT_MAX_OUT, OPS_TOOLS, {});
+        const { resp } = await callDeepSeek(this.env, messages, DEFAULT_MAX_OUT, toolsPayload(), {});
         const choice = resp && resp.choices && resp.choices[0];
         if (!choice) { finalText = "(empty upstream response)"; break; }
         const m = choice.message || {};
