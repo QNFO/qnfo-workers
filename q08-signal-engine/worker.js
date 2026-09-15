@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.10";
+var VERSION = "0.7.11";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -224,6 +224,8 @@ var Q08_DIRECTIVE = [
   "FACTS (hard, non-negotiable): every specific fact — number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt — must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics about the incident; historical precedents are drawn from real, verifiable history. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit — a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
   "",
   "PROSE, NOT SCHEME: write prose, not a specification. Never enumerate with '(1) ... (2) ...' in running text, and never write like a design document; the reader is a person, not a reviewer.",
+  "",
+  "NO SECTION HEADERS: the essay is continuous prose. Do not use Markdown section headers (## or ###) anywhere in the body — paragraph breaks only. A header is a crutch; if you need one, the prose has failed to carry the argument.",
   "",
   "PRECEDENT, NOT METAPHOR: a historical precedent is a real, well-known recurrence of the same system — a named era and institution where the identical incentive or structural dynamic operated. Never fabricate a historical event or date to force a rhyme; a reader who checks must find it. A vague \u2018throughout history\u2019 with no named instance is not a precedent. A metaphor (\u2018it is like a telescope\u2019) is decorative and banned.",
   "",
@@ -534,7 +536,7 @@ async function generate(env) {
   // Gate — one corrective retry on failure
   var gateResult = gate(piece.text);
   if (!gateResult.ok) {
-    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected for these reasons; fix only these issues ---\n" + gateResult.problems.join("; ");
+    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, NO section headers — fixing only these issues ---\n" + gateResult.problems.join("; ");
     var retryPiece = null;
     try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
@@ -870,7 +872,7 @@ export default {
       var piece = await compose(env, prompt);
       var gateResult = gate(piece.text);
       if (!gateResult.ok) {
-        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected for these reasons; fix only these issues ---\n" + gateResult.problems.join("; ");
+        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, NO section headers — fixing only these issues ---\n" + gateResult.problems.join("; ");
         var retryPiece = null;
         try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
         if (retryPiece && retryPiece.text) {
