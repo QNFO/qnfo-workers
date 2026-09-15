@@ -33,7 +33,7 @@
 //   F8 model-empty alert.
 //
 // CANONICAL: QNFO/qnfo-workers/qnfo-goal-author/worker.js. DEPLOY: wrangler (D1 AUDIT + cron).
-const VERSION = '0.2.0';
+const VERSION = '0.4.0';
 const NAME = 'qnfo-goal-author';
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const ADOPT_CAP = 3;          // max instrumental goals auto-adopted per cycle
@@ -244,7 +244,7 @@ async function synthesizeGoals(env, objectives, signals) {
 async function adoptGoals(env, objectives, candidates) {
   const objKeys = objectives.map(o => o.objective_key);
   const recent = await recentGoalTokens(env);
-  let adopted = 0, queuedRevision = 0, rejected = 0, seen = 0, nearDup = 0;
+  let adopted = 0, queuedRevision = 0, rejected = 0, seen = 0, nearDup = 0, dispatched = 0;
   const adoptedList = [];
   for (const c of candidates) {
     const statement = String(c.statement || '').trim();
@@ -302,11 +302,33 @@ async function adoptGoals(env, objectives, candidates) {
       ).bind(gk, statement.slice(0, 400), NAME, dod || statement.slice(0, 200), 'goal:' + gk, due).run();
     } catch (e) { /* best-effort */ }
 
+    // R1b: AUTO-DISPATCH into the execution pipeline (2026-09-15). Research goals go straight
+    // into research_queue (status='queued'), which qnfo-idea-triage claims by score DESC and
+    // executes to a publication. This closes "drainable but not dispatched". Ops/infra goals
+    // route to fleet_improvements (read by fleet-control + the kaizen loop).
+    if (program === 'QNFO.RSCH') {
+      try {
+        await env.AUDIT.prepare(
+          `INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at)
+           VALUES (?, 'goal-author', ?, ?, ?, ?, 'ACCEPT', 'queued', ?)`
+        ).bind(crypto.randomUUID(), gk, statement.slice(0, 3000), alignment.slice(0, 200), score, nowIso()).run();
+        dispatched++;
+      } catch (e) { /* best-effort */ }
+    } else {
+      try {
+        await env.AUDIT.prepare(
+          `INSERT OR IGNORE INTO fleet_improvements (source, target, kind, title, detail, priority, status)
+           VALUES ('goal-author', 'fleet', 'self-authored-goal', ?, ?, 'P2', 'proposed')`
+        ).bind(statement.slice(0, 240), (dod || alignment).slice(0, 500)).run();
+        dispatched++;
+      } catch (e) { /* best-effort */ }
+    }
+
     adopted++;
     recent.push(cand);
     adoptedList.push({ statement: statement.slice(0, 160), score, program, dod: dod.slice(0, 120), parent });
   }
-  return { seen, adopted, queuedRevision, rejected, nearDup, adoptedList };
+  return { seen, adopted, queuedRevision, rejected, nearDup, dispatched, adoptedList };
 }
 
 // PRECONDITION: goals table populated. POSTCONDITION: stale adopted goals retired.
@@ -352,6 +374,56 @@ async function receipts(env, summary) {
   }
 }
 
+// VALUE-PROPOSAL (2026-09-15): the honest "self-authored values" rung. The fleet periodically
+// reviews the RATIFIED objective function against recent fleet evidence and PROPOSES revisions
+// with falsifiable rationale. Proposals are NEVER auto-adopted — they route to propose->ratify
+// (residual-consent #3). "Self-authored values" under an honesty anchor means the fleet authors
+// value PROPOSALS; the human ratifies value CHANGES. This is the boundary that keeps independent
+// thinking anchored rather than silent objective drift.
+async function reviewValues(env) {
+  await ensureSchema(env);
+  const objectives = await loadObjectives(env);
+  const evidence = await gatherSignals(env);
+  const prompt = [
+    'You are the value-review module of an autonomous fleet. The terminal objective (value function) is HUMAN-RATIFIED; propose revisions only, never change it yourself.',
+    'RATIFIED OBJECTIVES:\n' + objectives.map(o => o.objective_key + ': ' + o.statement).join('\n'),
+    'FLEET EVIDENCE (recent):\n' + evidence.join('\n'),
+    'Propose up to 3 SPECIFIC, FALSIFIABLE revisions to the objective function or its weights/constraints. Each needs: the change, a one-line falsifiable rationale, and the evidence that would justify it.',
+    'If no revision is warranted, return an empty array.',
+    'Return JSON ONLY: {"revisions":[{"change":"...","rationale":"...","evidence":"..."}]}'
+  ].join('\n');
+  const text = await runModel(env, prompt);
+  if (!text) return { ok: false, why: 'model empty' };
+  let jsonText = text.replace(/```(?:json)?/gi, '').trim();
+  const fb = jsonText.indexOf('{');
+  if (fb > 0) jsonText = jsonText.slice(fb);
+  let parsed = null;
+  try { parsed = JSON.parse(jsonText); } catch (e) { const m = text.match(/\{[\s\S]*\}/); if (m) { try { parsed = JSON.parse(m[0]); } catch (e2) {} } }
+  const revs = (parsed && Array.isArray(parsed.revisions)) ? parsed.revisions : [];
+  let proposed = 0;
+  for (const r of revs) {
+    const change = String(r.change || '').trim();
+    if (change.length < 12) continue;
+    const gk = 'vrev-' + hash(change.toLowerCase().replace(/\s+/g, ' '));
+    await env.AUDIT.prepare(
+      `INSERT INTO goals (goal_key, statement, goal_type, parent_objective, alignment, source, score, priority, status, dod, owner, program_code, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(goal_key) DO UPDATE SET updated_at=excluded.updated_at`
+    ).bind(gk, change, 'objective-revision', objectives[0] ? objectives[0].objective_key : 'objective-function',
+           'rationale: ' + String(r.rationale || '').slice(0, 300) + ' | evidence: ' + String(r.evidence || '').slice(0, 300),
+           'value-review', 0, 3, 'proposed', 'human ratification of proposed objective revision', 'human-ratify', 'QNFO.OPS', nowIso(), nowIso()).run();
+    proposed++;
+  }
+  try {
+    await env.AUDIT.prepare(
+      `INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)`
+    ).bind('vrev-' + Date.now(), nowIso(), proposed > 0 ? 'value-revision-proposed' : 'value-review-clean',
+           proposed > 0 ? proposed + ' objective-function revision(s) proposed for human ratification (residual-consent #3).' : 'value review ran; no revision warranted against current evidence.',
+           null, NAME, proposed > 0 ? 'pending-ratification' : 'done').run();
+  } catch (e) { /* best-effort */ }
+  return { ok: true, proposed, revisions: revs.map(r => String(r.change || '').slice(0, 120)) };
+}
+
 // PRECONDITION: schema + objectives ready. POSTCONDITION: one full authorship cycle with receipt.
 async function authorLoop(env) {
   await ensureSchema(env);
@@ -378,12 +450,17 @@ async function authorLoop(env) {
 
 export default {
   async scheduled(event, env, ctx) {
+    const cron = event.cron;
+    if (cron === '0 3 * * 1') {
+      ctx.waitUntil(reviewValues(env).catch(e => console.error('goal-author value-review error:', e && e.message || e)));
+      return;
+    }
     ctx.waitUntil(authorLoop(env).catch(e => console.error('goal-author cron error:', e && e.message || e)));
   },
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const mutate = (path === '/author' || path === '/reprioritize');
+    const mutate = (path === '/author' || path === '/reprioritize' || path === '/review-values');
     try {
       if (mutate && !authorized(request, env)) return json({ ok: false, error: 'unauthorized' }, 401);
       if (path === '/health') {
@@ -393,10 +470,13 @@ export default {
         const a = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM goals WHERE status IN ('adopted','active')").first();
         let drained = { n: 0 };
         try { drained = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM task_dod_register WHERE source_table='self_authored_goal' AND status='open'").first(); } catch (e) {}
-        return json({ ok: true, name: NAME, version: VERSION, objectives: o.n || 0, goals_total: g.n || 0, goals_active: a.n || 0, goals_drainable_open: drained.n || 0 });
+        let queued = { n: 0 };
+        try { queued = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE source='goal-author' AND status='queued'").first(); } catch (e) {}
+        return json({ ok: true, name: NAME, version: VERSION, objectives: o.n || 0, goals_total: g.n || 0, goals_active: a.n || 0, goals_drainable_open: drained.n || 0, goals_queued_for_exec: queued.n || 0 });
       }
       if (path === '/author' && request.method === 'POST') return json(await authorLoop(env));
       if (path === '/reprioritize' && request.method === 'POST') return json({ ok: true, ...(await rePrioritize(env)) });
+      if (path === '/review-values' && request.method === 'POST') return json(await reviewValues(env));
       if (path === '/objectives') {
         const r = await env.AUDIT.prepare("SELECT * FROM objectives ORDER BY id").all();
         return json({ ok: true, count: r.results.length, objectives: r.results });
@@ -405,7 +485,7 @@ export default {
         const r = await env.AUDIT.prepare("SELECT * FROM goals ORDER BY priority, score DESC LIMIT 100").all();
         return json({ ok: true, count: r.results.length, goals: r.results });
       }
-      return json({ ok: true, name: NAME, version: VERSION, endpoints: ['/health', '/author', '/reprioritize', '/objectives', '/goals'] });
+      return json({ ok: true, name: NAME, version: VERSION, endpoints: ['/health', '/author', '/reprioritize', '/review-values', '/objectives', '/goals'] });
     } catch (err) {
       return json({ ok: false, error: String(err && err.stack || err.message || err) }, 500);
     }

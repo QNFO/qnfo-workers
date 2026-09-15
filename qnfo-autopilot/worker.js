@@ -7,7 +7,7 @@
 //       all scheduled workers, autonomous + receipted).
 //   (3) DAILY DIGEST — writes kind=autopilot-cycle / daily-digest events (proactive reporting).
 // CANONICAL: QNFO/qnfo-workers/qnfo-autopilot/worker.js. DEPLOY: wrangler (D1 AUDIT + cron 5 * * * *).
-const VERSION = '0.3.1';
+const VERSION = '0.3.3';
 const NAME = 'qnfo-autopilot';
 const DASH = 'https://fleet.qnfo.org/api/state';
 const UA = 'qnfo-autopilot/' + VERSION;
@@ -140,6 +140,10 @@ async function publishReport(env) {
 
 const CF_API = 'https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b';
 const EVOLVE_MODEL = '@cf/moonshotai/kimi-k2.6';
+// THINK_MODEL (2026-09-15): non-reasoning model for the think-loop. kimi-k2.6 is a reasoning
+// model that burns its entire token budget on CoT, returning content:"" + finish_reason:"length"
+// under small max_tokens -> silent "no parseable question". llama returns content directly.
+const THINK_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 // SERVICE-BINDING-1: synchronous runtime-verify for subdomain-only workers (egress -> workers.dev = 1042).
 // Service bindings invoke the target's fetch handler directly, bypassing the public subdomain wall.
@@ -373,17 +377,23 @@ async function thinkLoop(env) {
   await ensureSchema(env);
   await env.AUDIT.prepare('CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)').run();
   try {
-    const ai = await env.AI.run(EVOLVE_MODEL, {
+    const ai = await env.AI.run(THINK_MODEL, {
       messages: [
         { role: 'system', content: 'You are the QNFO research collective. Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
         { role: 'user', content: 'Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus.' },
       ],
-      max_tokens: 512,
+      max_tokens: 1024,
     });
+    // THINK-MODEL-SHAPE-FIX (2026-09-15): kimi-k2.6 returns {choices[0].message.content}; the
+    // old extraction only read {response} then fell back to JSON.stringify, which never matched
+    // {"question":...} -> silent "no parseable question" since ~2026-09-11 (the 22 stored
+    // questions all predate that). Reuse the chat-shape extraction.
     let text = '';
-    if (typeof ai === 'string') text = ai;
+    const _m = ai && ai.choices && ai.choices[0] && ai.choices[0].message;
+    if (_m && typeof _m.content === 'string' && _m.content.trim()) text = _m.content.trim();
     else if (ai && typeof ai.response === 'string') text = ai.response;
-    else text = JSON.stringify(ai || {});
+    else if (typeof ai === 'string') text = ai;
+    if (!text) return { ok: false, why: 'model empty', raw: JSON.stringify(ai || {}).slice(0, 200) };
     let q = null;
     const m = text.match(/\{[\s\S]*\}/);
     if (m) { try { q = JSON.parse(m[0]); } catch (e) {} }

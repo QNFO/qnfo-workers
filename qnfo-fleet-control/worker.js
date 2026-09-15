@@ -1557,3 +1557,10 @@ export default {
     return deployDefault.scheduled(event, env, ctx);
   },
 };
+
+// DO-EXPORT-FIX (2026-09-15): wrangler refuses to deploy a worker that declares a Durable
+// Object binding whose class is not module-level exported ("Your Worker depends on ... not
+// exported"). advisorMod returns FleetAdvisor; re-export it at module scope so qnfo-fleet-control
+// is wrangler-deployable again (was API-deployed only, which skips the export check).
+const FleetAdvisor = advisorMod.FleetAdvisor;
+export { FleetAdvisor };

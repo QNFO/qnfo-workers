@@ -51,6 +51,14 @@ index_name = "qnfo-calibration"
 name = "FleetAdvisor"
 class_name = "FleetAdvisor"
 
+# DO-MIGRATION-FIX (2026-09-15): FleetAdvisor is a vestigial Durable Object (the advisor runs via
+# server_default.fetch; the DO is only a /health presence check). Cloudflare requires a migration
+# to register the class before a binding can reference it (API 10061), and KV-backed DO namespaces
+# are deprecated on this account (API 10099) -> use new_sqlite_classes. The class ignores storage.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FleetAdvisor"]
+
 [[services]]
 binding = "SVC_PERSONAL_API"
 service = "personal-api"
