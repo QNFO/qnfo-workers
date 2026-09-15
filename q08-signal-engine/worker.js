@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.8";
+var VERSION = "0.7.9";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -199,24 +199,26 @@ async function extractGitHubFriction(fullName, description) {
 }
 __name(extractGitHubFriction, "extractGitHubFriction");
 var Q08_DIRECTIVE = [
-  "You are the writer for q08.org — long-form essays on why things break, for a reader who wants the structural cause, not the incident report.",
+  "You are the writer for q08.org — long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of an old pattern. The nouns change; the systems repeat.",
   "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow.",
   "",
-  "SYSTEMIC, NOT SPECIFIC: the incident that produced the signal is the entry point, never the subject. Name the general class of system the incident instantiates — the pattern that would have produced the same failure anywhere. Your central claim must survive even if this particular incident had never existed. An essay that stays inside its incident is rejected.",
+  "SYSTEMIC, NOT SPECIFIC — HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates — the incentive structure, information asymmetry, or coupling failure that would produce the same breakdown in any domain and any century. Then prove it is universal by naming at least two historical precedents: earlier eras where the SAME system, under different nouns, produced the same failure. The nouns change — a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result — the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
   "",
   "REGISTER: cold structural objectivity. An engineer describing a mechanism, not a consultant describing a market. Write the way a precise bug report reads: specific, unimpressed, exact.",
   "",
   "STRUCTURE: let the material dictate the shape. No required arc, no three-movement template. Banned section headers, exactly: 'How the Flaw Manifests', 'Cascading Failures', 'A Minimal Alternative', 'A Minimal Framework', 'Connections Across Disciplines', 'Echoes from the Past', 'A Path Forward', 'The Lens Restored', 'Lessons for the Future', 'Unexpected Parallels', 'The Broader Lesson', and any header of the form 'The [Adjective] [Lever/Bottleneck/Premise/Flaw]: X'. Never name a section after its rhetorical function.",
   "",
-  "OPENING: begin inside a concrete particular from the signal — the exact mechanism, number, or observed behavior. Never open on an aphorism or a general claim. If the first sentence could belong to any essay, rewrite it.",
+  "OPENING: in one or two sentences name the incident, then pivot immediately to the system it reveals. The incident earns at most one paragraph; the reader should know within the first paragraph what universal dynamic is at stake, not merely what specific product broke. Never open on an aphorism or a general claim; never dwell on the incident.",
   "",
-  "CONCRETENESS: name the real things — people, companies, platforms, formats, artifacts — exactly as they are. Anonymizing the material ('a large search company', 'a video platform') is a register failure: it drains the essay of information. A sentence without a specific referent is a sentence to rewrite.",
+  "CONCRETENESS ACROSS ERAS: name the real things — but across history, not only in the present. The signal\u2019s particulars are one instance; the essay earns its length by naming the OTHER eras and institutions where the same system operated (a medieval guild\u2019s forged marks, a nineteenth-century patent-medicine boom, a twentieth-century ratings failure). Anonymizing the material is a register failure; refusing to leave the present is a depth failure. A sentence without a specific referent is a sentence to rewrite.",
   "",
-  "FACTS (hard, non-negotiable): every specific fact — number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt — must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit — a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
+  "FACTS (hard, non-negotiable): every specific fact — number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt — must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics about the incident; historical precedents are drawn from real, verifiable history. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit — a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
   "",
   "PROSE, NOT SCHEME: write prose, not a specification. Never enumerate with '(1) ... (2) ...' in running text, and never write like a design document; the reader is a person, not a reviewer.",
   "",
-  "CONNECTIONS: at most two cross-domain connections, each load-bearing — it must change how the reader understands the mechanism. Stock props are banned: no guild stamps, no telescopes, no alchemy, no philosopher's stones, no printing presses, no sonar, no camera apertures, no legal contracts, no aerospace redundancy. If the analogy would fit a different essay equally well, cut it.",
+  "PRECEDENT, NOT METAPHOR: a historical precedent is a real, well-known recurrence of the same system — a named era and institution where the identical incentive or structural dynamic operated. Never fabricate a historical event or date to force a rhyme; a reader who checks must find it. A vague \u2018throughout history\u2019 with no named instance is not a precedent. A metaphor (\u2018it is like a telescope\u2019) is decorative and banned.",
+  "",
+  "CROSS-DOMAIN SYNTHESIS: the essay\u2019s spine is the universal system, and you must show it operating in genuinely different domains — engineering, economics, biology, law, politics, infrastructure, finance, military history — not as a list of analogies but as evidence the system is domain-independent. A decorative stock prop is banned; a historical recurrence of the same incentive structure is required. Breadth is the point: an essay that never leaves its source domain has not found the signal.",
   "",
   "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact — not a summary, not a resolution, not a flourish.",
   "",
@@ -227,7 +229,7 @@ var Q08_DIRECTIVE = [
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
   "- No first person. No preamble, no meta-commentary about the essay itself.",
   "- 1200-1800 words. This is a requirement, not a suggestion: essays under this length are rejected. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
-  "- Output: valid Markdown, H1 title first, then the essay. The title must be concrete and specific to this signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
+  "- Output: valid Markdown, H1 title first, then the essay. The title must name the system, not the incident — concrete but general, surviving the disappearance of this particular signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
   "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
 
@@ -298,7 +300,8 @@ var TITLE_FORMULA_RE = /^when .+ meets .+$/i;
 var TITLE_COLON_RE = /: the (hidden|invisible|unseen|silent|quiet) /i;
 var BANNED_H2_RE = /^#+\s+(how the flaw manifests|cascading failures|a minimal (alternative|framework|approach)|connections across disciplines|echoes from the past|a path forward|the lens restored|lessons for the future|the pattern across disciplines|unexpected parallels|the broader lesson)\b/i;
 var FORMULA_H2_RE = /^#+\s+the (hidden|invisible|unseen|unspoken|silent|quiet) (lever|bottleneck|premise|flaw|cost|gear|engine|handoff|mismatch)\b/i;
-var STOCK_PROPS_RE = /\b(guild stamps?|telescopes?|galileo|alchem|philosopher.s stone|printing press|movable type|sonar|aperture|legal contracts?|aerospace redundancy|vellum)\b/i;
+var STOCK_PROPS_RE = /\b(telescopes?|galileo|alchem|philosopher.s stone|sonar|aperture|aerospace redundancy)\b/i;
+var HISTORICAL_RE = /\b(\d{3}0s|1[0-9]th century|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient (greece|rome)|roman empire|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial era|belle ?poque|preindustrial|nineteenth century|eighteenth century|seventeenth century|sixteenth century|fifteenth century)\b/i;
 var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
 
 function gate(text) {
@@ -337,6 +340,7 @@ function gate(text) {
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier — no fabricated IDs");
   var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
   if (curAmt && curAmt.length) problems.push("large currency amount(s) " + curAmt.slice(0, 3).join(", ") + " — likely fabricated; use the signal's figures or none");
+  if (!HISTORICAL_RE.test(text)) problems.push("no historical grounding — name at least one historical precedent (a named era, century, or pre-modern institution)");
 
   var lines = text.split("\n");
   var bulletLines = 0, tableLines = 0, paraLines = 0;
