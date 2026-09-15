@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.3";
+var VERSION = "0.7.4";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -222,6 +222,10 @@ var Q08_DIRECTIVE = [
   "CONCRETENESS: name the real things — people, companies, platforms, formats, artifacts — exactly as they are. Anonymizing the material ('a large search company', 'a video platform') is a register failure: it drains the essay of information. A sentence without a specific referent is a sentence to rewrite.",
   "",
   "INFORMATION DENSITY: mine the signal for its specific facts — numbers, names, measurements, mechanisms, quoted text — and put them in the essay. An essay that could have been written without reading the signal is rejected.",
+  "",
+  "NO INVENTION: never invent a number, count, price, percentage, quotation, or mechanism that the signal does not supply. Use the signal's figures exactly. Never harden a general statement into a precise one: 'several bucks' is not '$2–$3'; 'proxies' is not '30 residential proxies'. A reader who checks must find the figure behind it. Fabricated precision is the worst failure this publication can commit.",
+  "",
+  "PROSE, NOT SCHEME: write prose, not a specification. Never enumerate with '(1) ... (2) ...' in running text, and never write like a design document; the reader is a person, not a reviewer.",
   "",
   "CONNECTIONS: at most two cross-domain connections, each load-bearing — it must change how the reader understands the mechanism. Stock props are banned: no guild stamps, no telescopes, no alchemy, no philosopher's stones, no printing presses, no sonar, no camera apertures, no legal contracts, no aerospace redundancy. If the analogy would fit a different essay equally well, cut it.",
   "",
@@ -480,10 +484,10 @@ async function generate(env) {
   // Skip already-processed signal IDs today (source-scoped)
   var processed = await env.DB.prepare(
     "SELECT source_id FROM signal_log WHERE processed_at >= ?1"
-  ).bind(utcDay() + "T00:00:00.000Z").all();
+  ).bind(new Date(Date.now() - 7 * 864e5).toISOString()).all();
   var processedIds = new Set((processed.results || []).map(r => String(r.source_id)));
   var candidates = stories.filter(s => !processedIds.has(String((s.source||"hn") + ":" + s.id)));
-  if (!candidates.length) return { ok: false, reason: "all signals already processed today" };
+  if (!candidates.length) return { ok: false, reason: "all signals already processed in the last 7 days" };
   // Source diversity: prefer a source other than the last one used
   var lastRun = await env.DB.prepare("SELECT top_signal FROM engine_runs WHERE top_signal != '' ORDER BY id DESC LIMIT 1").first();
   var lastSource = lastRun ? (String(lastRun.top_signal||"").split(":")[0]) : "";
@@ -541,6 +545,12 @@ async function generate(env) {
     }
   }
   if (!gateResult.ok) {
+    // Mark the signal processed so the same story is not retried by the next runs.
+    try {
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO signal_log (id, source, source_id, title, url, points, num_comments, ratio, volatility_score, friction_point, signal_strength, status, processed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).bind("sig-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), (story.source || "hn"), (story.source || "hn") + ":" + String(story.id || ""), story.title, story.url, story.points, story.num_comments, story.ratio, story.volatility_score, friction.friction_point, friction.signal_strength, "gate_failed", nowIso()).run();
+    } catch (e) {}
     await env.DB.prepare(
       "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error) VALUES (?,?,?,?,?,?,?,?)"
     ).bind(stories.length, candidates.length, 0, (story.source||"hn") + ":" + story.title.slice(0, 80), piece.model, Date.now()-t0, "gate_failed", gateResult.problems.join("; ")).run();
