@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.4";
+var VERSION = "1.3.5";
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -130,6 +130,9 @@ __name(storeNote, "storeNote");
 async function handleIntent(env, body, source, device) {
   const desire = clamp(body.desire, 4e3);
   if (!desire) return { error: "desire required" };
+  if (isNoise(desire) || /^(name|title|summarize|summarise)\s+(this|the)\s+(conversation|chat)/i.test(desire)) {
+    return { silent: true, reason: "meta", type: "unknown", status: "silenced" };
+  }
   const ai = await classifyAI(env, desire);
   const cls = ai || classifyRules(desire);
   if (!cls.summary) {

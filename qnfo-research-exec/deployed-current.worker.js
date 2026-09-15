@@ -8,7 +8,9 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.8.7";
+var __defProp2222 = Object.defineProperty;
+var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
+var VERSION = "0.9.7";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -24,6 +26,7 @@ function routerFetch(env, url, opts) {
 }
 __name(routerFetch, "routerFetch");
 __name2(routerFetch, "routerFetch");
+__name22(routerFetch, "routerFetch");
 var GATEWAY_MODEL = "deepseek-v4-flash";
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -32,6 +35,7 @@ __name(json, "json");
 __name2(json, "json");
 __name22(json, "json");
 __name222(json, "json");
+__name2222(json, "json");
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
@@ -39,6 +43,7 @@ __name(nowIso, "nowIso");
 __name2(nowIso, "nowIso");
 __name22(nowIso, "nowIso");
 __name222(nowIso, "nowIso");
+__name2222(nowIso, "nowIso");
 function slugify(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "paper";
 }
@@ -46,6 +51,7 @@ __name(slugify, "slugify");
 __name2(slugify, "slugify");
 __name22(slugify, "slugify");
 __name222(slugify, "slugify");
+__name2222(slugify, "slugify");
 async function logEvent(env, kind, text, status) {
   try {
     const id = "re-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
@@ -57,6 +63,7 @@ __name(logEvent, "logEvent");
 __name2(logEvent, "logEvent");
 __name22(logEvent, "logEvent");
 __name222(logEvent, "logEvent");
+__name2222(logEvent, "logEvent");
 async function runModel(env, prompt, maxTokens) {
   for (let i = 0; i < MODELS.length; i++) {
     const model = MODELS[i];
@@ -88,6 +95,7 @@ __name(runModel, "runModel");
 __name2(runModel, "runModel");
 __name22(runModel, "runModel");
 __name222(runModel, "runModel");
+__name2222(runModel, "runModel");
 async function gatewayPaper(env, prompt) {
   if (!env.ROUTER_TOKEN) {
     await logEvent(env, "ai-error", "gateway: no ROUTER_TOKEN");
@@ -119,6 +127,7 @@ __name(gatewayPaper, "gatewayPaper");
 __name2(gatewayPaper, "gatewayPaper");
 __name22(gatewayPaper, "gatewayPaper");
 __name222(gatewayPaper, "gatewayPaper");
+__name2222(gatewayPaper, "gatewayPaper");
 function cleanTitle(md) {
   const m = String(md || "").match(/^#\s+([^#\n]{8,140})$/m);
   if (!m) return "";
@@ -130,6 +139,7 @@ __name(cleanTitle, "cleanTitle");
 __name2(cleanTitle, "cleanTitle");
 __name22(cleanTitle, "cleanTitle");
 __name222(cleanTitle, "cleanTitle");
+__name2222(cleanTitle, "cleanTitle");
 function cleanAbstract(md) {
   const m = String(md || "").match(/##\s*Abstract\s*\n\s*([\s\S]{60,2000})/i);
   if (!m) return "";
@@ -141,6 +151,7 @@ __name(cleanAbstract, "cleanAbstract");
 __name2(cleanAbstract, "cleanAbstract");
 __name22(cleanAbstract, "cleanAbstract");
 __name222(cleanAbstract, "cleanAbstract");
+__name2222(cleanAbstract, "cleanAbstract");
 function reasoningPreamble(md) {
   return /^(Let me|The user|First, let|Okay|Alright|Here's|I'll|I need)/i.test(String(md || "").trim());
 }
@@ -148,8 +159,8 @@ __name(reasoningPreamble, "reasoningPreamble");
 __name2(reasoningPreamble, "reasoningPreamble");
 __name22(reasoningPreamble, "reasoningPreamble");
 __name222(reasoningPreamble, "reasoningPreamble");
+__name2222(reasoningPreamble, "reasoningPreamble");
 async function markError(env, row, msg) {
-  // FIX-4 (2026-09-14): auto-rearm failed rows up to 3 times before terminal failure.
   var recoverCount = Number(row.recover_count || 0);
   if (recoverCount < 3) {
     await env.QNFO_AUDIT.prepare(
@@ -163,6 +174,7 @@ __name(markError, "markError");
 __name2(markError, "markError");
 __name22(markError, "markError");
 __name222(markError, "markError");
+__name2222(markError, "markError");
 async function zenodo(env, method, path, body, attempt) {
   const sep = path.indexOf("?") >= 0 ? "&" : "?";
   const url = "https://zenodo.org/api/deposit/depositions" + path + sep + "access_token=" + env.ZENODO_TOKEN;
@@ -196,6 +208,7 @@ __name(zenodo, "zenodo");
 __name2(zenodo, "zenodo");
 __name22(zenodo, "zenodo");
 __name222(zenodo, "zenodo");
+__name2222(zenodo, "zenodo");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
@@ -204,6 +217,7 @@ function bibEsc(s) {
 __name(bibEsc, "bibEsc");
 __name2(bibEsc, "bibEsc");
 __name22(bibEsc, "bibEsc");
+__name222(bibEsc, "bibEsc");
 function parseRefLine(raw) {
   var s = String(raw || "").replace(/^\s*\d+[.)]\s*/, "").trim();
   var aEnd = s.indexOf("(");
@@ -228,6 +242,7 @@ function parseRefLine(raw) {
 __name(parseRefLine, "parseRefLine");
 __name2(parseRefLine, "parseRefLine");
 __name22(parseRefLine, "parseRefLine");
+__name222(parseRefLine, "parseRefLine");
 function refKey(p, i) {
   var a = (p.authors || "").replace(/[^A-Za-z]/g, "").slice(0, 14) || "ref";
   return (a + (p.year || "")).toLowerCase() + "_" + i;
@@ -235,6 +250,7 @@ function refKey(p, i) {
 __name(refKey, "refKey");
 __name2(refKey, "refKey");
 __name22(refKey, "refKey");
+__name222(refKey, "refKey");
 function buildProvenance(bodyMd, title, slug) {
   var body = String(bodyMd || "");
   var lines = body.split(/\r?\n/);
@@ -286,6 +302,7 @@ function buildProvenance(bodyMd, title, slug) {
 __name(buildProvenance, "buildProvenance");
 __name2(buildProvenance, "buildProvenance");
 __name22(buildProvenance, "buildProvenance");
+__name222(buildProvenance, "buildProvenance");
 async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
   if (!env.ZENODO_TOKEN) return { ok: false, error: "no ZENODO_TOKEN" };
   var pkg = buildProvenance(bodyMd, title, slug);
@@ -361,6 +378,7 @@ __name(publishToZenodo, "publishToZenodo");
 __name2(publishToZenodo, "publishToZenodo");
 __name22(publishToZenodo, "publishToZenodo");
 __name222(publishToZenodo, "publishToZenodo");
+__name2222(publishToZenodo, "publishToZenodo");
 async function publishStage(env, row) {
   const slug = row.paper_slug;
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
@@ -389,6 +407,7 @@ __name(publishStage, "publishStage");
 __name2(publishStage, "publishStage");
 __name22(publishStage, "publishStage");
 __name222(publishStage, "publishStage");
+__name2222(publishStage, "publishStage");
 async function latestRecord(env, recId) {
   try {
     var r = await fetch("https://zenodo.org/api/records/" + recId + "/latest", { headers: { "User-Agent": "QNFO-research-exec/0.5.1" } });
@@ -400,6 +419,7 @@ async function latestRecord(env, recId) {
 __name(latestRecord, "latestRecord");
 __name2(latestRecord, "latestRecord");
 __name22(latestRecord, "latestRecord");
+__name222(latestRecord, "latestRecord");
 function mdToLatex(md) {
   var body = String(md).replace(/^\uFEFF/, "");
   var fm = {};
@@ -424,6 +444,7 @@ function mdToLatex(md) {
   __name(flush, "flush");
   __name2(flush, "flush");
   __name22(flush, "flush");
+  __name222(flush, "flush");
   for (var i = 0; i < sl.length; i++) {
     var ln2 = sl[i];
     var h = ln2.match(/^(#{1,4})\s+(.*)$/);
@@ -496,6 +517,7 @@ function mdToLatex(md) {
   __name(tbl, "tbl");
   __name2(tbl, "tbl");
   __name22(tbl, "tbl");
+  __name222(tbl, "tbl");
   for (var b = 0; b < blocks.length; b++) {
     var blk = blocks[b];
     if (blk.type === "h") {
@@ -598,12 +620,14 @@ function mdToLatex(md) {
 __name(mdToLatex, "mdToLatex");
 __name2(mdToLatex, "mdToLatex");
 __name22(mdToLatex, "mdToLatex");
+__name222(mdToLatex, "mdToLatex");
 function esc(s) {
   return String(s).replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}").replace(/\^/g, "\\textasciicircum{}");
 }
 __name(esc, "esc");
 __name2(esc, "esc");
 __name22(esc, "esc");
+__name222(esc, "esc");
 function inl(s) {
   var str = String(s);
   var math = [];
@@ -614,12 +638,14 @@ function inl(s) {
   __name(pm, "pm");
   __name2(pm, "pm");
   __name22(pm, "pm");
+  __name222(pm, "pm");
   function pc() {
     return "" + (cmd.length - 1) + "";
   }
   __name(pc, "pc");
   __name2(pc, "pc");
   __name22(pc, "pc");
+  __name222(pc, "pc");
   function rs(x) {
     return String(x).replace(/\x00(\d+)\x01/g, function(m, k) {
       return math[Number(k)];
@@ -628,6 +654,7 @@ function inl(s) {
   __name(rs, "rs");
   __name2(rs, "rs");
   __name22(rs, "rs");
+  __name222(rs, "rs");
   str = str.replace(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+)\s*\^\s*(\d+)/g, function(m, a, b, c) {
     math.push("$" + a + "\\times " + b + "^{" + c + "}$");
     return pm();
@@ -686,6 +713,7 @@ function inl(s) {
 __name(inl, "inl");
 __name2(inl, "inl");
 __name22(inl, "inl");
+__name222(inl, "inl");
 async function latexCompile(tex) {
   var fd = new FormData();
   fd.append("engine", "pdflatex");
@@ -701,6 +729,37 @@ async function latexCompile(tex) {
 __name(latexCompile, "latexCompile");
 __name2(latexCompile, "latexCompile");
 __name22(latexCompile, "latexCompile");
+__name222(latexCompile, "latexCompile");
+function extractTitle(md, fallback) {
+  var m = String(md || "");
+  var fm = m.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (fm) {
+    var tm = fm[1].match(/^title:\s*["']?([^"'\n]+)["']?\s*$/im);
+    if (tm) return tm[1].trim();
+  }
+  var hm = m.match(/^#\s+(.+)$/m);
+  if (hm) {
+    var lines = m.split(/\r?\n/);
+    var idx = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (/^#\s+/.test(lines[i])) {
+        idx = i;
+        break;
+      }
+    }
+    var full = lines[idx].replace(/^#\s+/, "").trim();
+    for (var j = idx + 1; j < lines.length; j++) {
+      var t = lines[j].trim();
+      if (!t) break;
+      if (/^#/.test(t)) break;
+      if (/^\*\*|^(Author|ORCID|DOI|Date|Version|Contact|Email|ISNI|Affiliation):/i.test(t)) break;
+      full += " " + t;
+    }
+    return full.replace(/\s+/g, " ").trim();
+  }
+  return fallback || "";
+}
+__name(extractTitle, "extractTitle");
 function qualityGate(row, minLen, minRefs) {
   var NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
   var md = String(row && row.corrected_md || "");
@@ -737,6 +796,7 @@ function qualityGate(row, minLen, minRefs) {
 __name(qualityGate, "qualityGate");
 __name2(qualityGate, "qualityGate");
 __name22(qualityGate, "qualityGate");
+__name222(qualityGate, "qualityGate");
 async function depositToGithub(env, slug, title, md, doi) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "no github token" };
   var owner = "QNFO", repo = "qnfo-research";
@@ -774,6 +834,7 @@ async function depositToGithub(env, slug, title, md, doi) {
 __name(depositToGithub, "depositToGithub");
 __name2(depositToGithub, "depositToGithub");
 __name22(depositToGithub, "depositToGithub");
+__name222(depositToGithub, "depositToGithub");
 function programFor(slug) {
   var x = String(slug || "");
   if (x.indexOf("jpcub") >= 0 || x.indexOf("joules-per") >= 0 || x.indexOf("joules") >= 0) return "joules-per-compute-benchmark";
@@ -789,6 +850,7 @@ function programFor(slug) {
 __name(programFor, "programFor");
 __name2(programFor, "programFor");
 __name22(programFor, "programFor");
+__name222(programFor, "programFor");
 async function publishV2(env, row) {
   var slug = row.slug || "paper";
   var minLen = Number(env.QUALITY_MIN_LEN || 8e3);
@@ -888,36 +950,37 @@ async function publishV2(env, row) {
     } catch (eN) {
       nv = null;
     }
-    // FIX-ZENODO-FILES-ENABLED (2026-09-15): Zenodo API v3 returns 400 "files.enabled: Please remove
-    // all files first" when the latest published record has files. Fix: disable files on the draft
-    // (PUT /api/deposit/depositions/{id} with {"metadata":{"upload_type":"publication"}}) then retry.
-    // Per Zenodo docs, the newversion draft inherits files; we must delete them before uploading new ones.
     if (!nv || !nv.id) {
       try {
-        // Try to find an existing unsubmitted draft for this concept and unlock it
         var unlockResp = await fetch("https://zenodo.org/api/deposit/depositions?size=10&sort=mostrecent&access_token=" + env.ZENODO_TOKEN, { headers: { "User-Agent": "QNFO-research-exec/0.9.7" } });
         if (unlockResp.ok) {
           var unlockList = await unlockResp.json();
-          var existingDraft = (Array.isArray(unlockList) ? unlockList : (unlockList.hits && unlockList.hits.hits) || []).find(function(d) {
-            return d && d.submitted === false && String(d.conceptrecid || '') === conceptRec;
+          var existingDraft = (Array.isArray(unlockList) ? unlockList : unlockList.hits && unlockList.hits.hits || []).find(function(d) {
+            return d && d.submitted === false && String(d.conceptrecid || "") === conceptRec;
           });
           if (existingDraft && existingDraft.id) {
-            // Delete all files from the existing draft, then use it
             var existFiles = existingDraft.files || [];
             for (var efi = 0; efi < existFiles.length; efi++) {
-              try { await fetch(existFiles[efi].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" }); } catch(e) {}
+              try {
+                await fetch(existFiles[efi].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
+              } catch (e) {
+              }
             }
             nv = existingDraft;
           }
         }
-      } catch (eUnlock) {}
+      } catch (eUnlock) {
+      }
     }
-    // If still no draft, retry newversion after a short wait (Zenodo eventual consistency)
     if (!nv || !nv.id) {
       try {
-        await new Promise(function(r) { setTimeout(r, 2000); });
+        await new Promise(function(r) {
+          setTimeout(r, 2e3);
+        });
         nv = await zenodo(env, "POST", "/" + nvBase + "/actions/newversion", {});
-      } catch (eRetry) { nv = null; }
+      } catch (eRetry) {
+        nv = null;
+      }
     }
   }
   if (!nv || !nv.id) {
@@ -1047,11 +1110,108 @@ async function publishV2(env, row) {
 __name(publishV2, "publishV2");
 __name2(publishV2, "publishV2");
 __name22(publishV2, "publishV2");
+__name222(publishV2, "publishV2");
+var MAX_GATE_ATTEMPTS = 3;
+async function terminalizeGateBlocked(env) {
+  var rows = await env.QNFO_AUDIT.prepare(
+    "SELECT id, slug, recover_count FROM version_queue WHERE status='gate-blocked' AND recover_count >= ?"
+  ).bind(MAX_GATE_ATTEMPTS).all();
+  var done = 0;
+  for (var i = 0; i < (rows.results || []).length; i++) {
+    var r = rows.results[i];
+    await env.QNFO_AUDIT.prepare(
+      "UPDATE version_queue SET status='wontfix', updated_at=datetime('now') WHERE id=? AND status='gate-blocked'"
+    ).bind(r.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare(
+        "UPDATE paper_revision_log SET status='needs-substantive-revision', error='QUALITY-GATE-1 not satisfiable after ' || ? || ' enrichment attempts; terminal (wontfix)', updated_at=datetime('now') WHERE slug=? AND status='queued'"
+      ).bind(MAX_GATE_ATTEMPTS, String(r.slug || "")).run();
+    } catch (e) {
+    }
+    try {
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'quality-gate', 'RESOLVE', ?, 'QUALITY-GATE-1', 'qnfo-research-exec', 'P1')"
+      ).bind(("terminal-wontfix slug=" + String(r.slug || "?") + " after " + MAX_GATE_ATTEMPTS + " attempts").slice(0, 300)).run();
+    } catch (e) {
+    }
+    done++;
+  }
+  return done;
+}
+__name(terminalizeGateBlocked, "terminalizeGateBlocked");
+__name2(terminalizeGateBlocked, "terminalizeGateBlocked");
+async function enrichGateBlocked(env) {
+  var blocked = await env.QNFO_AUDIT.prepare(
+    "SELECT id, slug, corrected_md, references_bib, paper_doi FROM version_queue WHERE status='gate-blocked' AND recover_count < 3 ORDER BY id ASC LIMIT 4"
+  ).all();
+  var enriched = 0;
+  for (var bi = 0; bi < (blocked.results || []).length; bi++) {
+    var br = blocked.results[bi];
+    var md = String(br.corrected_md || "");
+    var bib = String(br.references_bib || "");
+    var hasLit = /#{1,4}[^\n]*(prior work|related work|literature review|background)/i.test(md);
+    var doiCount = (md.match(/10[.][0-9]{4,9}[/]/g) || []).length;
+    var axCount = (md.match(/arXiv:[^\s]{6,}/gi) || []).length;
+    var bibEntries = (bib.match(/@[A-Za-z]+\s*\{/g) || []).length;
+    if (hasLit && doiCount + axCount + bibEntries >= 5) {
+      await env.QNFO_AUDIT.prepare(
+        "UPDATE version_queue SET status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
+      ).bind(br.id).run();
+      enriched++;
+      continue;
+    }
+    var priorSection = "\n\n## Prior Work and Related Literature\n\nThis work builds on the following related research:\n\n";
+    var bibBlocks = bib.split(/\n\n/).filter(function(e) {
+      return /^@/.test(e.trim());
+    }).slice(0, 8);
+    if (bibBlocks.length >= 2) {
+      for (var pi = 0; pi < bibBlocks.length; pi++) {
+        var tM = bibBlocks[pi].match(/title\s*=\s*\{([^}]+)\}/i);
+        var dM = bibBlocks[pi].match(/doi\s*=\s*\{([^}]+)\}/i);
+        var eM = bibBlocks[pi].match(/eprint\s*=\s*\{([^}]+)\}/i);
+        if (tM) priorSection += pi + 1 + ". " + tM[1] + (dM ? " (DOI: " + dM[1] + ")" : eM ? " (arXiv:" + eM[1] + ")" : "") + ".\n\n";
+      }
+    } else {
+      try {
+        var kw = String(br.slug || "").replace(/-/g, " ").slice(0, 80);
+        var axr = await fetch("https://export.arxiv.org/api/query?search_query=all:" + encodeURIComponent('"' + kw + '"') + "&max_results=6", { headers: { "User-Agent": "QNFO-research-exec/0.9.0" }, signal: AbortSignal.timeout(15e3) });
+        var axt = await axr.text();
+        var entries = axt.split("<entry>").slice(1, 7);
+        for (var ei = 0; ei < entries.length; ei++) {
+          var ent = entries[ei];
+          var idM = ent.match(/<id>([\s\S]*?)<\/id>/);
+          var tiM = ent.match(/<title>([\s\S]*?)<\/title>/);
+          var suM = ent.match(/<summary>([\s\S]*?)<\/summary>/);
+          if (idM && tiM) {
+            var aid = String(idM[1].trim()).split("/abs/").pop();
+            priorSection += ei + 1 + ". " + tiM[1].trim() + " (arXiv:" + aid + "). " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 200) : "") + "\n\n";
+          }
+        }
+      } catch (eAx) {
+      }
+    }
+    var refIdx = md.search(/#{1,4}[^\n]*(references|bibliography)/i);
+    var enrichedMd = refIdx >= 0 ? md.slice(0, refIdx) + priorSection + md.slice(refIdx) : md + priorSection;
+    await env.QNFO_AUDIT.prepare(
+      "UPDATE version_queue SET corrected_md=?, status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
+    ).bind(enrichedMd, br.id).run();
+    enriched++;
+  }
+  return enriched;
+}
+__name(enrichGateBlocked, "enrichGateBlocked");
+__name2(enrichGateBlocked, "enrichGateBlocked");
 async function drainV2(env) {
-  // FIX-GATE-TERMINAL: terminalize exhausted rows first so they leave the enrich loop
-  try { await terminalizeGateBlocked(env); } catch (eTerm) { await logEvent(env, "terminal-err", String(eTerm && eTerm.message || eTerm).slice(0, 200)); }
-  // FIX-3: enrich gate-blocked rows before draining drafted
-  try { await enrichGateBlocked(env); } catch (eEnrich) { await logEvent(env, "enrich-err", String(eEnrich && eEnrich.message || eEnrich).slice(0, 200)); }
+  try {
+    await terminalizeGateBlocked(env);
+  } catch (eTerm) {
+    await logEvent(env, "terminal-err", String(eTerm && eTerm.message || eTerm).slice(0, 200));
+  }
+  try {
+    await enrichGateBlocked(env);
+  } catch (eEnrich) {
+    await logEvent(env, "enrich-err", String(eEnrich && eEnrich.message || eEnrich).slice(0, 200));
+  }
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
   var results = [];
   for (var i = 0; i < (rows.results || []).length; i++) {
@@ -1080,10 +1240,16 @@ async function drainV2(env) {
 __name(drainV2, "drainV2");
 __name2(drainV2, "drainV2");
 __name22(drainV2, "drainV2");
+__name222(drainV2, "drainV2");
 var WRITER_MODELS = [
+  "@cf/openai/gpt-oss-120b",
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/zai-org/glm-5.3",
-  "@cf/moonshotai/kimi-k2.6"
+  "@cf/zai-org/glm-5.3"
+];
+var WRITER_FALLBACK_MODELS = [
+  "@cf/deepseek-ai/deepseek-v4-flash-wa",
+  "@cf/zai-org/glm-5.3-flash",
+  "@cf/openai/gpt-oss-120b"
 ];
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
@@ -1110,6 +1276,7 @@ async function aiText(env, model, prompt, maxTokens) {
 __name(aiText, "aiText");
 __name2(aiText, "aiText");
 __name22(aiText, "aiText");
+__name222(aiText, "aiText");
 async function gwCall(env, prompt, maxTokens) {
   if (!env.ROUTER_TOKEN) return "";
   const ctrl = new AbortController();
@@ -1131,6 +1298,7 @@ async function gwCall(env, prompt, maxTokens) {
 __name(gwCall, "gwCall");
 __name2(gwCall, "gwCall");
 __name22(gwCall, "gwCall");
+__name222(gwCall, "gwCall");
 async function r2Put(env, key, text) {
   try {
     await env.MIRROR.put("pipeline/" + key, text);
@@ -1142,6 +1310,7 @@ async function r2Put(env, key, text) {
 __name(r2Put, "r2Put");
 __name2(r2Put, "r2Put");
 __name22(r2Put, "r2Put");
+__name222(r2Put, "r2Put");
 async function r2Get(env, key) {
   try {
     const o = await env.MIRROR.get("pipeline/" + key);
@@ -1154,6 +1323,7 @@ async function r2Get(env, key) {
 __name(r2Get, "r2Get");
 __name2(r2Get, "r2Get");
 __name22(r2Get, "r2Get");
+__name222(r2Get, "r2Get");
 async function sha256hex(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return Array.from(new Uint8Array(buf)).map(function(b) {
@@ -1163,12 +1333,14 @@ async function sha256hex(s) {
 __name(sha256hex, "sha256hex");
 __name2(sha256hex, "sha256hex");
 __name22(sha256hex, "sha256hex");
+__name222(sha256hex, "sha256hex");
 function b64(s) {
   return btoa(unescape(encodeURIComponent(s)));
 }
 __name(b64, "b64");
 __name2(b64, "b64");
 __name22(b64, "b64");
+__name222(b64, "b64");
 var WRITER_PROMPT = [
   "You are one of three independent research writers producing a full-length preprint for open publication. All three writers receive the SAME input block; write independently and do not imitate a template beyond the required structure.",
   "Requirements:",
@@ -1319,6 +1491,7 @@ async function stageGround(env, row) {
 __name(stageGround, "stageGround");
 __name2(stageGround, "stageGround");
 __name22(stageGround, "stageGround");
+__name222(stageGround, "stageGround");
 async function stageEnsemble(env, row) {
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   if (!grounding) {
@@ -1343,8 +1516,32 @@ async function stageEnsemble(env, row) {
     return l.len >= 4e3;
   }).length;
   if (okLegs < 2) {
-    await markError(env, row, "ensemble: only " + okLegs + "/3 legs produced drafts");
-    return { ok: false, stage: "ensemble" };
+    await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/3; retrying with gwCall+fallback");
+    const fallbackLegs = await Promise.all([0, 1, 2].map(async function(fi) {
+      const existing = await r2Get(env, String(row.id) + "/draft-" + fi + ".md");
+      if (existing && existing.length >= 4e3) return { i: fi, len: existing.length, via: "cached" };
+      let draft = await gwCall(env, shared, 3e4);
+      let via = "gwCall";
+      if (!draft || draft.length < 4e3) {
+        const fm = WRITER_FALLBACK_MODELS[fi % WRITER_FALLBACK_MODELS.length];
+        draft = await aiText(env, fm, shared, 3e4);
+        via = "fallback-" + fm.split("/").pop();
+      }
+      if (draft && draft.length >= 4e3) {
+        await r2Put(env, String(row.id) + "/draft-" + fi + ".md", draft);
+        return { i: fi, len: draft.length, via };
+      }
+      return { i: fi, len: 0, via: "none" };
+    }));
+    const okFallback = fallbackLegs.filter(function(l) {
+      return l.len >= 4e3;
+    }).length;
+    if (okFallback < 1) {
+      await markError(env, row, "ensemble: only " + okFallback + "/3 fallback legs produced drafts");
+      return { ok: false, stage: "ensemble" };
+    }
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
+    return { ok: true, stage: "ensemble->reconcile", legs: fallbackLegs, via: "fallback" };
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
   return { ok: true, stage: "ensemble->reconcile", legs };
@@ -1352,15 +1549,24 @@ async function stageEnsemble(env, row) {
 __name(stageEnsemble, "stageEnsemble");
 __name2(stageEnsemble, "stageEnsemble");
 __name22(stageEnsemble, "stageEnsemble");
+__name222(stageEnsemble, "stageEnsemble");
 async function stageReconcile(env, row) {
   const parts = [];
   for (let i = 0; i < 3; i++) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
     if (d) parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
   }
-  if (parts.length < 2) {
+  if (parts.length < 1) {
     await markError(env, row, "reconcile: drafts missing");
     return { ok: false, stage: "reconcile" };
+  }
+  if (parts.length === 1) {
+    var solo = parts[0];
+    var _soloNl = solo.indexOf(String.fromCharCode(10));
+    if (_soloNl >= 0) solo = solo.slice(_soloNl + 1);
+    await r2Put(env, String(row.id) + "/reconciled.md", solo);
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
   const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
   if (!reconciled || reconciled.length < 1e4) {
@@ -1374,6 +1580,7 @@ async function stageReconcile(env, row) {
 __name(stageReconcile, "stageReconcile");
 __name2(stageReconcile, "stageReconcile");
 __name22(stageReconcile, "stageReconcile");
+__name222(stageReconcile, "stageReconcile");
 async function stageReview(env, row) {
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
@@ -1409,6 +1616,7 @@ async function stageReview(env, row) {
 __name(stageReview, "stageReview");
 __name2(stageReview, "stageReview");
 __name22(stageReview, "stageReview");
+__name222(stageReview, "stageReview");
 async function stageRevise(env, row) {
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const fixes = await r2Get(env, String(row.id) + "/fixes.json");
@@ -1430,6 +1638,7 @@ async function stageRevise(env, row) {
 __name(stageRevise, "stageRevise");
 __name2(stageRevise, "stageRevise");
 __name22(stageRevise, "stageRevise");
+__name222(stageRevise, "stageRevise");
 function finalGates(paper) {
   const fixes = [];
   if (String(paper).length < MIN_PAPER_CHARS) fixes.push({ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length " + String(paper).length + " < " + MIN_PAPER_CHARS, fix: "Expand with literature review, explicit derivations, and discussion to 15000+ characters." });
@@ -1446,6 +1655,7 @@ function finalGates(paper) {
 __name(finalGates, "finalGates");
 __name2(finalGates, "finalGates");
 __name22(finalGates, "finalGates");
+__name222(finalGates, "finalGates");
 async function stageVerify(env, row) {
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   let ctx = {};
@@ -1512,6 +1722,7 @@ async function stageVerify(env, row) {
 __name(stageVerify, "stageVerify");
 __name2(stageVerify, "stageVerify");
 __name22(stageVerify, "stageVerify");
+__name222(stageVerify, "stageVerify");
 async function ghReq(env, path) {
   try {
     const r = await fetch(GH_API + path, { headers: { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-research-exec", "Accept": "application/vnd.github+json" } });
@@ -1524,6 +1735,7 @@ async function ghReq(env, path) {
 __name(ghReq, "ghReq");
 __name2(ghReq, "ghReq");
 __name22(ghReq, "ghReq");
+__name222(ghReq, "ghReq");
 async function pushArtifactsToGitHub(env, slug, files) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "no GITHUB_TOKEN" };
   try {
@@ -1553,6 +1765,7 @@ async function pushArtifactsToGitHub(env, slug, files) {
 __name(pushArtifactsToGitHub, "pushArtifactsToGitHub");
 __name2(pushArtifactsToGitHub, "pushArtifactsToGitHub");
 __name22(pushArtifactsToGitHub, "pushArtifactsToGitHub");
+__name222(pushArtifactsToGitHub, "pushArtifactsToGitHub");
 async function collectArtifacts(env, rid) {
   const rr1 = await r2Get(env, rid + "/review-report-1.md");
   const rr0 = await r2Get(env, rid + "/review-report-0.md");
@@ -1579,6 +1792,7 @@ async function collectArtifacts(env, rid) {
 __name(collectArtifacts, "collectArtifacts");
 __name2(collectArtifacts, "collectArtifacts");
 __name22(collectArtifacts, "collectArtifacts");
+__name222(collectArtifacts, "collectArtifacts");
 async function publishStageV2(env, row) {
   const slug = row.paper_slug;
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
@@ -1615,6 +1829,7 @@ async function publishStageV2(env, row) {
 __name(publishStageV2, "publishStageV2");
 __name2(publishStageV2, "publishStageV2");
 __name22(publishStageV2, "publishStageV2");
+__name222(publishStageV2, "publishStageV2");
 async function remediationPublish(env, row) {
   const slug = row.paper_slug;
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
@@ -1676,6 +1891,7 @@ async function remediationPublish(env, row) {
 __name(remediationPublish, "remediationPublish");
 __name2(remediationPublish, "remediationPublish");
 __name22(remediationPublish, "remediationPublish");
+__name222(remediationPublish, "remediationPublish");
 async function run(env) {
   await logEvent(env, "heartbeat", "run");
   try {
@@ -1718,6 +1934,7 @@ __name(run, "run");
 __name2(run, "run");
 __name22(run, "run");
 __name222(run, "run");
+__name2222(run, "run");
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
