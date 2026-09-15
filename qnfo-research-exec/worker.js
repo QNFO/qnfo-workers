@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.5"; // FIX-RECONCILE-1DRAFT (2026-09-14): terminalize gate-blocked after N attempts (no infinite loop)
+var VERSION = "0.9.6"; // FIX-ENSEMBLE-RELIABLE (2026-09-15): promote verified-working models to primary legs
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -1169,14 +1169,14 @@ __name(drainV2, "drainV2");
 __name2(drainV2, "drainV2");
 __name22(drainV2, "drainV2");
 var WRITER_MODELS = [
+  "@cf/openai/gpt-oss-120b",
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/zai-org/glm-5.3",
-  "@cf/moonshotai/kimi-k2.6"
+  "@cf/zai-org/glm-5.3"
 ];
 var WRITER_FALLBACK_MODELS = [
-  "@cf/zai-org/glm-5.3", // verified ok (ai_model_health 2026-09-14)
-  "@cf/zai-org/glm-5.3-flash", // verified ok (ai_model_health 2026-09-14)
-  "@cf/openai/gpt-oss-120b" // verified ok (ai_model_health 2026-09-14)
+  "@cf/deepseek-ai/deepseek-v4-flash-wa",
+  "@cf/zai-org/glm-5.3-flash",
+  "@cf/openai/gpt-oss-120b"
 ]; // FIX-2 fallbacks
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
