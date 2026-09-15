@@ -1481,8 +1481,9 @@ async function stageReconcile(env, row) {
   }
   if (parts.length === 1) {
     // Single-draft reconcile: one leg produced a valid paper; skip the LLM merge.
-    var solo = parts[0].replace(/^=== WRITER [A-Z] DRAFT ===
-?/, "");
+    var solo = parts[0];
+    var _soloNl = solo.indexOf(String.fromCharCode(10));
+    if (_soloNl >= 0) solo = solo.slice(_soloNl + 1);
     await r2Put(env, String(row.id) + "/reconciled.md", solo);
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
