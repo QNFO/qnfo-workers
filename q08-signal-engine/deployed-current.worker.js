@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.6";
+var VERSION = "0.7.7";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -281,7 +281,7 @@ async function compose(env, prompt) {
     try {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 3000,
+        max_tokens: 4500,
         temperature: 0.65,
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
@@ -870,6 +870,13 @@ export default {
         if (retryPiece && retryPiece.text) {
           var retryGate = gate(retryPiece.text);
           if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
+          else if (retryGate.problems.length === 1 && /verdict/i.test(retryGate.problems[0]) && retryGate.problems[0].indexOf("self-verdict") < 0) {
+            try {
+              var vp2 = await compose(env, "You have written an essay that passed all editorial checks. Output exactly one line, nothing else, in this form:\nworth your time: yes|flat|no \u2014 one clause of justification\nUse flat only if a reader gains little beyond the source material; use no if the piece is not worth publishing.");
+              var vm3 = (vp2 && vp2.text || "").match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
+              if (vm3) { retryPiece.text = retryPiece.text.replace(/\s*$/, "") + "\n\n" + vm3[0]; retryGate = gate(retryPiece.text); if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; } }
+            } catch (e) {}
+          }
         }
       }
       if (!gateResult.ok) return json({ ok: false, error: "gate failed: " + gateResult.problems.join("; ") }, 422);
