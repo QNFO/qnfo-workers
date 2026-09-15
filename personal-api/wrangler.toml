@@ -40,3 +40,11 @@ service = "calendar-api"
 environment = "production"
 
 # Secrets (wrangler secret put): API_KEY, CAL_TOKEN, CF_TOKEN, INFRA_TOKEN
+
+# PersonalTwinAgent Durable Object (deployed; class pre-exists with live instances).
+# Binding-only on purpose: the class was created by a prior migration. Do NOT re-declare it
+# under new_classes — Cloudflare rejects "new-class migration to a class already depended on"
+# by existing Durable Objects (code 10074), verified on qnfo-ops 2026-09-14.
+[[durable_objects.bindings]]
+name = "PERSONAL_TWIN_AGENT"
+class_name = "PersonalTwinAgent"
