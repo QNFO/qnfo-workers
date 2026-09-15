@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.13";
+var VERSION = "0.7.14";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -475,6 +475,35 @@ async function feedbackScan(env) {
 // ---------------------------------------------------------------------------
 // 8. Main generation cycle
 // ---------------------------------------------------------------------------
+// Self-referential signal: a published essay's systemic claim is emitted back into
+// the fleet's signal store (signals table, source=q08) so the fleet's own self-audit
+// (fleet-control scan, kaizen watchtower, cloud-ops digest) can read its own analysis
+// and apply it to its own failure modes. Best-effort; never blocks publication.
+async function emitContentSignal(env, piece, saved) {
+  try {
+    if (!env.AUDIT) return;
+    var bodyText = String(piece.text || "").replace(/\n?worth your time:[\s\S]*$/im, "").trim();
+    var paras = bodyText.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 80; });
+    var openQ = paras.length ? paras[paras.length - 1].slice(0, 400) : "";
+    await env.AUDIT.prepare(
+      "INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+    ).bind(
+      "q08:" + saved.slug,
+      nowIso(),
+      "q08",
+      ORIGIN + "/p/" + saved.slug,
+      String(saved.title || "").slice(0, 300),
+      JSON.stringify([openQ]),
+      0.6,
+      "fleet",
+      "open",
+      nowIso()
+    ).run();
+  } catch (e) {
+    // best-effort: a failed signal write must never fail a publish
+  }
+}
+
 async function generate(env) {
   var t0 = Date.now();
   // Daily cap check
@@ -575,6 +604,7 @@ async function generate(env) {
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
   await queueForDistribution(env, saved.title, saved.slug);
   pingIndexNow(env, ORIGIN + "/p/" + saved.slug).catch(() => {});
+  emitContentSignal(env, piece, saved).catch(() => {});
   // Log run
   await env.DB.prepare(
     "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status) VALUES (?,?,?,?,?,?,?)"
