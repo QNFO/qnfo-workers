@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.4"; // FIX-GATE-TERMINAL (2026-09-14): terminalize gate-blocked after N attempts (no infinite loop)
+var VERSION = "0.9.5"; // FIX-RECONCILE-1DRAFT (2026-09-14): terminalize gate-blocked after N attempts (no infinite loop)
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -1475,9 +1475,17 @@ async function stageReconcile(env, row) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
     if (d) parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
   }
-  if (parts.length < 2) {
+  if (parts.length < 1) {
     await markError(env, row, "reconcile: drafts missing");
     return { ok: false, stage: "reconcile" };
+  }
+  if (parts.length === 1) {
+    // Single-draft reconcile: one leg produced a valid paper; skip the LLM merge.
+    var solo = parts[0].replace(/^=== WRITER [A-Z] DRAFT ===
+?/, "");
+    await r2Put(env, String(row.id) + "/reconciled.md", solo);
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
   const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
   if (!reconciled || reconciled.length < 1e4) {
