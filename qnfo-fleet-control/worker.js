@@ -985,7 +985,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.13";
+var VERSION = "0.4.14";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1449,29 +1449,74 @@ __name2(scan, "scan");
 // row (scan's canonical track-and-resolve mechanism) + a self_heal_actions row.
 // This closes the loop: content published -> signal emitted -> scan detects ->
 // self_heal_action created -> repair -> re-observe.
+// Fresh-probe map: domain -> cheap SQL probe against qnfo-audit. activeWhen=gt0
+// means the failure mode is active when the count is >0 (drift present); zero means
+// active when the count is 0 (liveness failure). Domains absent from the map keep
+// the snapshot observation.
+var SIGNAL_PROBES = {
+  registry: { sql: "SELECT COUNT(*) n FROM service_registry WHERE state='live' AND (updated_at IS NULL OR updated_at < datetime('now','-2 days'))", activeWhen: "gt0" },
+  versioning: { sql: "SELECT COUNT(*) n FROM fleet_drift_report WHERE worker != 'SCAN' AND ts >= datetime('now','-6 hours') AND note IN ('deployed-ahead','canonical-ahead')", activeWhen: "gt0" },
+  telemetry: { sql: "SELECT COUNT(*) n FROM fleet_probe_log WHERE ok=1 AND ts >= datetime('now','-1 hour')", activeWhen: "zero" },
+  "self-audit": { sql: "SELECT COUNT(*) n FROM handoffs WHERE timestamp >= datetime('now','-1 day')", activeWhen: "zero" },
+  metrics: { sql: "SELECT COUNT(*) n FROM fleet_drift_report WHERE worker='SCAN' AND ts >= datetime('now','-6 hours')", activeWhen: "zero" },
+  "content-integrity": { sql: "SELECT COUNT(*) n FROM signals WHERE source='q08' AND ts >= datetime('now','-2 days')", activeWhen: "zero" }
+};
 async function contentSignalAudit(env) {
-  var out = { signals: 0, active: 0, filed: 0, details: [] };
+  var out = { signals: 0, freshProbed: 0, active: 0, filed: 0, details: [] };
+  var probeCache = {};
   try {
     var rows = await env.AUDIT.prepare(
       "SELECT s.id, s.source, s.content, s.domain, s.evidential_weight, s.decision, fso.matches_failure_mode, fso.action_taken FROM signals s LEFT JOIN fleet_signal_observations fso ON fso.signal_id = s.id WHERE s.source IN ('q08','reading') AND s.status = 'open'"
     ).all();
     var rs = (rows && rows.results) || [];
     out.signals = rs.length;
+    var probeDomain = async function(domain) {
+      var spec = SIGNAL_PROBES[domain];
+      if (!spec) return null;
+      if (probeCache[domain] !== void 0) return probeCache[domain];
+      try {
+        var row = await env.AUDIT.prepare(spec.sql).first();
+        var n = row && row.n != null ? Number(row.n) : 0;
+        var act = spec.activeWhen === "zero" ? (n === 0 ? 1 : 0) : (n > 0 ? 1 : 0);
+        probeCache[domain] = { active: act, n };
+        return probeCache[domain];
+      } catch (e) {
+        probeCache[domain] = { active: null, n: -1 };
+        return probeCache[domain];
+      }
+    };
     for (var i = 0; i < rs.length; i++) {
       var s = rs[i];
-      var active = Number(s.matches_failure_mode) === 1;
-      var unresolved = !s.action_taken || String(s.action_taken).indexOf("OPEN") === 0;
+      var dom = String(s.domain || "");
+      var fresh = await probeDomain(dom);
+      var active, unresolved;
+      if (fresh && fresh.active !== null) {
+        out.freshProbed++;
+        active = fresh.active;
+        unresolved = 1;
+        var obs = "FRESH-PROBE(" + dom + " n=" + fresh.n + "): " + (active ? "failure-mode-active" : "nominal");
+        try {
+          await env.AUDIT.prepare("UPDATE fleet_signal_observations SET matches_failure_mode=?1, action_taken=?2, observed_at=datetime('now') WHERE signal_id=?3").bind(active, obs, s.id).run();
+        } catch (e) {
+        }
+      } else {
+        active = Number(s.matches_failure_mode) === 1;
+        unresolved = !s.action_taken || String(s.action_taken).indexOf("OPEN") === 0;
+      }
       if (active && unresolved) {
         out.active++;
         var title = "[" + s.source + "] " + String(s.content || "").slice(0, 90);
         var prio = Number(s.evidential_weight) >= 0.8 ? "P1" : "P2";
-        var iid = await improvement(env, "content-signal", String(s.domain || "fleet"), "failure-mode", title, String(s.decision || "").slice(0, 400), prio);
-        try {
-          await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?1,?2,?3,datetime('now'),'detected')").bind("content-signal-alert", String(s.id), String(s.decision || s.content || "").slice(0, 400)).run();
-        } catch (e) {
+        var ex = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE kind='failure-mode' AND title=?1 AND status IN ('proposed','approved','in_progress') LIMIT 1").bind(title).first();
+        if (!ex) {
+          var iid = await improvement(env, "content-signal", dom || "fleet", "failure-mode", title, String(s.decision || "").slice(0, 400), prio);
+          try {
+            await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?1,?2,?3,datetime('now'),'detected')").bind("content-signal-alert", String(s.id), String(s.decision || s.content || "").slice(0, 400)).run();
+          } catch (e) {
+          }
+          out.filed++;
+          out.details.push({ signal: s.id, domain: dom, improvement: iid });
         }
-        out.filed++;
-        out.details.push({ signal: s.id, domain: s.domain, improvement: iid });
       }
     }
   } catch (e) {
@@ -1479,7 +1524,6 @@ async function contentSignalAudit(env) {
   }
   return out;
 }
-__name(contentSignalAudit, "contentSignalAudit");
 __name2(contentSignalAudit, "contentSignalAudit");
 async function registerWatch(env, horizonDays) {
   try {
