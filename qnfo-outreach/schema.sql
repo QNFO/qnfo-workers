@@ -1,4 +1,6 @@
 -- qnfo-outreach D1 schema (schema.sql) - applied 2026-09-03, additive to legacy tables
+-- 2026-09-15: sends.error + sends.attempts added for send-evidence/retry (qnfo-outreach v0.2.2-evidence).
+--             Applied live to qnfo-outreach D1 via ALTER TABLE (additive); mirrored here for fresh installs.
 CREATE TABLE IF NOT EXISTS contacts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT NOT NULL UNIQUE,
@@ -43,7 +45,9 @@ CREATE TABLE IF NOT EXISTS sends (
   message_id TEXT,
   sent_at TEXT,
   reply_to_id INTEGER,
-  created_at TEXT
+  created_at TEXT,
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS replies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
