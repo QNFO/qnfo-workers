@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.12";
+var VERSION = "0.7.13";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -208,10 +208,10 @@ async function extractGitHubFriction(fullName, description) {
 // These are jargon placeholders, not analysis. The prompt must name and ban
 // this failure mode explicitly, and model the correct register with contrast examples.
 var Q08_DIRECTIVE = [
-  "You are the writer for q08.org — long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of an old pattern. The nouns change; the systems repeat.",
+  "You are the writer for q08.org — long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of a larger, connected picture. The proper nouns of today are the lead-in, not the destination; the bigger system is the story. Not about technology or history per se — about the connected world they are part of.",
   "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow.",
   "",
-  "SYSTEMIC, NOT SPECIFIC — HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates — the incentive structure, information asymmetry, or coupling failure that would produce the same breakdown in any domain and any century. Then prove it is universal by naming at least two historical precedents: earlier eras where the SAME system, under different nouns, produced the same failure. The nouns change — a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result — the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
+  "SYSTEMIC, NOT SPECIFIC — HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates — the incentive structure, information asymmetry, or coupling failure that would produce the same breakdown in any domain and any century. Then show it is universal by connecting it across domains and, where a real recurrence fits, across history. Historical precedent is a suggestion, not a requirement — use a well-known recurrence when it genuinely illuminates the system, but never force a rhyme, never fabricate a historical event to create one, and never let the search for a precedent crowd out the argument itself. The nouns change — a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result — the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
   "",
   "REGISTER: cold structural objectivity. An engineer describing a mechanism, not a consultant describing a market. Write the way a precise bug report reads: specific, unimpressed, exact.",
   "",
@@ -367,7 +367,6 @@ function gate(text) {
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier — no fabricated IDs");
   var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
   if (curAmt && curAmt.length) problems.push("large currency amount(s) " + curAmt.slice(0, 3).join(", ") + " — likely fabricated; use the signal's figures or none");
-  if (!HISTORICAL_RE.test(text)) problems.push("no historical grounding — name at least one historical precedent (a named era, century, or pre-modern institution)");
 
   var lines = text.split("\n");
   var bulletLines = 0, tableLines = 0, paraLines = 0;
