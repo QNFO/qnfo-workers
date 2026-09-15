@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.28.1"; // DO tool-format fix 2026-09-15 // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
+var VERSION = "2.28.2"; // DO honors OPS_MAX_TOOL_ITERS 2026-09-15 // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -2817,8 +2817,9 @@ export class AgenticOpsExec {
     const messages = [{ role: "system", content: OPS_SYSTEM_PROMPT }].concat(history);
     let finalText = "";
     try {
+      const maxIters = envInt(this.env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
       let iter = 0;
-      while (iter < MAX_TOOL_ITERS) {
+      while (iter < maxIters) {
         const { resp } = await callDeepSeek(this.env, messages, DEFAULT_MAX_OUT, toolsPayload(), {});
         const choice = resp && resp.choices && resp.choices[0];
         if (!choice) { finalText = "(empty upstream response)"; break; }
@@ -2835,7 +2836,7 @@ export class AgenticOpsExec {
         }
         iter++;
       }
-      if (!finalText) finalText = "(tool loop did not converge within " + MAX_TOOL_ITERS + " iterations)";
+      if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
       await this.ctx.storage.put("history", history);
       try { ws.send(JSON.stringify({ type: "message", role: "assistant", content: finalText })); } catch (e) {}
     } catch (e) {
