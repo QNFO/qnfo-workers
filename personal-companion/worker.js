@@ -3,8 +3,6 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var VERSION = "1.4.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
@@ -157,7 +155,7 @@ var P_ESSAY = L(
   "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
   "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
   "You are given real source material below. Mine it. Use the specific names, dates, numbers, mechanisms and cases it contains; a piece that could have been written without reading the sources has failed.",
-  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call \u2014 the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
+  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call — the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
   "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
 );
 var P_NOTES = L(
@@ -580,17 +578,14 @@ async function loadContinuity(env, form) {
     var yes = 0, flat = 0, no = 0, neg = [], pos = [];
     for (var j = 0; j < fr.length; j++) {
       var sgn = String(fr[j].signal || "");
-      if (sgn === "good") yes++;
-      else if (sgn === "flat") flat++;
-      else no++;
+      if (sgn === "good") yes++; else if (sgn === "flat") flat++; else no++;
       var t = squish(fr[j].title || fr[j].slug);
-      if (sgn === "good") pos.push(t);
-      else neg.push(t + "(" + sgn + ")");
+      if (sgn === "good") pos.push(t); else neg.push(t + "(" + sgn + ")");
     }
     lines.push("");
-    lines.push("HOW HE REACTED \u2014 reader verdicts, worth your time? (last 14 days: yes=" + yes + " flat=" + flat + " no=" + no + ")");
-    if (neg.length) lines.push("flat/no pieces \u2014 these did not earn their reading time; do not repeat what they shared: " + neg.slice(0, 6).join(" | "));
-    if (pos.length) lines.push("yes pieces \u2014 earned it: " + pos.slice(0, 6).join(" | "));
+    lines.push("HOW HE REACTED — reader verdicts, worth your time? (last 14 days: yes=" + yes + " flat=" + flat + " no=" + no + ")");
+    if (neg.length) lines.push("flat/no pieces — these did not earn their reading time; do not repeat what they shared: " + neg.slice(0, 6).join(" | "));
+    if (pos.length) lines.push("yes pieces — earned it: " + pos.slice(0, 6).join(" | "));
     var rn = [];
     for (var j2 = 0; j2 < Math.min(fr.length, 8); j2++) rn.push("[" + fr[j2].signal + "] " + squish(fr[j2].title || fr[j2].slug));
     lines.push("most recent votes: " + rn.join(" | "));
@@ -1450,8 +1445,7 @@ async function generate(env, form, opts) {
             feedback = "The previous draft opened with the same sentences as an existing piece. Open on a different particular.";
             continue;
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
       var titleLow = String(piece.title || "").toLowerCase().trim();
       if (titleLow.length > 4) {

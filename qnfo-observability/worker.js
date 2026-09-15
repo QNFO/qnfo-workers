@@ -717,4 +717,4 @@ export default {
     if (p === '/v1/review' && req.method === 'POST') { if (!evOkAuth(req, env)) return json({ error: 'unauthorized' }, 401); return json(await evReview(env)); }
         return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/ingest', '/log', '/workers/logs', '/fleet/summary', '/integration', '/trend', '/jobs', '/jobs/<id>', '/v1/events', '/v1/issues', '/v1/sync', '/v1/review'] }, 404);
   }
-};
+};

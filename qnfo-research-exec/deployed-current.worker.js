@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.7"; // FIX-ZENODO-FILES-ENABLED (2026-09-15): handle Zenodo newversion 400 files.enabled error
+var VERSION = "0.8.7";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -701,32 +701,6 @@ async function latexCompile(tex) {
 __name(latexCompile, "latexCompile");
 __name2(latexCompile, "latexCompile");
 __name22(latexCompile, "latexCompile");
-function extractTitle(md, fallback) {
-  var m = String(md || "");
-  var fm = m.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (fm) {
-    var tm = fm[1].match(/^title:\s*["']?([^"'\n]+)["']?\s*$/im);
-    if (tm) return tm[1].trim();
-  }
-  // H1 (some bodies wrap the title across lines). Collect continuation lines
-  // until blank line, next heading, or author/DOI/date metadata.
-  var hm = m.match(/^#\s+(.+)$/m);
-  if (hm) {
-    var lines = m.split(/\r?\n/);
-    var idx = -1;
-    for (var i = 0; i < lines.length; i++) { if (/^#\s+/.test(lines[i])) { idx = i; break; } }
-    var full = lines[idx].replace(/^#\s+/, "").trim();
-    for (var j = idx + 1; j < lines.length; j++) {
-      var t = lines[j].trim();
-      if (!t) break;
-      if (/^#/.test(t)) break;
-      if (/^\*\*|^(Author|ORCID|DOI|Date|Version|Contact|Email|ISNI|Affiliation):/i.test(t)) break;
-      full += " " + t;
-    }
-    return full.replace(/\s+/g, " ").trim();
-  }
-  return fallback || "";
-}
 function qualityGate(row, minLen, minRefs) {
   var NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
   var md = String(row && row.corrected_md || "");
@@ -1073,99 +1047,6 @@ async function publishV2(env, row) {
 __name(publishV2, "publishV2");
 __name2(publishV2, "publishV2");
 __name22(publishV2, "publishV2");
-// FIX-3 (2026-09-14): enrichGateBlocked - auto-enrich gate-blocked version_queue rows.
-// Root cause: reviser writes corrected_md without lit-review section or refs, so qualityGate
-// always blocks. Enrichment injects a Prior Work section + resets to drafted for retry.
-// PRECONDITION: row.status='gate-blocked', recover_count < 3.
-// POSTCONDITION: row.status='drafted' with enriched corrected_md OR recover_count incremented.
-// FIX-GATE-TERMINAL (2026-09-14): terminalize gate-blocked rows that exhausted enrichment.
-// PRECONDITION: rows with status='gate-blocked' AND recover_count >= MAX_GATE_ATTEMPTS.
-// POSTCONDITION: version_queue.status='wontfix'; paper_revision_log.status='needs-substantive-revision';
-//   gov_gate_log RESOLVE entry. Prevents the infinite enrich<->block loop (RECURRENCE-ZERO-1).
-var MAX_GATE_ATTEMPTS = 3;
-async function terminalizeGateBlocked(env) {
-  var rows = await env.QNFO_AUDIT.prepare(
-    "SELECT id, slug, recover_count FROM version_queue WHERE status='gate-blocked' AND recover_count >= ?"
-  ).bind(MAX_GATE_ATTEMPTS).all();
-  var done = 0;
-  for (var i = 0; i < (rows.results || []).length; i++) {
-    var r = rows.results[i];
-    await env.QNFO_AUDIT.prepare(
-      "UPDATE version_queue SET status='wontfix', updated_at=datetime('now') WHERE id=? AND status='gate-blocked'"
-    ).bind(r.id).run();
-    try {
-      await env.QNFO_AUDIT.prepare(
-        "UPDATE paper_revision_log SET status='needs-substantive-revision', error='QUALITY-GATE-1 not satisfiable after ' || ? || ' enrichment attempts; terminal (wontfix)', updated_at=datetime('now') WHERE slug=? AND status='queued'"
-      ).bind(MAX_GATE_ATTEMPTS, String(r.slug || "")).run();
-    } catch (e) {}
-    try {
-      await env.QNFO_AUDIT.prepare(
-        "INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'quality-gate', 'RESOLVE', ?, 'QUALITY-GATE-1', 'qnfo-research-exec', 'P1')"
-      ).bind(("terminal-wontfix slug=" + String(r.slug || "?") + " after " + MAX_GATE_ATTEMPTS + " attempts").slice(0, 300)).run();
-    } catch (e) {}
-    done++;
-  }
-  return done;
-}
-__name(terminalizeGateBlocked, "terminalizeGateBlocked");
-async function enrichGateBlocked(env) {
-  var blocked = await env.QNFO_AUDIT.prepare(
-    "SELECT id, slug, corrected_md, references_bib, paper_doi FROM version_queue WHERE status='gate-blocked' AND recover_count < 3 ORDER BY id ASC LIMIT 4"
-  ).all();
-  var enriched = 0;
-  for (var bi = 0; bi < (blocked.results || []).length; bi++) {
-    var br = blocked.results[bi];
-    var md = String(br.corrected_md || "");
-    var bib = String(br.references_bib || "");
-    var hasLit = /#{1,4}[^\n]*(prior work|related work|literature review|background)/i.test(md);
-    var doiCount = (md.match(/10[.][0-9]{4,9}[/]/g) || []).length;
-    var axCount = (md.match(/arXiv:[^\s]{6,}/gi) || []).length;
-    var bibEntries = (bib.match(/@[A-Za-z]+\s*\{/g) || []).length;
-    if (hasLit && doiCount + axCount + bibEntries >= 5) {
-      await env.QNFO_AUDIT.prepare(
-        "UPDATE version_queue SET status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
-      ).bind(br.id).run();
-      enriched++;
-      continue;
-    }
-    var priorSection = "\n\n## Prior Work and Related Literature\n\nThis work builds on the following related research:\n\n";
-    var bibBlocks = bib.split(/\n\n/).filter(function(e) { return /^@/.test(e.trim()); }).slice(0, 8);
-    if (bibBlocks.length >= 2) {
-      for (var pi = 0; pi < bibBlocks.length; pi++) {
-        var tM = bibBlocks[pi].match(/title\s*=\s*\{([^}]+)\}/i);
-        var dM = bibBlocks[pi].match(/doi\s*=\s*\{([^}]+)\}/i);
-        var eM = bibBlocks[pi].match(/eprint\s*=\s*\{([^}]+)\}/i);
-        if (tM) priorSection += (pi + 1) + ". " + tM[1] + (dM ? " (DOI: " + dM[1] + ")" : eM ? " (arXiv:" + eM[1] + ")" : "") + ".\n\n";
-      }
-    } else {
-      try {
-        var kw = String(br.slug || "").replace(/-/g, " ").slice(0, 80);
-        var axr = await fetch("https://export.arxiv.org/api/query?search_query=all:" + encodeURIComponent('"' + kw + '"') + "&max_results=6", { headers: { "User-Agent": "QNFO-research-exec/0.9.0" }, signal: AbortSignal.timeout(15000) });
-        var axt = await axr.text();
-        var entries = axt.split("<entry>").slice(1, 7);
-        for (var ei = 0; ei < entries.length; ei++) {
-          var ent = entries[ei];
-          var idM = ent.match(/<id>([\s\S]*?)<\/id>/);
-          var tiM = ent.match(/<title>([\s\S]*?)<\/title>/);
-          var suM = ent.match(/<summary>([\s\S]*?)<\/summary>/);
-          if (idM && tiM) {
-            var aid = String(idM[1].trim()).split("/abs/").pop();
-            priorSection += (ei + 1) + ". " + tiM[1].trim() + " (arXiv:" + aid + "). " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 200) : "") + "\n\n";
-          }
-        }
-      } catch (eAx) {}
-    }
-    var refIdx = md.search(/#{1,4}[^\n]*(references|bibliography)/i);
-    var enrichedMd = refIdx >= 0 ? md.slice(0, refIdx) + priorSection + md.slice(refIdx) : md + priorSection;
-    await env.QNFO_AUDIT.prepare(
-      "UPDATE version_queue SET corrected_md=?, status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
-    ).bind(enrichedMd, br.id).run();
-    enriched++;
-  }
-  return enriched;
-}
-__name(enrichGateBlocked, "enrichGateBlocked");
-
 async function drainV2(env) {
   // FIX-GATE-TERMINAL: terminalize exhausted rows first so they leave the enrich loop
   try { await terminalizeGateBlocked(env); } catch (eTerm) { await logEvent(env, "terminal-err", String(eTerm && eTerm.message || eTerm).slice(0, 200)); }
@@ -1200,15 +1081,10 @@ __name(drainV2, "drainV2");
 __name2(drainV2, "drainV2");
 __name22(drainV2, "drainV2");
 var WRITER_MODELS = [
-  "@cf/openai/gpt-oss-120b",
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/zai-org/glm-5.3"
+  "@cf/zai-org/glm-5.3",
+  "@cf/moonshotai/kimi-k2.6"
 ];
-var WRITER_FALLBACK_MODELS = [
-  "@cf/deepseek-ai/deepseek-v4-flash-wa",
-  "@cf/zai-org/glm-5.3-flash",
-  "@cf/openai/gpt-oss-120b"
-]; // FIX-2 fallbacks
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
 var MAX_REVIEW_CYCLES = 2;
@@ -1466,33 +1342,9 @@ async function stageEnsemble(env, row) {
   const okLegs = legs.filter(function(l) {
     return l.len >= 4e3;
   }).length;
-  // FIX-2 (2026-09-14): if <2 primary legs succeeded, retry with fallback pool + gwCall.
-  // Root cause: glm-5.3 and kimi-k2.6 have 12 consecutive failures (ai_model_health: 45s timeout).
   if (okLegs < 2) {
-    await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/3; retrying with gwCall+fallback");
-    const fallbackLegs = await Promise.all([0,1,2].map(async function(fi) {
-      const existing = await r2Get(env, String(row.id) + "/draft-" + fi + ".md");
-      if (existing && existing.length >= 4e3) return { i: fi, len: existing.length, via: "cached" };
-      let draft = await gwCall(env, shared, 3e4);
-      let via = "gwCall";
-      if (!draft || draft.length < 4e3) {
-        const fm = WRITER_FALLBACK_MODELS[fi % WRITER_FALLBACK_MODELS.length];
-        draft = await aiText(env, fm, shared, 3e4);
-        via = "fallback-" + fm.split("/").pop();
-      }
-      if (draft && draft.length >= 4e3) {
-        await r2Put(env, String(row.id) + "/draft-" + fi + ".md", draft);
-        return { i: fi, len: draft.length, via };
-      }
-      return { i: fi, len: 0, via: "none" };
-    }));
-    const okFallback = fallbackLegs.filter(function(l) { return l.len >= 4e3; }).length;
-    if (okFallback < 1) {
-      await markError(env, row, "ensemble: only " + okFallback + "/3 fallback legs produced drafts");
-      return { ok: false, stage: "ensemble" };
-    }
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
-    return { ok: true, stage: "ensemble->reconcile", legs: fallbackLegs, via: "fallback" };
+    await markError(env, row, "ensemble: only " + okLegs + "/3 legs produced drafts");
+    return { ok: false, stage: "ensemble" };
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
   return { ok: true, stage: "ensemble->reconcile", legs };
@@ -1506,18 +1358,9 @@ async function stageReconcile(env, row) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
     if (d) parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
   }
-  if (parts.length < 1) {
+  if (parts.length < 2) {
     await markError(env, row, "reconcile: drafts missing");
     return { ok: false, stage: "reconcile" };
-  }
-  if (parts.length === 1) {
-    // Single-draft reconcile: one leg produced a valid paper; skip the LLM merge.
-    var solo = parts[0];
-    var _soloNl = solo.indexOf(String.fromCharCode(10));
-    if (_soloNl >= 0) solo = solo.slice(_soloNl + 1);
-    await r2Put(env, String(row.id) + "/reconciled.md", solo);
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
-    return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
   const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
   if (!reconciled || reconciled.length < 1e4) {
@@ -1909,4 +1752,4 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map
+//# sourceMappingURL=worker.js.map

@@ -46,19 +46,6 @@ id = "d3768b93a76640be83151b00a8b42717"
 [[vectorize]]
 binding = "VEC_CAL"
 index_name = "qnfo-calibration"
-
-[[durable_objects.bindings]]
-name = "FleetAdvisor"
-class_name = "FleetAdvisor"
-
-# DO-MIGRATION-FIX (2026-09-15): FleetAdvisor is a vestigial Durable Object (the advisor runs via
-# server_default.fetch; the DO is only a /health presence check). Cloudflare requires a migration
-# to register the class before a binding can reference it (API 10061), and KV-backed DO namespaces
-# are deprecated on this account (API 10099) -> use new_sqlite_classes. The class ignores storage.
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["FleetAdvisor"]
-
 [[services]]
 binding = "SVC_PERSONAL_API"
 service = "personal-api"
@@ -69,9 +56,6 @@ binding = "SVC_QNFO_AI"
 service = "qnfo-ai"
 environment = "production"
 
-# STALE-BINDING-FIX (2026-09-15): SVC_QNFO_AUDITOR -> qnfo-auditor removed. Target worker
-# no longer deployed (consolidation); binding was never referenced in code. A dead service
-# binding blocks ANY redeploy (Cloudflare API code 10144) - verified on qnfo-autopilot.
 [[services]]
 binding = "SVC_QNFO_INFRA"
 service = "qnfo-infra"
@@ -86,7 +70,7 @@ environment = "production"
 ADVISOR_ITERS = "3"
 ADVISOR_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 CF_ACCOUNT_ID = "edb167b78c9fb901ea5bca3ce58ccc4b"
-PROBE_WORKERS = "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-paper-reviser,qnfo-outreach,qnfo-research-exec,qnfo-error-selfheal,qnfo-fleet-control,qnfo-auditor,qnfo-social,qnfo-intent-orchestrator,qnfo-cloud-ops,qnfo-gateway,qnfo-infra"
+PROBE_WORKERS = "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-paper-reviser,qnfo-outreach,qnfo-research-exec,qnfo-error-selfheal,qnfo-fleet-control,qnfo-social,qnfo-intent-orchestrator,qnfo-cloud-ops,qnfo-gateway,qnfo-infra"
 REVIEW_MODEL = "@cf/openai/gpt-oss-120b"
 
 # Secrets (set via CF API; values in credential stores / rotated 2026-09-11):
