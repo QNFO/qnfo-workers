@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "1.4.0";
+var VERSION = "1.5.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -159,15 +159,15 @@ var P_ESSAY = L(
   "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
 );
 var P_NOTES = L(
-  "FORM: curated field notes, between 3 and 5 items.",
-  "Each item is one concrete thing: a paper, a concept, a place, a piece of music, a passage, an exhibition.",
-  "Each item is 90 to 200 words. Say precisely what the thing is, then what it connects to in his world. The connection is the point; the summary only makes the connection legible.",
+  "FORM: connected field essay, 1800 to 2400 words, in 3 to 5 movements.",
+  "Each movement is one concrete thing: a paper, a concept, a place, a piece of music, a passage, an exhibition.",
+  "Each movement is 350 to 550 words. Say precisely what the thing is, then develop what it connects to in his world — draw the connection out, do not merely state it. One through-line binds the movements into a single sustained piece, not a list.",
   "If only three of the supplied anchors are worth his time, give three. Never pad to a count. Never include an item you would not defend.",
   "Give every item a short title.",
   "The set title names the subject, not the count. Banned patterns: 'Four Ways ...', 'Three Claims ...', 'N Instruments/Reasons/Things ...'."
 );
 var P_SERIAL = L(
-  "FORM: serialized long-form, 1200 to 1800 words, continuing one ongoing work.",
+  "FORM: serialized long-form, 1800 to 2400 words, continuing one ongoing work.",
   "You are given the RUNNING WORK: its thesis and the closing lines of the previous installment.",
   "Advance the argument. Do not recap beyond one sentence of orientation.",
   "This installment must add at least one claim that was not available before it, and it must close mid-motion on a question the next installment has to answer.",
@@ -994,10 +994,10 @@ __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
-  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
+  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
   var sys = [P_STYLE, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular from the source material. Name the paper, the theorem, the number, or the place. A sentence that could have been written without the source material is a failed sentence.";
-  var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1500 to 2200 words. This is a requirement, not a suggestion." : "Length: four items, each 110 to 170 words. This is a requirement, not a suggestion.");
+  var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1800 to 2400 words. This is a requirement, not a suggestion." : "Length: 1800 to 2400 words, in 3 to 5 movements. This is a requirement, not a suggestion.");
   var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : ""].join(NL);
   var writerModel = form === "notes" ? WRITER_MODEL : WRITER_MODEL_ESSAY;
   var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, WRITER_TIMEOUT_MS, writerModel);
@@ -1037,7 +1037,7 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
 __name(composePiece, "composePiece");
 __name2(composePiece, "composePiece");
 async function critiquePiece(env, piece, form) {
-  var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1500 to 2200 words" : "3 to 5 items of 90 to 200 words each";
+  var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1800 to 2400 words" : "1800 to 2400 words in 3 to 5 movements";
   var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
   var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL);
   return parseJsonLoose(r.text);
@@ -1067,12 +1067,12 @@ function validatePiece(piece, form) {
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
   var md = String(piece.body_md);
   var wc = wordCount(md);
-  if (form === "essay" && (wc < 1700 || wc > 3200)) problems.push("essay length " + wc);
-  if (form === "serial" && (wc < 1200 || wc > 2800)) problems.push("serial length " + wc);
+  if (form === "essay" && (wc < 2000 || wc > 3200)) problems.push("essay length " + wc);
+  if (form === "serial" && (wc < 1800 || wc > 2800)) problems.push("serial length " + wc);
   if (form === "notes") {
     var items = countHeadings(md, 2);
     if (items < 3) problems.push("notes items " + items);
-    if (wc < 200 || wc > 1800) problems.push("notes length " + wc);
+    if (wc < 1700 || wc > 3200) problems.push("notes length " + wc);
   }
   var hits = bannedHits(md + " " + String(piece.title || "") + " " + String(piece.lede || ""));
   if (hits.length) problems.push("banned: " + hits.join(", "));
