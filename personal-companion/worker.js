@@ -4,7 +4,7 @@ var __name2 = __name;
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "1.5.0";
+var VERSION = "1.6.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1103,6 +1103,31 @@ async function similarExists(env, text, excludeSlug) {
 }
 __name(similarExists, "similarExists");
 __name2(similarExists, "similarExists");
+
+
+// Self-referential signal: emit a reading.q08 piece as a fleet signal (best-effort)
+async function emitReadingSignal(env, piece, form, slug) {
+  try {
+    if (!env.AUDIT) return;
+    var body = String(piece.body_md || "");
+    var paras = body.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 80; });
+    var openQ = paras.length ? paras[paras.length - 1].slice(0, 400) : "";
+    await env.AUDIT.prepare(
+      "INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+    ).bind(
+      "reading:" + slug,
+      nowIso(),
+      "reading",
+      "https://reading.q08.org/p/" + slug,
+      String(piece.title || "").slice(0, 300),
+      JSON.stringify([openQ]),
+      0.55,
+      "fleet",
+      "open",
+      nowIso()
+    ).run();
+  } catch (e) { /* best-effort */ }
+}
 async function persistPiece(env, piece, form, topic, model, quality, words) {
   var day = amsDayKey(/* @__PURE__ */ new Date());
   var salt = String(Date.now()) + topic.id + form;
@@ -1111,6 +1136,7 @@ async function persistPiece(env, piece, form, topic, model, quality, words) {
   await env.PERSONAL.prepare(
     "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
   ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 2e3), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
+  emitReadingSignal(env, piece, form, slug).catch(function() {});
   try {
     var vecs = await embed(env, [String(piece.title) + NL + String(piece.lede || "") + NL + String(piece.body_md).slice(0, 5e3)]);
     if (vecs.length && env.VZ) {
