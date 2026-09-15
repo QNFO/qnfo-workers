@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.4";
+var VERSION = "0.7.5";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -413,8 +413,12 @@ async function persistPiece(env, piece, signal, story, model) {
     signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso(),
     JSON.stringify(buildSources(story))
   ).run();
-  // Seed prompt pool with structure skeleton (H2/H3 headings only)
+  // Seed prompt pool with structure skeleton (headings, else title + lead paragraph).
   var skeleton = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
+  if (skeleton.length < 50) {
+    var leadPara = body.split("\n").map(l => l.trim()).filter(l => l.length > 40)[0] || "";
+    skeleton = (title + "\n" + leadPara.slice(0, 400)).slice(0, 800);
+  }
   if (skeleton.length > 50) {
     await env.DB.prepare(
       "INSERT INTO prompt_pool (id, piece_id, structure_md, active) VALUES (?,?,?,1)"
@@ -836,6 +840,48 @@ export default {
       }
       var out = await generate(env);
       return json({ ok: true, worker: WORKER, version: VERSION, out });
+    }
+
+    if (path === "/regen" && req.method === "POST") {
+      // Regenerate a single existing piece from its original signal, through the
+      // current directive. Reuses buildPrompt/compose/gate. Rate-limited per IP.
+      var rip2 = String(req.headers.get("cf-connecting-ip") || "anon");
+      var rik2 = await sha16("regen:" + rip2);
+      var rr2 = await env.DB.prepare("SELECT COUNT(*) n FROM q08_run_rate WHERE ip_key=? AND created_at > datetime('now','-1 hour')").bind(rik2).first().catch(function(){ return { n: 0 }; });
+      if ((rr2 && rr2.n || 0) >= 10) return json({ ok: false, error: "rate limited" }, 429);
+      await env.DB.prepare("INSERT INTO q08_run_rate (ip_key, created_at) VALUES (?,?)").bind(rik2, nowIso()).run().catch(function(){});
+
+      var target = String(url.searchParams.get("slug") || "").slice(0, 200);
+      if (!target) return json({ ok: false, error: "slug required" }, 400);
+      var prow = await env.DB.prepare("SELECT * FROM published_pieces WHERE slug = ?").bind(target).first();
+      if (!prow) return json({ ok: false, error: "piece not found" }, 404);
+      var srow = await env.DB.prepare("SELECT * FROM signal_log WHERE source_id = ? AND friction_point IS NOT NULL AND length(friction_point) > 40 ORDER BY length(friction_point) DESC LIMIT 1").bind(prow.signal_source).first();
+      if (!srow) return json({ ok: false, error: "signal friction not found" }, 404);
+      var friction = { core_concept: prow.core_concept || srow.title, friction_point: srow.friction_point || "", signal_strength: srow.signal_strength || "Medium" };
+      var recentRows = await env.DB.prepare("SELECT structure_md FROM prompt_pool ORDER BY created_at DESC LIMIT 6").all();
+      var recentStructures = (recentRows.results || []).map(function(r){ return r.structure_md; });
+      var prompt = buildPrompt(friction, [], recentStructures);
+      var piece = await compose(env, prompt);
+      var gateResult = gate(piece.text);
+      if (!gateResult.ok) {
+        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected for these reasons; fix only these issues ---\n" + gateResult.problems.join("; ");
+        var retryPiece = null;
+        try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
+        if (retryPiece && retryPiece.text) {
+          var retryGate = gate(retryPiece.text);
+          if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
+        }
+      }
+      if (!gateResult.ok) return json({ ok: false, error: "gate failed: " + gateResult.problems.join("; ") }, 422);
+      piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
+      var tm = piece.text.match(/^#\s+(.+)$/m);
+      var title = tm ? tm[1].trim() : prow.title;
+      var body = piece.text.replace(/^#\s+.+\n?/, "").trim();
+      await env.DB.prepare("UPDATE published_pieces SET title = ?, body_md = ? WHERE slug = ?").bind(title, body, target).run();
+      var skel = body.split("\n").filter(l => l.startsWith("#") || l.startsWith("- ") || l.startsWith("**")).join("\n").slice(0, 800);
+      if (skel.length < 50) { var lp = body.split("\n").map(l => l.trim()).filter(l => l.length > 40)[0] || ""; skel = (title + "\n" + lp.slice(0, 400)).slice(0, 800); }
+      await env.DB.prepare("UPDATE prompt_pool SET structure_md = ?, active = 0 WHERE piece_id = ?").bind(skel, prow.id).run().catch(function(){});
+      return json({ ok: true, slug: prow.slug, title: title, model: piece.model, words: body.split(/\s+/).length });
     }
 
     if (path === "/api/f") {
