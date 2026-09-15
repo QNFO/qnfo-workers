@@ -16,14 +16,6 @@ binding = "ERRATA_WORKFLOW"
 class_name = "ErrataWorkflow"
 schedules = ["5 * * * *"]
 
-[[services]]
-binding = "ERRATA_WATCH"
-service = "qnfo-errata-watch"
-
-[[services]]
-binding = "ERRATA_RESPOND"
-service = "qnfo-errata-respond"
-
-[[services]]
-binding = "ERRATA_PUBLISH"
-service = "qnfo-errata-publish"
+# RETIRED-BINDING-FIX (2026-09-15): ERRATA_WATCH/RESPOND/PUBLISH -> qnfo-errata-* removed.
+# Those targets are retired (merged into errata-hub); this dir is not deployed. A service
+# binding to a deleted worker blocks ANY redeploy (CF API 10144). Guard: qnfo-ops/scripts/stale-binding-guard.py.

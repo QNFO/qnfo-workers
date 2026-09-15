@@ -7,9 +7,6 @@ workers_dev = true
 binding = "STATE"
 id = "0cf89b469bcb47058e343611d9117897"
 
-[[services]]
-binding = "REF"
-service = "jnl-referee"
-
+# RETIRED-BINDING-FIX (2026-09-15): REF -> jnl-referee removed (retired; merged into jnl-pipeline).
 [ai]
 binding = "AI"
