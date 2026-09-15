@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.11";
+var VERSION = "0.7.12";
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -274,7 +274,6 @@ function buildPrompt(friction, fewShot, recentStructures) {
 var COMPOSE_MODELS = [
   "@cf/openai/gpt-oss-120b",
   "@cf/moonshotai/kimi-k2.6",
-  "@cf/zai-org/glm-5.3",
 ];
 
 async function compose(env, prompt) {
