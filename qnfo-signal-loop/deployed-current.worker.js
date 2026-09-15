@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.0";
+var VERSION = "1.1.2";
 var WORKER = "qnfo-signal-loop";
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -30,43 +30,66 @@ async function ensureSchema(env) {
 __name(ensureSchema, "ensureSchema");
 function extractOpenQuestions(bodyMd) {
   if (!bodyMd) return [];
+  const text = String(bodyMd);
   const out = [];
-  const m = String(bodyMd).match(/##?\s*(Open Questions?|Future Work|Open Problems?)[\s\S]{0,4000}/i);
-  if (m) {
-    const lines = m[0].split("\n").filter((l) => /^[-*\d.]\s*\S/.test(l.trim())).map((l) => l.trim()).slice(0, 15);
-    for (const l of lines) out.push(l.slice(0, 300));
-  }
+  const seen = new Set();
+  const push = (s) => {
+    const t = String(s).replace(/\s+/g, " ").replace(/^[\s*\-\d.]+/, "").trim();
+    if (t.length < 15 || t.length > 320) return;
+    const k = t.slice(0, 80).toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    if (out.length < 15) out.push(t);
+  };
+  const m = text.match(/##?\s*(Open Questions?|Open Problems?|Future Work|Future Directions?|Limitations?|Outlook|Unresolved|Discussion)[\s\S]{0,4000}/i);
+  if (m) { for (const l of m[0].split("\n")) { if (/^\s*([-*]|\d+\.)\s+\S/.test(l)) push(l); } }
+  const inline = text.match(/[^.\n]{12,300}?(open question|remains? open|open problem|unresolved|future work|not yet (known|understood|resolved|established)|unknown whether|remains? to be)[^.\n]{0,240}[.?]/gi) || [];
+  for (const s of inline) push(s);
+  const qs = text.match(/[^.\n?]{25,300}\?/g) || [];
+  for (const s of qs) push(s);
   return out;
 }
 __name(extractOpenQuestions, "extractOpenQuestions");
 async function runReentry(env) {
   await ensureSchema(env);
   const papers = await env.LIVING_PAPER.prepare(
-    `SELECT slug, doi, title, body_md, version FROM papers WHERE doi IS NOT NULL AND doi != '' ORDER BY created_at DESC LIMIT 500`
+    `SELECT slug, doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' ORDER BY created_at DESC LIMIT 500`
   ).all();
   const rows = papers.results || [];
-  const out = { scanned: rows.length, emitted: 0, skipped: 0, errors: 0, signals: [] };
+  const out = { scanned: rows.length, emitted: 0, rescored: 0, skipped: 0, errors: 0, signals: [] };
   for (const p of rows) {
     const doi = p.doi;
     const existing = await env.QNFO_AUDIT.prepare(
-      `SELECT id FROM signals WHERE source = 'artifact_reentry' AND source_ref = ? LIMIT 1`
+      `SELECT id, evidential_weight FROM signals WHERE source = 'artifact_reentry' AND source_ref = ? LIMIT 1`
     ).bind(doi).first();
+    let bodyMd = "";
+    try {
+      const pr = await env.LIVING_PAPER.prepare(
+        `SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE doi = ? LIMIT 1`
+      ).bind(doi).first();
+      bodyMd = pr && pr.b ? pr.b : "";
+    } catch (e) { out.errors++; }
+    const oq = extractOpenQuestions(bodyMd);
+    const eps = oq.length > 0 ? 0.9 : 0;
     if (existing) {
-      out.skipped++;
+      if (Number(existing.evidential_weight || 0) === 0 && eps > 0) {
+        try {
+          await env.QNFO_AUDIT.prepare(
+            `UPDATE signals SET open_questions = ?, evidential_weight = ? WHERE id = ?`
+          ).bind(JSON.stringify(oq), eps, existing.id).run();
+          out.rescored++;
+        } catch (e) { out.errors++; }
+      } else { out.skipped++; }
       continue;
     }
-    const oq = extractOpenQuestions(p.body_md);
-    const eps = oq.length > 0 ? 0.9 : 0;
     try {
       await env.QNFO_AUDIT.prepare(
         `INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?)`
       ).bind(sigId("artifact_reentry", doi), nowIso(), "artifact_reentry", doi, String(p.title || "").slice(0, 500), JSON.stringify(oq), eps, "research", "new", nowIso()).run();
       out.emitted++;
-      out.signals.push({ doi, open_questions: oq.length, evidential_weight: eps, title: String(p.title || "").slice(0, 120) });
-    } catch (e) {
-      out.errors++;
-    }
+      if (eps > 0) out.signals.push({ doi, open_questions: oq.length, evidential_weight: eps, title: String(p.title || "").slice(0, 100) });
+    } catch (e) { out.errors++; }
   }
   return out;
 }
@@ -184,4 +207,4 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map
+//# sourceMappingURL=worker.js.map

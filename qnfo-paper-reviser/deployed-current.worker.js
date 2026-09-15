@@ -2,10 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.0.4-deepseek-flash";
-var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+var VERSION = "1.2.2"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
 var PROV_FILES = ["references.bib", "citation-audit.md", "DUE-DILIGENCE.md", "PROJECT-PLAN.md", "README.md", "LICENSE"];
@@ -14,19 +12,16 @@ function json(data, status) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
 __name(json, "json");
-__name2(json, "json");
 function authorized(request, env) {
   if (!env.REVISER_TOKEN) return false;
   return (request.headers.get("X-Reviser-Token") || "") === env.REVISER_TOKEN;
 }
 __name(authorized, "authorized");
-__name2(authorized, "authorized");
 function recIdOf(doi) {
   const m = String(doi || "").match(/zenodo\.(\d+)/);
   return m ? m[1] : null;
 }
 __name(recIdOf, "recIdOf");
-__name2(recIdOf, "recIdOf");
 async function zenodoGet(path) {
   const r = await fetch("https://zenodo.org/api/records" + path, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(3e4) });
   if (!r.ok) return { _status: r.status };
@@ -37,14 +32,12 @@ async function zenodoGet(path) {
   }
 }
 __name(zenodoGet, "zenodoGet");
-__name2(zenodoGet, "zenodoGet");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
   });
 }
 __name(bibEsc, "bibEsc");
-__name2(bibEsc, "bibEsc");
 function parseRefLine(raw) {
   const s = String(raw || "").replace(/^\s*\d+[.)]\s*/, "").trim();
   const aEnd = s.indexOf("(");
@@ -67,13 +60,11 @@ function parseRefLine(raw) {
   return { authors, year, title, rest, arxiv, doi };
 }
 __name(parseRefLine, "parseRefLine");
-__name2(parseRefLine, "parseRefLine");
 function refKey(p, i) {
   const a = (p.authors || "").replace(/[^A-Za-z]/g, "").slice(0, 14) || "ref";
   return (a + (p.year || "")).toLowerCase() + "_" + i;
 }
 __name(refKey, "refKey");
-__name2(refKey, "refKey");
 function regenerateProvenance(bodyMd, title, slug) {
   const body = String(bodyMd || "");
   const lines = body.split(/\r?\n/);
@@ -117,7 +108,6 @@ function regenerateProvenance(bodyMd, title, slug) {
   return { references_bib: bib, citation_audit: audit, readme_md: readme, project_plan: plan, license_md: lic };
 }
 __name(regenerateProvenance, "regenerateProvenance");
-__name2(regenerateProvenance, "regenerateProvenance");
 async function downloadProvenance(recId) {
   const out = { references_bib: null, citation_audit: null, due_diligence: null, project_plan: null, readme_md: null, license_md: null, verify_script: null, verify_output: null };
   const rec = await zenodoGet("/" + recId);
@@ -148,35 +138,31 @@ async function downloadProvenance(recId) {
   return out;
 }
 __name(downloadProvenance, "downloadProvenance");
-__name2(downloadProvenance, "downloadProvenance");
 async function aiText(env, prompt, model, maxTokens) {
   const m = model || MODEL;
   const res = await env.AI.run(m, { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens || 4096 }, { gateway: { id: "default" } });
   let text = "";
   try {
+    // Envelope-agnostic extraction (2026-09-06): Workers AI may return choices[].message.content,
+    // result.response, response, or result. Legacy code read only res.response||res.result and
+    // silently lost text when the envelope was OpenAI-style choices[].
     if (res) {
       const ch = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
-      if (ch) {
-        text = String(ch);
-      } else if (typeof res.response === "string") {
-        text = res.response;
-      } else if (res.result && typeof res.result === "string") {
-        text = res.result;
-      } else if (res.result && typeof res.result.response === "string") {
-        text = res.result.response;
-      } else if (res.result && res.result.choices && res.result.choices[0] && res.result.choices[0].message) {
+      if (ch) { text = String(ch); }
+      else if (typeof res.response === "string") { text = res.response; }
+      else if (res.result && typeof res.result === "string") { text = res.result; }
+      else if (res.result && typeof res.result.response === "string") { text = res.result.response; }
+      else if (res.result && res.result.choices && res.result.choices[0] && res.result.choices[0].message) {
         text = String(res.result.choices[0].message.content || "");
-      } else if (typeof res === "string") {
-        text = res;
-      }
+      } else if (typeof res === "string") { text = res; }
     }
   } catch (e) {
     text = "";
   }
   return text.trim();
 }
+
 __name(aiText, "aiText");
-__name2(aiText, "aiText");
 function parseJsonObject(text) {
   const a = text.indexOf("{");
   const b = text.lastIndexOf("}");
@@ -189,10 +175,11 @@ function parseJsonObject(text) {
   }
 }
 __name(parseJsonObject, "parseJsonObject");
-__name2(parseJsonObject, "parseJsonObject");
 async function selectCandidates(env, limit) {
   const rows = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != '' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
   const all = rows && rows.results || [];
+  // id 132 (2026-09-08): terminal dispositions only; every status below is terminal for the auto-loop.
+  // "needs-substantive-revision" and "stub-fragment" defer to the substantive-remediation loop (id 133).
   const done = await env.WATCH_DB.prepare("SELECT slug FROM paper_revision_log WHERE status IN ('already-revised','flagged','queued','stub-fragment','needs-substantive-revision') GROUP BY slug").all();
   const doneSet = new Set((done && done.results || []).map(function(r) {
     return r.slug;
@@ -204,13 +191,16 @@ async function selectCandidates(env, limit) {
   const out = [];
   for (const p of all) {
     if (doneSet.has(p.slug) || pendSet.has(p.slug)) continue;
+    if (String(p.body_md || "").length < 8000) {
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.doi, p.title).run();
+      continue;
+    }
     out.push(p);
     if (out.length >= limit) break;
   }
   return out;
 }
 __name(selectCandidates, "selectCandidates");
-__name2(selectCandidates, "selectCandidates");
 async function verifySingleVersion(env, recId) {
   const rec = await zenodoGet("/" + recId);
   if (!rec || rec._status) return { count: 1, conceptrecid: null, latestDoi: null, uncertain: true };
@@ -229,12 +219,11 @@ async function verifySingleVersion(env, recId) {
   return { count, conceptrecid, latestDoi, uncertain: false };
 }
 __name(verifySingleVersion, "verifySingleVersion");
-__name2(verifySingleVersion, "verifySingleVersion");
 function auditPrompt(paper) {
   return [
     "You are an ADVERSARIAL reviewer auditing a QNFO research preprint for concrete, correctable defects. You are hostile-but-honest: report ONLY issues that genuinely appear in the text; never invent issues.",
-    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names).",
-    "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution (requires human review).",
+    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
+    "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit).",
     "For each issue provide a SURGICAL edit: 'location' must be an EXACT verbatim substring copied from the paper; 'fix' is the replacement (for insertion, fix = location + inserted text; for deletion, fix = ''). If you cannot quote an exact substring, do NOT propose an edit.",
     'Output JSON only: {"issues":[{"severity":"low|high","category":"...","location":"exact verbatim substring","fix":"replacement","reason":"1 sentence"}]}. If no genuine issues, return {"issues":[]}.',
     "PAPER TITLE: " + (paper.title || ""),
@@ -243,12 +232,10 @@ function auditPrompt(paper) {
   ].join("\n");
 }
 __name(auditPrompt, "auditPrompt");
-__name2(auditPrompt, "auditPrompt");
 function normWs(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
 __name(normWs, "normWs");
-__name2(normWs, "normWs");
 function buildNormMap(s) {
   const norm = [];
   const map = [];
@@ -267,7 +254,6 @@ function buildNormMap(s) {
   return { norm: norm.join(""), map };
 }
 __name(buildNormMap, "buildNormMap");
-__name2(buildNormMap, "buildNormMap");
 function applyEdits(md, issues) {
   let out = md;
   const applied = [];
@@ -307,7 +293,6 @@ function applyEdits(md, issues) {
   return { md: out, applied, skipped };
 }
 __name(applyEdits, "applyEdits");
-__name2(applyEdits, "applyEdits");
 function bumpVersion(v) {
   const s = String(v || "").trim();
   if (/^v?0\./.test(s)) return "1.0.0";
@@ -315,7 +300,6 @@ function bumpVersion(v) {
   return "2.0.0";
 }
 __name(bumpVersion, "bumpVersion");
-__name2(bumpVersion, "bumpVersion");
 function applyVersionMarkers(md, versionTo) {
   let out = md;
   if (/\*\*Version:\*\*/i.test(out)) out = out.replace(/\*\*Version:\*\*\s*[^\n]*/i, "**Version:** " + versionTo);
@@ -325,7 +309,6 @@ function applyVersionMarkers(md, versionTo) {
   return out;
 }
 __name(applyVersionMarkers, "applyVersionMarkers");
-__name2(applyVersionMarkers, "applyVersionMarkers");
 function addChangelog(md, versionTo, changelog) {
   const entry = "- v" + versionTo + ": " + changelog;
   const chIdx = md.indexOf("## Changelog");
@@ -340,7 +323,6 @@ function addChangelog(md, versionTo, changelog) {
   return md + block;
 }
 __name(addChangelog, "addChangelog");
-__name2(addChangelog, "addChangelog");
 async function processPaper(env, paper, mode) {
   const dry = mode === "dry";
   const doi = paper.zenodo_doi || paper.doi || "";
@@ -386,14 +368,36 @@ async function processPaper(env, paper, mode) {
     }
     return { slug: paper.slug, flagged: true, high: high.length, low: low.length, doi };
   }
+  // SUBSTANCE GATE (2026-09-06, row 84): never publish a v2.0.0 for content the audit
+  // found no genuine issues in, or for near-empty stub/fragment bodies. Log and skip.
   var bodyLen = String(paper.body_md || "").trim().length;
   var noRealIssues = !issues || issues.length === 0;
+  // id 132 (2026-09-08): body is a fragment only when trivially short. The old regex matched any
+  // short heading-only line (## Abstract, ## References) and mislabeled 6-21k-char papers as stubs.
   var isStub = bodyLen < 1500;
   if (isStub || noRealIssues) {
     if (!dry) {
       await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ zenodo_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
     }
     return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
+  }
+  // FIX-REVISER-GARBAGE (2026-09-14): reject non-paper AI output (reasoning preamble / outline fragment).
+  // Root cause of the 20-row gate-blocked backlog: for long essay inputs the auditor's surgical
+  // edits produced reasoning text / outline fragments that were queued as corrected_md.
+  var _rv = String(revised || "");
+  var _head = _rv.slice(0, 180).trim().toLowerCase();
+  var _hasHeading = _rv.indexOf("# ") === 0 || _rv.indexOf("\n# ") >= 0 || _rv.indexOf("\n## ") >= 0;
+  var _badHead = _head.indexOf("**") === 0 || _head.indexOf("complexity assessment") >= 0 || _head.indexOf("here is") === 0 || _head.indexOf("here\u2019s") === 0 || _head.indexOf("the provided topic") === 0 || _head.indexOf("let me") === 0;
+  var _outline = _head.indexOf("merged outline") >= 0 || _head.indexOf("continuation of") >= 0 || _head.indexOf("chapter 3:") === 0 || _head.indexOf("chapter 5:") === 0;
+  var _hasBody = _rv.length >= 1500;
+  if (!_hasBody || _badHead || _outline || !_hasHeading) {
+    var _reason = _badHead ? "reasoning-preamble" : _outline ? "outline-fragment" : !_hasHeading ? "no-h1" : "too-short";
+    if (!dry) {
+      try {
+        await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, error, created_at, updated_at) VALUES (?, ?, ?, ?, 'needs-substantive-revision', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), "AI revision rejected: " + _reason).run();
+      } catch (eRj) {}
+    }
+    return { slug: paper.slug, rejected: true, reason: _reason, issues: auditSummary, doi: doi };
   }
   const versionTo = bumpVersion(paper.version);
   const edits = applyEdits(paper.body_md || "", low);
@@ -422,7 +426,6 @@ async function processPaper(env, paper, mode) {
   return { slug: paper.slug, queued: true, versionFrom: paper.version, versionTo, issues: auditSummary, applied: edits.applied.length, skippedEdits: edits.skipped.length, doi };
 }
 __name(processPaper, "processPaper");
-__name2(processPaper, "processPaper");
 async function runOnce(env, mode) {
   const dry = mode === "dry";
   const candidates = await selectCandidates(env, BATCH);
@@ -437,7 +440,6 @@ async function runOnce(env, mode) {
   return { ok: true, worker: "qnfo-paper-reviser", version: VERSION, dry, model: MODEL, candidates: candidates.length, results };
 }
 __name(runOnce, "runOnce");
-__name2(runOnce, "runOnce");
 async function statusSweep(env) {
   const total = await env.PAPERS_DB.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != ''").first();
   const done = await env.WATCH_DB.prepare("SELECT status, COUNT(*) AS n FROM paper_revision_log GROUP BY status").all();
@@ -445,7 +447,6 @@ async function statusSweep(env) {
   return { worker: "qnfo-paper-reviser", version: VERSION, published_zenodo_total: total && total.n || 0, revision_log: done && done.results || [], pending_version_queue: pending && pending.n || 0 };
 }
 __name(statusSweep, "statusSweep");
-__name2(statusSweep, "statusSweep");
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -504,3 +505,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+

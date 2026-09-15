@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.0-depth-gate";
+var VERSION = "1.2.2"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -381,6 +381,24 @@ async function processPaper(env, paper, mode) {
     }
     return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
   }
+  // FIX-REVISER-GARBAGE (2026-09-14): reject non-paper AI output (reasoning preamble / outline fragment).
+  // Root cause of the 20-row gate-blocked backlog: for long essay inputs the auditor's surgical
+  // edits produced reasoning text / outline fragments that were queued as corrected_md.
+  var _rv = String(revised || "");
+  var _head = _rv.slice(0, 180).trim().toLowerCase();
+  var _hasHeading = _rv.indexOf("# ") === 0 || _rv.indexOf("\n# ") >= 0 || _rv.indexOf("\n## ") >= 0;
+  var _badHead = _head.indexOf("**") === 0 || _head.indexOf("complexity assessment") >= 0 || _head.indexOf("here is") === 0 || _head.indexOf("here\u2019s") === 0 || _head.indexOf("the provided topic") === 0 || _head.indexOf("let me") === 0;
+  var _outline = _head.indexOf("merged outline") >= 0 || _head.indexOf("continuation of") >= 0 || _head.indexOf("chapter 3:") === 0 || _head.indexOf("chapter 5:") === 0;
+  var _hasBody = _rv.length >= 1500;
+  if (!_hasBody || _badHead || _outline || !_hasHeading) {
+    var _reason = _badHead ? "reasoning-preamble" : _outline ? "outline-fragment" : !_hasHeading ? "no-h1" : "too-short";
+    if (!dry) {
+      try {
+        await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, error, created_at, updated_at) VALUES (?, ?, ?, ?, 'needs-substantive-revision', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), "AI revision rejected: " + _reason).run();
+      } catch (eRj) {}
+    }
+    return { slug: paper.slug, rejected: true, reason: _reason, issues: auditSummary, doi: doi };
+  }
   const versionTo = bumpVersion(paper.version);
   const edits = applyEdits(paper.body_md || "", low);
   let revised = applyVersionMarkers(edits.md, versionTo);
@@ -487,3 +505,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+

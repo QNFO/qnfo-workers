@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.4';
+const VERSION = '1.2.6'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -259,7 +259,7 @@ async function digest(env, ingestResult) {
     const ratio = r.bad / r.n;
     if (r.n >= 20 && ratio > 0.5) {
       summary.anomalies.push({ worker: r.script_name, events: r.n, bad: r.bad, ratio: Math.round(ratio * 100) / 100 });
-      await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, 0)').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + r.bad + '/' + r.n + ' last 24h)').run();
+      await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, "digest")').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + r.bad + '/' + r.n + ' last 24h)').run();
     }
   }
   // RECURRENCE-FIX (2026-09-14): id was hour-granular ('fleet-obs-<YYYY-MM-DDTHH>-digest'), so any
@@ -384,7 +384,7 @@ async function assessIntegration(env) {
         st.oldest_h = ageHours(r.oldest || r.latest);
         if (c.max != null && st.n > c.max) { st.status = 'stuck'; st.detail = 'backpressure: ' + st.n + ' waiting (' + c.want + ')'; }
         else if (c.minOk != null && st.n < c.minOk) { st.status = 'degraded'; st.detail = 'below expected activity (' + c.want + ')'; }
-        else if (st.n === 0 && st.total != null && st.total >= EMPTY_MATCH_MIN_TOTAL) {
+        else if (st.n === 0 && st.total != null && st.total >= EMPTY_MATCH_MIN_TOTAL && !c.expectEmpty) {
           // The pending predicate matched nothing, but the medium is not empty. Either the queue drained
           // or the status enum moved. We cannot tell from here, so we must not assert health.
           st.status = 'empty-match';
@@ -406,16 +406,20 @@ async function assessIntegration(env) {
   try { const r = await env.AUDIT.prepare("SELECT DISTINCT worker_name FROM worker_invocations").all(); invocated = (r.results || []).map(function (x) { return x.worker_name; }); } catch (e) {}
   const probedSet = new Set(probed), tracedSet = new Set(traced), invocatedSet = new Set(invocated);
   // FLEET-SIZE-LIVE-1 (2026-09-13): use live service_registry count instead of hardcoded FLEET array
-  var liveFleetRow = null;
-  try { liveFleetRow = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM service_registry WHERE state='live'").first(); } catch(e) {}
-  const fleetSize = liveFleetRow ? liveFleetRow.c : FLEET.length;
+  var liveFleetNames = FLEET;
+  try {
+    const lf = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
+    if (lf && lf.results && lf.results.length) liveFleetNames = lf.results.map(function (x) { return x.service; });
+  } catch (e) {}
+  const liveSet = new Set(liveFleetNames);
+  const fleetSize = liveFleetNames.length;
   const coverage = {
     fleet_size: fleetSize,
-    probed: probedSet.size,
-    invocated: invocatedSet.size,
-    traced: tracedSet.size,
-    probe_gap: FLEET.filter(function (w) { return !probedSet.has(w); }).length,
-    trace_gap: FLEET.filter(function (w) { return !tracedSet.has(w); }).length,
+    probed: [...probedSet].filter(function (w) { return liveSet.has(w); }).length,
+    invocated: [...invocatedSet].filter(function (w) { return liveSet.has(w); }).length,
+    traced: [...tracedSet].filter(function (w) { return liveSet.has(w); }).length,
+    probe_gap: liveFleetNames.filter(function (w) { return !probedSet.has(w); }).length,
+    trace_gap: liveFleetNames.filter(function (w) { return !tracedSet.has(w); }).length,
   };
   const decaySignals = [
     ['cloud_ops_events', 'SELECT MAX(ts) latest FROM cloud_ops_events'],
@@ -446,7 +450,7 @@ async function assessIntegration(env) {
   }
   if (coverage.probe_gap > 0) opportunities.push({ kind: 'coverage', text: coverage.probe_gap + ' of ' + fleetSize + ' workers have no liveness probe' });
   if (coverage.trace_gap > 0) opportunities.push({ kind: 'trace-gap', text: 'Logpush trace coverage: ' + coverage.traced + '/' + fleetSize + ' workers emit trace events' });
-  const noSignal = FLEET.filter(function (w) { return !probedSet.has(w) && !tracedSet.has(w) && !invocatedSet.has(w); });
+  const noSignal = liveFleetNames.filter(function (w) { return !probedSet.has(w) && !tracedSet.has(w) && !invocatedSet.has(w); });
   if (noSignal.length > 0) opportunities.push({ kind: 'integration-candidate', text: noSignal.length + ' workers emit no probe/trace/invocation signal: ' + noSignal.slice(0, 8).join(', ') + (noSignal.length > 8 ? ', ...' : '') });
   // v1.1.5: empty-match is deliberately excluded from chainScore - it is an UNKNOWN, not a pass and not
   // a failure. Counting it as healthy is what let five stale predicates report green for days.
@@ -713,4 +717,4 @@ export default {
     if (p === '/v1/review' && req.method === 'POST') { if (!evOkAuth(req, env)) return json({ error: 'unauthorized' }, 401); return json(await evReview(env)); }
         return json({ ok: false, error: 'not found', endpoints: ['/health', '/run/ingest', '/log', '/workers/logs', '/fleet/summary', '/integration', '/trend', '/jobs', '/jobs/<id>', '/v1/events', '/v1/issues', '/v1/sync', '/v1/review'] }, 404);
   }
-};
+};

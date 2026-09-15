@@ -4,10 +4,11 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.21.3";
+var VERSION = "5.27.0";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
+var VISION_FALLBACK = "glm-5.3-flash";
 var _modelHealthCache = null;
 var _modelHealthCacheAt = 0;
 async function loadModelHealth(env) {
@@ -25,19 +26,12 @@ async function loadModelHealth(env) {
 __name(loadModelHealth, "loadModelHealth");
 var MODELS = {
   // Workers AI free — original three
-  "deepseek-r1-qwen-32b": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", reasoning: true, maxOut: 32768, ctx: 8e4, temp: 0.6, topP: 0.95, tools: false, vision: false },
-  "qwen3-30b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen3-30b-a3b-fp8", reasoning: true, maxOut: 16384, ctx: 32768, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
-  "qwen2.5-coder-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwen2.5-coder-32b-instruct", reasoning: false, maxOut: 16384, ctx: 32768, temp: 0.2, topP: 0.95, tools: false, vision: false },
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
-  "glm-5.2": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.2", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: false },
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
-  "qwq-32b": { tier: 0, family: "qwen", wa: "@cf/qwen/qwq-32b", reasoning: true, maxOut: 16384, ctx: 24e3, temp: 0.6, topP: 0.95, tools: false, vision: false },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
   // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
-  "glm-4.7-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-4.7-flash", reasoning: true, maxOut: 32768, ctx: 131072, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // $0.06/M — cheap general default (131k ctx, reasoning)
-  "gemma-4-26b": { tier: 0, family: "google", wa: "@cf/google/gemma-4-26b-a4b-it", reasoning: true, maxOut: 32768, ctx: 256e3, temp: 0.7, topP: 0.9, tools: true, vision: true },
   // $0.10/M
   "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
@@ -55,7 +49,6 @@ var MODELS = {
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
   // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
-  "llama-3.2-11b-vision": { tier: 0, family: "meta", wa: "@cf/meta/llama-3.2-11b-vision-instruct", reasoning: false, maxOut: 4096, ctx: 128e3, temp: 0.6, topP: 0.9, tools: false, vision: true },
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
@@ -70,15 +63,7 @@ var MAX_OUT = {
   // Workers AI (tier-0) — output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
-  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": 32768,
-  "@cf/qwen/qwen3-30b-a3b-fp8": 16384,
-  "@cf/qwen/qwen2.5-coder-32b-instruct": 16384,
-  "@cf/zai-org/glm-5.2": 32768,
   "@cf/moonshotai/kimi-k2.6": 32768,
-  "@cf/qwen/qwq-32b": 16384,
-  "@cf/meta/llama-3.2-11b-vision-instruct": 4096,
-  "@cf/zai-org/glm-4.7-flash": 32768,
-  "@cf/google/gemma-4-26b-a4b-it": 32768,
   "@cf/zai-org/glm-5.3-flash": 32768,
   "@cf/openai/gpt-oss-120b": 32768,
   "@cf/deepseek-ai/deepseek-v4-flash-0731": 32768,
@@ -90,7 +75,7 @@ var MAX_OUT = {
   "@cf/zai-org/glm-5.3": 32768
 };
 var DEFAULT_MAX_OUT = 32768;
-var DEFAULT_SYSTEM_PROMPT = "Answer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on 'CONTINUE' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.";
+var DEFAULT_SYSTEM_PROMPT = "QUNIVERSE FLEET CONTEXT (for QNFO-internal questions)\nThis endpoint (qnfo-ai) is the research gateway on the Cloudflare Quniverse fleet (~54 workers). QNFO is not an acronym.\n- qnfo-ops (qnfo-ops.q08.workers.dev) \u2014 ops endpoint; fleet probes, D1/R2/KV/Vectorize, self-heal.\n- personal-api (personal-api.q08.workers.dev) \u2014 personal twin; NEVER cross-pollinate into research (PERSONAL-QNFO-SEPARATION-1).\n- ideas.qnfo.org \u2014 idea intake hub; /api/sessions, /rss.xml, /sitemap.xml all live.\n- qnfo.org \u2014 landing + email-capture; qnfo-subscribers double opt-in pipeline.\n- qnfo-signal-loop \u2014 signal-organism L8 re-entry; emits signals from living-paper open-question sections.\n- qnfo-paper-reviser \u2014 adversarial revision loop; all publications target >=2 Zenodo versions.\n- qnfo-outreach \u2014 autonomous outreach agent; ACTIVATION_AT 2026-09-15.\n- NO-JOURNALS-1: never suggest traditional journal submissions. Zenodo is the canonical venue.\n\nAnswer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on 'CONTINUE' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.";
 async function getCalendarContext(env) {
   try {
     const from = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -148,7 +133,7 @@ function contextAwareTarget(cls, target, estInput, maxOut) {
   if (estInput + out <= modelCtx(spec) - CTX_SAFETY_MARGIN) return target;
   const big = MODELS["glm-5.3-flash"];
   if (big && spec.wa !== big.wa && estInput + out <= modelCtx(big) - CTX_SAFETY_MARGIN) {
-    return "qwq-32b";
+    return "glm-5.3";
   }
   return cls.domain === "science" ? "deepseek-v4-flash-thinking" : "deepseek-v4-flash";
 }
@@ -461,7 +446,7 @@ var ENSEMBLE = {
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
   science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-pro-0813"],
-  general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-4.7-flash"]
+  general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3-flash"]
 };
 var json = /* @__PURE__ */ __name2((obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
@@ -563,17 +548,17 @@ function seededPick(pool, key) {
 __name(seededPick, "seededPick");
 __name2(seededPick, "seededPick");
 var ROUTE_POOLS = {
-  code: ["kimi-k2.7-code", "glm-5.3", "qwen2.5-coder-32b", "deepseek-v4-pro-wa", "gpt-oss-120b"],
+  code: ["kimi-k2.7-code", "glm-5.3", "kimi-k2.7-code", "deepseek-v4-pro-wa", "gpt-oss-120b"],
   science: ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa"],
   legal: ["deepseek-v4-pro", "glm-5.3", "kimi-k2.6"],
-  creative: ["glm-5.3", "gemma-4-26b", "glm-4.7-flash", "qwen3-30b"],
-  general: ["glm-4.7-flash", "gemma-4-26b", "qwen3-30b", "deepseek-v4-flash", "glm-5.3-flash"]
+  creative: ["glm-5.3", "kimi-k2.6", "glm-5.3-flash", "kimi-k2.7-code"],
+  general: ["glm-5.3-flash", "kimi-k2.6", "kimi-k2.7-code", "deepseek-v4-flash", "glm-5.3-flash"]
 };
 function autoRoute(cls, prompt, health) {
   const h = health || {};
   const okPool = /* @__PURE__ */ __name((pool2) => pool2.filter((x) => !h[x] || h[x].status !== "failing" && h[x].status !== "degraded"), "okPool");
   if (cls.complexity === "high" && cls.domain !== "code") {
-    const base2 = ["glm-5.3", "deepseek-v4-pro-wa", "gpt-oss-120b", "deepseek-v4-pro"];
+    const base2 = ["glm-5.3", "deepseek-v4-pro-wa", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro"];
     const pool2 = okPool(base2);
     return seededPick(pool2.length ? pool2 : base2, prompt || "");
   }
@@ -1133,7 +1118,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         agreementRate = 1;
       } else {
         try {
-          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 25e3, "ensemble-reviewer");
+          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 35e3, "ensemble-reviewer");
           const rText = rOut ? extractWAContent(rOut) : "";
           if (rText.trim()) {
             finalText = rText;
@@ -1311,11 +1296,25 @@ async function mediaProcess(env, id) {
   const buf = await obj.arrayBuffer();
   const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
   const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + b64;
-  const out = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
-    messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
-    max_tokens: 1024
-  });
-  const text = String(out && (out.response || out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || "").trim();
+  let text = "";
+  try {
+    const gw = await fetch(GW_COMPAT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_API_TOKEN },
+      body: JSON.stringify({
+        model: "@cf/zai-org/glm-5.3-flash",
+        messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
+        max_tokens: 2048
+      })
+    });
+    if (gw.ok) {
+      const gj = await gw.json();
+      text = String(gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content || "").trim();
+    }
+  } catch (e) {
+    text = "";
+  }
+  if (!text) return { ok: false, error: "vision ocr unavailable (gateway)", id };
   await env.QNFO_AUDIT.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8e3), id).run();
   return { ok: true, id, extracted_text: text.slice(0, 8e3) };
 }
@@ -1482,16 +1481,16 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
   let spec = MODELS[target];
   if (hasImage && !isEnsemble) {
-    const v = MODELS["llama-3.2-11b-vision"];
+    const v = MODELS[VISION_FALLBACK];
     if (v && (!spec || !spec.vision)) {
-      target = "llama-3.2-11b-vision";
+      target = VISION_FALLBACK;
       spec = v;
     }
   }
   if ((wantsCode || tools && tools.length) && !isEnsemble && !hasImage && (!spec || !spec.tools)) {
-    if (MODELS["qwen3-30b"]?.tools) {
-      target = "qwen3-30b";
-      spec = MODELS["qwen3-30b"];
+    if (MODELS["kimi-k2.7-code"]?.tools) {
+      target = "kimi-k2.7-code";
+      spec = MODELS["kimi-k2.7-code"];
     } else {
       target = "deepseek-v4-flash";
       spec = MODELS["deepseek-v4-flash"];
@@ -1611,7 +1610,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
           return streamWithLog(new Response(streamT, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec());
         }
         if (!waContent || !String(waContent).trim()) {
-          const wafbCands = [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
+          const wafbCands = [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
           for (const wafb of wafbCands) {
             if (!wafb || wafb.wa && wafb.wa === effSpec.wa) continue;
             if (hasImage && !wafb.vision) continue;
@@ -1673,7 +1672,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
         }
       } catch (e) {
       }
-      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["qwen2.5-coder-32b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["gemma-4-26b"] || MODELS["qwen3-30b"], MODELS["qwen2.5-coder-32b"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
+      const fbCands = effSpec.api ? [MODELS["deepseek-v4-flash-wa"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]] : [MODELS["kimi-k2.6"] || MODELS["kimi-k2.7-code"], MODELS["kimi-k2.7-code"], MODELS["glm-5.3-flash"], MODELS["deepseek-v4-flash"]];
       for (const fbSpec of fbCands) {
         if (!fbSpec) continue;
         if (hasImage && !fbSpec.vision) continue;
@@ -2480,3 +2479,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+

@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.3.3";
+var VERSION = "1.4.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -146,26 +146,27 @@ var P_STYLE = L(
   "- Every factual claim must trace to the supplied ANCHORS. If an anchor does not support a claim, do not make the claim.",
   "- Where you reason past the anchors, mark the step as your inference.",
   "- State uncertainty at its true size. Never inflate confidence to make a piece land better.",
-  "- One section must state the strongest objection to the piece's own central claim, in the objector's own terms, and say how bad it is."
+  "- The strongest objection to your central claim must appear in the piece, in the objector's own terms, with an honest assessment of how bad it is. Where it sits is your choice; do not give it the same heading or the same position twice in a row.",
+  "",
+  "The anchors below are raw research notes, usually encyclopedic extracts in a register you must not copy. Never reproduce their sentences. Banned habits they carry: definitional lead sentences ('X is the study of ...'), hedged attributions ('commentators have linked', 'observers note', 'a study found', 'some argue'), and disambiguation-style enumeration. If you need a definition, state it in your own voice in one concrete sentence, or skip it. The piece must read as if you know the subject from inside, not as if you summarized an encyclopedia.",
+  "Do not open with 'In [year], ...' unless the date itself is doing the work. Never repeat the opening move of one of your recent pieces (listed below).",
+  "Reader verdicts (worth your time? yes/flat/no) are listed below. flat and no mean the piece did not earn its reading time; note what those pieces shared and do not repeat it. A recent no outweighs an old yes."
 );
 var P_ESSAY = L(
   "FORM: essay, 2000 to 2800 words. This is long-form. One sustained line of thought, carried to the end; do not stop while the argument is still thin, and do not pad.",
   "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
   "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
   "You are given real source material below. Mine it. Use the specific names, dates, numbers, mechanisms and cases it contains; a piece that could have been written without reading the sources has failed.",
-  "Cover, in this order, without labelling the parts in the text:",
-  "1. open on a concrete particular that puts the reader inside the subject",
-  "2. develop what is actually going on, in specific detail drawn from the material, so a reader who knows the subject does not wince",
-  "3. build your argument step by step, giving the evidence and reasoning for each step and anticipating a sceptical reader at every turn",
-  "4. under a heading, the strongest objection to your argument, in the objector's own terms, answered or honestly conceded",
-  "5. what would have to be true for your argument to hold, and what observation would falsify it"
+  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call \u2014 the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
+  "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
 );
 var P_NOTES = L(
   "FORM: curated field notes, between 3 and 5 items.",
   "Each item is one concrete thing: a paper, a concept, a place, a piece of music, a passage, an exhibition.",
   "Each item is 90 to 200 words. Say precisely what the thing is, then what it connects to in his world. The connection is the point; the summary only makes the connection legible.",
   "If only three of the supplied anchors are worth his time, give three. Never pad to a count. Never include an item you would not defend.",
-  "Give every item a short title."
+  "Give every item a short title.",
+  "The set title names the subject, not the count. Banned patterns: 'Four Ways ...', 'Three Claims ...', 'N Instruments/Reasons/Things ...'."
 );
 var P_SERIAL = L(
   "FORM: serialized long-form, 1200 to 1800 words, continuing one ongoing work.",
@@ -572,15 +573,27 @@ async function loadContinuity(env, form) {
     lines.push("- " + pr[i].day + " [" + pr[i].form + "] " + squish(pr[i].title || "") + " :: " + squish(pr[i].lede || ""));
   }
   var fb = await env.PERSONAL.prepare(
-    "SELECT f.slug, f.signal, f.note, p.title FROM companion_feedback f LEFT JOIN companion_pieces p ON p.slug = f.slug ORDER BY f.id DESC LIMIT 12"
+    "SELECT f.slug, f.signal, f.note, p.title FROM companion_feedback f LEFT JOIN companion_pieces p ON p.slug = f.slug WHERE f.created_at > datetime('now','-14 days') ORDER BY f.id DESC LIMIT 60"
   ).all();
   var fr = fb.results || [];
   if (fr.length) {
-    lines.push("");
-    lines.push("HOW HE REACTED (this is the strongest signal you have)");
+    var yes = 0, flat = 0, no = 0, neg = [], pos = [];
     for (var j = 0; j < fr.length; j++) {
-      lines.push("- [" + fr[j].signal + "] " + squish(fr[j].title || fr[j].slug) + (fr[j].note ? " :: " + squish(fr[j].note) : ""));
+      var sgn = String(fr[j].signal || "");
+      if (sgn === "good") yes++;
+      else if (sgn === "flat") flat++;
+      else no++;
+      var t = squish(fr[j].title || fr[j].slug);
+      if (sgn === "good") pos.push(t);
+      else neg.push(t + "(" + sgn + ")");
     }
+    lines.push("");
+    lines.push("HOW HE REACTED \u2014 reader verdicts, worth your time? (last 14 days: yes=" + yes + " flat=" + flat + " no=" + no + ")");
+    if (neg.length) lines.push("flat/no pieces \u2014 these did not earn their reading time; do not repeat what they shared: " + neg.slice(0, 6).join(" | "));
+    if (pos.length) lines.push("yes pieces \u2014 earned it: " + pos.slice(0, 6).join(" | "));
+    var rn = [];
+    for (var j2 = 0; j2 < Math.min(fr.length, 8); j2++) rn.push("[" + fr[j2].signal + "] " + squish(fr[j2].title || fr[j2].slug));
+    lines.push("most recent votes: " + rn.join(" | "));
   }
   if (form === "serial") {
     var sr = await env.PERSONAL.prepare("SELECT series, title, thesis, chapters, last_lines FROM companion_series ORDER BY id DESC LIMIT 1").all();
@@ -605,8 +618,8 @@ async function pickTopic(env, form) {
   var used = [];
   try {
     var r = await env.PERSONAL.prepare(
-      "SELECT DISTINCT key FROM companion_seeds WHERE used_at > datetime('now','-7 days')"
-    ).all();
+      "SELECT DISTINCT key FROM companion_seeds WHERE used_at > datetime('now','-10 days') OR (form = ? AND used_at > datetime('now','-1 day'))"
+    ).bind(form).all();
     var rr = r.results || [];
     for (var i = 0; i < rr.length; i++) used.push(rr[i].key);
   } catch (e) {
@@ -986,7 +999,7 @@ __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
-  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. Include one section headed exactly: ## The strongest objection";
+  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each item as its own ## heading followed by one or two paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
   var sys = [P_STYLE, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular from the source material. Name the paper, the theorem, the number, or the place. A sentence that could have been written without the source material is a failed sentence.";
   var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1500 to 2200 words. This is a requirement, not a suggestion." : "Length: four items, each 110 to 170 words. This is a requirement, not a suggestion.");
@@ -1426,6 +1439,20 @@ async function generate(env, form, opts) {
         await logRun(env, form, model, topic.id, "rejected", "too similar to " + dup.slug + " (" + dup.score.toFixed(3) + ")", Date.now() - t0);
         continue;
       }
+      var openKey = String(piece.lede || String(piece.body_md || "").split(NL)[0] || "").replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 60);
+      if (openKey.length > 40) {
+        try {
+          var odCheck = await env.PERSONAL.prepare(
+            "SELECT slug FROM companion_pieces WHERE replace(replace(replace(lower(substr(lede,1,120)),' ',''),'.',''),'-','') LIKE ? LIMIT 1"
+          ).bind(openKey + "%").all();
+          if ((odCheck.results || []).length > 0) {
+            await logRun(env, form, model, topic.id, "rejected", "duplicate opening: same lede as existing piece", Date.now() - t0);
+            feedback = "The previous draft opened with the same sentences as an existing piece. Open on a different particular.";
+            continue;
+          }
+        } catch (e) {
+        }
+      }
       var titleLow = String(piece.title || "").toLowerCase().trim();
       if (titleLow.length > 4) {
         try {
@@ -1559,7 +1586,7 @@ var worker_default = {
         { kind: "paper", ref: "arXiv:2509.00002", title: "Continued Fractions and Just Intonation", text: "The convergents of a continued fraction give the best rational approximations to a real number. Applied to frequency ratios, this recovers the historically attested tuning ladder: 3/2, 4/3, 5/4 and their compounds. The approximation error of a convergent falls monotonically, so the order of the ladder is forced rather than chosen. We tabulate the first nine convergents against the historical record." },
         { kind: "concept", ref: "https://en.wikipedia.org/wiki/Ultrametric_space", title: "Ultrametric space", text: "An ultrametric space is a metric space in which the triangle inequality is replaced by the strong triangle inequality: d(x,z) is at most the larger of d(x,y) and d(y,z). Every ultrametric space embeds isometrically in a complete one, and its closed balls are either disjoint or nested, never partially overlapping." }
       ];
-      var cSys = [P_STYLE, "", P_ESSAY, "", "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Include one section headed exactly: ## The strongest objection"].join(NL);
+      var cSys = [P_STYLE, "", P_ESSAY, "", "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it"].join(NL);
       var cUser = [anchorsBlock(cTopic, cAnchors, "(life context omitted for this comparison run)", "(taste context omitted for this comparison run)"), "", "Length: 900 to 1100 words. This is a requirement."].join(NL);
       var c0 = Date.now();
       try {
@@ -1776,3 +1803,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
