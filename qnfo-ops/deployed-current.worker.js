@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
-var VERSION = "2.28.2"; // DO honors OPS_MAX_TOOL_ITERS 2026-09-15 // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
+var VERSION = "2.28.3"; // DO per-session history keying (sid) 2026-09-15 // FIX-6 (2.27.0 multi-client auth) + AgenticOpsExec real DO (2026-09-14)
 // CODE-GATE-GUARD-1 (2026-09-12): classifyDomain length thresholds. The pipeline-prefix
 // blocklist and the embedded-data detector run FIRST; only then do the length guards apply:
 //   1500 - above this length a prompt is excluded from code mode ONLY IF it carries an
@@ -2800,19 +2800,25 @@ export class AgenticOpsExec {
       const sid = url.searchParams.get("sid") || randId("sess-");
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
+      server.serializeAttachment({ sid: sid });
       this.ctx.acceptWebSocket(server, [sid]);
       return new Response(null, { status: 101, webSocket: client });
     }
-    const history = (await this.ctx.storage.get("history")) || [];
-    const sessions = (await this.ctx.storage.list()).size;
-    return json({ ok: true, worker: WORKER, class: "AgenticOpsExec", version: VERSION, sessions, messages: history.length, capabilities: ["websocket-hibernation", "durable-agent-session", "ops-tool-loop"] });
+    const histList = await this.ctx.storage.list({ prefix: "history:" });
+    const sessions = histList.size;
+    let messages = 0;
+    histList.forEach(function(h) { messages += (h || []).length; });
+    return json({ ok: true, worker: WORKER, class: "AgenticOpsExec", version: VERSION, sessions, messages, capabilities: ["websocket-hibernation", "durable-agent-session", "ops-tool-loop"] });
   }
   async webSocketMessage(ws, message) {
     let payload = {};
     try { payload = typeof message === "string" ? JSON.parse(message) : { content: String(message) }; } catch (e) { payload = { content: String(message) }; }
     const userContent = String((payload && (payload.content || payload.message || payload.text)) || "");
     if (!userContent) { try { ws.send(JSON.stringify({ type: "error", error: "empty message" })); } catch (e) {} return; }
-    const history = (await this.ctx.storage.get("history")) || [];
+    const att = ws.deserializeAttachment();
+    const sid = att && att.sid ? att.sid : "default";
+    const historyKey = "history:" + sid;
+    const history = (await this.ctx.storage.get(historyKey)) || [];
     history.push({ role: "user", content: userContent });
     const messages = [{ role: "system", content: OPS_SYSTEM_PROMPT }].concat(history);
     let finalText = "";
@@ -2837,10 +2843,10 @@ export class AgenticOpsExec {
         iter++;
       }
       if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
-      await this.ctx.storage.put("history", history);
+      await this.ctx.storage.put(historyKey, history);
       try { ws.send(JSON.stringify({ type: "message", role: "assistant", content: finalText })); } catch (e) {}
     } catch (e) {
-      await this.ctx.storage.put("history", history);
+      await this.ctx.storage.put(historyKey, history);
       try { ws.send(JSON.stringify({ type: "error", error: String((e && e.message) || e) })); } catch (e2) {}
     }
   }
