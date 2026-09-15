@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.14";
+var VERSION = "0.7.15"; // v0.7.15 DISCOVERY-1: real sitemap + robots routes
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -953,6 +953,19 @@ export default {
       // Increment read count
       env.DB.prepare("UPDATE published_pieces SET reads=reads+1 WHERE slug=?").bind(slug).run().catch(() => {});
       return html(renderPiece(piece));
+    }
+
+    if (path === "/sitemap.xml") {
+      var srows = await env.DB.prepare("SELECT slug, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 5000").all();
+      var surls = (srows.results || []).map(function (r) {
+        return "<url><loc>" + ORIGIN + "/p/" + encodeURIComponent(r.slug) + "</loc><lastmod>" + String(r.published_at || "").slice(0, 10) + "</lastmod></url>";
+      }).join("");
+      var sxml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + '<url><loc>' + ORIGIN + '</loc></url><url><loc>' + ORIGIN + '/feed.xml</loc></url>' + surls + '</urlset>';
+      return new Response(sxml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=1800" } });
+    }
+
+    if (path === "/robots.txt") {
+      return new Response("User-agent: *\nAllow: /\n\nSitemap: " + ORIGIN + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
 
     if (path === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });

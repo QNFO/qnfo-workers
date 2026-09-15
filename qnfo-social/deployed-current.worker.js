@@ -1,5 +1,21 @@
+<<<<<<< HEAD
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+=======
+// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose. v0.5.3-failclosed (2026-09-13): the fact-checker now fails CLOSED. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry + agent_issue escalation (was v0.5.1-failopen).
+// Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN. D1: DB (qnfo-audit.social_threads). AI: env.AI.
+// Cron posts oldest queued thread. /compose drafts a thread from title+abstract (draft -> approve -> queued).
+// v0.5.3 CHECKER-FAILCLOSED-1: checkThread returned [] when both parse attempts failed, and both
+// callers do `issues.length === 0 ? 'queued' : 'draft'` - so a broken checker AUTO-QUEUED the
+// thread for posting. [] means "checked and faithful"; returning it on failure published
+// unchecked content. It now returns null (unverified) -> always 'draft' + alert. The escalation
+// sample was also empty whenever the model returned an empty string, which is why issue #676
+// was filed with a blank detail ("checker empty or unparseable: "); it now falls back to the
+// raw response shape so the failure is diagnosable.
+var VERSION = '0.6.0'; // v0.6.0 DRAIN-QUOTA-1 (2026-09-15): drain matched to production rate + crashed-run reclaim + failed-retry sweep + daily cap // FIX 2026-09-15: checker max_tokens 1000->3000; reasoning model deepseek-v4-flash-0731 exhausted the 1000 cap on complex papers -> empty content -> fail-closed (agent_issues 898)
+const BSKY = 'https://bsky.social/xrpc';
+const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
+>>>>>>> f97f9fd (qnfo-social v0.6.0 + q08-signal-engine v0.7.15: close the dissemination gap)
 
 // worker.js
 var VERSION = "0.6.0";
@@ -276,6 +292,7 @@ async function bufferPost(env, text) {
   }
   return { results };
 }
+<<<<<<< HEAD
 __name(bufferPost, "bufferPost");
 var DRAIN_PER_RUN = 2;
 var DRAIN_DAILY_CAP = 12;
@@ -292,6 +309,39 @@ async function drainQueue(env) {
   ).first();
   const postedToday = today && today.n || 0;
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: "daily-cap", posted_today: postedToday };
+=======
+
+var DRAIN_PER_RUN = 2;      // threads posted per scheduled run
+var DRAIN_DAILY_CAP = 12;   // hard ceiling on posts per UTC day
+var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
+
+// Drain the share queue oldest-first under a daily ceiling.
+// PRECONDITION:  env.DB is the qnfo-audit D1 binding holding social_threads.
+// POSTCONDITION: at most DRAIN_PER_RUN threads leave 'queued'; every terminal
+//                transition is written back before the run returns.
+// INVARIANT:     no row is left in 'posting' forever - a crashed run is
+//                reclaimed on the next pass with retry_count incremented, so
+//                poison rows cannot loop.
+async function drainQueue(env) {
+  // 1. Reclaim rows abandoned mid-flight by a crashed run.
+  await env.DB.prepare(
+    "UPDATE social_threads SET status = CASE WHEN retry_count < ? THEN 'queued' ELSE 'failed' END, retry_count = retry_count + 1 WHERE status = 'posting'"
+  ).bind(MAX_RETRIES).run();
+
+  // 2. Sweep failed rows back into the queue while under the retry ceiling.
+  await env.DB.prepare(
+    "UPDATE social_threads SET status = 'queued' WHERE status = 'failed' AND retry_count < ?"
+  ).bind(MAX_RETRIES).run();
+
+  // 3. Enforce the daily ceiling so the channel cannot flood.
+  const today = await env.DB.prepare(
+    "SELECT COUNT(*) n FROM social_threads WHERE status = 'posted' AND posted_at >= datetime('now','start of day')"
+  ).first();
+  const postedToday = (today && today.n) || 0;
+  if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
+
+  // 4. Drain oldest-first.
+>>>>>>> f97f9fd (qnfo-social v0.6.0 + q08-signal-engine v0.7.15: close the dissemination gap)
   let posted = 0, failed = 0;
   for (let i = 0; i < DRAIN_PER_RUN; i++) {
     const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
@@ -302,6 +352,10 @@ async function drainQueue(env) {
       if (!Array.isArray(posts) || !posts.length) throw new Error("bad posts payload");
       const s = await session(env);
       const uris = await postThread(s, posts);
+<<<<<<< HEAD
+=======
+      // Buffer cross-post (Mastodon + LinkedIn + X) is best-effort, never blocks Bluesky.
+>>>>>>> f97f9fd (qnfo-social v0.6.0 + q08-signal-engine v0.7.15: close the dissemination gap)
       let bufferResult = null;
       try {
         bufferResult = await bufferPost(env, posts[0]);
@@ -310,6 +364,7 @@ async function drainQueue(env) {
       }
       await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
       posted++;
+<<<<<<< HEAD
       console.log("drain posted thread", row.slug, uris[0], "buffer:", JSON.stringify(bufferResult).slice(0, 200));
     } catch (e) {
       failed++;
@@ -331,8 +386,26 @@ var worker_default = {
       await alertDigest(env);
       return;
     }
+=======
+      console.log('drain posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
+    } catch (e) {
+      failed++;
+      await env.DB.prepare("UPDATE social_threads SET status='failed', error=?, retry_count=retry_count+1 WHERE id=?").bind(String(e).slice(0, 300), row.id).run();
+      await logAlert(env, 'cron', 'error', 'drain post failed ' + row.slug + ': ' + String(e));
+      console.error('drain post failed', row.slug, String(e));
+    }
+  }
+  return { posted: posted, failed: failed, posted_today: postedToday + posted };
+}
+
+export default {
+  async scheduled(event, env) {
+    if (event.cron === '0 6 * * *') { await autoScan(env); return; }
+    if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
+>>>>>>> f97f9fd (qnfo-social v0.6.0 + q08-signal-engine v0.7.15: close the dissemination gap)
     await drainQueue(env);
   },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const p = url.pathname, m = request.method;
@@ -425,11 +498,19 @@ var worker_default = {
         const drafts = await env.DB.prepare("SELECT id, slug, title, doi FROM social_threads WHERE status='draft' ORDER BY id DESC LIMIT 10").all();
         return new Response(JSON.stringify({ ok: true, drafted: (drafts.results || []).length, drafts: drafts.results || [] }), { headers: { "Content-Type": "application/json", ...cors } });
       }
+<<<<<<< HEAD
       if (p === "/drain" && m === "POST") {
         const res = await drainQueue(env);
         return new Response(JSON.stringify({ ok: true, drain: res }), { headers: { "Content-Type": "application/json", ...cors } });
       }
       if (p === "/alerts" && m === "GET") {
+=======
+      if (p === '/drain' && m === 'POST') {
+        const res = await drainQueue(env);
+        return new Response(JSON.stringify({ ok: true, drain: res }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/alerts' && m === 'GET') {
+>>>>>>> f97f9fd (qnfo-social v0.6.0 + q08-signal-engine v0.7.15: close the dissemination gap)
         const rows = await env.DB.prepare("SELECT id, source, level, message, created_at, digested FROM alerts ORDER BY id DESC LIMIT 50").all();
         return new Response(JSON.stringify(rows.results || []), { headers: { "Content-Type": "application/json", ...cors } });
       }
