@@ -8,7 +8,7 @@ var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.6"; // FIX-ENSEMBLE-RELIABLE (2026-09-15): promote verified-working models to primary legs
+var VERSION = "0.9.7"; // FIX-ZENODO-FILES-ENABLED (2026-09-15): handle Zenodo newversion 400 files.enabled error
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
@@ -913,6 +913,37 @@ async function publishV2(env, row) {
       nv = await zenodo(env, "POST", "/" + nvBase + "/actions/newversion", {});
     } catch (eN) {
       nv = null;
+    }
+    // FIX-ZENODO-FILES-ENABLED (2026-09-15): Zenodo API v3 returns 400 "files.enabled: Please remove
+    // all files first" when the latest published record has files. Fix: disable files on the draft
+    // (PUT /api/deposit/depositions/{id} with {"metadata":{"upload_type":"publication"}}) then retry.
+    // Per Zenodo docs, the newversion draft inherits files; we must delete them before uploading new ones.
+    if (!nv || !nv.id) {
+      try {
+        // Try to find an existing unsubmitted draft for this concept and unlock it
+        var unlockResp = await fetch("https://zenodo.org/api/deposit/depositions?size=10&sort=mostrecent&access_token=" + env.ZENODO_TOKEN, { headers: { "User-Agent": "QNFO-research-exec/0.9.7" } });
+        if (unlockResp.ok) {
+          var unlockList = await unlockResp.json();
+          var existingDraft = (Array.isArray(unlockList) ? unlockList : (unlockList.hits && unlockList.hits.hits) || []).find(function(d) {
+            return d && d.submitted === false && String(d.conceptrecid || '') === conceptRec;
+          });
+          if (existingDraft && existingDraft.id) {
+            // Delete all files from the existing draft, then use it
+            var existFiles = existingDraft.files || [];
+            for (var efi = 0; efi < existFiles.length; efi++) {
+              try { await fetch(existFiles[efi].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" }); } catch(e) {}
+            }
+            nv = existingDraft;
+          }
+        }
+      } catch (eUnlock) {}
+    }
+    // If still no draft, retry newversion after a short wait (Zenodo eventual consistency)
+    if (!nv || !nv.id) {
+      try {
+        await new Promise(function(r) { setTimeout(r, 2000); });
+        nv = await zenodo(env, "POST", "/" + nvBase + "/actions/newversion", {});
+      } catch (eRetry) { nv = null; }
     }
   }
   if (!nv || !nv.id) {
