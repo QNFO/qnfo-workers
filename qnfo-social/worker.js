@@ -8,7 +8,7 @@
 // sample was also empty whenever the model returned an empty string, which is why issue #676
 // was filed with a blank detail ("checker empty or unparseable: "); it now falls back to the
 // raw response shape so the failure is diagnosable.
-var VERSION = '0.5.4-failclosed-buffer';
+var VERSION = '0.5.5-checker-budget'; // FIX 2026-09-15: checker max_tokens 1000->3000; reasoning model deepseek-v4-flash-0731 exhausted the 1000 cap on complex papers -> empty content -> fail-closed (agent_issues 898)
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 
@@ -121,13 +121,13 @@ async function checkThread(env, title, abstract, posts) {
     }
     return null;
   }
-  const ai1 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 1000 });
+  const ai1 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 3000 });
   let text = extractText(ai1).trim();
   let issues = parseIssues(text);
   let diagText = text;
   let lastAi = ai1;
   if (issues === null) {
-    const ai2 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 1000 });
+    const ai2 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 3000 });
     const retryText = extractText(ai2).trim();
     diagText = retryText;
     lastAi = ai2;
