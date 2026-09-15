@@ -2,9 +2,18 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
+// v5.28.0 (2026-09-15) STREAM-TIMEOUT-1: the stream path called Workers AI with stream=false
+// (full non-streaming inference, up to 32768 out-tokens) and then synthesised the SSE, so a long
+// generation inherited the whole inference latency and Workers AI aborted it with 3046: Request
+// timeout, surfacing to clients as HTTP 502 {"error":"stream failed: 3046: Request timeout"}.
+// Fix: (a) runDirect retries a 3046/timeout with a halved max_tokens before giving up;
+// (b) the stream path no longer throws on upstream failure - it retries halved, then falls through
+// to the existing sibling-model chain and the FALLBACK_TEXT degradation, so the client gets a
+// usable 200 SSE answer instead of a raw upstream error string. Also restores the corrupted
+// recursion in extractWAContent() (line ~991 returned an undefined identifier `extrac`).
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.27.0";
+var VERSION = "5.28.0";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -621,6 +630,12 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
           aiBody.max_tokens = Math.max(1024, Math.floor(cur / 2));
           continue;
         }
+        const isTimeoutErr = /3046|request timeout|timed out/i.test(msg);
+        if (isTimeoutErr && attempt < 2 && Number.isFinite(Number(aiBody.max_tokens)) && Number(aiBody.max_tokens) > 2048) {
+          aiBody.max_tokens = Math.max(2048, Math.floor(Number(aiBody.max_tokens) / 2));
+          await new Promise((res) => setTimeout(res, 300 + attempt * 400));
+          continue;
+        }
         if (/429|rate limit|capacity temporarily|try again/i.test(msg) && attempt < 2) {
           await new Promise((res) => setTimeout(res, 250 + attempt * 250));
           continue;
@@ -988,8 +1003,7 @@ function extractWAContent(result, depth = 0) {
     }
     if (typeof c.text === "string" && c.text.trim()) return c.text;
   }
-  if (result.result && typeof result.result === "object") return extrac;
-  tWAContent(result.result, depth + 1);
+  if (result.result && typeof result.result === "object") return extractWAContent(result.result, depth + 1);
   return "";
 }
 __name(extractWAContent, "extractWAContent");
@@ -1586,14 +1600,29 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       if (effSpec.wa) {
         const sTools = Array.isArray(tools) && tools.length ? tools : null;
         const sToolMode = !!sTools && !!effSpec.tools;
-        const waOut0 = await runWorkersAI(env, effSpec.wa, messages, clampTokens(max_tokens, MAX_OUT[effSpec.wa]), false, {
+        const sOpts = {
           temperature: effTemp,
           top_p: effTopP,
           tools: sToolMode ? sTools : void 0,
           tool_choice: sToolMode ? clientToolChoice || "auto" : void 0,
           vision: effSpec.vision
-        });
-        const waToolCalls = sToolMode ? extractWAToolCalls(waOut0) : null;
+        };
+        const sCap0 = clampTokens(max_tokens, MAX_OUT[effSpec.wa]);
+        let waOut0 = null;
+        try {
+          waOut0 = await runWorkersAI(env, effSpec.wa, messages, sCap0, false, sOpts);
+        } catch (eS) {
+          const sMsg = String(eS && eS.message || eS || "");
+          if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, { ...mkLogRec(), model: routedModel, streamed: 1, response: ("STREAM-UPSTREAM-ERROR: " + sMsg).slice(0, 400), latency_ms: Date.now() - t0 }));
+          if (/3046|request timeout|timed out/i.test(sMsg)) {
+            try {
+              waOut0 = await runWorkersAI(env, effSpec.wa, messages, Math.max(2048, Math.floor(sCap0 / 2)), false, sOpts);
+            } catch (eS2) {
+              waOut0 = null;
+            }
+          }
+        }
+        const waToolCalls = sToolMode && waOut0 ? extractWAToolCalls(waOut0) : null;
         const waTCIndexed = (waToolCalls || []).map((tc0, i0) => ({ ...tc0, index: tc0 && tc0.index != null ? tc0.index : i0 }));
         let waContent = stripToolMarkup(extractWAContent(waOut0));
         if (waToolCalls && waToolCalls.length) {
@@ -2479,4 +2508,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-
+
