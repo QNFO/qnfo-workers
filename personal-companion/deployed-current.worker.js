@@ -1,5 +1,6 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+var __name2 = __name;
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
