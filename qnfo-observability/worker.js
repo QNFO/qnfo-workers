@@ -259,7 +259,7 @@ async function digest(env, ingestResult) {
     const ratio = r.bad / r.n;
     if (r.n >= 20 && ratio > 0.5) {
       summary.anomalies.push({ worker: r.script_name, events: r.n, bad: r.bad, ratio: Math.round(ratio * 100) / 100 });
-      await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, 'digest')').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + r.bad + '/' + r.n + ' last 24h)').run();
+      await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, "digest")').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + r.bad + '/' + r.n + ' last 24h)').run();
     }
   }
   // RECURRENCE-FIX (2026-09-14): id was hour-granular ('fleet-obs-<YYYY-MM-DDTHH>-digest'), so any
