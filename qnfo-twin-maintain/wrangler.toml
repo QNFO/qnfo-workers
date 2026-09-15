@@ -1,0 +1,20 @@
+name = "qnfo-twin-maintain"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+usage_model = "standard"
+
+# PERSONAL_DB repointed from personal-life (e8d6c61a) to qnfo-graph (a1954b92)
+# per TWIN-MAINTAIN-STORE-MISPOINT fix 2026-09-15
+# qnfo-graph.agent_memories = 544 rows (live store, written by qnfo-memory-mcp)
+# personal-life.agent_memories = 0 rows (empty, wrong target)
+[[d1_databases]]
+binding = "PERSONAL_DB"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"
+
+[triggers]
+crons = ["0 4 * * *"]

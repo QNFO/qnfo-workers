@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.29.2";
+var VERSION = "2.30.2";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1322,10 +1322,11 @@ async function cfWorkerRead(env, args) {
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
       { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
     );
-    const metaJ = metaR.ok ? await metaR.json() : null;
+    let metaJ = null;
+    try { metaJ = metaR.ok ? await metaR.json() : null; } catch (_mj) { metaJ = null; }
     const meta = metaJ && metaJ.result || {};
     const srcR = await fetch(
-      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/content",
+      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/content/v2",
       { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Accept": "application/javascript" } }
     );
     if (!srcR.ok) return { ok: false, error: "CF API " + srcR.status + " reading " + worker };
@@ -2150,15 +2151,21 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
   }
-  const resp = await fetch(DEEPSEEK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
+  let resp = null, _dsLastErr = "";
+  for (let _dsTry = 0; _dsTry < 3; _dsTry++) {
+    resp = await fetch(DEEPSEEK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+      body: JSON.stringify(body)
+    });
+    if (resp.ok) break;
     const txt = await resp.text();
-    throw new Error("deepseek " + resp.status + ": " + String(txt || "").slice(0, 300));
+    _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
+    if (resp.status < 500 && resp.status !== 429) throw new Error(_dsLastErr);
+    console.log("OPS_DS_RETRY attempt=" + (_dsTry + 1) + " " + _dsLastErr.slice(0, 120));
+    if (_dsTry < 2) await new Promise(function(rr) { setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400)); });
   }
+  if (!resp || !resp.ok) throw new Error(_dsLastErr || "deepseek upstream unavailable after 3 attempts");
   const _out = await resp.json();
   const _servedBy = o.codeMode ? o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL : null;
   return { resp: _out, servedBy: _servedBy };
@@ -2775,7 +2782,7 @@ function manifest() {
     service: WORKER,
     kind: "worker",
     version: VERSION,
-    base_url: "https://qnfo-ops.q08.workers.dev",
+    base_url: "https://ops.qnfo.org",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
     capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation"],
     routes: ROUTES,
@@ -2799,7 +2806,7 @@ async function registryRefresh(env) {
     } catch (e) {
     }
   }, "upsert");
-  await upsert("qnfo-ops", "worker", { version: VERSION, base_url: CANON_BASE["qnfo-ops"] || "https://qnfo-ops.q08.workers.dev", purpose: "ops endpoint + service registry + queue/query", capabilities: manifest().capabilities, routes: ROUTES, tools: OPS_TOOLS.map(function(t) {
+  await upsert("qnfo-ops", "worker", { version: VERSION, base_url: CANON_BASE["qnfo-ops"] || "https://ops.qnfo.org", purpose: "ops endpoint + service registry + queue/query", capabilities: manifest().capabilities, routes: ROUTES, tools: OPS_TOOLS.map(function(t) {
     return { name: t.name, description: t.description };
   }), models: ["ops-exec", "deepseek-v4-flash"], deps: manifest().deps });
   let apiList = [];
@@ -3301,7 +3308,7 @@ var worker_default = {
     }
     if (path === "/v1/models" && method === "GET") {
       const mk = /* @__PURE__ */ __name2(function(id) {
-        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (pure server-side loop: ALL code/tool ops execute on Cloudflare; no client tool_calls handoff; streamed final answers; DeepSeek upstream, no markup)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://qnfo-ops.q08.workers.dev/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
+        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (pure server-side loop: ALL code/tool ops execute on Cloudflare; no client tool_calls handoff; streamed final answers; DeepSeek upstream, no markup)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://ops.qnfo.org/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
       }, "mk");
       return json({ object: "list", data: [mk("ops-exec"), mk("deepseek-v4-flash")] });
     }
