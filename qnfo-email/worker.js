@@ -18,6 +18,14 @@ var qnfo_email_default = {
     const { bodyText, bodyHtml } = await parseBody(raw);
     const classification = classifyAddress(to);
     const headersJson = JSON.stringify(Object.fromEntries(headers.entries()));
+    // LOOP-GUARD (EMAIL-ALERT-LOOP-1, 2026-09-16): internal alert mail is sent to
+    // alerts@<own-domain>; Cloudflare Email Routing on the same zone then delivers it
+    // straight back into this handler with the envelope rewritten to
+    // bounces@cf-bounce.<own-domain>. Verified: 122 outbound, 104 returned (85%).
+    if (isLoopRelay(from) && isOwnAddress(to) && classification !== "personal") {
+      console.log("[LOOP-DROP] " + from + " -> " + to + ": " + subject);
+      return;
+    }
     const emailId = await storeEmail(env.AUDIT_DB, {
       messageId,
       from,
@@ -129,7 +137,7 @@ var qnfo_email_default = {
           env.AUDIT_DB.prepare("SELECT COUNT(*) as count FROM emails").first(),
           env.AUDIT_DB.prepare("SELECT COUNT(*) as count FROM emails WHERE julianday(received_at) > julianday('now', '-24 hours')").first(),
           env.AUDIT_DB.prepare("SELECT classification, COUNT(*) as count FROM emails GROUP BY classification ORDER BY count DESC").all(),
-          env.AUDIT_DB.prepare("SELECT status, COUNT(*) as count FROM emails GROUP BY status").all()
+          env.AUDIT_DB.prepare("SELECT status, COUNT(*) as count FROM emails GROUP BY status ORDER BY count DESC").all()
         ]);
         return json({
           total: total?.count || 0,
@@ -146,6 +154,38 @@ var qnfo_email_default = {
       try {
         const { to, subject, body, html, reply_to_id, from } = await request.json();
         if (!to) return json({ error: "to is required" }, 400);
+        // SEND-GATES (EMAIL-SENDPATH-1, 2026-09-16): this endpoint previously validated
+        // only that `to` was present. No suppression, no no-repeat, no threading.
+        var replyHeaders = {};
+        if (reply_to_id) {
+          try {
+            var _orig = await env.AUDIT_DB.prepare("SELECT message_id FROM emails WHERE id=?1").bind(reply_to_id).first();
+            if (_orig && _orig.message_id) {
+              replyHeaders["In-Reply-To"] = _orig.message_id;
+              replyHeaders["References"] = _orig.message_id;
+            }
+          } catch (e) {
+            console.error("threading:", e.message);
+          }
+        }
+        try {
+          var _to = String(to).toLowerCase();
+          var _pol = await env.AUDIT_DB.prepare("SELECT pattern, kind FROM email_sender_policy").all();
+          for (var _p of (_pol.results || [])) {
+            if (_p.kind !== "person" && _p.pattern && _to.indexOf(String(_p.pattern).toLowerCase()) !== -1) {
+              return json({ error: "blocked: recipient matches machine/no-reply policy", pattern: _p.pattern }, 403);
+            }
+          }
+          var _led = await env.AUDIT_DB.prepare("SELECT email, suppress, reply_count FROM contact_ledger WHERE lower(email)=?1").bind(_to).first();
+          if (_led && _led.suppress) {
+            return json({ error: "blocked: recipient is suppressed", email: _to }, 403);
+          }
+          if (_led && (_led.reply_count || 0) >= 2) {
+            return json({ error: "blocked: no-repeat policy (reply_count>=2)", email: _to, reply_count: _led.reply_count }, 409);
+          }
+        } catch (e) {
+          console.error("send-gates:", e.message);
+        }
         const htmlBody = html || (body ? `<p>${body.replace(/\n/g, "<br>")}</p>` : "");
         const textBody = body || html?.replace(/<[^>]*>/g, "") || "";
         const replySubject = subject || "(no subject)";
@@ -157,7 +197,8 @@ var qnfo_email_default = {
           from: FROM_ADDR,
           subject: replySubject,
           text: textBody,
-          html: htmlBody
+          html: htmlBody,
+          headers: replyHeaders
         });
         const actualMessageId = result?.messageId || null;
         console.log(`[SEND] messageId=${actualMessageId} to=${to} subject=${replySubject}`);
@@ -236,6 +277,24 @@ var qnfo_email_default = {
     });
   }
 };
+// ── Loop / ownership guard (EMAIL-ALERT-LOOP-1, 2026-09-16) ──────────────────
+// Internal alert mail is sent to alerts@<own-domain>. Cloudflare Email Routing on the
+// same zone then delivers it straight back into this handler with the envelope rewritten
+// to bounces@cf-bounce.<own-domain>. Verified on qnfo-audit.emails: 122 outbound alerts
+// to alerts@qnfo.org, 104 returned here (85%). They are dropped before being stored.
+var OWN_DOMAINS = ["qnfo.org", "qwav.org", "qwav.tech", "qwav.net", "qwav.uk", "q-wave.tech", "qwave.tech", "q08.org", "qnfo.net", "qnfo.uk", "empoweringchange.today"];
+function isOwnAddress(a) {
+  var d = String(a || "").split("@")[1] || "";
+  return OWN_DOMAINS.indexOf(d.toLowerCase()) !== -1;
+}
+function isLoopRelay(a) {
+  // Deliberately narrow: THIS zone's own Cloudflare routing relay only, plain or
+  // SRS-encoded. A blanket SRS/bounce match would silently drop genuine mail --
+  // id 731 (SRS0=...=whitefriar.co.uk=jay@empoweringchange.today) is a real human
+  // correspondent and id 693 (SRS0=...=sv703.xserver.jp=postmaster@qnfo.org) is a
+  // genuine external NDR. Both must survive.
+  return /cf-bounce\./i.test(String(a || ""));
+}
 async function parseBody(raw) {
   let bodyText = "", bodyHtml = "";
   try {
@@ -352,5 +411,3 @@ __name(truncate, "truncate");
 export {
   qnfo_email_default as default
 };
-//# sourceMappingURL=qnfo-email.js.map
-
