@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.30.3";
+var VERSION = "2.30.4";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1394,7 +1394,7 @@ async function cfWorkerDeploy(env, args) {
   } else {
     return { ok: false, error: "cf_worker_deploy ABORTED: bindings fetch status " + bResp.status + " \u2014 refusing to deploy with bindings:[]" };
   }
-  const bindingsOut = existingBindings.map(function (b) { const c = Object.assign({}, b); delete c.text; return c; });
+  const bindingsOut = existingBindings.map(function (b) { const c = Object.assign({}, b); return c; });
   try {
     const boundary = "ops-deploy-" + Date.now().toString(16);
     const metadataPart = JSON.stringify({ body_part: "worker.js", bindings: bindingsOut });
