@@ -14,7 +14,7 @@ function fnv32(s) {
 __name(fnv32, "fnv32");
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.30.2";
+var VERSION = "2.30.3";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -305,7 +305,7 @@ var OPS_TOOLS = [
   { name: "kv_delete", description: "Delete a key from the bound KV namespace (destructive; requires confirm:true).", parameters: { type: "object", properties: { key: { type: "string" }, confirm: { type: "boolean" } }, required: ["key"], additionalProperties: false } },
   { name: "github_create_branch", description: "Create a new branch in a GitHub repo from an existing branch (base, default main) via the git refs API.", parameters: { type: "object", properties: { repo: { type: "string" }, branch: { type: "string" }, base: { type: "string" } }, required: ["repo", "branch"], additionalProperties: false } },
   { name: "cf_worker_read", description: "Read the live deployed bundle + VERSION of a Cloudflare Worker via CF API. Use before editing to avoid concurrent-agent races (CONCURRENT-WORKER-VERIFY-1). Returns bundle_snippet (up to maxChars), version, size, modified_on.", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name (e.g. qnfo-agent-orchestrator)" }, maxChars: { type: "number", description: "max chars of bundle to return (default 8000, max 40000)" } }, required: ["worker"], additionalProperties: false } },
-  { name: "cf_worker_deploy", description: "Deploy a Cloudflare Worker via CF API PUT (server-side; no local wrangler required). Supports expected_version guard to prevent concurrent-agent races. Use for API-managed workers that have no wrangler.toml (e.g. qnfo-agent-orchestrator). ADVERSARIAL: does not validate JS syntax \u2014 test with run_code first.", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name" }, content: { type: "string", description: "full JS source to deploy" }, version: { type: "string", description: "version label (for logging)" }, expected_version: { type: "string", description: "if set, aborts if live version != this (race guard)" } }, required: ["worker", "content"], additionalProperties: false } },
+  { name: "cf_worker_deploy", description: "Deploy a Cloudflare Worker via CF API PUT (server-side; no local wrangler required). Supports expected_version guard to prevent concurrent-agent races. Use for API-managed workers that have no wrangler.toml (e.g. qnfo-agent-orchestrator). ADVERSARIAL: does not validate JS syntax \u2014 test with run_code first. BINDING-PRESERVE-1 (2026-09-16): redeclares the worker's existing bindings from GET /bindings (secret values persist in the secrets store) and aborts fail-closed if they cannot be read for an existing worker — a deploy can no longer wipe KV/D1/R2/Vectorize/service bindings.", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name" }, content: { type: "string", description: "full JS source to deploy" }, version: { type: "string", description: "version label (for logging)" }, expected_version: { type: "string", description: "if set, aborts if live version != this (race guard)" } }, required: ["worker", "content"], additionalProperties: false } },
   { name: "cf_worker_bindings", description: "Read live bindings for a Cloudflare Worker via CF API. Use before authoring wrangler.toml for MERGE consolidations (BINDING-PRESERVATION-1). Returns bindings array with type/name and type-specific fields (namespace_id, database_id, etc.).", parameters: { type: "object", properties: { worker: { type: "string", description: "worker script name" } }, required: ["worker"], additionalProperties: false } },
   { name: "github_cherry_pick", description: "Graft one or more commits onto origin/main via GitHub Trees+Commits API (WORKTREE-GRAFT-PUSH-1). Server-side equivalent of: git worktree add --detach <tmp> origin/main && git cherry-pick <sha> && git push origin HEAD:main. ADVERSARIAL: does NOT resolve merge conflicts \u2014 check for file divergence first.", parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, commits: { type: "array", items: { type: "string" }, description: "array of commit SHAs to graft in order" }, base: { type: "string", description: "target branch (default main)" } }, required: ["repo", "commits"], additionalProperties: false } },
   { name: "dr_validate_schema", description: "Server-side D1 schema validation (JS port of dr_validate_schema.py). Validates required tables/columns in qnfo-audit + living-paper D1 databases directly via bound D1 bindings. Returns {ok, status:'SCHEMA OK'|'SCHEMA ERROR', violations, validated}.", parameters: { type: "object", properties: {}, additionalProperties: false } },
@@ -1369,9 +1369,35 @@ async function cfWorkerDeploy(env, args) {
       return { ok: false, rejected: true, error: "VERSION MISMATCH: live=" + cur.version + " expected=" + args.expected_version + " \u2014 concurrent agent may have deployed. Read current bundle first (cf_worker_read) before retrying." };
     }
   }
+  // BINDING-PRESERVE-1 (2026-09-16): a script PUT fully replaces script metadata. Deploying
+  // bindings:[] WIPES every non-secret binding (KV/D1/R2/Vectorize/services/vars/queues).
+  // PRECONDITION: worker exists OR is brand-new; CF_API_TOKEN present.
+  // INVARIANT: existing bindings are redeclared verbatim (secret_text returns name+type only;
+  // secret VALUES live in the separate secrets store and persist across uploads).
+  // POSTCONDITION: script updated with previous bindings preserved; abort (fail-closed) if the
+  // existing set cannot be determined for a worker that already exists.
+  let existingBindings = null;
+  let bResp = null;
+  try {
+    bResp = await fetch(
+      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/bindings",
+      { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
+    );
+  } catch (e) {
+    return { ok: false, error: "cf_worker_deploy ABORTED: bindings fetch network error (" + String(e && e.message || e).slice(0, 200) + ") \u2014 refusing to deploy with bindings:[]" };
+  }
+  if (bResp.status === 404) {
+    existingBindings = [];
+  } else if (bResp.ok) {
+    const bj = await bResp.json().catch(() => null);
+    existingBindings = (bj && Array.isArray(bj.result)) ? bj.result : [];
+  } else {
+    return { ok: false, error: "cf_worker_deploy ABORTED: bindings fetch status " + bResp.status + " \u2014 refusing to deploy with bindings:[]" };
+  }
+  const bindingsOut = existingBindings.map(function (b) { const c = Object.assign({}, b); delete c.text; return c; });
   try {
     const boundary = "ops-deploy-" + Date.now().toString(16);
-    const metadataPart = JSON.stringify({ body_part: "worker.js", bindings: [] });
+    const metadataPart = JSON.stringify({ body_part: "worker.js", bindings: bindingsOut });
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
@@ -1379,7 +1405,7 @@ async function cfWorkerDeploy(env, args) {
     );
     const j = await resp.json().catch(() => ({}));
     if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400) };
-    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
