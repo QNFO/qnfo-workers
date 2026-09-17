@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.1';
+var VERSION = '0.7.2';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 
@@ -454,8 +454,14 @@ async function drainQueue(env) {
       let threadLink = null;
       for (const pt of posts) { const u = extractUrls(String(pt)); if (u.length) { threadLink = u[0]; break; } }
       const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined });
+      // Buffer (Mastodon/LinkedIn/X) posts plain text with no facet/embed support - the
+      // link MUST be applied to the text itself here, mirroring what postThread() does
+      // internally for Bluesky's post 1. Previously this sent the raw linkless posts[0].
       let bufferResult = null;
-      try { bufferResult = await bufferPost(env, posts[0]); } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
+      try {
+        const bufText = threadLink ? applyLink(String(posts[0] || ''), threadLink, 280) : truncate(String(posts[0] || ''), 280);
+        bufferResult = await bufferPost(env, bufText);
+      } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
       await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
       posted++;
       console.log('drain posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
@@ -493,8 +499,10 @@ export default {
       }
       if (p === '/cross' && m === 'POST') {
         const b = await request.json();
-        const res = await bufferPost(env, String(b.text || '').slice(0, 280));
-        return new Response(JSON.stringify({ ok: true, buffer: res }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        const link = String(b.link || '');
+        const bufText = link ? applyLink(String(b.text || ''), link, 280) : truncate(String(b.text || ''), 280);
+        const res = await bufferPost(env, bufText);
+        return new Response(JSON.stringify({ ok: true, buffer: res, text_sent: bufText }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/thread' && m === 'POST') {
         const b = await request.json();
