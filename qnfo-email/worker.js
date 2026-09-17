@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-email/fabric-20260910";
-const VERSION = "1.8.1";
+const VERSION = "1.9.1";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -55,12 +55,38 @@ var qnfo_email_default = {
     await logAction(env.AUDIT_DB, emailId, "processed", classification, startTime);
   },
   // ═══ HTTP HANDLER ════════════════════════════
+  async scheduled(controller, env, ctx) {
+    try {
+      const r = await sendInboundDigest(env);
+      console.log("inbound-digest:", JSON.stringify(r));
+    } catch (e) {
+      console.error("inbound-digest failed:", String(e && e.message || e));
+    }
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const json = /* @__PURE__ */ __name((data, status) => new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }), "json");
     let p = url.pathname;
     if (p === "/email" || p.startsWith("/email/")) {
       p = p.replace("/email", "") || "/";
+    }
+    if (p === "/unsubscribe") {
+      try {
+        const ue = String(url.searchParams.get("e") || "").trim().toLowerCase();
+        const ut = String(url.searchParams.get("t") || "").trim();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ue)) {
+          return new Response("<!doctype html><meta charset=utf-8><h1>Invalid link</h1><p>No valid address in this link.</p>", { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+        }
+        const want = (await sha16(ue + ":qnfo-unsub-2026")).slice(0, 16);
+        if (ut !== want) {
+          return new Response("<!doctype html><meta charset=utf-8><h1>Invalid or expired link</h1><p>Reply to any message from this project with the single word STOP and you will be removed.</p>", { status: 403, headers: { "Content-Type": "text/html; charset=utf-8" } });
+        }
+        await env.AUDIT_DB.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1,'unsubscribe','link') ON CONFLICT(email) DO UPDATE SET reason='unsubscribe', source='link', created_at=datetime('now')").bind(ue).run();
+        await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO email_send_violations (recipient, sender, subject, violation, detail, resolved) VALUES (?1,'system','unsubscribe','UNSUBSCRIBE-HONOURED','recipient opted out via link; suppressed',1)").bind(ue).run().catch(() => {});
+        return new Response("<!doctype html><html><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Removed</title></head><body style=\"font:16px/1.6 system-ui,-apple-system,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1.2rem;color:#1c1a18\"><h1 style=\"font-size:1.25rem\">You have been removed</h1><p>This address will not be contacted again by this project. Suppression is permanent and stored server-side.</p><p style=\"color:#6b6560;font-size:.9rem\">If anything further arrives, reply to it and flag it as a defect.</p></body></html>", { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      } catch (e) {
+        return new Response("error: " + e.message, { status: 500 });
+      }
     }
     if (request.method !== "OPTIONS" && p !== "/health") {
       const auth = request.headers.get("Authorization") || "";
@@ -146,9 +172,9 @@ var qnfo_email_default = {
       try {
         const { to, subject, body, html, reply_to_id, from } = await request.json();
         if (!to) return json({ error: "to is required" }, 400);
-        // SUPPRESSION-ENFORCE-1 (2026-09-17): email_suppression was write-only (populated by the
-        // reply-scan path); the send path never read it. Consult it before sending so opt-outs
-        // and reply-stop addresses are never re-emailed.
+        // SUPPRESSION-ENFORCE-1 (2026-09-17): the email_suppression table is populated by the
+        // /unsubscribe link path (write side), but the send path never read it. Consult it before
+        // sending so opt-outs and reply-stop addresses are never re-emailed.
         try {
           const suppressed = await env.AUDIT_DB.prepare(
             "SELECT reason FROM email_suppression WHERE LOWER(email) = ?1 LIMIT 1"
@@ -357,11 +383,66 @@ async function sendNotification(env, data) {
   }
 }
 __name(sendNotification, "sendNotification");
+async function sha16(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
 function truncate(text, maxLength) {
   if (!text) return "";
   return text.length > maxLength ? text.substring(0, maxLength) + "\u2026" : text;
 }
 __name(truncate, "truncate");
+function decodeSubject(s) {
+  s = String(s || "");
+  return s.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, function (m, cs, enc, data) {
+    try {
+      if (enc.toLowerCase() === "b") {
+        const bin = atob(data);
+        const bytes = Uint8Array.from(bin, function (c) { return c.charCodeAt(0); });
+        return new TextDecoder(cs === "" ? "utf-8" : cs).decode(bytes);
+      } else {
+        return data.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
+      }
+    } catch (e) { return m; }
+  }).replace(/\s+/g, " ").trim();
+}
+async function sendInboundDigest(env) {
+  const OWNER = "rwnquni@outlook.com";
+  const MACHINE = /srs0=|cf-bounce|cfbounces|dmarcreport|mailer-daemon|postmaster|bounces\+/i;
+  const CRITICAL = /api access|spend|threshold|action needed|rejected|undelivered|discontinu|postpon|pricing|billing|turned off|suspension/i;
+  let rows = [];
+  try {
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    rows = ((await env.AUDIT_DB.prepare(
+      "SELECT id, sender, recipient, subject, classification, status, received_at FROM emails WHERE status != 'sent' AND received_at >= ? ORDER BY id DESC LIMIT 200"
+    ).bind(since).all()).results) || [];
+  } catch (e) { return { sent: false, error: "query: " + String(e && e.message || e).slice(0, 150) }; }
+  const crit = [], human = [];
+  const seen = new Set();
+  for (const r of rows) {
+    const s = decodeSubject(r.subject);
+    if (CRITICAL.test(s) || /cfbounces\+ndrdrop/.test(String(r.sender || ""))) { crit.push(r); seen.add(r.id); }
+  }
+  for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    if (MACHINE.test(String(r.sender || ""))) continue;
+    human.push(r);
+  }
+  if (!crit.length && !human.length) return { sent: false, reason: "nothing to surface" };
+  const day = new Date().toISOString().slice(0, 10);
+  const fmt = function (r) { return "  [" + r.id + "] " + decodeSubject(r.subject).slice(0, 90) + " <- " + (r.sender || "?"); };
+  const L = [];
+  L.push("QNFO inbound digest - " + day);
+  L.push("");
+  if (crit.length) { L.push("OPERATIONAL (account/service notices - verify each):"); for (const r of crit) L.push(fmt(r)); L.push(""); }
+  if (human.length) { L.push("FROM PEOPLE (may need a reply):"); for (const r of human) L.push(fmt(r)); L.push(""); }
+  L.push("Read one: email worker GET /emails/body?id=<id>. Reply to this message to act.");
+  try {
+    await env.SEND_EMAIL.send({ to: OWNER, from: "qnfo@qnfo.org", subject: "QNFO inbound digest - " + day, text: L.join("\n") });
+    return { sent: true, critical: crit.length, human: human.length };
+  } catch (e) { return { sent: false, error: "send: " + String(e && e.message || e).slice(0, 150) }; }
+}
+
 export {
   qnfo_email_default as default
 };

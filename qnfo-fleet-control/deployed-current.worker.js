@@ -21,7 +21,9 @@ var advisorMod = (function() {
   __name(workerNameSet, "workerNameSet");
   async function probeHealth(name, names) {
     if (names && names.size) {
-      if (names.has(name)) return { ok: true, via: "cf-api-list", version: null };
+      // FLEET-PROBE-COVERAGE-1 (2026-09-17): cf-api-list proves EXISTENCE only, not liveness.
+      // Mark it existence_only so runAudit never reports an existence check as "up" (healthy).
+      if (names.has(name)) return { ok: true, via: "cf-api-list", version: null, existence_only: true };
       return { ok: false, detail: "not-in-cf-worker-list" };
     }
     const hosts = [name + ".q08.workers.dev", name + ".qnfo.org"];
@@ -131,7 +133,11 @@ var advisorMod = (function() {
     const workerNames = await workerNameSet(env);
     const results = await Promise.all(PROBES.map((n) => probeHealth(n, workerNames)));
     const down = [];
-    for (let i = 0; i < PROBES.length; i++) if (!results[i].ok) down.push(PROBES[i] + "(" + (results[i].detail || "") + ")");
+    const existenceOnly = [];
+    for (let i = 0; i < PROBES.length; i++) {
+      if (!results[i].ok) down.push(PROBES[i] + "(" + (results[i].detail || "") + ")");
+      else if (results[i].existence_only) existenceOnly.push(PROBES[i]);
+    }
     try {
       const rows = await d1All(env, "SELECT model, error_class, SUM(count) AS n FROM ai_gateway_failures WHERE ts >= ((strftime('%s','now') - 86400) * 1000) GROUP BY model, error_class ORDER BY n DESC LIMIT 8");
       for (const row of rows) {
@@ -151,11 +157,14 @@ var advisorMod = (function() {
     try {
       const open = await d1All(env, "SELECT COUNT(*) AS n FROM agent_issues WHERE status='open' AND title NOT LIKE 'OPEN-ISSUES%'");
       const n = open && open[0] ? open[0].n : 0;
-      if (n > 8) findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES-BACKLOG", detail: n + " open agent_issues (excluding advisor OPEN-ISSUES tickets)" });
-    } catch (e) {
-    }
-    try {
-      await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='backlog' AND title LIKE 'OPEN-ISSUES %'", [ts, WORKER]);
+      if (n > 8) {
+        findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES-BACKLOG", detail: n + " open agent_issues (excluding advisor OPEN-ISSUES tickets)" });
+      } else {
+        // FM-4 FLAP-GUARD (2026-09-17): close the backlog ticket ONLY when the condition cleared.
+        // The prior code closed it unconditionally every run, defeating the title-dedup in the
+        // filing loop and re-filing a fresh OPEN-ISSUES-BACKLOG ticket every ~20 min (churn).
+        await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='backlog' AND title LIKE 'OPEN-ISSUES %'", [ts, WORKER]);
+      }
     } catch (e) {
     }
     const gw = await gatewayConfigAudit(env);
@@ -223,7 +232,7 @@ var advisorMod = (function() {
       } catch (e) {
       }
     }
-    const state = { up: PROBES.length - down.length, down: down.length, findings: findings.length, filed, suggestion, gateway_drift: gw.skipped ? null : gw.drift, spend_guard, ensemble, ts };
+    const state = { up: PROBES.length - down.length - existenceOnly.length, down: down.length, existence_only: existenceOnly.length, findings: findings.length, filed, suggestion, gateway_drift: gw.skipped ? null : gw.drift, spend_guard, ensemble, ts };
     try {
       await d1Run(
         env,
@@ -232,7 +241,7 @@ var advisorMod = (function() {
       );
     } catch (e) {
     }
-    return { ok: true, worker: WORKER, version: VERSION2, ts, probed: PROBES.length, up: PROBES.length - down.length, down: down.length, findings: findings.length, filed, suggestion: suggestion ? suggestion.slice(0, 400) : null };
+    return { ok: true, worker: WORKER, version: VERSION2, ts, probed: PROBES.length, up: PROBES.length - down.length - existenceOnly.length, down: down.length, existence_only: existenceOnly.length, findings: findings.length, filed, suggestion: suggestion ? suggestion.slice(0, 400) : null };
   }
   __name(runAudit, "runAudit");
   __name3(runAudit, "runAudit");
