@@ -3,12 +3,11 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.2.2-evidence";
+var VERSION = "0.3.1";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
 var PER_DOMAIN_DAILY_CAP = 3;
-var MAX_SEND_ATTEMPTS = 3;
 var WARMUP_ALLOWLIST = ["alerts@qnfo.org", "qnfo@qnfo.org", "rowan.quni@qnfo.org", "rwnquni@outlook.com", "rowan.quni@outlook.com"];
 var FROM_ACADEMIC = "rowan.quni@qnfo.org";
 var SPAM_TOKENS = ["TEST", "SEND TEST", "WRANGLER", "MATRIX", "VERIFY", "verification code", "PIPELINE TEST", "FREE", "!!!"];
@@ -41,23 +40,10 @@ async function sendRaw(env, from, to, subject, bodyText) {
     const mid = r && r.messageId ? String(r.messageId) : null;
     return { ok: true, err: "", messageId: mid };
   } catch (e) {
-    const code = e && e.code ? String(e.code) : "";
-    const msg = e && e.message ? String(e.message) : String(e);
-    return { ok: false, err: (code ? code + ": " : "") + msg, messageId: null };
+    return { ok: false, err: String(e && e.message || e) };
   }
 }
 __name(sendRaw, "sendRaw");
-async function ledgerOutbound(env, messageId, to, subject, bodyText) {
-  try {
-    await env.QNFO_AUDIT.prepare(
-      "INSERT INTO emails (message_id, sender, recipient, subject, body_text, body_html, headers_json, classification, received_at, status) VALUES (?1,?2,?3,?4,?5,'','{}','general',?6,'sent')"
-    ).bind(messageId, FROM_ACADEMIC, to, subject, String(bodyText || "").slice(0, 1e4), (/* @__PURE__ */ new Date()).toISOString()).run();
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-__name(ledgerOutbound, "ledgerOutbound");
 async function noRepeat(env, email) {
   const e = email.toLowerCase();
   const s = await env.OUTREACH_D1.prepare(
@@ -134,6 +120,56 @@ async function draftCampaigns(env) {
   return drafted;
 }
 __name(draftCampaigns, "draftCampaigns");
+async function sha16(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+async function unsubUrl(email) {
+  const e = String(email || "").toLowerCase();
+  const h = await sha16(e + ":qnfo-unsub-2026");
+  return "https://qnfo.org/email/unsubscribe?e=" + encodeURIComponent(e) + "&t=" + h.slice(0, 16);
+}
+async function compliant(body, email) {
+  const url = await unsubUrl(email);
+  const footer = "\n\n--\nThis was sent once, to one person. If you would rather not receive anything further from me: " + url + "\nReplying with STOP also works and I will remove you within a day.\nRowan Brad Quni-Gudzinas, QNFO (Netherlands)";
+  return String(body || "") + footer;
+}
+async function suppressed(env, email) {
+  const e = String(email || "").toLowerCase();
+  try { const row = await env.QNFO_AUDIT.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(e).first(); if (row) return true; } catch (err) {}
+  try { const c = await env.OUTREACH_D1.prepare("SELECT suppress FROM contacts WHERE lower(email)=?1").bind(e).first(); if (c && Number(c.suppress) === 1) return true; } catch (err) {}
+  return false;
+}
+async function scanReplies(env) {
+  let last = 0;
+  try { const s = await env.OUTREACH_D1.prepare("SELECT value FROM pipeline_state WHERE key='reply_scan_watermark'").first(); last = Number((s && s.value) || 0) || 0; } catch (e) {}
+  let rows = [];
+  try {
+    rows = ((await env.QNFO_AUDIT.prepare("SELECT id, sender, subject, substr(COALESCE(body_text,''),1,3000) body FROM emails WHERE id > ?1 AND status != 'sent' ORDER BY id ASC LIMIT 200").bind(last).all()).results) || [];
+  } catch (e) { return { scanned: 0, suppressed: 0, err: String(e).slice(0, 120) }; }
+  const STOP = /\b(unsubscribe|opt[\s-]?out|remove me|stop emailing|do not contact|don'?t contact|take me off|no further (emails?|contact)|leave me alone)\b/i;
+  let maxId = last, n = 0;
+  for (const row of rows) {
+    if (row.id > maxId) maxId = row.id;
+    const from = String(row.sender || "").toLowerCase();
+    if (/srs0=|cf-bounce|bounces\+|mailer-daemon|postmaster|noreply|no-reply/.test(from)) continue;
+    const m = from.match(/[^@\s<>]+@[^@\s<>]+/);
+    const addr = m ? m[0].replace(/[>,]+$/, "") : "";
+    if (!addr || !EMAIL_RE.test(addr)) continue;
+    if (STOP.test(String(row.subject || "") + " " + String(row.body || ""))) {
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1,'reply-stop','reply-scan') ON CONFLICT(email) DO UPDATE SET reason='reply-stop', source='reply-scan', created_at=datetime('now')").bind(addr).run();
+        await env.OUTREACH_D1.prepare("UPDATE contacts SET suppress=1, suppress_reason=?1 WHERE lower(email)=?2").bind("reply-stop " + utcDay(), addr).run();
+        await env.OUTREACH_D1.prepare("UPDATE sends SET status='suppressed' WHERE status IN ('draft','queued') AND contact_id IN (SELECT id FROM contacts WHERE lower(email)=?1)").bind(addr).run();
+        n++;
+      } catch (e) {}
+    }
+  }
+  try {
+    await env.OUTREACH_D1.prepare("INSERT INTO pipeline_state (key,value,updated_at) VALUES ('reply_scan_watermark',?1,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')").bind(String(maxId)).run();
+  } catch (e) {}
+  return { scanned: rows.length, suppressed: n, watermark: maxId };
+}
 async function sendGated(env) {
   const now = Date.now();
   const day = utcDay();
@@ -175,27 +211,25 @@ async function sendGated(env) {
       await env.OUTREACH_D1.prepare("UPDATE sends SET status = 'suppressed' WHERE id = ?1").bind(row.id).run();
       continue;
     }
+    if (await suppressed(env, to)) {
+      await env.OUTREACH_D1.prepare("UPDATE sends SET status = 'suppressed' WHERE id = ?1").bind(row.id).run();
+      continue;
+    }
     const domain = to.split("@")[1];
     const domToday = await env.OUTREACH_D1.prepare(
       "SELECT COUNT(*) n FROM sends WHERE status='sent' AND sent_at LIKE ?1 AND contact_id IN (SELECT id FROM contacts WHERE email LIKE ?2)"
     ).bind(day + "%", "%@" + domain).first();
     if ((domToday && domToday.n || 0) >= PER_DOMAIN_DAILY_CAP) continue;
-    const res = await sendRaw(env, FROM_ACADEMIC, to, row.subject, row.body);
+    const finalBody = await compliant(row.body, to);
+    const res = await sendRaw(env, FROM_ACADEMIC, to, row.subject, finalBody);
     if (res.ok) {
-      await env.OUTREACH_D1.prepare(
-        "UPDATE sends SET status='sent', sent_at=datetime('now'), message_id=?2, error=NULL, attempts=attempts+1 WHERE id=?1"
-      ).bind(row.id, res.messageId).run();
-      await ledgerOutbound(env, res.messageId || "outreach-unverified-" + row.id, to, row.subject, row.body);
+      await env.OUTREACH_D1.prepare("UPDATE sends SET status='sent', sent_at=datetime('now'), message_id=?2 WHERE id=?1").bind(row.id, res.messageId).run();
       await env.OUTREACH_D1.prepare(
         "UPDATE contacts SET status='contacted', last_contacted=datetime('now'), contact_count=contact_count+1 WHERE id=?1"
       ).bind(row.contact_id).run();
       sent++;
     } else {
-      const att = (row.attempts || 0) + 1;
-      const terminal = att >= MAX_SEND_ATTEMPTS;
-      await env.OUTREACH_D1.prepare(
-        "UPDATE sends SET status=?2, attempts=?3, error=?4 WHERE id=?1"
-      ).bind(row.id, terminal ? "failed" : "draft", att, String(res.err).slice(0, 500)).run();
+      await env.OUTREACH_D1.prepare("UPDATE sends SET status='failed' WHERE id=?1").bind(row.id).run();
     }
   }
   return { sent, skipped: "" };
@@ -214,7 +248,7 @@ var worker_default = {
     const path = url.pathname;
     const method = req.method;
     if (path === "/health" || path === "/") {
-      const out = {
+      return json({
         ok: true,
         worker: "qnfo-outreach",
         version: VERSION,
@@ -223,16 +257,7 @@ var worker_default = {
         cron: "0 11 * * 1-5",
         mode: Date.now() >= ACTIVATION_AT_MS ? "external-enabled" : "draft+warmup",
         day: utcDay()
-      };
-      try {
-        const u = await env.OUTREACH_D1.prepare("SELECT COUNT(*) n FROM sends WHERE status='sent' AND message_id IS NULL").first();
-        out.sent_without_message_id = (u && u.n) || 0;
-        const f = await env.OUTREACH_D1.prepare("SELECT COUNT(*) n FROM sends WHERE status='failed'").first();
-        out.failed = (f && f.n) || 0;
-      } catch (e) {
-        out.evidence_error = String(e && e.message || e).slice(0, 200);
-      }
-      return json(out);
+      });
     }
     if (path === "/api/contacts" && method === "GET") {
       const rows = await env.OUTREACH_D1.prepare("SELECT * FROM contacts ORDER BY first_seen DESC LIMIT 50").all();
@@ -269,7 +294,7 @@ var worker_default = {
       await env.OUTREACH_D1.prepare(
         "INSERT INTO sends (id, campaign_id, contact_id, kind, channel, subject, body, status, sent_at) VALUES (?1,NULL,NULL,'selfcheck','email','Outreach pipeline self-check','self-check',?2,datetime('now'))"
       ).bind(makeId("s-"), res.ok ? "sent" : "failed").run();
-      return json({ ok: res.ok, err: res.err, to, message_id: res.messageId || null });
+      return json({ ok: res.ok, err: res.err, to });
     }
     const rfcMatch = path.match(/^\/rfc\/([a-z0-9-]+)\/comment$/);
     if (rfcMatch && method === "POST") {
@@ -292,6 +317,7 @@ var worker_default = {
     return json({ ok: false, err: "not found" }, 404);
   },
   async scheduled(controller, env, ctx) {
+    await scanReplies(env).catch(() => ({ scanned: 0 }));
     const mined = await mineGitHub(env).catch(() => ({ mined: 0 }));
     const drafted = await draftCampaigns(env).catch(() => 0);
     const sent = await sendGated(env).catch(() => ({ sent: 0 }));
