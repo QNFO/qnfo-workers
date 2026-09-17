@@ -1,4 +1,5 @@
 name = "qnfo-social"
+account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
 main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true

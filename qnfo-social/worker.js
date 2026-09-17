@@ -1,14 +1,16 @@
-// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose. v0.5.3-failclosed (2026-09-13): the fact-checker now fails CLOSED. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry + agent_issue escalation (was v0.5.1-failopen).
-// Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN. D1: DB (qnfo-audit.social_threads). AI: env.AI.
-// Cron posts oldest queued thread. /compose drafts a thread from title+abstract (draft -> approve -> queued).
-// v0.5.3 CHECKER-FAILCLOSED-1: checkThread returned [] when both parse attempts failed, and both
-// callers do `issues.length === 0 ? 'queued' : 'draft'` - so a broken checker AUTO-QUEUED the
-// thread for posting. [] means "checked and faithful"; returning it on failure published
-// unchecked content. It now returns null (unverified) -> always 'draft' + alert. The escalation
-// sample was also empty whenever the model returned an empty string, which is why issue #676
-// was filed with a blank detail ("checker empty or unparseable: "); it now falls back to the
-// raw response shape so the failure is diagnosable.
-var VERSION = '0.6.0'; // v0.6.0 DRAIN-QUOTA-1 (2026-09-15): drain matched to production rate + crashed-run reclaim + failed-retry sweep + daily cap // FIX 2026-09-15: checker max_tokens 1000->3000; reasoning model deepseek-v4-flash-0731 exhausted the 1000 cap on complex papers -> empty content -> fail-closed (agent_issues 898)
+// qnfo-social - cloud-based Bluesky posting (AT Protocol) + AI compose with link facets.
+// v0.7.0-LINKS (2026-09-16): postText emits app.bsky.richtext.facet#link facets (UTF-8 byte offsets) for
+//   every URL; root posts carry app.bsky.embed.external link cards; /repost + /delete admin routes for
+//   link remediation; auth accepts X-Ops-Key (OPS_KEY secret); autoScan+compose prompts demand full
+//   https:// URLs (never bare DOIs); truncateSafe never splits a URL at the 290-char boundary.
+// History: v0.6.0 DRAIN-QUOTA-1 (2026-09-15) drain matched to production rate + crashed-run reclaim +
+//   failed-retry sweep + daily cap. v0.5.3-checker-failclosed (2026-09-13): checker returns null (not [])
+//   when unavailable -> draft. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry +
+//   agent_issue escalation. FIX 2026-09-15: checker max_tokens 1000->3000 for the reasoning model.
+// Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
+// D1: DB (qnfo-audit.social_threads). AI: env.AI.
+
+var VERSION = '0.7.1';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 
@@ -18,16 +20,79 @@ function truncate(text, max) {
   return pts.slice(0, max).join('');
 }
 
+// Like truncate but never leaves a URL split in half at the cut boundary.
+function truncateSafe(text, max) {
+  const s = String(text || '');
+  const pts = Array.from(s);
+  if (pts.length <= max) return s;
+  let cut = pts.slice(0, max).join('');
+  cut = cut.replace(/https?:\/\/\S*$/, '').trimEnd();
+  return cut;
+}
+function byteLen(s) {
+  return new TextEncoder().encode(String(s || '')).length;
+}
+function extractUrls(text) {
+  const urls = [];
+  const re = /https?:\/\/[^\s"'<>()\[\]{}]+/g;
+  let m;
+  const seen = new Set();
+  while ((m = re.exec(text)) !== null) {
+    const u = m[0].replace(/[.,;:!?]+$/, '');
+    if (!seen.has(u)) { seen.add(u); urls.push(u); }
+  }
+  return urls;
+}
+// Build link facets with UTF-8 byte offsets (Bluesky requires byte indices, not char indices).
+function buildFacets(text) {
+  const s = String(text || '');
+  const urls = extractUrls(s);
+  const facets = [];
+  for (const u of urls) {
+    const idx = s.indexOf(u);
+    if (idx < 0) continue;
+    const byteStart = byteLen(s.slice(0, idx));
+    const byteEnd = byteStart + byteLen(u);
+    facets.push({
+      $type: 'app.bsky.richtext.facet',
+      index: { byteStart: byteStart, byteEnd: byteEnd },
+      features: [{ $type: 'app.bsky.richtext.facet#link', uri: u }]
+    });
+  }
+  return facets;
+}
+function findDoi(text) {
+  const m = String(text || '').match(/(?:doi:?\s*)?(10\.\d{4,9}\/[^\s"'<>)\]]+)/i);
+  if (!m) return null;
+  return m[1].replace(/[.,;]+$/, '');
+}
+// Attach a link to a headline: replace a bare DOI with its URL, else append the URL.
+function applyLink(text, link, max) {
+  max = max || 290;
+  const s = String(text || '');
+  if (!link) return truncateSafe(s, max);
+  if (s.includes(link)) return truncateSafe(s, max);
+  const doi = findDoi(s);
+  if (doi && ('https://doi.org/' + doi) === link) {
+    return truncateSafe(s.replace(/doi:?\s*10\.\d{4,9}\/[^\s"'<>)\]]+/i, link), max);
+  }
+  const budget = max - link.length - 3;
+  const head = truncateSafe(s, Math.max(budget, 1));
+  return head + ' \u2014 ' + link;
+}
+
 function auth(req, env) {
   const tok = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!tok) return false;
-  const check = (exp) => {
-    if (!exp || tok.length !== exp.length) return false;
+  const ops = req.headers.get('X-Ops-Key') || '';
+  const eq = (a, b) => {
+    if (!a || !b || a.length !== b.length) return false;
     let d = 0;
-    for (let i = 0; i < tok.length; i++) d |= tok.charCodeAt(i) ^ exp.charCodeAt(i);
+    for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
     return d === 0;
   };
-  return (env.SOCIAL_TOKEN && check(env.SOCIAL_TOKEN)) || (env.GATEWAY_SOCIAL_TOKEN && check(env.GATEWAY_SOCIAL_TOKEN));
+  if (tok && (eq(tok, env.SOCIAL_TOKEN) || eq(tok, env.GATEWAY_SOCIAL_TOKEN))) return true;
+  if (ops && eq(ops, env.OPS_KEY)) return true;
+  return false;
 }
 
 async function session(env) {
@@ -40,29 +105,89 @@ async function session(env) {
   return r.json();
 }
 
-async function postText(s, text, reply) {
-  const record = { text: truncate(text, 290), createdAt: new Date().toISOString() };
+async function postText(s, text, reply, opts) {
+  opts = opts || {};
+  const record = { text: truncateSafe(text, 290), createdAt: (opts.createdAt || new Date().toISOString()) };
   if (reply) record.reply = reply;
-  const r = await fetch(BSKY + '/com.atproto.repo.createRecord', {
+  const facets = buildFacets(record.text);
+  if (facets.length) record.facets = facets;
+  if (opts.embed && facets.length) {
+    record.embed = {
+      $type: 'app.bsky.embed.external',
+      external: {
+        uri: facets[0].features[0].uri,
+        title: String(opts.embed.title || 'QNFO').slice(0, 300),
+        description: String(opts.embed.desc || 'QNFO research').slice(0, 1000)
+      }
+    };
+  }
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const r = await fetch(BSKY + '/com.atproto.repo.createRecord', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (qnfo-social)', 'Authorization': 'Bearer ' + s.accessJwt },
+      body: JSON.stringify({ repo: s.did, collection: 'app.bsky.feed.post', record: record })
+    });
+    if (r.status === 429 || r.status >= 500) {
+      lastErr = new Error('post ' + r.status);
+      await new Promise((res) => setTimeout(res, 500 * (attempt + 1)));
+      continue;
+    }
+    if (!r.ok) throw new Error('post ' + r.status + ' ' + (await r.text()).slice(0, 200));
+    return r.json();
+  }
+  throw lastErr || new Error('post retries exhausted');
+}
+async function deleteRecord(s, uri) {
+  const rkey = String(uri).split('/').pop();
+  const r = await fetch(BSKY + '/com.atproto.repo.deleteRecord', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (qnfo-social)', 'Authorization': 'Bearer ' + s.accessJwt },
-    body: JSON.stringify({ repo: s.did, collection: 'app.bsky.feed.post', record: record })
+    body: JSON.stringify({ repo: s.did, collection: 'app.bsky.feed.post', rkey: rkey })
   });
-  if (!r.ok) throw new Error('post ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  if (r.status === 400) return { ok: true, already_gone: true };
+  if (!r.ok) throw new Error('delete ' + r.status + ' ' + (await r.text()).slice(0, 200));
   return r.json();
 }
-
-async function postThread(s, posts) {
+async function postThread(s, posts, threadOpts) {
   let root = null, parent = null;
   const uris = [];
+  threadOpts = threadOpts || {};
   for (let i = 0; i < posts.length; i++) {
+    const p = posts[i];
+    let text = typeof p === 'string' ? p : String((p && p.text) || '');
     const reply = i > 0 ? { root: root, parent: parent } : undefined;
-    const res = await postText(s, posts[i], reply);
+    const opts = { createdAt: p && p.createdAt ? p.createdAt : undefined };
+    if (i === 0) {
+      if (threadOpts.link) text = applyLink(text, threadOpts.link, 290);
+      if (threadOpts.embed) opts.embed = threadOpts.embed;
+    }
+    const res = await postText(s, text, reply, opts);
     uris.push(res.uri);
     if (i === 0) root = { uri: res.uri, cid: res.cid };
     parent = { uri: res.uri, cid: res.cid };
   }
   return uris;
+}
+// Delete a thread's old posts then recreate them with link facets + a root embed.
+async function repostThread(s, th) {
+  const posts = (th.posts || []).filter(function(p){ return p && p.uri; });
+  const link = String(th.link || '');
+  const title = String(th.title || '');
+  const desc = String(th.desc || 'QNFO research paper');
+  const oldUris = posts.map(function(p){ return p.uri; });
+  const deleted = [];
+  for (const u of oldUris) {
+    try { deleted.push(await deleteRecord(s, u)); } catch (e) { deleted.push({ uri: u, error: String(e).slice(0, 150) }); }
+    await new Promise((res) => setTimeout(res, 80));
+  }
+  const revised = posts.map(function(p, i){
+    if (i === 0) return { text: applyLink(p.text, link, 290), createdAt: p.createdAt };
+    return { text: String(p.text || ''), createdAt: p.createdAt };
+  });
+  const embed = { title: title || 'QNFO', desc: desc };
+  const uris = await postThread(s, revised, { embed: embed });
+  return { deleted: deleted.length, newRoot: uris[0], count: uris.length };
 }
 
 function sanitizePosts(raw) {
@@ -75,7 +200,12 @@ function extractText(ai) {
   if (typeof ai.response === 'string' && ai.response) return ai.response;
   var ch = (ai.choices && ai.choices[0]) || (ai.result && ai.result.choices && ai.result.choices[0]);
   if (ch) {
-    if (ch.message && typeof ch.message.content === 'string') return ch.message.content;
+    if (ch.message && typeof ch.message.content === 'string' && ch.message.content) return ch.message.content;
+    if (ch.message && typeof ch.message.reasoning_content === 'string' && ch.message.reasoning_content) {
+      var rc = ch.message.reasoning_content;
+      var m = rc.match(/\[[\s\S]*\]/);
+      if (m) return m[0];
+    }
     if (typeof ch.text === 'string') return ch.text;
   }
   return '';
@@ -100,14 +230,14 @@ async function checkThread(env, title, abstract, posts) {
   const base = [
     "Given a paper (title + abstract = ground truth) and a social media thread (candidate), list every claim in the thread that is NOT supported by the title or abstract.",
     "Check for: invented numbers, invented statistics, invented findings, overclaiming, misattribution, unsupported claims of being 'new' or 'first'.",
-    "Ignore style: questions, hooks, calls to action, the DOI link, and generic phrases like 'read the paper'.",
+    "Ignore style: questions, hooks, calls to action, links, and generic phrases like 'read the paper'.",
     "Output ONLY a JSON array of issues, e.g. [{\"post\": 2, \"issue\": \"...\"}]. Output [] if the thread is fully faithful.",
     "PAPER: " + JSON.stringify({ title: title, abstract: abstract }),
     "THREAD: " + JSON.stringify(posts)
   ].join('\n');
   function parseIssues(text) {
     if (!text) return null;
-    const cleaned = String(text).replace(/```(?:json)?/g, '').trim();
+    const cleaned = String(text).replace(/\x60\x60\x60(?:json)?/g, '').trim();
     try {
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
@@ -199,8 +329,9 @@ async function autoScan(env) {
         "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
         "3. Post 3: why/how it matters, in accessible terms.",
         "4. Post 4: how a reader can check it (falsifiability / open access) - invite scrutiny.",
-        "5. Post 5: the DOI link then an open discussion question.",
+        "5. Post 5: name the author (Rowan Brad Quni-Gudzinas) by name, give the paper link as a full URL: https://doi.org/" + doi + ", then an open discussion question.",
         "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
+        "Links must be full URLs (https://...). Never write a bare DOI.",
         "Output ONLY the 5 posts, one per line, no numbering, no markdown.",
         "DOI: " + doi,
         "Title: " + title,
@@ -262,36 +393,55 @@ async function bufferPost(env, text) {
   return { results };
 }
 
-var DRAIN_PER_RUN = 2;      // threads posted per scheduled run
-var DRAIN_DAILY_CAP = 12;   // hard ceiling on posts per UTC day
+// Re-run the fact-checker on drafts held only because the checker was unavailable.
+async function recheckDrafts(env) {
+  var rows = await env.DB.prepare("SELECT id, slug, title, doi, posts FROM social_threads WHERE status='draft' AND notes LIKE '%checker unavailable%' ORDER BY id ASC LIMIT 6").all();
+  var list = rows.results || [];
+  var approved = 0, held = 0, skipped = 0;
+  for (var i = 0; i < list.length; i++) {
+    var row = list[i];
+    var posts = [];
+    try { posts = JSON.parse(row.posts); } catch (e) { posts = []; }
+    if (!Array.isArray(posts) || !posts.length) { skipped++; continue; }
+    var abstract = "";
+    var dm = String(row.doi || "").match(/zenodo\.(\d+)/);
+    if (dm) {
+      try {
+        var zr = await fetch("https://zenodo.org/api/records/" + dm[1], { headers: { "User-Agent": "Mozilla/5.0 (qnfo-social)" } });
+        if (zr.ok) { var zj = await zr.json(); abstract = String((zj.metadata && zj.metadata.description) || "").replace(/<[^>]+>/g, "").slice(0, 4000); }
+      } catch (e) { abstract = ""; }
+    }
+    if (!abstract) { skipped++; continue; }
+    var issues = await checkThread(env, String(row.title || ""), abstract, posts);
+    if (issues && issues.length === 0) {
+      await env.DB.prepare("UPDATE social_threads SET status='queued', notes=NULL WHERE id=?").bind(row.id).run();
+      approved++;
+    } else {
+      if (issues) await env.DB.prepare("UPDATE social_threads SET notes=? WHERE id=?").bind(JSON.stringify(issues), row.id).run();
+      held++;
+    }
+  }
+  if (approved) await logAlert(env, "recheck", "info", "recheck approved " + approved + " held draft(s)");
+  return { checked: list.length, approved: approved, held: held, skipped: skipped };
+}
+
+var DRAIN_PER_RUN = 6;      // threads posted per scheduled run
+var DRAIN_DAILY_CAP = 30;   // hard ceiling on posts per UTC day
 var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
 
 // Drain the share queue oldest-first under a daily ceiling.
-// PRECONDITION:  env.DB is the qnfo-audit D1 binding holding social_threads.
-// POSTCONDITION: at most DRAIN_PER_RUN threads leave 'queued'; every terminal
-//                transition is written back before the run returns.
-// INVARIANT:     no row is left in 'posting' forever - a crashed run is
-//                reclaimed on the next pass with retry_count incremented, so
-//                poison rows cannot loop.
 async function drainQueue(env) {
-  // 1. Reclaim rows abandoned mid-flight by a crashed run.
   await env.DB.prepare(
     "UPDATE social_threads SET status = CASE WHEN retry_count < ? THEN 'queued' ELSE 'failed' END, retry_count = retry_count + 1 WHERE status = 'posting'"
   ).bind(MAX_RETRIES).run();
-
-  // 2. Sweep failed rows back into the queue while under the retry ceiling.
   await env.DB.prepare(
     "UPDATE social_threads SET status = 'queued' WHERE status = 'failed' AND retry_count < ?"
   ).bind(MAX_RETRIES).run();
-
-  // 3. Enforce the daily ceiling so the channel cannot flood.
   const today = await env.DB.prepare(
     "SELECT COUNT(*) n FROM social_threads WHERE status = 'posted' AND posted_at >= datetime('now','start of day')"
   ).first();
   const postedToday = (today && today.n) || 0;
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
-
-  // 4. Drain oldest-first.
   let posted = 0, failed = 0;
   for (let i = 0; i < DRAIN_PER_RUN; i++) {
     const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
@@ -301,8 +451,9 @@ async function drainQueue(env) {
       const posts = JSON.parse(row.posts);
       if (!Array.isArray(posts) || !posts.length) throw new Error('bad posts payload');
       const s = await session(env);
-      const uris = await postThread(s, posts);
-      // Buffer cross-post (Mastodon + LinkedIn + X) is best-effort, never blocks Bluesky.
+      let threadLink = null;
+      for (const pt of posts) { const u = extractUrls(String(pt)); if (u.length) { threadLink = u[0]; break; } }
+      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined });
       let bufferResult = null;
       try { bufferResult = await bufferPost(env, posts[0]); } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
       await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
@@ -322,13 +473,14 @@ export default {
   async scheduled(event, env) {
     if (event.cron === '0 6 * * *') { await autoScan(env); return; }
     if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
+    await recheckDrafts(env);
     await drainQueue(env);
   },
 
   async fetch(request, env) {
     const url = new URL(request.url);
     const p = url.pathname, m = request.method;
-    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Ops-Key' };
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     if (!auth(request, env)) return new Response('unauthorized', { status: 401, headers: cors });
@@ -362,6 +514,7 @@ export default {
         await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'queued')").bind(String(b.slug), String(b.title || ''), JSON.stringify(posts)).run();
         return new Response(JSON.stringify({ ok: true, slug: b.slug }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
+
       if (p === '/compose' && m === 'POST') {
         const b = await request.json();
         const title = String(b.title || '').slice(0, 300);
@@ -375,8 +528,9 @@ export default {
           "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
           "3. Post 3: why/how it matters, in accessible terms.",
           "4. Post 4: how a reader can check it (falsifiability / open access) - invite scrutiny.",
-          "5. Post 5: the DOI link then an open discussion question.",
+          "5. Post 5: name the author (Rowan Brad Quni-Gudzinas) by name, give the paper link as a full URL: https://doi.org/" + doi + ", then an open discussion question.",
           "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
+          "Links must be full URLs (https://...). Never write a bare DOI.",
           "Output ONLY the 5 posts, one per line, no numbering, no markdown.",
           "DOI: " + (doi || '(none provided)'),
           "Title: " + title,
@@ -388,7 +542,6 @@ export default {
         if (posts.length < 3) return new Response(JSON.stringify({ error: 'compose produced too few posts', raw: text.slice(0, 500) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
         const slug = String(b.slug || ('draft-' + Date.now().toString(36)));
         const issues = await checkThread(env, title, abstract, posts);
-        // v0.5.3: null (checker unavailable) is NOT clean - hold as draft.
         const status = issues && issues.length === 0 ? 'queued' : 'draft';
         const notes = issues && issues.length ? JSON.stringify(issues) : (issues === null ? JSON.stringify([{ post: 0, issue: 'checker unavailable - unverified, held as draft' }]) : null);
         await env.DB.prepare("INSERT INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, notes).run();
@@ -413,6 +566,7 @@ export default {
         await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
+
       if (p === '/scan' && m === 'POST') {
         await autoScan(env);
         const drafts = await env.DB.prepare("SELECT id, slug, title, doi FROM social_threads WHERE status='draft' ORDER BY id DESC LIMIT 10").all();
@@ -421,6 +575,36 @@ export default {
       if (p === '/drain' && m === 'POST') {
         const res = await drainQueue(env);
         return new Response(JSON.stringify({ ok: true, drain: res }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      // Link remediation: delete old posts, recreate with facets + root embed.
+      if (p === '/repost' && m === 'POST') {
+        const b = await request.json();
+        const threads = Array.isArray(b.threads) ? b.threads : (b.threads ? [b.threads] : []);
+        if (!threads.length) return new Response(JSON.stringify({ error: 'no threads' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+        const s = await session(env);
+        const results = [];
+        for (const th of threads) {
+          try {
+            const r = await repostThread(s, th);
+            results.push(r);
+          } catch (e) {
+            results.push({ error: String(e).slice(0, 200) });
+          }
+          await new Promise((res) => setTimeout(res, 120));
+        }
+        return new Response(JSON.stringify({ ok: true, count: results.length, results: results }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (p === '/delete' && m === 'POST') {
+        const b = await request.json();
+        const uris = Array.isArray(b.uris) ? b.uris : [];
+        const s = await session(env);
+        const out = [];
+        for (const u of uris) {
+          try { await deleteRecord(s, u); out.push({ uri: u, ok: true }); }
+          catch (e) { out.push({ uri: u, ok: false, error: String(e).slice(0, 120) }); }
+          await new Promise((res) => setTimeout(res, 60));
+        }
+        return new Response(JSON.stringify({ ok: true, deleted: out }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/alerts' && m === 'GET') {
         const rows = await env.DB.prepare("SELECT id, source, level, message, created_at, digested FROM alerts ORDER BY id DESC LIMIT 50").all();
@@ -436,3 +620,5 @@ export default {
     }
   }
 };
+
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls };
