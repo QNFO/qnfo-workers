@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-email/fabric-20260910";
-const VERSION = "1.9.1";
+const VERSION = "1.9.2";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -33,6 +33,12 @@ var qnfo_email_default = {
     if (filterResult.action === "reject") {
       message.setReject(filterResult.reason || "Email rejected by policy");
       await logAction(env.AUDIT_DB, emailId, "rejected", filterResult.reason, startTime);
+      return;
+    }
+    if (filterResult.action === "spam") {
+      // EMAIL-FILTER-SPAM-ACTION-1 (2026-09-17): the "spam" filter action was inert - spam-matched
+      // mail fell through to "processed" and still triggered sendNotification. Mark it spam and drop it.
+      await logAction(env.AUDIT_DB, emailId, "spam", filterResult.reason || "Matched spam filter", startTime);
       return;
     }
     await sendNotification(env, { messageId, emailId, from, to, subject, classification, preview: truncate(bodyText, PREVIEW_LENGTH), bodySize: rawSize, receivedAt });
@@ -447,4 +453,6 @@ export {
   qnfo_email_default as default
 };
 //# sourceMappingURL=qnfo-email.js.map
-
+
+
+
