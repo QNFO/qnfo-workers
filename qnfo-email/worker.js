@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-email/fabric-20260910";
-const VERSION = "1.8.0";
+const VERSION = "1.8.1";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -146,6 +146,19 @@ var qnfo_email_default = {
       try {
         const { to, subject, body, html, reply_to_id, from } = await request.json();
         if (!to) return json({ error: "to is required" }, 400);
+        // SUPPRESSION-ENFORCE-1 (2026-09-17): email_suppression was write-only (populated by the
+        // reply-scan path); the send path never read it. Consult it before sending so opt-outs
+        // and reply-stop addresses are never re-emailed.
+        try {
+          const suppressed = await env.AUDIT_DB.prepare(
+            "SELECT reason FROM email_suppression WHERE LOWER(email) = ?1 LIMIT 1"
+          ).bind(String(to).toLowerCase()).first();
+          if (suppressed) {
+            return json({ success: false, suppressed: true, reason: suppressed.reason || "suppressed", to });
+          }
+        } catch (e) {
+          // fail-open: a suppression-lookup error must not block legitimate email
+        }
         const htmlBody = html || (body ? `<p>${body.replace(/\n/g, "<br>")}</p>` : "");
         const textBody = body || html?.replace(/<[^>]*>/g, "") || "";
         const replySubject = subject || "(no subject)";
