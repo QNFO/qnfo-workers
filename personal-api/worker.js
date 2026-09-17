@@ -36,7 +36,7 @@ function clampMaxTokens(requested, isReason) {
 }
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.0.0";
+var VERSION = "4.1.0";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -733,38 +733,122 @@ function toolAppendix() {
 }
 __name(toolAppendix, "toolAppendix");
 __name2(toolAppendix, "toolAppendix");
+function toolCallFromObj(obj) {
+  if (!obj || typeof obj !== "object") return null;
+  if (obj.tool_call) {
+    const tc = obj.tool_call;
+    const name = typeof tc === "string" ? tc : (tc && tc.name);
+    const args = (tc && typeof tc === "object" && tc.args && typeof tc.args === "object") ? tc.args : {};
+    return { name: name || null, args: args };
+  }
+  if (Array.isArray(obj.tool_calls) && obj.tool_calls.length) {
+    const first = obj.tool_calls[0];
+    const fn = first && (first.function || first);
+    if (fn && fn.name) {
+      let args = {};
+      const a = fn.arguments;
+      if (typeof a === "string") {
+        try { args = JSON.parse(a) || {}; } catch (e) { args = {}; }
+      } else if (a && typeof a === "object") {
+        args = a;
+      }
+      return { name: fn.name, args: args };
+    }
+  }
+  if (obj.name && typeof obj.name === "string") {
+    let args = {};
+    const a = obj.args || obj.arguments;
+    if (typeof a === "string") {
+      try { args = JSON.parse(a) || {}; } catch (e) { args = {}; }
+    } else if (a && typeof a === "object") {
+      args = a;
+    }
+    return { name: obj.name, args: args };
+  }
+  return null;
+}
+__name(toolCallFromObj, "toolCallFromObj");
+__name2(toolCallFromObj, "toolCallFromObj");
 function parseToolCall(text) {
-  const s = String(text || "").trim();
-  if (!s || s.charAt(0) !== "{") return null;
-  let start = -1, end = -1, depth = 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charAt(i);
+  let s = String(text || "");
+  if (!s) return null;
+  const open1 = "<|tool_call_begin|>";
+  const close1 = "<|tool_call_end|>";
+  const open2 = "<|tool_calls_section_begin|>";
+  const close2 = "<|tool_calls_section_end|>";
+  let i = s.indexOf(open1);
+  if (i !== -1) {
+    const j = s.indexOf(close1, i + open1.length);
+    if (j !== -1) s = s.slice(i + open1.length, j);
+  } else {
+    const k = s.indexOf(open2);
+    if (k !== -1) {
+      const l = s.indexOf(close2, k + open2.length);
+      if (l !== -1) s = s.slice(k + open2.length, l);
+    }
+  }
+  const braceIdx = s.indexOf("{");
+  if (braceIdx > 0) {
+    const head = s.slice(0, braceIdx).trim();
+    if (head && TOOLS[head]) {
+      let args = {};
+      try {
+        const o = JSON.parse(s.slice(braceIdx));
+        if (o && typeof o === "object") args = o;
+      } catch (e) {
+        args = {};
+      }
+      return { name: head, args: args };
+    }
+  }
+  const candidates = [];
+  let start = -1;
+  let depth = 0;
+  for (let p = 0; p < s.length; p++) {
+    const c = s.charAt(p);
     if (c === "{") {
-      if (start === -1) start = i;
+      if (depth === 0) start = p;
       depth++;
     } else if (c === "}") {
       depth--;
-      if (depth === 0) {
-        end = i;
-        break;
+      if (depth === 0 && start !== -1) {
+        candidates.push(s.slice(start, p + 1));
+        start = -1;
       }
     }
   }
-  if (start === -1 || end === -1) return null;
-  let obj;
-  try {
-    obj = JSON.parse(s.slice(start, end + 1));
-  } catch (e) {
-    return null;
+  for (const cand of candidates) {
+    let obj;
+    try { obj = JSON.parse(cand); } catch (e) { continue; }
+    const tc = toolCallFromObj(obj);
+    if (tc && tc.name && TOOLS[tc.name]) return { name: tc.name, args: tc.args || {} };
   }
-  const tc = obj && obj.tool_call;
-  const name = tc ? typeof tc === "string" ? tc : tc.name : null;
-  if (!name || !TOOLS[name]) return null;
-  const args = tc && typeof tc === "object" && tc.args && typeof tc.args === "object" ? tc.args : {};
-  return { name, args };
+  return null;
 }
 __name(parseToolCall, "parseToolCall");
 __name2(parseToolCall, "parseToolCall");
+function sanitizeToolArtifacts(text) {
+  let t = String(text || "").trim();
+  const strip = (open, close) => {
+    let out = t;
+    let idx;
+    while ((idx = out.indexOf(open)) !== -1) {
+      const j = out.indexOf(close, idx + open.length);
+      if (j === -1) break;
+      out = out.slice(0, idx) + " " + out.slice(j + close.length);
+    }
+    return out;
+  };
+  t = strip("<|tool_calls_section_begin|>", "<|tool_calls_section_end|>");
+  t = strip("<|tool_call_begin|>", "<|tool_call_end|>");
+  t = strip("<|tool_call_argument_begin|>", "<|tool_call_argument_end|>");
+  t = t.trim();
+  const low = t.toLowerCase();
+  if (t.charAt(0) === "{" && (low.indexOf("tool_call") !== -1 || low.indexOf("tool_calls") !== -1)) t = "";
+  return t.trim();
+}
+__name(sanitizeToolArtifacts, "sanitizeToolArtifacts");
+__name2(sanitizeToolArtifacts, "sanitizeToolArtifacts");
 async function runTool(env, name, args) {
   const t = TOOLS[name];
   if (!t) return { ok: false, error: "unknown tool: " + name };
@@ -1231,10 +1315,10 @@ function parseDdg(html, isLite, k) {
 __name(parseDdg, "parseDdg");
 __name2(parseDdg, "parseDdg");
 function isCurrentEvents(q) {
-  const t = String(q || "").toLowerCase();
-  const words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "schedule", "hours", "open now", "happening", "happened", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
+  const t = " " + String(q || "").toLowerCase() + " ";
+  const words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "schedule", "hours", "open now", "happening", "happened", "going on", "whats on", "what's on", "events", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
   for (const w of words) {
-    if (t.indexOf(" " + w + " ") !== -1 || t.indexOf(w) === 0 || t === w) return true;
+    if (t.indexOf(" " + w + " ") !== -1) return true;
   }
   const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
   let hasDigit = false;
@@ -1843,7 +1927,7 @@ var api_default = {
         const text = up2.body.choices[0].message.content || "";
         const tc = parseToolCall(text);
         if (!tc) {
-          loopFinal = text;
+          loopFinal = sanitizeToolArtifacts(text);
           loopUp = up2;
           break;
         }
