@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.2';
+var VERSION = '0.7.4';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 
@@ -79,6 +79,35 @@ function applyLink(text, link, max) {
   const budget = max - link.length - 3;
   const head = truncateSafe(s, Math.max(budget, 1));
   return head + ' \u2014 ' + link;
+}
+
+// Buffer (Mastodon/LinkedIn/X) publishes ONE standalone post with no thread, no facets and
+// no embed. A Bluesky thread's post[0] is often a bare noun-phrase title ("Redundant
+// Safeguards as Coupled Failure Modes") which is fine as a thread root but incoherent as a
+// standalone cross-post. BUFFER-STANDALONE-1: prefer the first post that reads as a complete
+// sentence, then attach the link. Falls back to title/post[0] + link so a link is always
+// present. Bluesky composition is untouched.
+function isCompleteSentence(t) {
+  const s = String(t || '').trim();
+  if (s.length < 25) return false;
+  if (!/[.?!]["')\]]?$/.test(s)) return false;
+  return /\s/.test(s);
+}
+function pickBufferText(posts, link, title, max) {
+  max = max || 280;
+  const list = (posts || []).map(function(p) { return typeof p === 'string' ? p : String((p && p.text) || ''); });
+  const stripped = list.map(function(t) { return String(t).replace(/^\s*(Read|Paper|DOI)\s*:\s*/i, '').trim(); });
+  // 1. first post that stands alone as a sentence and is not just a bare link line
+  for (let i = 0; i < stripped.length; i++) {
+    const t = stripped[i];
+    if (!t) continue;
+    const withoutUrl = t.replace(/https?:\/\/\S+/g, '').trim();
+    if (withoutUrl.length < 25) continue;
+    if (isCompleteSentence(withoutUrl)) return link ? applyLink(t, link, max) : truncate(t, max);
+  }
+  // 2. fall back to the thread title (or post 0), always link-bearing
+  const head = String(title || list[0] || '').trim();
+  return link ? applyLink(head, link, max) : truncate(head, max);
 }
 
 function auth(req, env) {
@@ -459,7 +488,7 @@ async function drainQueue(env) {
       // internally for Bluesky's post 1. Previously this sent the raw linkless posts[0].
       let bufferResult = null;
       try {
-        const bufText = threadLink ? applyLink(String(posts[0] || ''), threadLink, 280) : truncate(String(posts[0] || ''), 280);
+        const bufText = pickBufferText(posts, threadLink, row.title, 280);
         bufferResult = await bufferPost(env, bufText);
       } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
       await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
@@ -503,6 +532,16 @@ export default {
         const bufText = link ? applyLink(String(b.text || ''), link, 280) : truncate(String(b.text || ''), 280);
         const res = await bufferPost(env, bufText);
         return new Response(JSON.stringify({ ok: true, buffer: res, text_sent: bufText }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      // Buffer admin proxy: Buffer posts are plain text with no facet/embed model, so a bad
+      // cross-post can only be REMOVED, never repaired in place. This route gives the fleet
+      // read+delete control over its own Buffer history (auth-gated, same key as /repost).
+      if (p === '/buffer/gql' && m === 'POST') {
+        const b = await request.json();
+        const q = String(b.query || '');
+        if (!q) return new Response(JSON.stringify({ error: 'query required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+        const res = await bufferGql(env, q);
+        return new Response(JSON.stringify({ ok: true, data: res }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/thread' && m === 'POST') {
         const b = await request.json();
