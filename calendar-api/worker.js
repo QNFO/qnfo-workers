@@ -25,10 +25,10 @@
 // Health: GET /health
 // DEPLOY: cd qnfo-workers/calendar && wrangler deploy  (CAL_DB D1 qnfo-audit, ICS_R2 qnfo-assets)
 // CANONICAL SOURCE (remote): github.com/QNFO/qnfo-workers -> calendar/worker.js
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const WORKER = "calendar-api";
 const PLANES = ["qnfo", "personal"];
-const ALLOWED_SOURCES = ["radar", "catalog", "manual", "personal-radar", "personal-profile"];
+const ALLOWED_SOURCES = ["radar", "catalog", "manual", "personal-radar", "personal-profile", "personal-twin"];
 const R2_PUBLIC = "https://pub-7e5e6cd48f4b43ebb55a5ee25093cb71.r2.dev";
 const CR = String.fromCharCode(13);
 const LF = String.fromCharCode(10);
