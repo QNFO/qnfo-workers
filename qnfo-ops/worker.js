@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.12";
+var VERSION = "2.36.13";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -50,8 +50,9 @@ __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-var UPSTREAM_MODEL = "workers-ai/@cf/deepseek-ai/deepseek-v4-pro-0813";
+var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-18: DeepSeek unreliable -> GPT-5.5 (reliable tool-capable frontier)
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5.5";
 var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" };
 var WAI_PASSTHROUGH = { "pareto": "unbiased/pareto", "qwen3.8-max": "alibaba/qwen3.8-max" }; // best tool-capable frontier (gpt-5.6 needs Responses API for tools) // 2026-09-18: GPT-5 confirmed available via WAI unified billing (diag-wai: gpt-5-2025-08-07)
@@ -2468,6 +2469,23 @@ __name2(callWorkersAI, "callWorkersAI");
 __name22(callWorkersAI, "callWorkersAI");
 __name222(callWorkersAI, "callWorkersAI");
 __name2222(callWorkersAI, "callWorkersAI");
+async function callGLM(env, messages, maxTokens, tools, opts) {
+  const o = opts || {};
+  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const inputs = { messages: msgs };
+  if (maxTokens) inputs.max_tokens = maxTokens;
+  if (o.temperature != null) inputs.temperature = o.temperature;
+  if (o.topP != null) inputs.top_p = o.topP;
+  if (tools && tools.length) {
+    inputs.tools = tools;
+    if (o.toolChoice) inputs.tool_choice = o.toolChoice;
+  }
+  const res = await env.WAI.run(UPSTREAM_GLM_MODEL, inputs);
+  if (res && Array.isArray(res.choices)) return res;
+  const txt = res && (res.response != null ? res.response : res.answer) || "";
+  return { choices: [{ index: 0, message: { role: "assistant", content: String(txt) }, finish_reason: "stop" }], usage: res && res.usage || {} };
+}
+__name(callGLM, "callGLM");
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
   if (o.codeMode && env.WAI) {
@@ -2477,6 +2495,15 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     } catch (e) {
       o.__codeFallbackErr = String(e && e.message || e).slice(0, 180);
       console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__codeFallbackErr);
+    }
+  }
+  if (!o.codeMode && !o.upstreamModel && env.WAI) {
+    try {
+      const rg = await callGLM(env, messages, maxTokens, tools, o);
+      return { resp: rg, servedBy: UPSTREAM_GLM_MODEL };
+    } catch (eg) {
+      o.__glmFallbackErr = String(eg && eg.message || eg).slice(0, 180);
+      console.log("OPS_GLM_FALLBACK " + UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__glmFallbackErr);
     }
   }
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
@@ -2504,7 +2531,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   if (!resp || !resp.ok) throw new Error(_dsLastErr || "deepseek upstream unavailable after 3 attempts");
   const _out = await resp.json();
-  const _servedBy = o.codeMode ? (o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL) : (o.upstreamModel ? o.upstreamModel : null);
+  const _servedBy = o.codeMode ? (o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL) : (o.upstreamModel ? o.upstreamModel : (o.__glmFallbackErr ? UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_MODEL));
   return { resp: _out, servedBy: _servedBy };
 }
 __name(callDeepSeek, "callDeepSeek");
@@ -2982,7 +3009,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + String(e && e.message || e).slice(0, 180));
       }
     }
-    const upBody = frontierMode ? { model: UPSTREAM_FRONTIER_MODEL, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: UPSTREAM_MODEL, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const _streamModel = frontierMode ? UPSTREAM_FRONTIER_MODEL : UPSTREAM_MODEL; const _streamIsOAI = _streamModel.indexOf("openai/") === 0 || _streamModel.indexOf("gpt-5") >= 0; const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
@@ -4167,6 +4194,7 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
 
 
 
