@@ -16,3 +16,16 @@ Provider "QNFO Ops" is registered in the app stores (providers + provider_models
 model_configs + Roaming app-settings.json). If it does not appear immediately,
 restart DeepChat or trigger a provider/model refresh in Settings → Providers.
 Model ids: ops-exec (default agent/tools), deepseek-v4-flash.
+
+## Canonical limits (OPS-SETTINGS-IMMUTABLE-1)
+
+| Model | context | max output | timeout |
+|---|---|---|---|
+| `ops-frontier` (DeepChat default) | 400000 | 128000 | 600000 |
+| `ops-exec` | 1048576 | 393216 | 3600000 |
+| `deepseek-v4-flash` | 1048576 | 393216 | 3600000 |
+
+Relay / worker ceilings: `MODEL_CTX = 1048576`, `DEFAULT_MAX_OUT = 393216`,
+`OPS_LOOP_DEADLINE_MS = 300000`, `cpu_ms = 300000`, workflow step timeout `15 minutes`.
+These values are immutable; do not change them. Drift is enforced by
+`scripts/ops-settings-guard.py` (canonical: `QNFO/qnfo-ops/scripts`).

@@ -196,3 +196,17 @@ matches the committed source.
   from the repo dirs; secrets are untouched by script uploads.
 - New version rule: bump VERSION in worker.js, commit + push BEFORE deploy, then run
   `scripts/verify-runtime.py`.
+
+## 11. Ops client limits (OPS-SETTINGS-IMMUTABLE-1)
+
+The OpenAI-compatible clients consume these advertised limits unchanged:
+
+| Model | context | max output |
+|---|---|---|
+| `ops-frontier` (DeepChat default) | 400000 | 128000 |
+| `ops-exec` | 1048576 | 393216 |
+| `deepseek-v4-flash` | 1048576 | 393216 |
+
+Worker relay ceilings: `MODEL_CTX = 1048576`, `DEFAULT_MAX_OUT = 393216`,
+`OPS_LOOP_DEADLINE_MS = 300000`. Immutable — enforced by
+`QNFO/qnfo-ops/scripts/ops-settings-guard.py`.
