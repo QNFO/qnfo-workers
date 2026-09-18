@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.4";
+var VERSION = "2.36.6";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -52,7 +52,7 @@ var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/te
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var UPSTREAM_MODEL = "workers-ai/@cf/deepseek-ai/deepseek-v4-pro-0813";
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
-var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5"; // 2026-09-18: GPT-5 confirmed available via WAI unified billing (diag-wai: gpt-5-2025-08-07)
+var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5.5"; // best tool-capable frontier (gpt-5.6 needs Responses API for tools) // 2026-09-18: GPT-5 confirmed available via WAI unified billing (diag-wai: gpt-5-2025-08-07)
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
@@ -2558,9 +2558,9 @@ __name22(normalizeMessages, "normalizeMessages");
 __name222(normalizeMessages, "normalizeMessages");
 __name2222(normalizeMessages, "normalizeMessages");
 var FRONTIER_MODELS = {
-  "ops-frontier": { up: "openai/gpt-5", ctx: 4e5, maxOut: 128e3 },
-  "ops-frontier-mini": { up: "openai/gpt-5-mini", ctx: 4e5, maxOut: 128e3 },
-  "ops-frontier-reason": { up: "openai/o4-mini", ctx: 2e5, maxOut: 1e5 }
+  "ops-frontier": { up: "openai/gpt-5.5", ctx: 4e5, maxOut: 128e3 },
+  "ops-frontier-mini": { up: "openai/gpt-5.4", ctx: 4e5, maxOut: 128e3 },
+  "ops-frontier-reason": { up: "openai/gpt-5.5", ctx: 2e5, maxOut: 1e5 }
 };
 async function handleFrontier(env, body, messages, maxTokens, isStream, ua, ctx, wanted) {
   const spec = FRONTIER_MODELS[wanted];
@@ -4113,6 +4113,8 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
+
 
 
 
