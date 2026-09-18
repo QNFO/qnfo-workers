@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.13";
+var VERSION = "2.36.14";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3825,7 +3825,7 @@ var worker_default = {
       }
       return json(out);
     }
-    if (path === "/health" && method === "GET") {
+    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) rat = "undercount false-positive (adaptive-sampled)"; if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
       const bindings = {};
       for (const k of BINDING_KEYS) bindings[k.toLowerCase()] = !!(env[k] && env[k].fetch);
       bindings.audit = !!env.QNFO_AUDIT;
@@ -4194,6 +4194,7 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
 
 
 
