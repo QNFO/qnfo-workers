@@ -10,9 +10,10 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.4';
+var VERSION = '0.7.5';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
+const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
 
 function truncate(text, max) {
   const pts = Array.from(String(text || ''));
@@ -271,8 +272,16 @@ async function checkThread(env, title, abstract, posts) {
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
     } catch (e) {}
-    const lo = cleaned.indexOf('['), hi = cleaned.lastIndexOf(']');
-    if (lo >= 0 && hi > lo) {
+    const opens = [];
+    for (let i = 0; i < cleaned.length; i++) if (cleaned[i] === '[') opens.push(i);
+    for (let k = 0; k < opens.length; k++) {
+      const lo = opens[k];
+      let depth = 0, hi = -1;
+      for (let j = lo; j < cleaned.length; j++) {
+        if (cleaned[j] === '[') depth++;
+        else if (cleaned[j] === ']') { depth--; if (depth === 0) { hi = j; break; } }
+      }
+      if (hi < 0) continue;
       try {
         const parsed = JSON.parse(cleaned.slice(lo, hi + 1));
         if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
@@ -280,13 +289,13 @@ async function checkThread(env, title, abstract, posts) {
     }
     return null;
   }
-  const ai1 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 3000 });
+  const ai1 = await env.AI.run(CHECKER_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 2000 });
   let text = extractText(ai1).trim();
   let issues = parseIssues(text);
   let diagText = text;
   let lastAi = ai1;
   if (issues === null) {
-    const ai2 = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 3000 });
+    const ai2 = await env.AI.run(CHECKER_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 2000 });
     const retryText = extractText(ai2).trim();
     diagText = retryText;
     lastAi = ai2;
