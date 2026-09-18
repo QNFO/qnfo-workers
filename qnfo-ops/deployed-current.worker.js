@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.6";
+var VERSION = "2.36.9";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -52,7 +52,8 @@ var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/te
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var UPSTREAM_MODEL = "workers-ai/@cf/deepseek-ai/deepseek-v4-pro-0813";
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
-var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5.5"; // best tool-capable frontier (gpt-5.6 needs Responses API for tools) // 2026-09-18: GPT-5 confirmed available via WAI unified billing (diag-wai: gpt-5-2025-08-07)
+var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5.5";
+var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" }; // best tool-capable frontier (gpt-5.6 needs Responses API for tools) // 2026-09-18: GPT-5 confirmed available via WAI unified billing (diag-wai: gpt-5-2025-08-07)
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
@@ -2640,8 +2641,10 @@ async function handleFrontier(env, body, messages, maxTokens, isStream, ua, ctx,
 }
 __name(handleFrontier, "handleFrontier");
 __name2(handleFrontier, "handleFrontier");
-async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
+async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, upstreamModel, displayModel) {
   const t0 = Date.now();
+  const relayUp = upstreamModel || UPSTREAM_MODEL;
+  const relayDisp = displayModel || "deepseek-v4-flash";
   const norm = normalizeMessages(messages);
   const maxOut = clamp(maxTokens, 393216);
   const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
@@ -2650,12 +2653,12 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
   const relayTopP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : 0.9;
   const prompt = lastUserText(norm).slice(0, 4e3);
   const fail = /* @__PURE__ */ __name2222(async function(errText) {
-    const rec = { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: String(errText || "").slice(0, 500), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 };
+    const rec = { id: randId("ops-"), ts: iso(), model: relayDisp, strategy: "relay", prompt, response: String(errText || "").slice(0, 500), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 };
     ctx.waitUntil(logOps(env, rec));
   }, "fail");
   try {
     if (isStream) {
-      const upBody = { model: UPSTREAM_MODEL, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
+      const upBody = { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
@@ -2670,10 +2673,10 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
         return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
       }
       const recId = randId("ops-");
-      ctx.waitUntil(logOps(env, { id: recId, ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
+      ctx.waitUntil(logOps(env, { id: recId, ts: iso(), model: relayDisp, strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
       return new Response(relayStream(resp.body, recId, env, ctx, norm), { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache" } });
     }
-    const { resp: cResp } = await callDeepSeek(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
+    const { resp: cResp } = await callDeepSeek(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice, upstreamModel: relayUp });
     const cChoice = cResp && cResp.choices && cResp.choices[0];
     const cMsg = cChoice && cChoice.message || {};
     const cText = String(cMsg.content || "");
@@ -2681,13 +2684,13 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx) {
     const cUsage = cResp && cResp.usage || {};
     const cRespId = randId("chatcmpl-");
     const cCreated = Math.floor(Date.now() / 1e3);
-    ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: "deepseek-v4-flash", strategy: "relay", prompt, response: (cText || (cToolCalls ? JSON.stringify(cToolCalls) : "")).slice(0, 2e4), prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(norm)), completion_tokens: cUsage.completion_tokens || estTokens(cText), cost_usd: costUsdCalc(cUsage.prompt_tokens || 0, cUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: cToolCalls ? JSON.stringify(cToolCalls).slice(0, 3e3) : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 0, ok: 1 }));
+    ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: relayDisp, strategy: "relay", prompt, response: (cText || (cToolCalls ? JSON.stringify(cToolCalls) : "")).slice(0, 2e4), prompt_tokens: cUsage.prompt_tokens || estTokens(JSON.stringify(norm)), completion_tokens: cUsage.completion_tokens || estTokens(cText), cost_usd: costUsdCalc(cUsage.prompt_tokens || 0, cUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: cToolCalls ? JSON.stringify(cToolCalls).slice(0, 3e3) : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 0, ok: 1 }));
     const cMsgOut = { role: "assistant", content: cText };
     if (cToolCalls) cMsgOut.tool_calls = cToolCalls.map(function(tc0, i0) {
       return Object.assign({}, tc0, { index: tc0 && tc0.index != null ? tc0.index : i0 });
     });
     const cFr = cChoice && cChoice.finish_reason || "stop";
-    return json({ id: cRespId, object: "chat.completion", created: cCreated, model: "deepseek-v4-flash", choices: [{ index: 0, message: cMsgOut, finish_reason: cFr }], usage: cUsage });
+    return json({ id: cRespId, object: "chat.completion", created: cCreated, model: relayDisp, choices: [{ index: 0, message: cMsgOut, finish_reason: cFr }], usage: cUsage });
   } catch (e) {
     await fail(e && e.message || String(e));
     return json({ error: "relay error: " + (e && e.message || String(e)) }, 502);
@@ -2796,10 +2799,11 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
   const FRONTIER_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-frontier-reason": true };
   const frontierMode = !!FRONTIER_ALIASES[wanted];
-  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash" && !frontierMode) return json({ error: "unknown model " + rawWanted + " (available: ops-exec, ops-frontier, deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
+  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash" && !frontierMode && !PASSTHROUGH_MODELS[wanted]) return json({ error: "unknown model " + rawWanted + " (available: ops-exec, ops-frontier, deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
   if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
+    if (PASSTHROUGH_MODELS[wanted]) return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx, PASSTHROUGH_MODELS[wanted], wanted);
   const t0 = Date.now();
   const isStream = !!stream;
   const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
@@ -3247,7 +3251,7 @@ function manifest() {
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
     }),
-    models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason"],
+    models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason", "gpt-5.6-sol", "gpt-5", "gpt-5-mini", "o4-mini"],
     deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "REGISTRY_TOKEN (fleet self-registration)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
     generatedAt: iso()
   };
@@ -3269,7 +3273,7 @@ async function registryRefresh(env) {
   }, "upsert");
   await upsert("qnfo-ops", "worker", { version: VERSION, base_url: CANON_BASE["qnfo-ops"] || "https://ops.qnfo.org", purpose: "ops endpoint + service registry + queue/query", capabilities: manifest().capabilities, routes: ROUTES, tools: OPS_TOOLS.map(function(t) {
     return { name: t.name, description: t.description };
-  }), models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason"], deps: manifest().deps });
+  }), models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason", "gpt-5.6-sol", "gpt-5", "gpt-5-mini", "o4-mini"], deps: manifest().deps });
   let apiList = [];
   if (env.CF_API_TOKEN) {
     try {
@@ -3767,7 +3771,7 @@ var worker_default = {
       bindings.containers_pilot = !!(env.CONTAINERS_PILOT && env.CONTAINERS_PILOT.fetch);
       bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.ai = !!env.WAI;
-      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason"], bindings, generatedAt: iso() });
+      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason", "gpt-5.6-sol", "gpt-5", "gpt-5-mini", "o4-mini"], bindings, generatedAt: iso() });
     }
     if (path === "/agents/ops-exec" || path.startsWith("/agents/ops-exec")) {
       if (!env.AGENTIC_OPS_EXEC) return json({ error: "AgenticOpsExec DO not bound", code: 503 }, 503);
@@ -3827,14 +3831,14 @@ var worker_default = {
     }
     if (path === "/v1/models" && method === "GET") {
       const mk = /* @__PURE__ */ __name2222(function(id) {
-        if (id === "ops-frontier") return { id, object: "model", created: 171e7, owned_by: "qnfo", description: "QNFO ops FRONTIER execution agent: identical server-side agentic tool loop as ops-exec (60+ tools: shell_exec/exec_python/exec_node, ops_d1_query, r2/kv/vectorize, github_*, email_*, cf_worker_deploy, etc.) backed by DeepSeek V4 Pro (1M ctx, reasoning, function-calling) via Cloudflare AI Gateway. No client tool_calls handoff - pure server-side execution.", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming", "reasoning"], _router: { model: "deepseek-v4-pro-0813", endpoint: "https://ops.qnfo.org/v1", tier: 0, family: "deepseek", reasoning: true, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 1.32, costPer1MOutput: 3.96, availability: "key-required" } };
-        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (pure server-side loop: ALL code/tool ops execute on Cloudflare; no client tool_calls handoff; streamed final answers; DeepSeek upstream, no markup)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: "deepseek-v4-flash", endpoint: "https://ops.qnfo.org/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
+        if (id === "ops-frontier") return { id, object: "model", created: 171e7, owned_by: "qnfo", description: "QNFO ops FRONTIER execution agent: identical server-side agentic tool loop as ops-exec (60+ tools: shell_exec/exec_python/exec_node, ops_d1_query, r2/kv/vectorize, github_*, email_*, cf_worker_deploy, etc.) backed by GPT-5.5 (tool-capable frontier, unified billing) via Cloudflare AI Gateway. No client tool_calls handoff - pure server-side execution.", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming", "reasoning"], _router: { model: "gpt-5.5", endpoint: "https://ops.qnfo.org/v1", tier: 0, family: "openai", reasoning: true, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 1.32, costPer1MOutput: 3.96, availability: "key-required" } };
+        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (pure server-side loop: ALL code/tool ops execute on Cloudflare; no client tool_calls handoff; streamed final answers; DeepSeek upstream, no markup)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: id, endpoint: "https://ops.qnfo.org/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
       }, "mk");
-      return json({ object: "list", data: [mk("ops-exec"), mk("ops-frontier"), mk("ops-frontier-mini"), mk("ops-frontier-reason"), mk("deepseek-v4-flash")] });
+      return json({ object: "list", data: [mk("ops-exec"), mk("ops-frontier"), mk("ops-frontier-mini"), mk("ops-frontier-reason"), mk("deepseek-v4-flash"), mk("gpt-5.6-sol"), mk("gpt-5"), mk("gpt-5-mini"), mk("o4-mini")] });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
       const id = path.split("/").pop();
-      if (id !== "ops-exec" && id !== "deepseek-v4-flash" && id !== "ops-frontier") return json({ error: "model not found" }, 404);
+      if (id !== "ops-exec" && id !== "deepseek-v4-flash" && id !== "ops-frontier" && !PASSTHROUGH_MODELS[id]) return json({ error: "model not found" }, 404);
       return json({ id, object: "model", created: 171e7, owned_by: "qnfo" });
     }
     if (path === "/v1/responses" && method === "POST") {
@@ -4113,6 +4117,9 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+
+
+
 
 
 
