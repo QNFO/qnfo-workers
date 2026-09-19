@@ -1,4 +1,4 @@
-const VERSION = "2.0.2";
+const VERSION = "2.0.3";
 const QNFO_VERSION = "qnfo-email/command-20260918";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
@@ -264,7 +264,10 @@ async function parseBody(raw) {
 async function storeEmail(db, data) {
   try {
     const result = await db.prepare("INSERT INTO emails (message_id, sender, recipient, subject, body_text, body_html, headers_json, classification, received_at, status, in_reply_to, references_hdr) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'received',?10,?11) ON CONFLICT(message_id) DO UPDATE SET recipient=?3,subject=?4,body_text=?5,body_html=?6,headers_json=?7,classification=?8,in_reply_to=?10,references_hdr=?11").bind(data.messageId, data.from, data.to, data.subject, data.bodyText, data.bodyHtml, data.headersJson, data.classification, data.receivedAt, data.inReplyTo, data.refsHdr).run();
-    return result.meta ? result.meta.last_row_id || 0 : 0;
+    // EMAIL-STOREEMAIL-LASTROWID-UNSAFE (959): meta.last_row_id is unreliable after
+    // ON CONFLICT(message_id) DO UPDATE - re-select the actual row id by message_id.
+    const row = await db.prepare("SELECT id FROM emails WHERE message_id = ?1").bind(data.messageId).first();
+    return (row && row.id) || 0;
   } catch (e) { console.error("D1 store:", e.message); return 0; }
 }
 
