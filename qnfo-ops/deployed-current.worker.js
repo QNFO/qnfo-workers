@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.34";
+var VERSION = "2.36.36";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -77,7 +77,11 @@ var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-f
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-var MAX_TOOL_ITERS = 30;
+// COST-GATED-1 (2026-09-19): bound the tool loop + result size. ops-exec averaged
+// 710,774 input tokens / 120s per request (p50 49k tok / 44s), driven by 30 rounds x
+// 65,536-char tool results. Now 12 rounds / 16,384 chars, cutting context growth + cost.
+var MAX_TOOL_ITERS = 12;
+var MAX_TOOL_RESULT_CHARS = 16384;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
@@ -3031,9 +3035,9 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e4); // NONSTREAM-CLIENT-BUDGET-1 (2026-09-19): non-streaming clients (DeepChat agent loop) get a bounded budget so the response cannot outlive the client patience (the 58-218s loops aborted with provider_error); streaming clients keep the full 150s since the SSE keepalive holds the socket open.
-  const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", 30);
-  const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e4); // NONSTREAM-CLIENT-BUDGET-1 (2026-09-19): non-streaming clients (DeepChat agent loop) get a bounded budget so the response cannot outlive the client patience (the 58-218s loops aborted with provider_error); streaming clients go to the full 300s CPU ceiling (SSE keepalive holds the socket open).
+  const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
+  const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
   const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
   const _opsToolNames = new Set(OPS_TOOLS.map(function(t) {
@@ -3953,7 +3957,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     const answerCap = Math.max(8192, clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
     const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
     const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
-    const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
+    const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
     const opsToolNames = new Set(OPS_TOOLS.map(function(t) {
       return t.name;
     }));
