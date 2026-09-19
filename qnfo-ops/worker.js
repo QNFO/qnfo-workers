@@ -3022,11 +3022,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const codeMode = false; // DISABLED 2026-09-19: kimi-k2.7-code cannot tool-call (broke run_code); route ALL prompts through agentic gpt-5.5 path
   let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
-<<<<<<< Updated upstream
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
-=======
-  const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR
->>>>>>> Stashed changes
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
   const loopDeadlineMs = envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5);
@@ -3848,11 +3844,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     }
     work.unshift({ role: "system", content: OPS_SYSTEM_PROMPT + sysDate });
     const maxTurns = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
-<<<<<<< Updated upstream
     const answerCap = Math.max(8192, clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
-=======
-    const answerCap = Math.max(8192, clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR
->>>>>>> Stashed changes
     const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
     const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
     const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
