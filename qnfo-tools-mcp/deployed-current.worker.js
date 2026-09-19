@@ -6,7 +6,7 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var PL_SEARCH = "https://personal-life-search.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
-var VERSION = "1.1.2";
+var VERSION = "1.1.3";
 var TOOLS = [
   { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
   { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
@@ -257,6 +257,10 @@ var worker_default = {
     if (path === "/mcp/messages" && method === "POST") {
       const sessionId = url.searchParams.get("sessionId") || "";
       const controller = sessions.get(sessionId);
+      // MCP-MESSAGES-UNAUTHENTICATED (953): this endpoint previously executed JSON-RPC
+      // tools with NO auth check at all. Require either a live auth-established SSE
+      // session or a valid MCP_TOKEN, matching /mcp and /mcp/sse.
+      if (!controller && !authToken(tokenFrom(url, request), env)) return new Response("unauthorized", { status: 401 });
       let msg;
       try {
         msg = await request.json();
