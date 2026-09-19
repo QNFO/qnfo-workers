@@ -13,7 +13,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // recursion in extractWAContent() (line ~991 returned an undefined identifier `extrac`).
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.0";
+var VERSION = "5.28.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -2196,6 +2196,7 @@ var worker_default = {
         worker: "qnfo-ai",
         version: VERSION,
         capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search", "vision", "function-calling", "context-aware-routing", "tool-gateway", "chat", "agent", "code"],
+        limitations: ["relay/router only - does NOT execute code or tools server-side; tool-gateway forwards tool_calls back to the caller", "research/infra scope only; never serves personal-life data (PERSONAL-QNFO-SEPARATION-1)", "run_code runs in an isolated in-worker JS sandbox (no subprocess/VM/host filesystem)", "data-returning endpoints (/v1/search, /v1/history, /v1/web/*) require ROUTER_AUTH_KEY", "no persistent agent tool loop (unlike qnfo-ops)"],
         routes: ROUTES,
         bindings: {
           ai: !!env.AI,
