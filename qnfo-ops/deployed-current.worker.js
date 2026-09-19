@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.20";
+var VERSION = "2.36.23";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -50,13 +50,30 @@ __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-19: cost/perf-optimized AI Gateway dynamic route (verified -> gpt-5-mini-2025-08-07)
+var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-19: default ops upstream. (dynamic/ops-cost-opt was dropped - the route does not exist on the gateway -> 2019 model-not-found.)
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5.5";
 var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" };
 var WAI_PASSTHROUGH = { "pareto": "unbiased/pareto", "qwen3.8-max": "alibaba/qwen3.8-max" }; // best tool-capable frontier (gpt-5.6 needs Responses API for tools) // 2026-09-18: GPT-5 confirmed available via WAI unified billing (diag-wai: gpt-5-2025-08-07)
+// OPS-EXEC-MODELS-1 (2026-09-19): the SERVER-SIDE EXECUTING model class. Each id runs the full
+// ops agent tool loop (60+ tools) against its AI Gateway upstream. This is the "can execute"
+// class; PASSTHROUGH_MODELS / WAI_PASSTHROUGH are relays that do NOT execute server-side.
+var OPS_EXEC_MODELS = {
+  "ops-frontier": "openai/gpt-5.5",
+  "ops-frontier-mini": "openai/gpt-5.5",
+  "ops-frontier-reason": "openai/gpt-5.5",
+  "gpt-5.1-codex": "openai/gpt-5.1-codex",
+  "gpt-5.3-codex": "openai/gpt-5.3-codex",
+  "gpt-5-codex": "openai/gpt-5-codex",
+  "gpt-5.6-terra": "openai/gpt-5.6-terra",
+  "gpt-5.6-luna": "openai/gpt-5.6-luna",
+  "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
+  "deepseek-chat": "deepseek/deepseek-chat",
+  "typesafe-jev": "typesafe/jev"
+};
+var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-frontier-reason": true };
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
@@ -64,6 +81,62 @@ var MAX_TOOL_ITERS = 30;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
+// OPS-MODEL-CATALOG-1 (2026-09-19): single source of truth for /v1/models advertising.
+// INVARIANT: every advertised entry MUST reflect the ACTUAL routing constants above
+// (UPSTREAM_MODEL / UPSTREAM_FRONTIER_MODEL / PASSTHROUGH_MODELS / WAI_PASSTHROUGH).
+// Each model carries an explicit `execution` mode and a `limitations` array so clients can
+// distinguish server-side EXECUTING agents from relays ("weak agents" that cannot execute).
+var OPS_EXEC_LOOP_LIMITS = ["pure server-side execution: client-supplied tools are NOT dispatched back to the caller", "execution scope is the Cloudflare Workers runtime only (no real subprocess/VM/firecracker)", "no vision/image input"];
+var OPS_RELAY_LIMITS = ["pass-through relay only: does NOT execute code or tools server-side", "no ops agent tool loop (no shell_exec/ops_d1_query/etc.)", "client-supplied tools are relayed back to the caller, not executed here"];
+var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND identical upstream (openai/gpt-5.5)", "the ops-frontier / ops-frontier-mini / ops-frontier-reason ids are NOT behaviourally distinct today"];
+var OPS_ALIAS_LIMITS = OPS_ALIAS_LIMITATIONS;
+// Endpoint-level LIMITATIONS (OPS-CAPABILITY-ADVERTISING-1, 2026-09-19): what this endpoint
+// explicitly does NOT do, and where execution is restricted ("weak agent" scoping).
+var OPS_ENDPOINT_LIMITATIONS = ["executing-agent models run a PURE SERVER-SIDE tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "relay models (deepseek-v4-flash, gpt-5*, o4-mini, pareto, qwen3.8-max) do NOT execute code/tools server-side", "no vision/image input on any advertised model", "ops-frontier-mini and ops-frontier-reason are aliases of ops-frontier (not distinct models)", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
+function opsModelIds() {
+  return opsModelCatalog().map(function(m) {
+    return m.id;
+  });
+}
+function opsModelById(id) {
+  var all = opsModelCatalog();
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].id === id) return all[i];
+  }
+  return null;
+}
+function opsModelFamily(up) {
+  var s = String(up || "");
+  if (s.indexOf("openai/") === 0) return "openai";
+  if (s.indexOf("anthropic/") === 0) return "anthropic";
+  if (s.indexOf("alibaba/") === 0) return "alibaba";
+  if (s.indexOf("unbiased/") === 0) return "unbiased";
+  if (s.indexOf("typesafe/") === 0) return "typesafe";
+  if (s.indexOf("dynamic/") === 0) return "gateway-dynamic";
+  return "deepseek";
+}
+function opsModelEntry(id, o) {
+  return { id: id, object: "model", created: 171e7, owned_by: "qnfo", description: o.description, execution: o.execution, context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: o.capabilities, limitations: o.limitations, _router: { model: o.upstream, endpoint: "https://ops.qnfo.org/v1", upstream: o.upstream, tier: o.tier, family: opsModelFamily(o.upstream), reasoning: !!o.reasoning, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: typeof o.in === "number" ? o.in : null, costPer1MOutput: typeof o.out === "number" ? o.out : null, availability: "key-required" } };
+}
+function opsModelCatalog() {
+  var out = [];
+  var EXEC_CAPS = ["chat", "agent", "code", "tool_use", "streaming", "server-side-execution"];
+  out.push(opsModelEntry("ops-exec", { description: "QNFO ops EXECUTION agent - server-side agentic tool loop (60+ ops tools: shell_exec/exec_python/exec_node, ops_d1_query, r2/kv/vectorize, github_*, email_*, cf_worker_deploy). Upstream: openai/gpt-5.5 (unified billing via Cloudflare AI Gateway). No client tool_calls handoff.", execution: "server-side-agent-loop", upstream: UPSTREAM_MODEL, tier: 0, reasoning: true, in: null, out: null, capabilities: EXEC_CAPS.concat(["reasoning"]), limitations: OPS_EXEC_LOOP_LIMITS }));
+  Object.keys(OPS_EXEC_MODELS).forEach(function(k) {
+    var up = OPS_EXEC_MODELS[k];
+    var isAlias = !!OPS_EXEC_ALIASES[k];
+    out.push(opsModelEntry(k, { description: isAlias ? "Alias of ops-frontier (NOT a distinct model): server-side agent loop, upstream " + up + "." : "QNFO ops CODE agent - server-side agentic tool loop (60+ ops tools: shell_exec/exec_python/exec_node, ops_d1_query, r2/kv/vectorize, github_*, email_*, cf_worker_deploy), upstream " + up + " (tool-capable, unified billing via Cloudflare AI Gateway). No client tool_calls handoff.", execution: "server-side-agent-loop", upstream: up, tier: 0, reasoning: up.indexOf("gpt-5.5") >= 0 || up.indexOf("codex") >= 0, in: null, out: null, capabilities: EXEC_CAPS.concat(["reasoning"]), limitations: OPS_EXEC_LOOP_LIMITS.concat(isAlias ? OPS_ALIAS_LIMITS : []) }));
+  });
+  out.push(opsModelEntry("deepseek-v4-flash", { description: "DeepSeek V4 Flash pass-through relay (client tools + streaming preserved). Does not run the ops agent loop.", execution: "pass-through-relay", upstream: "deepseek-v4-flash", tier: 1, reasoning: false, in: 0.14, out: 0.28, capabilities: ["chat", "code", "tool_use", "streaming"], limitations: OPS_RELAY_LIMITS }));
+  Object.keys(PASSTHROUGH_MODELS).forEach(function(k) {
+    out.push(opsModelEntry(k, { description: "Pass-through relay to " + PASSTHROUGH_MODELS[k] + " (client tools + streaming preserved; no server-side ops execution).", execution: "pass-through-relay", upstream: PASSTHROUGH_MODELS[k], tier: 1, reasoning: /^o[0-9]/.test(k) || k.indexOf("codex") >= 0, in: null, out: null, capabilities: ["chat", "code", "tool_use", "streaming"], limitations: OPS_RELAY_LIMITS }));
+  });
+  Object.keys(WAI_PASSTHROUGH).forEach(function(k) {
+    out.push(opsModelEntry(k, { description: "Workers-AI relay to " + WAI_PASSTHROUGH[k] + " (client tools + streaming preserved; no server-side ops execution).", execution: "workers-ai-relay", upstream: WAI_PASSTHROUGH[k], tier: 1, reasoning: false, in: 0, out: 0, capabilities: ["chat", "code", "tool_use", "streaming"], limitations: OPS_RELAY_LIMITS }));
+  });
+  return out;
+}
+
 var MODEL_CTX = 1048576;
 var CORS_HEADERS = {
   "Content-Type": "application/json",
@@ -2525,7 +2598,14 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     if (resp.ok) break;
     const txt = await resp.text();
     _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
-    if (resp.status < 500 && resp.status !== 429) throw new Error(_dsLastErr);
+    if (resp.status < 500 && resp.status !== 429) {
+      if (o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB) {
+        body.model = UPSTREAM_MODEL_FB;
+        console.log("OPS_EXEC_MODEL_FALLBACK " + o.upstreamModel + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
+        continue;
+      }
+      throw new Error(_dsLastErr);
+    }
     console.log("OPS_DS_RETRY attempt=" + (_dsTry + 1) + " " + _dsLastErr.slice(0, 120));
     if (_dsTry < 2) await new Promise(function(rr) {
       setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400));
@@ -2925,9 +3005,9 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const stream = body && body.stream;
   const rawWanted = String(model || "ops-exec");
   const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
-  const FRONTIER_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-frontier-reason": true };
-  const frontierMode = !!FRONTIER_ALIASES[wanted];
-  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash" && !frontierMode && !PASSTHROUGH_MODELS[wanted] && !WAI_PASSTHROUGH[wanted]) return json({ error: "unknown model " + rawWanted + " (available: ops-exec, ops-frontier, deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
+  const execUpstream = OPS_EXEC_MODELS[wanted];
+  const frontierMode = !!execUpstream;
+  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash" && !frontierMode && !PASSTHROUGH_MODELS[wanted] && !WAI_PASSTHROUGH[wanted]) return json({ error: "unknown model " + rawWanted + " (available: ops-exec, " + Object.keys(OPS_EXEC_MODELS).join(", ") + ", deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
   if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
@@ -2942,7 +3022,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const codeMode = false; // DISABLED 2026-09-19: kimi-k2.7-code cannot tool-call (broke run_code); route ALL prompts through agentic gpt-5.5 path
   let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
-  const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
+  const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
   const loopDeadlineMs = envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5);
@@ -3073,7 +3153,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + String(e && e.message || e).slice(0, 180));
       }
     }
-    const _streamModel = frontierMode ? UPSTREAM_FRONTIER_MODEL : UPSTREAM_MODEL; const _streamIsOAI = _streamModel.indexOf("openai/") === 0 || _streamModel.indexOf("gpt-5") >= 0; const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const _streamModel = execUpstream || UPSTREAM_MODEL; const _streamIsOAI = _streamModel.indexOf("openai/") === 0 || _streamModel.indexOf("gpt-5") >= 0; const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
@@ -3160,7 +3240,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
         if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
-        const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 };
+        const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0 };
         let _r1 = null;
         if (isStream) { try { _r1 = await callDeepSeekStream(env, work, capNow, toolsNow, _dsOpts, function(txt) { emitChunk({ role: "assistant", content: txt }, null); streamedTokens = true; }); } catch (e) { _r1 = null; } }
         if (!_r1) _r1 = await callDeepSeek(env, work, capNow, toolsNow, _dsOpts);
@@ -3214,7 +3294,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         if (isStream) { if (content && !clientHandoff) return await finalize(); return await streamFinalAnswer(strategy); }
         if (withTools && finishReason === "length") {
           try {
-            const { resp: r3, servedBy: _sb2 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 });
+            const { resp: r3, servedBy: _sb2 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
             if (_sb2) servedBy = _sb2;
             const c3 = r3 && r3.choices && r3.choices[0];
             const m3 = c3 && c3.message;
@@ -3386,7 +3466,8 @@ function manifest() {
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
     }),
-    models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason", "gpt-5.6-sol", "gpt-5", "gpt-5-mini", "o4-mini", "pareto", "qwen3.8-max"],
+    models: opsModelIds(),
+    limitations: OPS_ENDPOINT_LIMITATIONS,
     deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "REGISTRY_TOKEN (fleet self-registration)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
     generatedAt: iso()
   };
@@ -3408,7 +3489,7 @@ async function registryRefresh(env) {
   }, "upsert");
   await upsert("qnfo-ops", "worker", { version: VERSION, base_url: CANON_BASE["qnfo-ops"] || "https://ops.qnfo.org", purpose: "ops endpoint + service registry + queue/query", capabilities: manifest().capabilities, routes: ROUTES, tools: OPS_TOOLS.map(function(t) {
     return { name: t.name, description: t.description };
-  }), models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason", "gpt-5.6-sol", "gpt-5", "gpt-5-mini", "o4-mini", "pareto", "qwen3.8-max"], deps: manifest().deps });
+  }), models: opsModelIds(), deps: manifest().deps });
   let apiList = [];
   if (env.CF_API_TOKEN) {
     try {
@@ -3739,7 +3820,9 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     }
     const body = startRes.body;
     const t0 = startRes.t0;
-    const frontierMode = String(body.model || "") === "ops-frontier";
+    const _wanted = String(body.model || "").indexOf("/") >= 0 ? String(body.model).split("/").pop() : String(body.model || "");
+    const execUpstream = OPS_EXEC_MODELS[_wanted];
+    const frontierMode = !!execUpstream;
     const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
     let work = [];
     const srcMsgs = Array.isArray(body.messages) ? body.messages : [];
@@ -3761,7 +3844,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     }
     work.unshift({ role: "system", content: OPS_SYSTEM_PROMPT + sysDate });
     const maxTurns = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
-    const answerCap = clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
+    const answerCap = Math.max(8192, clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
     const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
     const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
     const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
@@ -3788,7 +3871,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "3 seconds", backoff: "linear" }, timeout: "15 minutes" }, async function() {
-          const { resp: r } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 });
+          const { resp: r } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
           return JSON.parse(JSON.stringify(r));
         });
       } catch (e) {
@@ -3831,7 +3914,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       finishReason = choice && choice.finish_reason || "stop";
       if (withTools && finishReason === "length") {
         try {
-          const { resp: r3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 });
+          const { resp: r3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
           addUsage(r3);
           const c3 = r3 && r3.choices && r3.choices[0];
           const m3 = c3 && c3.message;
@@ -3918,7 +4001,7 @@ var worker_default = {
       bindings.containers_pilot = !!(env.CONTAINERS_PILOT && env.CONTAINERS_PILOT.fetch);
       bindings.github_token = !!env.GITHUB_TOKEN;
       bindings.ai = !!env.WAI;
-      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, routes: ROUTES, models: ["ops-exec", "deepseek-v4-flash", "ops-frontier", "ops-frontier-mini", "ops-frontier-reason", "gpt-5.6-sol", "gpt-5", "gpt-5-mini", "o4-mini", "pareto", "qwen3.8-max"], bindings, generatedAt: iso() });
+      return json({ status: "ok", worker: WORKER, version: VERSION, capabilities: manifest().capabilities, limitations: OPS_ENDPOINT_LIMITATIONS, routes: ROUTES, models: opsModelIds(), bindings, generatedAt: iso() });
     }
     if (path === "/agents/ops-exec" || path.startsWith("/agents/ops-exec")) {
       if (!env.AGENTIC_OPS_EXEC) return json({ error: "AgenticOpsExec DO not bound", code: 503 }, 503);
@@ -3977,16 +4060,13 @@ var worker_default = {
       }
     }
     if (path === "/v1/models" && method === "GET") {
-      const mk = /* @__PURE__ */ __name2222(function(id) {
-        if (id === "ops-frontier") return { id, object: "model", created: 171e7, owned_by: "qnfo", description: "QNFO ops FRONTIER execution agent: identical server-side agentic tool loop as ops-exec (60+ tools: shell_exec/exec_python/exec_node, ops_d1_query, r2/kv/vectorize, github_*, email_*, cf_worker_deploy, etc.) backed by GPT-5.5 (tool-capable frontier, unified billing) via Cloudflare AI Gateway. No client tool_calls handoff - pure server-side execution.", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming", "reasoning"], _router: { model: "gpt-5.5", endpoint: "https://ops.qnfo.org/v1", tier: 0, family: "openai", reasoning: true, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 1.32, costPer1MOutput: 3.96, availability: "key-required" } };
-        return { id, object: "model", created: 171e7, owned_by: "qnfo", description: id === "ops-exec" ? "QNFO ops execution agent (pure server-side loop: ALL code/tool ops execute on Cloudflare; no client tool_calls handoff; streamed final answers; DeepSeek upstream, no markup)" : "DeepSeek V4 Flash relay via qnfo-ops (pure pass-through: client tools + streaming preserved, audited)", context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: ["chat", "agent", "code", "tool_use", "streaming"], _router: { model: id, endpoint: "https://ops.qnfo.org/v1", tier: 1, family: "deepseek", reasoning: false, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0.14, costPer1MOutput: 0.28, availability: "key-required" } };
-      }, "mk");
-      return json({ object: "list", data: [mk("ops-exec"), mk("ops-frontier"), mk("ops-frontier-mini"), mk("ops-frontier-reason"), mk("deepseek-v4-flash"), mk("gpt-5.6-sol"), mk("gpt-5"), mk("gpt-5-mini"), mk("o4-mini"), mk("pareto"), mk("qwen3.8-max")] });
+      return json({ object: "list", data: opsModelCatalog() });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
-      const id = path.split("/").pop();
-      if (id !== "ops-exec" && id !== "deepseek-v4-flash" && id !== "ops-frontier" && !PASSTHROUGH_MODELS[id] && !WAI_PASSTHROUGH[id]) return json({ error: "model not found" }, 404);
-      return json({ id, object: "model", created: 171e7, owned_by: "qnfo" });
+      const id = decodeURIComponent(path.split("/").pop());
+      const found = opsModelCatalog().filter(function(m2) { return m2.id === id; })[0];
+      if (!found) return json({ error: "model not found: " + id }, 404);
+      return json(found);
     }
     if (path === "/v1/responses" && method === "POST") {
       let body;
