@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.25";
+var VERSION = "2.36.26";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3584,6 +3584,7 @@ async function capabilityAudit(env, offset, limit) {
   let checked = 0, conforming = 0;
   for (let i = 0; i < page.length; i++) {
     const s = page[i];
+    if (s.service === WORKER) continue;
     checked++;
     const url = String(s.base_url).replace(/\/+$/, "") + "/health";
     let reason = "";
