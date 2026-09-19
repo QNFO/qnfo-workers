@@ -1,4 +1,4 @@
-const VERSION = "2.0.4";
+const VERSION = "2.0.5";
 const QNFO_VERSION = "qnfo-email/command-20260918";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
@@ -199,6 +199,12 @@ export default {
         const ALLOWED_DOMAINS = ["qnfo.org","qwav.org","qwav.tech","qwav.net","qwav.uk","q-wave.tech","qwave.tech","q08.org","qnfo.net","qnfo.uk","empoweringchange.today"];
         const fromDomain = (body.from || "").split("@")[1] || "";
         const FROM_ADDR = body.from && ALLOWED_DOMAINS.indexOf(fromDomain.toLowerCase()) >= 0 ? body.from : "qnfo@qnfo.org";
+        // MCP-COLD-SEND-UNGATED (952): this send path had NO suppression check, so cold
+        // sends could re-contact opted-out addresses. Honour email_suppression before send.
+        try {
+          const _sup = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(body.to || "").toLowerCase()).first();
+          if (_sup) return json({ error: "recipient is suppressed", to: body.to, suppressed: true }, 409);
+        } catch (_e) { /* suppression lookup unavailable: proceed (no worse than before) */ }
         const result = await env.SEND_EMAIL.send({ to: body.to, from: FROM_ADDR, subject: replySubject, text: textBody, html: htmlBody });
         const sentId = crypto.randomUUID();
         const now = new Date().toISOString();
