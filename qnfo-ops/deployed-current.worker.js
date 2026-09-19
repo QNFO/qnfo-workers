@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.14";
+var VERSION = "2.36.16";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2875,7 +2875,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const clientToolChoice = body && body.tool_choice || "auto";
   const source = detectSource(ua);
   const domain = frontierMode ? "ops" : classifyDomain(lastUserText(messages));
-  const codeMode = !frontierMode && domain === "code";
+  const codeMode = false; // DISABLED 2026-09-19: kimi-k2.7-code cannot tool-call (broke run_code); route ALL prompts through agentic gpt-5.5 path
   let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
   const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
