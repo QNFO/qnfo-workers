@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.16";
+var VERSION = "2.36.17";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2844,10 +2844,21 @@ __name2(patchOps, "patchOps");
 __name22(patchOps, "patchOps");
 __name222(patchOps, "patchOps");
 __name2222(patchOps, "patchOps");
+async function costGuard(env) {
+  try {
+    const _t = new Date().toISOString().slice(0, 10);
+    const _cn = Number(env.OPS_DAILY_CAP_USD);
+    const _capUsd = Number.isFinite(_cn) && _cn > 0 ? _cn : 10;
+    const _r = env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT ROUND(COALESCE(SUM(cost_usd),0),4) usd FROM ops_ai_log WHERE ts LIKE ?1").bind(_t + "%").first() : null;
+    if (_r && _r.usd >= _capUsd) return { blocked: true, usd: _r.usd, cap: _capUsd };
+    return { blocked: false, usd: (_r && _r.usd) || 0, cap: _capUsd };
+  } catch (e) { return { blocked: false, usd: 0, cap: 0 }; }
+}
 async function handleChat(env, body, authHeader, ua, ctx) {
   const okAuth = await authOk(authHeader, env);
   if (!okAuth) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
   try {
+    { const _cg = await costGuard(env); if (_cg.blocked) return json({ error: "ops daily cost cap reached ($" + _cg.cap + "/day, spent $" + _cg.usd + ")" }, 429); }
     const _today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const _capN = Number(env.OPS_DAILY_CAP);
     const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 250;
@@ -2875,7 +2886,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const clientToolChoice = body && body.tool_choice || "auto";
   const source = detectSource(ua);
   const domain = frontierMode ? "ops" : classifyDomain(lastUserText(messages));
-  const codeMode = false; // DISABLED 2026-09-19: kimi-k2.7-code cannot tool-call (broke run_code); route ALL prompts through agentic gpt-5.5 path
+  const codeMode = !frontierMode && domain === "code";
   let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
   const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
@@ -3020,6 +3031,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       const dec = new TextDecoder();
       let buf = "";
       while (true) {
+        if (Date.now() - t0 > envInt(env, "OPS_FINAL_DEADLINE_MS", 9e4)) { try { reader.cancel(); } catch (e) {} break; }
         const r = await reader.read();
         if (r.done) break;
         buf += dec.decode(r.value, { stream: true });
@@ -3141,7 +3153,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           if (isStream) emitProgress();
           continue;
         }
-        if (isStream) return await streamFinalAnswer(strategy);
+        if (isStream) { if (content && !clientHandoff) return await finalize(); return await streamFinalAnswer(strategy); }
         if (withTools && finishReason === "length") {
           try {
             const { resp: r3, servedBy: _sb2 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 });
@@ -4063,6 +4075,7 @@ var worker_default = {
     }
     if (path === "/v1/jobs" && method === "POST") {
       if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      { const _cg = await costGuard(env); if (_cg.blocked) return json({ error: "ops daily cost cap reached ($" + _cg.cap + "/day, spent $" + _cg.usd + ")" }, 429); }
       let jbody = null;
       try {
         jbody = await request.json();
@@ -4194,7 +4207,6 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-
 
 
 
