@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.42";
+var VERSION = "2.36.44";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -119,8 +119,20 @@ function opsModelFamily(up) {
   if (s.indexOf("dynamic/") === 0) return "gateway-dynamic";
   return "deepseek";
 }
+// DEEPCHAT-TOOL-MODE-1 (2026-09-19): advertise each model's DeepChat "Mode" default on /v1/models.
+// DeepChat's model-catalog parser reads the OpenAI-standard fields `default_tool_mode`
+// ("agent" | "code" | "minimal"), `tool_call` (bool) and `limit.{context,output}` from the model
+// record; these become the per-model Mode default (resolveToolMode: sessionOverride ?? modelDefault
+// ?? "agent"). This endpoint is the SERVER-SIDE source of truth - qnfo-ops provider_models re-sync
+// from here, so the mapping re-propagates to every DeepChat client on the next model refresh.
+// Mapping: codex ids -> "code" (compose tools through code); the small relays -> "minimal"
+// (simplified file ops); everything else -> "agent" (standard Agent tool set).
+var OPS_DEFAULT_TOOL_MODE = { "gpt-5.1-codex": "code", "gpt-5.3-codex": "code", "gpt-5-codex": "code", "gpt-5-mini": "minimal", "o4-mini": "minimal" };
+function opsDefaultToolMode(id) {
+  return OPS_DEFAULT_TOOL_MODE[id] || "agent";
+}
 function opsModelEntry(id, o) {
-  return { id: id, object: "model", created: 171e7, owned_by: "qnfo", description: o.description, execution: o.execution, context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: o.capabilities, limitations: o.limitations, _router: { model: o.upstream, endpoint: "https://ops.qnfo.org/v1", upstream: o.upstream, tier: o.tier, family: opsModelFamily(o.upstream), reasoning: !!o.reasoning, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: typeof o.in === "number" ? o.in : null, costPer1MOutput: typeof o.out === "number" ? o.out : null, availability: "key-required" } };
+  return { id: id, object: "model", created: 171e7, owned_by: "qnfo", description: o.description, execution: o.execution, context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: o.capabilities, limitations: o.limitations, limit: { context: MODEL_CTX, output: DEFAULT_MAX_OUT }, temperature: true, tool_call: true, default_tool_mode: opsDefaultToolMode(id), _router: { model: o.upstream, endpoint: "https://ops.qnfo.org/v1", upstream: o.upstream, tier: o.tier, family: opsModelFamily(o.upstream), reasoning: !!o.reasoning, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: typeof o.in === "number" ? o.in : null, costPer1MOutput: typeof o.out === "number" ? o.out : null, availability: "key-required" } };
 }
 function opsModelCatalog() {
   var out = [];
