@@ -233,3 +233,10 @@ environment = "production"
 [[durable_objects.bindings]]
 name = "AGENTIC_OPS_EXEC"
 class_name = "AgenticOpsExec"
+
+# DO-EXPORT-EXPLICIT-1 (2026-09-19): declare the Durable Object export explicitly. wrangler 4.118
+# warns that a `durable_objects` binding without a live `exports` entry may not work as expected;
+# making it explicit removes the warning and pins the storage backend.
+[exports.AgenticOpsExec]
+type = "durable-object"
+storage = "sqlite"
