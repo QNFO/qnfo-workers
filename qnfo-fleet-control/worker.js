@@ -994,11 +994,11 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.15-redeployguard";
+var VERSION = "0.4.16-cachefresh";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
-var FRESH_MS = 18e5;
+var FRESH_MS = 3e5; // DEPLOY-CACHE-STALE-1: was 30min - a still-fresh R2 canonical cache silently reverted pushed fixes; 5min bounds deploy latency
 var NO_SELF = ["qnfo-fleet-deploy"];
 function json(d, s) {
   return new Response(JSON.stringify(d), { status: s || 200, headers: { "Content-Type": "application/json" } });
@@ -1185,7 +1185,7 @@ async function selfdocAudit(env) {
         var dirs = ["qnfo-workers/main/" + cand[a], "qnfo-ops/main/cloud/" + cand[a]];
         for (var d = 0; d < dirs.length && !found; d++) {
           try {
-            var r = await timedFetch(GH + dirs[d] + "/README.md", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+            var r = await timedFetch(GH + dirs[d] + "/README.md?cb=" + Math.floor(Date.now() / 300000), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
             if (r.ok) {
               var t = await r.text();
               if (t && t.length > 0 && t.slice(0, 4) !== "404:") found = true;
@@ -1239,7 +1239,7 @@ async function canonical(env, worker) {
   }
   for (var i = 0; i < cs.length; i++) {
     try {
-      var r = await timedFetch(GH + cs[i], { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+      var r = await timedFetch(GH + cs[i] + "?cb=" + Math.floor(Date.now() / 300000), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
       if (r.ok) {
         var c = await r.text();
         if (c && c.length > 0 && c.slice(0, 4) !== "404:") {
