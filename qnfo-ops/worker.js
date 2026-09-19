@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.39";
+var VERSION = "2.36.40";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1689,7 +1689,8 @@ async function cfWorkerDeploy(env, args) {
   });
   try {
     const boundary = "ops-deploy-" + Date.now().toString(16);
-    const metadataPart = JSON.stringify({ body_part: "worker.js", bindings: bindingsOut });
+    const _mp = (args && args.service_worker) ? { body_part: "worker.js" } : { main_module: "worker.js" }; // MODULE-FORMAT-1: vectorize/DO/workflow bindings require ES module format (CF 100329)
+  const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
