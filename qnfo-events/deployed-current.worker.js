@@ -1,30 +1,244 @@
-const V='1.0.0',TO='rwnquni@outlook.com',OFF=[60,1440];
-const iso=()=>new Date().toISOString();
-const J=(d,s)=>new Response(JSON.stringify(d),{status:s||200,headers:{'content-type':'application/json','access-control-allow-origin':'*'}});
-const au=(r,e)=>{const t=String(r.headers.get('Authorization')||'').replace(/^Bearer /i,'');return!e.INGEST_TOKEN||t===e.INGEST_TOKEN;};
-const SCH=["CREATE TABLE IF NOT EXISTS event_inbox (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT UNIQUE, from_addr TEXT, subject TEXT, raw TEXT, parsed_json TEXT, status TEXT DEFAULT 'new', calendar_event_id INTEGER, created_at TEXT DEFAULT (datetime('now')))","CREATE TABLE IF NOT EXISTS event_reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, calendar_event_id INTEGER, event_title TEXT, dtstart TEXT, remind_at TEXT, sent INTEGER DEFAULT 0, sent_at TEXT)","CREATE TABLE IF NOT EXISTS event_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, title TEXT, outcome TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')))","CREATE TABLE IF NOT EXISTS event_prefs (category TEXT PRIMARY KEY, accept_count INTEGER DEFAULT 0, decline_count INTEGER DEFAULT 0, last_seen TEXT)"];
-const sch=async e=>{for(const s of SCH)await e.D1.prepare(s).run();};
-const uf=s=>String(s).replace(/\r?\n[ \t]/g,'');
-const dec=s=>{try{return atob(String(s).replace(/\s/g,''));}catch(e){return'';}};
-function cps(raw){const o=[],r=String(raw||''),m=r.match(/boundary="?([^"\s\r\n]+)"?/i),b=m?m[1]:null,ss=b?r.split('--'+b):[r];for(const s of ss)if(/BEGIN:VCALENDAR/i.test(s))o.push(s);return o;}
-function pb(sec){let b=sec;const h=sec.search(/\r?\n\r?\n/);if(h>=0)b=sec.slice(h).replace(/^\s+/,'');b=b.replace(/--[\s\S]*$/,'').trim();const hd=sec.split(/\r?\n\r?\n/)[0]||'';return /base64/i.test(hd)?dec(b):b.replace(/=\r?\n/g,'');}
-function pv(ics){const P={};let no=false;for(const ln of uf(ics).split(/\r?\n/)){if(/^BEGIN:VALARM/i.test(ln)){no=true;continue;}if(/^END:VALARM/i.test(ln)){no=false;continue;}if(no)continue;const m=ln.match(/^([A-Za-z-]+)(;[^:]*)?:(.*)$/);if(!m)continue;const n=m[1].toUpperCase(),pm={};(m[2]||'').split(';').filter(Boolean).forEach(x=>{const q=x.match(/^([A-Za-z-]+)=(.*)$/);if(q)pm[q[1].toUpperCase()]=q[2];});if(!P[n])P[n]={v:m[3],pm:pm};}const g=n=>P[n]?P[n].v:null,gp=n=>P[n]?P[n].pm:{};return{title:g('SUMMARY')||'(untitled)',dtstart:g('DTSTART'),dsp:gp('DTSTART'),dtend:g('DTEND'),loc:g('LOCATION'),desc:g('DESCRIPTION'),uid:g('UID'),ad:((gp('DTSTART').VALUE||'').toUpperCase()==='DATE')};}
-function tz(tzid,ms){try{const f=new Intl.DateTimeFormat('en-US',{timeZone:tzid,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}),p={};for(const x of f.formatToParts(new Date(ms)))if(x.type!=='literal')p[x.type]=x.value;return Math.round((Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second)-ms)/60000);}catch(e){return 0;}}
-function utc(ds,pm,ad){if(!ds)return null;if(ad){const m=ds.match(/^(\d{4})(\d{2})(\d{2})/);return m?m[1]+'-'+m[2]+'-'+m[3]:ds;}const m=ds.match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})?(Z)?$/);if(!m)return ds;const y=+m[1],mo=+m[2],d=+m[3],h=+m[4],mi=+m[5],s=+(m[6]||'0');if(m[7]==='Z')return new Date(Date.UTC(y,mo-1,d,h,mi,s)).toISOString();const g=Date.UTC(y,mo-1,d,h,mi,s);return new Date(g-tz((pm&&pm.TZID)||'UTC',g)*60000).toISOString();}
-async function ai(e,su,bo){try{const r=await e.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast',{messages:[{role:'system',content:'Extract one calendar event. Reply STRICT JSON only: {"is_event":bool,"title":str,"dtstart":"ISO8601 UTC or YYYY-MM-DD","dtend":str|null,"all_day":bool,"location":str|null,"category":"meeting|flight|hotel|restaurant|delivery|health|appointment|other"}. Assume Europe/Berlin. If not an appointment/invitation/confirmation reply {"is_event":false}.'},{role:'user',content:'Subject: '+su+'\n\n'+String(bo||'').slice(0,2500)}],max_tokens:350}),t=(r&&(r.response||(r.choices&&r.choices[0]&&r.choices[0].message&&r.choices[0].message.content)))||'',m=t.match(/\{[\s\S]*\}/);return m?JSON.parse(m[0]):null;}catch(e){return null;}}
-async function post(e,ev){const h={'content-type':'application/json'};if(e.CAL_EMAIL_TOKEN)h.Authorization='Bearer '+e.CAL_EMAIL_TOKEN;const r=await e.CAL_API.fetch('https://calendar-api/events?plane=personal',{method:'POST',headers:h,body:JSON.stringify(ev)});return await r.json().catch(()=>({}));}
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-async function ing(e,p){const mid=p.messageId||('m-'+Date.now());if(await e.D1.prepare('SELECT id FROM event_inbox WHERE message_id=?').bind(mid).first())return{duplicate:true};const ps=cps(p.raw||'');let ev=null,me='none';if(ps.length){const ics=ps.map(pb).join('\n');if(/METHOD:\s*CANCEL/i.test(ics)){me='cancel';const v=pv(ics);if(v.uid)await e.D1.prepare("UPDATE calendar SET status='cancelled', updated=datetime('now') WHERE url=?").bind('ics:'+v.uid).run();}else{const v=pv(ics);ev={title:v.title,dtstart:utc(v.dtstart,v.dsp,v.ad),dtend:utc(v.dtend,v.dsp,v.ad)||null,all_day:v.ad,location:v.loc,description:v.desc,url:v.uid?('ics:'+v.uid):null,source:'email',status:'confirmed'};me='ics';}}else{const a=await ai(e,p.subject,p.body);if(a&&a.is_event){ev={title:a.title,dtstart:a.dtstart,dtend:a.dtend||null,all_day:!!a.all_day,location:a.location||null,source:'email',status:'confirmed'};me='ai';}}if(!ev){await e.D1.prepare("INSERT INTO event_inbox (message_id,from_addr,subject,raw,parsed_json,status) VALUES (?,?,?,?,?,'ignored')").bind(mid,p.from||'',p.subject||'',String(p.raw||'').slice(0,20000),'{}').run();return{is_event:false};}const res=await post(e,ev),cid=(res&&res.id)||null;let rc=0;if(ev.dtstart){const t=Date.parse(ev.dtstart);if(isFinite(t)){const st=[];for(const o of OFF){const ra=t-o*60000;if(ra>Date.now()){st.push(e.D1.prepare('INSERT INTO event_reminders (calendar_event_id,event_title,dtstart,remind_at) VALUES (?,?,?,?)').bind(cid,ev.title,ev.dtstart,new Date(ra).toISOString()));rc++;}}if(st.length)await e.D1.batch(st);}}await e.D1.prepare("INSERT INTO event_inbox (message_id,from_addr,subject,raw,parsed_json,status,calendar_event_id) VALUES (?,?,?,?,?,'processed',?)").bind(mid,p.from||'',p.subject||'',String(p.raw||'').slice(0,20000),JSON.stringify(ev),cid).run();await e.D1.prepare("INSERT INTO event_prefs (category,accept_count,last_seen) VALUES (?,1,?) ON CONFLICT(category) DO UPDATE SET accept_count=accept_count+1,last_seen=excluded.last_seen").bind(String(ev.title||'other').slice(0,40),iso()).run().catch(()=>{});return{is_event:true,method:me,calendar_event_id:cid,reminders:rc,title:ev.title,dtstart:ev.dtstart};}
-async function dis(e){const now=iso(),d=await e.D1.prepare('SELECT * FROM event_reminders WHERE sent=0 AND remind_at<=? ORDER BY remind_at LIMIT 20').bind(now).all(),s=[];for(const r of(d.results||[])){try{if(e.SEND_EMAIL)await e.SEND_EMAIL.send({to:TO,from:'qnfo@qnfo.org',subject:'Reminder: '+r.event_title,text:'Reminder: '+r.event_title+'\nWhen: '+r.dtstart});await e.D1.prepare('UPDATE event_reminders SET sent=1,sent_at=? WHERE id=?').bind(now,r.id).run();s.push(r.event_title);}catch(x){}}return s;}
-export default{
-async fetch(req,e){const u=new URL(req.url),p=u.pathname;if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':'*'}});if(p==='/health')return J({ok:true,worker:'qnfo-events',version:V,ts:iso()});if(!au(req,e))return J({error:'unauthorized'},401);
-if(p==='/ingest'&&req.method==='POST'){const b=await req.json().catch(()=>null);if(!b)return J({error:'json required'},400);await sch(e);return J(await ing(e,b));}
-if(p==='/feedback'&&req.method==='POST'){const b=await req.json().catch(()=>({}));await sch(e);if(b.calendar_event_id)await e.D1.prepare("UPDATE calendar SET status='cancelled', updated=datetime('now') WHERE id=?").bind(b.calendar_event_id).run();await e.D1.prepare('INSERT INTO event_feedback (category,title,outcome,source) VALUES (?,?,?,?)').bind(String(b.category||'other').slice(0,40),b.title||'',b.outcome||'declined','manual').run();const c=(b.outcome==='declined'||b.outcome==='cancelled')?'decline_count':'accept_count';await e.D1.prepare('INSERT INTO event_prefs (category,'+c+',last_seen) VALUES (?,1,?) ON CONFLICT(category) DO UPDATE SET '+c+'='+c+'+1,last_seen=excluded.last_seen').bind(String(b.category||'other').slice(0,40),iso()).run();return J({ok:true});}
-if(p==='/run-reminders')return J({ok:true,sent:await dis(e)});
-if(p==='/prefs'){const r=await e.D1.prepare('SELECT * FROM event_prefs ORDER BY (accept_count+decline_count) DESC LIMIT 50').all();return J({prefs:r.results||[]});}
-if(p==='/inbox'){const r=await e.D1.prepare('SELECT id,message_id,subject,status,calendar_event_id,created_at FROM event_inbox ORDER BY id DESC LIMIT 50').all();return J({inbox:r.results||[]});}
-if(p==='/reminders'){const r=await e.D1.prepare('SELECT * FROM event_reminders ORDER BY remind_at DESC LIMIT 50').all();return J({reminders:r.results||[]});}
-return J({ok:true,worker:'qnfo-events',version:V});},
-async scheduled(ev,e,ctx){ctx.waitUntil((async()=>{await sch(e);await dis(e);})().catch(()=>{}));}
+// worker.js
+var VERSION = "1.1.0";
+var SELF = { purpose: "central issue/event ledger + fleet sweep" };
+function json(o, st) {
+  return new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } });
+}
+__name(json, "json");
+function norm(s) {
+  return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+__name(norm, "norm");
+function hash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16);
+}
+__name(hash, "hash");
+function fingerprint(ev) {
+  return ev.fingerprint && String(ev.fingerprint).trim() || hash(norm(ev.source) + "|" + norm(ev.category) + "|" + norm(ev.title));
+}
+__name(fingerprint, "fingerprint");
+async function ensureSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS issue_ledger (fingerprint TEXT PRIMARY KEY, source TEXT, level TEXT, category TEXT, title TEXT, status TEXT DEFAULT 'open', first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1, last_detail TEXT, updated_at TEXT)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS issue_events (id INTEGER PRIMARY KEY AUTOINCREMENT, fingerprint TEXT, source TEXT, level TEXT, category TEXT, title TEXT, detail TEXT, ts TEXT)").run();
+  await env.AUDIT.prepare("CREATE INDEX IF NOT EXISTS idx_issue_ledger_status ON issue_ledger(status)").run();
+}
+__name(ensureSchema, "ensureSchema");
+function okAuth(req, env) {
+  const t = env.EVENTS_TOKEN || "";
+  if (!t) return true;
+  const h = req.headers.get("Authorization") || "";
+  if (!h.startsWith("Bearer ")) return false;
+  const a = h.slice(7), b = t;
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+__name(okAuth, "okAuth");
+async function ingest(env, ev) {
+  await ensureSchema(env);
+  const fp = fingerprint(ev);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const level = String(ev.level || "info").toLowerCase();
+  const source = String(ev.source || "unknown").slice(0, 80);
+  const category = String(ev.category || "general").slice(0, 60);
+  const title = String(ev.title || "").slice(0, 300);
+  const detail = String(ev.detail || "").slice(0, 4e3);
+  const ts = String(ev.ts || now).slice(0, 40);
+  const exist = await env.AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint=?1").bind(fp).first();
+  let created = false;
+  if (!exist) {
+    created = true;
+    await env.AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,?4,?5,'open',?6,?6,1,?7,?6)").bind(fp, source, level, category, title, ts, detail).run();
+  } else {
+    await env.AUDIT.prepare("UPDATE issue_ledger SET occurrences = occurrences + 1, last_seen = ?1, last_detail = ?2, updated_at = ?1 WHERE fingerprint = ?3").bind(ts, detail, fp).run();
+  }
+  await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(fp, source, level, category, title, detail, ts).run();
+  const row = await env.AUDIT.prepare("SELECT fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences FROM issue_ledger WHERE fingerprint=?1").bind(fp).first();
+  return { created, issue: row };
+}
+__name(ingest, "ingest");
+async function setStatus(env, fp, status, note) {
+  await ensureSchema(env);
+  const row = await env.AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint=?1").bind(fp).first();
+  if (!row) return { error: "not found" };
+  await env.AUDIT.prepare("UPDATE issue_ledger SET status=?1, last_detail=COALESCE(?2,last_detail), updated_at=?3 WHERE fingerprint=?4").bind(status, String(note || "").slice(0, 1e3) || null, (/* @__PURE__ */ new Date()).toISOString(), fp).run();
+  return { ok: true };
+}
+__name(setStatus, "setStatus");
+async function sweep(env) {
+  await ensureSchema(env);
+  let alertsN = 0, coeN = 0;
+  try {
+    const alerts = await env.AUDIT.prepare("SELECT id, source, level, message, created_at FROM alerts WHERE created_at > datetime('now','-2 day') ORDER BY id ASC").all();
+    for (const a of alerts.results || []) {
+      const key = "src:alert:" + a.id;
+      const seen = await env.AUDIT.prepare("SELECT id FROM issue_events WHERE detail=?1 LIMIT 1").bind(key).first();
+      if (seen) {
+        continue;
+      }
+      const fp = "alert:" + hash(norm(a.source || "unknown") + "|" + norm(a.message || "").slice(0, 180));
+      const lvl = a.level === "HIGH" ? "high" : String(a.level || "warning").toLowerCase();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const ex = await env.AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint=?1").bind(fp).first();
+      if (!ex) {
+        await env.AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,'alert','AUTO-SWEEP: ' || substr(?4,1,220),'open',?5,?5,1,?4,?5)").bind(fp, String(a.source || "unknown").slice(0, 80), lvl, String(a.message || ""), now).run();
+      } else {
+        await env.AUDIT.prepare("UPDATE issue_ledger SET occurrences=occurrences+1, last_seen=?1, last_detail=?2, updated_at=?1 WHERE fingerprint=?3").bind(now, String(a.message || "").slice(0, 1e3), fp).run();
+      }
+      await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,?3,'alert','AUTO-SWEEP',?4,?5)").bind(fp, String(a.source || "unknown").slice(0, 80), lvl, key, now).run();
+      alertsN++;
+    }
+  } catch (e) {
+    alertsN = -1;
+  }
+  try {
+    const coe = await env.AUDIT.prepare("SELECT id, kind, text, job, status, ts FROM cloud_ops_events WHERE ts > datetime('now','-2 day') AND status IN ('error','partial','failed') ORDER BY ts ASC").all();
+    for (const c of coe.results || []) {
+      const key = "src:coe:" + c.id;
+      const seen = await env.AUDIT.prepare("SELECT id FROM issue_events WHERE detail=?1 LIMIT 1").bind(key).first();
+      if (seen) {
+        continue;
+      }
+      const fp = "coe:" + hash(norm(c.job || c.kind || "unknown") + "|" + norm(c.text || "").slice(0, 180));
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const ex = await env.AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint=?1").bind(fp).first();
+      if (!ex) {
+        await env.AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,'error','cloud-ops','AUTO-SWEEP: ' || substr(?3,1,220),'open',?4,?4,1,?3,?4)").bind(fp, String(c.job || c.kind || "unknown").slice(0, 80), String(c.text || ""), now).run();
+      } else {
+        await env.AUDIT.prepare("UPDATE issue_ledger SET occurrences=occurrences+1, last_seen=?1, last_detail=?2, updated_at=?1 WHERE fingerprint=?3").bind(now, String(c.text || "").slice(0, 1e3), fp).run();
+      }
+      await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,'error','cloud-ops','AUTO-SWEEP',?3,?4)").bind(fp, String(c.job || c.kind || "unknown").slice(0, 80), key, now).run();
+      coeN++;
+    }
+  } catch (e) {
+    coeN = -1;
+  }
+  return { alertsN, coeN };
+}
+__name(sweep, "sweep");
+async function review(env) {
+  await ensureSchema(env);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const out = { reviewed: 0, autoResolved: 0, escalated: 0, staleResolved: 0 };
+  try {
+    const open = await env.AUDIT.prepare("SELECT fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences FROM issue_ledger WHERE status IN ('open','acknowledged') ORDER BY last_seen ASC").all();
+    const rows = open.results || [];
+    out.reviewed = rows.length;
+    const ago = /* @__PURE__ */ __name((iso, hours) => {
+      try {
+        return Date.now() - new Date(iso).getTime() > hours * 36e5;
+      } catch (e) {
+        return false;
+      }
+    }, "ago");
+    for (const it of rows) {
+      const fp = it.fingerprint;
+      const occ = it.occurrences || 1;
+      const source = String(it.source || "");
+      if (occ >= 3 && (it.level === "high" || it.level === "error")) {
+        const dup = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1").bind(String(it.title || "").slice(0, 180)).first();
+        if (!dup) {
+          await env.AUDIT.prepare("INSERT INTO agent_issues (priority, status, title, description, created_at, updated_at) VALUES ('high','open',?1,?2,?3,?3)").bind(String(it.title || "").slice(0, 180), ("AUTO-ESCALATION from qnfo-events review " + now + " - repeated occurrence " + occ + "x, source " + source + ". Fix at the mechanism, not the symptom (RECURRENCE-ZERO-1).").slice(0, 500), Date.now()).run();
+          out.escalated++;
+        }
+      } else if (it.status === "acknowledged" && ago(it.last_seen, 24) && occ <= 2) {
+        await env.AUDIT.prepare("UPDATE issue_ledger SET status='resolved', resolved_at=?1, last_detail='auto-resolved by review loop (stale acknowledged)', updated_at=?1 WHERE fingerprint=?2").bind(now, fp).run();
+        out.staleResolved++;
+      } else if (ago(it.last_seen, 72) && occ <= 2 && (it.level === "info" || it.level === "warning")) {
+        await env.AUDIT.prepare("UPDATE issue_ledger SET status='resolved', resolved_at=?1, last_detail='auto-resolved by review loop (stale, no repeat)', updated_at=?1 WHERE fingerprint=?2").bind(now, fp).run();
+        out.staleResolved++;
+      }
+    }
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 300);
+  }
+  try {
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1,?2,'review',?3,'qnfo-events','ok')").bind("review-" + Date.now().toString(36), now, JSON.stringify(out).slice(0, 600)).run();
+  } catch (e) {
+    out.auditErr = String(e && e.message || e).slice(0, 120);
+  }
+  return out;
+}
+__name(review, "review");
+async function handle(req, env) {
+  const url = new URL(req.url);
+  const path = url.pathname;
+  const m = req.method;
+  if (path === "/health" && m === "GET") {
+    return json({ ok: true, worker: "qnfo-events", version: VERSION, self: SELF, audit: !!env.AUDIT, token: !!env.EVENTS_TOKEN });
+  }
+  if (!okAuth(req, env)) return json({ error: "unauthorized" }, 401);
+  if (path === "/v1/events" && m === "POST") {
+    let ev = {};
+    try {
+      ev = await req.json();
+    } catch (e) {
+      return json({ error: "bad json" }, 400);
+    }
+    return json(await ingest(env, ev));
+  }
+  if (path === "/v1/issues" && m === "GET") {
+    await ensureSchema(env);
+    const status = url.searchParams.get("status");
+    const source = url.searchParams.get("source");
+    const level = url.searchParams.get("level");
+    let sql = "SELECT fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences FROM issue_ledger WHERE 1=1";
+    const binds = [];
+    if (status) {
+      sql += " AND status=?";
+      binds.push(status);
+    }
+    if (source) {
+      sql += " AND source=?";
+      binds.push(source);
+    }
+    if (level) {
+      sql += " AND level=?";
+      binds.push(level);
+    }
+    sql += " ORDER BY last_seen DESC LIMIT 100";
+    const res = binds.length ? await env.AUDIT.prepare(sql).bind(...binds).all() : await env.AUDIT.prepare(sql).all();
+    return json({ issues: res.results || [], count: (res.results || []).length });
+  }
+  if (path.startsWith("/v1/issues/") && m === "POST") {
+    const rest = path.slice("/v1/issues/".length).split("/");
+    if (rest.length !== 2) return json({ error: "expected /v1/issues/:fp/:action" }, 400);
+    const fp = decodeURIComponent(rest[0]);
+    const action = rest[1];
+    if (!["resolve", "acknowledge", "mute", "reopen"].includes(action)) return json({ error: "action must be resolve|acknowledge|mute|reopen" }, 400);
+    const body = await req.json().catch(() => ({}));
+    const statusMap = { resolve: "resolved", acknowledge: "acknowledged", mute: "muted", reopen: "open" };
+    return json(await setStatus(env, fp, statusMap[action], body.note || ""));
+  }
+  if (path === "/v1/sync" && m === "POST") return json(await sweep(env));
+  if (path === "/v1/review" && m === "POST") return json(await review(env));
+  if (path === "/") return json({ ok: true, name: "qnfo-events", version: VERSION, endpoints: ["/v1/events POST", "/v1/issues GET", "/v1/issues/:fp/:action POST", "/v1/sync POST", "/health"] });
+  return json({ error: "not found" }, 404);
+}
+__name(handle, "handle");
+var worker_default = {
+  async scheduled(event, env, ctx) {
+    try {
+      const r = await sweep(env);
+      console.log("qnfo-events sweep", JSON.stringify(r));
+    } catch (e) {
+      console.error("qnfo-events sweep failed", String(e && e.message || e));
+    }
+  },
+  async fetch(request, env) {
+    return handle(request, env).catch((e) => json({ error: String(e && e.message || e) }, 500));
+  }
 };
-
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map
