@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.31";
+var VERSION = "2.36.33";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -50,7 +50,7 @@ __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-19: default ops upstream. (dynamic/ops-cost-opt was dropped - the route does not exist on the gateway -> 2019 model-not-found.)
+var UPSTREAM_MODEL = "dynamic/opsdynamic"; // AIGW-DYNAMIC-ROUTE-1 (2026-09-19): cost/performance-optimized AI Gateway dynamic route (openai/gpt-5.5 primary -> openai/gpt-5-mini fallback), created+deployed on gateway default (route 75d46899). UPSTREAM_MODEL_FB is the in-worker fallback if the route is unavailable.
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
@@ -3031,7 +3031,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 9e4); // NONSTREAM-CLIENT-BUDGET-1 (2026-09-19): non-streaming clients (DeepChat agent loop) get a bounded budget so the response cannot outlive the client patience (the 58-218s loops aborted with provider_error); streaming clients keep the full 150s since the SSE keepalive holds the socket open.
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 4.5e4); // NONSTREAM-CLIENT-BUDGET-1 (2026-09-19): non-streaming clients (DeepChat agent loop) get a bounded budget so the response cannot outlive the client patience (the 58-218s loops aborted with provider_error); streaming clients keep the full 150s since the SSE keepalive holds the socket open.
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", 30);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
