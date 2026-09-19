@@ -994,7 +994,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.14";
+var VERSION = "0.4.15-redeployguard";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1293,7 +1293,7 @@ async function cooldown(env, worker) {
     var r = await env.AUDIT.prepare("SELECT ts FROM fleet_deploys WHERE worker=?1 AND ok=1 ORDER BY id DESC LIMIT 1").bind(worker).first();
     if (r && r.ts) {
       var age = Date.now() - (/* @__PURE__ */ new Date(String(r.ts).replace(" ", "T") + "Z")).getTime();
-      if (!isNaN(age) && age < 6e4) return true;
+      if (!isNaN(age) && age < 2.16e7) return true;
     }
   } catch (e) {
   }
@@ -1312,6 +1312,10 @@ async function redeploy(env, worker) {
   if (!canV) return { ok: false, status: 422, note: "canonical has no VERSION marker" };
   var dep = await deployedContent(env, worker);
   var depV = dep ? versionOf(dep) : null;
+  if (!depV) {
+    await audit(env, worker, "deploy", "?", canV, c.path, false, "deployed content unreadable - skipped (no blind redeploy)");
+    return { ok: false, status: 503, note: "deployed content unreadable - skipped" };
+  }
   if (depV === canV) {
     await audit(env, worker, "deploy", depV, canV, c.path, true, "no-op version match");
     return { ok: true, status: 200, note: "no-op", from: depV, to: canV };
