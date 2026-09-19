@@ -258,6 +258,24 @@ var REGISTER_EXEMPLAR = [
   "A shipping line asked its own freight office to set the insurance premium on the cargo it carried. The office priced each consignment from the manifest, and the manifest was written by the same clerks who loaded the hold. Nobody falsified a document; the incentive did the work. A consignment that was awkward to stow was written up as routine, because routine cargo cleared faster. The premium fell, the line won more contracts, and the losses surfaced only when a hull was opened in dry dock two seasons later. The party who could have measured the risk was the party paid to understate it.",
 ].join("\n");
 
+// Only a reader-proven structure that is ALSO in-register may serve as an exemplar.
+// Without this, promoting top-rated pieces would feed the OLD banal skeletons
+// (label titles, 'structural dynamic' openings) straight back into the prompt.
+function exemplarOk(md) {
+  if (!md) return false;
+  var t = String(md);
+  var tm = t.match(/^#\s+(.+)$/m);
+  var title = tm ? tm[1].trim().replace(/[\u2010-\u2015\u2212]/g, "-") : "";
+  if (title) {
+    if (BAD_TITLE_RE.test(title)) return false;
+    if (TITLE_FORMULA_RE.test(title) || TITLE_COLON_RE.test(title)) return false;
+    for (var i = 0; i < LABEL_TITLE_RES.length; i++) { if (LABEL_TITLE_RES[i].test(title)) return false; }
+  }
+  if (new RegExp(STOCK_FRAMING_RE.source, "i").test(t)) return false;
+  if (new RegExp(LABEL_PHRASE_RE.source, "i").test(t)) return false;
+  return true;
+}
+
 function buildPrompt(friction, fewShot, recentStructures) {
   var parts = [Q08_DIRECTIVE];
   parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no — justification'.");
@@ -506,17 +524,23 @@ async function feedbackScan(env) {
     }
   }
   if (all.length < 4) return { promoted: promoted, purged: purged };
-  // Promote only structures with proven reader value: at least 2 yes votes, 2:1 yes ratio.
-  var proven = all.filter(function(r){ var g = Number(r.g) || 0, b = Number(r.b) || 0; return g >= 2 && g >= 2 * b; });
-  var topK = Math.max(1, Math.floor(proven.length * 0.5));
-  for (var i = 0; i < Math.min(topK, proven.length); i++) {
-    await env.DB.prepare("UPDATE prompt_pool SET active = 2 WHERE id = ?").bind(proven[i].id).run();
+  // PROMOTION (v0.7.22). The previous rule required g >= 2 && g >= 2*b (a 2:1 yes-ratio).
+  // Real reader sentiment here is ~30% good / 70% flat-or-no, so that rule could NEVER
+  // fire: zero pieces qualified and the proven pool was empty by construction. This now
+  // implements what this function's header says - promote the TOP quantile by reader
+  // verdict among pieces with a usable sample, purge the bottom quantile.
+  function readerScore(r) { var g = Number(r.g) || 0, b = Number(r.b) || 0; return (g + b) > 0 ? g / (g + b) : 0; }
+  var sampled = all.filter(function(r){ return ((Number(r.g) || 0) + (Number(r.b) || 0)) >= 3; });
+  sampled.sort(function(x, y){ return readerScore(y) - readerScore(x) || (Number(y.g) || 0) - (Number(x.g) || 0); });
+  var qn = Math.max(1, Math.floor(sampled.length * 0.15));
+  for (var i = 0; i < Math.min(qn, sampled.length); i++) {
+    if (readerScore(sampled[i]) < 0.5) break;
+    await env.DB.prepare("UPDATE prompt_pool SET active = 2 WHERE id = ?").bind(sampled[i].id).run();
     promoted++;
   }
-  // Deactivate structures with proven negative reader value.
-  var neg = all.filter(function(r){ var g = Number(r.g) || 0, b = Number(r.b) || 0; return b > 0 && b > g; });
-  for (var j = 0; j < neg.length; j++) {
-    await env.DB.prepare("UPDATE prompt_pool SET active = 0 WHERE id = ?").bind(neg[j].id).run();
+  for (var j = sampled.length - 1; j >= Math.max(0, sampled.length - qn); j--) {
+    if (readerScore(sampled[j]) >= 0.5) break;
+    await env.DB.prepare("UPDATE prompt_pool SET active = 0 WHERE id = ?").bind(sampled[j].id).run();
     purged++;
   }
   return { promoted: promoted, purged: purged };
@@ -600,7 +624,7 @@ async function generate(env) {
   var exemplars = await env.DB.prepare(
     "SELECT pp.structure_md FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 2 AND (p.reads > 0 OR p.feedback_score > 0) ORDER BY pp.performance_score DESC, p.feedback_score DESC LIMIT 2"
   ).all();
-  var fewShot = (exemplars.results || []);
+  var fewShot = (exemplars.results || []).filter(function(r){ return exemplarOk(r.structure_md); });
   // Recent structures as divergence priming: the model must NOT repeat them.
   var recentRows = await env.DB.prepare(
     "SELECT structure_md FROM prompt_pool ORDER BY created_at DESC LIMIT 6"
