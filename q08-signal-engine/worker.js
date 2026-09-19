@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.24"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.25"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -265,7 +265,7 @@ function exemplarOk(md) {
   if (!md) return false;
   var t = String(md);
   var tm = t.match(/^#\s+(.+)$/m);
-  var title = tm ? tm[1].trim().replace(/[\u2010-\u2015\u2212]/g, "-") : "";
+  var title = (tm ? tm[1].trim() : String(t.split("\n")[0] || "").trim()).replace(/[\u2010-\u2015\u2212]/g, "-");
   if (title) {
     if (BAD_TITLE_RE.test(title)) return false;
     if (TITLE_FORMULA_RE.test(title) || TITLE_COLON_RE.test(title)) return false;
