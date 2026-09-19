@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.19"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.20"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -248,6 +248,16 @@ var Q08_DIRECTIVE = [
   "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
 
+var REGISTER_EXEMPLAR = [
+  "# The badge that outlived the inspection behind it",
+  "",
+  "A guild issued a stamped mark to certify that a piece of metal had been assayed by a sworn inspector. Buyers learned to read the mark as a promise about the metal. The mark was cheaper to copy than the inspection was to perform, and within a generation the workshops turning out stamped-but-unaudited goods outnumbered the ones still submitting to the assay. The arrangement had three parts. The buyer could not verify the metal directly, so the stamp carried the entire burden of trust. The guild drew its authority from the stamp, so it had no reason to publish how many stamps circulated outside its control. The copying workshop paid nothing for the trust it spent. The inspection was the expensive step and the stamp was the cheap one, and the market rewarded the cheap one.",
+  "",
+  "# The freight office that priced its own risk",
+  "",
+  "A shipping line asked its own freight office to set the insurance premium on the cargo it carried. The office priced each consignment from the manifest, and the manifest was written by the same clerks who loaded the hold. Nobody falsified a document; the incentive did the work. A consignment that was awkward to stow was written up as routine, because routine cargo cleared faster. The premium fell, the line won more contracts, and the losses surfaced only when a hull was opened in dry dock two seasons later. The party who could have measured the risk was the party paid to understate it.",
+].join("\n");
+
 function buildPrompt(friction, fewShot, recentStructures) {
   var parts = [Q08_DIRECTIVE];
   parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no — justification'.");
@@ -256,6 +266,10 @@ function buildPrompt(friction, fewShot, recentStructures) {
     for (var ex of fewShot.slice(0, 2)) {
       parts.push(ex.structure_md.slice(0, 400));
     }
+  } else {
+    // ANTI-BANAL-2: with no reader-proven exemplars the writer has only prohibitions.
+    parts.push("\n--- REGISTER EXEMPLAR (shape only - do not reuse this subject, title, or facts) ---");
+    parts.push(REGISTER_EXEMPLAR);
   }
   if (recentStructures && recentStructures.length > 0) {
     parts.push("\n--- RECENT STRUCTURES ON THIS SITE (BANNED PATTERNS — diverge from every one) ---");
