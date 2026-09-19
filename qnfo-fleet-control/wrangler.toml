@@ -71,17 +71,12 @@ environment = "production"
 # script qnfo-fleet-control). This binding is what made the toml binding-INCOMPLETE before
 # 2026-09-19: live had 24 bindings, the toml declared 17, so a wrangler deploy would have
 # SILENTLY DROPPED the DO + 6 secrets (BINDING-PRESERVATION-1). Added 2026-09-19.
-# OPERATIVE DEPLOY PATH: the DO namespace was created out-of-band (raw content API,
-# as-built 2026-09-11), so reconcile the migration tag below against the live namespace
-# BEFORE any wrangler deploy; otherwise use scripts/raw_put.py (binding-preserving
-# /content PUT), the path used for this worker.
-[[durable_objects.bindings]]
-name = "FleetAdvisor"
-class_name = "FleetAdvisor"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["FleetAdvisor"]
+# VERIFIED 2026-09-19: the live namespace is SQLite-backed (use_sqlite:true ->
+# new_sqlite_classes is the CORRECT migration type; every DO namespace in the account is
+# use_sqlite:true). The namespace was created out-of-band (raw content API, as-built
+# 2026-09-11), so the first wrangler deploy applies this Create migration; if CF rejects it
+# for the already-existing class the deploy FAILS CLOSED (no change). OPERATIVE DEPLOY PATH
+# remains scripts/raw_put.py (binding-preserving /content PUT -- no migration, no risk).
 
 [vars]
 ADVISOR_ITERS = "3"
