@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.29";
+var VERSION = "2.36.30";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3513,14 +3513,29 @@ async function registryRefresh(env) {
     } catch (e) {
     }
   }
-  // FLEET-VERSION-SWEEP-1 (v2.36.29): maintain `version` for EVERY live worker, not only the
-  // 12 FLEET members. Previously the ~37 non-FLEET rows were inserted once with version=null
-  // and never refreshed, so service_registry silently drifted and registry-as-truth held for
-  // only ~26% of the fleet. Additive + parallel + timeout-bounded; updates version only.
-  let swept = 0;
+  // FLEET-VERSION-SWEEP-1 (v2.36.30): maintain `version` for EVERY live worker, not only the
+  // 12 FLEET members. 2.36.29 attempted this with a bare fetch() and reported versionSwept:0 —
+  // the sandbox is not permitted to reach the public internet via fetch(), so every probe threw
+  // and was swallowed. This version records the failure reason instead of hiding it.
+  let swept = 0, sweepTried = 0, sweepErrs = [];
   if (apiList.length > 0) {
     const fleetSet = new Set(FLEET.map(function(f) { return f.name; }));
     const others = apiList.filter(function(w) { return w.id !== "qnfo-ops" && !fleetSet.has(w.id); });
+    const results = await Promise.all(others.map(async function(w) {
+      sweepTried++;
+      try {
+        const r2 = await fetch("https://" + w.id + ".q08.workers.dev/health", { signal: AbortSignal.timeout(8e3) });
+        if (!r2.ok) return w.id + ":HTTP" + r2.status;
+        const j2 = await r2.json();
+        const v2 = j2 && j2.version ? String(j2.version) : null;
+        if (!v2) return w.id + ":noversion";
+        await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(v2, now, w.id).run();
+        swept++;
+        return null;
+      } catch (e) { return w.id + ":" + String(e && e.message || e).slice(0, 70); }
+    }));
+    sweepErrs = results.filter(Boolean).slice(0, 6);
+  }
     await Promise.all(others.map(async function(w) {
       try {
         const r2 = await fetch("https://" + w.id + ".q08.workers.dev/health", { signal: AbortSignal.timeout(8e3) });
@@ -3572,7 +3587,7 @@ async function registryRefresh(env) {
       pruned = -1;
     }
   }
-  return { ok: true, workers: apiList.length, richSelfDoc: rich, versionSwept: swept, pruned, ts: now };
+  return { ok: true, workers: apiList.length, richSelfDoc: rich, versionSwept: swept, sweepTried, sweepErrs, pruned, ts: now };
 }
 __name(registryRefresh, "registryRefresh");
 __name2(registryRefresh, "registryRefresh");
