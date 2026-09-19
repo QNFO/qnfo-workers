@@ -2,11 +2,13 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var jnlWatchMod = (function() {
-  var __defProp2 = Object.defineProperty;
-  var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
   var __defProp22 = Object.defineProperty;
   var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+  var __defProp222 = Object.defineProperty;
+  var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
   var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
   var COMMUNITY = `https://zenodo.org/api/communities/${COMMUNITY_ID}/records`;
   var CURSOR_KEY = "cursor:lastModified";
@@ -43,6 +45,7 @@ var jnlWatchMod = (function() {
   __name(ensureSchema, "ensureSchema");
   __name2(ensureSchema, "ensureSchema");
   __name22(ensureSchema, "ensureSchema");
+  __name222(ensureSchema, "ensureSchema");
   var BUILD = "selfexclude-2026-09-10";
   var SELF_ORCIDS = ["0009-0002-4317-5604"];
   var SELF_NAME_PATTERNS = [/quni-?gudzinas/i, /rowan\s+brad\s+quni/i];
@@ -59,6 +62,7 @@ var jnlWatchMod = (function() {
   }
   __name(creatorList, "creatorList");
   __name2(creatorList, "creatorList");
+  __name22(creatorList, "creatorList");
   function isSelfRecord(h) {
     var title = String(h && h.metadata && h.metadata.title || "");
     if (title.indexOf(OWN_REPORT_TITLE) === 0) return { self: true, kind: "own-review-report", why: "title prefix " + OWN_REPORT_TITLE };
@@ -73,6 +77,7 @@ var jnlWatchMod = (function() {
   }
   __name(isSelfRecord, "isSelfRecord");
   __name2(isSelfRecord, "isSelfRecord");
+  __name22(isSelfRecord, "isSelfRecord");
   function creatorsText(h) {
     return creatorList(h).map(function(c) {
       return c.name + (c.orcid ? " [" + c.orcid + "]" : "");
@@ -80,6 +85,7 @@ var jnlWatchMod = (function() {
   }
   __name(creatorsText, "creatorsText");
   __name2(creatorsText, "creatorsText");
+  __name22(creatorsText, "creatorsText");
   async function migrate(env) {
     var adds = [
       "ALTER TABLE jnl_records ADD COLUMN self_authored INTEGER NOT NULL DEFAULT 0",
@@ -100,6 +106,7 @@ var jnlWatchMod = (function() {
   }
   __name(migrate, "migrate");
   __name2(migrate, "migrate");
+  __name22(migrate, "migrate");
   async function zenodoFetch(url) {
     const res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(3e4) });
     const txt = await res.text();
@@ -109,6 +116,7 @@ var jnlWatchMod = (function() {
   __name(zenodoFetch, "zenodoFetch");
   __name2(zenodoFetch, "zenodoFetch");
   __name22(zenodoFetch, "zenodoFetch");
+  __name222(zenodoFetch, "zenodoFetch");
   async function zenodoRecords() {
     const hits = [];
     const seen = /* @__PURE__ */ new Set();
@@ -131,6 +139,7 @@ var jnlWatchMod = (function() {
   __name(zenodoRecords, "zenodoRecords");
   __name2(zenodoRecords, "zenodoRecords");
   __name22(zenodoRecords, "zenodoRecords");
+  __name222(zenodoRecords, "zenodoRecords");
   async function kpis(env) {
     const out = { intended: {}, actual: {} };
     const recs = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM jnl_records").first();
@@ -168,6 +177,7 @@ var jnlWatchMod = (function() {
   }
   __name(kpis, "kpis");
   __name2(kpis, "kpis");
+  __name22(kpis, "kpis");
   async function poll(env) {
     const schema = await ensureSchema(env);
     const { hits, total } = await zenodoRecords();
@@ -203,12 +213,14 @@ var jnlWatchMod = (function() {
   __name(poll, "poll");
   __name2(poll, "poll");
   __name22(poll, "poll");
+  __name222(poll, "poll");
   function json(data, status = 200) {
     return new Response(JSON.stringify(data, null, 1), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
   }
   __name(json, "json");
   __name2(json, "json");
   __name22(json, "json");
+  __name222(json, "json");
   var index_default = {
     async scheduled(event, env, ctx) {
       try {
@@ -267,8 +279,8 @@ var jnlWatchMod = (function() {
   return { default: index_default };
 })();
 var jnlRefereeMod = (function() {
-  var __defProp2 = Object.defineProperty;
-  var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+  var __defProp22 = Object.defineProperty;
+  var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
   var VERSION = "0.9.1";
   var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/moonshotai/kimi-k2.6";
   var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
@@ -290,6 +302,7 @@ var jnlRefereeMod = (function() {
   }
   __name(json, "json");
   __name2(json, "json");
+  __name22(json, "json");
   async function ensureSchema(env) {
     var out = [];
     for (var i = 0; i < DDL.length; i++) {
@@ -306,6 +319,7 @@ var jnlRefereeMod = (function() {
   }
   __name(ensureSchema, "ensureSchema");
   __name2(ensureSchema, "ensureSchema");
+  __name22(ensureSchema, "ensureSchema");
   function log(env, recid, kind, detail) {
     try {
       return env.AUDIT.prepare("INSERT INTO jnl_review_log (recid, kind, detail) VALUES (?, ?, ?)").bind(recid || null, kind, String(detail || "").slice(0, 1e3)).run();
@@ -315,6 +329,7 @@ var jnlRefereeMod = (function() {
   }
   __name(log, "log");
   __name2(log, "log");
+  __name22(log, "log");
   function normalizeId(input) {
     var s = String(input || "").trim();
     var m = s.match(/[0-9]{5,9}/);
@@ -322,6 +337,7 @@ var jnlRefereeMod = (function() {
   }
   __name(normalizeId, "normalizeId");
   __name2(normalizeId, "normalizeId");
+  __name22(normalizeId, "normalizeId");
   async function whoHash(header) {
     try {
       var h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(header || "anon"));
@@ -335,6 +351,7 @@ var jnlRefereeMod = (function() {
   }
   __name(whoHash, "whoHash");
   __name2(whoHash, "whoHash");
+  __name22(whoHash, "whoHash");
   async function submitRateOk(env, who) {
     var cap = Number(env.JNL_SUBMIT_DAILY_CAP || 10);
     var key = "submit:" + dateKey(/* @__PURE__ */ new Date()) + ":" + who;
@@ -343,6 +360,7 @@ var jnlRefereeMod = (function() {
   }
   __name(submitRateOk, "submitRateOk");
   __name2(submitRateOk, "submitRateOk");
+  __name22(submitRateOk, "submitRateOk");
   async function submitBump(env, who) {
     var key = "submit:" + dateKey(/* @__PURE__ */ new Date()) + ":" + who;
     var cur = Number(await env.STATE.get(key) || 0) + 1;
@@ -351,6 +369,7 @@ var jnlRefereeMod = (function() {
   }
   __name(submitBump, "submitBump");
   __name2(submitBump, "submitBump");
+  __name22(submitBump, "submitBump");
   async function submitNew(env, recid, note, who) {
     await ensureSchema(env);
     var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
@@ -371,11 +390,13 @@ var jnlRefereeMod = (function() {
   }
   __name(submitNew, "submitNew");
   __name2(submitNew, "submitNew");
+  __name22(submitNew, "submitNew");
   function stopSet() {
     return { the: 1, of: 1, and: 1, a: 1, an: 1, for: 1, in: 1, on: 1, to: 1, from: 1, by: 1, with: 1, at: 1, or: 1, as: 1, into: 1, its: 1, their: 1, this: 1, that: 1, is: 1, are: 1, be: 1, was: 1, were: 1, not: 1, no: 1, how: 1, what: 1, why: 1, when: 1, which: 1, via: 1, per: 1, under: 1, over: 1, between: 1, across: 1, new: 1, one: 1, two: 1, three: 1, model: 1, models: 1, study: 1, studies: 1, paper: 1, using: 1, use: 1, used: 1, first: 1, second: 1, case: 1, cases: 1, concept: 1, concepts: 1, towards: 1, toward: 1, framework: 1, frameworks: 1 };
   }
   __name(stopSet, "stopSet");
   __name2(stopSet, "stopSet");
+  __name22(stopSet, "stopSet");
   function conceptsOf(title) {
     var s = String(title || "").toLowerCase();
     s = s.replace(/[^a-z0-9 ]/g, " ");
@@ -392,6 +413,7 @@ var jnlRefereeMod = (function() {
   }
   __name(conceptsOf, "conceptsOf");
   __name2(conceptsOf, "conceptsOf");
+  __name22(conceptsOf, "conceptsOf");
   function sharedConcepts(a, b) {
     var i = 0;
     var j = 0;
@@ -408,6 +430,7 @@ var jnlRefereeMod = (function() {
   }
   __name(sharedConcepts, "sharedConcepts");
   __name2(sharedConcepts, "sharedConcepts");
+  __name22(sharedConcepts, "sharedConcepts");
   async function buildGraph(env) {
     await ensureSchema(env);
     var rows = await env.AUDIT.prepare("SELECT recid, title FROM jnl_records ORDER BY recid").all();
@@ -429,6 +452,7 @@ var jnlRefereeMod = (function() {
   }
   __name(buildGraph, "buildGraph");
   __name2(buildGraph, "buildGraph");
+  __name22(buildGraph, "buildGraph");
   async function zenodoGet(url) {
     var res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     var txt = await res.text();
@@ -437,11 +461,13 @@ var jnlRefereeMod = (function() {
   }
   __name(zenodoGet, "zenodoGet");
   __name2(zenodoGet, "zenodoGet");
+  __name22(zenodoGet, "zenodoGet");
   function stripHtml(s) {
     return String(s || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
   }
   __name(stripHtml, "stripHtml");
   __name2(stripHtml, "stripHtml");
+  __name22(stripHtml, "stripHtml");
   async function fetchRecord(recid) {
     var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
     var meta = rec.metadata || {};
@@ -495,6 +521,7 @@ var jnlRefereeMod = (function() {
   }
   __name(fetchRecord, "fetchRecord");
   __name2(fetchRecord, "fetchRecord");
+  __name22(fetchRecord, "fetchRecord");
   function extractText(out) {
     if (!out) return "";
     if (typeof out === "string") return out;
@@ -509,6 +536,7 @@ var jnlRefereeMod = (function() {
   }
   __name(extractText, "extractText");
   __name2(extractText, "extractText");
+  __name22(extractText, "extractText");
   function parseJsonObject(s) {
     var txt = String(s || "").trim();
     var a = txt.indexOf("{");
@@ -523,17 +551,20 @@ var jnlRefereeMod = (function() {
   }
   __name(parseJsonObject, "parseJsonObject");
   __name2(parseJsonObject, "parseJsonObject");
+  __name22(parseJsonObject, "parseJsonObject");
   function num(v, dflt) {
     var n = Number(v);
     return Number.isFinite(n) ? n : dflt;
   }
   __name(num, "num");
   __name2(num, "num");
+  __name22(num, "num");
   function clampScore(v) {
     return Math.max(1, Math.min(10, Math.round(num(v, 5))));
   }
   __name(clampScore, "clampScore");
   __name2(clampScore, "clampScore");
+  __name22(clampScore, "clampScore");
   function arrOf(v) {
     return Array.isArray(v) ? v.filter(function(x) {
       return typeof x === "string" && x.trim();
@@ -543,17 +574,20 @@ var jnlRefereeMod = (function() {
   }
   __name(arrOf, "arrOf");
   __name2(arrOf, "arrOf");
+  __name22(arrOf, "arrOf");
   async function aiRun(env, model, sys, usr) {
     var r = await env.AI.run(model, { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: MAX_TOKENS });
     return extractText(r);
   }
   __name(aiRun, "aiRun");
   __name2(aiRun, "aiRun");
+  __name22(aiRun, "aiRun");
   function reviewerSystem(role) {
     return "You are " + role + ' for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). You review ONLY the provided record content. Never fabricate quotes, citations, or external facts; quote only text present in the input and mark recalled items as uncertain. Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, novelty of framing, reproducibility, and honesty, not conformity to one field. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), confidence ("high"|"medium"|"low" with reason inside rationale), verdict ("PUBLISH"|"REVISE"|"REJECT"), rationale (string).';
   }
   __name(reviewerSystem, "reviewerSystem");
   __name2(reviewerSystem, "reviewerSystem");
+  __name22(reviewerSystem, "reviewerSystem");
   function userPrompt(rec, withText) {
     var head = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (rec.doi || "(none)") + "\nversion: " + (rec.version || "(none)") + "\npublication_date: " + (rec.publication_date || "(none)") + "\nlicense: " + (rec.license || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\nkeywords: " + (rec.keywords || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + (rec.description || "(none)").slice(0, 6e3) + "\n\n";
     if (withText && rec.text) {
@@ -566,6 +600,7 @@ var jnlRefereeMod = (function() {
   }
   __name(userPrompt, "userPrompt");
   __name2(userPrompt, "userPrompt");
+  __name22(userPrompt, "userPrompt");
   function decisionFrom(parsedList, basis) {
     var avgs = [];
     var fatal = false;
@@ -607,6 +642,7 @@ var jnlRefereeMod = (function() {
   }
   __name(decisionFrom, "decisionFrom");
   __name2(decisionFrom, "decisionFrom");
+  __name22(decisionFrom, "decisionFrom");
   function buildReport(rec, parsedList, dec, modelsUsed, basis) {
     var lines = [];
     lines.push("# AI Referee Report");
@@ -667,6 +703,7 @@ var jnlRefereeMod = (function() {
   }
   __name(buildReport, "buildReport");
   __name2(buildReport, "buildReport");
+  __name22(buildReport, "buildReport");
   async function runReview(env, recid, manual) {
     var schema = await ensureSchema(env);
     var models = String(env.JNL_MODELS || MODELS_DEFAULT).split(",").map(function(x) {
@@ -736,6 +773,7 @@ var jnlRefereeMod = (function() {
   }
   __name(runReview, "runReview");
   __name2(runReview, "runReview");
+  __name22(runReview, "runReview");
   async function enqueueNew(env, limit) {
     var schema = await ensureSchema(env);
     var rows = await env.AUDIT.prepare(
@@ -753,17 +791,20 @@ var jnlRefereeMod = (function() {
   }
   __name(enqueueNew, "enqueueNew");
   __name2(enqueueNew, "enqueueNew");
+  __name22(enqueueNew, "enqueueNew");
   async function pickQueued(env) {
     var row = await env.AUDIT.prepare("SELECT v.recid AS recid FROM jnl_reviews v LEFT JOIN jnl_records r ON r.recid = v.recid WHERE (v.status='queued' OR (v.status='error' AND v.ran_at IS NOT NULL AND v.ran_at < datetime('now','-30 minutes'))) AND COALESCE(r.self_authored,0) = 0 ORDER BY v.id ASC LIMIT 1").first();
     return row ? row.recid : null;
   }
   __name(pickQueued, "pickQueued");
   __name2(pickQueued, "pickQueued");
+  __name22(pickQueued, "pickQueued");
   function dateKey(d) {
     return d.toISOString().slice(0, 10);
   }
   __name(dateKey, "dateKey");
   __name2(dateKey, "dateKey");
+  __name22(dateKey, "dateKey");
   async function dailyBudgetOk(env) {
     var key = "referee:daily:" + dateKey(/* @__PURE__ */ new Date());
     var cap = Number(env.JNL_DAILY_CAP || 60);
@@ -772,6 +813,7 @@ var jnlRefereeMod = (function() {
   }
   __name(dailyBudgetOk, "dailyBudgetOk");
   __name2(dailyBudgetOk, "dailyBudgetOk");
+  __name22(dailyBudgetOk, "dailyBudgetOk");
   async function bumpDaily(env) {
     var key = "referee:daily:" + dateKey(/* @__PURE__ */ new Date());
     var cur = Number(await env.STATE.get(key) || 0) + 1;
@@ -780,6 +822,7 @@ var jnlRefereeMod = (function() {
   }
   __name(bumpDaily, "bumpDaily");
   __name2(bumpDaily, "bumpDaily");
+  __name22(bumpDaily, "bumpDaily");
   async function authOk(request, env) {
     var secret = env.JNL_TOKEN || "";
     if (!secret) return false;
@@ -800,6 +843,7 @@ var jnlRefereeMod = (function() {
   }
   __name(authOk, "authOk");
   __name2(authOk, "authOk");
+  __name22(authOk, "authOk");
   async function handleScheduled(env) {
     try {
       var schema = await ensureSchema(env);
@@ -841,6 +885,7 @@ var jnlRefereeMod = (function() {
   }
   __name(handleScheduled, "handleScheduled");
   __name2(handleScheduled, "handleScheduled");
+  __name22(handleScheduled, "handleScheduled");
   var index_default = {
     async scheduled(event, env, ctx) {
       var r = await handleScheduled(env);
@@ -887,7 +932,7 @@ var jnlRefereeMod = (function() {
         }
         if (path === "/self-audit") {
           var sa = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review_decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE decision='PUBLISH') AS publishes, (SELECT COUNT(*) FROM jnl_decisions WHERE path='speculation-acknowledged') AS spec_ack_publishes, (SELECT COUNT(*) FROM jnl_reviews WHERE status='queued') AS queued").first();
-          var pct = /* @__PURE__ */ __name2(function(a, b) {
+          var pct = /* @__PURE__ */ __name22(function(a, b) {
             return b ? Math.round(1e3 * a / b) / 10 + "%" : null;
           }, "pct");
           return json({ ok: true, service: "jnl-referee", version: VERSION, build: BUILD, counts: sa, contamination: { self_records_share: pct(sa.self_records, sa.records), self_review_decisions_share: pct(sa.self_review_decisions, sa.decisions) }, guard: "self-authored records are excluded from the review queue (JNL-SELF-EXCLUDE-1); historical decisions are flagged, never deleted" });
@@ -912,7 +957,7 @@ var jnlRefereeMod = (function() {
           return json({ ok: true, count: subR.results.length, rows: subR.results });
         }
         if (path === "/" || path === "/index.html") {
-          var escH = /* @__PURE__ */ __name2(function(s) {
+          var escH = /* @__PURE__ */ __name22(function(s) {
             return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
           }, "escH");
           var recParam = Number(url.searchParams.get("recid") || 0);
@@ -1107,6 +1152,7 @@ var jnlRefereeMod = (function() {
   }
   __name(creatorList, "creatorList");
   __name2(creatorList, "creatorList");
+  __name22(creatorList, "creatorList");
   function isSelfRecord(h) {
     var title = String(h && h.metadata && h.metadata.title || "");
     if (title.indexOf(OWN_REPORT_TITLE) === 0) return { self: true, kind: "own-review-report", why: "title prefix " + OWN_REPORT_TITLE };
@@ -1121,6 +1167,7 @@ var jnlRefereeMod = (function() {
   }
   __name(isSelfRecord, "isSelfRecord");
   __name2(isSelfRecord, "isSelfRecord");
+  __name22(isSelfRecord, "isSelfRecord");
   function creatorsText(h) {
     return creatorList(h).map(function(c) {
       return c.name + (c.orcid ? " [" + c.orcid + "]" : "");
@@ -1128,6 +1175,7 @@ var jnlRefereeMod = (function() {
   }
   __name(creatorsText, "creatorsText");
   __name2(creatorsText, "creatorsText");
+  __name22(creatorsText, "creatorsText");
   async function migrate(env) {
     var adds = [
       "ALTER TABLE jnl_records ADD COLUMN self_authored INTEGER NOT NULL DEFAULT 0",
@@ -1156,11 +1204,13 @@ var jnlRefereeMod = (function() {
   }
   __name(migrate, "migrate");
   __name2(migrate, "migrate");
+  __name22(migrate, "migrate");
   function specAckSystem() {
     return "You are a second-pass reviewer for an open AI-reviewed journal whose stated ethos welcomes theoretical and philosophical work. A first-pass review flagged this record as speculative or lacking empirical evidence, which alone blocks publication. Your ONLY question: does the record handle its own speculation honestly and rigorously - does it state explicitly that its claims are theoretical/speculative, and does it offer falsifiable or disconfirming criteria a reader could actually test? Do NOT judge whether the claims are true. Do NOT reward confident tone. Absence of empirical evidence is expected and is not by itself a reason to answer false. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: acknowledged (boolean), disconfirmation_criteria (array of strings quoted or paraphrased from the record; empty array if none), rationale (string), confidence (high|medium|low).";
   }
   __name(specAckSystem, "specAckSystem");
   __name2(specAckSystem, "specAckSystem");
+  __name22(specAckSystem, "specAckSystem");
   async function speculationAckPass(env, rec, models) {
     var sys = specAckSystem();
     var usr = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (rec.doi || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + String(rec.description || "").slice(0, 4e3) + "\n\nFULL TEXT (first " + String(rec.text || "").length + " chars):\n" + String(rec.text || "").slice(0, 12e3) + "\n\nNow produce the acknowledgment JSON.";
@@ -1187,12 +1237,14 @@ var jnlRefereeMod = (function() {
   }
   __name(speculationAckPass, "speculationAckPass");
   __name2(speculationAckPass, "speculationAckPass");
+  __name22(speculationAckPass, "speculationAckPass");
   function specEscapeEligible(dec, basis) {
     var fatalOk = !dec || !dec.fatal || dec.fatal_spec_only === true || dec.spec_only_fatal === true;
     return !!(dec && dec.decision === "REVISE" && dec.speculative && fatalOk && basis === "text" && dec.avg >= 7.5 && (typeof dec.min_avg !== "number" || dec.min_avg >= 6) && !dec.low_confidence);
   }
   __name(specEscapeEligible, "specEscapeEligible");
   __name2(specEscapeEligible, "specEscapeEligible");
+  __name22(specEscapeEligible, "specEscapeEligible");
   async function applySpecAckEscape(env, rec, dec, models, recid, basis) {
     var specPath = { used: false, acknowledged: false, votes: [], models: [], criteria: [], rationale: "" };
     if (!specEscapeEligible(dec, basis)) {
@@ -1210,6 +1262,7 @@ var jnlRefereeMod = (function() {
   }
   __name(applySpecAckEscape, "applySpecAckEscape");
   __name2(applySpecAckEscape, "applySpecAckEscape");
+  __name22(applySpecAckEscape, "applySpecAckEscape");
   function specAckReportSection(specPath, NL) {
     var specLines = [];
     specLines.push("");
@@ -1225,6 +1278,7 @@ var jnlRefereeMod = (function() {
   }
   __name(specAckReportSection, "specAckReportSection");
   __name2(specAckReportSection, "specAckReportSection");
+  __name22(specAckReportSection, "specAckReportSection");
   async function scoreOnce(env, rec, models, recidForLog) {
     var basis = rec.text && rec.text.length >= 200 ? "text" : "metadata";
     var parsedList = [];
@@ -1249,6 +1303,7 @@ var jnlRefereeMod = (function() {
   }
   __name(scoreOnce, "scoreOnce");
   __name2(scoreOnce, "scoreOnce");
+  __name22(scoreOnce, "scoreOnce");
   async function driftCheck(env, recid, models) {
     var stored = await env.AUDIT.prepare("SELECT decision, avg_score, basis FROM jnl_reviews WHERE recid = ?").bind(recid).first();
     if (!stored || !stored.decision) return { ok: false, recid, error: "no stored decision to compare against" };
@@ -1264,6 +1319,7 @@ var jnlRefereeMod = (function() {
   }
   __name(driftCheck, "driftCheck");
   __name2(driftCheck, "driftCheck");
+  __name22(driftCheck, "driftCheck");
   async function driftSample(env, n) {
     var models = String(env.JNL_MODELS || MODELS_DEFAULT).split(",").map(function(x) {
       return x.trim();
@@ -1284,6 +1340,7 @@ var jnlRefereeMod = (function() {
   }
   __name(driftSample, "driftSample");
   __name2(driftSample, "driftSample");
+  __name22(driftSample, "driftSample");
   async function citationProbe(env, recid) {
     var row = await env.AUDIT.prepare("SELECT doi FROM jnl_records WHERE recid = ?").bind(recid).first();
     var doi = row && row.doi ? String(row.doi).replace(/^https?:\/\/doi.org\//, "") : null;
@@ -1310,6 +1367,7 @@ var jnlRefereeMod = (function() {
   }
   __name(citationProbe, "citationProbe");
   __name2(citationProbe, "citationProbe");
+  __name22(citationProbe, "citationProbe");
   async function citationSample(env, n) {
     var rows = await env.AUDIT.prepare("SELECT recid FROM jnl_records WHERE citation_checked_at IS NULL OR citation_checked_at < datetime('now', '-14 days') ORDER BY (citation_checked_at IS NOT NULL) ASC, citation_checked_at ASC LIMIT ?").bind(Math.max(1, Math.min(n, 25))).all();
     var out = [];
@@ -1327,13 +1385,14 @@ var jnlRefereeMod = (function() {
   }
   __name(citationSample, "citationSample");
   __name2(citationSample, "citationSample");
+  __name22(citationSample, "citationSample");
   var SPECULATIVE_RE = /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/;
   return { default: index_default };
 })();
 var jnlReviserMod = (function() {
   const QNFO_VERSION = "jnl-reviser/fabric-20260910";
-  var __defProp2 = Object.defineProperty;
-  var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+  var __defProp22 = Object.defineProperty;
+  var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
   var REF = "jnl-referee";
   var ZENODO = "https://zenodo.org/api";
   var OWNER_QNFO = 1328013;
@@ -1346,6 +1405,7 @@ var jnlReviserMod = (function() {
   }
   __name(json, "json");
   __name2(json, "json");
+  __name22(json, "json");
   async function zf(url, opts = {}, tok) {
     const r = await fetch(url, { ...opts, headers: { "user-agent": UA, accept: "application/json", "content-type": "application/json", ...tok ? { authorization: `Bearer ${tok}` } : {}, ...opts.headers || {} }, signal: AbortSignal.timeout(12e4) });
     const t = await r.text();
@@ -1359,6 +1419,7 @@ var jnlReviserMod = (function() {
   }
   __name(zf, "zf");
   __name2(zf, "zf");
+  __name22(zf, "zf");
   function looseJson(t) {
     try {
       return JSON.parse(t);
@@ -1375,12 +1436,14 @@ var jnlReviserMod = (function() {
   }
   __name(looseJson, "looseJson");
   __name2(looseJson, "looseJson");
+  __name22(looseJson, "looseJson");
   async function ensureToken(env) {
     if (!env.ZENODO_TOKEN) throw new Error("missing ZENODO_TOKEN");
     return env.ZENODO_TOKEN;
   }
   __name(ensureToken, "ensureToken");
   __name2(ensureToken, "ensureToken");
+  __name22(ensureToken, "ensureToken");
   function extractText(o) {
     if (typeof o === "string") return o;
     if (!o || typeof o !== "object") return "";
@@ -1397,6 +1460,7 @@ var jnlReviserMod = (function() {
   }
   __name(extractText, "extractText");
   __name2(extractText, "extractText");
+  __name22(extractText, "extractText");
   var worker_default2 = {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -1545,7 +1609,7 @@ ${mdLimited}`, max_tokens: 1200 });
         }
         await fetch(`${bucket}/${encodeURIComponent(mdKey)}`, { method: "PUT", headers: { authorization: `Bearer ${tok}`, "content-type": "application/octet-stream", "user-agent": UA }, body: out, signal: AbortSignal.timeout(12e4) });
         const curVer = paper.metadata?.version || "1.0";
-        const bump = /* @__PURE__ */ __name2((v) => {
+        const bump = /* @__PURE__ */ __name22((v) => {
           const m = String(v).match(/^v?(\d+)\.(\d+)(.*)$/i);
           if (!m) return `v1.1`;
           const nv = `${m[1]}.${Number(m[2]) + 1}`;
@@ -1583,8 +1647,8 @@ ${mdLimited}`, max_tokens: 1200 });
 })();
 var jnlZenodoMod = (function() {
   const QNFO_VERSION = "jnl-zenodo/fabric-20260910";
-  var __defProp2 = Object.defineProperty;
-  var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+  var __defProp22 = Object.defineProperty;
+  var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
   var REFEREE = null;
   var ZENODO_API = "https://zenodo.org/api";
   var OWNER_QNFO = 1328013;
@@ -1595,6 +1659,7 @@ var jnlZenodoMod = (function() {
   }
   __name(json, "json");
   __name2(json, "json");
+  __name22(json, "json");
   async function zfetch(url, opts = {}, token) {
     const res = await fetch(url, { ...opts, headers: { "user-agent": UA, accept: "application/json", "content-type": "application/json", ...token ? { authorization: `Bearer ${token}` } : {}, ...opts.headers || {} }, signal: AbortSignal.timeout(9e4) });
     const txt = await res.text();
@@ -1608,11 +1673,13 @@ var jnlZenodoMod = (function() {
   }
   __name(zfetch, "zfetch");
   __name2(zfetch, "zfetch");
+  __name22(zfetch, "zfetch");
   function stripHtml(s) {
     return String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   }
   __name(stripHtml, "stripHtml");
   __name2(stripHtml, "stripHtml");
+  __name22(stripHtml, "stripHtml");
   async function tryCommunitySubmission(draftId, token) {
     const attempts = [];
     const bodies = [
@@ -1654,6 +1721,7 @@ var jnlZenodoMod = (function() {
   }
   __name(tryCommunitySubmission, "tryCommunitySubmission");
   __name2(tryCommunitySubmission, "tryCommunitySubmission");
+  __name22(tryCommunitySubmission, "tryCommunitySubmission");
   var index_default = {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -1791,11 +1859,12 @@ var jnlZenodoMod = (function() {
   return { default: index_default };
 })();
 function jnlRefCall(env) {
-  return { fetch: /* @__PURE__ */ __name(function(url, init) {
+  return { fetch: /* @__PURE__ */ __name2(function(url, init) {
     return jnlRefereeMod.default.fetch(new Request(url, init), env);
   }, "fetch") };
 }
 __name(jnlRefCall, "jnlRefCall");
+__name2(jnlRefCall, "jnlRefCall");
 var worker_default = {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
@@ -1806,6 +1875,7 @@ var worker_default = {
       return mod.default.fetch(new Request(u.toString(), request), env, ctx);
     }
     __name(sub, "sub");
+    __name2(sub, "sub");
     if (p === "/watch" || p.startsWith("/watch/")) return sub("/watch", jnlWatchMod);
     if (p === "/referee" || p.startsWith("/referee/")) return sub("/referee", jnlRefereeMod);
     if (p === "/reviser" || p.startsWith("/reviser/")) return sub("/reviser", jnlReviserMod);

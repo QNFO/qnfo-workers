@@ -2,15 +2,17 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var m0 = (function() {
   var ideafactoryMod = (function() {
     const QNFO_VERSION = "qnfo-idea-factory/fabric-20260910";
     var __freeze = Object.freeze;
-    var __defProp2 = Object.defineProperty;
-    var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-    var __template = /* @__PURE__ */ __name((cooked, raw) => __freeze(__defProp2(cooked, "raw", { value: __freeze(raw || cooked.slice()) })), "__template");
     var __defProp22 = Object.defineProperty;
     var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+    var __template = /* @__PURE__ */ __name2((cooked, raw) => __freeze(__defProp22(cooked, "raw", { value: __freeze(raw || cooked.slice()) })), "__template");
+    var __defProp222 = Object.defineProperty;
+    var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
     var SUGGEST_DENY = [
       "check my email",
       "check email",
@@ -98,6 +100,7 @@ var m0 = (function() {
     }
     __name(suggestDomainSafe, "suggestDomainSafe");
     __name2(suggestDomainSafe, "suggestDomainSafe");
+    __name22(suggestDomainSafe, "suggestDomainSafe");
     var FRONTIER_STARTERS = [
       "What is the Landauer floor for cryogenic quantum controllers?",
       "Can joules-per-compute benchmarking stay fair across very different architectures?",
@@ -124,6 +127,7 @@ var m0 = (function() {
     }
     __name(frontierPick, "frontierPick");
     __name2(frontierPick, "frontierPick");
+    __name22(frontierPick, "frontierPick");
     async function handleSuggest(url, env) {
       const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
       const ql = q.toLowerCase();
@@ -133,7 +137,7 @@ var m0 = (function() {
       } catch (e) {
         live = [];
       }
-      const recency = /* @__PURE__ */ __name2((s) => {
+      const recency = /* @__PURE__ */ __name22((s) => {
         const ms = Date.parse(s.updated_at || s.created_at || "");
         return Number.isFinite(ms) ? ms : 0;
       }, "recency");
@@ -143,7 +147,7 @@ var m0 = (function() {
         const sb = Math.min(Number(b.message_count) || 0, 30) - Math.max(0, (Date.now() - recency(b)) / 864e5) * 0.35;
         return sb - sa;
       });
-      const dedupe = /* @__PURE__ */ __name2((arr) => {
+      const dedupe = /* @__PURE__ */ __name22((arr) => {
         const seen = {};
         const out = [];
         for (const it of arr) {
@@ -155,7 +159,7 @@ var m0 = (function() {
         return out;
       }, "dedupe");
       const recent = dedupe(dom).slice(0, 20);
-      const toItem = /* @__PURE__ */ __name2((s) => ({ title: String(s.title || "").slice(0, 120), source: "recent", thread: s.id || null }), "toItem");
+      const toItem = /* @__PURE__ */ __name22((s) => ({ title: String(s.title || "").slice(0, 120), source: "recent", thread: s.id || null }), "toItem");
       const groups = [];
       const qIsOps = ql.length >= 2 && (SUGGEST_DENY.some((p) => ql.indexOf(p) >= 0) || DENY_WORDS.some((w) => {
         try {
@@ -190,6 +194,7 @@ var m0 = (function() {
     }
     __name(handleSuggest, "handleSuggest");
     __name2(handleSuggest, "handleSuggest");
+    __name22(handleSuggest, "handleSuggest");
     var worker_default2 = {
       async fetch(request, env) {
         const url = new URL(request.url);
@@ -226,6 +231,7 @@ var m0 = (function() {
     __name(cors, "cors");
     __name2(cors, "cors");
     __name22(cors, "cors");
+    __name222(cors, "cors");
     function json(data, status = 200) {
       return new Response(JSON.stringify(data), {
         status,
@@ -235,6 +241,7 @@ var m0 = (function() {
     __name(json, "json");
     __name2(json, "json");
     __name22(json, "json");
+    __name222(json, "json");
     var REDACT = "[redacted]";
     function redact(s) {
       if (!s) return s;
@@ -266,6 +273,7 @@ var m0 = (function() {
     __name(redact, "redact");
     __name2(redact, "redact");
     __name22(redact, "redact");
+    __name222(redact, "redact");
     function normLabel(s) {
       if (typeof s !== "string") return s;
       return s.replace(/^(?:User message|Assistant message|System message|User|Assistant|Human|AI|System)\s*:\s*(?:\r?\n)+/i, "").replace(/^\r?\n+/, "");
@@ -273,6 +281,7 @@ var m0 = (function() {
     __name(normLabel, "normLabel");
     __name2(normLabel, "normLabel");
     __name22(normLabel, "normLabel");
+    __name222(normLabel, "normLabel");
     function collapseThreads(items) {
       var map = {}, order = [];
       for (var i = 0; i < items.length; i++) {
@@ -293,6 +302,7 @@ var m0 = (function() {
     __name(collapseThreads, "collapseThreads");
     __name2(collapseThreads, "collapseThreads");
     __name22(collapseThreads, "collapseThreads");
+    __name222(collapseThreads, "collapseThreads");
     var INTERNAL_MARKERS = [
       "INTENT_TOKEN",
       "rotation verification",
@@ -328,6 +338,7 @@ var m0 = (function() {
     __name(isInternalThread, "isInternalThread");
     __name2(isInternalThread, "isInternalThread");
     __name22(isInternalThread, "isInternalThread");
+    __name222(isInternalThread, "isInternalThread");
     var JUNK_MARKERS = ["say ok", "say okay", "test", "testing", "first turn", "second turn", "third turn", "auto-express", "block the response", "opening turn", "capital of", "what is the capital", "who is", "who are you", "what is your name", "tell me a joke", "write a poem", "write me a", "make me a", "create me", "explain simply", "explain everything", "explain like i", "3 sentences", "5 years old", "five years old", "good morning", "good night", "thank you", "thanks", "you're welcome", "are you sure", "can you", "please", "what can you tell me about", "what do you know about", "what is love", "the meaning of life", "continue", "repeat", "again", "this sucks", "terrible response", "needs remediation", "what time is it", "what time", "write a python", "write code", "implement a", "based on the chat history", "give this conversation a name", "reply with exactly", "reply with the single word ok", "list every event on the qnfo calendar", "qnfo calendar", "guard-probe", "probe-", "rotation verification", "you decide how a newly extracted memory", "you synthesize a few durable", "probe does", "probe: does", "does auto-express", "what is the capital of", "say the word", "just say", "use your ", "call the ", "express_intent", "social_compose", "email_check", "search_research", "tool with action", "say hello", "hello world", "what is 2+2", "reply with the single word", "source detection", "gateway passed", "note these as fixes", "note for remediation", "mismatch-probe", "reasoning-leak", "filter-probe", "verify-5.8.0", "say the word", "nebul", "fil-ok", "fix-ok", "guard-probe", "what should i do today", "be more productive", "personally and professionally", "productivity", "daily planning", "life advice"];
     function isJunkThread(title) {
       const raw = String(title || "").trim();
@@ -339,6 +350,7 @@ var m0 = (function() {
     __name(isJunkThread, "isJunkThread");
     __name2(isJunkThread, "isJunkThread");
     __name22(isJunkThread, "isJunkThread");
+    __name222(isJunkThread, "isJunkThread");
     function isSystemContent(c) {
       const sc = String(c || "").trim();
       if (!sc) return true;
@@ -351,6 +363,7 @@ var m0 = (function() {
     __name(isSystemContent, "isSystemContent");
     __name2(isSystemContent, "isSystemContent");
     __name22(isSystemContent, "isSystemContent");
+    __name222(isSystemContent, "isSystemContent");
     async function liveThreads(env) {
       try {
         const res = await env.QNFO_AUDIT.prepare(
@@ -388,6 +401,7 @@ var m0 = (function() {
     __name(liveThreads, "liveThreads");
     __name2(liveThreads, "liveThreads");
     __name22(liveThreads, "liveThreads");
+    __name222(liveThreads, "liveThreads");
     async function archiveThreads(env) {
       try {
         const res = await env.QNFO_AUDIT.prepare(
@@ -423,6 +437,7 @@ var m0 = (function() {
     __name(archiveThreads, "archiveThreads");
     __name2(archiveThreads, "archiveThreads");
     __name22(archiveThreads, "archiveThreads");
+    __name222(archiveThreads, "archiveThreads");
     async function allThreads(env) {
       const live = await liveThreads(env);
       live.sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")));
@@ -431,6 +446,7 @@ var m0 = (function() {
     __name(allThreads, "allThreads");
     __name2(allThreads, "allThreads");
     __name22(allThreads, "allThreads");
+    __name222(allThreads, "allThreads");
     async function searchThreadIds(env, q) {
       const like = "%" + q + "%";
       const ids = {};
@@ -446,6 +462,7 @@ var m0 = (function() {
     __name(searchThreadIds, "searchThreadIds");
     __name2(searchThreadIds, "searchThreadIds");
     __name22(searchThreadIds, "searchThreadIds");
+    __name222(searchThreadIds, "searchThreadIds");
     async function handleSessions(url, env) {
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10), 1), 100);
       const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10), 0);
@@ -466,6 +483,7 @@ var m0 = (function() {
     __name(handleSessions, "handleSessions");
     __name2(handleSessions, "handleSessions");
     __name22(handleSessions, "handleSessions");
+    __name222(handleSessions, "handleSessions");
     async function handleSession(path, env) {
       const id = decodeURIComponent(path.split("/").slice(3).join("/"));
       if (!id) return json({ error: "Missing id" }, 400);
@@ -500,6 +518,7 @@ var m0 = (function() {
     __name(handleSession, "handleSession");
     __name2(handleSession, "handleSession");
     __name22(handleSession, "handleSession");
+    __name222(handleSession, "handleSession");
     async function handleFeed(url, env) {
       const afterParam = url.searchParams.get("after");
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "30", 10), 1), 100);
@@ -520,6 +539,7 @@ var m0 = (function() {
     __name(handleFeed, "handleFeed");
     __name2(handleFeed, "handleFeed");
     __name22(handleFeed, "handleFeed");
+    __name222(handleFeed, "handleFeed");
     function normTs(v) {
       if (!v) return null;
       if (typeof v === "number") return new Date(v).toISOString();
@@ -531,9 +551,10 @@ var m0 = (function() {
     __name(normTs, "normTs");
     __name2(normTs, "normTs");
     __name22(normTs, "normTs");
+    __name222(normTs, "normTs");
     const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-const CHAT_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
-const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV research corpus context. Cite paper titles when you draw on them. If the corpus does not contain an answer, say so plainly. Keep answers concise, precise, and faithful to the source papers.";
+    const CHAT_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+    const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV research corpus context. Cite paper titles when you draw on them. If the corpus does not contain an answer, say so plainly. Keep answers concise, precise, and faithful to the source papers.";
     async function searchCorpus(query, env, topK) {
       try {
         const embedResult = await env.AI.run(EMBED_MODEL, { text: [query] });
@@ -547,19 +568,26 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
           if (slug) {
             try {
               const row = await env.LIVING_PAPER.prepare("SELECT title, abstract, body_md FROM papers WHERE slug = ?1 LIMIT 1").bind(String(slug).replace(/\.md$/, "")).first();
-              if (row) { title = row.title; body = (row.body_md || row.abstract || "").replace(/^---[\s\S]*?---\s*/, "").slice(0, 2500); }
-            } catch (e) {}
+              if (row) {
+                title = row.title;
+                body = (row.body_md || row.abstract || "").replace(/^---[\s\S]*?---\s*/, "").slice(0, 2500);
+              }
+            } catch (e) {
+            }
           }
           if (!title && m.metadata && m.metadata.title) title = m.metadata.title;
           if (!body && m.metadata && (m.metadata.text || m.metadata.abstract)) body = String(m.metadata.text || m.metadata.abstract || "").slice(0, 2500);
           out.push({ slug: slug ? String(slug).replace(/\.md$/, "") : null, file: title || slug || m.id, title: title || slug || m.id, text: body });
         }
         return out;
-      } catch (e) { return []; }
+      } catch (e) {
+        return [];
+      }
     }
     __name(searchCorpus, "searchCorpus");
     __name2(searchCorpus, "searchCorpus");
     __name22(searchCorpus, "searchCorpus");
+    __name222(searchCorpus, "searchCorpus");
     function parseChat(resp) {
       let c = "";
       if (resp && typeof resp.response === "string") c = resp.response;
@@ -571,6 +599,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
     __name(parseChat, "parseChat");
     __name2(parseChat, "parseChat");
     __name22(parseChat, "parseChat");
+    __name222(parseChat, "parseChat");
     async function handleAsk(url, request, env) {
       let body;
       try {
@@ -590,7 +619,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
             const context = results.map((r, i) => "[" + (i + 1) + "] " + (r.title || "untitled") + (r.slug ? " (slug: " + r.slug + ")" : "") + "\n" + r.text).join("\n\n");
             const userPrompt = "QUESTION:\n" + query + "\n\nCORPUS CONTEXT (use ONLY this; if it does not answer the question, say so plainly):\n" + context;
             try {
-              const aiResp = await env.AI.run(CHAT_MODEL, { messages: [ { role: "system", content: ASK_SYSTEM_PROMPT }, { role: "user", content: userPrompt } ], max_tokens: 1024, temperature: 0.3 }, { gateway: { id: "default" } });
+              const aiResp = await env.AI.run(CHAT_MODEL, { messages: [{ role: "system", content: ASK_SYSTEM_PROMPT }, { role: "user", content: userPrompt }], max_tokens: 1024, temperature: 0.3 }, { gateway: { id: "default" } });
               return { answer: parseChat(aiResp) || "(no answer returned)", sources, model: CHAT_MODEL };
             } catch (e) {
               return { answer: "Found " + results.length + " matching research sources (semantic search worked, answer model unavailable).", sources, model: null, error: e.message };
@@ -622,6 +651,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
     __name(handleAsk, "handleAsk");
     __name2(handleAsk, "handleAsk");
     __name22(handleAsk, "handleAsk");
+    __name222(handleAsk, "handleAsk");
     async function relatedThreads(query, env, limit = 6) {
       const terms = String(query || "").toLowerCase().replace(/[^a-z0-9+\- ]+/g, " ").split(/\s+/).filter((t) => t.length >= 3).slice(0, 8);
       if (!terms.length) return [];
@@ -658,6 +688,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
     __name(relatedThreads, "relatedThreads");
     __name2(relatedThreads, "relatedThreads");
     __name22(relatedThreads, "relatedThreads");
+    __name222(relatedThreads, "relatedThreads");
     async function handleProposalPost(request, env) {
       let body;
       try {
@@ -685,6 +716,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
     __name(handleProposalPost, "handleProposalPost");
     __name2(handleProposalPost, "handleProposalPost");
     __name22(handleProposalPost, "handleProposalPost");
+    __name222(handleProposalPost, "handleProposalPost");
     async function handleProposalList(request, env) {
       const auth = request.headers.get("X-Sync-Token");
       if (!auth || auth !== (env.SYNC_TOKEN || "")) return json({ error: "Unauthorized" }, 401);
@@ -696,6 +728,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
     __name(handleProposalList, "handleProposalList");
     __name2(handleProposalList, "handleProposalList");
     __name22(handleProposalList, "handleProposalList");
+    __name222(handleProposalList, "handleProposalList");
     async function sha256(s) {
       const data = new TextEncoder().encode(String(s));
       const digest = await crypto.subtle.digest("SHA-256", data);
@@ -704,6 +737,7 @@ const ASK_SYSTEM_PROMPT = "Answer questions using ONLY the provided QNFO/QWAV re
     __name(sha256, "sha256");
     __name2(sha256, "sha256");
     __name22(sha256, "sha256");
+    __name222(sha256, "sha256");
     var _a;
     var UI_HTML = String.raw(_a || (_a = __template([`
 <!DOCTYPE html>
@@ -1602,12 +1636,14 @@ route();
     __name(handleRss, "handleRss");
     __name2(handleRss, "handleRss");
     __name22(handleRss, "handleRss");
+    __name222(handleRss, "handleRss");
     function xmlEsc(t) {
       return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
     }
     __name(xmlEsc, "xmlEsc");
     __name2(xmlEsc, "xmlEsc");
     __name22(xmlEsc, "xmlEsc");
+    __name222(xmlEsc, "xmlEsc");
     function serveEmbed() {
       const html = `<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>QNFO Ideas \u2014 live</title>
@@ -1649,6 +1685,7 @@ setInterval(load,60000);
     __name(serveEmbed, "serveEmbed");
     __name2(serveEmbed, "serveEmbed");
     __name22(serveEmbed, "serveEmbed");
+    __name222(serveEmbed, "serveEmbed");
     function serveUI() {
       return new Response(UI_HTML, {
         headers: {
@@ -1660,11 +1697,12 @@ setInterval(load,60000);
     __name(serveUI, "serveUI");
     __name2(serveUI, "serveUI");
     __name22(serveUI, "serveUI");
+    __name222(serveUI, "serveUI");
     return { default: worker_default2 };
   })();
   var ideaminerMod = (function() {
-    var __defProp2 = Object.defineProperty;
-    var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+    var __defProp22 = Object.defineProperty;
+    var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
     var VERSION = "0.1.2-glm53";
     var WORKER = "qnfo-idea-miner";
     var MODEL = "@cf/zai-org/glm-5.3-flash";
@@ -1675,11 +1713,13 @@ setInterval(load,60000);
     }
     __name(json, "json");
     __name2(json, "json");
+    __name22(json, "json");
     function nowIso() {
       return (/* @__PURE__ */ new Date()).toISOString();
     }
     __name(nowIso, "nowIso");
     __name2(nowIso, "nowIso");
+    __name22(nowIso, "nowIso");
     function hash(s) {
       let h = 0;
       for (let i = 0; i < s.length; i++) {
@@ -1689,6 +1729,7 @@ setInterval(load,60000);
     }
     __name(hash, "hash");
     __name2(hash, "hash");
+    __name22(hash, "hash");
     async function runModel(env, prompt) {
       try {
         const r = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: MAX_TOKENS, temperature: 0.4 });
@@ -1701,6 +1742,7 @@ setInterval(load,60000);
     }
     __name(runModel, "runModel");
     __name2(runModel, "runModel");
+    __name22(runModel, "runModel");
     var MINER_PROMPT = [
       "From the recent research-session titles below, propose up to 3 specific, novel, publishable research questions.",
       "Each idea must be a concrete research direction - a falsifiable claim or a derivable mathematical/quantitative result - NOT a chat summary, NOT an ops command, NOT a meta question about the pipeline.",
@@ -1745,6 +1787,7 @@ setInterval(load,60000);
     }
     __name(run, "run");
     __name2(run, "run");
+    __name22(run, "run");
     var worker_default2 = {
       async scheduled(event, env, ctx) {
         ctx.waitUntil(run(env));
@@ -1762,8 +1805,8 @@ setInterval(load,60000);
     return { default: worker_default2 };
   })();
   var ideatriageMod = (function() {
-    var __defProp2 = Object.defineProperty;
-    var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+    var __defProp22 = Object.defineProperty;
+    var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
     var VERSION = "1.4.0-intake-only";
     var MODELS = {
       a: "@cf/zai-org/glm-5.3-flash",
@@ -1787,6 +1830,7 @@ setInterval(load,60000);
     }
     __name(orchBase, "orchBase");
     __name2(orchBase, "orchBase");
+    __name22(orchBase, "orchBase");
     var MAX_REVISE = 2;
     var MAX_STAGE_ATTEMPTS = 3;
     var MAX_ACTIVE = 1;
@@ -1805,17 +1849,20 @@ setInterval(load,60000);
     }
     __name(json, "json");
     __name2(json, "json");
+    __name22(json, "json");
     function auth(req, env) {
       const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       return !!env.TRIAGE_TOKEN && !!t && t === env.TRIAGE_TOKEN;
     }
     __name(auth, "auth");
     __name2(auth, "auth");
+    __name22(auth, "auth");
     function slugify(s) {
       return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "paper";
     }
     __name(slugify, "slugify");
     __name2(slugify, "slugify");
+    __name22(slugify, "slugify");
     function tryJson(s) {
       if (typeof s !== "string") return s || null;
       const m = s.match(/\{[\s\S]*\}/);
@@ -1828,6 +1875,7 @@ setInterval(load,60000);
     }
     __name(tryJson, "tryJson");
     __name2(tryJson, "tryJson");
+    __name22(tryJson, "tryJson");
     var SCORECARD_PROMPT = `You are QNFO's research-idea merit reviewer. Score the idea below for the QNFO autonomous research pipeline.
 Return JSON ONLY: {"novelty":0-1,"technical_merit":0-1,"impact_potential":0-1,"exposure_potential":0-1,"feasibility":0-1,"risk":0-1,"rationale":"<=120 chars","hook":"<=90 chars, one-line public-facing hook"}
 Scoring guide: technical_merit = depth of technical content + verifiability; impact_potential = significance if proven; exposure_potential = breadth of audience/attention it can attract (social, media, cross-field); risk = probability of producing nothing citable (1 = near-certain dead end). IMPORTANT: feasibility means feasibility of the THEORETICAL/COMPUTATIONAL research itself (can the derivation, simulation, formal analysis, and computational verification be carried out by the QNFO autonomous pipeline) \u2014 NOT experimental testability. QNFO has no laboratory; an idea is feasible if its mathematics/computation can be executed and verified in silico, even if a confirming experiment would require external labs years away. Do NOT mark a theoretical physics idea infeasible merely because no experiment currently exists.
@@ -1853,6 +1901,7 @@ IDEA: `;
     }
     __name(extractText, "extractText");
     __name2(extractText, "extractText");
+    __name22(extractText, "extractText");
     async function runModel(env, name, prompt) {
       let lastErr = "";
       const chain = [name].concat(MODEL_CHAIN.filter(function(x) {
@@ -1892,11 +1941,13 @@ IDEA: `;
     }
     __name(runModel, "runModel");
     __name2(runModel, "runModel");
+    __name22(runModel, "runModel");
     function composite(c) {
       return 0.3 * c.novelty + 0.3 * c.technical_merit + 0.2 * c.impact_potential + 0.2 * c.exposure_potential;
     }
     __name(composite, "composite");
     __name2(composite, "composite");
+    __name22(composite, "composite");
     async function scoreIdea(env, desire) {
       const prompt = SCORECARD_PROMPT + String(desire || "").slice(0, 3e3);
       const [ra, rb] = await Promise.all([runModel(env, MODELS.a, prompt), runModel(env, MODELS.b, prompt)]);
@@ -1950,6 +2001,7 @@ IDEA: `;
     }
     __name(scoreIdea, "scoreIdea");
     __name2(scoreIdea, "scoreIdea");
+    __name22(scoreIdea, "scoreIdea");
     var NOISE_RE = [
       /^call (the )?[a-z_]+( tool)?(\s|$)/i,
       /(email_check|express_intent|intents_list|social_compose|search_research|search_papers tool)/i,
@@ -1973,12 +2025,14 @@ IDEA: `;
     }
     __name(isNoise, "isNoise");
     __name2(isNoise, "isNoise");
+    __name22(isNoise, "isNoise");
     function isQuestion(text) {
       const t = String(text || "").trim();
       return t.length < 160 && /\?\s*$/.test(t) && /^(what|who|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have|quick|one line|one sentence|in one sentence|probe)/i.test(t);
     }
     __name(isQuestion, "isQuestion");
     __name2(isQuestion, "isQuestion");
+    __name22(isQuestion, "isQuestion");
     async function enqueue(env, source, sourceId, idea, summary, s) {
       await env.QNFO_AUDIT.prepare(
         "INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,'queued',?8)"
@@ -1986,6 +2040,7 @@ IDEA: `;
     }
     __name(enqueue, "enqueue");
     __name2(enqueue, "enqueue");
+    __name22(enqueue, "enqueue");
     async function triageOne(env, row) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       if (isNoise(row.desire)) {
@@ -2008,6 +2063,7 @@ IDEA: `;
     }
     __name(triageOne, "triageOne");
     __name2(triageOne, "triageOne");
+    __name22(triageOne, "triageOne");
     async function runPending(env, commit, limit) {
       const out = { triaged: [], queue_added: 0, errors: [], commit };
       const intents = await env.QNFO_AUDIT.prepare(
@@ -2061,6 +2117,7 @@ IDEA: `;
     }
     __name(runPending, "runPending");
     __name2(runPending, "runPending");
+    __name22(runPending, "runPending");
     async function ensureSchema(env) {
       const alters = [
         "ALTER TABLE research_queue ADD COLUMN stage TEXT",
@@ -2088,6 +2145,7 @@ IDEA: `;
     }
     __name(ensureSchema, "ensureSchema");
     __name2(ensureSchema, "ensureSchema");
+    __name22(ensureSchema, "ensureSchema");
     async function logTask(env, queueId, stage, action, status, detail) {
       try {
         await env.QNFO_AUDIT.prepare(
@@ -2099,6 +2157,7 @@ IDEA: `;
     }
     __name(logTask, "logTask");
     __name2(logTask, "logTask");
+    __name22(logTask, "logTask");
     async function setPipelineStatus(env, status, phase, notes) {
       try {
         await env.QNFO_AUDIT.prepare(
@@ -2109,6 +2168,7 @@ IDEA: `;
     }
     __name(setPipelineStatus, "setPipelineStatus");
     __name2(setPipelineStatus, "setPipelineStatus");
+    __name22(setPipelineStatus, "setPipelineStatus");
     function briefNote(row) {
       return [
         "You are executing stage NOTE of the QNFO autonomous research pipeline.",
@@ -2131,6 +2191,7 @@ IDEA: `;
     }
     __name(briefNote, "briefNote");
     __name2(briefNote, "briefNote");
+    __name22(briefNote, "briefNote");
     function briefDraft(row, note) {
       return [
         "You are executing stage DRAFT of the QNFO autonomous research pipeline.",
@@ -2150,6 +2211,7 @@ IDEA: `;
     }
     __name(briefDraft, "briefDraft");
     __name2(briefDraft, "briefDraft");
+    __name22(briefDraft, "briefDraft");
     function briefReview(row, draft) {
       return [
         "You are the adversarial reviewer in the QNFO autonomous research pipeline (post-publication adversarial analysis gate, applied pre-publication).",
@@ -2169,6 +2231,7 @@ IDEA: `;
     }
     __name(briefReview, "briefReview");
     __name2(briefReview, "briefReview");
+    __name22(briefReview, "briefReview");
     function briefRevise(row, draft, findings) {
       return [
         "You are revising a draft paper per adversarial-review findings in the QNFO autonomous research pipeline.",
@@ -2183,6 +2246,7 @@ IDEA: `;
     }
     __name(briefRevise, "briefRevise");
     __name2(briefRevise, "briefRevise");
+    __name22(briefRevise, "briefRevise");
     function briefPublish(row, slug, draft) {
       return [
         "You are executing stage PUBLISH of the QNFO autonomous research pipeline.",
@@ -2200,6 +2264,7 @@ IDEA: `;
     }
     __name(briefPublish, "briefPublish");
     __name2(briefPublish, "briefPublish");
+    __name22(briefPublish, "briefPublish");
     function briefFor(row, slug) {
       const ctx = tryJson(row.context) || {};
       switch (row.stage) {
@@ -2219,6 +2284,7 @@ IDEA: `;
     }
     __name(briefFor, "briefFor");
     __name2(briefFor, "briefFor");
+    __name22(briefFor, "briefFor");
     async function dispatchStage(env, row, slug) {
       const b = briefFor(row, slug);
       if (!b) return { error: "no brief for stage " + row.stage };
@@ -2248,6 +2314,7 @@ IDEA: `;
     }
     __name(dispatchStage, "dispatchStage");
     __name2(dispatchStage, "dispatchStage");
+    __name22(dispatchStage, "dispatchStage");
     async function getTask(env, tid) {
       try {
         const r = await fetch(orchBase(env) + "/task/" + tid, { headers: { "X-Sync-Token": env.DISPATCH_TOKEN || "" } });
@@ -2259,6 +2326,7 @@ IDEA: `;
     }
     __name(getTask, "getTask");
     __name2(getTask, "getTask");
+    __name22(getTask, "getTask");
     async function advance(env, row, result) {
       const ctx = tryJson(row.context) || {};
       const slug = slugify(row.summary || row.idea);
@@ -2334,6 +2402,7 @@ IDEA: `;
     }
     __name(advance, "advance");
     __name2(advance, "advance");
+    __name22(advance, "advance");
     async function finalize(env, row, slug, doi, paperUrl) {
       try {
         const ctx = tryJson(row.context) || {};
@@ -2380,6 +2449,7 @@ IDEA: `;
     }
     __name(finalize, "finalize");
     __name2(finalize, "finalize");
+    __name22(finalize, "finalize");
     async function claimNext(env) {
       const active = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status='researching'").first();
       if (active && Number(active.n) >= MAX_ACTIVE) return { claimed: false, reason: "active-task-exists" };
@@ -2401,6 +2471,7 @@ IDEA: `;
     }
     __name(claimNext, "claimNext");
     __name2(claimNext, "claimNext");
+    __name22(claimNext, "claimNext");
     async function syncStages(env) {
       const rows = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='researching'").all();
       const out = [];
@@ -2479,6 +2550,7 @@ IDEA: `;
     }
     __name(syncStages, "syncStages");
     __name2(syncStages, "syncStages");
+    __name22(syncStages, "syncStages");
     var worker_default2 = {
       async scheduled(event, env) {
         if (event.cron === "0 * * * *") {
@@ -2603,8 +2675,8 @@ IDEA: `;
 })();
 var m1 = (function() {
   const QNFO_VERSION = "qnfo-thread-ingest/fabric-20260910";
-  var __defProp2 = Object.defineProperty;
-  var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+  var __defProp22 = Object.defineProperty;
+  var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
   var worker_ingest_default = {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -2649,6 +2721,7 @@ var m1 = (function() {
   }
   __name(cors, "cors");
   __name2(cors, "cors");
+  __name22(cors, "cors");
   function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
       status,
@@ -2657,6 +2730,7 @@ var m1 = (function() {
   }
   __name(json, "json");
   __name2(json, "json");
+  __name22(json, "json");
   async function handleThreads(request, env) {
     const len = Number(request.headers.get("Content-Length") || 0);
     if (len > 3e6) return json({ error: "payload too large (max 3MB)" }, 413);
@@ -2701,6 +2775,7 @@ var m1 = (function() {
   }
   __name(handleThreads, "handleThreads");
   __name2(handleThreads, "handleThreads");
+  __name22(handleThreads, "handleThreads");
   return { default: worker_ingest_default };
 })();
 var worker_default = {

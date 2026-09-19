@@ -10,14 +10,14 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.7";
+var VERSION = "0.9.8";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
-var ROUTER = "https://qnfo-ai.internal/v1/chat/completions";
+var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
 function routerFetch(env, url, opts) {
   if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
     return env.QNFO_AI.fetch(url, opts);
@@ -1260,7 +1260,7 @@ var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
 async function aiText(env, model, prompt, maxTokens) {
-  const cappedTokens = Math.min(maxTokens, 4096);
+  const cappedTokens = Math.min(maxTokens, 8192);
   try {
     const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
     if (typeof r === "string") return r;
@@ -1286,13 +1286,19 @@ async function gwCall(env, prompt, maxTokens) {
   try {
     const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
-    if (!r.ok) return "";
+    if (!r.ok) {
+      await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + "; falling back to Workers AI", "warn");
+      return await aiText(env, MODELS[0], prompt, maxTokens);
+    }
     const j = await r.json();
     const c = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-    return typeof c === "string" ? c : "";
+    if (typeof c === "string" && c) return c;
+    await logEvent(env, "gw-fallback", "gateway empty content; falling back to Workers AI", "warn");
+    return await aiText(env, MODELS[0], prompt, maxTokens);
   } catch (e) {
     clearTimeout(t);
-    return "";
+    await logEvent(env, "gw-error", "gwCall failed: " + String(e && e.message || e).slice(0, 150), "warn");
+    return await aiText(env, MODELS[0], prompt, maxTokens);
   }
 }
 __name(gwCall, "gwCall");
@@ -1570,10 +1576,20 @@ async function stageReconcile(env, row) {
   }
   const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
   if (!reconciled || reconciled.length < 1e4) {
-    await markError(env, row, "reconcile: output too short (" + (reconciled ? reconciled.length : 0) + ")");
-    return { ok: false, stage: "reconcile" };
-  }
-  await r2Put(env, String(row.id) + "/reconciled.md", reconciled);
+    let best = parts[0];
+    for (let _i = 1; _i < parts.length; _i++) if (parts[_i].length > best.length) best = parts[_i];
+    let body = best;
+    const _nl = body.indexOf(String.fromCharCode(10));
+    if (_nl >= 0) body = body.slice(_nl + 1);
+    if (!body || body.trim().length < 2e3) {
+      await markError(env, row, "reconcile: output too short (" + (reconciled ? reconciled.length : 0) + ")");
+      return { ok: false, stage: "reconcile" };
+    }
+    await logEvent(env, "reconcile-degrade", "gateway empty; reconciled from best leg (len=" + body.length + ")", "warn");
+    await r2Put(env, String(row.id) + "/reconciled.md", body);
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, degraded: true }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "reconcile->review", len: body.length, degraded: true };
+  }await r2Put(env, String(row.id) + "/reconciled.md", reconciled);
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "reconcile->review", len: reconciled.length };
 }

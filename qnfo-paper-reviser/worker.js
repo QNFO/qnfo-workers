@@ -455,67 +455,6 @@ var worker_default = {
     if (url.pathname === "/run/scan") {
       const mode = url.searchParams.get("mode") || "dry";
       try {
-        await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, error, created_at, updated_at) VALUES (?, ?, ?, ?, 'needs-substantive-revision', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), "AI revision rejected: " + _reason).run();
-      } catch (eRj) {}
-    }
-    return { slug: paper.slug, rejected: true, reason: _reason, issues: auditSummary, doi: doi };
-  }
-  const versionTo = bumpVersion(paper.version);
-  const edits = applyEdits(paper.body_md || "", low);
-  let revised = applyVersionMarkers(edits.md, versionTo);
-  const appliedCats = edits.applied.map(function(a) {
-    return a.category;
-  }).join(", ") || "no substantive corrections required";
-  const changelog = "Adversarial audit revision. Fixes: " + appliedCats + ".";
-  revised = addChangelog(revised, versionTo, changelog);
-  const regen = regenerateProvenance(revised, paper.title, paper.slug);
-  const merged = {
-    references_bib: prov.references_bib || regen.references_bib,
-    citation_audit: prov.citation_audit || regen.citation_audit,
-    due_diligence: prov.due_diligence,
-    project_plan: prov.project_plan || regen.project_plan,
-    readme_md: prov.readme_md || regen.readme_md,
-    license_md: prov.license_md || regen.license_md,
-    verify_script: prov.verify_script,
-    verify_output: prov.verify_output
-  };
-  if (dry) {
-    return { slug: paper.slug, dry: true, versionFrom: paper.version, versionTo, issues: auditSummary, applied: edits.applied.length, skippedEdits: edits.skipped.length, mdDelta: revised.length - (paper.body_md || "").length, doi };
-  }
-  await env.WATCH_DB.prepare("INSERT INTO version_queue (paper_doi, slug, title, version_from, version_to, corrected_md, status, references_bib, citation_audit, due_diligence, project_plan, readme_md, verify_script, verify_output, license_md, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'drafted', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(doi, paper.slug, paper.title, paper.version, versionTo, revised, merged.references_bib, merged.citation_audit, merged.due_diligence, merged.project_plan, merged.readme_md, merged.verify_script, merged.verify_output, merged.license_md).run();
-  await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, version_to, status, audit_summary, changelog, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, versionTo, JSON.stringify(auditSummary), changelog).run();
-  return { slug: paper.slug, queued: true, versionFrom: paper.version, versionTo, issues: auditSummary, applied: edits.applied.length, skippedEdits: edits.skipped.length, doi };
-}
-__name(processPaper, "processPaper");
-async function runOnce(env, mode) {
-  const dry = mode === "dry";
-  const candidates = await selectCandidates(env, BATCH);
-  const results = [];
-  for (const p of candidates) {
-    try {
-      results.push(await processPaper(env, p, mode));
-    } catch (e) {
-      results.push({ slug: p.slug, error: String(e && e.message || e).slice(0, 200) });
-    }
-  }
-  return { ok: true, worker: "qnfo-paper-reviser", version: VERSION, dry, model: MODEL, candidates: candidates.length, results };
-}
-__name(runOnce, "runOnce");
-async function statusSweep(env) {
-  const total = await env.PAPERS_DB.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != ''").first();
-  const done = await env.WATCH_DB.prepare("SELECT status, COUNT(*) AS n FROM paper_revision_log GROUP BY status").all();
-  const pending = await env.WATCH_DB.prepare("SELECT COUNT(*) AS n FROM version_queue WHERE status IN ('drafted','publishing')").first();
-  return { worker: "qnfo-paper-reviser", version: VERSION, published_zenodo_total: total && total.n || 0, revision_log: done && done.results || [], pending_version_queue: pending && pending.n || 0 };
-}
-__name(statusSweep, "statusSweep");
-var worker_default = {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if ((url.pathname.startsWith("/run/") || url.pathname.startsWith("/debug/")) && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
-    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-paper-reviser", version: VERSION, model: MODEL, bindings: { ai: !!env.AI, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, auth: !!env.REVISER_TOKEN } });
-    if (url.pathname === "/run/scan") {
-      const mode = url.searchParams.get("mode") || "dry";
-      try {
         return json(await runOnce(env, mode));
       } catch (e) {
         return json({ ok: false, error: e.message }, 500);
@@ -566,4 +505,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-

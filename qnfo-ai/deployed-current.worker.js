@@ -2,18 +2,11 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-// v5.28.0 (2026-09-15) STREAM-TIMEOUT-1: the stream path called Workers AI with stream=false
-// (full non-streaming inference, up to 32768 out-tokens) and then synthesised the SSE, so a long
-// generation inherited the whole inference latency and Workers AI aborted it with 3046: Request
-// timeout, surfacing to clients as HTTP 502 {"error":"stream failed: 3046: Request timeout"}.
-// Fix: (a) runDirect retries a 3046/timeout with a halved max_tokens before giving up;
-// (b) the stream path no longer throws on upstream failure - it retries halved, then falls through
-// to the existing sibling-model chain and the FALLBACK_TEXT degradation, so the client gets a
-// usable 200 SSE answer instead of a raw upstream error string. Also restores the corrupted
-// recursion in extractWAContent() (line ~991 returned an undefined identifier `extrac`).
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.0";
+var __defProp22 = Object.defineProperty;
+var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+var VERSION = "5.28.2-calctxcache";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -33,6 +26,7 @@ async function loadModelHealth(env) {
   return map;
 }
 __name(loadModelHealth, "loadModelHealth");
+__name2(loadModelHealth, "loadModelHealth");
 var MODELS = {
   // Workers AI free — original three
   // Workers AI free — directive substitutes (small coder/validator/reviewer class)
@@ -85,7 +79,14 @@ var MAX_OUT = {
 };
 var DEFAULT_MAX_OUT = 32768;
 var DEFAULT_SYSTEM_PROMPT = "QUNIVERSE FLEET CONTEXT (for QNFO-internal questions)\nThis endpoint (qnfo-ai) is the research gateway on the Cloudflare Quniverse fleet (~54 workers). QNFO is not an acronym.\n- qnfo-ops (qnfo-ops.q08.workers.dev) \u2014 ops endpoint; fleet probes, D1/R2/KV/Vectorize, self-heal.\n- personal-api (personal-api.q08.workers.dev) \u2014 personal twin; NEVER cross-pollinate into research (PERSONAL-QNFO-SEPARATION-1).\n- ideas.qnfo.org \u2014 idea intake hub; /api/sessions, /rss.xml, /sitemap.xml all live.\n- qnfo.org \u2014 landing + email-capture; qnfo-subscribers double opt-in pipeline.\n- qnfo-signal-loop \u2014 signal-organism L8 re-entry; emits signals from living-paper open-question sections.\n- qnfo-paper-reviser \u2014 adversarial revision loop; all publications target >=2 Zenodo versions.\n- qnfo-outreach \u2014 autonomous outreach agent; ACTIVATION_AT 2026-09-15.\n- NO-JOURNALS-1: never suggest traditional journal submissions. Zenodo is the canonical venue.\n\nAnswer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on 'CONTINUE' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.";
+var _calCtxCache = { at: 0, text: null };
 async function getCalendarContext(env) {
+  if (_calCtxCache.at && Date.now() - _calCtxCache.at < 9e5) return _calCtxCache.text;
+  var _t = await _getCalendarContextUncached(env);
+  _calCtxCache = { at: Date.now(), text: _t };
+  return _t;
+}
+async function _getCalendarContextUncached(env) {
   try {
     const from = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const to = new Date(Date.now() + 21 * 864e5).toISOString().slice(0, 10);
@@ -104,6 +105,7 @@ async function getCalendarContext(env) {
   }
 }
 __name(getCalendarContext, "getCalendarContext");
+__name2(getCalendarContext, "getCalendarContext");
 var FALLBACK_TEXT = "I do not have a reliable answer for that right now. For QNFO research topics the ensemble mode (model=ensemble) cross-checks answers across models, and rephrasing usually helps. Current QNFO state is published on Zenodo (open access), and the joules-per-compute benchmark (JPCUB) lives at github.com/rwnq8/joules-per-compute-benchmark.";
 var CTX_SAFETY_MARGIN = 512;
 function clampTokens(maxTokens, cap) {
@@ -113,6 +115,7 @@ function clampTokens(maxTokens, cap) {
 }
 __name(clampTokens, "clampTokens");
 __name2(clampTokens, "clampTokens");
+__name22(clampTokens, "clampTokens");
 var TIER0_TOTAL_CAP = 24e3;
 function estimateInputTokens(messages) {
   let chars = 0;
@@ -123,11 +126,13 @@ function estimateInputTokens(messages) {
 }
 __name(estimateInputTokens, "estimateInputTokens");
 __name2(estimateInputTokens, "estimateInputTokens");
+__name22(estimateInputTokens, "estimateInputTokens");
 function estimateOutputTokens(text) {
   return Math.ceil(String(text || "").length / 3);
 }
 __name(estimateOutputTokens, "estimateOutputTokens");
 __name2(estimateOutputTokens, "estimateOutputTokens");
+__name22(estimateOutputTokens, "estimateOutputTokens");
 function modelCtx(spec) {
   if (!spec) return DEEPSEEK_MAX_CONTEXT;
   if (spec.ctx) return spec.ctx;
@@ -135,6 +140,7 @@ function modelCtx(spec) {
 }
 __name(modelCtx, "modelCtx");
 __name2(modelCtx, "modelCtx");
+__name22(modelCtx, "modelCtx");
 function contextAwareTarget(cls, target, estInput, maxOut) {
   const spec = MODELS[target];
   if (!spec || spec.tier !== 0) return target;
@@ -148,6 +154,7 @@ function contextAwareTarget(cls, target, estInput, maxOut) {
 }
 __name(contextAwareTarget, "contextAwareTarget");
 __name2(contextAwareTarget, "contextAwareTarget");
+__name22(contextAwareTarget, "contextAwareTarget");
 var DEEPSEEK_MAX_CONTEXT = 1048576;
 function truncateMessagesToFit(messages, maxInputTokens) {
   const arr = Array.isArray(messages) ? messages : [];
@@ -205,6 +212,7 @@ function truncateMessagesToFit(messages, maxInputTokens) {
 }
 __name(truncateMessagesToFit, "truncateMessagesToFit");
 __name2(truncateMessagesToFit, "truncateMessagesToFit");
+__name22(truncateMessagesToFit, "truncateMessagesToFit");
 function normalizeResponsesInput(body) {
   const messages = [];
   if (body.instructions) {
@@ -244,6 +252,7 @@ function normalizeResponsesInput(body) {
 }
 __name(normalizeResponsesInput, "normalizeResponsesInput");
 __name2(normalizeResponsesInput, "normalizeResponsesInput");
+__name22(normalizeResponsesInput, "normalizeResponsesInput");
 function normalizeResponsesContent(content) {
   if (content == null) return "";
   if (typeof content === "string") return content;
@@ -265,6 +274,7 @@ function normalizeResponsesContent(content) {
 }
 __name(normalizeResponsesContent, "normalizeResponsesContent");
 __name2(normalizeResponsesContent, "normalizeResponsesContent");
+__name22(normalizeResponsesContent, "normalizeResponsesContent");
 function flattenContentToString(content) {
   if (content == null) return "";
   if (typeof content === "string") return content;
@@ -283,6 +293,7 @@ function flattenContentToString(content) {
 }
 __name(flattenContentToString, "flattenContentToString");
 __name2(flattenContentToString, "flattenContentToString");
+__name22(flattenContentToString, "flattenContentToString");
 function normalizeMessagesContent(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -293,6 +304,7 @@ function normalizeMessagesContent(messages) {
 }
 __name(normalizeMessagesContent, "normalizeMessagesContent");
 __name2(normalizeMessagesContent, "normalizeMessagesContent");
+__name22(normalizeMessagesContent, "normalizeMessagesContent");
 function normalizeForWorkersAITools(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -303,6 +315,7 @@ function normalizeForWorkersAITools(messages) {
 }
 __name(normalizeForWorkersAITools, "normalizeForWorkersAITools");
 __name2(normalizeForWorkersAITools, "normalizeForWorkersAITools");
+__name22(normalizeForWorkersAITools, "normalizeForWorkersAITools");
 var PER_IMAGE_CHARS = 2550;
 function contentCharLen(content) {
   if (typeof content === "string") return content.length;
@@ -320,6 +333,7 @@ function contentCharLen(content) {
 }
 __name(contentCharLen, "contentCharLen");
 __name2(contentCharLen, "contentCharLen");
+__name22(contentCharLen, "contentCharLen");
 function hasImageParts(messages) {
   if (!Array.isArray(messages)) return false;
   for (const m of messages) {
@@ -334,6 +348,7 @@ function hasImageParts(messages) {
 }
 __name(hasImageParts, "hasImageParts");
 __name2(hasImageParts, "hasImageParts");
+__name22(hasImageParts, "hasImageParts");
 function _bytesToB64(bytes) {
   let bin = "";
   const CH = 32768;
@@ -341,6 +356,7 @@ function _bytesToB64(bytes) {
   return btoa(bin);
 }
 __name(_bytesToB64, "_bytesToB64");
+__name2(_bytesToB64, "_bytesToB64");
 function _sniffMime(b) {
   if (b.length >= 4 && b[0] === 137 && b[1] === 80 && b[2] === 78 && b[3] === 71) return "image/png";
   if (b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255) return "image/jpeg";
@@ -349,6 +365,7 @@ function _sniffMime(b) {
   return "image/png";
 }
 __name(_sniffMime, "_sniffMime");
+__name2(_sniffMime, "_sniffMime");
 async function inlineRemoteImages(messages) {
   if (!Array.isArray(messages)) return messages;
   for (const m of messages) {
@@ -391,6 +408,7 @@ async function inlineRemoteImages(messages) {
   return messages;
 }
 __name(inlineRemoteImages, "inlineRemoteImages");
+__name2(inlineRemoteImages, "inlineRemoteImages");
 function normalizeForVision(messages) {
   if (!Array.isArray(messages)) return messages;
   return messages.map((m) => {
@@ -417,11 +435,13 @@ function normalizeForVision(messages) {
 }
 __name(normalizeForVision, "normalizeForVision");
 __name2(normalizeForVision, "normalizeForVision");
+__name22(normalizeForVision, "normalizeForVision");
 function shouldEnsemble(cls) {
   return cls.uncertainty === "medium" || cls.complexity === "high";
 }
 __name(shouldEnsemble, "shouldEnsemble");
 __name2(shouldEnsemble, "shouldEnsemble");
+__name22(shouldEnsemble, "shouldEnsemble");
 var QNFO_INDEXES = ["PAPER_VZ", "NOTES_VZ", "TASKS_VZ", "HANDOFFS_VZ", "LOG_VZ", "IPATENT_VZ", "INFRA_VZ", "CLOUD_OPS_VZ"];
 async function searchQnfoIndexes(env, q, k) {
   const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
@@ -444,6 +464,7 @@ async function searchQnfoIndexes(env, q, k) {
 }
 __name(searchQnfoIndexes, "searchQnfoIndexes");
 __name2(searchQnfoIndexes, "searchQnfoIndexes");
+__name22(searchQnfoIndexes, "searchQnfoIndexes");
 var ENSEMBLE = {
   primary: { wa: "@cf/moonshotai/kimi-k2.7-code", ctx: 262144 },
   // frontier coder (262k ctx, reasoning + vision, $0.95/M)
@@ -457,7 +478,7 @@ var ENSEMBLE_POOL = {
   science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-pro-0813"],
   general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3-flash"]
 };
-var json = /* @__PURE__ */ __name2((obj, status = 200) => new Response(JSON.stringify(obj), {
+var json = /* @__PURE__ */ __name22((obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
   headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS" }
 }), "json");
@@ -470,6 +491,7 @@ function timingSafeEqual(a, b) {
 }
 __name(timingSafeEqual, "timingSafeEqual");
 __name2(timingSafeEqual, "timingSafeEqual");
+__name22(timingSafeEqual, "timingSafeEqual");
 function isCurrentEvents(q) {
   var t = String(q || "").toLowerCase();
   var words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "schedule", "hours", "open now", "happening", "happened", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
@@ -497,6 +519,7 @@ function isCurrentEvents(q) {
   return false;
 }
 __name(isCurrentEvents, "isCurrentEvents");
+__name2(isCurrentEvents, "isCurrentEvents");
 function classify(prompt) {
   const p = (prompt || "").toLowerCase();
   let complexity = "medium", domain = "general", uncertainty = "low", divergence = "high", verifiability = "unverifiable";
@@ -525,6 +548,7 @@ function classify(prompt) {
 }
 __name(classify, "classify");
 __name2(classify, "classify");
+__name22(classify, "classify");
 function _seedStr(str) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -535,6 +559,7 @@ function _seedStr(str) {
 }
 __name(_seedStr, "_seedStr");
 __name2(_seedStr, "_seedStr");
+__name22(_seedStr, "_seedStr");
 function stripRoleWrapper(txt) {
   if (typeof txt !== "string") return txt;
   var s = txt;
@@ -550,12 +575,14 @@ function stripRoleWrapper(txt) {
 }
 __name(stripRoleWrapper, "stripRoleWrapper");
 __name2(stripRoleWrapper, "stripRoleWrapper");
+__name22(stripRoleWrapper, "stripRoleWrapper");
 function seededPick(pool, key) {
   if (!pool || !pool.length) return null;
   return pool[_seedStr(String(key || "")) % pool.length];
 }
 __name(seededPick, "seededPick");
 __name2(seededPick, "seededPick");
+__name22(seededPick, "seededPick");
 var ROUTE_POOLS = {
   code: ["kimi-k2.7-code", "glm-5.3", "kimi-k2.7-code", "deepseek-v4-pro-wa", "gpt-oss-120b"],
   science: ["glm-5.3", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro-wa"],
@@ -565,7 +592,7 @@ var ROUTE_POOLS = {
 };
 function autoRoute(cls, prompt, health) {
   const h = health || {};
-  const okPool = /* @__PURE__ */ __name((pool2) => pool2.filter((x) => !h[x] || h[x].status !== "failing" && h[x].status !== "degraded"), "okPool");
+  const okPool = /* @__PURE__ */ __name2((pool2) => pool2.filter((x) => !h[x] || h[x].status !== "failing" && h[x].status !== "degraded"), "okPool");
   if (cls.complexity === "high" && cls.domain !== "code") {
     const base2 = ["glm-5.3", "deepseek-v4-pro-wa", "kimi-k2.6", "gpt-oss-120b", "deepseek-v4-pro"];
     const pool2 = okPool(base2);
@@ -577,6 +604,7 @@ function autoRoute(cls, prompt, health) {
 }
 __name(autoRoute, "autoRoute");
 __name2(autoRoute, "autoRoute");
+__name22(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
   const { temperature, top_p, tools, vision, tool_choice } = opts;
   const directOnly = !!(tools && tools.length);
@@ -597,7 +625,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
     err.gwShapeSkip = true;
     throw err;
   }
-  const buildBody = /* @__PURE__ */ __name((msgs) => {
+  const buildBody = /* @__PURE__ */ __name2((msgs) => {
     const b = { model: "workers-ai/" + modelId, messages: msgs, max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]), stream: stream || false };
     if (Number.isFinite(temperature)) b.temperature = temperature;
     if (Number.isFinite(top_p)) b.top_p = top_p;
@@ -607,7 +635,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
     }
     return b;
   }, "buildBody");
-  const buildAIBody = /* @__PURE__ */ __name((msgs) => {
+  const buildAIBody = /* @__PURE__ */ __name2((msgs) => {
     const b = { messages: msgs, max_tokens: clampTokens(maxTokens, MAX_OUT[modelId]), stream: stream || false };
     if (Number.isFinite(temperature)) b.temperature = temperature;
     if (Number.isFinite(top_p)) b.top_p = top_p;
@@ -617,7 +645,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
     }
     return b;
   }, "buildAIBody");
-  const runDirect = /* @__PURE__ */ __name(async (initialMsgs) => {
+  const runDirect = /* @__PURE__ */ __name2(async (initialMsgs) => {
     const aiBody = buildAIBody(initialMsgs);
     for (let attempt = 0; ; attempt++) {
       try {
@@ -671,6 +699,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
 }
 __name(runWorkersAI, "runWorkersAI");
 __name2(runWorkersAI, "runWorkersAI");
+__name22(runWorkersAI, "runWorkersAI");
 function extractWAToolCalls(result, depth = 0) {
   if (!result || typeof result !== "object" || depth > 4) return null;
   const raw = result.tool_calls || result.result?.tool_calls || result.choices?.[0]?.message?.tool_calls || (result.result && typeof result.result === "object" ? result.result.choices?.[0]?.message?.tool_calls : null) || null;
@@ -685,6 +714,7 @@ function extractWAToolCalls(result, depth = 0) {
 }
 __name(extractWAToolCalls, "extractWAToolCalls");
 __name2(extractWAToolCalls, "extractWAToolCalls");
+__name22(extractWAToolCalls, "extractWAToolCalls");
 var RUN_CODE_TOOL = {
   type: "function",
   function: {
@@ -734,6 +764,7 @@ async function callGatewayService(env, svc, path, opts) {
   }
 }
 __name(callGatewayService, "callGatewayService");
+__name2(callGatewayService, "callGatewayService");
 function wantsAgentTools(body, messages) {
   if (body && (body.agent === true || body.agent === "true")) return true;
   var txt = "";
@@ -801,6 +832,7 @@ function wantsAgentTools(body, messages) {
   return false;
 }
 __name(wantsAgentTools, "wantsAgentTools");
+__name2(wantsAgentTools, "wantsAgentTools");
 var GATEWAY_ACTION_TOOLS = [
   { type: "function", function: { name: "search_research", description: "Semantic search across the QNFO/QWAV research paper corpus. Returns paper slugs, titles, authors, DOIs, and relevance scores. Use to answer questions about papers and the research program.", parameters: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "integer", description: "Max results 1-10, default 5" } }, required: ["query"] } } },
   { type: "function", function: { name: "search_knowledge", description: "Semantic search across ALL QNFO internal knowledge sources (papers, notes, tasks, handoffs, query log, patents, infra, cloud-ops). Returns top matches per source. Use for questions about your own notes, tasks, or activity.", parameters: { type: "object", properties: { query: { type: "string", description: "Search query" }, limit: { type: "integer", description: "Max results per source 1-10, default 3" } }, required: ["query"] } } },
@@ -909,6 +941,7 @@ async function executeGatewayTool(env, fnName, args) {
   }
 }
 __name(executeGatewayTool, "executeGatewayTool");
+__name2(executeGatewayTool, "executeGatewayTool");
 async function executeDynamicCode(env, code) {
   if (!code || !String(code).trim()) return { ok: false, error: "code required" };
   if (!env.LOADER) return { ok: false, error: "run_code unavailable: Dynamic Workers LOADER binding missing on qnfo-ai" };
@@ -925,6 +958,7 @@ async function executeDynamicCode(env, code) {
   }
 }
 __name(executeDynamicCode, "executeDynamicCode");
+__name2(executeDynamicCode, "executeDynamicCode");
 async function executeBuiltinTools(env, toolCalls) {
   const results = [];
   for (const tc of toolCalls || []) {
@@ -943,6 +977,7 @@ async function executeBuiltinTools(env, toolCalls) {
 }
 __name(executeBuiltinTools, "executeBuiltinTools");
 __name2(executeBuiltinTools, "executeBuiltinTools");
+__name22(executeBuiltinTools, "executeBuiltinTools");
 async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, effTopP, toolChoice) {
   if (effSpec.wa) {
     const out = await runWorkersAI(env, effSpec.wa, messages, maxTokens, false, {
@@ -966,6 +1001,7 @@ async function runModelTurn(env, effSpec, messages, maxTokens, tools, effTemp, e
 }
 __name(runModelTurn, "runModelTurn");
 __name2(runModelTurn, "runModelTurn");
+__name22(runModelTurn, "runModelTurn");
 function normalizeMDWhitespace(text) {
   const fence = String.fromCharCode(96).repeat(3);
   const segs = String(text || "").split(fence);
@@ -976,6 +1012,7 @@ function normalizeMDWhitespace(text) {
   return segs.join(fence).trim();
 }
 __name(normalizeMDWhitespace, "normalizeMDWhitespace");
+__name2(normalizeMDWhitespace, "normalizeMDWhitespace");
 function stripCOT(text) {
   let t = String(text || "");
   t = t.replace(/<think>[\s\S]*?<\/think>/g, " ").replace(/<\/?think>/g, " ");
@@ -988,6 +1025,7 @@ function stripCOT(text) {
 }
 __name(stripCOT, "stripCOT");
 __name2(stripCOT, "stripCOT");
+__name22(stripCOT, "stripCOT");
 function extractWAContent(result, depth = 0) {
   if (typeof result === "string") return stripCOT(result);
   if (!result || typeof result !== "object" || depth > 4) return "";
@@ -1008,6 +1046,7 @@ function extractWAContent(result, depth = 0) {
 }
 __name(extractWAContent, "extractWAContent");
 __name2(extractWAContent, "extractWAContent");
+__name22(extractWAContent, "extractWAContent");
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
   const { temperature, top_p, tool_choice } = opts;
   const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT), stream: stream || false };
@@ -1028,6 +1067,7 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, o
 }
 __name(callDeepSeek, "callDeepSeek");
 __name2(callDeepSeek, "callDeepSeek");
+__name22(callDeepSeek, "callDeepSeek");
 async function callGateway(env, model, messages, maxTokens, stream) {
   const resp = await fetch(GW_COMPAT, {
     method: "POST",
@@ -1040,6 +1080,7 @@ async function callGateway(env, model, messages, maxTokens, stream) {
 }
 __name(callGateway, "callGateway");
 __name2(callGateway, "callGateway");
+__name22(callGateway, "callGateway");
 function withTimeout(p, ms, label) {
   let timer;
   const to = new Promise((_, reject) => {
@@ -1049,6 +1090,7 @@ function withTimeout(p, ms, label) {
 }
 __name(withTimeout, "withTimeout");
 __name2(withTimeout, "withTimeout");
+__name22(withTimeout, "withTimeout");
 function stripToolMarkup(text) {
   let t = String(text || "");
   t = t.replace(/<\|tool_calls_section_begin\|>[\s\S]*?<\|tool_calls_section_end\|>/g, " ").replace(/<\|tool_call_begin\|>[\s\S]*?<\|tool_call_end\|>/g, " ").replace(/<\|tool_call_argument_begin\|>[\s\S]*?<\|tool_call_argument_end\|>/g, " ");
@@ -1060,6 +1102,7 @@ function stripToolMarkup(text) {
   return t;
 }
 __name(stripToolMarkup, "stripToolMarkup");
+__name2(stripToolMarkup, "stripToolMarkup");
 async function runEnsemble(env, messages, maxTokens, domain) {
   const t0 = Date.now();
   let primaryText = "";
@@ -1164,6 +1207,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
 }
 __name(runEnsemble, "runEnsemble");
 __name2(runEnsemble, "runEnsemble");
+__name22(runEnsemble, "runEnsemble");
 async function expressIdea(env, text, threadId, source) {
   try {
     if (!env.INTENT_TOKEN || !env.QNFO_AUDIT || !text) return;
@@ -1171,7 +1215,7 @@ async function expressIdea(env, text, threadId, source) {
     if (existing) return;
     await env.QNFO_AUDIT.prepare("INSERT INTO intent_express_log (thread_id, ts) VALUES (?1, ?2)").bind(threadId, (/* @__PURE__ */ new Date()).toISOString()).run();
     try {
-      const fetcher = env.QNFO_INTENT && env.QNFO_INTENT.fetch ? env.QNFO_INTENT : { fetch: /* @__PURE__ */ __name((u, o) => fetch(u, o), "fetch") };
+      const fetcher = env.QNFO_INTENT && env.QNFO_INTENT.fetch ? env.QNFO_INTENT : { fetch: /* @__PURE__ */ __name2((u, o) => fetch(u, o), "fetch") };
       const resp = await withTimeout(fetcher.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN },
@@ -1187,7 +1231,8 @@ async function expressIdea(env, text, threadId, source) {
 }
 __name(expressIdea, "expressIdea");
 __name2(expressIdea, "expressIdea");
-__name2(expressIdea, "expressIdea");
+__name22(expressIdea, "expressIdea");
+__name22(expressIdea, "expressIdea");
 function collectMediaUrls(messages) {
   const out = [];
   if (!Array.isArray(messages)) return out;
@@ -1218,6 +1263,7 @@ function collectMediaUrls(messages) {
 }
 __name(collectMediaUrls, "collectMediaUrls");
 __name2(collectMediaUrls, "collectMediaUrls");
+__name22(collectMediaUrls, "collectMediaUrls");
 async function ensureMediaTable(env) {
   if (!env.QNFO_AUDIT) return;
   try {
@@ -1227,6 +1273,7 @@ async function ensureMediaTable(env) {
 }
 __name(ensureMediaTable, "ensureMediaTable");
 __name2(ensureMediaTable, "ensureMediaTable");
+__name22(ensureMediaTable, "ensureMediaTable");
 async function mediaCapture(env, messages, meta) {
   if (!env.MEDIA || !env.QNFO_AUDIT) return { skipped: "no MEDIA/QNFO_AUDIT binding" };
   const parts = collectMediaUrls(messages);
@@ -1263,6 +1310,7 @@ async function mediaCapture(env, messages, meta) {
 }
 __name(mediaCapture, "mediaCapture");
 __name2(mediaCapture, "mediaCapture");
+__name22(mediaCapture, "mediaCapture");
 async function mediaPrune(env) {
   if (!env.MEDIA || !env.QNFO_AUDIT) return;
   try {
@@ -1301,6 +1349,7 @@ async function mediaPrune(env) {
 }
 __name(mediaPrune, "mediaPrune");
 __name2(mediaPrune, "mediaPrune");
+__name22(mediaPrune, "mediaPrune");
 async function mediaProcess(env, id) {
   if (!env.MEDIA || !env.QNFO_AUDIT || !env.AI) return { ok: false, error: "missing binding" };
   const row = await env.QNFO_AUDIT.prepare("SELECT id, key, mime, bucket FROM media_objects WHERE id = ?1").bind(id).first();
@@ -1334,6 +1383,7 @@ async function mediaProcess(env, id) {
 }
 __name(mediaProcess, "mediaProcess");
 __name2(mediaProcess, "mediaProcess");
+__name22(mediaProcess, "mediaProcess");
 async function handleChat(env, body, authHeader, ctx, ua) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
@@ -1450,7 +1500,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       }
     }
   }
-  const mkLogRec = /* @__PURE__ */ __name2(() => ({
+  const mkLogRec = /* @__PURE__ */ __name22(() => ({
     id: "q-" + Math.random().toString(16).slice(2, 18),
     ts: (/* @__PURE__ */ new Date()).toISOString(),
     model: routedModel,
@@ -1472,7 +1522,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     messages_json: JSON.stringify((rawMessages || messages).slice(-100)),
     thread_id: threadId
   }), "mkLogRec");
-  const mkRouter = /* @__PURE__ */ __name2((routed, strategy, extra = {}) => ({
+  const mkRouter = /* @__PURE__ */ __name22((routed, strategy, extra = {}) => ({
     routed_model: routed,
     tier: MODELS[routed]?.tier ?? 0,
     complexity: cls.complexity,
@@ -1528,13 +1578,13 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   if (isEnsemble || autoEnsemble) {
     try {
-      const ensResp = /* @__PURE__ */ __name2((content, body2) => {
+      const ensResp = /* @__PURE__ */ __name22((content, body2) => {
         const logRec = { ...mkLogRec(), model: "ensemble", streamed: isStream ? 1 : 0, response: String(content).slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
         if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
         if (isStream) {
           const enc8 = new TextEncoder();
           const nlnl = String.fromCharCode(10, 10);
-          const chunk = /* @__PURE__ */ __name2((delta, finish) => enc8.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "ensemble", choices: [{ index: 0, delta, finish_reason: finish }] }) + nlnl), "chunk");
+          const chunk = /* @__PURE__ */ __name22((delta, finish) => enc8.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "ensemble", choices: [{ index: 0, delta, finish_reason: finish }] }) + nlnl), "chunk");
           const stream2 = new ReadableStream({
             start(controller) {
               controller.enqueue(chunk({ role: "assistant", content }, null));
@@ -1767,6 +1817,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
 }
 __name(handleChat, "handleChat");
 __name2(handleChat, "handleChat");
+__name22(handleChat, "handleChat");
 function lastUserText(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -1781,6 +1832,7 @@ function lastUserText(messages) {
 }
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");
+__name22(lastUserText, "lastUserText");
 async function logQuery(env, record) {
   const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
   const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
@@ -1841,6 +1893,7 @@ async function logQuery(env, record) {
 }
 __name(logQuery, "logQuery");
 __name2(logQuery, "logQuery");
+__name22(logQuery, "logQuery");
 function streamWithLog(upstream, env, ctx, rec) {
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
@@ -1898,11 +1951,13 @@ function streamWithLog(upstream, env, ctx, rec) {
 }
 __name(streamWithLog, "streamWithLog");
 __name2(streamWithLog, "streamWithLog");
+__name22(streamWithLog, "streamWithLog");
 function cleanText(html) {
   return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'").replace(/&#x26;/g, "&").replace(/&#039;/g, "'").replace(/\s+/g, " ").trim();
 }
 __name(cleanText, "cleanText");
 __name2(cleanText, "cleanText");
+__name22(cleanText, "cleanText");
 function isPrivateHost(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
   if (h === "localhost" || h === "::1" || h === "[::1]") return true;
@@ -1912,6 +1967,7 @@ function isPrivateHost(host) {
 }
 __name(isPrivateHost, "isPrivateHost");
 __name2(isPrivateHost, "isPrivateHost");
+__name22(isPrivateHost, "isPrivateHost");
 function parseDdg(html, isLite, k) {
   const results = [];
   if (!isLite) {
@@ -1963,6 +2019,7 @@ function parseDdg(html, isLite, k) {
 }
 __name(parseDdg, "parseDdg");
 __name2(parseDdg, "parseDdg");
+__name22(parseDdg, "parseDdg");
 async function webSearch(q, k) {
   const qq = encodeURIComponent(q);
   const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", "Accept": "text/html" };
@@ -1986,6 +2043,7 @@ async function webSearch(q, k) {
 }
 __name(webSearch, "webSearch");
 __name2(webSearch, "webSearch");
+__name22(webSearch, "webSearch");
 async function browserMarkdown(env, url, maxChars) {
   try {
     const token = env.CF_TOKEN || env.CF_API_TOKEN;
@@ -2006,6 +2064,7 @@ async function browserMarkdown(env, url, maxChars) {
   }
 }
 __name(browserMarkdown, "browserMarkdown");
+__name2(browserMarkdown, "browserMarkdown");
 async function webFetch(url, maxChars, env) {
   const u = new URL(url);
   if (!/^https?:$/i.test(u.protocol)) return { error: "only http(s) URLs" };
@@ -2028,6 +2087,7 @@ async function webFetch(url, maxChars, env) {
 }
 __name(webFetch, "webFetch");
 __name2(webFetch, "webFetch");
+__name22(webFetch, "webFetch");
 async function authOk(header, env) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!header || !header.startsWith("Bearer ") || !expected) return false;
@@ -2039,6 +2099,7 @@ async function authOk(header, env) {
 }
 __name(authOk, "authOk");
 __name2(authOk, "authOk");
+__name22(authOk, "authOk");
 var PLAYGROUND_HTML = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content=
@@ -2196,6 +2257,7 @@ var worker_default = {
         worker: "qnfo-ai",
         version: VERSION,
         capabilities: ["model-router", "ai-inference", "streaming", "ensemble", "pinned-models", "internal-rag", "query-logging", "history-search", "vision", "function-calling", "context-aware-routing", "tool-gateway", "chat", "agent", "code"],
+        limitations: ["relay/router only - does NOT execute code or tools server-side; tool-gateway forwards tool_calls back to the caller", "research/infra scope only; never serves personal-life data (PERSONAL-QNFO-SEPARATION-1)", "run_code runs in an isolated in-worker JS sandbox (no subprocess/VM/host filesystem)", "data-returning endpoints (/v1/search, /v1/history, /v1/web/*) require ROUTER_AUTH_KEY", "no persistent agent tool loop (unlike qnfo-ops)"],
         routes: ROUTES,
         bindings: {
           ai: !!env.AI,
@@ -2306,7 +2368,7 @@ var worker_default = {
       };
       if (body.stream) {
         const encoder = new TextEncoder();
-        const enc = /* @__PURE__ */ __name2((obj) => encoder.encode("data: " + JSON.stringify(obj) + "\n\n"), "enc");
+        const enc = /* @__PURE__ */ __name22((obj) => encoder.encode("data: " + JSON.stringify(obj) + "\n\n"), "enc");
         const stream = new ReadableStream({
           start(controller) {
             if (text) {
@@ -2508,4 +2570,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-

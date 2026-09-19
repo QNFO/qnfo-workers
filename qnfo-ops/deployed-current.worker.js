@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.27";
+var VERSION = "2.36.30";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1898,8 +1898,13 @@ async function workspaceGlob(env, args) {
   const limit = Math.min(Math.max(parseInt(args && args.limit, 10) || 100, 1), 500);
   if (!env.BACKUPS_R2) return { ok: false, error: "BACKUPS_R2 binding missing" };
   const listPfx = "ops-workspace/" + (prefix ? prefix.replace(/\/$/, "") + "/" : "");
-  const listed = await env.BACKUPS_R2.list({ prefix: listPfx, limit });
-  const objects = listed.objects || [];
+  // WORKSPACE-GLOB-FALSE-NEGATIVE-1: paginate the ENTIRE prefix before filtering.
+  let cursor = void 0; const objects = [];
+  do {
+    const _pg = await env.BACKUPS_R2.list(cursor ? { prefix: listPfx, cursor } : { prefix: listPfx });
+    for (const _o of _pg.objects || []) objects.push(_o);
+    cursor = _pg.truncated ? _pg.cursor : void 0;
+  } while (cursor && objects.length < 5000);
   let filtered = objects;
   if (pattern) {
     const rx = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\x00/g, ".*");
@@ -1911,7 +1916,7 @@ async function workspaceGlob(env, args) {
     }
     if (re) filtered = objects.filter((o) => re.test(o.key.replace(/^ops-workspace\//, "")));
   }
-  return { ok: true, pattern: pattern || "*", prefix: prefix || "(root)", count: filtered.length, truncated: !!listed.truncated, files: filtered.map((o) => ({ path: o.key.replace(/^ops-workspace\//, ""), size: o.size, uploaded: o.uploaded })) };
+  return { ok: true, pattern: pattern || "*", prefix: prefix || "(root)", count: filtered.length, truncated: objects.length >= 5000, files: filtered.slice(0, limit).map((o) => ({ path: o.key.replace(/^ops-workspace\//, ""), size: o.size, uploaded: o.uploaded })) };
 }
 __name(workspaceGlob, "workspaceGlob");
 __name2(workspaceGlob, "workspaceGlob");
@@ -3508,6 +3513,29 @@ async function registryRefresh(env) {
     } catch (e) {
     }
   }
+  // FLEET-VERSION-SWEEP-1 (v2.36.30): maintain `version` for EVERY live worker, not only the
+  // 12 FLEET members. 2.36.29 attempted this with a bare fetch() and reported versionSwept:0,
+  // so every probe failed silently. This records the failure reason instead of hiding it.
+  let swept = 0, sweepTried = 0, sweepErrs = [];
+  if (apiList.length > 0) {
+    const others = apiList.filter(function(w) { return w.id !== "qnfo-ops"; });
+    const probe = /* @__PURE__ */ __name2222(async function(w) {
+      sweepTried++;
+      try {
+        const r2 = await fetch("https://" + w.id + ".q08.workers.dev/health", { signal: AbortSignal.timeout(8e3) });
+        if (!r2.ok) return w.id + ":HTTP" + r2.status;
+        const j2 = await r2.json();
+        const v2 = j2 && j2.version ? String(j2.version) : null;
+        if (!v2) return w.id + ":noversion";
+        await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(v2, now, w.id).run();
+        swept++;
+        return null;
+      } catch (e) { return w.id + ":" + String(e && e.message || e).slice(0, 70); }
+    }, "probe");
+    const results = await Promise.all(others.map(probe));
+    sweepErrs = results.filter(Boolean).slice(0, 6);
+  }
+
   let rich = 0;
   for (const f of FLEET) {
     const h = await probeService(env, f, "/health");
@@ -3546,7 +3574,7 @@ async function registryRefresh(env) {
       pruned = -1;
     }
   }
-  return { ok: true, workers: apiList.length, richSelfDoc: rich, pruned, ts: now };
+  return { ok: true, workers: apiList.length, richSelfDoc: rich, versionSwept: swept, sweepTried, sweepErrs, pruned, ts: now };
 }
 __name(registryRefresh, "registryRefresh");
 __name2(registryRefresh, "registryRefresh");
@@ -4438,25 +4466,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

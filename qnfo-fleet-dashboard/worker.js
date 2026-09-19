@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.6.4"; // FIX-5 (2026-09-14): concrete chain remediation
+var VERSION = "1.6.6"; // FIX-5 (2026-09-14): concrete chain remediation
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1946,4 +1946,4 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map
+//# sourceMappingURL=worker.js.map

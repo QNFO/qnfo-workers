@@ -1,33 +1,18 @@
-// qnfo-containers-pilot v1.0.0
-// Full-stack shell execution on Cloudflare Containers (Firecracker VM).
-// Image: nikolaik/python-nodejs:python3.12-nodejs22 (Python 3.12 + Node.js 22 + npm)
-// Startup: installs git + ripgrep + curl via apt-get on first cold start (~10-15s)
-// ROUTES (Bearer PILOT_TOKEN, fail-closed):
-//   GET  /health              static liveness
-//   POST /sh                  bash -c <cmd> (full shell, internet-enabled)
-//   POST /exec                python3 -c <code>
-//   POST /node                node -e <code>
-//   POST /pip                 pip install <packages>
-//   POST /npm                 npm install <packages> in /workspace
-//   POST /git/clone           git clone <url> into /workspace/<name>
-//   POST /git/op              git <op> in /workspace/<repo>
-//   POST /workspace/write     write file under /workspace
-//   POST /workspace/read      read file under /workspace
-//   POST /workspace/ls        ls under /workspace
-//   POST /workspace/exec      sh -c <cmd> in /workspace/<dir>
-//   GET  /status              container.running probe
-const VERSION = "1.0.0";
-const MAX_CMD = 65536;
-const MAX_OUT = 131072;
-const WORKSPACE = "/workspace";
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// worker.js
+var VERSION = "1.0.0";
+var MAX_CMD = 65536;
+var MAX_OUT = 131072;
+var WORKSPACE = "/workspace";
 function json(data, status) {
   return new Response(JSON.stringify(data, null, 2), {
     status: status || 200,
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: { "content-type": "application/json; charset=utf-8" }
   });
 }
-
+__name(json, "json");
 function authorized(request, env) {
   const token = env.PILOT_TOKEN;
   if (!token) return false;
@@ -40,7 +25,7 @@ function authorized(request, env) {
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
 }
-
+__name(authorized, "authorized");
 function safeRel(p) {
   const rel = String(p || "").replace(/^\/+/g, "");
   if (!rel) return null;
@@ -48,49 +33,49 @@ function safeRel(p) {
   if (rel.indexOf("\\") >= 0) return null;
   return rel;
 }
-
+__name(safeRel, "safeRel");
 async function logEvent(env, kind, text, meta, status) {
   if (!env || !env.AUDIT) return;
   try {
     const id = crypto.randomUUID();
-    const ts = new Date().toISOString();
+    const ts = (/* @__PURE__ */ new Date()).toISOString();
     await env.AUDIT.prepare(
       "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      id, ts,
+      id,
+      ts,
       String(kind).slice(0, 200),
-      String(text || "").slice(0, 2000),
-      meta ? JSON.stringify(meta).slice(0, 4000) : null,
+      String(text || "").slice(0, 2e3),
+      meta ? JSON.stringify(meta).slice(0, 4e3) : null,
       "qnfo-containers-pilot",
       status || "ok"
     ).run();
-  } catch (e) {}
+  } catch (e) {
+  }
 }
-
-export class ShellContainer {
+__name(logEvent, "logEvent");
+var ShellContainer = class {
+  static {
+    __name(this, "ShellContainer");
+  }
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
     this._initialized = false;
   }
-
   async ensureStarted() {
     if (this.ctx.container.running) return;
     await this.ctx.container.start({
       entrypoint: ["bash", "-c", "mkdir -p /workspace && sleep infinity"],
-      enableInternet: true,
+      enableInternet: true
     });
-    // Install essential tools on first boot (~10-15s cold start)
     await this.run([
-      "bash", "-c",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ripgrep 2>&1 | tail -3; " +
-      "git config --global user.email ops@qnfo.org; " +
-      "git config --global user.name 'QNFO ops'; " +
-      "echo INIT_DONE"
+      "bash",
+      "-c",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ripgrep 2>&1 | tail -3; git config --global user.email ops@qnfo.org; git config --global user.name 'QNFO ops'; echo INIT_DONE"
     ]);
     this._initialized = true;
   }
-
   async run(cmd) {
     const proc = await this.ctx.container.exec(cmd);
     const output = await proc.output();
@@ -103,17 +88,13 @@ export class ShellContainer {
     if (stderrTruncated) stderr = stderr.slice(0, MAX_OUT) + "\n...[TRUNCATED]";
     return { exitCode: output.exitCode, stdout, stderr, stdoutTruncated, stderrTruncated };
   }
-
   async fetch(request) {
     const url = new URL(request.url);
     const path = url.pathname;
-
     if (!authorized(request, this.env)) {
       return json({ ok: false, error: "unauthorized (PILOT_TOKEN required)" }, 401);
     }
-
     try {
-      // /sh — full bash execution
       if (path === "/sh") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -127,8 +108,6 @@ export class ShellContainer {
         await logEvent(this.env, "container.sh", cmd.slice(0, 200), { exitCode: out.exitCode }, out.exitCode === 0 ? "ok" : "error");
         return json({ ok: out.exitCode === 0, result: out });
       }
-
-      // /exec — python3 -c <code>
       if (path === "/exec") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -140,8 +119,6 @@ export class ShellContainer {
         await logEvent(this.env, "container.exec", "python3 -c", { exitCode: out.exitCode }, out.exitCode === 0 ? "ok" : "error");
         return json({ ok: out.exitCode === 0, result: out });
       }
-
-      // /node — node -e <code>
       if (path === "/node") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -152,8 +129,6 @@ export class ShellContainer {
         const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && node -e " + JSON.stringify(code)]);
         return json({ ok: out.exitCode === 0, result: out });
       }
-
-      // /pip — pip install <packages>
       if (path === "/pip") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -164,8 +139,6 @@ export class ShellContainer {
         await logEvent(this.env, "container.pip", packages.join(" "), { exitCode: out.exitCode }, out.exitCode === 0 ? "ok" : "error");
         return json({ ok: out.exitCode === 0, packages, result: out });
       }
-
-      // /npm — npm install <packages> in /workspace
       if (path === "/npm") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -176,40 +149,40 @@ export class ShellContainer {
         const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && npm install --save " + packages.join(" ") + " 2>&1 | tail -5"]);
         return json({ ok: out.exitCode === 0, packages, cwd, result: out });
       }
-
-      // /git/clone — clone a repo into /workspace/<name>
       if (path === "/git/clone") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
         const repoUrl = String(body.url || "").trim();
         const branch = body.branch ? String(body.branch) : null;
         const depth = parseInt(body.depth, 10) || 1;
-        const name = body.name
-          ? safeRel(String(body.name))
-          : repoUrl.split("/").pop().replace(/\.git$/, "");
+        const name = body.name ? safeRel(String(body.name)) : repoUrl.split("/").pop().replace(/\.git$/, "");
         if (!repoUrl) return json({ ok: false, error: "url required" }, 400);
         if (!name) return json({ ok: false, error: "invalid repo name" }, 400);
         await this.ensureStarted();
-        const checkOut = await this.run(["bash", "-c",
+        const checkOut = await this.run([
+          "bash",
+          "-c",
           "[ -d /workspace/" + name + "/.git ] && echo EXISTS || echo MISSING"
         ]);
         let out;
         if (checkOut.stdout.trim() === "EXISTS") {
-          out = await this.run(["bash", "-c",
+          out = await this.run([
+            "bash",
+            "-c",
             "cd /workspace/" + name + " && git fetch --depth=" + depth + " && git reset --hard origin/HEAD 2>&1"
           ]);
         } else {
           const branchFlag = branch ? "--branch " + branch + " " : "";
           const depthFlag = depth > 0 ? "--depth=" + depth + " " : "";
-          out = await this.run(["bash", "-c",
+          out = await this.run([
+            "bash",
+            "-c",
             "git clone " + depthFlag + branchFlag + JSON.stringify(repoUrl) + " /workspace/" + name + " 2>&1"
           ]);
         }
         await logEvent(this.env, "container.git_clone", repoUrl, { exitCode: out.exitCode, name }, out.exitCode === 0 ? "ok" : "error");
         return json({ ok: out.exitCode === 0, url: repoUrl, name, path: "/workspace/" + name, result: out });
       }
-
-      // /git/op — git <op> in /workspace/<repo>
       if (path === "/git/op") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -217,16 +190,16 @@ export class ShellContainer {
         const op = String(body.op || "status");
         const args = String(body.args || "");
         if (!repo) return json({ ok: false, error: "repo required" }, 400);
-        const allowed = ["status","log","diff","show","branch","add","commit","push","pull","checkout","reset","fetch","blame","stash"];
+        const allowed = ["status", "log", "diff", "show", "branch", "add", "commit", "push", "pull", "checkout", "reset", "fetch", "blame", "stash"];
         if (!allowed.includes(op)) return json({ ok: false, error: "op not allowed: " + op }, 400);
         await this.ensureStarted();
-        const out = await this.run(["bash", "-c",
+        const out = await this.run([
+          "bash",
+          "-c",
           "cd /workspace/" + repo + " && git " + op + " " + args + " 2>&1"
         ]);
         return json({ ok: out.exitCode === 0, repo, op, result: out });
       }
-
-      // /workspace/write — write a file
       if (path === "/workspace/write") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -239,8 +212,6 @@ export class ShellContainer {
         const out = await this.run(["python3", "-c", pyCode, WORKSPACE + "/" + rel, b64]);
         return json({ ok: out.exitCode === 0, path: rel, bytes: content.length, result: out });
       }
-
-      // /workspace/read — read a file
       if (path === "/workspace/read") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -252,12 +223,13 @@ export class ShellContainer {
         const out = await this.run(["python3", "-c", pyCode, WORKSPACE + "/" + rel]);
         let content = null;
         if (out.exitCode === 0) {
-          try { content = decodeURIComponent(escape(atob(out.stdout.trim()))).slice(0, maxChars); } catch (e) {}
+          try {
+            content = decodeURIComponent(escape(atob(out.stdout.trim()))).slice(0, maxChars);
+          } catch (e) {
+          }
         }
         return json({ ok: out.exitCode === 0, path: rel, content, truncated: content && content.length >= maxChars, result: { exitCode: out.exitCode, stderr: out.stderr } });
       }
-
-      // /workspace/ls — list files
       if (path === "/workspace/ls") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -267,8 +239,6 @@ export class ShellContainer {
         const out = await this.run(["bash", "-c", "ls -la " + JSON.stringify(fullPath) + " 2>&1"]);
         return json({ ok: out.exitCode === 0, path: fullPath, result: out });
       }
-
-      // /workspace/exec — run cmd in workspace subdir
       if (path === "/workspace/exec") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
         const body = await request.json().catch(() => ({}));
@@ -281,23 +251,21 @@ export class ShellContainer {
         await logEvent(this.env, "container.workspace_exec", cmd.slice(0, 200), { exitCode: out.exitCode, dir: rel || "/" }, out.exitCode === 0 ? "ok" : "error");
         return json({ ok: out.exitCode === 0, dir: cwd, result: out });
       }
-
-      // /status — container probe
       if (path === "/status") {
         return json({ ok: true, containerRunning: this.ctx.container.running, initialized: this._initialized });
       }
-
       return json({ ok: false, error: "not found: " + path }, 404);
-
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
-      try { await logEvent(this.env, "container.error", msg, {}, "error"); } catch (le) {}
+      try {
+        await logEvent(this.env, "container.error", msg, {}, "error");
+      } catch (le) {
+      }
       return json({ ok: false, error: msg }, 500);
     }
   }
-}
-
-export default {
+};
+var worker_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
@@ -305,11 +273,16 @@ export default {
         ok: true,
         worker: "qnfo-containers-pilot",
         version: VERSION,
-        capabilities: ["bash", "python3.12", "node22", "npm", "pip", "git", "ripgrep", "workspace-fs", "git-clone", "full-shell"],
+        capabilities: ["bash", "python3.12", "node22", "npm", "pip", "git", "ripgrep", "workspace-fs", "git-clone", "full-shell"]
       });
     }
     const id = env.SHELL_CONTAINER.idFromName("default");
     const stub = env.SHELL_CONTAINER.get(id);
     return stub.fetch(request);
-  },
+  }
 };
+export {
+  ShellContainer,
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map

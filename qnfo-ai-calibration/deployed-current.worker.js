@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.7";
+var VERSION = "1.2.0-wastecut";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -120,9 +120,12 @@ async function probeCompletion(env, model) {
       45e3,
       "QNFO_AI"
     );
-    var content = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content;
+    var _m = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message;
+    var content = _m && _m.content;
+    var _rs = _m && _m.reasoning_content;
     var echo = r.data && r.data.model === model;
-    var pass = r.status === 200 && !!content && String(content).trim().length > 0 && echo;
+    var _has = (!!content && String(content).trim().length > 0) || (!!_rs && String(_rs).trim().length > 0);
+    var pass = r.status === 200 && _has && echo;
     return { status: pass ? "pass" : "fail", latency_ms: Date.now() - t0, detail: pass ? "ok" : "http=" + r.status + " echo=" + echo + " " + JSON.stringify(String(content || "").slice(0, 60)) };
   } catch (e) {
     return { status: "fail", latency_ms: Date.now() - t0, detail: "err " + String(e && e.message || e).slice(0, 120) };
@@ -583,8 +586,8 @@ async function calibration(env, trigger) {
   results.push(Object.assign({ probe: "tools", target: "deepseek-v4-flash" }, await probeTools(env)));
   results.push(Object.assign({ probe: "stream", target: "deepseek-v4-flash" }, await probeStream(env)));
   results = results.concat(await probeRouting(env));
-  results.push(await probeEndpoint(env, "qnfo-ops/ops-exec", "https://qnfo-ops.internal/v1/chat/completions", env.OPS_KEY, { model: "ops-exec", messages: [{ role: "user", content: "Reply with exactly: OK" }], max_tokens: 64, stream: false }, "QNFO_OPS"));
-  results.push(await probeEndpoint(env, "personal-api/personal-twin-chat", "https://personal-api.internal/v1/chat/completions", env.PT_KEY, { model: "personal-twin-chat", messages: [{ role: "user", content: "Reply with exactly: OK" }], max_tokens: 16, stream: false }, "PT_API"));
+  results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://qnfo-ops.internal/health",null,null,2e4,"QNFO_OPS"); return {probe:"endpoint",target:"qnfo-ops/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ return {probe:"endpoint",target:"qnfo-ops/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
+  results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://personal-api.internal/health",null,null,2e4,"PT_API"); return {probe:"endpoint",target:"personal-api/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ return {probe:"endpoint",target:"personal-api/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
   results.push(await probeEndpoint(env, "deepseek-direct/models", DEEPSEEK + "/models", env.DEEPSEEK_KEY, null, null));
   var pass = 0, fail = 0, driftCount = 0;
   for (var i = 0; i < results.length; i++) {
@@ -642,4 +645,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-

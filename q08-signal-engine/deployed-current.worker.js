@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.15"; // v0.7.15 DISCOVERY-1: real sitemap + robots routes
+var VERSION = "0.7.26"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -211,7 +211,7 @@ var Q08_DIRECTIVE = [
   "You are the writer for q08.org — long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of a larger, connected picture. The proper nouns of today are the lead-in, not the destination; the bigger system is the story. Not about technology or history per se — about the connected world they are part of.",
   "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow.",
   "",
-  "SYSTEMIC, NOT SPECIFIC — HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates — the incentive structure, information asymmetry, or coupling failure that would produce the same breakdown in any domain and any century. Then show it is universal by connecting it across domains and, where a real recurrence fits, across history. Historical precedent is a suggestion, not a requirement — use a well-known recurrence when it genuinely illuminates the system, but never force a rhyme, never fabricate a historical event to create one, and never let the search for a precedent crowd out the argument itself. The nouns change — a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result — the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
+  "SYSTEMIC, NOT SPECIFIC — HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates — the specific mechanism that would produce the same breakdown in any domain and any century. Then show it is universal by connecting it across domains and, where a real recurrence fits, across history. Historical precedent is a suggestion, not a requirement — use a well-known recurrence when it genuinely illuminates the system, but never force a rhyme, never fabricate a historical event to create one, and never let the search for a precedent crowd out the argument itself. The nouns change — a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result — the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
   "",
   "REGISTER: cold structural objectivity. An engineer describing a mechanism, not a consultant describing a market. Write the way a precise bug report reads: specific, unimpressed, exact.",
   "",
@@ -229,12 +229,16 @@ var Q08_DIRECTIVE = [
   "",
   "PRECEDENT, NOT METAPHOR: a historical precedent is a real, well-known recurrence of the same system — a named era and institution where the identical incentive or structural dynamic operated. Never fabricate a historical event or date to force a rhyme; a reader who checks must find it. A vague \u2018throughout history\u2019 with no named instance is not a precedent. A metaphor (\u2018it is like a telescope\u2019) is decorative and banned.",
   "",
-  "CROSS-DOMAIN SYNTHESIS: the essay\u2019s spine is the universal system, and you must show it operating in genuinely different domains — engineering, economics, biology, law, politics, infrastructure, finance, military history — not as a list of analogies but as evidence the system is domain-independent. A decorative stock prop is banned; a historical recurrence of the same incentive structure is required. Breadth is the point: an essay that never leaves its source domain has not found the signal.",
+  "CROSS-DOMAIN SYNTHESIS: the essay\u2019s spine is the universal system, and you must show it operating in genuinely different domains — engineering, economics, biology, law, politics, infrastructure, finance, military history — not as a list of analogies but as evidence the system is domain-independent. A decorative stock prop is banned; a historical recurrence of the same mechanism is required. Breadth is the point: an essay that never leaves its source domain has not found the signal.",
   "",
   "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact — not a summary, not a resolution, not a flourish.",
   "",
   "VERDICT (mandatory final line, this is the last line of your output, after the essay): write exactly 'worth your time: yes|flat|no — one clause of justification'. State honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. 'no' rejects the essay; 'flat' means it barely clears the bar. Omitting this line is a rejection on its own.",
   "",
+    "MECHANISM, NOT LABEL: name the causal process — who is incentivised to do what, which information is missing, where the coupling breaks — as actors doing something, never as an abstract noun. 'Incentive structure', 'information asymmetry', 'coupling failure', 'structural dynamic' and 'systemic failure' are labels, not mechanisms: if a sentence reduces to one of them, the mechanism has not been found yet. The words 'structural', 'systemic' and 'dynamic' are permitted only as a precise description of a named mechanism, never as a summary of your own argument.",
+    "BANNED FRAMING (automatic rejection — the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
+    "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature — they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
+    "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors — e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
   "CONSTRAINTS (hard):",
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
@@ -244,6 +248,34 @@ var Q08_DIRECTIVE = [
   "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
 
+var REGISTER_EXEMPLAR = [
+  "# The badge that outlived the inspection behind it",
+  "",
+  "A guild issued a stamped mark to certify that a piece of metal had been assayed by a sworn inspector. Buyers learned to read the mark as a promise about the metal. The mark was cheaper to copy than the inspection was to perform, and within a generation the workshops turning out stamped-but-unaudited goods outnumbered the ones still submitting to the assay. The arrangement had three parts. The buyer could not verify the metal directly, so the stamp carried the entire burden of trust. The guild drew its authority from the stamp, so it had no reason to publish how many stamps circulated outside its control. The copying workshop paid nothing for the trust it spent. The inspection was the expensive step and the stamp was the cheap one, and the market rewarded the cheap one.",
+  "",
+  "# The freight office that priced its own risk",
+  "",
+  "A shipping line asked its own freight office to set the insurance premium on the cargo it carried. The office priced each consignment from the manifest, and the manifest was written by the same clerks who loaded the hold. Nobody falsified a document; the incentive did the work. A consignment that was awkward to stow was written up as routine, because routine cargo cleared faster. The premium fell, the line won more contracts, and the losses surfaced only when a hull was opened in dry dock two seasons later. The party who could have measured the risk was the party paid to understate it.",
+].join("\n");
+
+// Only a reader-proven structure that is ALSO in-register may serve as an exemplar.
+// Without this, promoting top-rated pieces would feed the OLD banal skeletons
+// (label titles, 'structural dynamic' openings) straight back into the prompt.
+function exemplarOk(md) {
+  if (!md) return false;
+  var t = String(md);
+  var tm = t.match(/^#\s+(.+)$/m);
+  var title = (tm ? tm[1].trim() : String(t.split("\n")[0] || "").trim()).replace(/[\u2010-\u2015\u2212]/g, "-");
+  if (title) {
+    if (BAD_TITLE_RE.test(title)) return false;
+    if (TITLE_FORMULA_RE.test(title) || TITLE_COLON_RE.test(title)) return false;
+    for (var i = 0; i < LABEL_TITLE_RES.length; i++) { if (LABEL_TITLE_RES[i].test(title)) return false; }
+  }
+  if (new RegExp(STOCK_FRAMING_RE.source, "i").test(t)) return false;
+  if (new RegExp(LABEL_PHRASE_RE.source, "i").test(t)) return false;
+  return true;
+}
+
 function buildPrompt(friction, fewShot, recentStructures) {
   var parts = [Q08_DIRECTIVE];
   parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no — justification'.");
@@ -252,6 +284,10 @@ function buildPrompt(friction, fewShot, recentStructures) {
     for (var ex of fewShot.slice(0, 2)) {
       parts.push(ex.structure_md.slice(0, 400));
     }
+  } else {
+    // ANTI-BANAL-2: with no reader-proven exemplars the writer has only prohibitions.
+    parts.push("\n--- REGISTER EXEMPLAR (shape only - do not reuse this subject, title, or facts) ---");
+    parts.push(REGISTER_EXEMPLAR);
   }
   if (recentStructures && recentStructures.length > 0) {
     parts.push("\n--- RECENT STRUCTURES ON THIS SITE (BANNED PATTERNS — diverge from every one) ---");
@@ -272,8 +308,11 @@ function buildPrompt(friction, fewShot, recentStructures) {
 // Model priority: frontier-scale non-reasoning writers only.
 // Banned: llama, mistral, gemma-7b, -flash, -fp8-fast, -mini, -small (per fleet policy).
 var COMPOSE_MODELS = [
+  "@cf/nvidia/nemotron-3-120b-a12b",
   "@cf/openai/gpt-oss-120b",
-  "@cf/moonshotai/kimi-k2.6",
+  // NOTE: kimi-k2.6 / glm-5.3 / deepseek-v4-pro are REASONING models here - they return
+  // empty message.content once the budget is spent on reasoning_content, so they cannot
+  // serve as fallbacks at this token budget. Re-add only with a raised reasoning floor.
 ];
 
 async function compose(env, prompt) {
@@ -282,7 +321,7 @@ async function compose(env, prompt) {
     try {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 4500,
+        max_tokens: 6000,
         temperature: 0.65,
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
@@ -331,6 +370,24 @@ var FORMULA_H2_RE = /^#+\s+the (hidden|invisible|unseen|unspoken|silent|quiet) (
 var STOCK_PROPS_RE = /\b(telescopes?|galileo|alchem|philosopher.s stone|sonar|aperture|aerospace redundancy)\b/i;
 var HISTORICAL_RE = /\b([0-9]+th century|\d{3,4}0s|19[0-9]{2}|18[0-9]{2}|1[0-7][0-9]{2}|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient|roman|greek|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial|belle ?poque|preindustrial|great depression|south sea|tulip|dot-com|dotcom|hanseatic|medici|silk road|printing press|gutenberg|panic of|railway mania)\b/i;
 var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
+// ANTI-BANAL-1 (v0.7.16). The observed failure mode is not a weak argument but a
+// banal *register*: the stock framing sentence ("…illustrates a broader structural
+// dynamic") and nominalised label titles ("Scale-Induced Professional Displacement").
+// These are category names and significance-summaries, not mechanisms. The mandate
+// forbids management-consulting abstractions; these patterns ARE that failure.
+var STOCK_FRAMING_RE = /\b(?:illustrat\w+|expos\w+|reveal\w+|foreground\w+|underscor\w+)\b[^.!?]{0,90}\b(?:a|an|the)\s+(?:[a-z-]+\s+){0,3}(?:dynamic|structure|pattern|failure|gap|tension|mismatch|flaw|disjunction|force|logic|loop|cycle|feedback|principle|phenomenon|tendency|incentive|premise|asymmetry|equilibrium)\b/i;
+var ABSTRACT_SUMMARY_RE = /\b(?:structural|systemic|recurring|institutional|underlying|universal|self-referential|self-reinforcing)\s+(?:dynamic|failure|gap|tension|mismatch|disjunction|structure|loop|cycle|pattern)\b/gi;
+var LABEL_PHRASE_RE = /\b(?:coupling failure|incentive structure|information asymmetry|concrete manifestation of|concrete instance of|feedback loop in which|systemic incentive)\b/gi;
+var LABEL_TITLE_RES = [
+  /\b(?:systems?|chains?|designs?|loops?|traps?|paradoxes?|precedence|approximation|displacement|consolidation|observability|planning|automation|constraints?|escalation|asymmetry|convergence|divergence|disjunction|equilibrium|inertia|entropy|abstraction|fallacy|myth|illusion)$/i,
+  /^(?:structural|systemic|recurring|institutional|externalized|opaque|implicit|formal|abstract|nominal|statistical|rhetoric\w*|scale|efficiency|goal|sponsorship|incentive|autonomous)\b/i,
+  /^the\s+[a-z][^:]{3,70}\s+of\s+[a-z][^:]{3,70}$/i,
+  /^[a-z][^:]{2,60}\s+as\s+[a-z][^:]{2,60}$/i,
+  /(?:^|[\s-])(?:scale|efficiency|goal|incentive|sponsorship|market|growth|cost|risk|hype|policy|capital|prestige|autonomy|reward|narrative|fashion|trend)[- ]?(?:induced|driven|mediated|conditioned|derived)\s+[a-z]/i,
+  /\b(?:in|across|within|under|of)\s+[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+(?:systems|chains|designs|contexts|settings|architectures|planning|automation|constraints|contracts|pipelines|domains|models|frameworks)$/i,
+  /^the\s+\w+\s+\w*\s*(?:trap|paradox|illusion|fallacy|myth|dilemma|tyranny|consequence|problem|curse|temptation|revenge)\b/i,
+  /:\s+(?:how|why)\s+(?:[a-z]+\s+){0,3}(?:drives?|shapes?|creates?|breeds?|undermines?|erodes?|rewards?|punishes?)\b/i
+];
 
 function gate(text) {
   // Enforce LONG-FORM PROSE with a hook, not lists:
@@ -341,7 +398,7 @@ function gate(text) {
   if (text.length < 4000) problems.push("too short for long-form (" + text.length + " chars; 1200-1800 words required)");
 
   var titleMatch = text.match(/^#\s+(.+)$/m);
-  var title = titleMatch ? titleMatch[1].trim() : "";
+  var title = titleMatch ? titleMatch[1].trim().replace(/[\u2010-\u2015\u2212]/g, "-") : "";
   if (!title) problems.push("no H1 title");
   else if (BAD_TITLE_RE.test(title)) problems.push("dry/abstract title '" + title.slice(0, 60) + "'");
   else if (title.length > 100) problems.push("title too long");
@@ -363,6 +420,16 @@ function gate(text) {
   if (sp) problems.push("stock analogy prop: '" + sp[1] + "'");
   var sr = body.match(SOFT_REGISTER_RE);
   if (sr) problems.push("soft register: '" + sr[1] + "'");
+  // ANTI-BANAL-1: reject the significance-summary framing and label titles.
+  var sf = text.match(STOCK_FRAMING_RE);
+  if (sf) problems.push("stock framing tell: '" + sf[0].replace(/\s+/g, " ").slice(0, 80) + "' — name the mechanism, do not summarise the essay's significance");
+  var absN = (text.match(ABSTRACT_SUMMARY_RE) || []).length;
+  var lp = text.match(LABEL_PHRASE_RE);
+  if (lp && lp.length >= 2) problems.push("abstraction labels x" + lp.length + " ('" + lp.slice(0, 3).join("', '") + "') - state the mechanisms instead of labelling them");
+  if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') — state the mechanism instead of labelling it");
+  for (var lt of LABEL_TITLE_RES) {
+    if (lt.test(title)) { problems.push("label title — names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
+  }
   if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric — no fabricated scores");
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier — no fabricated IDs");
   var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
@@ -457,17 +524,23 @@ async function feedbackScan(env) {
     }
   }
   if (all.length < 4) return { promoted: promoted, purged: purged };
-  // Promote only structures with proven reader value: at least 2 yes votes, 2:1 yes ratio.
-  var proven = all.filter(function(r){ var g = Number(r.g) || 0, b = Number(r.b) || 0; return g >= 2 && g >= 2 * b; });
-  var topK = Math.max(1, Math.floor(proven.length * 0.5));
-  for (var i = 0; i < Math.min(topK, proven.length); i++) {
-    await env.DB.prepare("UPDATE prompt_pool SET active = 2 WHERE id = ?").bind(proven[i].id).run();
+  // PROMOTION (v0.7.22). The previous rule required g >= 2 && g >= 2*b (a 2:1 yes-ratio).
+  // Real reader sentiment here is ~30% good / 70% flat-or-no, so that rule could NEVER
+  // fire: zero pieces qualified and the proven pool was empty by construction. This now
+  // implements what this function's header says - promote the TOP quantile by reader
+  // verdict among pieces with a usable sample, purge the bottom quantile.
+  function readerScore(r) { var g = Number(r.g) || 0, b = Number(r.b) || 0; return (g + b) > 0 ? g / (g + b) : 0; }
+  var sampled = all.filter(function(r){ return ((Number(r.g) || 0) + (Number(r.b) || 0)) >= 3; });
+  sampled.sort(function(x, y){ return readerScore(y) - readerScore(x) || (Number(y.g) || 0) - (Number(x.g) || 0); });
+  var qn = Math.max(1, Math.floor(sampled.length * 0.15));
+  for (var i = 0; i < Math.min(qn, sampled.length); i++) {
+    if (readerScore(sampled[i]) < 0.5) break;
+    await env.DB.prepare("UPDATE prompt_pool SET active = 2 WHERE id = ?").bind(sampled[i].id).run();
     promoted++;
   }
-  // Deactivate structures with proven negative reader value.
-  var neg = all.filter(function(r){ var g = Number(r.g) || 0, b = Number(r.b) || 0; return b > 0 && b > g; });
-  for (var j = 0; j < neg.length; j++) {
-    await env.DB.prepare("UPDATE prompt_pool SET active = 0 WHERE id = ?").bind(neg[j].id).run();
+  for (var j = sampled.length - 1; j >= Math.max(0, sampled.length - qn); j--) {
+    if (readerScore(sampled[j]) >= 0.5) break;
+    await env.DB.prepare("UPDATE prompt_pool SET active = 0 WHERE id = ?").bind(sampled[j].id).run();
     purged++;
   }
   return { promoted: promoted, purged: purged };
@@ -551,7 +624,7 @@ async function generate(env) {
   var exemplars = await env.DB.prepare(
     "SELECT pp.structure_md FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 2 AND (p.reads > 0 OR p.feedback_score > 0) ORDER BY pp.performance_score DESC, p.feedback_score DESC LIMIT 2"
   ).all();
-  var fewShot = (exemplars.results || []);
+  var fewShot = (exemplars.results || []).filter(function(r){ return exemplarOk(r.structure_md); });
   // Recent structures as divergence priming: the model must NOT repeat them.
   var recentRows = await env.DB.prepare(
     "SELECT structure_md FROM prompt_pool ORDER BY created_at DESC LIMIT 6"
@@ -599,8 +672,11 @@ async function generate(env) {
   piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
-  // Feedback loop (async, non-blocking)
-  feedbackScan(env).catch(() => {});
+  // Feedback loop. MUST be awaited: as a floating promise with no ctx.waitUntil it
+  // was truncated by the Worker runtime once the response returned, so the promotion
+  // loop never completed and the reader-proven pool stayed empty (feedback_score
+  // updates landed, promotions did not).
+  await feedbackScan(env).catch(() => {});
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
   await queueForDistribution(env, saved.title, saved.slug);
   pingIndexNow(env, ORIGIN + "/p/" + saved.slug).catch(() => {});
@@ -849,7 +925,7 @@ export default {
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
       var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
       var runs = await env.DB.prepare("SELECT status, COUNT(*) n FROM engine_runs GROUP BY status").all().catch(() => ({results:[]}));
-      return json({ ok: true, worker: WORKER, version: VERSION, pieces: cnt.n, last, runs: runs.results });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], pieces: cnt.n, last, runs: runs.results });
     }
 
     if (path === "/run" && req.method === "POST") {

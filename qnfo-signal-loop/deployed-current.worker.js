@@ -207,4 +207,4 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map
+//# sourceMappingURL=worker.js.map

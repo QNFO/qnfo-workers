@@ -6,9 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var __defProp222 = Object.defineProperty;
-var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.2-glm53";
+var VERSION = "0.3.2-glm53"; // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -20,7 +18,6 @@ function json(data, status = 200) {
 __name(json, "json");
 __name2(json, "json");
 __name22(json, "json");
-__name222(json, "json");
 function auth(req, env) {
   if (!env.KAIZEN_TOKEN) return false;
   const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
@@ -35,7 +32,6 @@ function auth(req, env) {
 __name(auth, "auth");
 __name2(auth, "auth");
 __name22(auth, "auth");
-__name222(auth, "auth");
 function daysSince(isoStr) {
   if (!isoStr) return 999;
   const t = new Date(isoStr).getTime();
@@ -45,7 +41,6 @@ function daysSince(isoStr) {
 __name(daysSince, "daysSince");
 __name2(daysSince, "daysSince");
 __name22(daysSince, "daysSince");
-__name222(daysSince, "daysSince");
 async function listSkillFiles(env) {
   const byName = /* @__PURE__ */ new Map();
   let cursor;
@@ -69,7 +64,6 @@ async function listSkillFiles(env) {
 __name(listSkillFiles, "listSkillFiles");
 __name2(listSkillFiles, "listSkillFiles");
 __name22(listSkillFiles, "listSkillFiles");
-__name222(listSkillFiles, "listSkillFiles");
 async function readSkillBody(env, key) {
   const obj = await env.SKILLS_BUCKET.get(key);
   if (!obj) return "";
@@ -78,7 +72,6 @@ async function readSkillBody(env, key) {
 __name(readSkillBody, "readSkillBody");
 __name2(readSkillBody, "readSkillBody");
 __name22(readSkillBody, "readSkillBody");
-__name222(readSkillBody, "readSkillBody");
 function parseVersion(body) {
   const m = body.match(/Current:\s*\*\*v([0-9]+\.[0-9]+(?:\.[0-9]+)?)/i);
   return m ? m[1] : "";
@@ -86,7 +79,6 @@ function parseVersion(body) {
 __name(parseVersion, "parseVersion");
 __name2(parseVersion, "parseVersion");
 __name22(parseVersion, "parseVersion");
-__name222(parseVersion, "parseVersion");
 function parseName(body) {
   const m = body.match(/^#\s+(.+)$/m);
   return m ? m[1].trim() : "";
@@ -94,7 +86,6 @@ function parseName(body) {
 __name(parseName, "parseName");
 __name2(parseName, "parseName");
 __name22(parseName, "parseName");
-__name222(parseName, "parseName");
 function findDrift(body, skillName) {
   const refs = [];
   const re = /(See|Load|activates?)\s+([a-z0-9-]+)(?:\s+skill)?\s+v([0-9]+\.[0-9]+)/gi;
@@ -107,7 +98,6 @@ function findDrift(body, skillName) {
 __name(findDrift, "findDrift");
 __name2(findDrift, "findDrift");
 __name22(findDrift, "findDrift");
-__name222(findDrift, "findDrift");
 async function runScan(env) {
   const started = Date.now();
   const files = await listSkillFiles(env);
@@ -132,13 +122,12 @@ async function runScan(env) {
   }
   let opsStats = {};
   try {
-    const since7 = new Date(Date.now() - 7 * 24 * 3600 * 1e3).toISOString();
+    const since7 = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
     const oc = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1").bind(since7).first();
     const of = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1 AND ok = 0").bind(since7).first();
     const ol = await env.QNFO_AUDIT.prepare("SELECT model, COUNT(*) c, AVG(latency_ms) avg_ms FROM ops_ai_log WHERE ts >= ?1 GROUP BY model").bind(since7).all();
-    opsStats = { chats7d: oc && oc.c || 0, failures7d: of && of.c || 0, byModel: (ol.results || []).map((r) => r.model + ":" + r.c + "@" + Math.round(r.avg_ms || 0) + "ms") };
-  } catch (e2) {
-  }
+    opsStats = { chats7d: (oc && oc.c) || 0, failures7d: (of && of.c) || 0, byModel: (ol.results || []).map((r) => r.model + ":" + r.c + "@" + Math.round(r.avg_ms || 0) + "ms") };
+  } catch (e2) {}
   const scored = skills.map((s) => {
     const stalenessScore = Math.min(1, s.stalenessDays / 90);
     const incidentScore = Math.min(1, (incidents[s.skill.toLowerCase()] || 0) / 5);
@@ -162,16 +151,17 @@ async function runScan(env) {
     ).run();
   } catch (e) {
   }
+  // Weekly candidate disposition pass (register contract: "Dispositioned in next kaizen report").
+  // The auditor's upsertCandidate only promotes on re-upsert; quiet candidates would sit 'proposed' forever.
   let disposed = 0;
   try {
     const matureCut = new Date(Date.now() - 7 * 864e5).toISOString();
     const mature = await env.QNFO_AUDIT.prepare("SELECT id FROM kaizen_candidates WHERE status='proposed' AND created_at < ?1 LIMIT 20").bind(matureCut).all();
-    for (const m of mature.results || []) {
-      await env.QNFO_AUDIT.prepare("UPDATE kaizen_candidates SET status='promoted', updated_at=?1 WHERE id=?2").bind((/* @__PURE__ */ new Date()).toISOString(), m.id).run();
+    for (const m of (mature.results || [])) {
+      await env.QNFO_AUDIT.prepare("UPDATE kaizen_candidates SET status='promoted', updated_at=?1 WHERE id=?2").bind(new Date().toISOString(), m.id).run();
       disposed++;
     }
-  } catch (e) {
-  }
+  } catch (e) { }
   return {
     ok: true,
     worker: "qnfo-kaizen",
@@ -189,7 +179,6 @@ async function runScan(env) {
 __name(runScan, "runScan");
 __name2(runScan, "runScan");
 __name22(runScan, "runScan");
-__name222(runScan, "runScan");
 var META_RE = /(add gate [A-Z0-9._-]+ to [a-z0-9-]+|meta-?knowledge|kaizen|improve the (system|pipeline|agent|process)|update (the )?(instructions?|skills?|prompts?|system prompt)|operating (procedure|protocol|policy|runbook))/i;
 async function ensureMetaSchema(env) {
   await env.QNFO_AUDIT.prepare(
@@ -202,7 +191,6 @@ async function ensureMetaSchema(env) {
 __name(ensureMetaSchema, "ensureMetaSchema");
 __name2(ensureMetaSchema, "ensureMetaSchema");
 __name22(ensureMetaSchema, "ensureMetaSchema");
-__name222(ensureMetaSchema, "ensureMetaSchema");
 function tryJson(s) {
   if (typeof s !== "string") return s || null;
   const blocks = [];
@@ -220,7 +208,6 @@ function tryJson(s) {
 __name(tryJson, "tryJson");
 __name2(tryJson, "tryJson");
 __name22(tryJson, "tryJson");
-__name222(tryJson, "tryJson");
 async function validateClaim(env, desire, skillNames, hint) {
   const prompt = `Meta-knowledge validation pass (FRAMEWORK-DOGFOOD-1 claim-sheet gate).
 Input is a meta-knowledge statement about how the QNFO autonomous research system should operate.
@@ -244,7 +231,6 @@ Existing skills: ` + skillNames.join(", ") + "\nDo not output reasoning or comme
 __name(validateClaim, "validateClaim");
 __name2(validateClaim, "validateClaim");
 __name22(validateClaim, "validateClaim");
-__name222(validateClaim, "validateClaim");
 async function runMeta(env, commit, limit) {
   await ensureMetaSchema(env);
   const out = { claimed: [], errors: [], commit };
@@ -290,7 +276,6 @@ async function runMeta(env, commit, limit) {
 __name(runMeta, "runMeta");
 __name2(runMeta, "runMeta");
 __name22(runMeta, "runMeta");
-__name222(runMeta, "runMeta");
 function appendSection(env, body, claim) {
   const changeId = crypto.randomUUID().slice(0, 8);
   const section = "\n\n## " + claim.gate_name + " (autonomous meta-update " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + ", change " + changeId + ")\n\n" + claim.claim + "\n\n- Evidence: " + claim.evidence + "\n- Confidence: " + claim.confidence + "\n- Scope: " + claim.scope + "\n- Source: qnfo-kaizen v" + VERSION + " meta loop (intent " + claim.intent_id + "). Additive-only; no version bump. Git push: " + (env.GITHUB_TOKEN ? "worker" : "deferred to local skill_sync bridge") + ".\n";
@@ -299,7 +284,6 @@ function appendSection(env, body, claim) {
 __name(appendSection, "appendSection");
 __name2(appendSection, "appendSection");
 __name22(appendSection, "appendSection");
-__name222(appendSection, "appendSection");
 async function pushToGitHub(env, key, content, message) {
   if (!env.GITHUB_TOKEN) return "deferred-no-token";
   try {
@@ -322,7 +306,6 @@ async function pushToGitHub(env, key, content, message) {
 __name(pushToGitHub, "pushToGitHub");
 __name2(pushToGitHub, "pushToGitHub");
 __name22(pushToGitHub, "pushToGitHub");
-__name222(pushToGitHub, "pushToGitHub");
 async function applyMeta(env, commit) {
   await ensureMetaSchema(env);
   const out = { applied: [], errors: [], commit };
@@ -385,7 +368,6 @@ async function applyMeta(env, commit) {
 __name(applyMeta, "applyMeta");
 __name2(applyMeta, "applyMeta");
 __name22(applyMeta, "applyMeta");
-__name222(applyMeta, "applyMeta");
 var worker_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -457,4 +439,3 @@ var worker_default = {
 export {
   worker_default as default
 };
-//# sourceMappingURL=worker.js.map

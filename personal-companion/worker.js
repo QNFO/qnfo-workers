@@ -1,9 +1,11 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-var __name2 = __name;
 
 // worker.js
 import { WorkflowEntrypoint } from "cloudflare:workers";
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var __name22 = __name2;
 var VERSION = "1.6.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
@@ -34,12 +36,14 @@ function modelAllowed(m) {
 }
 __name(modelAllowed, "modelAllowed");
 __name2(modelAllowed, "modelAllowed");
+__name22(modelAllowed, "modelAllowed");
 var NL = String.fromCharCode(10);
 function L() {
   return Array.prototype.slice.call(arguments).join(NL);
 }
 __name(L, "L");
 __name2(L, "L");
+__name22(L, "L");
 var RHYTHM = ["notes", "essay", "notes", "essay", "notes", "essay", "serial"];
 var TOPICS = [
   { id: "coffeehouse-public", cat: "cs.CY", wiki: "Coffeehouse", rel: ["Public sphere", "Coffee", "Third place"], a: "the history of coffeehouses", b: "the birth of public space" },
@@ -156,13 +160,13 @@ var P_ESSAY = L(
   "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
   "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
   "You are given real source material below. Mine it. Use the specific names, dates, numbers, mechanisms and cases it contains; a piece that could have been written without reading the sources has failed.",
-  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call — the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
+  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call \u2014 the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
   "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
 );
 var P_NOTES = L(
   "FORM: connected field essay, 1800 to 2400 words, in 3 to 5 movements.",
   "Each movement is one concrete thing: a paper, a concept, a place, a piece of music, a passage, an exhibition.",
-  "Each movement is 350 to 550 words. Say precisely what the thing is, then develop what it connects to in his world — draw the connection out, do not merely state it. One through-line binds the movements into a single sustained piece, not a list.",
+  "Each movement is 350 to 550 words. Say precisely what the thing is, then develop what it connects to in his world \u2014 draw the connection out, do not merely state it. One through-line binds the movements into a single sustained piece, not a list.",
   "If only three of the supplied anchors are worth his time, give three. Never pad to a count. Never include an item you would not defend.",
   "Give every item a short title.",
   "The set title names the subject, not the count. Banned patterns: 'Four Ways ...', 'Three Claims ...', 'N Instruments/Reasons/Things ...'."
@@ -206,6 +210,7 @@ function json(obj, status) {
 }
 __name(json, "json");
 __name2(json, "json");
+__name22(json, "json");
 function html(body, status) {
   return new Response(body, {
     status: status || 200,
@@ -214,6 +219,7 @@ function html(body, status) {
 }
 __name(html, "html");
 __name2(html, "html");
+__name22(html, "html");
 function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   if (a.length !== b.length) return false;
@@ -223,6 +229,7 @@ function safeEqual(a, b) {
 }
 __name(safeEqual, "safeEqual");
 __name2(safeEqual, "safeEqual");
+__name22(safeEqual, "safeEqual");
 function authorized(request, env) {
   var key = env.COMPANION_KEY || "";
   if (!key) return true;
@@ -235,6 +242,7 @@ function authorized(request, env) {
 }
 __name(authorized, "authorized");
 __name2(authorized, "authorized");
+__name22(authorized, "authorized");
 async function sha16(s) {
   var data = new TextEncoder().encode(String(s));
   var digest = await crypto.subtle.digest("SHA-256", data);
@@ -245,11 +253,13 @@ async function sha16(s) {
 }
 __name(sha16, "sha16");
 __name2(sha16, "sha16");
+__name22(sha16, "sha16");
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 __name(nowIso, "nowIso");
 __name2(nowIso, "nowIso");
+__name22(nowIso, "nowIso");
 function amsParts(d) {
   var fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Amsterdam",
@@ -268,12 +278,14 @@ function amsParts(d) {
 }
 __name(amsParts, "amsParts");
 __name2(amsParts, "amsParts");
+__name22(amsParts, "amsParts");
 function amsDayKey(d) {
   var p = amsParts(d);
   return p.year + "-" + p.month + "-" + p.day;
 }
 __name(amsDayKey, "amsDayKey");
 __name2(amsDayKey, "amsDayKey");
+__name22(amsDayKey, "amsDayKey");
 function amsWeekday(d) {
   var names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var p = amsParts(d);
@@ -282,6 +294,7 @@ function amsWeekday(d) {
 }
 __name(amsWeekday, "amsWeekday");
 __name2(amsWeekday, "amsWeekday");
+__name22(amsWeekday, "amsWeekday");
 function squish(s) {
   var out = "";
   var prev = false;
@@ -303,6 +316,7 @@ function squish(s) {
 }
 __name(squish, "squish");
 __name2(squish, "squish");
+__name22(squish, "squish");
 function stripTags(s) {
   var out = "";
   var depth = 0;
@@ -317,6 +331,7 @@ function stripTags(s) {
 }
 __name(stripTags, "stripTags");
 __name2(stripTags, "stripTags");
+__name22(stripTags, "stripTags");
 function sections(xml, tag) {
   var open = "<" + tag + ">";
   var close = "</" + tag + ">";
@@ -334,6 +349,7 @@ function sections(xml, tag) {
 }
 __name(sections, "sections");
 __name2(sections, "sections");
+__name22(sections, "sections");
 function firstTag(chunk, tag) {
   var open = "<" + tag + ">";
   var close = "</" + tag + ">";
@@ -345,6 +361,7 @@ function firstTag(chunk, tag) {
 }
 __name(firstTag, "firstTag");
 __name2(firstTag, "firstTag");
+__name22(firstTag, "firstTag");
 function parseJsonLoose(text) {
   if (!text) return null;
   var a = text.indexOf("{");
@@ -358,6 +375,7 @@ function parseJsonLoose(text) {
 }
 __name(parseJsonLoose, "parseJsonLoose");
 __name2(parseJsonLoose, "parseJsonLoose");
+__name22(parseJsonLoose, "parseJsonLoose");
 function hasEmoji(s) {
   for (var i = 0; i < s.length; i++) {
     var c = s.charCodeAt(i);
@@ -380,6 +398,7 @@ function hasEmoji(s) {
 }
 __name(hasEmoji, "hasEmoji");
 __name2(hasEmoji, "hasEmoji");
+__name22(hasEmoji, "hasEmoji");
 function bannedHits(text) {
   var low = text.toLowerCase();
   var hits = [];
@@ -390,18 +409,21 @@ function bannedHits(text) {
 }
 __name(bannedHits, "bannedHits");
 __name2(bannedHits, "bannedHits");
+__name22(bannedHits, "bannedHits");
 function isCap(s, i) {
   var c = s.charAt(i);
   return c >= "A" && c <= "Z";
 }
 __name(isCap, "isCap");
 __name2(isCap, "isCap");
+__name22(isCap, "isCap");
 function isLow(s, i) {
   var c = s.charAt(i);
   return c >= "a" && c <= "z";
 }
 __name(isLow, "isLow");
 __name2(isLow, "isLow");
+__name22(isLow, "isLow");
 function readWord(s, i) {
   var out = "";
   while (i < s.length) {
@@ -415,6 +437,7 @@ function readWord(s, i) {
 }
 __name(readWord, "readWord");
 __name2(readWord, "readWord");
+__name22(readWord, "readWord");
 var STOPW = ["The", "A", "An", "In", "On", "At", "By", "To", "Of", "If", "When", "Where", "What", "How", "Why", "Then", "There", "These", "Those", "We", "They", "He", "She", "His", "Her", "Its", "Our", "Their", "Not", "No", "Yet", "So", "As", "From", "With", "Without", "Between", "After", "Before", "During", "Both", "Each", "Every", "All", "Some", "Many", "Most", "Such", "That", "Than", "Because", "Although", "While", "Since", "Thus", "Hence", "Therefore", "However", "Moreover", "Furthermore", "One", "Two", "Three", "But", "And", "For", "Or", "It", "This", "Is", "Are", "Was", "Were", "Be", "Been", "Do", "Does", "Did", "Has", "Have", "Had", "Can", "Could", "Shall", "Should", "Will", "Would", "May", "Might", "Must"];
 var STOP = {};
 for (sw = 0; sw < STOPW.length; sw++) STOP[STOPW[sw]] = true;
@@ -442,6 +465,7 @@ function nameCandidates(text) {
 }
 __name(nameCandidates, "nameCandidates");
 __name2(nameCandidates, "nameCandidates");
+__name22(nameCandidates, "nameCandidates");
 function anchorsText(anchors) {
   var parts = [];
   for (var i = 0; i < anchors.length; i++) parts.push(String(anchors[i].title || "") + " " + String(anchors[i].text || ""));
@@ -449,6 +473,7 @@ function anchorsText(anchors) {
 }
 __name(anchorsText, "anchorsText");
 __name2(anchorsText, "anchorsText");
+__name22(anchorsText, "anchorsText");
 function unverifiedNames(piece, anchors, topic) {
   var at = anchorsText(anchors) + " " + String(topic && topic.a || "") + " " + String(topic && topic.b || "");
   var cand = nameCandidates(String(piece.body_md || ""));
@@ -461,6 +486,7 @@ function unverifiedNames(piece, anchors, topic) {
 }
 __name(unverifiedNames, "unverifiedNames");
 __name2(unverifiedNames, "unverifiedNames");
+__name22(unverifiedNames, "unverifiedNames");
 function wordCount(s) {
   var n = 0;
   var inWord = false;
@@ -478,6 +504,7 @@ function wordCount(s) {
 }
 __name(wordCount, "wordCount");
 __name2(wordCount, "wordCount");
+__name22(wordCount, "wordCount");
 async function embed(env, texts) {
   var resp = await env.AI.run(EMBED_MODEL, { text: texts }, { signal: AbortSignal.timeout(EMBED_TIMEOUT_MS) });
   var vecs = resp && resp.data || [];
@@ -493,6 +520,7 @@ async function embed(env, texts) {
 }
 __name(embed, "embed");
 __name2(embed, "embed");
+__name22(embed, "embed");
 async function ensureSchema(env) {
   var stmts = [
     "CREATE TABLE IF NOT EXISTS companion_pieces (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE NOT NULL, form TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT, lede TEXT, body_md TEXT NOT NULL, anchor_json TEXT, quality_json TEXT, word_count INTEGER, day TEXT, created_at TEXT NOT NULL)",
@@ -508,6 +536,7 @@ async function ensureSchema(env) {
 }
 __name(ensureSchema, "ensureSchema");
 __name2(ensureSchema, "ensureSchema");
+__name22(ensureSchema, "ensureSchema");
 async function loadProfile(env) {
   var r = await env.PERSONAL.prepare(
     "SELECT facet, label, statement FROM profile WHERE confidence >= 0.7 ORDER BY facet, label"
@@ -527,6 +556,7 @@ async function loadProfile(env) {
 }
 __name(loadProfile, "loadProfile");
 __name2(loadProfile, "loadProfile");
+__name22(loadProfile, "loadProfile");
 async function loadLife(env) {
   var lines = [];
   var acts = await env.PERSONAL.prepare(
@@ -561,6 +591,7 @@ async function loadLife(env) {
 }
 __name(loadLife, "loadLife");
 __name2(loadLife, "loadLife");
+__name22(loadLife, "loadLife");
 async function loadContinuity(env, form) {
   var lines = [];
   var pcs = await env.PERSONAL.prepare(
@@ -579,14 +610,17 @@ async function loadContinuity(env, form) {
     var yes = 0, flat = 0, no = 0, neg = [], pos = [];
     for (var j = 0; j < fr.length; j++) {
       var sgn = String(fr[j].signal || "");
-      if (sgn === "good") yes++; else if (sgn === "flat") flat++; else no++;
+      if (sgn === "good") yes++;
+      else if (sgn === "flat") flat++;
+      else no++;
       var t = squish(fr[j].title || fr[j].slug);
-      if (sgn === "good") pos.push(t); else neg.push(t + "(" + sgn + ")");
+      if (sgn === "good") pos.push(t);
+      else neg.push(t + "(" + sgn + ")");
     }
     lines.push("");
-    lines.push("HOW HE REACTED — reader verdicts, worth your time? (last 14 days: yes=" + yes + " flat=" + flat + " no=" + no + ")");
-    if (neg.length) lines.push("flat/no pieces — these did not earn their reading time; do not repeat what they shared: " + neg.slice(0, 6).join(" | "));
-    if (pos.length) lines.push("yes pieces — earned it: " + pos.slice(0, 6).join(" | "));
+    lines.push("HOW HE REACTED \u2014 reader verdicts, worth your time? (last 14 days: yes=" + yes + " flat=" + flat + " no=" + no + ")");
+    if (neg.length) lines.push("flat/no pieces \u2014 these did not earn their reading time; do not repeat what they shared: " + neg.slice(0, 6).join(" | "));
+    if (pos.length) lines.push("yes pieces \u2014 earned it: " + pos.slice(0, 6).join(" | "));
     var rn = [];
     for (var j2 = 0; j2 < Math.min(fr.length, 8); j2++) rn.push("[" + fr[j2].signal + "] " + squish(fr[j2].title || fr[j2].slug));
     lines.push("most recent votes: " + rn.join(" | "));
@@ -610,6 +644,7 @@ async function loadContinuity(env, form) {
 }
 __name(loadContinuity, "loadContinuity");
 __name2(loadContinuity, "loadContinuity");
+__name22(loadContinuity, "loadContinuity");
 async function pickTopic(env, form) {
   var used = [];
   try {
@@ -662,6 +697,7 @@ async function pickTopic(env, form) {
 }
 __name(pickTopic, "pickTopic");
 __name2(pickTopic, "pickTopic");
+__name22(pickTopic, "pickTopic");
 async function fetchArxiv(cat) {
   var url = "https://export.arxiv.org/api/query?search_query=cat:" + encodeURIComponent(cat) + "&sortBy=submittedDate&sortOrder=descending&max_results=5";
   var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
@@ -680,6 +716,7 @@ async function fetchArxiv(cat) {
 }
 __name(fetchArxiv, "fetchArxiv");
 __name2(fetchArxiv, "fetchArxiv");
+__name22(fetchArxiv, "fetchArxiv");
 async function fetchWiki(title) {
   var url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&format=json&titles=" + encodeURIComponent(title);
   var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
@@ -694,6 +731,7 @@ async function fetchWiki(title) {
 }
 __name(fetchWiki, "fetchWiki");
 __name2(fetchWiki, "fetchWiki");
+__name22(fetchWiki, "fetchWiki");
 async function fetchWikiSearch(query) {
   var url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&srlimit=1&redirects=1";
   var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
@@ -705,6 +743,7 @@ async function fetchWikiSearch(query) {
 }
 __name(fetchWikiSearch, "fetchWikiSearch");
 __name2(fetchWikiSearch, "fetchWikiSearch");
+__name22(fetchWikiSearch, "fetchWikiSearch");
 async function callModel(env, messages, maxTokens, timeoutMs, model) {
   var useModel = model || WRITER_MODEL;
   var isReasoner = String(useModel).indexOf("reasoner") >= 0;
@@ -741,6 +780,7 @@ async function callModel(env, messages, maxTokens, timeoutMs, model) {
 }
 __name(callModel, "callModel");
 __name2(callModel, "callModel");
+__name22(callModel, "callModel");
 function renderInline(s) {
   var out = "";
   var i = 0;
@@ -760,6 +800,7 @@ function renderInline(s) {
 }
 __name(renderInline, "renderInline");
 __name2(renderInline, "renderInline");
+__name22(renderInline, "renderInline");
 function escHtml(s) {
   var out = "";
   var AMP = "&amp;", LT = "&lt;", GT = "&gt;", QUOT = "&quot;", Q = String.fromCharCode(34);
@@ -775,6 +816,7 @@ function escHtml(s) {
 }
 __name(escHtml, "escHtml");
 __name2(escHtml, "escHtml");
+__name22(escHtml, "escHtml");
 function renderBody(md) {
   var lines = String(md || "").split(NL);
   var out = [];
@@ -788,6 +830,7 @@ function renderBody(md) {
   }
   __name(flushP, "flushP");
   __name2(flushP, "flushP");
+  __name22(flushP, "flushP");
   function closeList() {
     if (listOpen) {
       out.push("</ul>");
@@ -796,6 +839,7 @@ function renderBody(md) {
   }
   __name(closeList, "closeList");
   __name2(closeList, "closeList");
+  __name22(closeList, "closeList");
   for (var i = 0; i < lines.length; i++) {
     var t = lines[i].trim();
     if (!t) {
@@ -844,6 +888,7 @@ function renderBody(md) {
 }
 __name(renderBody, "renderBody");
 __name2(renderBody, "renderBody");
+__name22(renderBody, "renderBody");
 function formLabel(f) {
   if (f === "essay") return "Essay";
   if (f === "notes") return "Field notes";
@@ -852,6 +897,7 @@ function formLabel(f) {
 }
 __name(formLabel, "formLabel");
 __name2(formLabel, "formLabel");
+__name22(formLabel, "formLabel");
 var CSS = L(
   ":root{--bg:#faf8f5;--fg:#1b1a18;--mut:#6b6560;--line:#e2dcd4;--acc:#8a5a2b}",
   "@media(prefers-color-scheme:dark){:root{--bg:#161513;--fg:#e8e4de;--mut:#9a938b;--line:#2e2b27;--acc:#c99a5e}}",
@@ -889,11 +935,13 @@ function page(title, inner, extraHead) {
 }
 __name(page, "page");
 __name2(page, "page");
+__name22(page, "page");
 function shell(inner) {
   return "<header class=mast><h1><a href=/>Reading</a></h1><p>Written for one reader. Private.</p><nav class=forms><a href=/subscribe>subscribe</a><a href=/feed.xml>rss</a></nav></header>" + inner;
 }
 __name(shell, "shell");
 __name2(shell, "shell");
+__name22(shell, "shell");
 function renderIndex(pieces, keyQS, filter) {
   var items = [];
   for (var i = 0; i < pieces.length; i++) {
@@ -909,6 +957,7 @@ function renderIndex(pieces, keyQS, filter) {
 }
 __name(renderIndex, "renderIndex");
 __name2(renderIndex, "renderIndex");
+__name22(renderIndex, "renderIndex");
 function renderPiece(p, keyQS) {
   var bodyMd = String(p.body_md || "");
   var startsHeading = /^\s*#/.test(bodyMd);
@@ -920,6 +969,7 @@ function renderPiece(p, keyQS) {
 }
 __name(renderPiece, "renderPiece");
 __name2(renderPiece, "renderPiece");
+__name22(renderPiece, "renderPiece");
 function anchorsBlock(topic, anchors, life, profile) {
   var lines = [];
   lines.push("--- briefing. Never reproduce any wording from this briefing in the piece. ---");
@@ -943,6 +993,7 @@ function anchorsBlock(topic, anchors, life, profile) {
 }
 __name(anchorsBlock, "anchorsBlock");
 __name2(anchorsBlock, "anchorsBlock");
+__name22(anchorsBlock, "anchorsBlock");
 function countHeadings(md, level) {
   var mark = level === 3 ? "### " : "## ";
   var lines = String(md).split(NL);
@@ -952,6 +1003,7 @@ function countHeadings(md, level) {
 }
 __name(countHeadings, "countHeadings");
 __name2(countHeadings, "countHeadings");
+__name22(countHeadings, "countHeadings");
 function extractSection(md, needle) {
   var lines = String(md).split(NL);
   var out = [];
@@ -969,6 +1021,7 @@ function extractSection(md, needle) {
 }
 __name(extractSection, "extractSection");
 __name2(extractSection, "extractSection");
+__name22(extractSection, "extractSection");
 function extractLede(md) {
   var lines = String(md).split(NL);
   var i = 0;
@@ -993,6 +1046,7 @@ function extractLede(md) {
 }
 __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
+__name22(extractLede, "extractLede");
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
   var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
@@ -1037,6 +1091,7 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
 }
 __name(composePiece, "composePiece");
 __name2(composePiece, "composePiece");
+__name22(composePiece, "composePiece");
 async function critiquePiece(env, piece, form) {
   var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1800 to 2400 words" : "1800 to 2400 words in 3 to 5 movements";
   var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
@@ -1045,6 +1100,7 @@ async function critiquePiece(env, piece, form) {
 }
 __name(critiquePiece, "critiquePiece");
 __name2(critiquePiece, "critiquePiece");
+__name22(critiquePiece, "critiquePiece");
 async function sharpenBridge(env, piece, form) {
   try {
     var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6e3);
@@ -1063,12 +1119,13 @@ async function sharpenBridge(env, piece, form) {
 }
 __name(sharpenBridge, "sharpenBridge");
 __name2(sharpenBridge, "sharpenBridge");
+__name22(sharpenBridge, "sharpenBridge");
 function validatePiece(piece, form) {
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
   var md = String(piece.body_md);
   var wc = wordCount(md);
-  if (form === "essay" && (wc < 2000 || wc > 3200)) problems.push("essay length " + wc);
+  if (form === "essay" && (wc < 2e3 || wc > 3200)) problems.push("essay length " + wc);
   if (form === "serial" && (wc < 1800 || wc > 2800)) problems.push("serial length " + wc);
   if (form === "notes") {
     var items = countHeadings(md, 2);
@@ -1084,6 +1141,7 @@ function validatePiece(piece, form) {
 }
 __name(validatePiece, "validatePiece");
 __name2(validatePiece, "validatePiece");
+__name22(validatePiece, "validatePiece");
 async function similarExists(env, text, excludeSlug) {
   try {
     var vecs = await embed(env, [text.slice(0, 6e3)]);
@@ -1103,14 +1161,16 @@ async function similarExists(env, text, excludeSlug) {
 }
 __name(similarExists, "similarExists");
 __name2(similarExists, "similarExists");
-
-
-// Self-referential signal: emit a reading.q08 piece as a fleet signal (best-effort)
+__name22(similarExists, "similarExists");
 async function emitReadingSignal(env, piece, form, slug) {
   try {
     if (!env.AUDIT) return;
     var body = String(piece.body_md || "");
-    var paras = body.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 80; });
+    var paras = body.split("\n").map(function(l) {
+      return l.trim();
+    }).filter(function(l) {
+      return l.length > 80;
+    });
     var openQ = paras.length ? paras[paras.length - 1].slice(0, 400) : "";
     await env.AUDIT.prepare(
       "INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
@@ -1126,8 +1186,10 @@ async function emitReadingSignal(env, piece, form, slug) {
       "open",
       nowIso()
     ).run();
-  } catch (e) { /* best-effort */ }
+  } catch (e) {
+  }
 }
+__name(emitReadingSignal, "emitReadingSignal");
 async function persistPiece(env, piece, form, topic, model, quality, words) {
   var day = amsDayKey(/* @__PURE__ */ new Date());
   var salt = String(Date.now()) + topic.id + form;
@@ -1136,7 +1198,8 @@ async function persistPiece(env, piece, form, topic, model, quality, words) {
   await env.PERSONAL.prepare(
     "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
   ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 2e3), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
-  emitReadingSignal(env, piece, form, slug).catch(function() {});
+  emitReadingSignal(env, piece, form, slug).catch(function() {
+  });
   try {
     var vecs = await embed(env, [String(piece.title) + NL + String(piece.lede || "") + NL + String(piece.body_md).slice(0, 5e3)]);
     if (vecs.length && env.VZ) {
@@ -1169,6 +1232,7 @@ async function persistPiece(env, piece, form, topic, model, quality, words) {
 }
 __name(persistPiece, "persistPiece");
 __name2(persistPiece, "persistPiece");
+__name22(persistPiece, "persistPiece");
 async function logRun(env, form, model, topic, status, detail, ms) {
   try {
     await env.PERSONAL.prepare(
@@ -1179,6 +1243,7 @@ async function logRun(env, form, model, topic, status, detail, ms) {
 }
 __name(logRun, "logRun");
 __name2(logRun, "logRun");
+__name22(logRun, "logRun");
 async function sendMail(env, piece, slug, day) {
   var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
   var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
@@ -1186,6 +1251,7 @@ async function sendMail(env, piece, slug, day) {
 }
 __name(sendMail, "sendMail");
 __name2(sendMail, "sendMail");
+__name22(sendMail, "sendMail");
 async function mailOut(env, slug, origin) {
   try {
     var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(slug).all();
@@ -1199,6 +1265,7 @@ async function mailOut(env, slug, origin) {
 }
 __name(mailOut, "mailOut");
 __name2(mailOut, "mailOut");
+__name22(mailOut, "mailOut");
 async function sendOne(env, to, subject, body) {
   if (env.SEND_EMAIL) {
     try {
@@ -1222,16 +1289,19 @@ async function sendOne(env, to, subject, body) {
 }
 __name(sendOne, "sendOne");
 __name2(sendOne, "sendOne");
+__name22(sendOne, "sendOne");
 function subBase(env, origin) {
   return origin || "https://reading.q08.org";
 }
 __name(subBase, "subBase");
 __name2(subBase, "subBase");
+__name22(subBase, "subBase");
 function escXml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 __name(escXml, "escXml");
 __name2(escXml, "escXml");
+__name22(escXml, "escXml");
 function toRfc822(d) {
   try {
     return new Date(d).toUTCString();
@@ -1241,12 +1311,14 @@ function toRfc822(d) {
 }
 __name(toRfc822, "toRfc822");
 __name2(toRfc822, "toRfc822");
+__name22(toRfc822, "toRfc822");
 function subscribePage(msg) {
   var Q = String.fromCharCode(34);
   return "<div class=sub>" + (msg ? "<p>" + escHtml(msg) + "</p>" : "") + "<form method=post action=/subscribe><input type=email name=email placeholder=" + Q + "you@example.com" + Q + " required><button type=submit>Subscribe</button></form><p class=mut>One email per new piece. Unsubscribe anytime.</p></div>";
 }
 __name(subscribePage, "subscribePage");
 __name2(subscribePage, "subscribePage");
+__name22(subscribePage, "subscribePage");
 async function handleSubscribe(request, env, u, p) {
   try {
     await ensureSchema(env);
@@ -1289,6 +1361,7 @@ async function handleSubscribe(request, env, u, p) {
 }
 __name(handleSubscribe, "handleSubscribe");
 __name2(handleSubscribe, "handleSubscribe");
+__name22(handleSubscribe, "handleSubscribe");
 async function feedXml(env, u) {
   try {
     await ensureSchema(env);
@@ -1309,6 +1382,7 @@ async function feedXml(env, u) {
 }
 __name(feedXml, "feedXml");
 __name2(feedXml, "feedXml");
+__name22(feedXml, "feedXml");
 async function broadcast(env, slug, origin) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
@@ -1334,6 +1408,7 @@ async function broadcast(env, slug, origin) {
 }
 __name(broadcast, "broadcast");
 __name2(broadcast, "broadcast");
+__name22(broadcast, "broadcast");
 async function sendDigest(env) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
@@ -1362,6 +1437,7 @@ async function sendDigest(env) {
 }
 __name(sendDigest, "sendDigest");
 __name2(sendDigest, "sendDigest");
+__name22(sendDigest, "sendDigest");
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -1379,7 +1455,7 @@ async function generate(env, form, opts) {
     var anchors = [];
     var seen = {};
     var dayN = Number(amsDayKey(/* @__PURE__ */ new Date()).slice(8, 10)) || 0;
-    var addAnchor = /* @__PURE__ */ __name2(function(a) {
+    var addAnchor = /* @__PURE__ */ __name22(function(a) {
       if (a && a.title && !seen[a.title]) {
         seen[a.title] = true;
         anchors.push(a);
@@ -1472,7 +1548,8 @@ async function generate(env, form, opts) {
             feedback = "The previous draft opened with the same sentences as an existing piece. Open on a different particular.";
             continue;
           }
-        } catch (e) {}
+        } catch (e) {
+        }
       }
       var titleLow = String(piece.title || "").toLowerCase().trim();
       if (titleLow.length > 4) {
@@ -1531,6 +1608,7 @@ async function generate(env, form, opts) {
 }
 __name(generate, "generate");
 __name2(generate, "generate");
+__name22(generate, "generate");
 var worker_default = {
   async fetch(request, env, ctx) {
     var u = new URL(request.url);
@@ -1791,12 +1869,16 @@ async function steward(env) {
 }
 __name(steward, "steward");
 __name2(steward, "steward");
+__name22(steward, "steward");
 var GenerationFlow = class extends WorkflowEntrypoint {
   static {
     __name(this, "GenerationFlow");
   }
   static {
     __name2(this, "GenerationFlow");
+  }
+  static {
+    __name22(this, "GenerationFlow");
   }
   async run(event, step) {
     var form = event && event.payload && event.payload.form || RHYTHM[amsWeekday(/* @__PURE__ */ new Date())];
@@ -1824,4 +1906,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-

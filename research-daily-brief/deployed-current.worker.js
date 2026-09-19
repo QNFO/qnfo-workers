@@ -1,5 +1,3 @@
-
-
 // research-daily-brief v1.1.0
 // FIX 2026-09-13: fetchArxiv now has 3-attempt exponential backoff (1s/3s/9s) + Semantic Scholar fallback
 // FIX 2026-09-13: scheduled() no longer silently drops errors; alertMsg fires on every failure
