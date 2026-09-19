@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-email/fabric-20260910";
-const VERSION = "1.9.2";
+const VERSION = "1.9.3";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -314,7 +314,8 @@ async function storeEmail(db, data) {
     const result = await db.prepare(
       `INSERT INTO emails (message_id, sender, recipient, subject, body_text, body_html, headers_json, classification, received_at, status) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'received') ON CONFLICT(message_id) DO UPDATE SET recipient=?3,subject=?4,body_text=?5,body_html=?6,headers_json=?7,classification=?8`
     ).bind(data.messageId, data.from, data.to, data.subject, data.bodyText, data.bodyHtml, data.headersJson, data.classification, data.receivedAt).run();
-    return result.meta?.last_row_id || 0;
+    const row = await db.prepare("SELECT id FROM emails WHERE message_id = ?1").bind(data.messageId).first();
+    return (row && row.id) || 0;
   } catch (e) {
     console.error("D1 store:", e.message);
     return 0;
