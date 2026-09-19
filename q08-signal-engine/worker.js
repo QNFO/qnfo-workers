@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.15"; // v0.7.15 DISCOVERY-1: real sitemap + robots routes
+var VERSION = "0.7.16"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -235,6 +235,9 @@ var Q08_DIRECTIVE = [
   "",
   "VERDICT (mandatory final line, this is the last line of your output, after the essay): write exactly 'worth your time: yes|flat|no — one clause of justification'. State honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. 'no' rejects the essay; 'flat' means it barely clears the bar. Omitting this line is a rejection on its own.",
   "",
+    "MECHANISM, NOT LABEL: name the causal process — who is incentivised to do what, which information is missing, where the coupling breaks — as actors doing something, never as an abstract noun. 'Incentive structure', 'information asymmetry', 'coupling failure', 'structural dynamic' and 'systemic failure' are labels, not mechanisms: if a sentence reduces to one of them, the mechanism has not been found yet. The words 'structural', 'systemic' and 'dynamic' are permitted only as a precise description of a named mechanism, never as a summary of your own argument.",
+    "BANNED FRAMING (automatic rejection — the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
+    "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors — e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
   "CONSTRAINTS (hard):",
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
@@ -331,6 +334,22 @@ var FORMULA_H2_RE = /^#+\s+the (hidden|invisible|unseen|unspoken|silent|quiet) (
 var STOCK_PROPS_RE = /\b(telescopes?|galileo|alchem|philosopher.s stone|sonar|aperture|aerospace redundancy)\b/i;
 var HISTORICAL_RE = /\b([0-9]+th century|\d{3,4}0s|19[0-9]{2}|18[0-9]{2}|1[0-7][0-9]{2}|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient|roman|greek|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial|belle ?poque|preindustrial|great depression|south sea|tulip|dot-com|dotcom|hanseatic|medici|silk road|printing press|gutenberg|panic of|railway mania)\b/i;
 var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
+// ANTI-BANAL-1 (v0.7.16). The observed failure mode is not a weak argument but a
+// banal *register*: the stock framing sentence ("…illustrates a broader structural
+// dynamic") and nominalised label titles ("Scale-Induced Professional Displacement").
+// These are category names and significance-summaries, not mechanisms. The mandate
+// forbids management-consulting abstractions; these patterns ARE that failure.
+var STOCK_FRAMING_RE = /\b(?:illustrat\w+|expos\w+|reveal\w+|foreground\w+|underscor\w+)\b[^.]{0,70}\b(?:structural|systemic|recurring|institutional|underlying|broader|wider|deeper|universal)\s+(?:dynamic|failure|gap|pattern|tension|mismatch|flaw|disjunction|force|logic)\b/i;
+var ABSTRACT_SUMMARY_RE = /\b(?:structural|systemic|recurring|institutional|underlying|universal)\s+(?:dynamic|failure|gap|tension|mismatch|disjunction)\b/gi;
+var LABEL_TITLE_RES = [
+  /^(?:structural|systemic|recurring|institutional|externalized|opaque|implicit|formal|abstract|nominal|statistical|rhetoric\w*|scale|efficiency|goal|sponsorship|incentive|autonomous)\b/i,
+  /^the\s+[a-z][^:]{3,70}\s+of\s+[a-z][^:]{3,70}$/i,
+  /^[a-z][^:]{2,60}\s+as\s+[a-z][^:]{2,60}$/i,
+  /(?:^|[\s-])(?:induced|driven|mediated|conditioned|derived)\s+[a-z]/i,
+  /\b(?:in|across|within|under|of)\s+[a-z][a-z-]*(?:\s+[a-z][a-z-]*){0,2}\s+(?:systems|chains|designs|contexts|settings|architectures|planning|automation|constraints|contracts|pipelines|domains|models|frameworks)$/i,
+  /^the\s+\w+\s+\w*\s*(?:trap|paradox|illusion|fallacy|myth|dilemma|tyranny|consequence|problem|curse|temptation|revenge)\b/i,
+  /:\s+(?:how|why)\s+(?:[a-z]+\s+){0,3}(?:drives?|shapes?|creates?|breeds?|undermines?|erodes?|rewards?|punishes?)\b/i
+];
 
 function gate(text) {
   // Enforce LONG-FORM PROSE with a hook, not lists:
@@ -341,7 +360,7 @@ function gate(text) {
   if (text.length < 4000) problems.push("too short for long-form (" + text.length + " chars; 1200-1800 words required)");
 
   var titleMatch = text.match(/^#\s+(.+)$/m);
-  var title = titleMatch ? titleMatch[1].trim() : "";
+  var title = titleMatch ? titleMatch[1].trim().replace(/[\u2010-\u2015\u2212]/g, "-") : "";
   if (!title) problems.push("no H1 title");
   else if (BAD_TITLE_RE.test(title)) problems.push("dry/abstract title '" + title.slice(0, 60) + "'");
   else if (title.length > 100) problems.push("title too long");
@@ -363,6 +382,14 @@ function gate(text) {
   if (sp) problems.push("stock analogy prop: '" + sp[1] + "'");
   var sr = body.match(SOFT_REGISTER_RE);
   if (sr) problems.push("soft register: '" + sr[1] + "'");
+  // ANTI-BANAL-1: reject the significance-summary framing and label titles.
+  var sf = text.match(STOCK_FRAMING_RE);
+  if (sf) problems.push("stock framing tell: '" + sf[0].replace(/\s+/g, " ").slice(0, 80) + "' — name the mechanism, do not summarise the essay's significance");
+  var absN = (text.match(ABSTRACT_SUMMARY_RE) || []).length;
+  if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') — state the mechanism instead of labelling it");
+  for (var lt of LABEL_TITLE_RES) {
+    if (lt.test(title)) { problems.push("label title — names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
+  }
   if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric — no fabricated scores");
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier — no fabricated IDs");
   var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
