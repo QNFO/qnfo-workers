@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.3-calauth";
+var VERSION = "5.28.4-toolmode";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -2294,6 +2294,13 @@ var worker_default = {
           created: 171e7,
           owned_by: m.tier === 0 ? "workers-ai" : m.family,
           capabilities: ["chat", "code", "streaming"].concat(m.tools ? ["agent", "tool_use"] : []).concat(reasoning ? ["reasoning"] : []).concat(vision ? ["vision"] : []),
+          // DEEPCHAT-TOOL-MODE-1 (2026-09-19): DeepChat per-model "Mode" default (agent|code|minimal)
+          // + OpenAI-standard tool/limit facts. Read by DeepChat's model-catalog parser and re-synced
+          // into every client's provider_models on the next model refresh.
+          limit: { context: ctx2 ?? null, output: m.maxOut ?? null },
+          temperature: true,
+          tool_call: !!m.tools,
+          default_tool_mode: /code/i.test(id) ? "code" : /flash/i.test(id) ? "minimal" : "agent",
           _router: {
             tier: m.tier,
             family: m.family,
@@ -2311,8 +2318,8 @@ var worker_default = {
           }
         };
       });
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       return json({ object: "list", data });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
