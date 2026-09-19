@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.36";
+var VERSION = "2.36.41";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -48,7 +48,7 @@ __name2(stripToolFrames, "stripToolFrames");
 __name22(stripToolFrames, "stripToolFrames");
 __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var UPSTREAM_MODEL = "dynamic/opsdynamic"; // AIGW-DYNAMIC-ROUTE-1 (2026-09-19): cost/performance-optimized AI Gateway dynamic route (openai/gpt-5.5 primary -> openai/gpt-5-mini fallback), created+deployed on gateway default (route 75d46899). UPSTREAM_MODEL_FB is the in-worker fallback if the route is unavailable.
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
@@ -1689,7 +1689,10 @@ async function cfWorkerDeploy(env, args) {
   });
   try {
     const boundary = "ops-deploy-" + Date.now().toString(16);
-    const metadataPart = JSON.stringify({ body_part: "worker.js", bindings: bindingsOut });
+    const _mp = (args && args.service_worker) ? { body_part: "worker.js" } : { main_module: "worker.js" }; // MODULE-FORMAT-1: vectorize/DO/workflow bindings require ES module format (CF 100329)
+  const _exports = {};
+  for (const _b of bindingsOut) { if (_b.type === "durable_object_namespace" && _b.class_name) _exports[_b.class_name] = { type: "durable-object", storage: "sqlite" }; }
+  const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, (Object.keys(_exports).length ? { exports: _exports } : {}))); // DO-EXPORT-EXPLICIT-1: provisioned DO classes must be declared in exports (CF 100402)
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
@@ -4047,6 +4050,60 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     return doneRes;
   }
 };
+async function opsDeploy(env, args) {
+  const worker = String(args && args.worker || "").trim();
+  const repo = String(args && args.repo || "QNFO/qnfo-workers").trim();
+  const file = String(args && args.path || "").trim();
+  const ref = String(args && args.ref || "main").trim();
+  const fromVer = args && args.from_version ? String(args.from_version) : null;
+  const toVer = args && args.to_version ? String(args.to_version) : null;
+  const log = [];
+  if (!worker || !file) return { ok: false, error: "worker and path are required", log: log };
+  const dg = (env.DEPLOY_GUARD ? function (u, o) { return env.DEPLOY_GUARD.fetch(u, o); } : function (u, o) { return fetch(u, o); });
+  const DG = "https://deploy-guard"; // SERVER-SIDE-DEPLOY-1: service binding (CF err 1042 blocks same-zone worker fetch)
+  let lock = null;
+  try {
+    const lr = await dg(DG + "/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, owner: "qnfo-ops/ops-deploy", ttl_sec: 1800, expected_version: fromVer }) });
+    const _lt = await lr.text();
+    try { lock = JSON.parse(_lt); } catch (_e) { lock = {}; }
+    log.push({ step: "lock", http: lr.status, body: String(_lt).slice(0, 220), acquired: !!lock.acquired });
+    if (!lock.acquired) return { ok: false, error: "lock not acquired (fail-closed)", lock: lock, log: log };
+    let ok = false;
+    let result = null;
+    try {
+      const hdrs = { "Accept": "application/vnd.github+json", "User-Agent": "qnfo-ops-ops-deploy" };
+      if (env.GITHUB_TOKEN) hdrs["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+      const gr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + file + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
+      if (!gr.ok) { result = { ok: false, error: "github contents " + gr.status }; return Object.assign({ log: log }, result); }
+      const gj = await gr.json();
+      const b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+      const content = atob(b64);
+      const srcVer = (content.match(/var VERSION = "([^"]+)"/) || [])[1] || null;
+      log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
+      if (toVer && srcVer && srcVer !== toVer) { result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer }; return Object.assign({ log: log }, result); }
+      const dep = await cfWorkerDeploy(env, { worker: worker, content: content, version: toVer || srcVer || undefined, expected_version: fromVer || undefined });
+      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved });
+      if (!dep.ok) { result = { ok: false, error: dep.error, rejected: dep.rejected || false }; return Object.assign({ log: log }, result); }
+      let live = null;
+      try {
+        const cr = await cfWorkerRead(env, { worker: worker, maxChars: 500 });
+        live = (cr && cr.ok && cr.version) ? cr.version : null;
+        log.push({ step: "verify", live_version: live });
+      } catch (e) {
+        log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
+      }
+      ok = !toVer || live === toVer;
+      result = { ok: ok, worker: worker, from: fromVer, to: toVer, live: live, version_id: (dep.result && dep.result.id) || null, bindings_preserved: dep.bindings_preserved };
+      return Object.assign({ log: log }, result);
+    } finally {
+      try { await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, actor: "qnfo-ops/ops-deploy", from: fromVer, to: toVer, ok: ok, note: "server-side deploy (opsDeploy route)" }) }); } catch (e) {}
+      try { await dg(DG + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, token: lock.token }) }); } catch (e) {}
+    }
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 200), log: log };
+  }
+}
+
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -4124,6 +4181,13 @@ var worker_default = {
     }
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/manifest" && method === "GET") return json(manifest());
+    if (path === "/ops/deploy" && method === "POST") {
+      if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+      let _db = {};
+      try { _db = await request.json(); } catch (e) { }
+      const _dr = await opsDeploy(env, _db || {});
+      return json(_dr, _dr.ok ? 200 : 502);
+    }
     if (path === "/registry" && method === "GET") return json(await registryList(env));
     if (path === "/capability-audit" && method === "GET") {
       if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
