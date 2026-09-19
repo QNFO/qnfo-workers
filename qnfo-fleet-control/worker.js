@@ -218,7 +218,13 @@ var advisorMod = (function() {
     let filed = 0;
     for (const f of findings) {
       try {
-        const existing = await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title = ?", [f.title]);
+        // ADVISOR-FILES-NOT-FIXES-1 (dedupe): model-health and gateway-config findings carry a
+        // volatile model/drift list in their title, so exact-title dedupe NEVER matched and the
+        // advisor re-filed a fresh ticket every ~20 min. Dedupe those kinds by stable PREFIX.
+        const prefixDedupe = f.kind === "model-health" ? "MODEL-DEGRADED %" : f.kind === "gateway-config" ? "GATEWAY-DRIFT %" : null;
+        const existing = prefixDedupe
+          ? await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title LIKE ?", [prefixDedupe])
+          : await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title = ?", [f.title]);
         if (existing && existing.length) {
           await d1Run(env, "UPDATE agent_issues SET description=?, updated_at=? WHERE id=?", ["[advisor] " + f.detail.slice(0, 600), ts, existing[0].id]);
           continue;
@@ -994,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.16-cachefresh";
+var VERSION = "0.4.17-advisordedupe";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
