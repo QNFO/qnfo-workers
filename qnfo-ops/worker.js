@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.38";
+var VERSION = "2.36.39";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4056,10 +4056,11 @@ async function opsDeploy(env, args) {
   const toVer = args && args.to_version ? String(args.to_version) : null;
   const log = [];
   if (!worker || !file) return { ok: false, error: "worker and path are required", log: log };
-  const LOCK = "https://qnfo-deploy-guard.q08.workers.dev";
+  const dg = (env.DEPLOY_GUARD ? function (u, o) { return env.DEPLOY_GUARD.fetch(u, o); } : function (u, o) { return fetch(u, o); });
+  const DG = "https://deploy-guard"; // SERVER-SIDE-DEPLOY-1: service binding (CF err 1042 blocks same-zone worker fetch)
   let lock = null;
   try {
-    const lr = await fetch(LOCK + "/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, owner: "qnfo-ops/ops-deploy", ttl_sec: 1800, expected_version: fromVer }) });
+    const lr = await dg(DG + "/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, owner: "qnfo-ops/ops-deploy", ttl_sec: 1800, expected_version: fromVer }) });
     const _lt = await lr.text();
     try { lock = JSON.parse(_lt); } catch (_e) { lock = {}; }
     log.push({ step: "lock", http: lr.status, body: String(_lt).slice(0, 220), acquired: !!lock.acquired });
@@ -4082,10 +4083,9 @@ async function opsDeploy(env, args) {
       if (!dep.ok) { result = { ok: false, error: dep.error, rejected: dep.rejected || false }; return Object.assign({ log: log }, result); }
       let live = null;
       try {
-        const hr = await fetch("https://" + worker + ".q08.workers.dev/health", { headers: { "User-Agent": "qnfo-ops-ops-deploy" } });
-        const hj = await hr.json();
-        live = hj.version || hj.VERSION || null;
-        log.push({ step: "verify", http: hr.status, live_version: live });
+        const cr = await cfWorkerRead(env, { worker: worker, maxChars: 500 });
+        live = (cr && cr.ok && cr.version) ? cr.version : null;
+        log.push({ step: "verify", live_version: live });
       } catch (e) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
       }
@@ -4093,8 +4093,8 @@ async function opsDeploy(env, args) {
       result = { ok: ok, worker: worker, from: fromVer, to: toVer, live: live, version_id: (dep.result && dep.result.id) || null, bindings_preserved: dep.bindings_preserved };
       return Object.assign({ log: log }, result);
     } finally {
-      try { await fetch(LOCK + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, actor: "qnfo-ops/ops-deploy", from: fromVer, to: toVer, ok: ok, note: "server-side deploy (opsDeploy route)" }) }); } catch (e) {}
-      try { await fetch(LOCK + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, token: lock.token }) }); } catch (e) {}
+      try { await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, actor: "qnfo-ops/ops-deploy", from: fromVer, to: toVer, ok: ok, note: "server-side deploy (opsDeploy route)" }) }); } catch (e) {}
+      try { await dg(DG + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, token: lock.token }) }); } catch (e) {}
     }
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 200), log: log };

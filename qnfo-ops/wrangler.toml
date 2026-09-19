@@ -229,6 +229,14 @@ binding = "CONTAINERS_PILOT"
 service = "qnfo-containers-pilot"
 environment = "production"
 
+# SERVER-SIDE-DEPLOY-1 (2026-09-19): service binding to the deploy-guard lock service.
+# A Worker on *.q08.workers.dev CANNOT fetch another Worker on the same zone (Cloudflare
+# error 1042), so the lock/ledger calls go through this binding, not global fetch.
+[[services]]
+binding = "DEPLOY_GUARD"
+service = "qnfo-deploy-guard"
+environment = "production"
+
 # AgenticOpsExec Durable Object — real WebSocket-hibernated ops agent session (2026-09-14)
 [[durable_objects.bindings]]
 name = "AGENTIC_OPS_EXEC"
