@@ -1,0 +1,14 @@
+# QNFO/qnfo-workers — line-ending policy (MIRROR-EOL-1)
+# This repo is a deploy mirror of the live Cloudflare fleet. Default is LF: that is what git
+# stores for the majority of workers and what the parity guards normalise to.
+* text=auto eol=lf
+
+# These live bundles were DEPLOYED carrying CRLF (their /content/v2 bytes contain \r\n).
+# Store them VERBATIM so the repo stays byte-faithful to the deployed artifact; otherwise
+# core.autocrlf=true silently normalises them to LF and a raw byte comparison fails.
+qnfo-observability/worker.js -text
+qnfo-observability/deployed-current.worker.js -text
+qnfo-paper-reviser/worker.js -text
+qnfo-paper-reviser/deployed-current.worker.js -text
+qnfo-paper-indexer/worker.js -text
+qnfo-paper-indexer/deployed-current.worker.js -text
