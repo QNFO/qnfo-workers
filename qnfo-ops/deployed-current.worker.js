@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.30";
+var VERSION = "2.36.31";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3031,7 +3031,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)))); // REASONING-FLOOR (fixed: was malformed `Math.max(8192, const answerCap = ...)` - JS SyntaxError, 2026-09-19)
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5);
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 9e4); // NONSTREAM-CLIENT-BUDGET-1 (2026-09-19): non-streaming clients (DeepChat agent loop) get a bounded budget so the response cannot outlive the client patience (the 58-218s loops aborted with provider_error); streaming clients keep the full 150s since the SSE keepalive holds the socket open.
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", 30);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
