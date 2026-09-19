@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.20";
+var VERSION = "2.36.21";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2942,7 +2942,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const codeMode = false; // DISABLED 2026-09-19: kimi-k2.7-code cannot tool-call (broke run_code); route ALL prompts through agentic gpt-5.5 path
   let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
-  const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
+  Math.max(8192, const answerCap = clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))))); // REASONING-FLOOR
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
   const loopDeadlineMs = envInt(env, "OPS_LOOP_DEADLINE_MS", 1.5e5);
@@ -3761,7 +3761,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     }
     work.unshift({ role: "system", content: OPS_SYSTEM_PROMPT + sysDate });
     const maxTurns = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
-    const answerCap = clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216)));
+    Math.max(8192, const answerCap = clamp(Number.isFinite(body.max_tokens) && body.max_tokens > 0 ? body.max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))))); // REASONING-FLOOR
     const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
     const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
     const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", 65536);
