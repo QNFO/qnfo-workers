@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.26";
+var VERSION = "2.36.27";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -48,7 +48,7 @@ __name2(stripToolFrames, "stripToolFrames");
 __name22(stripToolFrames, "stripToolFrames");
 __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-19: default ops upstream. (dynamic/ops-cost-opt was dropped - the route does not exist on the gateway -> 2019 model-not-found.)
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
@@ -2484,6 +2484,7 @@ async function ensureSchema(env) {
   try {
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_ai_log (id TEXT PRIMARY KEY, ts TEXT NOT NULL, model TEXT, strategy TEXT, complexity TEXT, domain TEXT, prompt TEXT, response TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost_usd REAL, latency_ms INTEGER, tool_calls TEXT, source TEXT, ua TEXT, streamed INTEGER DEFAULT 0, ok INTEGER DEFAULT 1)").run();
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS service_registry (service TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'worker', version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT)").run();
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS capability_audit_snapshot (service TEXT PRIMARY KEY, version TEXT, capabilities TEXT, limitations TEXT, ts TEXT)").run();
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS llm_gateway_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), provider TEXT, model TEXT, tier TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, status INTEGER DEFAULT 200, error TEXT, streamed INTEGER DEFAULT 0, prompt_chars INTEGER DEFAULT 0, source TEXT)").run();
   } catch (e) {
   }
@@ -3571,6 +3572,20 @@ __name2222(registryList, "registryList");
 // /health MUST advertise a non-empty `capabilities` list AND a `limitations` array, so a
 // client can tell what a service DOES and what it explicitly does NOT do - in particular
 // restrictions on agent/code execution ("weak agent" scoping). Non-mutating; paginated.
+async function capabilityAuditReport(env, body) {
+  if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
+  const results = Array.isArray(body && body.results) ? body.results : [];
+  if (!results.length) return { ok: false, error: "results[] required" };
+  const now = iso();
+  let n = 0;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (!r || !r.service) continue;
+    await env.QNFO_AUDIT.prepare("INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts").bind(String(r.service), r.version != null ? String(r.version) : null, JSON.stringify(r.capabilities || []), JSON.stringify(r.limitations || []), now).run();
+    n++;
+  }
+  return { ok: true, stored: n, ts: now, contract: "CAPABILITY-ADVERTISING-CONTRACT-1" };
+}
 async function capabilityAudit(env, offset, limit) {
   const off = Math.max(0, offset | 0);
   const lim = Math.min(50, Math.max(1, (limit | 0) || 25));
@@ -3579,6 +3594,13 @@ async function capabilityAudit(env, offset, limit) {
   const svcs = (all.registry || []).filter(function(s) {
     return s.base_url;
   });
+  let snap = {};
+  try {
+    if (env.QNFO_AUDIT) {
+      const snRows = await env.QNFO_AUDIT.prepare("SELECT service, version, capabilities, limitations, ts FROM capability_audit_snapshot").all();
+      for (let i2 = 0; i2 < (snRows.results || []).length; i2++) { const sr = snRows.results[i2]; if (sr && sr.service) snap[sr.service] = sr; }
+    }
+  } catch (e) {}
   const page = svcs.slice(off, off + lim);
   const non = [], unver = [];
   let checked = 0, conforming = 0;
@@ -3587,6 +3609,16 @@ async function capabilityAudit(env, offset, limit) {
     if (s.service === WORKER) continue;
     checked++;
     const url = String(s.base_url).replace(/\/+$/, "") + "/health";
+    const sn = snap[s.service];
+    if (sn) {
+      let sl = [], sc = [];
+      try { sl = JSON.parse(sn.limitations || "[]"); } catch (e) {}
+      try { sc = JSON.parse(sn.capabilities || "[]"); } catch (e) {}
+      if (!Array.isArray(sl) || !sl.length) { non.push({ service: s.service, version: sn.version || "", url: url, reason: "missing-limitations", source: "snapshot" }); }
+      else if (!Array.isArray(sc) || !sc.length) { non.push({ service: s.service, version: sn.version || "", url: url, reason: "empty-capabilities", source: "snapshot" }); }
+      else { conforming++; }
+      continue;
+    }
     let reason = "";
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(6e3), headers: { "User-Agent": "qnfo-ops-capability-audit" } });
@@ -4065,6 +4097,16 @@ var worker_default = {
       if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
       const _au = new URL(request.url);
       return json(await capabilityAudit(env, Number(_au.searchParams.get("offset") || 0), Number(_au.searchParams.get("limit") || 25)));
+    }
+    if (path === "/capability-audit/report" && method === "POST") {
+      if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
+      let body = null;
+      try {
+        body = await request.json();
+      } catch (e) {
+        return json({ error: "invalid JSON" }, 400);
+      }
+      return json(await capabilityAuditReport(env, body));
     }
     if (path === "/registry/refresh" && method === "POST") {
       if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
