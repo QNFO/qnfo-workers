@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.18";
+var VERSION = "2.36.19";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2539,6 +2539,57 @@ __name2(callDeepSeek, "callDeepSeek");
 __name22(callDeepSeek, "callDeepSeek");
 __name222(callDeepSeek, "callDeepSeek");
 __name2222(callDeepSeek, "callDeepSeek");
+async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta) {
+  const o = opts || {};
+  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
+  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0;
+  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
+  if (tools && tools.length) { body.tools = tools; body.tool_choice = o.toolChoice || "auto"; }
+  const resp = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(body) });
+  if (!resp.ok || !resp.body) throw new Error("deepseek stream " + resp.status);
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", content = "", finish = "stop", usage = null;
+  const tcs = [];
+  while (true) {
+    const r = await reader.read();
+    if (r.done) break;
+    buf += dec.decode(r.value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf(String.fromCharCode(10))) >= 0) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line || line.indexOf(":") === 0 || line.indexOf("data:") !== 0) continue;
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      let chunk; try { chunk = JSON.parse(payload); } catch (e) { continue; }
+      if (chunk.usage) usage = chunk.usage;
+      const ch = chunk.choices && chunk.choices[0];
+      if (!ch) continue;
+      if (ch.finish_reason) finish = ch.finish_reason;
+      const d = ch.delta;
+      if (!d) continue;
+      if (d.content) {
+        content += d.content;
+        if (onDelta && firstFrameIdx(content) < 0) { try { onDelta(d.content); } catch (e) {} }
+      }
+      if (Array.isArray(d.tool_calls)) {
+        for (const tc of d.tool_calls) {
+          const ti = tc.index != null ? tc.index : 0;
+          if (!tcs[ti]) tcs[ti] = { id: "", type: "function", function: { name: "", arguments: "" } };
+          if (tc.id) tcs[ti].id = tc.id;
+          if (tc.function) { if (tc.function.name) tcs[ti].function.name = tc.function.name; if (tc.function.arguments) tcs[ti].function.arguments += tc.function.arguments; }
+        }
+      }
+    }
+  }
+  const tool_calls = tcs.filter(Boolean).map(function(t, i) { if (!t.id) t.id = "call_" + i; return t; });
+  const message = { role: "assistant", content };
+  if (tool_calls.length) message.tool_calls = tool_calls;
+  return { resp: { choices: [{ index: 0, message, finish_reason: finish }], usage: usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }, servedBy: o.upstreamModel || UPSTREAM_MODEL };
+}
+__name(callDeepSeekStream, "callDeepSeekStream");
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) {
@@ -3107,13 +3158,18 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
         if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
-        const { resp, servedBy: _sb1 } = await callDeepSeek(env, work, capNow, toolsNow, { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 });
+        const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: frontierMode ? UPSTREAM_FRONTIER_MODEL : void 0 };
+        let _r1 = null;
+        if (isStream) { try { _r1 = await callDeepSeekStream(env, work, capNow, toolsNow, _dsOpts, function(txt) { emitChunk({ role: "assistant", content: txt }, null); streamedTokens = true; }); } catch (e) { _r1 = null; } }
+        if (!_r1) _r1 = await callDeepSeek(env, work, capNow, toolsNow, _dsOpts);
+        const resp = _r1.resp; const _sb1 = _r1.servedBy;
         if (_sb1) servedBy = _sb1;
         const choice = resp && resp.choices && resp.choices[0];
         upstreamUsage = resp && resp.usage || upstreamUsage;
         const msg0 = choice && choice.message;
         const toolCalls = msg0 && Array.isArray(msg0.tool_calls) && msg0.tool_calls.length ? msg0.tool_calls : null;
         if (toolCalls && iter < maxIters) {
+          streamedTokens = false;
           const serverCalls = toolCalls.filter(function(tc) {
             return tc && tc.function && _opsToolNames.has(tc.function.name);
           });
