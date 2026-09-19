@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.23";
+var VERSION = "2.36.24";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -48,7 +48,7 @@ __name2(stripToolFrames, "stripToolFrames");
 __name22(stripToolFrames, "stripToolFrames");
 __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-19: default ops upstream. (dynamic/ops-cost-opt was dropped - the route does not exist on the gateway -> 2019 model-not-found.)
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
@@ -3461,7 +3461,7 @@ function manifest() {
     version: VERSION,
     base_url: "https://ops.qnfo.org",
     purpose: "QNFO ops/infrastructure AI execution endpoint: queue-and-query cloud-native services (research_queue -> intent orchestrator -> autonomous backend batch execution), full-fleet health, multi-DB read-only query, Vectorize/R2/KV read, machine-readable service registry.",
-    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation"],
+    capabilities: ["ops-ai-gateway", "openai-compatible", "chat", "agent", "code", "tool-execution", "fleet-probes", "full-fleet-probes", "multi-db-query", "vectorize-search", "r2-access", "kv-access", "research-queue", "queue-query", "analytics", "self-registration", "service-registry", "capability-advertising-audit", "telemetry", "self-heal", "isolated-ops-logging", "pure-server-exec", "streamed-answers", "async-jobs", "run-to-completion", "self-chaining-jobs", "workspace-edit", "workspace-grep", "workspace-glob", "workspace-diff", "workspace-patch", "run-code-net", "exec-pipeline", "git-ops", "parallel-reads", "claude-code-parity", "full-stack-shell", "cloudflare-containers", "real-python-interpreter", "real-node-interpreter", "bash-execution", "pip-install", "npm-install", "git-clone", "firecracker-vm", "agents-sdk", "durable-agent-sessions", "websocket-hibernation"],
     routes: ROUTES,
     tools: OPS_TOOLS.map(function(t) {
       return { name: t.name, description: t.description, parameters: t.parameters };
@@ -3566,6 +3566,49 @@ __name2(registryList, "registryList");
 __name22(registryList, "registryList");
 __name222(registryList, "registryList");
 __name2222(registryList, "registryList");
+// CAPABILITY-ADVERTISING-CONTRACT-1 (2026-09-19): fleet-wide conformance audit.
+// Normative rule (docs/CAPABILITY-ADVERTISING-CONTRACT.md): every registered worker's
+// /health MUST advertise a non-empty `capabilities` list AND a `limitations` array, so a
+// client can tell what a service DOES and what it explicitly does NOT do - in particular
+// restrictions on agent/code execution ("weak agent" scoping). Non-mutating; paginated.
+async function capabilityAudit(env, offset, limit) {
+  const off = Math.max(0, offset | 0);
+  const lim = Math.min(50, Math.max(1, (limit | 0) || 25));
+  const all = await registryList(env);
+  if (!all || !all.ok) return all || { ok: false, error: "registry unavailable" };
+  const svcs = (all.registry || []).filter(function(s) {
+    return s.base_url;
+  });
+  const page = svcs.slice(off, off + lim);
+  const non = [];
+  let checked = 0, conforming = 0;
+  for (let i = 0; i < page.length; i++) {
+    const s = page[i];
+    checked++;
+    const url = String(s.base_url).replace(/\/+$/, "") + "/health";
+    let reason = "";
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(6e3), headers: { "User-Agent": "qnfo-ops-capability-audit" } });
+      if (!res.ok) reason = "unhealthy:" + res.status;
+      else {
+        const j = await res.json().catch(function() {
+          return null;
+        });
+        if (!j) reason = "no-json";
+        else if (!Array.isArray(j.limitations) || !j.limitations.length) reason = "missing-limitations";
+        else {
+          const nCaps = Array.isArray(j.capabilities) ? j.capabilities.length : typeof j.capabilities === "string" && j.capabilities ? j.capabilities.split(",").length : 0;
+          if (nCaps === 0) reason = "empty-capabilities";
+        }
+      }
+    } catch (e) {
+      reason = "unreachable";
+    }
+    if (!reason) conforming++;
+    else non.push({ service: s.service, version: s.version || "", url, reason });
+  }
+  return { ok: true, offset: off, limit: lim, total: svcs.length, checked, conforming, non_conforming: non, contract: "CAPABILITY-ADVERTISING-CONTRACT-1", generatedAt: iso() };
+}
 async function registryGet(env, service) {
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
   try {
@@ -4015,6 +4058,11 @@ var worker_default = {
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/manifest" && method === "GET") return json(manifest());
     if (path === "/registry" && method === "GET") return json(await registryList(env));
+    if (path === "/capability-audit" && method === "GET") {
+      if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
+      const _au = new URL(request.url);
+      return json(await capabilityAudit(env, Number(_au.searchParams.get("offset") || 0), Number(_au.searchParams.get("limit") || 25)));
+    }
     if (path === "/registry/refresh" && method === "POST") {
       if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
       return json(await registryRefresh(env));
