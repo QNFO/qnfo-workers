@@ -66,6 +66,23 @@ binding = "SVC_QNFO_INTENT"
 service = "qnfo-intent-orchestrator"
 environment = "production"
 
+# FleetAdvisor Durable Object (advisor + calibration subsystem; stateless -- uses no
+# state.storage). LIVE namespace: qnfo-fleet-control_FleetAdvisor (class FleetAdvisor,
+# script qnfo-fleet-control). This binding is what made the toml binding-INCOMPLETE before
+# 2026-09-19: live had 24 bindings, the toml declared 17, so a wrangler deploy would have
+# SILENTLY DROPPED the DO + 6 secrets (BINDING-PRESERVATION-1). Added 2026-09-19.
+# OPERATIVE DEPLOY PATH: the DO namespace was created out-of-band (raw content API,
+# as-built 2026-09-11), so reconcile the migration tag below against the live namespace
+# BEFORE any wrangler deploy; otherwise use scripts/raw_put.py (binding-preserving
+# /content PUT), the path used for this worker.
+[[durable_objects.bindings]]
+name = "FleetAdvisor"
+class_name = "FleetAdvisor"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FleetAdvisor"]
+
 [vars]
 ADVISOR_ITERS = "3"
 ADVISOR_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
