@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.37";
+var VERSION = "2.36.38";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4060,8 +4060,9 @@ async function opsDeploy(env, args) {
   let lock = null;
   try {
     const lr = await fetch(LOCK + "/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, owner: "qnfo-ops/ops-deploy", ttl_sec: 1800, expected_version: fromVer }) });
-    lock = await lr.json().catch(function () { return {}; });
-    log.push({ step: "lock", acquired: !!lock.acquired });
+    const _lt = await lr.text();
+    try { lock = JSON.parse(_lt); } catch (_e) { lock = {}; }
+    log.push({ step: "lock", http: lr.status, body: String(_lt).slice(0, 220), acquired: !!lock.acquired });
     if (!lock.acquired) return { ok: false, error: "lock not acquired (fail-closed)", lock: lock, log: log };
     let ok = false;
     let result = null;
