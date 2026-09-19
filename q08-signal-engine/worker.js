@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.20"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.21"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -291,7 +291,10 @@ function buildPrompt(friction, fewShot, recentStructures) {
 // Banned: llama, mistral, gemma-7b, -flash, -fp8-fast, -mini, -small (per fleet policy).
 var COMPOSE_MODELS = [
   "@cf/openai/gpt-oss-120b",
-  "@cf/moonshotai/kimi-k2.6",
+  "@cf/nvidia/nemotron-3-120b-a12b",
+  // NOTE: kimi-k2.6 / glm-5.3 / deepseek-v4-pro are REASONING models here - they return
+  // empty message.content once the budget is spent on reasoning_content, so they cannot
+  // serve as fallbacks at this token budget. Re-add only with a raised reasoning floor.
 ];
 
 async function compose(env, prompt) {
@@ -300,7 +303,7 @@ async function compose(env, prompt) {
     try {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 4500,
+        max_tokens: 6000,
         temperature: 0.65,
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
