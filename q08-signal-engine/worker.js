@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.23"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.24"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -672,8 +672,11 @@ async function generate(env) {
   piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
-  // Feedback loop (async, non-blocking)
-  feedbackScan(env).catch(() => {});
+  // Feedback loop. MUST be awaited: as a floating promise with no ctx.waitUntil it
+  // was truncated by the Worker runtime once the response returned, so the promotion
+  // loop never completed and the reader-proven pool stayed empty (feedback_score
+  // updates landed, promotions did not).
+  await feedbackScan(env).catch(() => {});
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
   await queueForDistribution(env, saved.title, saved.slug);
   pingIndexNow(env, ORIGIN + "/p/" + saved.slug).catch(() => {});
