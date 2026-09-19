@@ -1,4 +1,4 @@
-const VERSION = "2.0.3";
+const VERSION = "2.0.4";
 const QNFO_VERSION = "qnfo-email/command-20260918";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
@@ -79,6 +79,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const json = function(data, status) { return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); };
+    const rawPath = url.pathname;
     let p = url.pathname;
     if (p === "/email" || p.startsWith("/email/")) p = p.replace("/email", "") || "/";
 
@@ -95,7 +96,7 @@ export default {
       } catch (e) { return new Response("error: " + e.message, { status: 500 }); }
     }
 
-    if (request.method !== "OPTIONS" && p !== "/health") {
+    if (request.method !== "OPTIONS" && rawPath !== "/health") {
       const auth = request.headers.get("Authorization") || "";
       const apiKey = env.API_KEY || "", gwKey = env.GATEWAY_EMAIL_KEY || "";
       const xk = request.headers.get("x-api-key") || "";
