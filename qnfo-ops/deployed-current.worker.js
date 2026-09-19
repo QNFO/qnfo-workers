@@ -50,7 +50,7 @@ __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-var UPSTREAM_MODEL = "dynamic/ops-cost-opt"; // 2026-09-19: cost/perf-optimized AI Gateway dynamic route (verified -> gpt-5-mini-2025-08-07)
+var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-19: cost/perf-optimized AI Gateway dynamic route (verified -> gpt-5-mini-2025-08-07)
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
