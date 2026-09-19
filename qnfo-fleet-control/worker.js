@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.18-redeploylock";
+var VERSION = "0.4.19-ledger";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1365,6 +1365,17 @@ async function redeploy(env, worker) {
       await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lockTok }) }, 8e3);
     } catch (e) {
     }
+  }
+  // DEPLOY-LEDGER-1 (2026-09-19): write the mutation to the qnfo-deploy-guard ledger.
+  // qnfo-deploy-guard marks a mutation "logged" only when a fleet_deploys row exists for the
+  // worker with ok=1 and ts within 180s of the script modified_on; otherwise it files
+  // DEPLOY-UNLOGGED-MUTATION, and DEPLOY-UNCOORDINATED-DEPLOY once the 120s lock has expired
+  // before the guard samples. This cron locked but never ledgered, so the redeploy path was the
+  // one deploy path that always tripped the guard. Record it here (fail-soft: a ledger outage
+  // must not abort the deploy, but it WILL leave a visible anomaly for the guard to file).
+  try {
+    await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, actor: "qnfo-fleet-control/redeploy", from: depV || "?", to: canV, source_path: c.path, ok: ok, note: String(note || "").slice(0, 280) }) }, 8e3);
+  } catch (e) {
   }
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
   return { ok, status: ok ? 200 : 502, note, from: depV, to: canV, direction, source: c.path, bytes: c.code.length };
