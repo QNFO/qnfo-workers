@@ -1,0 +1,80 @@
+name: deploy-gate
+
+# The repo IS the deploy source: qnfo-fleet-control redeploys qnfo-ops from main on a */20
+# cron. A broken bundle or a leftover merge marker on main is therefore not merely a red CI
+# run -- it is a bundle the cron can carry, or silently fail to carry (WORKER-BUILD-GATE-1).
+# This workflow is the permanent gate that must stay green before anything reaches main.
+#
+# Gates enforced (see scripts/deploy_gate.py):
+#   WORKER-BUILD-GATE-1     `wrangler deploy --dry-run` -- a REAL bundle build
+#   CONFLICT-MARKER-GATE-1  <<<<<<< / ======= / >>>>>>> in any worker source
+# The coordinated + logged deploy itself happens LOCALLY under
+# `deploy_guard.py with-lock` (DEPLOY-GUARD-BYPASS-1); CI validates the artifact, it does
+# not deploy.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Determine changed worker dirs
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          else
+            BASE="HEAD^"
+          fi
+          git diff --name-only "$BASE" HEAD 2>/dev/null | awk -F/ 'NF>1{print $1}' | sort -u | sed '/^$/d' > /tmp/changed.txt || true
+          echo "changed dirs:"; cat /tmp/changed.txt || true
+
+      - name: Gate every changed worker dir (build + conflict markers)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          rc=0
+          while read -r d; do
+            [ -z "$d" ] && continue
+            if [ -f "$d/wrangler.toml" ]; then
+              echo "::group::deploy-gate $d"
+              python3 scripts/deploy_gate.py --check "$d" || rc=1
+              echo "::endgroup::"
+            else
+              echo "skip $d (no wrangler.toml)"
+            fi
+          done < /tmp/changed.txt
+          exit $rc
+
+      - name: Gate ALL worker dirs (full sweep on manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          rc=0
+          for d in */ ; do
+            d="${d%/}"
+            if [ -f "$d/wrangler.toml" ]; then
+              echo "::group::deploy-gate $d"
+              python3 scripts/deploy_gate.py --check "$d" || rc=1
+              echo "::endgroup::"
+            fi
+          done
+          exit $rc
