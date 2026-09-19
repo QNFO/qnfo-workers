@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.17-advisordedupe";
+var VERSION = "0.4.18-redeploylock";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1328,6 +1328,19 @@ async function redeploy(env, worker) {
   }
   var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
   var toSha = await sha256(c.code);
+  // REDEPLOY-CRON-LOCK-1: acquire the distributed deploy lock so a locked manual deploy is
+  // never clobbered by the redeploy cron (DEPLOY-GUARD-BYPASS-1, cron side). Skip if held.
+  var lockTok = null;
+  try {
+    var lr2 = await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, owner: "qnfo-fleet-control/redeploy", ttl_sec: 120, expected_version: depV }) }, 8e3);
+    if (lr2 && lr2.status === 409) {
+      await audit(env, worker, "deploy", depV || "?", canV, c.path, false, "skipped: deploy lock held by another owner (REDEPLOY-CRON-LOCK-1)");
+      return { ok: false, status: 409, note: "deploy lock held by another owner - skipped", from: depV, to: canV };
+    }
+    var lj2 = lr2 ? await lr2.json().catch(function() { return null; }) : null;
+    lockTok = lj2 && lj2.token ? lj2.token : null;
+  } catch (e) {
+  }
   var r;
   if (isModule(c.code)) {
     var fd = new FormData();
@@ -1347,6 +1360,12 @@ async function redeploy(env, worker) {
   var depV2 = dep2 ? versionOf(dep2) : null;
   var ok = putOk && depV2 === canV;
   var note = !putOk ? "HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180) : ok ? "redeployed " + depV + " -> " + canV : "PUT-ok but deployed still " + (depV2 || "?") + " (wrangler-managed no-op?)";
+  if (lockTok) {
+    try {
+      await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lockTok }) }, 8e3);
+    } catch (e) {
+    }
+  }
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
   return { ok, status: ok ? 200 : 502, note, from: depV, to: canV, direction, source: c.path, bytes: c.code.length };
 }
