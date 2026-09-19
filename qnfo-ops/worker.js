@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.19";
+var VERSION = "2.36.20";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -50,7 +50,8 @@ __name222(stripToolFrames, "stripToolFrames");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-var UPSTREAM_MODEL = "openai/gpt-5.5"; // 2026-09-18: DeepSeek unreliable -> GPT-5.5 (reliable tool-capable frontier)
+var UPSTREAM_MODEL = "dynamic/ops-cost-opt"; // 2026-09-19: cost/perf-optimized AI Gateway dynamic route (verified -> gpt-5-mini-2025-08-07)
+var UPSTREAM_MODEL_FB = "openai/gpt-5.5"; // automatic fallback if the dynamic route is unavailable
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var UPSTREAM_FRONTIER_MODEL = "openai/gpt-5.5";
@@ -2508,13 +2509,14 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0; const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
+  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0 || modelToUse.indexOf("dynamic/") === 0; let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
   }
   let resp = null, _dsLastErr = "";
   for (let _dsTry = 0; _dsTry < 3; _dsTry++) {
+    if (_dsTry === 2 && !o.upstreamModel && body.model === UPSTREAM_MODEL) body.model = UPSTREAM_MODEL_FB;
     resp = await fetch(DEEPSEEK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") },
@@ -2543,7 +2545,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   const o = opts || {};
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0;
+  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0 || modelToUse.indexOf("dynamic/") === 0;
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = o.toolChoice || "auto"; }
   const resp = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(body) });
