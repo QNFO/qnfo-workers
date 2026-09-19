@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.41";
+var VERSION = "2.36.42";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3358,7 +3358,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       }, "cancel")
     });
     const response = new Response(streamResp, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache" } });
-    runner();
+    runner().catch(function(e){ try { emitChunk({ role: "assistant", content: "ops stream terminated: " + (e && e.message || String(e)) }, null); emitDone(); } catch (_) {} });
     return response;
   }
   return await runner();
