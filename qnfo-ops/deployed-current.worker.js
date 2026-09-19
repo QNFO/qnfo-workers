@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.24";
+var VERSION = "2.36.25";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3580,7 +3580,7 @@ async function capabilityAudit(env, offset, limit) {
     return s.base_url;
   });
   const page = svcs.slice(off, off + lim);
-  const non = [];
+  const non = [], unver = [];
   let checked = 0, conforming = 0;
   for (let i = 0; i < page.length; i++) {
     const s = page[i];
@@ -3589,7 +3589,8 @@ async function capabilityAudit(env, offset, limit) {
     let reason = "";
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(6e3), headers: { "User-Agent": "qnfo-ops-capability-audit" } });
-      if (!res.ok) reason = "unhealthy:" + res.status;
+      if (res.status === 404) reason = "probe-blocked:404";
+      else if (!res.ok) reason = "unhealthy:" + res.status;
       else {
         const j = await res.json().catch(function() {
           return null;
@@ -3602,12 +3603,13 @@ async function capabilityAudit(env, offset, limit) {
         }
       }
     } catch (e) {
-      reason = "unreachable";
+      reason = "probe-blocked:" + String(e && e.name || "error");
     }
     if (!reason) conforming++;
+    else if (reason.indexOf("probe-blocked") === 0) unver.push({ service: s.service, version: s.version || "", url, reason });
     else non.push({ service: s.service, version: s.version || "", url, reason });
   }
-  return { ok: true, offset: off, limit: lim, total: svcs.length, checked, conforming, non_conforming: non, contract: "CAPABILITY-ADVERTISING-CONTRACT-1", generatedAt: iso() };
+  return { ok: true, offset: off, limit: lim, total: svcs.length, checked, conforming, non_conforming: non, unverified: unver, probe_note: "IN-WORKER-PROBE-BLOCKED-1 (2026-09-19): a Cloudflare Worker CANNOT subrequest a sibling *.workers.dev URL - the platform returns 404 (verified: curl 200 vs worker-fetch 404 for the same URL, from BOTH qnfo-ops and qnfo-ai). /health reachability is NOT derivable in-worker; such entries appear under unverified, never as a false unhealthy. Run the probe from an external runner that can reach workers.dev.", contract: "CAPABILITY-ADVERTISING-CONTRACT-1", generatedAt: iso() };
 }
 async function registryGet(env, service) {
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
