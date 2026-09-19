@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.6.6"; // FIX-5 (2026-09-14): concrete chain remediation
+var VERSION = "1.7.0"; // ONE-SCREEN-1 (2026-09-19): single-viewport layout + fleet topology graph (nodes/edges)
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1457,6 +1457,7 @@ async function integrationView(env, liveNames) {
     registered: nodes.length,
     live: liveNames ? liveNames.length : null,
     edges: edges.length,
+    edge_list: edges.slice(0, 500),
     density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
     islands,
     sinks,
@@ -1598,125 +1599,112 @@ function chip(state, text) {
 }
 __name(chip, "chip");
 __name2(chip, "chip");
+function topologySvg(ig) {
+  if (!ig || !ig.edge_list || !ig.edge_list.length) return '<div class="sub">no declared dependency edges</div>';
+  const edges = ig.edge_list;
+  const set = {};
+  for (const e of edges) { set[e.from] = 1; set[e.to] = 1; }
+  const nodes = Object.keys(set);
+  if (!nodes.length) return '<div class="sub">no nodes</div>';
+  const W = 620, H = 300, cx = W / 2, cy = H / 2, R = Math.min(cx, cy) - 24;
+  const pos = {};
+  for (let i = 0; i < nodes.length; i++) { const a = (2 * Math.PI * i) / nodes.length - Math.PI / 2; pos[nodes[i]] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }; }
+  const hubSet = {};
+  (ig.hubs || []).forEach(function (x) { hubSet[x.service] = 1; });
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%;height:calc(100% - 52px);display:block">';
+  for (const e of edges) {
+    const a = pos[e.from], b = pos[e.to];
+    if (!a || !b) continue;
+    s += '<line x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) + '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke="#1f6feb" stroke-width="0.5" opacity="0.4"/>';
+  }
+  for (const n of nodes) {
+    const p = pos[n], hub = hubSet[n];
+    s += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (hub ? 4 : 2.4) + '" fill="' + (hub ? "#d29922" : "#3fb950") + '"><title>' + esc(n) + '</title></circle>';
+  }
+  for (const hh of (ig.hubs || []).slice(0, 8)) { const p = pos[hh.service]; if (p) s += '<text x="' + (p.x + 5).toFixed(1) + '" y="' + (p.y + 3).toFixed(1) + '" fill="#8b949e" font-size="7">' + esc(hh.service) + '</text>'; }
+  return s + '</svg>';
+}
 function pageHtml(st) {
   const h = [];
-  h.push('<!doctype html><html lang="en"><head><meta charset="utf-8"/>');
-  h.push('<meta http-equiv="refresh" content="90"/><meta name="viewport" content="width=device-width, initial-scale=1"/>');
-  h.push("<title>Quniverse Fleet Dashboard</title><style>");
-  h.push("body{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#0d1117;color:#c9d1d9;margin:0;padding:16px}");
-  h.push("h1{font-size:20px;margin:4px 0}h2{font-size:14px;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.06em;color:#8b949e}");
-  h.push("a{color:#58a6ff;text-decoration:none}.sub{color:#8b949e;font-size:12px}");
-  h.push("table{border-collapse:collapse;width:100%;font-size:12px;margin:4px 0 10px}th,td{border:1px solid #30363d;padding:3px 6px;text-align:left;vertical-align:top}th{background:#161b22;color:#8b949e;position:sticky;top:0}");
-  h.push("tr:nth-child(even) td{background:#0d1117}tr:hover td{background:#161b22}");
-  h.push(".chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.chip{padding:2px 8px;border-radius:10px;font-size:12px}");
-  h.push(".chip-ok{background:#12291b;color:#3fb950;border:1px solid #238636}.chip-err{background:#2d1215;color:#f85149;border:1px solid #da3633}");
-  h.push(".chip-warn{background:#2d1f0c;color:#d29922;border:1px solid #9e6a03}.chip-idle{background:#161b22;color:#8b949e;border:1px solid #30363d}.chip-info{background:#0d2333;color:#58a6ff;border:1px solid #1f6feb}");
-  h.push(".issue-err{color:#f85149}.issue-warn{color:#d29922}.card{border:1px solid #30363d;border-radius:6px;padding:10px;margin:10px 0;background:#0d1117}");
-  h.push(".dot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:4px}");
-  h.push(".dot-ok{background:#3fb950}.dot-err{background:#f85149}.dot-warn{background:#d29922}.dot-idle{background:#6e7681}");
-  h.push("</style></head><body>");
-  const totalOk = st.scheduled.filter(function(x) {
-    return x.status === "OK";
-  }).length;
-  const totalErr = st.scheduled.filter(function(x) {
-    return x.status === "ERR";
-  }).length;
-  const totalNoRun = st.scheduled.filter(function(x) {
-    return x.status === "NO-RUN";
-  }).length;
-  const probeOk = st.probes.filter(function(p) {
-    return p.ok;
-  }).length;
-  h.push('<h1>Quniverse Fleet Dashboard <span class="sub">v' + esc(st.version) + "</span></h1>");
-  h.push('<div class="sub">generated ' + esc(st.generated_at) + ' UTC &middot; 24h analytics window &middot; auto-refreshes every 90s &middot; raw: <a href="/api/state">/api/state</a> &middot; actions: <a href="/api/actions">/api/actions</a></div>');
-  h.push('<div class="chips">');
-  h.push(chip("info", st.fleet.workers + " workers active"));
-  h.push(chip("info", st.fleet.scheduled + " scheduled"));
-  h.push(chip("info", st.fleet.d1_databases + " D1"));
-  h.push(chip("info", st.totals.req24 + " req/24h"));
-  h.push(st.totals.err24 > 0 ? chip("err", st.totals.err24 + " errors/24h") : chip("ok", "0 errors/24h"));
-  h.push(probeOk === st.probes.length ? chip("ok", probeOk + "/" + st.probes.length + " probes up") : chip("warn", probeOk + "/" + st.probes.length + " probes up"));
-  h.push(chip(totalErr > 0 ? "err" : "ok", totalErr + " scheduled w/ errors"));
-  h.push(chip(totalNoRun > 0 ? "warn" : "ok", totalNoRun + " no-run"));
-  h.push(st.verdict === "ACTION_NEEDED" ? chip("err", "verdict: ACTION NEEDED") : st.verdict === "DEGRADED" ? chip("warn", "verdict: DEGRADED") : chip("ok", "verdict: HEALTHY"));
-  h.push("</div>");
-  const verdict = st.verdict || (st.issues && st.issues.some(function(i) {
-    return i.sev === "err";
-  }) ? "ACTION_NEEDED" : st.issues && st.issues.length ? "DEGRADED" : "HEALTHY");
-  if (st.issues && st.issues.length) {
-    const errs = st.issues.filter(function(i) {
-      return i.sev === "err";
-    });
-    const warns = st.issues.filter(function(i) {
-      return i.sev === "warn";
-    });
-    const byCat = {};
-    for (const i of st.issues) {
-      const c = i.category || "general";
-      byCat[c] = (byCat[c] || 0) + 1;
-    }
-    h.push('<div class="card"><h2>Action board &middot; ' + errs.length + " error, " + warns.length + " warning</h2>");
-    h.push('<div class="sub">verdict <b>' + esc(verdict) + "</b> &middot; by category: " + esc(Object.keys(byCat).map(function(k) {
-      return k + " " + byCat[k];
-    }).join(", ")) + ' &middot; machine feed <a href="/api/actions">/api/actions</a> &middot; loop <a href="/api/loop">/api/loop</a> &middot; issues <a href="https://github.com/QNFO/qnfo-fleet-issues">GitHub</a></div>');
-    for (const i of st.issues) {
-      const cls = i.sev === "err" ? "issue-err" : "issue-warn";
-      const rem = i.remediation && i.remediation.summary ? i.remediation.summary : "review raw evidence and classify";
-      const auto = i.auto_actionable ? '<span class="chip chip-info">auto</span>' : "";
-      const age = i.first_seen ? "since " + esc(String(i.first_seen).slice(0, 16).replace("T", " ")) : "first seen now";
-      h.push('<div class="card" style="margin:8px 0;padding:8px"><div class="' + cls + '"><b>[' + esc(i.sev) + "] " + esc(i.category) + "</b> " + esc(i.title || i.detail || "") + " " + auto + "</div>");
-      h.push('<div class="sub">' + esc(i.detail || "") + "</div>");
-      h.push("<div>Next: " + esc(rem) + ' <span class="sub">&middot; owner ' + esc(i.owner || "fleet") + " &middot; " + esc(age) + " &middot; " + esc(i.id) + (i.github ? ' &middot; <a href="https://github.com/' + GH_REPO + "/issues/" + i.github.number + '">#' + i.github.number + "</a> " + esc(i.github.state) + (i.github.dispatch ? " (" + esc(i.github.dispatch) + ")" : "") : "") + "</span></div></div>");
-    }
-    h.push("</div>");
-  } else {
-    h.push('<div class="card"><h2>Action board</h2><div class="sub">verdict HEALTHY &middot; no active error or warning conditions.</div></div>');
+  const issues = st.issues || [];
+  const errs = issues.filter(function (i) { return i.sev === "err"; });
+  const warns = issues.filter(function (i) { return i.sev === "warn"; });
+  const sched = st.scheduled || [];
+  const probes = st.probes || [];
+  const totalErr = sched.filter(function (x) { return x.status === "ERR"; }).length;
+  const totalNoRun = sched.filter(function (x) { return x.status === "NO-RUN"; }).length;
+  const probeOk = probes.filter(function (p) { return p.ok; }).length;
+  const ig = st.integration || {};
+  const rc = st.report_card || {};
+  const verd = st.verdict || (errs.length ? "ACTION_NEEDED" : warns.length ? "DEGRADED" : "HEALTHY");
+  const vcls = verd === "HEALTHY" ? "ok" : verd === "DEGRADED" ? "warn" : "err";
+  h.push('<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>');
+  h.push('<title>Quniverse Fleet Dashboard</title><style>');
+  h.push('*{box-sizing:border-box}html,body{height:100%;margin:0}');
+  h.push('body{font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:#0d1117;color:#c9d1d9;overflow:hidden}');
+  h.push('a{color:#58a6ff;text-decoration:none}.sub{color:#8b949e;font-size:10px}');
+  h.push('.app{display:grid;grid-template-columns:1.5fr 1fr 1.25fr;grid-template-rows:auto minmax(0,1.2fr) minmax(0,1fr);gap:7px;height:100vh;padding:7px}');
+  h.push('.hdr{grid-column:1/4;display:flex;align-items:center;gap:9px;flex-wrap:wrap;border-bottom:1px solid #30363d;padding-bottom:6px}');
+  h.push('.hdr h1{font-size:15px;margin:0 4px 0 0}');
+  h.push('.panel{border:1px solid #30363d;border-radius:6px;padding:6px 8px;overflow:auto;min-height:0}');
+  h.push('.panel h2{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b949e;margin:0 0 5px}');
+  h.push('.chips{display:flex;gap:5px;flex-wrap:wrap}.chip{padding:1px 7px;border-radius:9px;font-size:10px;white-space:nowrap}');
+  h.push('.chip-ok{background:#12291b;color:#3fb950;border:1px solid #238636}.chip-err{background:#2d1215;color:#f85149;border:1px solid #da3633}');
+  h.push('.chip-warn{background:#2d1f0c;color:#d29922;border:1px solid #9e6a03}.chip-idle{background:#161b22;color:#8b949e;border:1px solid #30363d}.chip-info{background:#0d2333;color:#58a6ff;border:1px solid #1f6feb}');
+  h.push('table{border-collapse:collapse;width:100%;font-size:10px}th,td{border-bottom:1px solid #21262d;padding:2px 4px;text-align:left;vertical-align:top}th{color:#8b949e}');
+  h.push('tr:hover td{background:#161b22}.issue-err{color:#f85149}.issue-warn{color:#d29922}');
+  h.push('.dot{display:inline-block;width:7px;height:7px;border-radius:4px;margin-right:4px}.dot-ok{background:#3fb950}.dot-err{background:#f85149}.dot-warn{background:#d29922}.dot-idle{background:#6e7681}');
+  h.push('.iss{border-left:2px solid #da3633;padding:1px 0 2px 6px;margin:3px 0}.iss.w{border-left-color:#9e6a03}');
+  h.push('.gauge{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px}');
+  h.push('</style></head><body><div class="app">');
+  h.push('<div class="hdr"><h1>Quniverse Fleet</h1><span class="chip chip-' + vcls + '">' + esc(verd) + '</span><span class="chips">');
+  h.push(chip("info", st.fleet.workers + " workers") + chip("info", st.fleet.scheduled + " sched") + chip("info", st.fleet.d1_databases + " D1") + chip("info", st.totals.req24 + " req/24h"));
+  h.push(st.totals.err24 > 0 ? chip("err", st.totals.err24 + " err/24h") : chip("ok", "0 err/24h"));
+  h.push(probeOk === probes.length ? chip("ok", probeOk + "/" + probes.length + " probes") : chip("warn", probeOk + "/" + probes.length + " probes"));
+  h.push(totalErr > 0 ? chip("err", totalErr + " sched-err") : chip("ok", "sched ok"));
+  if (totalNoRun > 0) h.push(chip("warn", totalNoRun + " no-run"));
+  h.push(ig.drift && ig.drift.ghost ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
+  h.push(ig.drift && ig.drift.unregistered ? chip("warn", ig.drift.unregistered + " unreg") : chip("ok", "0 unreg"));
+  h.push('</span><span class="sub" style="margin-left:auto">v' + esc(st.version) + ' &middot; ' + esc(String(st.generated_at || "").slice(0, 16).replace("T", " ")) + 'U &middot; <a href="/api/state">state</a> <a href="/api/actions">actions</a> <a href="/api/loop">loop</a></span></div>');
+  h.push('<div class="panel"><h2>Fleet topology &middot; ' + (ig.registered || 0) + ' nodes / ' + (ig.edges || 0) + ' edges &middot; density ' + (ig.density == null ? "n/a" : ig.density) + '</h2>');
+  h.push(topologySvg(ig));
+  h.push('<div class="chips">' + chip("info", (ig.live == null ? "?" : ig.live) + " live") + chip("ok", (ig.registered || 0) + " registered") + (ig.hubs && ig.hubs.length ? chip("info", "top hub " + esc(ig.hubs[0].service) + " (" + ig.hubs[0].out + " out)") : "") + (ig.islands && ig.islands.length ? chip("warn", ig.islands.length + " islands") : "") + (ig.drift && ig.drift.unversioned ? chip("warn", ig.drift.unversioned + " unversioned") : "") + '</div>');
+  if (ig.islands && ig.islands.length) h.push('<div class="sub" style="margin-top:3px">islands (no declared edge): ' + esc(ig.islands.slice(0, 16).join(", ")) + '</div>');
+  h.push('</div>');
+  h.push('<div class="panel"><h2>Systems report card</h2><div class="gauge">');
+  h.push('<span class="sub">Decision</span><span>LoA ' + (rc.loa || "n/a") + '</span>');
+  h.push('<span class="sub">Intelligence</span><span>' + esc(rc.agi || "n/a") + '</span>');
+  h.push('<span class="sub">VSM</span><span>' + esc(rc.vsm || "n/a") + '</span>');
+  h.push('<span class="sub">OODA</span><span>' + esc(rc.ooda || "n/a") + '</span>');
+  h.push('<span class="sub">Watchmaker</span><span>' + esc(rc.watchmaker || "n/a") + '</span>');
+  h.push('</div><div class="chips" style="margin-top:6px">');
+  h.push(rc.human_open === 0 ? chip("ok", "human-gated 0") : chip("warn", "human-gated " + rc.human_open));
+  h.push(chip("info", "self-heal " + rc.self_heal_total));
+  h.push(rc.open_issues === 0 ? chip("ok", "open issues 0") : chip("warn", "open issues " + rc.open_issues));
+  h.push(rc.drift_total > 0 ? chip("warn", "drift " + rc.drift_total) : chip("ok", "drift 0"));
+  h.push('</div><div class="sub" style="margin-top:6px">Objective: human-intervention&rarr;0, drift&rarr;0, self-heal&rarr;1.</div></div>');
+  h.push('<div class="panel"><h2>Action board &middot; ' + errs.length + ' err / ' + warns.length + ' warn</h2>');
+  if (!issues.length) h.push('<div class="sub">HEALTHY - no active conditions.</div>');
+  else for (const i of issues.slice(0, 60)) h.push('<div class="iss' + (i.sev === "err" ? "" : " w") + '"><b class="' + (i.sev === "err" ? "issue-err" : "issue-warn") + '">' + esc(i.category || i.sev) + '</b> ' + esc(String(i.title || i.detail || "").slice(0, 160)) + '</div>');
+  h.push('</div>');
+  h.push('<div class="panel"><h2>Scheduled workers &middot; next runs UTC</h2><table><tr><th></th><th>worker</th><th>cron</th><th>next</th><th>24h</th><th>err</th><th>last</th></tr>');
+  for (const s of sched) {
+    const dc = s.status === "ERR" ? "err" : s.status === "OK" ? "ok" : s.status === "NO-RUN" ? "warn" : "idle";
+    h.push('<tr><td><span class="dot dot-' + dc + '"></span></td><td>' + esc(s.name) + '</td><td class="sub">' + esc((s.crons || []).join(",")) + '</td><td class="sub">' + esc(s.next && s.next.length ? s.next[0].at : "-") + '</td><td>' + s.req24 + '</td><td>' + (s.err24 > 0 ? '<b class="issue-err">' + s.err24 + '</b>' : s.err24) + '</td><td class="sub">' + esc(String(s.lastRun || "").slice(5, 16).replace("T", " ")) + '</td></tr>');
   }
-  h.push("<h2>Scheduled workers (next runs UTC)</h2>");
-  h.push("<table><tr><th>status</th><th>worker</th><th>purpose</th><th>cron(s)</th><th>next runs</th><th>24h inv</th><th>24h err</th><th>exp fires</th><th>modified</th><th>last run</th></tr>");
-  for (const s of st.scheduled) {
-    const dotc = s.status === "ERR" ? "err" : s.status === "OK" ? "ok" : s.status === "NO-RUN" ? "warn" : "idle";
-    h.push('<tr><td><span class="dot dot-' + dotc + '"></span>' + esc(s.status) + "</td>");
-    h.push("<td>" + esc(s.name) + "</td><td>" + esc(s.purpose) + ' <span class="sub">(' + esc(s.group) + ")</span></td>");
-    h.push("<td>" + esc(s.crons.join(", ")) + "</td>");
-    h.push("<td>" + (s.next.length ? s.next.map(function(n) {
-      return n.at + (s.crons.length > 1 ? " [" + esc(n.cron) + "]" : "");
-    }).join("<br/>") : "none in 400d") + "</td>");
-    h.push("<td>" + s.req24 + "</td><td>" + (s.err24 > 0 ? '<b style="color:#f85149">' + s.err24 + "</b>" : s.err24) + "</td><td>" + s.expected24 + "</td>");
-    h.push('<td class="sub">' + esc((s.modified_on || "").slice(0, 16)) + "</td>");
-    h.push('<td class="sub">' + esc(s.lastRun ? String(s.lastRun).slice(0, 16).replace("T", " ") : "never (30d)") + "</td></tr>");
-  }
-  h.push("</table>");
-  h.push("<h2>Pipeline audits (D1 qnfo-audit + outreach + living-paper)</h2>");
-  h.push("<table><tr><th>state</th><th>probe</th><th>detail</th><th>latest</th></tr>");
-  for (const a of st.audits) {
-    h.push("<tr><td>" + chip(a.state, a.state) + "</td><td>" + esc(a.label) + "</td><td>" + esc(a.detail) + '</td><td class="sub">' + esc(a.ts ? String(a.ts).slice(0, 19) : "") + "</td></tr>");
-  }
-  h.push("</table>");
-  h.push("<h2>Endpoint probes</h2>");
-  h.push("<table><tr><th>status</th><th>name</th><th>url</th><th>http</th><th>ms</th><th>body sample</th></tr>");
-  for (const p of st.probes) {
-    h.push("<tr><td>" + (p.ok ? chip("ok", "UP") : chip("warn", "DOWN")) + "</td><td>" + esc(p.name) + "</td><td>" + esc(p.url) + "</td><td>" + p.status + "</td><td>" + p.ms + '</td><td class="sub">' + esc(p.body) + "</td></tr>");
-  }
-  h.push("</table>");
-  h.push(integrationHtml(st.integration, st));
-  h.push(systemIntegrationHtml(st.integration && st.integration.system));
-  h.push(reportCardHtml(st.report_card));
-  h.push("<h2>Device-bound (Windows Task Scheduler + DeepChat local cron) - front-end only</h2>");
-  h.push('<div class="sub">captured ' + esc(st.device.captured_at || "") + " UTC &middot; " + esc(st.device.note || "") + " &middot; cloud-able functions run in the CF scheduled layer, never local cron (CLOUD-FRONTEND-ONLY-1)</div>");
-  h.push("<table><tr><th>task</th><th>status</th><th>last run</th><th>last result</th><th>next run</th><th>schedule</th></tr>");
-  for (const t of st.device.windows_tasks) {
-    const stc = t.status === "Ready" ? "ok" : "warn";
-    h.push("<tr><td>" + esc(t.name) + "</td><td>" + chip(stc, t.status) + "</td><td>" + esc(t.last || "") + "</td><td>" + esc(t.lastres || "") + "</td><td>" + esc(t.next || "") + "</td><td>" + esc(t.schedule || "") + "</td></tr>");
-  }
-  h.push("</table>");
-  if (st.device.local_crons && st.device.local_crons.length) {
-    h.push("<table><tr><th>local cron id</th><th>name</th><th>schedule</th><th>note</th></tr>");
-    for (const lc of st.device.local_crons) h.push("<tr><td>" + esc(lc.id) + "</td><td>" + esc(lc.name) + "</td><td>" + esc(lc.cron) + '</td><td class="sub">' + esc(lc.note) + "</td></tr>");
-    h.push("</table>");
-  }
-  h.push('<div class="sub" style="margin-top:14px">guard set: prompt-store-verify / scheduler-guard / model_guard / adversarial-guard (exit 0 each cycle) &middot; registry captured ' + esc(st.meta.registry_captured_at || "") + " UTC</div>");
-  h.push("</body></html>");
+  h.push('</table></div>');
+  h.push('<div class="panel"><h2>Probes ' + probeOk + '/' + probes.length + ' up &middot; audits</h2><table>');
+  for (const p of probes) h.push('<tr><td>' + (p.ok ? '<span class="dot dot-ok"></span>' : '<span class="dot dot-warn"></span>') + '</td><td>' + esc(p.name) + '</td><td class="sub">' + esc(p.url || "") + '</td><td>' + p.status + '</td><td>' + p.ms + 'ms</td></tr>');
+  for (const a of (st.audits || [])) h.push('<tr><td>' + chip(a.state, a.state) + '</td><td colspan="4" class="sub">' + esc(a.label) + ': ' + esc(a.detail || "") + '</td></tr>');
+  h.push('</table></div>');
+  h.push('<div class="panel"><h2>Chains, queues &amp; device</h2>');
+  if (st.integration && st.integration.system && st.integration.system.score) h.push('<div class="sub">system integration: score ' + esc(st.integration.system.score.total) + ' &middot; chains ' + esc(st.integration.system.score.chains) + ' &middot; coverage ' + esc(st.integration.system.score.coverage) + ' &middot; freshness ' + esc(st.integration.system.score.freshness) + '</div>');
+  h.push('<table>');
+  for (const q of (st.queues || [])) h.push('<tr><td>' + esc(q.queue) + '</td><td class="sub">' + esc(q.db) + '</td><td>open ' + q.open + '</td><td>' + (q.stale ? '<span class="chip chip-warn">stale ' + (q.age_h || "?") + 'h</span>' : '<span class="chip chip-ok">fresh</span>') + '</td></tr>');
+  h.push('</table>');
+  h.push('<div class="sub">device ' + esc(String((st.device && st.device.captured_at) || "").slice(0, 16)) + ' &middot; ' + ((st.device && st.device.windows_tasks) ? st.device.windows_tasks.length : 0) + ' win-tasks &middot; front-end only (CLOUD-FRONTEND-ONLY-1)</div>');
+  h.push('</div>');
+  h.push('</div></body></html>');
   return h.join("");
 }
 __name(pageHtml, "pageHtml");
