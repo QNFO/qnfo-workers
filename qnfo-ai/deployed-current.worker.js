@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.2-calctxcache";
+var VERSION = "5.28.3-calauth";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -90,7 +90,7 @@ async function _getCalendarContextUncached(env) {
   try {
     const from = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const to = new Date(Date.now() + 21 * 864e5).toISOString().slice(0, 10);
-    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=qnfo&from=" + from + "&to=" + to);
+    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=qnfo&from=" + from + "&to=" + to, { headers: env.CAL_TOKEN ? { Authorization: "Bearer " + env.CAL_TOKEN } : {} });
     if (!r.ok) return null;
     const j = await r.json();
     const evs = (j.events || []).filter((x) => x.status !== "cancelled").slice(0, 12);

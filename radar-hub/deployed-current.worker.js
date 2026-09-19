@@ -4,7 +4,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.6-postgate2";
+var VERSION = "1.0.7-writeassert";
 var WORKER = "events-radar";
 var DOMAINS = [
   { code: "ADL", name: "Adelic Physics / p-adic info", kw: ["adelic", "p-adic", "idelic", "non-archimedean", "shannon", "rate-distortion", "rate distortion", "entropy", "number theory", "adele", "adelic shannon"] },
@@ -1216,6 +1216,11 @@ async function run(env) {
     } catch (e) {
       skipped += 1;
     }
+  }
+  if (posted === 0 && gated.length > 0 && gated.filter((g) => g.cleared).length > 0) {
+    try {
+      await env.RADAR_DB.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,datetime('now'),'detected')").bind("calendar-write-path-broken", "radar-hub/personal/" + scannedAt.slice(0, 10), "personal radar: cleared>0 but 0 posted (write/auth failure) - verify CAL_TOKEN matches calendar-api").run();
+    } catch (e) {}
   }
   const stats = { inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
   const report = renderReport(scannedAt, horizon, gated, budget, stats, { posted, skipped });
