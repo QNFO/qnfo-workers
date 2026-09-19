@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.17"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.18"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -341,7 +341,7 @@ var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*
 // forbids management-consulting abstractions; these patterns ARE that failure.
 var STOCK_FRAMING_RE = /\b(?:illustrat\w+|expos\w+|reveal\w+|foreground\w+|underscor\w+)\b[^.]{0,70}\b(?:structural|systemic|recurring|institutional|underlying|broader|wider|deeper|universal)\s+(?:dynamic|failure|gap|pattern|tension|mismatch|flaw|disjunction|force|logic)\b/i;
 var ABSTRACT_SUMMARY_RE = /\b(?:structural|systemic|recurring|institutional|underlying|universal)\s+(?:dynamic|failure|gap|tension|mismatch|disjunction)\b/gi;
-var LABEL_PHRASE_RE = /\b(?:coupling failure|incentive structure|information asymmetry|concrete manifestation of|concrete instance of|feedback loop in which|systemic incentive)\b/i;
+var LABEL_PHRASE_RE = /\b(?:coupling failure|incentive structure|information asymmetry|concrete manifestation of|concrete instance of|feedback loop in which|systemic incentive)\b/gi;
 var LABEL_TITLE_RES = [
   /^(?:structural|systemic|recurring|institutional|externalized|opaque|implicit|formal|abstract|nominal|statistical|rhetoric\w*|scale|efficiency|goal|sponsorship|incentive|autonomous)\b/i,
   /^the\s+[a-z][^:]{3,70}\s+of\s+[a-z][^:]{3,70}$/i,
@@ -388,7 +388,7 @@ function gate(text) {
   if (sf) problems.push("stock framing tell: '" + sf[0].replace(/\s+/g, " ").slice(0, 80) + "' — name the mechanism, do not summarise the essay's significance");
   var absN = (text.match(ABSTRACT_SUMMARY_RE) || []).length;
   var lp = text.match(LABEL_PHRASE_RE);
-  if (lp) problems.push("abstraction label '" + lp[0] + "' - replace the label with the mechanism it stands for (who does what, what is missing)");
+  if (lp && lp.length >= 2) problems.push("abstraction labels x" + lp.length + " ('" + lp.slice(0, 3).join("', '") + "') - state the mechanisms instead of labelling them");
   if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') — state the mechanism instead of labelling it");
   for (var lt of LABEL_TITLE_RES) {
     if (lt.test(title)) { problems.push("label title — names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
