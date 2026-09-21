@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.0";
+var VERSION = "1.2.0";
 function json(o, s) {
   return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } });
 }
@@ -21,8 +21,8 @@ async function handle(request, env) {
   const { slug, section, content, date } = p || {};
   if (!slug || !content) return new Response("slug and content required", { status: 400 });
   const d = /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const [y, m] = d.split("-");
-  const key = "notes/v1/" + y + "/" + m + "/" + d + "/_" + slug + "-" + d + ".md";
+  const [y, m, day] = d.split("-");
+  const key = "notes/v1/" + y + "/" + m + "/" + day + "/_" + slug + "-" + d + ".md";
   const header = "# " + (section || slug) + "\n\n> " + (/* @__PURE__ */ new Date()).toISOString() + "\n\n---\n\n## " + (section || slug) + "\n\n";
   const body = header + content;
   await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } });
