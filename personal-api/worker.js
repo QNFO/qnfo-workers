@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.3-toolmode";
+var VERSION = "4.1.4-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1581,7 +1581,7 @@ async function harvestIntent(env, q, messages, skipEvents) {
     if (!start) return;
     try {
       const evId = "evt-chat:" + Math.random().toString(16).slice(2, 14) + Date.now().toString(36);
-      await env.PERSONAL.prepare("INSERT INTO events (id, category, title, start_date, source, source_subject, notes, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)").bind(evId, "calendar", title.slice(0, 300), start, "chat", String(q || "").slice(0, 300), String(q || "").slice(0, 500), nowIso).run();
+      await calAdd(env, { title: title.slice(0, 300), dtstart: start });
     } catch (e) {
       console.log("harvest event error:", e && e.message || e);
     }
