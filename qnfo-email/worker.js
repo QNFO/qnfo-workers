@@ -1,5 +1,5 @@
-const VERSION = "2.0.7";
-const QNFO_VERSION = "qnfo-email/filter-before-store-963-allowlist-955";
+const VERSION = "2.0.8";
+const QNFO_VERSION = "qnfo-email/reply-capture-942-tone-950-norepeat-947";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
 const PREVIEW_LENGTH = 200;
@@ -77,6 +77,7 @@ export default {
       } catch (e) { console.error("Auto-reply:", e.message); }
     }
     await processCommand(env, { emailId: emailId, messageId: messageId, inReplyTo: inReplyTo, from: from, to: to, subject: subject, bodyText: bodyText });
+    ctx.waitUntil(enqueueHumanReply(env, { emailId: emailId, from: from, subject: subject, receivedAt: receivedAt, classification: classification, headersJson: headersJson }));
     await logAction(env.AUDIT_DB, emailId, "processed", classification, startTime);
   },
 
@@ -214,6 +215,14 @@ export default {
           const _sup = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(body.to || "").toLowerCase()).first();
           if (_sup) return json({ error: "recipient is suppressed", to: body.to, suppressed: true }, 409);
         } catch (_e) { /* suppression lookup unavailable: proceed (no worse than before) */ }
+        // GOOD-VIBES-REPLY-TONE-1 (950): block rejection / person-criticism outbound.
+        const tg = toneGate(textBody);
+        if (!tg.pass) return json({ error: "tone gate: " + tg.why, blocked: true }, 422);
+        // EMAIL-LEDGER-FRAGMENTED (947): honour contact_ledger.suppress as a second signal.
+        try {
+          const _led = await env.AUDIT_DB.prepare("SELECT suppress, suppress_reason FROM contact_ledger WHERE lower(email)=?1").bind(String(body.to || "").toLowerCase()).first();
+          if (_led && _led.suppress) return json({ error: "contact suppressed: " + (_led.suppress_reason || "opt-out"), to: body.to, suppressed: true }, 409);
+        } catch (_e) { /* contact_ledger unavailable: proceed */ }
         const result = await env.SEND_EMAIL.send({ to: body.to, from: FROM_ADDR, subject: replySubject, text: textBody, html: htmlBody });
         const sentId = crypto.randomUUID();
         const now = new Date().toISOString();
@@ -340,6 +349,55 @@ async function logAction(db, emailId, action, detail, startTime) {
     const ms = Date.now() - startTime;
     await db.prepare("UPDATE emails SET status=?1, processed_at=datetime('now'), processing_ms=?2 WHERE id=?3").bind(action, ms, emailId).run();
   } catch (e) { console.error("D1 log:", e.message); }
+}
+
+// EMAIL-AUTOREPLY-PATH-UNSAFE (945) + EMAIL-HUMAN-REPLY-LOOP-MISSING (942):
+// classify an inbound sender as human-or-machine so the reply agent can never
+// auto-reply to a relay/bounce/bulk source and create a mail loop.
+function classifyHumanSender(from, hdr) {
+  const f = String(from || "").toLowerCase();
+  const auto = String((hdr && hdr["auto-submitted"]) || "").toLowerCase();
+  const prec = String((hdr && hdr["precedence"]) || "").toLowerCase();
+  const xar = String((hdr && (hdr["x-autorespond"] || hdr["x-auto-response-suppress"])) || "").toLowerCase();
+  if (/bounce|noreply|no-reply|cf-bounce|cfbounces|srs0=|dmarcreport|mailer-daemon|postmaster|do-not-reply|do_not_reply|nobody@/i.test(f)) return { human: false, score: 0, reason: "machine-address" };
+  if (auto && auto !== "no") return { human: false, score: 0, reason: "auto-submitted" };
+  if (prec === "bulk" || prec === "list" || prec === "junk") return { human: false, score: 0, reason: "bulk-precedence" };
+  if (xar) return { human: false, score: 0, reason: "auto-responder" };
+  return { human: true, score: 2, reason: "" };
+}
+
+// GOOD-VIBES-REPLY-TONE-1 (950): block outbound text that is a rejection of the
+// recipient's work or criticism of the recipient. The substance of a valid
+// correction is kept in the corrections ledger + errata pipeline, never framed
+// as negative feedback to a person. Deliberately scoped to PERSON-directed
+// language so a legitimate "the value is incorrect" is not blocked.
+function toneGate(text) {
+  const t = String(text || "");
+  const REJECT = /(we (must )?(decline|reject|refuse)|your (manuscript|paper|submission|proposal|application|work) (has been|is|was) (rejected|declined)|we regret to inform|does not meet (our|the) (standards|bar|requirements)|not (suitable|acceptable|a good fit))/i;
+  const PERSON = /(you (are|were) (wrong|mistaken|incompetent)|your (work|paper|approach|analysis|research) (is|was) (wrong|flawed|nonsense|garbage|worthless|banal|bad)|this (is|shows) (bad|poor) science)/i;
+  if (REJECT.test(t) || PERSON.test(t)) return { pass: false, why: "rejection-or-criticism-tone" };
+  return { pass: true, why: "" };
+}
+
+// EMAIL-HUMAN-REPLY-LOOP-MISSING (942): route human inbound into the reply
+// queue (decision=pending) instead of leaving it stranded at status=processed.
+// Machine senders are excluded here; suppression + no-repeat are enforced at
+// draft/send time by the reply agent.
+async function enqueueHumanReply(env, d) {
+  try {
+    let hdrObj = {};
+    try { hdrObj = JSON.parse(d.headersJson || "{}") || {}; } catch (e) {}
+    const hsm = classifyHumanSender(d.from, hdrObj);
+    if (!hsm.human) return { queued: false, reason: hsm.reason };
+    if (d.classification === "alerts" || d.classification === "research" || d.classification === "publications") return { queued: false, reason: "non-human-address" };
+    const existing = await env.AUDIT_DB.prepare("SELECT id FROM email_reply_queue WHERE email_id=?1").bind(d.emailId).first();
+    if (existing) return { queued: false, reason: "already-queued" };
+    const sup = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(d.from || "").toLowerCase()).first();
+    if (sup) return { queued: false, reason: "suppressed" };
+    await env.AUDIT_DB.prepare("INSERT INTO email_reply_queue (email_id, sender, subject, received_at, human_score, decision, created_at) VALUES (?1,?2,?3,?4,?5,'pending',datetime('now'))")
+      .bind(d.emailId, d.from, d.subject, d.receivedAt, hsm.score).run();
+    return { queued: true };
+  } catch (e) { console.error("reply-enqueue:", e.message); return { queued: false, reason: "error:" + e.message }; }
 }
 
 function classifyAddress(to) {
