@@ -8,7 +8,7 @@
  *         stale-row reconcile; parallel head GETs; MAX_CHANGED 500.
  * Canonical source: QNFO/qnfo-workers notes-intake/
  */
-var VERSION = "0.1.3";
+var VERSION = "0.1.4";
 var WORKER = "notes-intake";
 var MAX_LIST_PAGES = 30;
 var MAX_CHANGED = 500;
@@ -122,7 +122,7 @@ async function run(env) {
   if (completeList) {
     var stale = [];
     regMap.forEach(function (_sig, path) {
-      if (INGEST_ROOTS.some(function (p) { return path.indexOf(p) === 0; }) && !seen.has(path)) stale.push(path);
+      if (!seen.has(path)) stale.push(path);
     });
     var delChunks = chunk(stale, 50);
     for (var d = 0; d < delChunks.length; d++) {
