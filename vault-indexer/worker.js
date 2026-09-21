@@ -5,11 +5,12 @@
  * + personal-life D1 files/chunks. Feeds the personal-twin RAG. Runs on cron every 5 minutes.
  * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 250 per run, parallel embed (8x), batched upserts.
  * v0.1.3: parallel embedding; stale-row reconcile (legacy orphans removed); vault_indexer_runs log; POST /drain.
+ * v0.1.6: overlap lock (one run at a time, TTL takeover); MAX_LIST_PAGES 100; _meta/ shared status channel.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.5";
+var VERSION = "0.1.6";
 var WORKER = "vault-indexer";
-var MAX_LIST_PAGES = 20;
+var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
 var MAX_BYTES = 262144;
 var CHUNK_SIZE = 900;
@@ -99,7 +100,21 @@ async function getFull(env, key) {
 
 async function run(env, cap) {
   var t0 = Date.now();
-  var s = { scanned: 0, changed: 0, indexed: 0, chunks: 0, vectors: 0, skipped: 0, reconciled: 0, errors: 0, notes: [] };
+  var s = { scanned: 0, changed: 0, indexed: 0, chunks: 0, vectors: 0, skipped: 0, reconciled: 0, locked: false, errors: 0, notes: [] };
+
+  // Overlap lock: one run at a time. TTL takeover (4 min) if a prior run died without releasing.
+  var nowIso = new Date().toISOString();
+  var haveLock = false;
+  try {
+    await env.PERSONAL.prepare("INSERT INTO vault_indexer_lock(id,started,owner) VALUES (1,?1,?2)").bind(nowIso, WORKER).run();
+    haveLock = true;
+  } catch (e) {
+    var lockRow = null;
+    try { lockRow = await env.PERSONAL.prepare("SELECT started FROM vault_indexer_lock WHERE id=1").first(); } catch (e2) { }
+    var age = lockRow && lockRow.started ? (Date.now() - Date.parse(lockRow.started)) : 1e9;
+    if (age < 240000) { s.locked = true; s.notes.push("locked"); s.elapsedMs = Date.now() - t0; return s; }
+    try { await env.PERSONAL.prepare("UPDATE vault_indexer_lock SET started=?1, owner=?2 WHERE id=1").bind(nowIso, WORKER).run(); haveLock = true; } catch (e3) { }
+  }
 
   var reg = new Map();
   try {
@@ -202,6 +217,11 @@ async function run(env, cap) {
     await env.PERSONAL.prepare("INSERT INTO vault_indexer_runs (started,finished,scanned,changed,indexed,chunks,skipped,reconciled,errors) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(new Date(t0).toISOString(), new Date().toISOString(), s.scanned, s.changed, s.indexed, s.chunks, s.skipped, s.reconciled, s.errors).run();
   } catch (e) { }
 
+  if (haveLock) { try { await env.PERSONAL.prepare("DELETE FROM vault_indexer_lock WHERE id=1").run(); } catch (e) { } }
+  try {
+    await env.VAULT.put("_meta/vault-indexer.status.json", JSON.stringify({ ts: new Date().toISOString(), scanned: s.scanned, changed: s.changed, indexed: s.indexed, chunks: s.chunks, reconciled: s.reconciled, errors: s.errors }), { httpMetadata: { contentType: "application/json" } });
+  } catch (e) { }
+
   s.elapsedMs = Date.now() - t0;
   return s;
 }
@@ -231,7 +251,10 @@ async function handle(request, env, ctx) {
       var t = await env.PERSONAL.prepare("SELECT COUNT(*) c FROM files WHERE path LIKE 'obsidian/%'").first();
       var ch = await env.PERSONAL.prepare("SELECT COUNT(*) c FROM chunks WHERE path LIKE 'obsidian/%'").first();
       var runs = await env.PERSONAL.prepare("SELECT * FROM vault_indexer_runs ORDER BY id DESC LIMIT 5").all();
-      return json({ ok: true, version: VERSION, files: t && t.c || 0, chunks: ch && ch.c || 0, recent_runs: runs.results || [] });
+      async function statusOf(k) { try { var o = await env.VAULT.get("_meta/" + k + ".status.json"); return o ? JSON.parse(await o.text()) : null; } catch (e) { return null; } }
+      var peer = await statusOf("notes-intake");
+      var self = await statusOf("vault-indexer");
+      return json({ ok: true, version: VERSION, files: t && t.c || 0, chunks: ch && ch.c || 0, recent_runs: runs.results || [], peer: peer, self: self });
     }
     return json({ ok: false, error: "not found" }, 404);
   } catch (e) {
