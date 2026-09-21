@@ -6,7 +6,7 @@
  * Cron every 15 min. Idempotent (registry sig dedupe; calendar UNIQUE uid). CPU-safe: range-GET head + D1 batch.
  * Canonical source: QNFO/qnfo-workers notes-intake/
  */
-var VERSION = "0.1.1";
+var VERSION = "0.1.2";
 var WORKER = "notes-intake";
 var MAX_LIST_PAGES = 30;
 var MAX_CHANGED = 300;
@@ -103,7 +103,7 @@ async function run(env) {
       var title = (fm.title && String(fm.title)) || basename(key);
       var status = fm.status ? String(fm.status) : "active";
       var recent = objs[i].uploaded && (nowMs - objs[i].uploaded.getTime() < 14 * 864e5);
-      var triage = (key.indexOf("Inbox/") === 0 || (recent && (!fm.type || !fm.status))) ? "needs_triage" : null;
+      var triage = (key.indexOf("Inbox/") === 0 || String(fm.triage).toLowerCase() === "true") ? "needs_triage" : null;
       upserts.push({ path: key, type: type, title: title, status: status, priority: numOrNull(fm.priority), due: fm.due ? String(fm.due).slice(0, 10) : null, next_action: fm.next_action ? String(fm.next_action).slice(0, 500) : null, project: fm.project ? String(fm.project) : null, area: fm.area ? String(fm.area) : null, energy: numOrNull(fm.energy), source: fm.source ? String(fm.source) : null, modified: new Date(objs[i].uploaded || nowMs).toISOString(), sig: sig, triage_state: triage, raw_fm: JSON.stringify(fm) });
       if (triage) s.triaged++;
       if (fm.due && (fm.next_action || fm.title)) datedActions.push({ path: key, title: (fm.next_action ? String(fm.next_action) : title).slice(0, 180), date: String(fm.due).slice(0, 10), time: null });
