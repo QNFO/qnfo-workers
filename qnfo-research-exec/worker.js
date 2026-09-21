@@ -10,10 +10,10 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.8";
+var VERSION = "0.9.9"; // G4/issue 980: billed sync writer legs + assert 3 drafts before reconcile
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
-var MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/zai-org/glm-5.3"];
+var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
@@ -1241,15 +1241,19 @@ __name(drainV2, "drainV2");
 __name2(drainV2, "drainV2");
 __name22(drainV2, "drainV2");
 __name222(drainV2, "drainV2");
+// G4 / issue 980: leg-1 primary "@cf/deepseek-ai/deepseek-v4-flash-0731" is async_queue:true,
+// so a synchronous env.AI.run never returns and the id was never billed (0 neurons); its
+// fallback "@cf/deepseek-ai/deepseek-v4-flash-wa" is not a real CF model id. Both replaced
+// with billed, sync-capable ids so three distinct writer legs actually produce drafts.
 var WRITER_MODELS = [
   "@cf/openai/gpt-oss-120b",
-  "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/zai-org/glm-5.3"
+  "@cf/zai-org/glm-5.3",
+  "@cf/zai-org/glm-5.3-flash"
 ];
 var WRITER_FALLBACK_MODELS = [
-  "@cf/deepseek-ai/deepseek-v4-flash-wa",
   "@cf/zai-org/glm-5.3-flash",
-  "@cf/openai/gpt-oss-120b"
+  "@cf/openai/gpt-oss-120b",
+  "@cf/zai-org/glm-5.3"
 ];
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
@@ -1521,7 +1525,7 @@ async function stageEnsemble(env, row) {
   const okLegs = legs.filter(function(l) {
     return l.len >= 4e3;
   }).length;
-  if (okLegs < 2) {
+  if (okLegs < 3) {
     await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/3; retrying with gwCall+fallback");
     const fallbackLegs = await Promise.all([0, 1, 2].map(async function(fi) {
       const existing = await r2Get(env, String(row.id) + "/draft-" + fi + ".md");
@@ -1542,7 +1546,7 @@ async function stageEnsemble(env, row) {
     const okFallback = fallbackLegs.filter(function(l) {
       return l.len >= 4e3;
     }).length;
-    if (okFallback < 1) {
+    if (okFallback < 3) {
       await markError(env, row, "ensemble: only " + okFallback + "/3 fallback legs produced drafts");
       return { ok: false, stage: "ensemble" };
     }
@@ -1567,6 +1571,7 @@ async function stageReconcile(env, row) {
     return { ok: false, stage: "reconcile" };
   }
   if (parts.length === 1) {
+    await logEvent(env, "reconcile-solo", "only 1 writer draft reached reconcile (ensemble degraded)", "warn");
     var solo = parts[0];
     var _soloNl = solo.indexOf(String.fromCharCode(10));
     if (_soloNl >= 0) solo = solo.slice(_soloNl + 1);
