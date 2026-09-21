@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.1 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat
+// qnfo-deploy-guard v1.3.3 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.2";
+var VERSION = "1.3.3";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -112,9 +112,20 @@ export default {
       if (!w4) return json({ error: "worker required" }, 400);
       var ttl = Math.min(Math.max(Number(b.ttl_sec || DEFAULT_TTL), 60), MAX_TTL);
       var now4 = Date.now();
+      // expected_version optimistic-concurrency check (registry-as-truth): reject a deploy that
+      // assumes a stale current version. Enforced only when the worker is registered.
+      if (b.expected_version) {
+        var reg = await auditAll(env, "SELECT version FROM service_registry WHERE service=?1 LIMIT 1", [w4]);
+        var curVer = reg && reg.length ? reg[0].version : null;
+        if (curVer && String(curVer) !== String(b.expected_version)) {
+          return json({ acquired: false, reason: "version-mismatch", worker: w4, expected_version: String(b.expected_version), current_version: curVer }, 409);
+        }
+      }
+      var actor4 = String(b.actor || b.owner || "unknown");
+      var sid4 = b.session_id ? String(b.session_id) : null;
       await auditRun(env, "DELETE FROM deploy_locks WHERE expires_at <= ?1", [now4]);
       var raw4 = tok(); var th4 = await sha256hex(raw4);
-      var ins4 = await auditRun(env, "INSERT INTO deploy_locks (worker, token_hash, owner, since, expires_at, expected_version) SELECT ?1,?2,?3,?4,?5,?6 WHERE NOT EXISTS (SELECT 1 FROM deploy_locks WHERE worker=?1 AND expires_at > ?4)", [w4, th4, String(b.owner || "unknown"), now4, now4 + ttl * 1000, b.expected_version || null]);
+      var ins4 = await auditRun(env, "INSERT INTO deploy_locks (worker, token_hash, owner, actor, session_id, since, expires_at, expected_version) SELECT ?1,?2,?3,?4,?5,?6,?7,?8 WHERE NOT EXISTS (SELECT 1 FROM deploy_locks WHERE worker=?1 AND expires_at > ?6)", [w4, th4, String(b.owner || "unknown"), actor4, sid4, now4, now4 + ttl * 1000, b.expected_version || null]);
       if (ins4 && ins4.ok === false) return json({ error: "lock_db_unavailable", detail: ins4.error }, 500);
       var ch4 = (ins4 && ins4.meta && typeof ins4.meta.changes === "number") ? ins4.meta.changes : (ins4 && typeof ins4.changes === "number" ? ins4.changes : 0);
       if (!ch4) {
@@ -136,7 +147,7 @@ export default {
     }
     if (p === "/ledger" && request.method === "POST") {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);
-      var rl = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", [String(bl.worker), String(bl.actor || "unknown"), bl.from || null, bl.to || null, bl.source_path || null, bl.ok === false ? 0 : 1, String(bl.note || "").slice(0, 400), nowIso()]);
+      var rl = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [String(bl.worker), String(bl.actor || "unknown"), bl.session_id ? String(bl.session_id) : null, bl.from || null, bl.to || null, bl.source_path || null, bl.ok === false ? 0 : 1, String(bl.note || "").slice(0, 400), nowIso()]);
       return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error });
     }
     if (p === "/thresholds" && request.method === "POST") { var bt = await request.json().catch(function () { return {}; }); await env.FLEET_CONFIG.put(THR_KEY, JSON.stringify({ day_usd: Number(bt.day_usd || 10), month_usd: Number(bt.month_usd || 150) })); return json({ set: true }); }
