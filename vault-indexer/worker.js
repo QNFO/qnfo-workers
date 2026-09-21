@@ -3,13 +3,13 @@
  * Semantic (Vectorize) indexer for the Obsidian vault (single source of truth = obsidian-vault R2).
  * Reads note docs -> chunk -> embed (@cf/baai/bge-base-en-v1.5, 768d) -> upsert Vectorize personal-life
  * + personal-life D1 files/chunks. Feeds the personal-twin RAG. Runs on cron every 30 minutes.
- * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 40 per run, batched upserts.
+ * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 120 per run, batched upserts.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.0";
+var VERSION = "0.1.1";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 20;
-var MAX_DOCS = 40;
+var MAX_DOCS = 120;
 var MAX_BYTES = 262144;
 var CHUNK_SIZE = 900;
 var CHUNK_OVERLAP = 120;
@@ -168,14 +168,14 @@ async function run(env) {
   return s;
 }
 
-async function handle(request, env) {
+async function handle(request, env, ctx) {
   try {
     var url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
     if (request.method === "OPTIONS") return new Response("ok", { status: 204 });
     if (url.pathname === "/run" && request.method === "POST") {
-      var r = await run(env);
-      return json({ ok: true, version: VERSION, result: r });
+      ctx.waitUntil(run(env));
+      return json({ ok: true, version: VERSION, queued: true });
     }
     if (url.pathname === "/stats" && request.method === "GET") {
       var t = await env.PERSONAL.prepare("SELECT COUNT(*) c FROM files WHERE path LIKE 'obsidian/%'").first();
@@ -189,7 +189,7 @@ async function handle(request, env) {
 }
 
 var worker_default = {
-  async fetch(request, env, ctx) { return handle(request, env); },
+  async fetch(request, env, ctx) { return handle(request, env, ctx); },
   async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); }
 };
 export { worker_default as default };

@@ -4,7 +4,7 @@ compatibility_date = "2026-01-01"
 workers_dev = true
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/10 * * * *"]
 
 [[r2_buckets]]
 binding = "VAULT"
