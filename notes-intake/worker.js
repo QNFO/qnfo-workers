@@ -8,7 +8,7 @@
  *         stale-row reconcile; parallel head GETs; MAX_CHANGED 500.
  * Canonical source: QNFO/qnfo-workers notes-intake/
  */
-var VERSION = "0.1.4";
+var VERSION = "0.1.5";
 var WORKER = "notes-intake";
 var MAX_LIST_PAGES = 30;
 var MAX_CHANGED = 500;
@@ -200,6 +200,10 @@ async function run(env) {
     await env.AUDIT.prepare("INSERT INTO notes_intake_runs (started,finished,scanned,changed,ingested,events_created,publish_queued,index_regenerated,errors,note) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(new Date(t0).toISOString(), new Date().toISOString(), s.scanned, s.changed, s.ingested, s.eventsCreated, s.publishQueued, s.indexRegenerated ? 1 : 0, s.errors, s.notes.join("|").slice(0, 300)).run();
   } catch (e) { }
 
+  try {
+    await env.VAULT.put("_meta/notes-intake.status.json", JSON.stringify({ ts: new Date().toISOString(), scanned: s.scanned, changed: s.changed, ingested: s.ingested, triaged: s.triaged, eventsCreated: s.eventsCreated, reconciled: s.reconciled, errors: s.errors }), { httpMetadata: { contentType: "application/json" } });
+  } catch (e) { }
+
   s.elapsedMs = Date.now() - t0;
   return s;
 }
@@ -254,7 +258,10 @@ async function handle(request, env, ctx) {
       var q = await env.AUDIT.prepare("SELECT COUNT(*) c FROM notes_publish_queue WHERE status='pending'").first();
       var tt = await env.AUDIT.prepare("SELECT COUNT(*) c FROM notes_intake WHERE triage_state='needs_triage'").first();
       var runs = await env.AUDIT.prepare("SELECT * FROM notes_intake_runs ORDER BY id DESC LIMIT 5").all();
-      return json({ ok: true, version: VERSION, notes: t && t.c || 0, triage: tt && tt.c || 0, publish_pending: q && q.c || 0, recent_runs: runs.results || [] });
+      async function statusOf(k) { try { var o = await env.VAULT.get("_meta/" + k + ".status.json"); return o ? JSON.parse(await o.text()) : null; } catch (e) { return null; } }
+      var peer = await statusOf("vault-indexer");
+      var self = await statusOf("notes-intake");
+      return json({ ok: true, version: VERSION, notes: t && t.c || 0, triage: tt && tt.c || 0, publish_pending: q && q.c || 0, recent_runs: runs.results || [], peer: peer, self: self });
     }
     return json({ ok: false, error: "not found" }, 404);
   } catch (e) {
