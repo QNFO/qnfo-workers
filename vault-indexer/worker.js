@@ -6,9 +6,10 @@
  * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 250 per run, parallel embed (8x), batched upserts.
  * v0.1.3: parallel embedding; stale-row reconcile (legacy orphans removed); vault_indexer_runs log; POST /drain.
  * v0.1.6: overlap lock (one run at a time, TTL takeover); MAX_LIST_PAGES 100; _meta/ shared status channel.
+ * v0.1.7: embed retry (3x backoff) + EMBED_CONCURRENCY 5 (transient AI-throttle errors self-heal).
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.6";
+var VERSION = "0.1.7";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -17,7 +18,7 @@ var CHUNK_SIZE = 900;
 var CHUNK_OVERLAP = 120;
 var MAX_CHUNKS = 24;
 var GET_CONCURRENCY = 16;
-var EMBED_CONCURRENCY = 8;
+var EMBED_CONCURRENCY = 5;
 var PATH_PREFIX = "obsidian/";
 var SKIP_PREFIXES = [".obsidian/", "releases/", "Attachments/", "Archive/", ".git/"];
 var INGEST_ROOTS = ["notes/", "Inbox/", "Projects/", "Areas/", "Resources/"];
@@ -181,9 +182,12 @@ async function run(env, cap) {
       if (text === null) { prepared[idx] = null; return; }
       var chs = chunkText(text);
       if (chs.length === 0) { prepared[idx] = null; return; }
-      var resp;
-      try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
-      catch (e) { prepared[idx] = { error: true }; return; }
+      var resp = null;
+      for (var attempt = 0; attempt < 3 && !resp; attempt++) {
+        try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
+        catch (e) { await new Promise(function (r) { setTimeout(r, 200 * (attempt + 1)); }); }
+      }
+      if (!resp) { prepared[idx] = { error: true }; return; }
       var vectors = (resp && resp.data) || [];
       var valid = vectors.filter(function (v) { return Array.isArray(v) && v.length === 768; }).map(function (v) { return v.map(function (z) { return Number.isFinite(z) ? z : 0; }); });
       if (valid.length === 0) { prepared[idx] = { error: true }; return; }
