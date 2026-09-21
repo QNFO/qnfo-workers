@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.3";
+var VERSION = "1.3.4";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -44,6 +44,22 @@ async function fileIssue(env, title, desc, priority) {
   return { filed: true, ok: res && res.ok !== false, error: res && res.error };
 }
 async function fileAlert(env, level, message) { await auditRun(env, "INSERT INTO alerts (source, level, message, digested, created_at) VALUES (?1,?2,?3,0,?4)", ["qnfo-deploy-guard", level, String(message).slice(0, 500), nowIso()]); }
+// REGISTRY-UNREGISTERED-WORKER-2 (2026-09-21): register-at-deploy. Any live worker absent from
+// service_registry (the census authority) gets a stub row immediately, cutting the drift window
+// from qnfo-register-guard's 24h to <=10min. The daily register-guard still does the full reconcile.
+async function ensureRegistry(env, fleet) {
+  var added = [];
+  try {
+    var have = await auditAll(env, "SELECT service FROM service_registry", []);
+    var set = {}; for (var i = 0; i < have.length; i++) set[have[i].service] = 1;
+    for (var j = 0; j < (fleet || []).length; j++) {
+      var w = String((fleet[j] && fleet[j].name) || ""); if (!w || set[w]) continue;
+      await auditRun(env, "INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at, state) VALUES (?1,'worker',NULL,?2,'AUTO-REGISTERED by deploy-guard: live worker absent from the registry (register-at-deploy); purpose/bindings pending full reconcile','[]','["/health"]','','','[]',?3,'live')", [w, "https://" + w + ".q08.workers.dev", nowIso()]);
+      set[w] = 1; added.push(w);
+    }
+  } catch (e) {}
+  return added;
+}
 async function scan(env) {
   var t0 = Date.now();
   var fp = await getJson(FLEET_URLS, 15000);
@@ -64,6 +80,8 @@ async function scan(env) {
   var denials = [];
   try { var dn = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var d = 0; d < dn.keys.length; d++) { var dv = await env.FLEET_CONFIG.get(dn.keys[d].name); if (dv) { try { denials.push(JSON.parse(dv)); } catch (e) {} } } } catch (e) {}
   var fleet = (fp.ok && fp.j && fp.j.fleet) ? fp.j.fleet : [];
+  var regAdded = [];
+  try { regAdded = await ensureRegistry(env, fleet); } catch (e) {}
   var snapshot = {}; var changed = []; var anomalies = [];
   for (var k = 0; k < fleet.length; k++) {
     var ww = fleet[k]; var mo = ww.modified_on || null;
@@ -93,7 +111,7 @@ async function scan(env) {
   if (filed.length) await fileAlert(env, "warn", "deploy-guard filed " + filed.length + " ticket(s): " + filed.map(function (f) { return f.title; }).join("; "));
   var ok = fp.ok ? 1 : 0;
   try { await auditRun(env, "INSERT INTO fleet_heartbeat (worker,version,ts,ok) VALUES (?1,?2,?3,?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok", [WORKER, VERSION, nowIso(), ok]); } catch (e) {}
-  var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, anomalies: uniq, filed: filed, active_locks: Object.keys(active), recent_denials: denials.length, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
+  var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, anomalies: uniq, filed: filed, active_locks: Object.keys(active), recent_denials: denials.length, registry_added: regAdded, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
   try { await env.FLEET_CONFIG.put(SNAP_KEY, JSON.stringify(snapshot), { expirationTtl: 604800 }); } catch (e) {}
   try { await env.FLEET_CONFIG.put(REPORT_KEY, JSON.stringify(report), { expirationTtl: 604800 }); } catch (e) {}
   if (fp.ok) { try { var dn2 = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var z = 0; z < dn2.keys.length; z++) { await env.FLEET_CONFIG.delete(dn2.keys[z].name); } } catch (e) {} }
@@ -148,6 +166,7 @@ export default {
     if (p === "/ledger" && request.method === "POST") {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);
       var rl = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [String(bl.worker), String(bl.actor || "unknown"), bl.session_id ? String(bl.session_id) : null, bl.from || null, bl.to || null, bl.source_path || null, bl.ok === false ? 0 : 1, String(bl.note || "").slice(0, 400), nowIso()]);
+      try { await ensureRegistry(env, [{ name: String(bl.worker) }]); } catch (e) {}
       return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error });
     }
     if (p === "/thresholds" && request.method === "POST") { var bt = await request.json().catch(function () { return {}; }); await env.FLEET_CONFIG.put(THR_KEY, JSON.stringify({ day_usd: Number(bt.day_usd || 10), month_usd: Number(bt.month_usd || 150) })); return json({ set: true }); }
