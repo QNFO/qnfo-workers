@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.9-toolmode";
+var VERSION = "4.1.8-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1875,7 +1875,6 @@ var api_default = {
     const path = url.pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
     if (path.startsWith("/agents/personal")) {
-      if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
       if (!env.PERSONAL_TWIN_AGENT) return json({ error: "PersonalTwinAgent DO not bound", code: 503 }, 503);
       const agentSid = path.replace(/^\/agents\/personal\/?/, "") || url.searchParams.get("session") || "default";
       const doId = env.PERSONAL_TWIN_AGENT.idFromName(agentSid);

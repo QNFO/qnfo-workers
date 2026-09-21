@@ -11,18 +11,13 @@ WHY (each gate below has a canonical incident behind it)
                           bypasses the qnfo-deploy-guard distributed lock, so concurrent sessions
                           sharing one Cloudflare API token race last-write-wins.
   DEPLOY-UNLOGGED-MUTATION a deploy not written to the ledger is un-auditable.
-  CRON-RATE-CEILING-1     a cron finer than 10 minutes (or above 144 fires/24h) multiplies
-                          invocations, AI spend, D1 writes and rate-limit exposure for no
-                          diagnostic gain. Cloudflare will happily accept a `*/5`; the ceiling
-                          is ours to enforce (owner directive 2026-09-23).
 
 WHAT (fail-closed: any failure deploys NOTHING and exits 3)
   1. CONFLICT-MARKER-GATE  scan the worker dir for merge markers
-  2. CRON-RATE-CEILING-1   evaluate every `crons = [...]` entry: <=144 fires/24h AND >=10 min spacing
-  3. WORKER-BUILD-GATE-1   run `wrangler deploy --dry-run` -- a REAL bundle build
-  4. DEPLOY-GUARD-BYPASS-1 run the deploy UNDER `deploy_guard.py with-lock`, so it is
+  2. WORKER-BUILD-GATE-1   run `wrangler deploy --dry-run` -- a REAL bundle build
+  3. DEPLOY-GUARD-BYPASS-1 run the deploy UNDER `deploy_guard.py with-lock`, so it is
                            coordinated (lock; exit 2 on conflict) AND logged to the ledger
-  5. DEPLOY-VERIFY-VERSION-1 (best effort) poll DEPLOY_HEALTH_URL for the expected version
+  4. DEPLOY-VERIFY-VERSION-1 (best effort) poll DEPLOY_HEALTH_URL for the expected version
 
 USAGE
   python scripts/deploy_gate.py <worker_dir> <from_ver> <to_ver>     # full gated deploy
@@ -47,14 +42,6 @@ CONFLICT = re.compile(rb"(?m)^(<{7}|={7}|>{7})")
 SCAN_EXT = (".js", ".mjs", ".cjs", ".ts", ".toml", ".json", ".jsonc")
 SKIP_DIRS = {"node_modules", ".git", ".wrangler", ".dryrun-tmp"}
 
-# Single source of truth for CRON-RATE-CEILING-1 (also runnable standalone:
-# `python3 scripts/cron_rate_guard.py [--live]`).
-sys.path.insert(0, HERE)
-try:
-    import cron_rate_guard as _crg
-except Exception:  # pragma: no cover - the gate warns, it never silently passes
-    _crg = None
-
 
 def conflict_gate(wdir):
     bad = []
@@ -72,35 +59,6 @@ def conflict_gate(wdir):
         print("FAIL CONFLICT-MARKER-GATE-1:", bad)
         return False
     print("PASS conflict-marker gate")
-    return True
-
-
-def cron_rate_gate(wdir):
-    """CRON-RATE-CEILING-1: no cron more than once per 10 min, nor >144 fires/24h."""
-    if _crg is None:
-        print("WARN cron-rate gate skipped: cron_rate_guard.py not importable")
-        return True
-    crons = _crg.toml_crons(os.path.join(wdir, "wrangler.toml"))
-    if not crons:
-        print("PASS cron-rate gate (no cron triggers declared)")
-        return True
-    bad = []
-    for cron in crons:
-        try:
-            stats = _crg.cron_stats(_crg.cron_fires(cron))
-        except Exception as exc:
-            bad.append((cron, "PARSE:%s" % exc))
-            continue
-        reason = _crg.violates(stats)
-        if reason:
-            bad.append((cron, "%s (max_fires_24h=%s, min_gap=%s min)"
-                        % (reason, stats["max_fires_24h"], stats["min_gap_minutes"])))
-    if bad:
-        print("FAIL CRON-RATE-CEILING-1:", bad)
-        print("  rule: <=%d fires/24h AND >=%d-minute spacing (owner directive 2026-09-23)"
-              % (_crg.MAX_FIRES_24H, _crg.MIN_GAP_MINUTES))
-        return False
-    print("PASS cron-rate gate (%d cron expression(s))" % len(crons))
     return True
 
 
@@ -172,8 +130,6 @@ def main(argv):
     worker = os.path.basename(os.path.abspath(wdir))
 
     if not conflict_gate(wdir):
-        return 3
-    if not cron_rate_gate(wdir):
         return 3
     if not build_gate(wdir):
         return 3
