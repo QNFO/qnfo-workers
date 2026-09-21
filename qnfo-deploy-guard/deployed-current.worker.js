@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.1";
+var VERSION = "1.3.2";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -29,7 +29,11 @@ function getJson(urls, tout) {
     return { ok: false, j: null, url: null };
   })();
 }
-async function readLock(env, w) { var v = await env.FLEET_CONFIG.get(LOCK_PREFIX + w); if (!v) return null; try { return JSON.parse(v); } catch (e) { return null; } }
+// DECISION (2026-09-21): the lock is backed by D1 deploy_locks (STRONGLY consistent). It was on KV,
+// whose reads are eventually consistent: a release followed by an immediate acquire could still observe
+// the stale lock and refuse (live-reproduced: acquire -> release(released:true) -> acquire REFUSED).
+async function sha256hex(s) { var b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s))); var a = new Uint8Array(b), o = ""; for (var i = 0; i < a.length; i++) o += ("0" + a[i].toString(16)).slice(-2); return o; }
+async function readLock(env, w) { var rows = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE worker=?1 AND expires_at > ?2 LIMIT 1", [w, Date.now()]); return (rows && rows.length) ? rows[0] : null; }
 async function auditRun(env, sql, params) { try { var st = env.AUDIT.prepare(sql); return await st.bind.apply(st, params || []).run(); } catch (e) { return { ok: false, error: String(e && e.message || e) }; } }
 async function auditAll(env, sql, params) { try { var st = env.AUDIT.prepare(sql); var b = params && params.length ? st.bind.apply(st, params) : st; var r = await b.all(); return (r && r.results) || []; } catch (e) { return []; } }
 async function fileIssue(env, title, desc, priority) {
@@ -56,7 +60,7 @@ async function scan(env) {
   var lastLedger = {}; for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; }
   var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
   var active = {};
-  try { var lk = await env.FLEET_CONFIG.list({ prefix: LOCK_PREFIX }); for (var j = 0; j < lk.keys.length; j++) { var w = lk.keys[j].name.slice(LOCK_PREFIX.length); var rc = await readLock(env, w); if (rc && rc.expires_at > Date.now()) active[w] = rc; } } catch (e) {}
+  try { var al = await auditAll(env, "SELECT worker, owner, since, expires_at FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); for (var j = 0; j < al.length; j++) active[al[j].worker] = al[j]; } catch (e) {}
   var denials = [];
   try { var dn = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var d = 0; d < dn.keys.length; d++) { var dv = await env.FLEET_CONFIG.get(dn.keys[d].name); if (dv) { try { denials.push(JSON.parse(dv)); } catch (e) {} } } } catch (e) {}
   var fleet = (fp.ok && fp.j && fp.j.fleet) ? fp.j.fleet : [];
@@ -101,26 +105,34 @@ export default {
     var url = new URL(request.url); var p = url.pathname;
     if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso() });
     if (p === "/report" && request.method === "GET") { var rp = await env.FLEET_CONFIG.get(REPORT_KEY); return json(rp ? JSON.parse(rp) : { ts: null }); }
-    if (p === "/locks" && request.method === "GET") { var lk2 = await env.FLEET_CONFIG.list({ prefix: LOCK_PREFIX }); var o2 = []; for (var i2 = 0; i2 < lk2.keys.length; i2++) { var w2 = lk2.keys[i2].name.slice(LOCK_PREFIX.length); var r2 = await readLock(env, w2); if (r2) o2.push(r2); } return json({ locks: o2, now: nowIso() }); }
+    if (p === "/locks" && request.method === "GET") { var lr = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); return json({ locks: lr, now: nowIso() }); }
     if (p.indexOf("/lock/") === 0 && request.method === "GET") { var w3 = decodeURIComponent(p.slice(6)); return json({ worker: w3, lock: await readLock(env, w3), now: nowIso() }); }
     if (p === "/lock/acquire" && request.method === "POST") {
       var b = await request.json().catch(function () { return {}; }); var w4 = String(b.worker || "");
       if (!w4) return json({ error: "worker required" }, 400);
       var ttl = Math.min(Math.max(Number(b.ttl_sec || DEFAULT_TTL), 60), MAX_TTL);
-      var cur = await readLock(env, w4);
-      if (cur && cur.expires_at > Date.now()) {
-        try { await env.FLEET_CONFIG.put(DENY_PREFIX + Date.now() + "-" + tok(), JSON.stringify({ worker: w4, owner: String(b.owner || "unknown"), held_by: cur.owner, at: nowIso() }), { expirationTtl: 3600 }); } catch (e) {}
-        return json({ acquired: false, held_by: cur.owner, held_since: cur.since, expires_at: new Date(cur.expires_at).toISOString() }, 409);
+      var now4 = Date.now();
+      await auditRun(env, "DELETE FROM deploy_locks WHERE expires_at <= ?1", [now4]);
+      var raw4 = tok(); var th4 = await sha256hex(raw4);
+      var ins4 = await auditRun(env, "INSERT INTO deploy_locks (worker, token_hash, owner, since, expires_at, expected_version) SELECT ?1,?2,?3,?4,?5,?6 WHERE NOT EXISTS (SELECT 1 FROM deploy_locks WHERE worker=?1 AND expires_at > ?4)", [w4, th4, String(b.owner || "unknown"), now4, now4 + ttl * 1000, b.expected_version || null]);
+      if (ins4 && ins4.ok === false) return json({ error: "lock_db_unavailable", detail: ins4.error }, 500);
+      var ch4 = (ins4 && ins4.meta && typeof ins4.meta.changes === "number") ? ins4.meta.changes : (ins4 && typeof ins4.changes === "number" ? ins4.changes : 0);
+      if (!ch4) {
+        var cur = await readLock(env, w4);
+        try { await env.FLEET_CONFIG.put(DENY_PREFIX + Date.now() + "-" + tok(), JSON.stringify({ worker: w4, owner: String(b.owner || "unknown"), held_by: cur ? cur.owner : null, at: nowIso() }), { expirationTtl: 3600 }); } catch (e) {}
+        return json({ acquired: false, held_by: cur ? cur.owner : "unknown", held_since: cur ? cur.since : null, expires_at: cur ? new Date(cur.expires_at).toISOString() : null }, 409);
       }
-      var rec3 = { worker: w4, owner: String(b.owner || "unknown"), token: tok(), since: nowIso(), expires_at: Date.now() + ttl * 1000, ttl_sec: ttl, expected_version: b.expected_version || null };
-      await env.FLEET_CONFIG.put(LOCK_PREFIX + w4, JSON.stringify(rec3), { expirationTtl: ttl });
-      return json({ acquired: true, token: rec3.token, expires_at: new Date(rec3.expires_at).toISOString() });
+      return json({ acquired: true, token: raw4, expires_at: new Date(now4 + ttl * 1000).toISOString() });
     }
     if (p === "/lock/release" && request.method === "POST") {
       var b5 = await request.json().catch(function () { return {}; }); var w5 = String(b5.worker || ""); var tk = String(b5.token || "");
       if (!w5 || !tk) return json({ error: "worker and token required" }, 400);
-      var cur5 = await readLock(env, w5); if (!cur5 || cur5.token !== tk) return json({ released: false, reason: "token mismatch or no lock" }, 409);
-      await env.FLEET_CONFIG.delete(LOCK_PREFIX + w5); return json({ released: true });
+      var th5 = await sha256hex(tk);
+      var del5 = await auditRun(env, "DELETE FROM deploy_locks WHERE worker=?1 AND token_hash=?2", [w5, th5]);
+      if (del5 && del5.ok === false) return json({ released: false, reason: "lock_db_unavailable" }, 500);
+      var cd5 = (del5 && del5.meta && typeof del5.meta.changes === "number") ? del5.meta.changes : (del5 && typeof del5.changes === "number" ? del5.changes : 0);
+      if (!cd5) return json({ released: false, reason: "token mismatch or no lock" }, 409);
+      return json({ released: true });
     }
     if (p === "/ledger" && request.method === "POST") {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);
