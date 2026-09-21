@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.1-toolmode";
+var VERSION = "4.1.2-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -145,10 +145,11 @@ async function loadPrimeContext(env, q, currentThread) {
     const tmw = /* @__PURE__ */ new Date(today + "T12:00:00Z");
     tmw.setUTCDate(tmw.getUTCDate() + 1);
     const tom = tmw.toISOString().slice(0, 10);
-    const evs = await env.PERSONAL.prepare("SELECT title, venue, start_date, energy_label FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all();
-    if (evs.results && evs.results.length) {
+    let evs = null;
+    try { evs = await calList(env, today, tom, 10); } catch (e) {}
+    if (evs && evs.ok && evs.events && evs.events.length) {
       lines.push("ON TODAY/TOMORROW:");
-      for (const e of evs.results) lines.push("- " + e.start_date + " " + String(e.title || "") + (e.venue ? " at " + e.venue : "") + (e.energy_label ? " (" + e.energy_label + ")" : ""));
+      for (const e of evs.events) lines.push("- " + String(e.dtstart || "").slice(0, 10) + " " + String(e.title || "") + (e.location ? " at " + e.location : "") + (e.domain ? " [" + e.domain + "]" : ""));
     } else lines.push("ON TODAY/TOMORROW: nothing scheduled in the events calendar.");
     const op = await env.PERSONAL.prepare("SELECT ts, kind, content FROM notes WHERE kind IN ('reminder','task','desire') OR content LIKE '%need to%' OR content LIKE '%remind%' OR content LIKE '%todo%' ORDER BY ts DESC LIMIT 8").all();
     if (op.results && op.results.length) {
@@ -451,8 +452,9 @@ async function suggestEvents(env, args) {
       suggestions.push({ title: r.title, url: r.url, snippet: r.snippet, source: "web_search", query });
     }
   }
-  const upcoming = await env.PERSONAL.prepare("SELECT title, start_date, venue, city, category FROM events WHERE start_date >= ?1 ORDER BY start_date ASC LIMIT 5").bind(isoDateNow()).all();
-  return { ok: true, city, interests, suggestions, upcoming_in_archive: upcoming.results || [] };
+  let upcoming = [];
+  try { const cl = await calList(env, isoDateNow(), isoDatePlus(30), 5); if (cl && cl.ok && cl.events) upcoming = cl.events.map(function(e) { return { title: e.title, dtstart: e.dtstart, venue: e.location, source: e.source, domain: e.domain }; }); } catch (e) {}
+  return { ok: true, city, interests, suggestions, upcoming_in_archive: upcoming };
 }
 __name(suggestEvents, "suggestEvents");
 async function predictWeek(env, args) {
@@ -467,7 +469,7 @@ async function predictWeek(env, args) {
     fetchWxForLocation(lat, lon).catch(function() {
       return null;
     }),
-    env.PERSONAL.prepare("SELECT title, start_date, venue FROM events WHERE start_date >= ?1 AND start_date <= ?2 ORDER BY start_date LIMIT 15").bind(from, to).all().catch(function() {
+    calList(env, from, to, 15).then(function(cl) { return { results: (cl && cl.events || []).map(function(e) { return { title: e.title, start_date: String(e.dtstart || "").slice(0, 10), venue: e.location }; }) }; }).catch(function() {
       return { results: [] };
     }),
     env.PERSONAL.prepare("SELECT title, due, priority FROM tasks WHERE status='open' ORDER BY (due IS NULL), due ASC LIMIT 10").all().catch(function() {
