@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.3.5-glm53-nomail";
+var VERSION = "0.3.6";
 var NAMESPACE = "email-orchestrator";
 var DAY_ACTIONS = ["wednesday-response-check"];
 var DOC = {
@@ -19,7 +19,7 @@ var DOC = {
   },
   cadence: {
     inbox: "latest 3h inbox summary (last24h count)",
-    replies: "outreach replies detected + logged to outreach_threads (response_type+reason, no user notification)",
+    replies: "outreach replies detected and surfaced in cadence_runs.replies (canonical reply log is qnfo-outreach replies table; no outreach_threads table exists)",
     followup: "silent >14d outreach contacts (0 eligible per NO-FOLLOW-UP-DEFAULT-1); DOES NOT auto-follow-up",
     receipt: "NO self-mail (policy 2026-09-09): day summary persisted to cadence_runs only \u2014 alerts@qnfo.org was not provisioned, every send NDR-bounced into spam (108+ bounces)",
     day_action: "wednesday-response-check \u2014 RESERVED for human-action days (7-9 Sep): currently only emits receipt (now removed) and cadence_runs row; no auto-replies, no auto-follow-ups"
@@ -83,11 +83,16 @@ var worker_default = {
   json(o, status) {
     return json(o, status);
   },
+  emailAuth(env) {
+    var h = {};
+    if (env.EMAIL_API_KEY) h["x-api-key"] = env.EMAIL_API_KEY;
+    return h;
+  },
   async listEmailFilters(request, env) {
     var a = this.auth(env, request);
     if (!a.ok) return this.cors(json({ ok: false, error: "auth: " + a.reason }, 401));
     try {
-      var rows = await env.OUTREACH_DB.prepare("SELECT id, pattern, action, priority, note FROM email_filters ORDER BY priority DESC").all();
+      var rows = await env.AUDIT_DB.prepare("SELECT id, field, pattern, action, reply_template, priority, enabled, rule_type FROM email_filters ORDER BY priority DESC").all();
       return this.cors(json({ ok: true, filters: rows.results || [] }));
     } catch (e) {
       return this.cors(json({ ok: false, error: e.message }, 500));
@@ -106,24 +111,25 @@ var worker_default = {
     }
     var result = { date: day, dry, started: now.toISOString(), mode: dry ? "dry" : "live" };
     try {
-      var ib = await env.EMAIL.fetch("https://email/inbox?h=168", { method: "GET" });
+      var ib = await env.EMAIL.fetch("https://email/stats", { method: "GET", headers: this.emailAuth(env) });
       var ibj = await ib.json();
-      if (ibj.ok) result.inbox = { total: ibj.messages ? ibj.messages.length : 0, last24h: ibj.last24h || null };
-      else result.inbox = { error: ibj.error || "inbox fetch failed" };
+      if (ibj && ibj.total !== undefined) result.inbox = { total: ibj.total, last24h: ibj.last24h ?? null };
+      else result.inbox = { error: (ibj && ibj.error) || "inbox fetch failed" };
     } catch (e) {
       result.inbox = { error: "inbox exception " + e.message };
     }
     result.replies = [];
     try {
-      var ore = await env.EMAIL.fetch("https://email/outreach/replies", { method: "GET" });
+      var ore = await env.EMAIL.fetch("https://email/outreach/replies", { method: "GET", headers: this.emailAuth(env) });
       var orej = await ore.json();
       if (orej.ok && orej.replies) result.replies = orej.replies.map(function(x) {
         return { from: x.from, response_type: x.response_type, reason: x.reason || "", duplicate: !!x.duplicate };
       });
     } catch (e) {
+      result.replies_error = e.message;
     }
     try {
-      var fu = await env.EMAIL.fetch("https://email/outreach/followup?days=14", { method: "GET" });
+      var fu = await env.EMAIL.fetch("https://email/outreach/followup?days=14", { method: "GET", headers: this.emailAuth(env) });
       var fuj = await fu.json();
       result.followup_eligible = fuj.ok ? fuj.count || 0 : -1;
       result.followup_due = fuj.ok ? fuj.due || [] : [];
@@ -142,14 +148,15 @@ var worker_default = {
       }
     }
     try {
-      var sc = await env.EMAIL.fetch("https://email/scan?limit=2", { method: "GET" });
+      var sc = await env.EMAIL.fetch("https://email/scan?limit=2", { method: "GET", headers: this.emailAuth(env) });
       var scj = await sc.json();
       if (scj.ok && scj.scan && scj.scan.length) result.scan = scj.scan.slice(0, 2);
     } catch (e) {
+      result.scan_error = e.message;
     }
     if (!dry && wd === 6) {
       try {
-        var wr = await env.EMAIL.fetch("https://email/outreach/weekly?mode=live", { method: "GET" });
+        var wr = await env.EMAIL.fetch("https://email/outreach/weekly?mode=live", { method: "GET", headers: this.emailAuth(env) });
         var wrj = await wr.json();
         result.weekly = wrj.ok ? wrj : { error: wrj.error || "weekly failed" };
       } catch (e) {
