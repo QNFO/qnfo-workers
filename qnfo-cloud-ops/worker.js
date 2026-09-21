@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.14.5";
+var VERSION = "1.14.4";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2092,7 +2092,7 @@ async function selfRegister(env) {
     routes: ["/health", "/run", "/search", "/record"],
     tools: [],
     models: [],
-    deps: ["ai:AI", "cron:24x", "d1:living-paper", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-graph", "d1:qnfo-outreach", "r2:d-drive", "send_email:SEND_EMAIL", "service:qnfo-email", "service:qnfo-infra", "service:qnfo-ops", "vectorize:qnfo-cloud-ops"]
+    deps: ["qnfo-audit D1", "qnfo-infra", "qnfo-graph", "living-paper", "portfolio-state", "qnfo-outreach", "qnfo-email", "send_email", "VAULT R2"]
   };
   const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
     method: "POST",

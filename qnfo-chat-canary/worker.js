@@ -8,7 +8,7 @@
 //   ops-feed guard (QNFO.OPS.015): ops phrase sent as a chat client must NOT auto-express
 //   failures -> qnfo-audit.alerts source='chat-canary' + out-of-band email.
 // Self-doc: FLEET-SELF-DOC-1. Canonical: QNFO/qnfo-workers/qnfo-chat-canary.
-const VERSION = "1.0.3"; // ops-feed guard probe (QNFO.OPS.015, audit P0-1 2026-09-03)
+const VERSION = "1.0.2"; // ops-feed guard probe (QNFO.OPS.015, audit P0-1 2026-09-03)
 const ROUTER = "https://qnfo-ai.q08.workers.dev";
 const UA = "qnfo-chat-canary/" + VERSION;
 // NO personal-inbox email (user directive 2026-09-02): alerts live in qnfo-audit.alerts -> swept into qnfo-events ledger.
@@ -37,21 +37,6 @@ function isFallback(t) {
   return s.indexOf("I could not generate a response") >= 0 || s.indexOf("I do not have a reliable answer for that right now") >= 0;
 }
 
-// CRED-ROTATION-HOOK-1 (2026-09-24): ROUTER_AUTH_KEY is a STORED COPY, so a rotation silently
-// breaks every probe. A 401/403 means the copy is stale - file a DISPOSITION row so the
-// fleet-control actor sees it, instead of only an alert email that no actor ever closes
-// (CLOSED-LOOP-DISPOSITION-1: an alert with no owned actor is not remediation).
-async function rotationHazard(env, status) {
-  try {
-    const dup = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM self_heal_actions WHERE kind='credential-rotation' AND status IN ('open','escalated')").first();
-    if (dup && dup.n) return;
-    await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, claim, confidence) VALUES ('credential-rotation',?1,?2,datetime('now'),'escalated',?3,0.9)")
-      .bind("ROUTER_AUTH_KEY",
-        "chat-canary received HTTP " + status + " from qnfo-ai - the stored ROUTER_AUTH_KEY is stale (rotated). Re-derive it from the Roaming DeepChat app-settings.json provider 'QNFO Router' (rk- key) and re-put the secret.",
-        "Detected by qnfo-chat-canary on a " + status + " from the router; credentialed liveness across the fleet is broken until the key is refreshed. owner=user until re-derived.").run();
-  } catch (e) {}
-}
-
 async function chatProbe(env, model, prompt, threadId, uaOverride) {
   const t0 = Date.now();
   const r = await aiFetch(env, "/v1/chat/completions", {
@@ -61,7 +46,6 @@ async function chatProbe(env, model, prompt, threadId, uaOverride) {
   });
   const j = await r.json().catch(() => ({}));
   const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
-  if (r.status === 401 || r.status === 403) await rotationHazard(env, r.status);
   return { status: r.status, content, model: (j && j.model) || model, latency: Date.now() - t0 };
 }
 

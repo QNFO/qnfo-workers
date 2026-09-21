@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.11"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.3"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -406,8 +406,8 @@ __name2(liveDevice, "liveDevice");
 async function liveScheduled(env, liveNames) {
   try {
     try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run(); } catch (e) {}
-    const meta = await d1all(env.AUDIT, "SELECT (julianday('now') - julianday(MAX(refreshed_at))) * 24 AS ageh FROM worker_schedules");
-    const ageH = meta && meta[0] && meta[0].ageh != null ? Number(meta[0].ageh) : 1e9;
+    const meta = await d1all(env.AUDIT, "SELECT MAX(refreshed_at) AS m FROM worker_schedules");
+    const ageH = meta && meta[0] && meta[0].m ? (Date.now() - new Date(meta[0].m).getTime()) / 36e5 : 1e9;
     const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM worker_schedules");
     if (ageH > 1 || !(cnt && cnt[0] && cnt[0].c > 0)) {
       const reg = await d1all(env.AUDIT, "SELECT service, purpose FROM service_registry") || [];
@@ -420,22 +420,20 @@ async function liveScheduled(env, liveNames) {
         const rs = await Promise.all(chunk.map(async function(n) {
           try {
             const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-            if (!r.ok) return { n, c: [], ok: false };
+            if (!r.ok) return { n, c: [] };
             const j = await r.json();
-            if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
-            const arr = j.result.schedules;
-            return { n, c: arr.map(function(s) { return s.cron; }), ok: true };
-          } catch (e) { return { n, c: [], ok: false }; }
+            const arr = (j.result && j.result.schedules) || [];
+            return { n, c: arr.map(function(s) { return s.cron; }) };
+          } catch (e) { return { n, c: [] }; }
         }));
         for (const it of rs) {
-          if (it.ok && !it.c.length) { try { await env.AUDIT.prepare("DELETE FROM worker_schedules WHERE name = ?1").bind(it.n).run(); } catch (e) {} continue; }
           if (!it.c.length) continue;
           try { await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso).run(); } catch (e) {}
         }
       }
     }
   } catch (e) {}
-  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
+  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules ORDER BY name") || [];
   const out = [];
   for (const r of rows) { try { out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" }); } catch (e) {} }
   return out;
@@ -789,7 +787,7 @@ async function dispatchIssue(env, i, gh_number) {
 __name(dispatchIssue, "dispatchIssue");
 __name2(dispatchIssue, "dispatchIssue");
 var EXEC_COOLDOWN_MS = 5 * 60 * 1e3;
-function execTargetFor(category, resource, env) {
+function execTargetFor(category, resource) {
   const r = String(resource || "").toLowerCase();
   if (category === "queue-freshness") {
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
@@ -800,9 +798,7 @@ function execTargetFor(category, resource, env) {
     // Each chain maps to its consumer worker's trigger endpoint.
     if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research pipeline (research-exec /run)" };
     if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
-    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return (env && env.REVISER_TOKEN)
-      ? { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log", auth: "X-Reviser-Token" }
-      : { safe: false, noAction: true, note: "PAPER-REVISER-SCAN-UNAUTHORIZED-1: /run/scan needs qnfo-paper-reviser X-Reviser-Token which this worker does not hold; qnfo-paper-reviser cron 37 */4 drains it - no auto-dispatch" };
+    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log" };
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: true, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "run observability ingest to digest alerts" };
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
@@ -825,7 +821,7 @@ async function execOne(env, row, prevState) {
   } catch (e) {
   }
   const resource = payload.resource || payload.title || "";
-  const spec = execTargetFor(row.category, resource, env);
+  const spec = execTargetFor(row.category, resource);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const prior = prevState || null;
   if (!spec || !spec.safe) {
@@ -845,9 +841,7 @@ async function execOne(env, row, prevState) {
   let ok = false, status = 0, body = "";
   try {
     if (!svc) throw new Error("binding " + spec.svc + " not bound");
-    const _eh = { "User-Agent": PROBE_UA };
-    if (spec.auth === "X-Reviser-Token" && env.REVISER_TOKEN) _eh["X-Reviser-Token"] = env.REVISER_TOKEN;
-    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: _eh });
+    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: { "User-Agent": PROBE_UA } });
     status = res.status;
     ok = res.ok;
     body = squash(await res.text()).slice(0, 240);
@@ -1060,32 +1054,18 @@ async function buildState(env, ctx) {
     const rows = await d1all(env.AUDIT, "SELECT slug, version_from, version_to, status, created_at FROM errata_actions ORDER BY created_at DESC LIMIT 2");
     push({ key: "errata_actions", label: "Errata actions", state: "info", detail: JSON.stringify(g) + "; latest: " + (rows.length ? rows[0].slug + " v" + rows[0].version_from + "->v" + rows[0].version_to + " " + rows[0].status : "none"), ts: rows.length ? rows[0].created_at : null });
   });
-  await safeAudit("ai_gateway_failures", "AI gateway failures (live)", async function() {
-    // GW-LIVE-TRUTH-1: the gateway is the source of truth, not the local mirror.
-    let liveTotal = null, liveErr = null;
-    try {
-      const gr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-      if (gr.ok) { const gj = await gr.json(); liveTotal = gj.result_info && gj.result_info.total_count; }
-      else liveErr = "HTTP " + gr.status;
-    } catch (e) { liveErr = String(e && e.message || e).slice(0, 60); }
-    // mirror freshness: a recorder that stopped writing is a defect, not a zero
-    let m = null;
-    try { m = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures"); } catch (e) {}
-    const mt = m && m.length ? m[0] : null;
-    const ageH = mt && mt.latest ? (Date.now() - Number(mt.latest)) / 36e5 : null;
-    let top = [];
-    try { top = await d1all(env.AUDIT, "SELECT status, model, SUM(count) AS c FROM ai_gateway_failures GROUP BY status, model ORDER BY c DESC LIMIT 4") || []; } catch (e) {}
-    const tc = top.map(function(r) { return r.status + " " + r.model + " x" + r.c; }).join(", ");
-    const stale = ageH == null || ageH > 2;
-    const bad = (liveTotal != null && liveTotal > 0) || stale;
-    push({ key: "gw_failures", label: "AI gateway failures (live)",
-      state: bad ? "err" : "ok",
-      detail: "live(all-time)=" + (liveTotal == null ? (liveErr || "n/a") : liveTotal) + "; mirror=" + (mt ? mt.total : 0) + " recorded, last write " + (ageH == null ? "never" : ageH.toFixed(1) + "h ago") + (stale ? " [RECORDER STALE]" : "") + (tc ? "; top: " + tc : ""),
-      ts: mt && mt.latest ? new Date(Number(mt.latest)).toISOString() : null });
+  await safeAudit("ai_gateway_failures", "AI gateway failures (24h, user-facing)", async function() {
+    const f = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source != 'qnfo-ai-calibration'", [epoch24]);
+    const top = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source != 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const total = f && f.length ? f[0].total : 0;
+    const tc = top.map(function(r) {
+      return r.error_class + ":" + r.c;
+    }).join(", ");
+    push({ key: "gw_failures", label: "AI gateway failures (24h, user-facing)", state: total > 0 ? "err" : "ok", detail: total > 0 ? total + " failure(s); " + tc : "0 failures", ts: f && f.length ? f[0].latest : null });
   });
   await safeAudit("gw_calibration", "AI calibration probes (24h)", async function() {
-    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%'", [epoch24]);
-    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration'", [epoch24]);
+    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
     const ctotal = c && c.length ? c[0].total : 0;
     const ctc = ct.map(function(r) {
       return r.error_class + ":" + r.c;
@@ -1126,14 +1106,9 @@ async function buildState(env, ctx) {
     const bad = rows.filter(function(r) {
       return String(r.status || "").toLowerCase() !== "ok" || (r.consecutive_failures || 0) > 0;
     });
-    let gwf = [];
-    try { gwf = await d1all(env.AUDIT, "SELECT model, SUM(count) AS c FROM ai_gateway_failures GROUP BY model ORDER BY c DESC LIMIT 6") || []; } catch (e) {}
-    const gwTop = gwf.map(function(r) { return (r.model || "?") + " x" + r.c; }).join(", ");
-    const gwBad = gwf.length > 0;
-    push({ key: "model_health", label: "AI model health", state: (bad.length || gwBad) ? "warn" : "ok",
-      detail: rows.length + " models; not-ok: " + (bad.length ? bad.map(function(r) {
-        return r.model_id + "=" + r.status + "/cf" + r.consecutive_failures;
-      }).join(", ") : "none") + (gwTop ? "; gateway-failure models: " + gwTop : ""), ts: null });
+    push({ key: "model_health", label: "AI model health", state: bad.length ? "warn" : "ok", detail: rows.length + " models; not-ok: " + (bad.length ? bad.map(function(r) {
+      return r.model_id + "=" + r.status + "/cf" + r.consecutive_failures;
+    }).join(", ") : "none"), ts: null });
   });
   await safeAudit("ai_queries", "AI queries (24h)", async function() {
     const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c, MAX(ts) AS latest FROM ai_queries WHERE ts >= ?", [iso24]);
@@ -1392,7 +1367,7 @@ function contractDepsOf(raw) {
     const ci = entry.indexOf(":");
     if (ci <= 0) continue;
     const prefix = entry.slice(0, ci).toLowerCase();
-    if (/^(d1|r2|vectorize|kv|queue|cron|ai|send_email|do|artifacts|ext|browser|ai_search|workflow|secrets|produces)$/.test(prefix)) out.push(prefix);
+    if (/^(d1|r2|vectorize|kv|queue|cron|ai|send_email)$/.test(prefix)) out.push(prefix);
   }
   return out;
 }
@@ -1514,18 +1489,9 @@ async function integrationView(env, liveNames) {
     registered: nodes.length,
     live: liveNames ? liveNames.length : null,
     edges: edges.length,
-    edges_worker: edges.length,
     contract_edges: contractEdgeCount,
-    edges_total: edges.length + contractEdgeCount,
     edge_list: edges.slice(0, 500),
     density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
-    // V1.7.11 METRIC-HONESTY-1: separate observability probe fan-out from functional control coupling.
-    // The single prober (qnfo-fleet-dashboard) holds an out-edge to every worker; counting those as
-    // "connectivity" inflates density ~75%. functional = edges NOT originating from the prober.
-    probe_edges: edges.filter(function(e) { return e && e.from === "qnfo-fleet-dashboard"; }).length,
-    edges_worker_functional: edges.filter(function(e) { return e && e.from !== "qnfo-fleet-dashboard"; }).length,
-    density_functional: nodes.length > 1 ? +((edges.filter(function(e) { return e && e.from !== "qnfo-fleet-dashboard"; }).length) / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
-    density_contract: nodes.length > 1 ? +(Number(((edges.length + contractEdgeCount) / (nodes.length * (nodes.length - 1))).toFixed(4))) : 0,
     islands,
     sinks,
     hubs,
@@ -1610,7 +1576,7 @@ function integrationHtml(ig, st) {
   h.push('<div class="chips">');
   h.push(chip("info", ig.registered + " registered"));
   h.push(chip("info", (ig.live == null ? "?" : ig.live) + " live"));
-  h.push(chip("info", ig.edges + " worker edges / " + (ig.contract_edges || 0) + " contract edges (density " + ig.density + " worker, " + (ig.density_contract == null ? "n/a" : ig.density_contract) + " contract)"));
+  h.push(chip("info", ig.edges + " edges (density " + ig.density + ")"));
   h.push(ig.drift.ghost > 0 ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
   h.push(ig.drift.unregistered > 0 ? chip("warn", ig.drift.unregistered + " unregistered") : chip("ok", "0 unregistered"));
   h.push(ig.drift.unversioned > 0 ? chip("warn", ig.drift.unversioned + " unversioned") : chip("ok", "0 unversioned"));
@@ -1733,7 +1699,7 @@ function pageHtml(st) {
   h.push(ig.drift && ig.drift.ghost ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
   h.push(ig.drift && ig.drift.unregistered ? chip("warn", ig.drift.unregistered + " unreg") : chip("ok", "0 unreg"));
   h.push('</span><span class="sub" style="margin-left:auto">v' + esc(st.version) + ' &middot; ' + esc(String(st.generated_at || "").slice(0, 16).replace("T", " ")) + 'U &middot; <a href="/api/state">state</a> <a href="/api/actions">actions</a> <a href="/api/loop">loop</a></span></div>');
-  h.push('<div class="panel"><h2>Fleet topology &middot; ' + (ig.registered || 0) + ' nodes / ' + (ig.edges || 0) + ' worker edges / ' + (ig.contract_edges || 0) + ' contract edges &middot; density ' + (ig.density == null ? "n/a" : ig.density) + ' worker / ' + (ig.density_contract == null ? "n/a" : ig.density_contract) + ' contract</h2>');
+  h.push('<div class="panel"><h2>Fleet topology &middot; ' + (ig.registered || 0) + ' nodes / ' + (ig.edges || 0) + ' edges &middot; density ' + (ig.density == null ? "n/a" : ig.density) + '</h2>');
   h.push(topologySvg(ig));
   h.push('<div class="chips">' + chip("info", (ig.live == null ? "?" : ig.live) + " live") + chip("ok", (ig.registered || 0) + " registered") + (ig.hubs && ig.hubs.length ? chip("info", "top hub " + esc(ig.hubs[0].service) + " (" + ig.hubs[0].out + " out)") : "") + (ig.islands && ig.islands.length ? chip("warn", ig.islands.length + " islands") : "") + (ig.drift && ig.drift.unversioned ? chip("warn", ig.drift.unversioned + " unversioned") : "") + '</div>');
   if (ig.islands && ig.islands.length) h.push('<div class="sub" style="margin-top:3px">islands (no declared edge): ' + esc(ig.islands.slice(0, 16).join(", ")) + '</div>');
@@ -1904,7 +1870,7 @@ function computeSai(st, bench, cfg, live) {
   const islands = ig.islands || [];
   const drift = ig.drift || {};
   const driftBad = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
-  const density = ig.density_contract || ig.density || 0;
+  const density = ig.density || 0;
   const audits = {};
   (st.audits || []).forEach(function(a) { if (a && a.key) audits[a.key] = a; });
   let openIssues = -1, userWait = -1;
@@ -1991,16 +1957,6 @@ var worker_default = {
       try {
         await loopExecute(env);
       } catch (e3) {
-      }
-      // FLEET-SCHEDULES-CRON-REFRESH-1 (2026-09-23): refresh the worker_schedules census ON THE CRON.
-      // liveScheduled() was only reachable via a view/route (worker.js:1243), so the census re-staled
-      // whenever nobody loaded the dashboard. Wire it into the scheduled handler so it self-maintains
-      // every */30 and the substantiveness/deprecation policy always reads a live-matching census.
-      try {
-        const _lf = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
-        const _names = (_lf.results || []).map(function (x) { return x.service; });
-        if (_names.length) await liveScheduled(env, _names);
-      } catch (e4) {
       }
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
     } catch (e) {
