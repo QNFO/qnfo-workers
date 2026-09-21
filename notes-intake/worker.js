@@ -1,22 +1,18 @@
 /**
- * notes-intake v0.1.0
+ * notes-intake v0.1.1
  * Server-side Obsidian vault notes pipeline. Single source of truth = R2 bucket obsidian-vault.
- *
- * INGEST    scan vault -> notes_intake registry (D1 qnfo-audit)
- * TRIAGE    infer type/status; flag needs_triage (Inbox/ + recently-modified incomplete)
- * EXECUTE   dated next-actions (future/recent) -> calendar (calendar-api publishes .ics hourly)
- * PUBLISH   publish-flagged notes -> notes_publish_queue (gated: surfaced, never auto-deposited)
- * IMPLEMENT regenerate notes/v1/_index.md (the live lookup dashboard)
- *
- * Cron every 15 min. Idempotent: registry dedupe by size|uploaded; calendar dedupe by UNIQUE uid.
+ * INGEST vault -> notes_intake registry | TRIAGE -> needs_triage | EXECUTE dated -> calendar |
+ * PUBLISH -> publish queue (gated) | IMPLEMENT -> regenerate notes/v1/_index.md.
+ * Cron every 15 min. Idempotent (registry sig dedupe; calendar UNIQUE uid). CPU-safe: range-GET head + D1 batch.
  * Canonical source: QNFO/qnfo-workers notes-intake/
  */
-var VERSION = "0.1.0";
+var VERSION = "0.1.1";
 var WORKER = "notes-intake";
-var MAX_LIST_PAGES = 25;
-var MAX_CHANGED = 600;
+var MAX_LIST_PAGES = 30;
+var MAX_CHANGED = 300;
 var MAX_EVENTS_PER_RUN = 100;
 var FUTURE_WINDOW_DAYS = 7;
+var HEAD_BYTES = 32768;
 var SKIP_PREFIXES = [".obsidian/", "releases/", "Attachments/", "Archive/", ".git/"];
 var MD_RE = /\.(md|markdown|mdx)$/i;
 
@@ -24,6 +20,7 @@ function json(o, s) { return new Response(JSON.stringify(o), { status: s || 200,
 function basename(k) { var p = k.split("/"); return p[p.length - 1] || k; }
 function numOrNull(v) { if (v === undefined || v === null || v === "") return null; var n = Number(v); return Number.isFinite(n) ? n : null; }
 function bearer(r) { return String(r.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim(); }
+function chunk(a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
 
 function parseFrontmatter(text) {
   var out = {};
@@ -61,13 +58,12 @@ function extractDatedActions(text) {
   return res;
 }
 
-async function getText(env, key, maxBytes) {
+async function getHead(env, key) {
   try {
     if (!MD_RE.test(key)) return null;
-    var o = await env.VAULT.get(key);
-    if (!o || o.size > (maxBytes || 2 * 1024 * 1024)) return null;
-    var b = await o.arrayBuffer();
-    return new TextDecoder("utf-8", { fatal: false }).decode(b);
+    var o = await env.VAULT.get(key, { range: { offset: 0, length: HEAD_BYTES } });
+    if (!o) return null;
+    return await o.text();
   } catch (e) { return null; }
 }
 
@@ -100,7 +96,7 @@ async function run(env) {
       if (regMap.get(key) === sig) continue;
       s.changed++;
       if (upserts.length >= MAX_CHANGED) { capped = true; break; }
-      var text = await getText(env, key);
+      var text = await getHead(env, key);
       if (text === null) continue;
       var fm = parseFrontmatter(text);
       var type = inferType(key, fm);
@@ -117,30 +113,29 @@ async function run(env) {
     if (capped) break;
   } while (cursor && pages < MAX_LIST_PAGES);
 
-  for (var u = 0; u < upserts.length; u++) {
-    var x = upserts[u];
-    try {
-      await env.AUDIT.prepare(
-        "INSERT INTO notes_intake (path,type,title,status,priority,due,next_action,project,area,energy,source,modified,ingested_at,sig,triage_state,raw_fm) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16) " +
-        "ON CONFLICT(path) DO UPDATE SET type=?2,title=?3,status=?4,priority=?5,due=?6,next_action=?7,project=?8,area=?9,energy=?10,source=?11,modified=?12,ingested_at=?13,sig=?14,triage_state=?15,raw_fm=?16"
-      ).bind(x.path, x.type, x.title, x.status, x.priority, x.due, x.next_action, x.project, x.area, x.energy, x.source, x.modified, new Date().toISOString(), x.sig, x.triage_state, x.raw_fm).run();
-      s.ingested++;
-    } catch (e) { s.errors++; }
+  var upStmts = upserts.map(function (u) {
+    return env.AUDIT.prepare("INSERT INTO notes_intake (path,type,title,status,priority,due,next_action,project,area,energy,source,modified,ingested_at,sig,triage_state,raw_fm) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16) ON CONFLICT(path) DO UPDATE SET type=?2,title=?3,status=?4,priority=?5,due=?6,next_action=?7,project=?8,area=?9,energy=?10,source=?11,modified=?12,ingested_at=?13,sig=?14,triage_state=?15,raw_fm=?16").bind(u.path, u.type, u.title, u.status, u.priority, u.due, u.next_action, u.project, u.area, u.energy, u.source, u.modified, new Date().toISOString(), u.sig, u.triage_state, u.raw_fm);
+  });
+  var upChunks = chunk(upStmts, 50);
+  for (var k = 0; k < upChunks.length; k++) {
+    try { await env.AUDIT.batch(upChunks[k]); s.ingested += upChunks[k].length; }
+    catch (e) { s.errors++; }
   }
 
   var cutoff = new Date(nowMs - FUTURE_WINDOW_DAYS * 864e5).toISOString().slice(0, 10);
-  for (var a = 0; a < datedActions.length && s.eventsCreated < MAX_EVENTS_PER_RUN; a++) {
+  var calStmts = [];
+  for (var a = 0; a < datedActions.length && calStmts.length < MAX_EVENTS_PER_RUN; a++) {
     var act = datedActions[a];
     if (!act.date || act.date < cutoff) continue;
-    try {
-      var uid = "notes-intake-" + await digest16(act.path + "|" + act.date + "|" + (act.time || "")) + "@qnfo.cloud";
-      var dtstart = act.time ? (act.date + "T" + act.time + ":00") : act.date;
-      var allDay = act.time ? 0 : 1;
-      var ins = await env.AUDIT.prepare(
-        "INSERT OR IGNORE INTO calendar (plane,uid,title,description,location,dtstart,dtend,all_day,url,source,domain,relevance,friction,status) VALUES ('personal',?1,?2,?3,NULL,?4,NULL,?5,NULL,'notes-intake','personal',NULL,NULL,'confirmed')"
-      ).bind(uid, act.title, "From notes: " + act.path, dtstart, allDay).run();
-      if (ins.meta && ins.meta.changes === 1) s.eventsCreated++; else s.eventsExisting++;
-    } catch (e) { s.errors++; }
+    var uid = "notes-intake-" + await digest16(act.path + "|" + act.date + "|" + (act.time || "")) + "@qnfo.cloud";
+    var dtstart = act.time ? (act.date + "T" + act.time + ":00") : act.date;
+    var allDay = act.time ? 0 : 1;
+    calStmts.push(env.AUDIT.prepare("INSERT OR IGNORE INTO calendar (plane,uid,title,description,location,dtstart,dtend,all_day,url,source,domain,relevance,friction,status) VALUES ('personal',?1,?2,?3,NULL,?4,NULL,?5,NULL,'notes-intake','personal',NULL,NULL,'confirmed')").bind(uid, act.title, "From notes: " + act.path, dtstart, allDay));
+  }
+  var calChunks = chunk(calStmts, 50);
+  for (var c2 = 0; c2 < calChunks.length; c2++) {
+    try { var cres = await env.AUDIT.batch(calChunks[c2]); for (var ri = 0; ri < cres.length; ri++) { if (cres[ri].meta && cres[ri].meta.changes === 1) s.eventsCreated++; else s.eventsExisting++; } }
+    catch (e) { s.errors++; }
   }
 
   for (var p = 0; p < publishFlags.length; p++) {
