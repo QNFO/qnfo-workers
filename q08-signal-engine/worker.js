@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.26"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.27"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -840,11 +840,13 @@ async function sha16(s) {
   var buf = await crypto.subtle.digest("SHA-256", enc.encode(String(s)));
   return Array.from(new Uint8Array(buf)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
 }
-async function sendEmail(env, to, subject, body) {
+async function sendEmail(env, to, subject, body, unsubUrl) {
   // Tokenless path: native Email Routing send binding (q08.org). No API key needed.
   if (env.SEND_EMAIL) {
     try {
-      await env.SEND_EMAIL.send({ to: to, from: "digest@q08.org", subject: subject, text: body });
+      var msg = { to: to, from: "digest@q08.org", subject: subject, text: body };
+      if (unsubUrl) msg.headers = { "List-Unsubscribe": "<" + unsubUrl + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
+      await env.SEND_EMAIL.send(msg);
       return { ok: true, via: "send_email" };
     } catch (e) {
       return { ok: false, error: "send_email: " + String(e && e.message || e) };
@@ -866,8 +868,9 @@ async function sendDigest(env) {
   var list = rows.map(function(r){ return "- " + r.title + " - https://q08.org/p/" + r.slug; }).join("\n");
   var sent = 0;
   for (var s of (subs.results || [])) {
-    var body = "q08 - daily digest (" + day + ")\n\n" + list + "\n\nUnsubscribe: https://q08.org/unsubscribe?t=" + s.token;
-    var r = await sendEmail(env, s.email, "q08 - daily digest", body);
+    var unsubUrl = "https://q08.org/unsubscribe?t=" + s.token;
+    var body = "q08 - daily digest (" + day + ")\n\n" + list + "\n\nUnsubscribe: " + unsubUrl;
+    var r = await sendEmail(env, s.email, "q08 - daily digest", body, unsubUrl);
     if (r && r.ok) sent++;
   }
   return { ok: true, pieces: rows.length, subscribers: (subs.results||[]).length, sent: sent };
@@ -1047,7 +1050,7 @@ export default {
     if (path === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
     if (path === "/subscribe") return await handleSubscribe(req, env, url);
     if (path === "/confirm") { var t0 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='confirmed', confirmed_at=? WHERE token=? AND status!='unsubscribed'").bind(nowIso(), t0).run(); return html("<h2>Subscribed</h2><p>You are subscribed. The daily digest arrives each evening.</p>"); }
-    if (path === "/unsubscribe") { var t1 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='unsubscribed' WHERE token=?").bind(t1).run(); return html("<h2>Unsubscribed</h2><p>You have been removed from the daily digest.</p>"); }
+    if (path === "/unsubscribe") { var t1 = (url.searchParams.get("t")||"").trim(); if (!t1) return html("<h2>Invalid link</h2><p>No unsubscribe token provided.</p>", 400); var unsub = await env.DB.prepare("UPDATE subscribers SET status='unsubscribed' WHERE token=?").bind(t1).run(); return (unsub && unsub.meta && unsub.meta.changes > 0) ? html("<h2>Unsubscribed</h2><p>You have been removed from the daily digest.</p>") : html("<h2>Not found</h2><p>That unsubscribe link is invalid or already used.</p>", 404); }
     if (path === "/api/pieces") {
       var rows = await env.DB.prepare("SELECT slug, title, core_concept, published_at, reads FROM published_pieces ORDER BY published_at DESC LIMIT 50").all();
       return json(rows.results || []);
