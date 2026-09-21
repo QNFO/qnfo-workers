@@ -1,5 +1,5 @@
-const VERSION = "2.0.5";
-const QNFO_VERSION = "qnfo-email/command-20260918";
+const VERSION = "2.0.7";
+const QNFO_VERSION = "qnfo-email/filter-before-store-963-allowlist-955";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
 const PREVIEW_LENGTH = 200;
@@ -40,21 +40,30 @@ export default {
     const refsHdr = headers.get("references") || null;
     const receivedAt = new Date().toISOString();
     const parsed = await parseBody(raw);
-    const bodyText = parsed.bodyText, bodyHtml = parsed.bodyHtml;
+    const bodyText = parsed.bodyText, bodyHtml = parsed.bodyHtml, rawText = parsed.rawText || "";
     const classification = classifyAddress(to);
     const headersJson = JSON.stringify(Object.fromEntries(headers.entries()));
+    // EMAIL-STORE-BEFORE-FILTER-1 (963): evaluate filters BEFORE persisting so a
+    // reject rule prevents ingestion (and stops cross-talk mail growing the mailbox).
+    const filterResult = await applyFilters(env.AUDIT_DB, from, to, subject, bodyText);
+    if (filterResult.action === "reject") {
+      message.setReject(filterResult.reason || "Email rejected by policy");
+      return;
+    }
     const emailId = await storeEmail(env.AUDIT_DB, {
       messageId: messageId, from: from, to: to, subject: subject,
       bodyText: truncate(bodyText, BODY_MAX_TEXT), bodyHtml: truncate(bodyHtml, BODY_MAX_HTML),
       headersJson: headersJson, classification: classification,
       receivedAt: receivedAt, inReplyTo: inReplyTo, refsHdr: refsHdr
     });
-    const filterResult = await applyFilters(env.AUDIT_DB, from, to, subject, bodyText);
-    if (filterResult.action === "reject") {
-      message.setReject(filterResult.reason || "Email rejected by policy");
-      await logAction(env.AUDIT_DB, emailId, "rejected", filterResult.reason, startTime);
-      return;
-    }
+    try {
+      var __evRaw = rawText || "";
+      var __subj = String(subject || "").toLowerCase();
+      var __isEv = __evRaw.indexOf("BEGIN:VCALENDAR") >= 0 || __evRaw.indexOf("text/calendar") >= 0 || /invitation|appointment|confirmation|booking|reservation|check-in|itinerary|flight|reminder:/.test(__subj);
+      if (__isEv && env.EVENTS) {
+        ctx.waitUntil(env.EVENTS.fetch("https://qnfo-events/ingest", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (env.INGEST_TOKEN || "") }, body: JSON.stringify({ messageId: messageId, from: from, to: to, subject: subject, raw: __evRaw.slice(0, 60000), body: (bodyText || "").slice(0, 4000) }) }).catch(function (e) { console.error("events forward", e && e.message || e); }));
+      }
+    } catch (e) { console.error("events hook", e && e.message || e); }
     await sendNotification(env, { messageId: messageId, emailId: emailId, from: from, to: to, subject: subject, classification: classification, preview: truncate(bodyText, PREVIEW_LENGTH), bodySize: rawSize, receivedAt: receivedAt });
     if (filterResult.action === "auto_reply" && filterResult.replyTemplate) {
       try {
@@ -196,7 +205,7 @@ export default {
         const htmlBody = body.html || (body.body ? "<p>" + body.body.split("\n").join("<br>") + "</p>" : "");
         const textBody = body.body || (body.html ? body.html.replace(/<[^>]*>/g, "") : "");
         const replySubject = body.subject || "(no subject)";
-        const ALLOWED_DOMAINS = ["qnfo.org","qwav.org","qwav.tech","qwav.net","qwav.uk","q-wave.tech","qwave.tech","q08.org","qnfo.net","qnfo.uk","empoweringchange.today"];
+        const ALLOWED_DOMAINS = ["qnfo.org","qwav.org","qwav.tech","qwav.net","qwav.uk","q-wave.tech","qwave.tech","q08.org","qnfo.net","qnfo.uk"]; // empoweringchange.today removed (lapsed 2026-09-18, issue 955)
         const fromDomain = (body.from || "").split("@")[1] || "";
         const FROM_ADDR = body.from && ALLOWED_DOMAINS.indexOf(fromDomain.toLowerCase()) >= 0 ? body.from : "qnfo@qnfo.org";
         // MCP-COLD-SEND-UNGATED (952): this send path had NO suppression check, so cold
@@ -247,25 +256,73 @@ export default {
   }
 };
 
-async function parseBody(raw) {
-  let bodyText = "", bodyHtml = "";
-  try {
-    const rawText = await new Response(raw).text();
-    const boundaryMatch = rawText.match(/boundary="?([^"\s\n\r]+)"?/i);
-    if (boundaryMatch) {
-      const boundary = boundaryMatch[1];
-      const parts = rawText.split("--" + boundary);
-      for (const part of parts) {
-        if (part.indexOf("Content-Type: text/plain") >= 0) { const cs = part.indexOf("\n\n"); if (cs > -1) bodyText = part.substring(cs).replace(/^[\n\r]+/, "").trim(); }
-        else if (part.indexOf("Content-Type: text/html") >= 0) { const cs = part.indexOf("\n\n"); if (cs > -1) bodyHtml = part.substring(cs).replace(/^[\n\r]+/, "").trim(); }
+function _hdr(head, name) {
+  const nm = String(name || "").toLowerCase();
+  for (const ln of String(head || "").split(/\r?\n/)) {
+    const i = ln.indexOf(":");
+    if (i > 0 && ln.slice(0, i).trim().toLowerCase() === nm) return ln.slice(i + 1).trim();
+  }
+  return "";
+}
+function _splitHB(s) {
+  let i = s.indexOf("\r\n\r\n");
+  if (i >= 0) return { head: s.slice(0, i), body: s.slice(i + 4) };
+  i = s.indexOf("\n\n");
+  if (i >= 0) return { head: s.slice(0, i), body: s.slice(i + 2) };
+  return { head: "", body: s };
+}
+function _decodeCte(body, cte) {
+  let b = String(body == null ? "" : body);
+  const c = String(cte || "").toLowerCase();
+  if (c.indexOf("quoted-printable") >= 0) {
+    b = b.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/g, function(_, h){ return String.fromCharCode(parseInt(h, 16)); });
+  } else if (c.indexOf("base64") >= 0) {
+    try { b = atob(b.replace(/[^A-Za-z0-9+/=]/g, "")); } catch (e) { }
+  }
+  return b;
+}
+function _htmlToText(html) {
+  return String(html || "")
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&").replace(/&quot;/gi, "\"").replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+function _walkMime(rawText, acc) {
+  const hb = _splitHB(rawText);
+  const ctype = _hdr(hb.head, "content-type").toLowerCase();
+  const cte = _hdr(hb.head, "content-transfer-encoding");
+  if (ctype.indexOf("multipart/") === 0) {
+    const bm = ctype.match(/boundary\s*=\s*"?([^";\r\n]+)"?/);
+    if (bm) {
+      for (const seg of hb.body.split("--" + bm[1].trim())) {
+        const t = seg.replace(/^\r?\n/, "");
+        if (!t.trim() || /^--\s*$/.test(t.trim())) continue;
+        _walkMime(t, acc);
       }
+      return acc;
     }
-    if (!bodyText && !bodyHtml) {
-      const parts = rawText.split(/\r?\n\r?\n/);
-      if (parts.length > 1) bodyText = parts.slice(1).join("\n\n").replace(/=\r?\n/g, "").trim();
-    }
-  } catch (e) { bodyText = "[parse: " + e.message + "]"; }
-  return { bodyText: bodyText, bodyHtml: bodyHtml };
+  }
+  if (ctype.indexOf("text/html") >= 0) { if (!acc.html) acc.html = _decodeCte(hb.body, cte).trim(); }
+  else if (ctype.indexOf("text/plain") >= 0) { if (!acc.text) acc.text = _decodeCte(hb.body, cte).trim(); }
+  else if (!ctype) { if (!acc.text) acc.text = _decodeCte(hb.body, cte).trim(); }
+  return acc;
+}
+async function parseBody(raw) {
+  let bodyText = "", bodyHtml = "", rawText = "";
+  try {
+    rawText = await new Response(raw).text();
+    const acc = _walkMime(rawText, { text: "", html: "" });
+    bodyText = acc.text || "";
+    bodyHtml = acc.html || "";
+    if (!bodyText && bodyHtml) bodyText = _htmlToText(bodyHtml);
+  } catch (e) {
+    bodyText = "[parse: " + e.message + "]";
+  }
+  return { bodyText: bodyText, bodyHtml: bodyHtml, rawText: rawText };
 }
 
 async function storeEmail(db, data) {
@@ -396,18 +453,26 @@ async function lookupSender(db, sender) {
 }
 
 function parseCommand(bodyText, subject) {
-  let t = (bodyText || "").trim();
+  let t = String(bodyText == null ? "" : bodyText).replace(/\r/g, "");
   const keep = [];
-  for (const l of t.split(/\r?\n/)) {
-    if (/^\s*>/.test(l)) continue;
-    if (/^--\s*$/.test(l)) break;
-    if (l.trim().length === 0) continue;
-    keep.push(l);
+  let started = false;
+  for (const rawLine of t.split("\n")) {
+    const s = rawLine.trim();
+    if (!s) { if (started) break; continue; }
+    if (/^>/.test(s)) { if (started) break; continue; }
+    if (/^_{6,}$/.test(s)) break;
+    if (/^-{2,}\s*$/.test(s)) break;
+    if (/^-{2,}\s*(original message|forwarded message|forwarded)/i.test(s)) break;
+    if (/^on .{6,}wrote:?$/i.test(s)) break;
+    if (/^(from|sent|to|cc|bcc|date|subject|reply-to)\s*:/i.test(s)) break;
+    if (/^<[^>]+>$/.test(s)) continue;
+    started = true;
+    keep.push(s);
   }
   t = keep.join("\n").trim();
-  if (!t) t = (subject || "").replace(/^re:\s*/i, "").trim();
+  if (!t) t = String(subject || "").replace(/^((re|fwd|fw)\s*:\s*)+/i, "").trim();
   const m = t.match(/^([A-Za-z][A-Za-z0-9_-]*)(?:\s+([\s\S]*))?$/);
-  if (!m) return { verb: t.toLowerCase(), commandText: "" };
+  if (!m) return { verb: t.toLowerCase().slice(0, 60), commandText: "" };
   return { verb: m[1].toLowerCase(), commandText: (m[2] || "").trim() };
 }
 
@@ -460,8 +525,9 @@ async function processCommand(env, c) {
 async function getJson(url) {
   try {
     const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    const txt = await res.text();
     if (!res.ok) return null;
-    return await res.json();
+    try { return JSON.parse(txt); } catch (e) { return null; }
   } catch (e) { return null; }
 }
 
@@ -508,53 +574,79 @@ async function cmdInbox(env) {
 }
 
 async function cmdRead(env, commandText) {
-  const id = parseInt((commandText || "").trim(), 10);
+  const id = parseInt(String(commandText || "").trim(), 10);
   if (!id) return { ok: false, error: "usage: read <email-id>" };
   const row = await env.AUDIT_DB.prepare("SELECT id, sender, recipient, subject, body_text, received_at FROM emails WHERE id=?1").bind(id).first();
   if (!row) return { ok: false, error: "email " + id + " not found" };
-  const L = ["[" + row.id + "] " + row.subject, "from: " + row.sender, "to: " + row.recipient, "at: " + row.received_at, "", truncate(row.body_text || "", 4000)];
+  let body = String(row.body_text || "");
+  if (/^-{2,}[A-Za-z0-9_=+.\/-]{8,}/m.test(body) || /content-type\s*:\s*multipart/i.test(body)) {
+    try {
+      const acc = _walkMime(body, { text: "", html: "" });
+      if (acc.text) body = acc.text;
+      else if (acc.html) body = _htmlToText(acc.html);
+    } catch (e) { }
+  }
+  const L = ["[" + row.id + "] " + decodeSubject(row.subject), "from: " + row.sender, "to: " + row.recipient, "at: " + row.received_at, "", truncate(body, 4000)];
   return { ok: true, text: L.join("\n") };
 }
 
 async function cmdJob(env, commandText) {
-  const id = (commandText || "").trim();
+  const id = String(commandText || "").trim();
   if (!id) return { ok: false, error: "usage: job <id>" };
   const key = env.OPS_KEY || "";
   const h = key ? { "Authorization": "Bearer " + key } : {};
-  const res = await fetch(OPS_BASE + "/v1/jobs/" + encodeURIComponent(id), { headers: h });
-  const j = await res.json();
-  if (res.status === 404) return { ok: false, error: "job " + id + " not found" };
-  return { ok: true, text: truncate(JSON.stringify(j, null, 2), 3000) };
+  try {
+    const res = await fetch(OPS_BASE + "/v1/jobs/" + encodeURIComponent(id), { headers: h });
+    const txt = await res.text();
+    if (res.status === 404) return { ok: false, error: "job " + id + " not found" };
+    let j = null;
+    try { j = JSON.parse(txt); } catch (e) { j = null; }
+    if (!j) return { ok: false, error: "ops returned non-JSON (HTTP " + res.status + "): " + txt.slice(0, 180) };
+    return { ok: true, text: truncate(JSON.stringify(j, null, 2), 3000) };
+  } catch (e) {
+    return { ok: false, error: "ops unreachable: " + String(e && e.message || e).slice(0, 160) };
+  }
 }
 
 async function cmdAgent(env, verb, commandText, kind) {
   if (kind !== "owner") return { ok: false, error: "action commands require owner sender; agent sender is read-only" };
+  const text = String(commandText ? (verb ? verb + " " + commandText : commandText) : (verb || "")).trim();
   if (env.COMMAND_TOKEN) {
     const tok = String(env.COMMAND_TOKEN || "");
-    if (commandText.indexOf(tok) < 0) return { ok: false, error: "COMMAND_TOKEN required for action commands (append token to your message)" };
+    if (text.indexOf(tok) < 0) return { ok: false, error: "COMMAND_TOKEN required for action commands (append the token to your message)" };
   }
   const key = env.OPS_KEY || "";
   if (!key) return { ok: false, error: "OPS_KEY not configured on qnfo-email; agent passthrough disabled" };
-  const text = commandText || verb;
-  const res = await fetch(OPS_BASE + "/v1/jobs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-    body: JSON.stringify({ model: "ops-exec", messages: [{ role: "user", content: text }] })
-  });
-  const j = await res.json();
-  if (!(res.status === 202 && j.id)) return { ok: false, error: "queue failed: " + JSON.stringify(j).slice(0, 300) };
-  const polls = Math.max(0, parseInt(env.AGENT_POLLS || "5", 10) || 0);
+  let j = null, lastErr = "";
+  for (let attempt = 0; attempt < 3 && !j; attempt++) {
+    try {
+      const res = await fetch(OPS_BASE + "/v1/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+        body: JSON.stringify({ model: "ops-exec", messages: [{ role: "user", content: text }] })
+      });
+      const txt = await res.text();
+      if (res.status === 202) { try { j = JSON.parse(txt); } catch (e) { j = null; } }
+      if (!j) lastErr = "HTTP " + res.status + " " + txt.slice(0, 120);
+    } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); }
+    if (!j && attempt < 2) await new Promise(function(r){ setTimeout(r, 1000 * (attempt + 1)); });
+  }
+  if (!j || !j.id) return { ok: false, error: "ops job queue unavailable (" + lastErr + ")" };
+  const polls = Math.max(0, parseInt(env.AGENT_POLLS || "6", 10) || 0);
   for (let i = 0; i < polls; i++) {
-    await new Promise(function(r){ setTimeout(r, 2500); });
+    await new Promise(function(r){ setTimeout(r, 2000); });
     try {
       const pr = await fetch(OPS_BASE + "/v1/jobs/" + encodeURIComponent(j.id), { headers: { "Authorization": "Bearer " + key } });
-      const pj = await pr.json();
+      const ptxt = await pr.text();
+      let pj = null;
+      try { pj = JSON.parse(ptxt); } catch (e) { pj = null; }
+      if (!pj) continue;
       const st = pj.status || (pj.job && pj.job.status);
       if (st && st !== "queued" && st !== "running") {
         const out = pj.response || (pj.job && pj.job.response) || pj.error || (pj.job && pj.job.error) || "";
         return { ok: st === "succeeded", job_id: j.id, status: st, text: "job " + j.id + " " + st + (out ? ":\n" + truncate(String(out), 3500) : "") };
       }
-    } catch (e) { /* keep waiting */ }
+    } catch (e) { }
   }
   return { ok: true, queued: true, job_id: j.id, note: "ops-exec agent job queued; reply 'job " + j.id + "' to poll" };
 }
