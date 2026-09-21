@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.4-toolmode";
+var VERSION = "4.1.5-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -145,11 +145,23 @@ async function loadPrimeContext(env, q, currentThread) {
     const tmw = /* @__PURE__ */ new Date(today + "T12:00:00Z");
     tmw.setUTCDate(tmw.getUTCDate() + 1);
     const tom = tmw.toISOString().slice(0, 10);
-    let evs = null;
-    try { evs = await calList(env, today, tom, 10); } catch (e) {}
-    if (evs && evs.ok && evs.events && evs.events.length) {
+    const _seenCal = new Set();
+    const _calEvents = [];
+    let _evsApi = null;
+    try { _evsApi = await calList(env, today, tom, 10); } catch (e) {}
+    if (_evsApi && _evsApi.ok && _evsApi.events) for (const e of _evsApi.events) {
+      const k = String(e.title || "").slice(0, 60) + "|" + String(e.dtstart || "").slice(0, 10);
+      if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.dtstart || "").slice(0, 10), title: e.title, loc: e.location, tag: e.domain || e.source || "" }); }
+    }
+    let _evsStore = null;
+    try { _evsStore = await env.PERSONAL.prepare("SELECT title, venue, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) {}
+    if (_evsStore && _evsStore.results) for (const e of _evsStore.results) {
+      const k = String(e.title || "").slice(0, 60) + "|" + String(e.start_date || "").slice(0, 10);
+      if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.start_date || "").slice(0, 10), title: e.title, loc: e.venue, tag: "personal" }); }
+    }
+    if (_calEvents.length) {
       lines.push("ON TODAY/TOMORROW:");
-      for (const e of evs.events) lines.push("- " + String(e.dtstart || "").slice(0, 10) + " " + String(e.title || "") + (e.location ? " at " + e.location : "") + (e.domain ? " [" + e.domain + "]" : ""));
+      for (const e of _calEvents) lines.push("- " + e.date + " " + String(e.title || "") + (e.loc ? " at " + e.loc : "") + (e.tag ? " [" + e.tag + "]" : ""));
     } else lines.push("ON TODAY/TOMORROW: nothing scheduled in the events calendar.");
     const op = await env.PERSONAL.prepare("SELECT ts, kind, content FROM notes WHERE kind IN ('reminder','task','desire') OR content LIKE '%need to%' OR content LIKE '%remind%' OR content LIKE '%todo%' ORDER BY ts DESC LIMIT 8").all();
     if (op.results && op.results.length) {
