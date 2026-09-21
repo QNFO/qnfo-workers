@@ -1,0 +1,23 @@
+name = "vault-indexer"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "obsidian-vault"
+
+[[d1_databases]]
+binding = "PERSONAL"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+[[vectorize]]
+binding = "VZ"
+index_name = "personal-life"
+
+[ai]
+binding = "AI"
