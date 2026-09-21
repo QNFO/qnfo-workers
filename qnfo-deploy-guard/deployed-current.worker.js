@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.3 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution)
+// qnfo-deploy-guard v1.3.5 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.4";
+var VERSION = "1.3.5";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -59,6 +59,25 @@ async function ensureRegistry(env, fleet) {
     }
   } catch (e) {}
   return added;
+}
+// REGISTRY-VERSION-CURRENCY-1 (2026-09-21): on redeploy, fetch the worker's live /health and
+// UPDATE service_registry.version. The prior register-at-deploy wrote only a first-seen stub
+// (version NULL or stale), so /lock/acquire's expected_version check compared against a stale
+// value and refused valid redeploys with a false "version-mismatch".
+async function refreshRegistryVersion(env, w) {
+  try {
+    var url = "https://" + w + ".q08.workers.dev/health";
+    var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+    var r = await fetch(url, { signal: c.signal, headers: { accept: "application/json" } });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    var j = await r.json();
+    if (j && j.version) {
+      await auditRun(env, "UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3", [String(j.version), nowIso(), w]);
+      return String(j.version);
+    }
+    return null;
+  } catch (e) { return null; }
 }
 async function scan(env) {
   var t0 = Date.now();
@@ -167,7 +186,9 @@ export default {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);
       var rl = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [String(bl.worker), String(bl.actor || "unknown"), bl.session_id ? String(bl.session_id) : null, bl.from || null, bl.to || null, bl.source_path || null, bl.ok === false ? 0 : 1, String(bl.note || "").slice(0, 400), nowIso()]);
       try { await ensureRegistry(env, [{ name: String(bl.worker) }]); } catch (e) {}
-      return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error });
+      var refreshedVer = null;
+      try { refreshedVer = await refreshRegistryVersion(env, String(bl.worker)); } catch (e) {}
+      return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error, registry_version: refreshedVer });
     }
     if (p === "/thresholds" && request.method === "POST") { var bt = await request.json().catch(function () { return {}; }); await env.FLEET_CONFIG.put(THR_KEY, JSON.stringify({ day_usd: Number(bt.day_usd || 10), month_usd: Number(bt.month_usd || 150) })); return json({ set: true }); }
     if (p === "/scan" && (request.method === "POST" || request.method === "GET")) { return json(await scan(env)); }
