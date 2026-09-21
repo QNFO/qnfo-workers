@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.5-toolmode";
+var VERSION = "4.1.6-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -2668,6 +2668,15 @@ var PersonalTwinAgent = class {
         this.env.PERSONAL.prepare("SELECT statement FROM facts ORDER BY ts DESC LIMIT 5").all().catch(() => ({ results: [] }))
       ]);
       const brief = { date: today, events: (evs.results || []).map((e) => e.title + (e.venue ? " @ " + e.venue : "") + " on " + e.start_date), tasks: (tasks.results || []).map((t) => t.title + (t.due ? " (due " + t.due + ")" : "")), facts: (facts.results || []).map((f) => f.statement) };
+      try {
+        const _ex = await this.env.PERSONAL.prepare("SELECT title, venue, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all();
+        const _have = new Set();
+        for (const s2 of brief.events) { const _p = String(s2).split(" @ "); _have.add(String(_p[0] || "").slice(0, 60).toLowerCase()); }
+        for (const e of (_ex.results || [])) {
+          const _k = String(e.title || "").slice(0, 60).toLowerCase();
+          if (!_have.has(_k)) { _have.add(_k); brief.events.push(String(e.title || "") + (e.venue ? " @ " + e.venue : "") + " on " + String(e.start_date || "").slice(0, 10)); }
+        }
+      } catch (e) {}
       this._setState("morning_brief_" + today, brief);
       return brief;
     } catch (e) {
@@ -2782,7 +2791,9 @@ var PersonalTwinAgent = class {
   async _chatInner(sid, uc) {
     if (!this.env.AI) return { content: "AI binding not configured", model: "none" };
     const history = this._getMsgs(sid, 10);
-    const messages = [{ role: "system", content: "You are Rowan's durable personal twin agent \u2014 stateful, context-aware, on Cloudflare Durable Objects. Persistent memory across sessions. Answer personal questions directly and concisely. PERSONAL-QNFO-SEPARATION-1: never reference research papers or QNFO research data." }, ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })), { role: "user", content: uc }];
+    let _briefCtx = "";
+    try { const _t = new Date().toISOString().slice(0, 10); let _b = this._getState("morning_brief_" + _t); if (!_b) _b = await this._buildBrief(); if (_b) _briefCtx = String.fromCharCode(10) + String.fromCharCode(10) + "TODAY (" + _t + ") DATA ONLY - events: " + ((_b.events || []).join("; ") || "none") + ". open tasks: " + ((_b.tasks || []).join("; ") || "none") + "."; } catch (e) {}
+    const messages = [{ role: "system", content: "You are Rowan's durable personal twin agent \u2014 stateful, context-aware, on Cloudflare Durable Objects. Persistent memory across sessions. Answer personal questions directly and concisely. PERSONAL-QNFO-SEPARATION-1: never reference research papers or QNFO research data." + _briefCtx }, ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })), { role: "user", content: uc }];
     try {
       const resp = await this.env.AI.run("@cf/deepseek-ai/deepseek-v4-pro-0813", { messages, max_tokens: 4096, temperature: 0.7 });
       let content = "";
