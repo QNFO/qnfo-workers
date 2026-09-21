@@ -6,7 +6,7 @@
  * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 120 per run, batched upserts.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.1";
+var VERSION = "0.1.2";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 20;
 var MAX_DOCS = 120;
@@ -94,7 +94,7 @@ async function getFull(env, key) {
   } catch (e) { return null; }
 }
 
-async function run(env) {
+async function run(env, cap) {
   var t0 = Date.now();
   var s = { scanned: 0, changed: 0, indexed: 0, chunks: 0, vectors: 0, skipped: 0, errors: 0, notes: [] };
 
@@ -126,7 +126,7 @@ async function run(env) {
   }
   s.changed = changed.length;
 
-  var work = changed.slice(0, MAX_DOCS);
+  var work = changed.slice(0, cap || MAX_DOCS);
   var texts = new Array(work.length);
   for (var b = 0; b < work.length; b += GET_CONCURRENCY) {
     var slice = work.slice(b, b + GET_CONCURRENCY);
@@ -174,8 +174,9 @@ async function handle(request, env, ctx) {
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
     if (request.method === "OPTIONS") return new Response("ok", { status: 204 });
     if (url.pathname === "/run" && request.method === "POST") {
-      ctx.waitUntil(run(env));
-      return json({ ok: true, version: VERSION, queued: true });
+      var cap = Math.min(60, Math.max(1, Number(url.searchParams.get("max") || 40)));
+      var r = await run(env, cap);
+      return json({ ok: true, version: VERSION, result: r });
     }
     if (url.pathname === "/stats" && request.method === "GET") {
       var t = await env.PERSONAL.prepare("SELECT COUNT(*) c FROM files WHERE path LIKE 'obsidian/%'").first();
