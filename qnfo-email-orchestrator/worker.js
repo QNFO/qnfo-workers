@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.3.6";
+var VERSION = "0.4.0";
 var NAMESPACE = "email-orchestrator";
 var DAY_ACTIONS = ["wednesday-response-check"];
 var DOC = {
@@ -39,6 +39,7 @@ var worker_default = {
       if (path === "/status") return this.cors(json({ ok: true, service: "qnfo-email-orchestrator", version: VERSION, features: ["cadence", "d1-log-only", "no-self-mail"], auth: !!env.OUTREACH_SECRET }));
       if (path === "/api/docs") return this.cors(json({ ok: true, doc: DOC }));
       if (path === "/run/cadence") return await this.runCadence(request, env, url);
+      if (path === "/run/replies") return await this.runReplies(request, env, url);
       if (path === "/api/email_filters") return await this.listEmailFilters(request, env);
       if (path === "/api/docs-html") {
         return new Response("<!doctype html><meta charset=utf-8><title>email-orchestrator docs</title><pre>" + esc(JSON.stringify(DOC, null, 2)) + "</pre>", { status: 200, headers: this.headers("text/html") });
@@ -87,6 +88,72 @@ var worker_default = {
     var h = {};
     if (env.EMAIL_API_KEY) h["x-api-key"] = env.EMAIL_API_KEY;
     return h;
+  },
+  // EMAIL-HUMAN-REPLY-LOOP-MISSING (942): triage-and-draft the human reply queue.
+  // Conservative v1: auto-send ONLY short grounded acknowledgments; escalate every
+  // technical/scientific/licensing/legal/opinion item so nothing is hallucinated
+  // from the owner's name. Uses the cheap Workers AI model (no OpenAI cost).
+  async runReplies(request, env, url) {
+    var a = this.auth(env, request);
+    if (!a.ok) return this.cors(json({ ok: false, error: "auth: " + a.reason }, 401));
+    var dry = url.searchParams.get("mode") !== "live";
+    return this.cors(json(await this.runRepliesInternal(env, dry)));
+  },
+  async scheduled(controller, env, ctx) {
+    try { var r = await this.runRepliesInternal(env, false); console.log("reply-draft:", JSON.stringify(r)); }
+    catch (e) { console.error("reply-draft failed:", String(e && e.message || e)); }
+  },
+  async runRepliesInternal(env, dry) {
+    var rows = await env.AUDIT_DB.prepare("SELECT q.id AS qid, q.email_id, q.sender, q.subject, e.body_text FROM email_reply_queue q LEFT JOIN emails e ON e.id = q.email_id WHERE q.decision = 'pending' ORDER BY q.id ASC LIMIT 25").all();
+    var list = rows.results || [];
+    var out = { scanned: list.length, dry: dry, sent: 0, escalated: 0, skipped: 0, items: [] };
+    for (var i = 0; i < list.length; i++) {
+      var res = await this.draftOne(env, list[i], dry);
+      if (res && res.action === "sent") out.sent++;
+      else if (res && res.action === "escalate") out.escalated++;
+      else out.skipped++;
+      out.items.push(res);
+    }
+    return out;
+  },
+  async draftOne(env, row, dry) {
+    var qid = row.qid;
+    try {
+      var prior = await env.AUDIT_DB.prepare("SELECT id FROM email_reply_queue WHERE lower(sender)=?1 AND id < ?2 AND decision IN ('sent','drafted')").bind(String(row.sender || "").toLowerCase(), qid).first();
+      if (prior) { await this.setDecision(env, qid, "skip", "no-repeat"); return { qid: qid, action: "skip", reason: "no-repeat" }; }
+      var cls = await this.cheapClassify(env, row);
+      if (cls.escalate) { await this.setDecision(env, qid, "escalate", cls.reason); return { qid: qid, action: "escalate", reason: cls.reason }; }
+      if (!cls.draft) { await this.setDecision(env, qid, "escalate", "empty-draft"); return { qid: qid, action: "escalate", reason: "empty-draft" }; }
+      if (dry) return { qid: qid, action: "would-send", draft: cls.draft };
+      var resp = await env.EMAIL.fetch("https://email/send", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") }, body: JSON.stringify({ to: row.sender, from: "qnfo@qnfo.org", subject: "Re: " + (row.subject || "(no subject)"), body: cls.draft, reply_to_id: row.email_id }) });
+      if (resp && resp.ok) { await this.setDecision(env, qid, "sent", null, cls.draft); return { qid: qid, action: "sent" }; }
+      var rj = null; try { rj = await resp.json(); } catch (e) {}
+      await this.setDecision(env, qid, "escalate", "send-failed:" + (resp ? resp.status : "no-resp") + ":" + (rj && rj.error || ""));
+      return { qid: qid, action: "escalate", reason: "send-failed" };
+    } catch (e) {
+      try { await this.setDecision(env, qid, "escalate", "error:" + e.message); } catch (e2) {}
+      return { qid: qid, action: "escalate", reason: "error:" + e.message };
+    }
+  },
+  async setDecision(env, qid, decision, reason, draft) {
+    await env.AUDIT_DB.prepare("UPDATE email_reply_queue SET decision=?1, skip_reason=?2, draft_text=COALESCE(?3, draft_text), drafted_at=datetime('now'), updated_at=datetime('now') WHERE id=?4").bind(decision, reason || null, draft || null, qid).run();
+  },
+  async cheapClassify(env, row) {
+    var body = String(row.body_text || "").slice(0, 2500);
+    var NL = String.fromCharCode(10);
+    var sys = "You triage inbound email for an assistant answering on its owner's behalf. Decide ONE action. DRAFT: the email is a simple logistical or scheduling message answerable from its own content (meeting confirm, receipt, availability, a thanks, a short logistics question) - output a 1-2 sentence polite professional reply that introduces no fact not present in the email. ESCALATE: anything technical, scientific, licensing, legal, financial, a review or opinion request, or anything you cannot answer with certainty - output only the word ESCALATE. Output exactly either 'DRAFT: <text>' or 'ESCALATE'.";
+    var usr = "From: " + (row.sender || "") + NL + "Subject: " + (row.subject || "") + NL + NL + body;
+    var out = { escalate: false, reason: "", draft: "" };
+    try {
+      var resp = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: 200 });
+      var txt = String(resp && (resp.response || resp.output || "")).trim();
+      var up = txt.toUpperCase();
+      if (!txt) { out.escalate = true; out.reason = "empty-model-output"; return out; }
+      if (up.indexOf("ESCALATE") === 0) { out.escalate = true; out.reason = "model-escalate"; return out; }
+      if (up.indexOf("DRAFT:") === 0) { out.draft = txt.slice(6).trim(); } else { out.draft = txt; }
+      if (!out.draft) { out.escalate = true; out.reason = "unparseable"; }
+      return out;
+    } catch (e) { out.escalate = true; out.reason = "model-error:" + e.message; return out; }
   },
   async listEmailFilters(request, env) {
     var a = this.auth(env, request);

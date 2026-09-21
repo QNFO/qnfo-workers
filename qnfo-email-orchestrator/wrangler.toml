@@ -26,4 +26,4 @@ environment = "production"
 
 # secret: EMAIL_API_KEY (set via wrangler secret put; persists across deploys)
 [triggers]
-crons = ["0 */3 * * *"]
+crons = ["0 */3 * * *", "*/15 * * * *"]
