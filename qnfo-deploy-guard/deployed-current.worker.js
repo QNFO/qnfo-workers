@@ -54,7 +54,7 @@ async function ensureRegistry(env, fleet) {
     var set = {}; for (var i = 0; i < have.length; i++) set[have[i].service] = 1;
     for (var j = 0; j < (fleet || []).length; j++) {
       var w = String((fleet[j] && fleet[j].name) || ""); if (!w || set[w]) continue;
-      await auditRun(env, "INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at, state) VALUES (?1,'worker',NULL,?2,'AUTO-REGISTERED by deploy-guard: live worker absent from the registry (register-at-deploy); purpose/bindings pending full reconcile','[]','["/health"]','','','[]',?3,'live')", [w, "https://" + w + ".q08.workers.dev", nowIso()]);
+      await auditRun(env, "INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at, state) VALUES (?1,'worker',NULL,?2,'AUTO-REGISTERED by deploy-guard: live worker absent from the registry (register-at-deploy); purpose/bindings pending full reconcile','[]','[\"/health\']','','','[]',?3,'live')", [w, "https://" + w + ".q08.workers.dev", nowIso()]);
       set[w] = 1; added.push(w);
     }
   } catch (e) {}
