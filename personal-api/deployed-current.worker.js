@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.7-toolmode";
+var VERSION = "4.1.8-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -2809,6 +2809,7 @@ var PersonalTwinAgent = class {
     const history = this._getMsgs(sid, 10);
     let _briefCtx = "";
     try { const _t = new Date().toISOString().slice(0, 10); let _b = this._getState("morning_brief_" + _t); if (!_b) _b = await this._buildBrief(); if (_b) _briefCtx = String.fromCharCode(10) + String.fromCharCode(10) + "TODAY (" + _t + ") DATA ONLY - events: " + ((_b.events || []).join("; ") || "none") + ". open tasks: " + ((_b.tasks || []).join("; ") || "none") + "."; } catch (e) {}
+    try { const _pr = await this.env.PERSONAL.prepare("SELECT label, statement FROM profile WHERE facet IN ('identity','likes','filters') AND confidence >= 0.9 ORDER BY facet LIMIT 6").all(); if (_pr.results && _pr.results.length) _briefCtx += String.fromCharCode(10) + "PROFILE (DATA ONLY): " + _pr.results.map(function(r) { return (r.label || "fact") + ": " + String(r.statement || "").slice(0, 140); }).join(" | "); } catch (e) {}
     const messages = [{ role: "system", content: "You are Rowan's durable personal twin agent \u2014 stateful, context-aware, on Cloudflare Durable Objects. Persistent memory across sessions. Answer personal questions directly and concisely. PERSONAL-QNFO-SEPARATION-1: never reference research papers or QNFO research data." + _briefCtx }, ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })), { role: "user", content: uc }];
     try {
       const resp = await this.env.AI.run("@cf/deepseek-ai/deepseek-v4-pro-0813", { messages, max_tokens: 4096, temperature: 0.7 });
