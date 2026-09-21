@@ -1164,7 +1164,7 @@ async function run(env) {
   } catch (e) {
   }
   const ledgerSlugs = ledgerRows.map((x) => ({ v: slug(x.venue), d: String(x.start_date || "").slice(0, 10) }));
-  let posted = 0, skipped = 0;
+  let posted = 0, skipped = 0, writeFailures = 0;
   const postedList = [];
   for (const g of gated) {
     if (g.e.runningUntil || g.e.runningUntilMonth) {
@@ -1212,12 +1212,12 @@ async function run(env) {
         posted += 1;
         postedList.push({ title, dtstart: g.e.startIso, id: (await pr.json()).id || null });
         existingKeys.add(key);
-      } else skipped += 1;
+      } else { skipped += 1; writeFailures += 1; }
     } catch (e) {
-      skipped += 1;
+      skipped += 1; writeFailures += 1;
     }
   }
-  if (posted === 0 && gated.length > 0 && gated.filter((g) => g.cleared).length > 0) {
+  if (writeFailures > 0 && gated.length > 0 && gated.filter((g) => g.cleared).length > 0) {
     try {
       await env.RADAR_DB.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,datetime('now'),'detected')").bind("calendar-write-path-broken", "radar-hub/personal/" + scannedAt.slice(0, 10), "personal radar: cleared>0 but 0 posted (write/auth failure) - verify CAL_TOKEN matches calendar-api").run();
     } catch (e) {}
