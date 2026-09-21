@@ -6,7 +6,7 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var PL_SEARCH = "https://personal-life-search.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
-var VERSION = "1.1.3";
+var VERSION = "1.1.4"; // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
 var TOOLS = [
   { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
   { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
@@ -24,17 +24,30 @@ var TOOLS = [
   { name: "email_respond", description: "Send an email reply (or new email) FROM a QNFO domain account via the qnfo-email Worker. Pass reply_to_id to reply to an existing inbound email (worker marks it replied). `from` defaults to qnfo@qnfo.org; pass rowan.quni@qnfo.org for academic outreach. Body field is `body` (plain text) with optional `html`.", inputSchema: { type: "object", properties: { to: { type: "string", description: "recipient email" }, subject: { type: "string", description: 'subject (use "Re: <original>" for replies)' }, body: { type: "string", description: "plain-text body" }, html: { type: "string", description: "optional HTML body" }, reply_to_id: { type: "number", description: "id of the inbound email being replied to (marks it replied)" }, from: { type: "string", description: "QNFO domain sender (default qnfo@qnfo.org; rowan.quni@qnfo.org for outreach)" } }, required: ["to", "subject", "body"] } },
   { name: "email_mark", description: "Update the status of an email row (received/processed/sent/replied/archived/spam/read/rejected).", inputSchema: { type: "object", properties: { id: { type: "number", description: "email id" }, status: { type: "string", description: "new status" } }, required: ["id", "status"] } }
 ];
-function authToken(token, env) {
-  const expected = env.MCP_TOKEN;
+function tokenEq(token, expected) {
   if (!expected || !token) return false;
-  const a = new TextEncoder().encode(token);
-  const b = new TextEncoder().encode(expected);
+  const a = new TextEncoder().encode(String(token));
+  const b = new TextEncoder().encode(String(expected));
   if (a.byteLength !== b.byteLength) return false;
   let d = 0;
   for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
+__name(tokenEq, "tokenEq");
+function authToken(token, env) {
+  return tokenEq(token, env.MCP_TOKEN);
+}
 __name(authToken, "authToken");
+// MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN is the FULL read+write credential.
+// MCP_READ_TOKEN (optional) grants READ tools only and cannot invoke the write tools
+// email_respond / email_mark / express_desire. With no MCP_READ_TOKEN set, behaviour is unchanged.
+var WRITE_TOOLS = ["email_respond", "email_mark", "express_desire"];
+function scopeFor(token, env) {
+  if (tokenEq(token, env.MCP_TOKEN)) return { ok: true, write: true };
+  if (env.MCP_READ_TOKEN && tokenEq(token, env.MCP_READ_TOKEN)) return { ok: true, write: false };
+  return { ok: false, write: false };
+}
+__name(scopeFor, "scopeFor");
 function ok(id, result) {
   return { jsonrpc: "2.0", id, result };
 }
@@ -168,17 +181,22 @@ async function callTool(env, name, args) {
   throw new Error("unknown tool: " + name);
 }
 __name(callTool, "callTool");
-async function handleJsonRpc(msg, env) {
+async function handleJsonRpc(msg, env, allowWrite) {
   const m = msg.method;
+  if (allowWrite === void 0) allowWrite = true;
   if (m === "initialize") {
     return ok(msg.id, { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "qnfo-tools-mcp", version: VERSION } });
   }
   if (m === "notifications/initialized" || m === "initialized") return null;
   if (m === "ping") return ok(msg.id, {});
-  if (m === "tools/list") return ok(msg.id, { tools: TOOLS });
+  if (m === "tools/list") return ok(msg.id, { tools: allowWrite ? TOOLS : TOOLS.filter((t) => WRITE_TOOLS.indexOf(t.name) < 0) });
   if (m === "tools/call") {
+    const tname = String(msg.params && msg.params.name || "");
+    if (!allowWrite && WRITE_TOOLS.indexOf(tname) >= 0) {
+      return rpcErr(msg.id, -32003, "forbidden: token lacks write scope for '" + tname + "'");
+    }
     try {
-      const out = await callTool(env, String(msg.params && msg.params.name || ""), msg.params && msg.params.arguments || {});
+      const out = await callTool(env, tname, msg.params && msg.params.arguments || {});
       try {
         if (env.AUDIT) {
           await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS mcp_log (id TEXT PRIMARY KEY, ts TEXT, tool TEXT, args TEXT, result TEXT, session TEXT)").run();
@@ -232,13 +250,14 @@ var worker_default = {
     }
     const tokenFrom = /* @__PURE__ */ __name((u, req) => u.searchParams.get("token") || (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""), "tokenFrom");
     if (path === "/mcp/sse" && method === "GET") {
-      if (!authToken(tokenFrom(url, request), env)) return new Response("unauthorized", { status: 401 });
+      const scSse = scopeFor(tokenFrom(url, request), env);
+      if (!scSse.ok) return new Response("unauthorized", { status: 401 });
       const sessionId = crypto.randomUUID();
       const encoder = new TextEncoder();
       let keep;
       const stream = new ReadableStream({
         start(controller) {
-          sessions.set(sessionId, controller);
+          sessions.set(sessionId, { c: controller, write: scSse.write });
           controller.enqueue(encoder.encode("event: endpoint" + NL + "data: /mcp/messages?sessionId=" + sessionId + NL + NL));
           keep = setInterval(() => {
             try {
@@ -256,18 +275,20 @@ var worker_default = {
     }
     if (path === "/mcp/messages" && method === "POST") {
       const sessionId = url.searchParams.get("sessionId") || "";
-      const controller = sessions.get(sessionId);
+      const sess = sessions.get(sessionId);
+      const controller = sess ? sess.c : null;
+      const scMsg = scopeFor(tokenFrom(url, request), env);
       // MCP-MESSAGES-UNAUTHENTICATED (953): this endpoint previously executed JSON-RPC
       // tools with NO auth check at all. Require either a live auth-established SSE
       // session or a valid MCP_TOKEN, matching /mcp and /mcp/sse.
-      if (!controller && !authToken(tokenFrom(url, request), env)) return new Response("unauthorized", { status: 401 });
+      if (!controller && !scMsg.ok) return new Response("unauthorized", { status: 401 });
       let msg;
       try {
         msg = await request.json();
       } catch (e) {
         return new Response("bad json", { status: 400 });
       }
-      const out = await handleJsonRpc(msg, env);
+      const out = await handleJsonRpc(msg, env, sess ? !!sess.write : scMsg.write);
       if (out && controller) {
         const encoder = new TextEncoder();
         controller.enqueue(encoder.encode("event: message" + NL + "data: " + JSON.stringify(out) + NL + NL));
@@ -275,14 +296,15 @@ var worker_default = {
       return new Response("Accepted", { status: 202, headers: cors });
     }
     if (path === "/mcp" && method === "POST") {
-      if (!authToken(tokenFrom(url, request), env)) return new Response("unauthorized", { status: 401 });
+      const scMcp = scopeFor(tokenFrom(url, request), env);
+      if (!scMcp.ok) return new Response("unauthorized", { status: 401 });
       let msg;
       try {
         msg = await request.json();
       } catch (e) {
         return new Response("bad json", { status: 400 });
       }
-      const out = await handleJsonRpc(msg, env);
+      const out = await handleJsonRpc(msg, env, scMcp.write);
       if (!out) return new Response("", { status: 202, headers: cors });
       return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...cors } });
     }
