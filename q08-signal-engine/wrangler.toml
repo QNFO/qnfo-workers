@@ -1,0 +1,34 @@
+name = "q08-signal-engine"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Native Email Routing send binding — tokenless (no EMAIL_API_KEY needed).
+# Proven pattern from qnfo-outreach. q08.org Email Routing is enabled/ready.
+# NOTE: must be a TOP-LEVEL key (before any [table]) or TOML scopes it away.
+send_email = [
+  { name = "SEND_EMAIL" }
+]
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "q08-signal"
+database_id = "10fd74b7-c4b3-43c7-9ca5-855213f44a69"
+
+# Shared distribution queue: qnfo-social reads social_threads and cross-posts
+# to Bluesky + Buffer (Mastodon/LinkedIn/X). Tokenless cross-worker handoff.
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[triggers]
+crons = ["0 */2 * * *", "0 17 * * *"]

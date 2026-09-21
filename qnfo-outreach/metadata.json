@@ -1,0 +1,11 @@
+{
+  "main_module": "worker.js",
+  "compatibility_date": "2026-08-01",
+  "usage_model": "standard",
+  "bindings": [
+    {"type": "d1", "name": "OUTREACH_D1", "database_id": "d5077252-8187-41b2-a44e-f84f8724ee36"},
+    {"type": "d1", "name": "QNFO_AUDIT", "database_id": "35e2e573-92f3-46ac-83c6-22f6429fc5e5"},
+    {"type": "d1", "name": "LIVING_PAPER", "database_id": "70a58cb3-b2cd-498d-877f-ecca86859a22"},
+    {"type": "send_email", "name": "SEND_EMAIL"}
+  ]
+}

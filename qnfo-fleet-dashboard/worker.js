@@ -2,10 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var __name22 = /* @__PURE__ */ __name2((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.11";
+var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
+var REGISTRY = null;;
+var VERSION = "1.7.3"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -16,33 +15,28 @@ function pad2(n) {
 }
 __name(pad2, "pad2");
 __name2(pad2, "pad2");
-__name22(pad2, "pad2");
 function fmtUtc(ms) {
   const d = new Date(ms);
   return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate()) + " " + pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()) + " UTC";
 }
 __name(fmtUtc, "fmtUtc");
 __name2(fmtUtc, "fmtUtc");
-__name22(fmtUtc, "fmtUtc");
 function naiveUtc(ms) {
   const d = new Date(ms);
   return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate()) + " " + pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()) + ":" + pad2(d.getUTCSeconds());
 }
 __name(naiveUtc, "naiveUtc");
 __name2(naiveUtc, "naiveUtc");
-__name22(naiveUtc, "naiveUtc");
 function esc(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 __name(esc, "esc");
 __name2(esc, "esc");
-__name22(esc, "esc");
 function squash(s) {
   return String(s || "").split(/\s+/).join(" ").slice(0, 200);
 }
 __name(squash, "squash");
 __name2(squash, "squash");
-__name22(squash, "squash");
 function json(data, status) {
   return new Response(JSON.stringify(data, null, 1), {
     status: status || 200,
@@ -51,7 +45,6 @@ function json(data, status) {
 }
 __name(json, "json");
 __name2(json, "json");
-__name22(json, "json");
 function parseField(f, lo, hi) {
   f = String(f).trim();
   if (f === "*" || f === "") return null;
@@ -80,7 +73,6 @@ function parseField(f, lo, hi) {
 }
 __name(parseField, "parseField");
 __name2(parseField, "parseField");
-__name22(parseField, "parseField");
 var cronFieldCache = /* @__PURE__ */ new Map();
 function cronFields(cronStr) {
   let p = cronFieldCache.get(cronStr);
@@ -102,7 +94,6 @@ function cronFields(cronStr) {
 }
 __name(cronFields, "cronFields");
 __name2(cronFields, "cronFields");
-__name22(cronFields, "cronFields");
 function cronMatchAt(cronStr, d) {
   const p = cronFields(cronStr);
   if (p.bad) return false;
@@ -121,7 +112,6 @@ function cronMatchAt(cronStr, d) {
 }
 __name(cronMatchAt, "cronMatchAt");
 __name2(cronMatchAt, "cronMatchAt");
-__name22(cronMatchAt, "cronMatchAt");
 function nextRuns(cronStr, fromMs, count, horizonMs) {
   const res = [];
   let t = Math.floor(fromMs / 6e4) * 6e4 + 6e4;
@@ -134,7 +124,6 @@ function nextRuns(cronStr, fromMs, count, horizonMs) {
 }
 __name(nextRuns, "nextRuns");
 __name2(nextRuns, "nextRuns");
-__name22(nextRuns, "nextRuns");
 function workerNextRuns(crons, fromMs, count) {
   const all = [];
   for (const c of crons || []) {
@@ -152,7 +141,6 @@ function workerNextRuns(crons, fromMs, count) {
 }
 __name(workerNextRuns, "workerNextRuns");
 __name2(workerNextRuns, "workerNextRuns");
-__name22(workerNextRuns, "workerNextRuns");
 function expectedFires(crons, fromMs, windowMs) {
   let n = 0;
   const start = fromMs - windowMs;
@@ -169,7 +157,6 @@ function expectedFires(crons, fromMs, windowMs) {
 }
 __name(expectedFires, "expectedFires");
 __name2(expectedFires, "expectedFires");
-__name22(expectedFires, "expectedFires");
 async function d1all(db, sql, params) {
   let ps = db.prepare(sql);
   if (params && params.length) ps = ps.bind.apply(ps, params);
@@ -178,21 +165,18 @@ async function d1all(db, sql, params) {
 }
 __name(d1all, "d1all");
 __name2(d1all, "d1all");
-__name22(d1all, "d1all");
 async function ensureStateTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_dashboard_state (id INTEGER PRIMARY KEY, updated_at TEXT, state_json TEXT, refresh_ms INTEGER)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_probe_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, name TEXT, url TEXT, transport TEXT, ok INTEGER, status INTEGER, ms INTEGER, body TEXT)").run();
 }
 __name(ensureStateTable, "ensureStateTable");
 __name2(ensureStateTable, "ensureStateTable");
-__name22(ensureStateTable, "ensureStateTable");
 async function saveState(env, st, ms) {
   await ensureStateTable(env);
   await env.AUDIT.prepare("INSERT INTO fleet_dashboard_state (id, updated_at, state_json, refresh_ms) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at, state_json=excluded.state_json, refresh_ms=excluded.refresh_ms").bind(st.generated_at, JSON.stringify(st), ms).run();
 }
 __name(saveState, "saveState");
 __name2(saveState, "saveState");
-__name22(saveState, "saveState");
 async function loadState(env) {
   try {
     await ensureStateTable(env);
@@ -204,7 +188,6 @@ async function loadState(env) {
 }
 __name(loadState, "loadState");
 __name2(loadState, "loadState");
-__name22(loadState, "loadState");
 async function analytics24(env) {
   const out = { per: {}, req: 0, err: 0, errWorkers: [], unattributed: 0, ts: null, error: null };
   if (!env.CF_TOKEN) {
@@ -255,7 +238,6 @@ async function analytics24(env) {
 }
 __name(analytics24, "analytics24");
 __name2(analytics24, "analytics24");
-__name22(analytics24, "analytics24");
 async function lastRuns30(env) {
   const out = {};
   if (!env.CF_TOKEN) return out;
@@ -293,26 +275,20 @@ async function lastRuns30(env) {
 }
 __name(lastRuns30, "lastRuns30");
 __name2(lastRuns30, "lastRuns30");
-__name22(lastRuns30, "lastRuns30");
 async function probeTargets(env) {
   try {
     const rows = await d1all(env.AUDIT, "SELECT service, base_url FROM service_registry WHERE state='live' AND base_url IS NOT NULL AND base_url <> '' AND kind='worker'") || [];
-    return rows.map(function(r) {
-      return { name: r.service, url: String(r.base_url).replace(/\/+$/, "") + "/health", kind: "worker" };
-    });
-  } catch (e) {
-    return [];
-  }
+    return rows.map(function(r) { return { name: r.service, url: String(r.base_url).replace(/\/+$/, "") + "/health", kind: "worker" }; });
+  } catch (e) { return []; }
 }
 __name(probeTargets, "probeTargets");
 __name2(probeTargets, "probeTargets");
-__name22(probeTargets, "probeTargets");
 async function healthProbes(env, liveNames) {
   const items = await probeTargets(env);
   const settled = await Promise.allSettled(items.map(async function(hp) {
     const t0 = Date.now();
     const kind = hp.kind || (hp.binding ? "worker" : "domain");
-    const logRow = /* @__PURE__ */ __name2(async function(out) {
+    const logRow = /* @__PURE__ */ __name(async function(out) {
       try {
         await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url || "", out.transport, out.ok ? 1 : 0, out.status, out.ms, String(out.body || "").slice(0, 200)).run();
       } catch (logErr) {
@@ -359,12 +335,7 @@ async function healthProbes(env, liveNames) {
       return out;
     } catch (e) {
       const out2 = { name: hp.name, url: hp.url || "", transport: hp.binding ? "binding" : "http", kind, ok: false, status: 0, ms: Date.now() - t0, body: "ERR " + squash(String(e.message || e)) };
-      if (kind === "worker" && Array.isArray(liveNames) && liveNames.indexOf(hp.name) >= 0) {
-        out2.ok = true;
-        out2.status = 200;
-        out2.transport = "cf-api-list";
-        out2.body = "cf-api-list: script live (probe transport error: " + squash(String(e.message || e)).slice(0, 80) + ")";
-      }
+      if (kind === "worker" && Array.isArray(liveNames) && liveNames.indexOf(hp.name) >= 0) { out2.ok = true; out2.status = 200; out2.transport = "cf-api-list"; out2.body = "cf-api-list: script live (probe transport error: " + squash(String(e.message || e)).slice(0, 80) + ")"; }
       await logRow(out2);
       return out2;
     }
@@ -384,21 +355,18 @@ async function healthProbes(env, liveNames) {
 }
 __name(healthProbes, "healthProbes");
 __name2(healthProbes, "healthProbes");
-__name22(healthProbes, "healthProbes");
 var CLOSED = { closed: 1, done: 1, resolved: 1, completed: 1, cancelled: 1, canceled: 1, wontfix: 1, dismissed: 1, superseded: 1, archived: 1, fixed: 1, rejected: 1 };
 function isOpenish(st) {
   return !CLOSED[String(st || "").toLowerCase()];
 }
 __name(isOpenish, "isOpenish");
 __name2(isOpenish, "isOpenish");
-__name22(isOpenish, "isOpenish");
 function failish(st) {
   const s = String(st || "").toLowerCase();
   return s.indexOf("fail") >= 0 || s === "error" || s === "err" || s === "bounce" || s === "rejected";
 }
 __name(failish, "failish");
 __name2(failish, "failish");
-__name22(failish, "failish");
 async function d1Count(env) {
   try {
     if (!env.CF_TOKEN) return null;
@@ -412,7 +380,7 @@ async function d1Count(env) {
 }
 __name(d1Count, "d1Count");
 __name2(d1Count, "d1Count");
-__name22(d1Count, "d1Count");
+
 async function liveDevice(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS device_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, plane TEXT, item_json TEXT, updated_at TEXT)").run();
@@ -423,14 +391,9 @@ async function liveDevice(env) {
     for (const r of rows) {
       if (!cap || (r.updated_at || "") > cap) cap = r.updated_at || cap;
       let it = null;
-      try {
-        it = JSON.parse(r.item_json);
-      } catch (e) {
-        it = null;
-      }
+      try { it = JSON.parse(r.item_json); } catch (e) { it = null; }
       if (!it) continue;
-      if (r.plane === "windows") win.push(it);
-      else loc.push(it);
+      if (r.plane === "windows") win.push(it); else loc.push(it);
     }
     return { captured_at: cap, note: "live from device_tasks (D1), " + rows.length + " rows", windows_tasks: win, local_crons: loc };
   } catch (e) {
@@ -439,112 +402,64 @@ async function liveDevice(env) {
 }
 __name(liveDevice, "liveDevice");
 __name2(liveDevice, "liveDevice");
-__name22(liveDevice, "liveDevice");
+
 async function liveScheduled(env, liveNames) {
   try {
-    try {
-      await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run();
-    } catch (e) {
-    }
-    const meta = await d1all(env.AUDIT, "SELECT (julianday('now') - julianday(MAX(refreshed_at))) * 24 AS ageh FROM worker_schedules");
-    const ageH = meta && meta[0] && meta[0].ageh != null ? Number(meta[0].ageh) : 1e9;
+    try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run(); } catch (e) {}
+    const meta = await d1all(env.AUDIT, "SELECT MAX(refreshed_at) AS m FROM worker_schedules");
+    const ageH = meta && meta[0] && meta[0].m ? (Date.now() - new Date(meta[0].m).getTime()) / 36e5 : 1e9;
     const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM worker_schedules");
     if (ageH > 1 || !(cnt && cnt[0] && cnt[0].c > 0)) {
       const reg = await d1all(env.AUDIT, "SELECT service, purpose FROM service_registry") || [];
       const pm = {};
-      reg.forEach(function(r) {
-        pm[r.service] = r.purpose || "";
-      });
+      reg.forEach(function(r) { pm[r.service] = r.purpose || ""; });
       const names = liveNames || [];
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso = new Date().toISOString();
       for (let i = 0; i < names.length; i += 8) {
         const chunk = names.slice(i, i + 8);
         const rs = await Promise.all(chunk.map(async function(n) {
           try {
             const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-            if (!r.ok) return { n, c: [], ok: false };
+            if (!r.ok) return { n, c: [] };
             const j = await r.json();
-            if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
-            const arr = j.result.schedules;
-            return { n, c: arr.map(function(s) {
-              return s.cron;
-            }), ok: true };
-          } catch (e) {
-            return { n, c: [], ok: false };
-          }
+            const arr = (j.result && j.result.schedules) || [];
+            return { n, c: arr.map(function(s) { return s.cron; }) };
+          } catch (e) { return { n, c: [] }; }
         }));
         for (const it of rs) {
-          if (it.ok && !it.c.length) {
-            try {
-              await env.AUDIT.prepare("DELETE FROM worker_schedules WHERE name = ?1").bind(it.n).run();
-            } catch (e) {
-            }
-            continue;
-          }
           if (!it.c.length) continue;
-          try {
-            await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso).run();
-          } catch (e) {
-          }
+          try { await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso).run(); } catch (e) {}
         }
       }
     }
-  } catch (e) {
-  }
-  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
+  } catch (e) {}
+  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules ORDER BY name") || [];
   const out = [];
-  for (const r of rows) {
-    try {
-      out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" });
-    } catch (e) {
-    }
-  }
+  for (const r of rows) { try { out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" }); } catch (e) {} }
   return out;
 }
 __name(liveScheduled, "liveScheduled");
 __name2(liveScheduled, "liveScheduled");
-__name22(liveScheduled, "liveScheduled");
 async function loadSaiConfig(env) {
   try {
     const rows = await d1all(env.AUDIT, "SELECT k, v FROM sai_config") || [];
     const cfg = {};
-    rows.forEach(function(r) {
-      if (r && typeof r.v === "number") cfg[r.k] = r.v;
-    });
+    rows.forEach(function(r) { if (r && typeof r.v === "number") cfg[r.k] = r.v; });
     return cfg;
-  } catch (e) {
-    return {};
-  }
+  } catch (e) { return {}; }
 }
 __name(loadSaiConfig, "loadSaiConfig");
 __name2(loadSaiConfig, "loadSaiConfig");
-__name22(loadSaiConfig, "loadSaiConfig");
 async function liveSaiInputs(env) {
   const out = { dims: {}, closureRate: null, healRate: null };
-  try {
-    const rows = await d1all(env.AUDIT, "SELECT dimension, score FROM autonomy_scores") || [];
-    rows.forEach(function(r) {
-      if (r && typeof r.score === "number") out.dims[r.dimension] = r.score;
-    });
-  } catch (e) {
-  }
-  try {
-    const t = await d1all(env.AUDIT, "SELECT COUNT(*) c FROM agent_issues");
-    const o = await d1all(env.AUDIT, "SELECT COUNT(*) c FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
-    const tc = t && t[0] ? t[0].c : 0, oc = o && o[0] ? o[0].c : 0;
-    if (tc > 0) out.closureRate = Math.max(0, Math.min(1, (tc - oc) / tc));
-  } catch (e) {
-  }
-  try {
-    const t = await d1all(env.AUDIT, "SELECT COUNT(*) c, SUM(CASE WHEN status IN ('healed','resolved') THEN 1 ELSE 0 END) h FROM self_heal_actions");
-    if (t && t[0] && t[0].c > 0) out.healRate = Math.max(0, Math.min(1, Number(t[0].h || 0) / t[0].c));
-  } catch (e) {
-  }
+  try { const rows = await d1all(env.AUDIT, "SELECT dimension, score FROM autonomy_scores") || []; rows.forEach(function(r) { if (r && typeof r.score === "number") out.dims[r.dimension] = r.score; }); } catch (e) {}
+  try { const t = await d1all(env.AUDIT, "SELECT COUNT(*) c FROM agent_issues"); const o = await d1all(env.AUDIT, "SELECT COUNT(*) c FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')"); const tc = t && t[0] ? t[0].c : 0, oc = o && o[0] ? o[0].c : 0; if (tc > 0) out.closureRate = Math.max(0, Math.min(1, (tc - oc) / tc)); } catch (e) {}
+  try { const t = await d1all(env.AUDIT, "SELECT COUNT(*) c, SUM(CASE WHEN status IN ('healed','resolved') THEN 1 ELSE 0 END) h FROM self_heal_actions"); if (t && t[0] && t[0].c > 0) out.healRate = Math.max(0, Math.min(1, Number(t[0].h || 0) / t[0].c)); } catch (e) {}
   return out;
 }
 __name(liveSaiInputs, "liveSaiInputs");
 __name2(liveSaiInputs, "liveSaiInputs");
-__name22(liveSaiInputs, "liveSaiInputs");
+
 async function liveScripts(env) {
   try {
     if (!env.CF_TOKEN) return null;
@@ -561,7 +476,6 @@ async function liveScripts(env) {
 }
 __name(liveScripts, "liveScripts");
 __name2(liveScripts, "liveScripts");
-__name22(liveScripts, "liveScripts");
 function stableKey(category, text) {
   const t = String(text || "");
   let subj = "";
@@ -586,7 +500,6 @@ function stableKey(category, text) {
 }
 __name(stableKey, "stableKey");
 __name2(stableKey, "stableKey");
-__name22(stableKey, "stableKey");
 function issueFingerprint(text) {
   let h = 5381;
   const s = String(text || "");
@@ -595,7 +508,6 @@ function issueFingerprint(text) {
 }
 __name(issueFingerprint, "issueFingerprint");
 __name2(issueFingerprint, "issueFingerprint");
-__name22(issueFingerprint, "issueFingerprint");
 function issueCategory(text) {
   const s = String(text || "").toLowerCase();
   if (s.indexOf("probe ") === 0) return "probe";
@@ -611,7 +523,6 @@ function issueCategory(text) {
 }
 __name(issueCategory, "issueCategory");
 __name2(issueCategory, "issueCategory");
-__name22(issueCategory, "issueCategory");
 var ISSUE_META = {
   "probe": { owner: "fleet", playbook: "Re-probe the endpoint; a host probe down across 2 cycles is real - verify externally, then check the worker binding and redeploy from its canonical repo.", auto: "probe-retry" },
   "queue-freshness": { owner: "fleet-autonomy", playbook: "A queue with open items and no new row in over 24h is STALE, not healthy: dispatch the drain worker (research-exec / qnfo-cloud-ops outreach) and confirm the newest row advances.", auto: "queue-drain" },
@@ -624,13 +535,12 @@ var ISSUE_META = {
   "analytics": { owner: "fleet", playbook: "Verify CF_TOKEN secret scope; retry the GraphQL analytics query.", auto: "secret-check" },
   "general": { owner: "fleet", playbook: "Review the raw evidence and classify.", auto: null }
 };
-__name22(ISSUE_META, "ISSUE_META");
+__name2(ISSUE_META, "ISSUE_META");
 function severityRank(sev) {
   return sev === "err" ? 0 : sev === "warn" ? 1 : 2;
 }
 __name(severityRank, "severityRank");
 __name2(severityRank, "severityRank");
-__name22(severityRank, "severityRank");
 function remediationFor(text, category) {
   const meta = ISSUE_META[category] || ISSUE_META.general;
   const t = String(text || "");
@@ -645,7 +555,6 @@ function remediationFor(text, category) {
 }
 __name(remediationFor, "remediationFor");
 __name2(remediationFor, "remediationFor");
-__name22(remediationFor, "remediationFor");
 function enrichIssues(list, firstSeen) {
   const fs = firstSeen || {};
   const out = (list || []).map(function(i) {
@@ -663,7 +572,6 @@ function enrichIssues(list, firstSeen) {
 }
 __name(enrichIssues, "enrichIssues");
 __name2(enrichIssues, "enrichIssues");
-__name22(enrichIssues, "enrichIssues");
 async function ensureIssueLog(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_log (id TEXT PRIMARY KEY, category TEXT, sev TEXT, title TEXT, first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1)").run();
@@ -672,7 +580,6 @@ async function ensureIssueLog(env) {
 }
 __name(ensureIssueLog, "ensureIssueLog");
 __name2(ensureIssueLog, "ensureIssueLog");
-__name22(ensureIssueLog, "ensureIssueLog");
 async function readIssueLog(env) {
   const m = {};
   try {
@@ -684,7 +591,6 @@ async function readIssueLog(env) {
 }
 __name(readIssueLog, "readIssueLog");
 __name2(readIssueLog, "readIssueLog");
-__name22(readIssueLog, "readIssueLog");
 async function writeIssueLog(env, enriched) {
   if (!enriched || !enriched.length) return;
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -697,7 +603,6 @@ async function writeIssueLog(env, enriched) {
 }
 __name(writeIssueLog, "writeIssueLog");
 __name2(writeIssueLog, "writeIssueLog");
-__name22(writeIssueLog, "writeIssueLog");
 var GH_REPO = "QNFO/qnfo-fleet-issues";
 var GH_API = "https://api.github.com";
 var LOOP_MIN_INTERVAL_MS = 10 * 60 * 1e3;
@@ -708,7 +613,6 @@ function ghHeaders(env, extra) {
 }
 __name(ghHeaders, "ghHeaders");
 __name2(ghHeaders, "ghHeaders");
-__name22(ghHeaders, "ghHeaders");
 async function ghCall(env, method, path, body) {
   try {
     const r = await fetch(GH_API + path, { method, headers: ghHeaders(env, body ? { "Content-Type": "application/json" } : null), body: body ? JSON.stringify(body) : void 0, signal: AbortSignal.timeout(15e3) });
@@ -724,7 +628,6 @@ async function ghCall(env, method, path, body) {
 }
 __name(ghCall, "ghCall");
 __name2(ghCall, "ghCall");
-__name22(ghCall, "ghCall");
 async function loopEnsure(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_loop (fingerprint TEXT PRIMARY KEY, category TEXT, sev TEXT, owner TEXT, title TEXT, first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1, gh_number INTEGER, gh_state TEXT, attempts INTEGER DEFAULT 0, dispatch_state TEXT, last_action TEXT, last_verified TEXT, closed_at TEXT, miss_streak INTEGER DEFAULT 0)").run();
@@ -761,7 +664,6 @@ async function loopEnsure(env) {
 }
 __name(loopEnsure, "loopEnsure");
 __name2(loopEnsure, "loopEnsure");
-__name22(loopEnsure, "loopEnsure");
 async function readLoop(env) {
   const m = {};
   try {
@@ -773,7 +675,6 @@ async function readLoop(env) {
 }
 __name(readLoop, "readLoop");
 __name2(readLoop, "readLoop");
-__name22(readLoop, "readLoop");
 async function attachIssueLinks(env, enriched) {
   try {
     const ll = await readLoop(env);
@@ -787,7 +688,6 @@ async function attachIssueLinks(env, enriched) {
 }
 __name(attachIssueLinks, "attachIssueLinks");
 __name2(attachIssueLinks, "attachIssueLinks");
-__name22(attachIssueLinks, "attachIssueLinks");
 async function loopMetaGet(env) {
   const m = {};
   try {
@@ -799,7 +699,6 @@ async function loopMetaGet(env) {
 }
 __name(loopMetaGet, "loopMetaGet");
 __name2(loopMetaGet, "loopMetaGet");
-__name22(loopMetaGet, "loopMetaGet");
 async function loopMetaSet(env, k, v) {
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_loop_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, v, v).run();
@@ -808,7 +707,6 @@ async function loopMetaSet(env, k, v) {
 }
 __name(loopMetaSet, "loopMetaSet");
 __name2(loopMetaSet, "loopMetaSet");
-__name22(loopMetaSet, "loopMetaSet");
 async function ghFindIssue(env, fp, title) {
   const q = encodeURIComponent("repo:" + GH_REPO + ' "' + fp + '" in:body');
   const r = await ghCall(env, "GET", "/search/issues?q=" + q + "&per_page=1", null);
@@ -822,7 +720,6 @@ async function ghFindIssue(env, fp, title) {
 }
 __name(ghFindIssue, "ghFindIssue");
 __name2(ghFindIssue, "ghFindIssue");
-__name22(ghFindIssue, "ghFindIssue");
 async function ghCreateIssue(env, i) {
   const labels = ["fleet-issue", i.sev === "err" ? "sev:err" : "sev:warn", i.category];
   labels.push(i.auto_actionable ? "auto" : "no-auto");
@@ -861,23 +758,24 @@ async function ghCreateIssue(env, i) {
 }
 __name(ghCreateIssue, "ghCreateIssue");
 __name2(ghCreateIssue, "ghCreateIssue");
-__name22(ghCreateIssue, "ghCreateIssue");
 async function ghComment(env, number, body) {
   return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/comments", { body });
 }
 __name(ghComment, "ghComment");
 __name2(ghComment, "ghComment");
-__name22(ghComment, "ghComment");
 async function ghAddLabels(env, number, labels) {
   return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/labels", { labels });
 }
 __name(ghAddLabels, "ghAddLabels");
 __name2(ghAddLabels, "ghAddLabels");
-__name22(ghAddLabels, "ghAddLabels");
 async function dispatchIssue(env, i, gh_number) {
   const action = i.remediation && i.remediation.suggested_action || "manual";
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   try {
+    // CHAIN-FLAP-NO-EPISODE-DEDUP-1 (2026-09-21): one open episode per signal. The prior
+    // SELECT-then-INSERT raced under two concurrent loopSync invocations (v1.7.2 shipped a
+    // double row at 11:00:29Z). This ATOMIC conditional INSERT closes the race - verified
+    // directly against D1 (run 1 changes=1, run 2 changes=0).
     await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) SELECT ?, ?, ?, ?, 'dispatched' WHERE NOT EXISTS (SELECT 1 FROM self_heal_actions WHERE kind='fleet-issue' AND ref=? AND status='dispatched')").bind("fleet-issue", i.id, "[auto] " + action + " :: " + String(i.detail || "").slice(0, 200), ts, i.id).run();
   } catch (e) {
   }
@@ -888,18 +786,19 @@ async function dispatchIssue(env, i, gh_number) {
 }
 __name(dispatchIssue, "dispatchIssue");
 __name2(dispatchIssue, "dispatchIssue");
-__name22(dispatchIssue, "dispatchIssue");
 var EXEC_COOLDOWN_MS = 5 * 60 * 1e3;
-function execTargetFor(category, resource, env) {
+function execTargetFor(category, resource) {
   const r = String(resource || "").toLowerCase();
   if (category === "queue-freshness") {
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
     return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
   }
   if (category === "integration-chain") {
+    // FIX-5 (2026-09-14): concrete auto-remediation per chain instead of blanket no-action.
+    // Each chain maps to its consumer worker's trigger endpoint.
     if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research pipeline (research-exec /run)" };
     if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
-    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return env && env.REVISER_TOKEN ? { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log", auth: "X-Reviser-Token" } : { safe: false, noAction: true, note: "PAPER-REVISER-SCAN-UNAUTHORIZED-1: /run/scan needs qnfo-paper-reviser X-Reviser-Token which this worker does not hold; qnfo-paper-reviser cron 37 */4 drains it - no auto-dispatch" };
+    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log" };
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: true, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "run observability ingest to digest alerts" };
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
@@ -915,7 +814,6 @@ function execTargetFor(category, resource, env) {
 }
 __name(execTargetFor, "execTargetFor");
 __name2(execTargetFor, "execTargetFor");
-__name22(execTargetFor, "execTargetFor");
 async function execOne(env, row, prevState) {
   let payload = {};
   try {
@@ -923,11 +821,11 @@ async function execOne(env, row, prevState) {
   } catch (e) {
   }
   const resource = payload.resource || payload.title || "";
-  const spec = execTargetFor(row.category, resource, env);
+  const spec = execTargetFor(row.category, resource);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const prior = prevState || null;
   if (!spec || !spec.safe) {
-    const state2 = "no-action";
+    const state2 = "no-action"; /* NEVER-HUMAN-1 (2026-09-14): unmet auto-actions become terminal no-action; no execution path may emit a human gate. */
     await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, spec && spec.note || "no safe auto-action", row.fingerprint).run();
     if (state2 !== prior) {
       try {
@@ -943,9 +841,7 @@ async function execOne(env, row, prevState) {
   let ok = false, status = 0, body = "";
   try {
     if (!svc) throw new Error("binding " + spec.svc + " not bound");
-    const _eh = { "User-Agent": PROBE_UA };
-    if (spec.auth === "X-Reviser-Token" && env.REVISER_TOKEN) _eh["X-Reviser-Token"] = env.REVISER_TOKEN;
-    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: _eh });
+    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: { "User-Agent": PROBE_UA } });
     status = res.status;
     ok = res.ok;
     body = squash(await res.text()).slice(0, 240);
@@ -967,7 +863,6 @@ async function execOne(env, row, prevState) {
 }
 __name(execOne, "execOne");
 __name2(execOne, "execOne");
-__name22(execOne, "execOne");
 async function loopExecute(env) {
   await loopEnsure(env);
   const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, owner, payload, gh_number, created_at, exec_state, exec_ts, exec_attempts FROM fleet_issue_dispatch WHERE state='queued' ORDER BY created_at ASC LIMIT 25") || [];
@@ -993,7 +888,6 @@ async function loopExecute(env) {
 }
 __name(loopExecute, "loopExecute");
 __name2(loopExecute, "loopExecute");
-__name22(loopExecute, "loopExecute");
 async function loopSnapshot(env) {
   try {
     const m = await loopMetaGet(env);
@@ -1013,7 +907,6 @@ async function loopSnapshot(env) {
 }
 __name(loopSnapshot, "loopSnapshot");
 __name2(loopSnapshot, "loopSnapshot");
-__name22(loopSnapshot, "loopSnapshot");
 async function loopSync(env, st) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret not set" };
   await loopEnsure(env);
@@ -1111,7 +1004,6 @@ async function loopSync(env, st) {
 }
 __name(loopSync, "loopSync");
 __name2(loopSync, "loopSync");
-__name22(loopSync, "loopSync");
 async function loopMaybeSync(env, st) {
   try {
     const meta = await loopMetaGet(env);
@@ -1124,12 +1016,11 @@ async function loopMaybeSync(env, st) {
 }
 __name(loopMaybeSync, "loopMaybeSync");
 __name2(loopMaybeSync, "loopMaybeSync");
-__name22(loopMaybeSync, "loopMaybeSync");
 async function buildState(env, ctx) {
   const nowMs = Date.now();
   const audits = [];
   const issues = [];
-  const push = /* @__PURE__ */ __name22(function(a) {
+  const push = /* @__PURE__ */ __name2(function(a) {
     audits.push(a);
   }, "push");
   const naive24 = naiveUtc(nowMs - DAY_MS);
@@ -1144,7 +1035,6 @@ async function buildState(env, ctx) {
   }
   __name(safeAudit, "safeAudit");
   __name2(safeAudit, "safeAudit");
-  __name22(safeAudit, "safeAudit");
   await safeAudit("deployments", "Deployments (24h)", async function() {
     const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM deployment_history WHERE deployed_at >= ?", [naive24]);
     const rows = await d1all(env.AUDIT, "SELECT resource_name, action, version_id, deployed_at, status FROM deployment_history ORDER BY deployed_at DESC LIMIT 3");
@@ -1164,45 +1054,18 @@ async function buildState(env, ctx) {
     const rows = await d1all(env.AUDIT, "SELECT slug, version_from, version_to, status, created_at FROM errata_actions ORDER BY created_at DESC LIMIT 2");
     push({ key: "errata_actions", label: "Errata actions", state: "info", detail: JSON.stringify(g) + "; latest: " + (rows.length ? rows[0].slug + " v" + rows[0].version_from + "->v" + rows[0].version_to + " " + rows[0].status : "none"), ts: rows.length ? rows[0].created_at : null });
   });
-  await safeAudit("ai_gateway_failures", "AI gateway failures (live)", async function() {
-    let liveTotal = null, liveErr = null;
-    try {
-      const gr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-      if (gr.ok) {
-        const gj = await gr.json();
-        liveTotal = gj.result_info && gj.result_info.total_count;
-      } else liveErr = "HTTP " + gr.status;
-    } catch (e) {
-      liveErr = String(e && e.message || e).slice(0, 60);
-    }
-    let m = null;
-    try {
-      m = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures");
-    } catch (e) {
-    }
-    const mt = m && m.length ? m[0] : null;
-    const ageH = mt && mt.latest ? (Date.now() - Number(mt.latest)) / 36e5 : null;
-    let top = [];
-    try {
-      top = await d1all(env.AUDIT, "SELECT status, model, SUM(count) AS c FROM ai_gateway_failures GROUP BY status, model ORDER BY c DESC LIMIT 4") || [];
-    } catch (e) {
-    }
+  await safeAudit("ai_gateway_failures", "AI gateway failures (24h, user-facing)", async function() {
+    const f = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source != 'qnfo-ai-calibration'", [epoch24]);
+    const top = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source != 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const total = f && f.length ? f[0].total : 0;
     const tc = top.map(function(r) {
-      return r.status + " " + r.model + " x" + r.c;
+      return r.error_class + ":" + r.c;
     }).join(", ");
-    const stale = ageH == null || ageH > 2;
-    const bad = liveTotal != null && liveTotal > 0 || stale;
-    push({
-      key: "gw_failures",
-      label: "AI gateway failures (live)",
-      state: bad ? "err" : "ok",
-      detail: "live(all-time)=" + (liveTotal == null ? liveErr || "n/a" : liveTotal) + "; mirror=" + (mt ? mt.total : 0) + " recorded, last write " + (ageH == null ? "never" : ageH.toFixed(1) + "h ago") + (stale ? " [RECORDER STALE]" : "") + (tc ? "; top: " + tc : ""),
-      ts: mt && mt.latest ? new Date(Number(mt.latest)).toISOString() : null
-    });
+    push({ key: "gw_failures", label: "AI gateway failures (24h, user-facing)", state: total > 0 ? "err" : "ok", detail: total > 0 ? total + " failure(s); " + tc : "0 failures", ts: f && f.length ? f[0].latest : null });
   });
   await safeAudit("gw_calibration", "AI calibration probes (24h)", async function() {
-    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%'", [epoch24]);
-    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration'", [epoch24]);
+    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
     const ctotal = c && c.length ? c[0].total : 0;
     const ctc = ct.map(function(r) {
       return r.error_class + ":" + r.c;
@@ -1243,24 +1106,9 @@ async function buildState(env, ctx) {
     const bad = rows.filter(function(r) {
       return String(r.status || "").toLowerCase() !== "ok" || (r.consecutive_failures || 0) > 0;
     });
-    let gwf = [];
-    try {
-      gwf = await d1all(env.AUDIT, "SELECT model, SUM(count) AS c FROM ai_gateway_failures GROUP BY model ORDER BY c DESC LIMIT 6") || [];
-    } catch (e) {
-    }
-    const gwTop = gwf.map(function(r) {
-      return (r.model || "?") + " x" + r.c;
-    }).join(", ");
-    const gwBad = gwf.length > 0;
-    push({
-      key: "model_health",
-      label: "AI model health",
-      state: bad.length || gwBad ? "warn" : "ok",
-      detail: rows.length + " models; not-ok: " + (bad.length ? bad.map(function(r) {
-        return r.model_id + "=" + r.status + "/cf" + r.consecutive_failures;
-      }).join(", ") : "none") + (gwTop ? "; gateway-failure models: " + gwTop : ""),
-      ts: null
-    });
+    push({ key: "model_health", label: "AI model health", state: bad.length ? "warn" : "ok", detail: rows.length + " models; not-ok: " + (bad.length ? bad.map(function(r) {
+      return r.model_id + "=" + r.status + "/cf" + r.consecutive_failures;
+    }).join(", ") : "none"), ts: null });
   });
   await safeAudit("ai_queries", "AI queries (24h)", async function() {
     const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c, MAX(ts) AS latest FROM ai_queries WHERE ts >= ?", [iso24]);
@@ -1303,14 +1151,14 @@ async function buildState(env, ctx) {
     }
   });
   const queueStats = [];
-  const ageOf = /* @__PURE__ */ __name2(function(raw) {
+  const ageOf = /* @__PURE__ */ __name(function(raw) {
     if (raw == null) return null;
     let ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T"));
     if (isNaN(ms) && !isNaN(Number(raw))) ms = Number(raw);
     if (isNaN(ms)) return null;
     return Math.round((nowMs - ms) / 36e5);
   }, "ageOf");
-  const qlook = /* @__PURE__ */ __name2(async function(db, sql) {
+  const qlook = /* @__PURE__ */ __name(async function(db, sql) {
     try {
       const g = await d1all(db, sql);
       return g && g.length ? g[0] : {};
@@ -1420,9 +1268,9 @@ async function buildState(env, ctx) {
   }).join(", ") });
   if (analytics.error) issues.push({ sev: "warn", text: "analytics unavailable: " + analytics.error });
   const chains = [];
-  const sysChains = systemIntegration && systemIntegration.chains || [];
+  const sysChains = (systemIntegration && systemIntegration.chains) || [];
   for (const c of sysChains) {
-    const mapSt = c.status === "healthy" ? "ok" : c.status === "unknown" ? "ok" : "warn";
+    const mapSt = c.status === "healthy" ? "ok" : (c.status === "unknown" ? "ok" : "warn");
     chains.push({ name: c.id, label: c.name, state: mapSt, stages: [c.producer, c.consumer], results: [{ label: c.medium, n: c.n, state: mapSt, detail: c.detail }] });
     if (mapSt !== "ok") issues.push({ sev: c.status === "stuck" ? "err" : "warn", text: "Integration chain " + c.name + ": " + c.status + " - " + (c.detail || "") });
   }
@@ -1483,7 +1331,6 @@ async function buildState(env, ctx) {
 }
 __name(buildState, "buildState");
 __name2(buildState, "buildState");
-__name22(buildState, "buildState");
 function depNamesOf(raw) {
   const out = [];
   if (!raw) return out;
@@ -1495,6 +1342,10 @@ function depNamesOf(raw) {
   }
   const list = Array.isArray(arr) ? arr : [arr];
   for (const d of list) {
+    // SYMBOLIC-DEP-RESOLVE-1 (issue 923): a dep may be a prefixed contract token
+    // (service:X, consumed-by:X, d1:X, r2:X, cron:X). The TARGET is the part AFTER the
+    // first colon; the old first-token match returned the PREFIX (service:X -> "service"),
+    // so contract edges were invisible and contract-integrated workers became false islands.
     const entry = String(d);
     const ci = entry.indexOf(":");
     const tail = ci >= 0 ? entry.slice(ci + 1) : entry;
@@ -1503,29 +1354,25 @@ function depNamesOf(raw) {
   }
   return out;
 }
-__name(depNamesOf, "depNamesOf");
 function contractDepsOf(raw) {
+  // Count deps that are DATA-CONTRACT edges to a non-worker medium (D1/R2/Vectorize/KV/cron/AI),
+  // so a worker integrated only via a data contract is not misreported as an island (issue 923).
   const out = [];
   if (!raw) return out;
   let arr;
-  try {
-    arr = JSON.parse(raw);
-  } catch (e) {
-    arr = String(raw).split(/[,;]/);
-  }
+  try { arr = JSON.parse(raw); } catch (e) { arr = String(raw).split(/[,;]/); }
   const list = Array.isArray(arr) ? arr : [arr];
   for (const d of list) {
     const entry = String(d).trim();
     const ci = entry.indexOf(":");
     if (ci <= 0) continue;
     const prefix = entry.slice(0, ci).toLowerCase();
-    if (/^(d1|r2|vectorize|kv|queue|cron|ai|send_email|do|artifacts|ext|browser|ai_search|workflow|secrets|produces)$/.test(prefix)) out.push(prefix);
+    if (/^(d1|r2|vectorize|kv|queue|cron|ai|send_email)$/.test(prefix)) out.push(prefix);
   }
   return out;
 }
-__name(contractDepsOf, "contractDepsOf");
+__name(depNamesOf, "depNamesOf");
 __name2(depNamesOf, "depNamesOf");
-__name22(depNamesOf, "depNamesOf");
 async function readSystemIntegration(env) {
   try {
     const r = await env.AUDIT.prepare("SELECT json FROM integration_state ORDER BY id DESC LIMIT 1").first();
@@ -1536,11 +1383,10 @@ async function readSystemIntegration(env) {
 }
 __name(readSystemIntegration, "readSystemIntegration");
 __name2(readSystemIntegration, "readSystemIntegration");
-__name22(readSystemIntegration, "readSystemIntegration");
 function systemIntegrationHtml(sys) {
   if (!sys || !sys.score) return '<h2>System integration at a glance</h2><div class="sub">no assessment yet - waiting for qnfo-observability telemetry</div>';
   const sc = sys.score;
-  const badge = /* @__PURE__ */ __name2(function(status) {
+  const badge = /* @__PURE__ */ __name(function(status) {
     const color = status === "healthy" ? "#2ea043" : status === "degraded" ? "#d29922" : status === "stuck" ? "#f85149" : "#8b949e";
     return '<span style="color:' + color + ';font-weight:600">' + status + "</span>";
   }, "badge");
@@ -1566,7 +1412,6 @@ function systemIntegrationHtml(sys) {
 }
 __name(systemIntegrationHtml, "systemIntegrationHtml");
 __name2(systemIntegrationHtml, "systemIntegrationHtml");
-__name22(systemIntegrationHtml, "systemIntegrationHtml");
 async function integrationView(env, liveNames) {
   const rows = await d1all(env.AUDIT, "SELECT service, kind, version, deps FROM service_registry WHERE kind='worker'") || [];
   const liveSet = new Set((liveNames || []).map(function(n) {
@@ -1602,13 +1447,11 @@ async function integrationView(env, liveNames) {
     }
     outbound.set(n.service, out);
   }
-  const deg = /* @__PURE__ */ __name22(function(s) {
+  const deg = /* @__PURE__ */ __name2(function(s) {
     return { out: outbound.get(s) || 0, in: inbound.get(s) || 0 };
   }, "deg");
   let contractEdgeCount = 0;
-  for (const n of nodes) {
-    if (n.contract && n.contract.length) contractEdgeCount += n.contract.length;
-  }
+  for (const n of nodes) { if (n.contract && n.contract.length) contractEdgeCount += n.contract.length; }
   const islands = nodes.filter(function(n) {
     const d = deg(n.service);
     return d.out === 0 && d.in === 0 && (!n.contract || n.contract.length === 0);
@@ -1646,24 +1489,9 @@ async function integrationView(env, liveNames) {
     registered: nodes.length,
     live: liveNames ? liveNames.length : null,
     edges: edges.length,
-    edges_worker: edges.length,
     contract_edges: contractEdgeCount,
-    edges_total: edges.length + contractEdgeCount,
     edge_list: edges.slice(0, 500),
     density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
-    // V1.7.11 METRIC-HONESTY-1: separate observability probe fan-out from functional control coupling.
-    // The single prober (qnfo-fleet-dashboard) holds an out-edge to every worker; counting those as
-    // "connectivity" inflates density ~75%. functional = edges NOT originating from the prober.
-    probe_edges: edges.filter(function(e) {
-      return e && e.from === "qnfo-fleet-dashboard";
-    }).length,
-    edges_worker_functional: edges.filter(function(e) {
-      return e && e.from !== "qnfo-fleet-dashboard";
-    }).length,
-    density_functional: nodes.length > 1 ? +(edges.filter(function(e) {
-      return e && e.from !== "qnfo-fleet-dashboard";
-    }).length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
-    density_contract: nodes.length > 1 ? +Number(((edges.length + contractEdgeCount) / (nodes.length * (nodes.length - 1))).toFixed(4)) : 0,
     islands,
     sinks,
     hubs,
@@ -1675,45 +1503,28 @@ async function integrationView(env, liveNames) {
 }
 __name(integrationView, "integrationView");
 __name2(integrationView, "integrationView");
-__name22(integrationView, "integrationView");
 async function reportCardData(env, integration, audits) {
   let humanOpen = -1;
   try {
-    const g2 = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')");
-    humanOpen = g2 && g2.length ? g2[0].c : 0;
-  } catch (e) {
-    humanOpen = -1;
-  }
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM task_dod_register WHERE owner='user' AND status NOT IN ('done','cancelled','cancelled-with-monitor')");
+    humanOpen = g && g.length ? g[0].c : 0;
+  } catch (e) { humanOpen = -1; }
   let selfHeal = -1;
   try {
-    const g2 = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM self_heal_actions");
-    selfHeal = g2 && g2.length ? g2[0].c : 0;
-  } catch (e) {
-    selfHeal = -1;
-  }
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM self_heal_actions");
+    selfHeal = g && g.length ? g[0].c : 0;
+  } catch (e) { selfHeal = -1; }
   let openIssues = -1;
   try {
-    const g2 = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
-    openIssues = g2 && g2.length ? g2[0].c : 0;
-  } catch (e) {
-    openIssues = -1;
-  }
+    const g = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
+    openIssues = g && g.length ? g[0].c : 0;
+  } catch (e) { openIssues = -1; }
   const drift = integration ? integration.drift : { ghost: 0, unregistered: 0, unversioned: 0 };
   const driftTotal = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
   const dim = {};
-  try {
-    const rows = await d1all(env.AUDIT, "SELECT dimension, score, framework, scale, evidence, gap, scored_at FROM autonomy_scores") || [];
-    rows.forEach(function(r) {
-      if (r && r.dimension) dim[r.dimension] = r;
-    });
-  } catch (e) {
-  }
-  const g = /* @__PURE__ */ __name2(function(k) {
-    return dim[k] && typeof dim[k].score === "number" ? dim[k].score : null;
-  }, "g");
-  const fmt = /* @__PURE__ */ __name2(function(v) {
-    return v == null ? "n/a" : String(v);
-  }, "fmt");
+  try { const rows = await d1all(env.AUDIT, "SELECT dimension, score, framework, scale, evidence, gap, scored_at FROM autonomy_scores") || []; rows.forEach(function(r) { if (r && r.dimension) dim[r.dimension] = r; }); } catch (e) {}
+  const g = /* @__PURE__ */ __name(function(k) { return dim[k] && typeof dim[k].score === "number" ? dim[k].score : null; }, "g");
+  const fmt = /* @__PURE__ */ __name(function(v) { return v == null ? "n/a" : String(v); }, "fmt");
   const loa = g("independent_decision");
   const overall = dim.overall || null;
   return {
@@ -1723,11 +1534,11 @@ async function reportCardData(env, integration, audits) {
     drift_total: driftTotal,
     drift,
     loa: loa != null ? String(Math.round(loa * 2)) : null,
-    loa_label: dim.independent_decision ? dim.independent_decision.gap || dim.independent_decision.evidence || "" : "",
-    agi: overall ? fmt(overall.score) + "/5 composite" : null,
-    vsm: dim.s5_policy || dim.s4_intelligence || dim.s3_control ? "S5 " + fmt(g("s5_policy")) + " / S4 " + fmt(g("s4_intelligence")) + " / S3 " + fmt(g("s3_control")) + " (of 5)" : null,
-    ooda: dim.ooda_closure ? fmt(g("ooda_closure")) + "/5 closure" : null,
-    watchmaker: dim.watchmaker_inverted ? fmt(g("watchmaker_inverted")) + "/5 inverted" : null,
+    loa_label: dim.independent_decision ? (dim.independent_decision.gap || dim.independent_decision.evidence || "") : "",
+    agi: overall ? (fmt(overall.score) + "/5 composite") : null,
+    vsm: (dim.s5_policy || dim.s4_intelligence || dim.s3_control) ? ("S5 " + fmt(g("s5_policy")) + " / S4 " + fmt(g("s4_intelligence")) + " / S3 " + fmt(g("s3_control")) + " (of 5)") : null,
+    ooda: dim.ooda_closure ? (fmt(g("ooda_closure")) + "/5 closure") : null,
+    watchmaker: dim.watchmaker_inverted ? (fmt(g("watchmaker_inverted")) + "/5 inverted") : null,
     top: null,
     scored_at: overall ? overall.scored_at : null,
     source: "autonomy_scores (qnfo-audit D1, live)"
@@ -1735,7 +1546,6 @@ async function reportCardData(env, integration, audits) {
 }
 __name(reportCardData, "reportCardData");
 __name2(reportCardData, "reportCardData");
-__name22(reportCardData, "reportCardData");
 function reportCardHtml(rc) {
   if (!rc) return "";
   const h = [];
@@ -1758,7 +1568,6 @@ function reportCardHtml(rc) {
 }
 __name(reportCardHtml, "reportCardHtml");
 __name2(reportCardHtml, "reportCardHtml");
-__name22(reportCardHtml, "reportCardHtml");
 function integrationHtml(ig, st) {
   if (!ig) return "";
   const h = [];
@@ -1767,7 +1576,7 @@ function integrationHtml(ig, st) {
   h.push('<div class="chips">');
   h.push(chip("info", ig.registered + " registered"));
   h.push(chip("info", (ig.live == null ? "?" : ig.live) + " live"));
-  h.push(chip("info", ig.edges + " worker edges / " + (ig.contract_edges || 0) + " contract edges (density " + ig.density + " worker, " + (ig.density_contract == null ? "n/a" : ig.density_contract) + " contract)"));
+  h.push(chip("info", ig.edges + " edges (density " + ig.density + ")"));
   h.push(ig.drift.ghost > 0 ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
   h.push(ig.drift.unregistered > 0 ? chip("warn", ig.drift.unregistered + " unregistered") : chip("ok", "0 unregistered"));
   h.push(ig.drift.unversioned > 0 ? chip("warn", ig.drift.unversioned + " unversioned") : chip("ok", "0 unversioned"));
@@ -1807,7 +1616,6 @@ function integrationHtml(ig, st) {
 }
 __name(integrationHtml, "integrationHtml");
 __name2(integrationHtml, "integrationHtml");
-__name22(integrationHtml, "integrationHtml");
 function chipClass(state) {
   const s = String(state || "").toUpperCase();
   if (s === "OK") return "ok";
@@ -1819,34 +1627,24 @@ function chipClass(state) {
 }
 __name(chipClass, "chipClass");
 __name2(chipClass, "chipClass");
-__name22(chipClass, "chipClass");
 function chip(state, text) {
   return '<span class="chip chip-' + chipClass(state) + '">' + esc(text == null ? state : text) + "</span>";
 }
 __name(chip, "chip");
 __name2(chip, "chip");
-__name22(chip, "chip");
 function topologySvg(ig) {
   if (!ig || !ig.edge_list || !ig.edge_list.length) return '<div class="sub">no declared dependency edges</div>';
   const edges = ig.edge_list;
   const set = {};
-  for (const e of edges) {
-    set[e.from] = 1;
-    set[e.to] = 1;
-  }
+  for (const e of edges) { set[e.from] = 1; set[e.to] = 1; }
   const nodes = Object.keys(set);
   if (!nodes.length) return '<div class="sub">no nodes</div>';
   const W = 620, H = 300, cx = W / 2, cy = H / 2, R = Math.min(cx, cy) - 24;
   const pos = {};
-  for (let i = 0; i < nodes.length; i++) {
-    const a = 2 * Math.PI * i / nodes.length - Math.PI / 2;
-    pos[nodes[i]] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) };
-  }
+  for (let i = 0; i < nodes.length; i++) { const a = (2 * Math.PI * i) / nodes.length - Math.PI / 2; pos[nodes[i]] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }; }
   const hubSet = {};
-  (ig.hubs || []).forEach(function(x) {
-    hubSet[x.service] = 1;
-  });
-  let s = '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%;height:calc(100% - 52px);display:block">';
+  (ig.hubs || []).forEach(function (x) { hubSet[x.service] = 1; });
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%;height:calc(100% - 52px);display:block">';
   for (const e of edges) {
     const a = pos[e.from], b = pos[e.to];
     if (!a || !b) continue;
@@ -1854,58 +1652,43 @@ function topologySvg(ig) {
   }
   for (const n of nodes) {
     const p = pos[n], hub = hubSet[n];
-    s += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (hub ? 4 : 2.4) + '" fill="' + (hub ? "#d29922" : "#3fb950") + '"><title>' + esc(n) + "</title></circle>";
+    s += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (hub ? 4 : 2.4) + '" fill="' + (hub ? "#d29922" : "#3fb950") + '"><title>' + esc(n) + '</title></circle>';
   }
-  for (const hh of (ig.hubs || []).slice(0, 8)) {
-    const p = pos[hh.service];
-    if (p) s += '<text x="' + (p.x + 5).toFixed(1) + '" y="' + (p.y + 3).toFixed(1) + '" fill="#8b949e" font-size="7">' + esc(hh.service) + "</text>";
-  }
-  return s + "</svg>";
+  for (const hh of (ig.hubs || []).slice(0, 8)) { const p = pos[hh.service]; if (p) s += '<text x="' + (p.x + 5).toFixed(1) + '" y="' + (p.y + 3).toFixed(1) + '" fill="#8b949e" font-size="7">' + esc(hh.service) + '</text>'; }
+  return s + '</svg>';
 }
-__name(topologySvg, "topologySvg");
 function pageHtml(st) {
   const h = [];
-  h.push('<div style="margin:8px 0 16px;padding:10px 14px;background:#0d1a12;border:1px solid #2a4d33;border-radius:8px"><b>ROI view:</b> <a href="/roi" style="color:#6f6">cost vs output vs impressions vs reach</a></div>');
   const issues = st.issues || [];
-  const errs = issues.filter(function(i) {
-    return i.sev === "err";
-  });
-  const warns = issues.filter(function(i) {
-    return i.sev === "warn";
-  });
+  const errs = issues.filter(function (i) { return i.sev === "err"; });
+  const warns = issues.filter(function (i) { return i.sev === "warn"; });
   const sched = st.scheduled || [];
   const probes = st.probes || [];
-  const totalErr = sched.filter(function(x) {
-    return x.status === "ERR";
-  }).length;
-  const totalNoRun = sched.filter(function(x) {
-    return x.status === "NO-RUN";
-  }).length;
-  const probeOk = probes.filter(function(p) {
-    return p.ok;
-  }).length;
+  const totalErr = sched.filter(function (x) { return x.status === "ERR"; }).length;
+  const totalNoRun = sched.filter(function (x) { return x.status === "NO-RUN"; }).length;
+  const probeOk = probes.filter(function (p) { return p.ok; }).length;
   const ig = st.integration || {};
   const rc = st.report_card || {};
   const verd = st.verdict || (errs.length ? "ACTION_NEEDED" : warns.length ? "DEGRADED" : "HEALTHY");
   const vcls = verd === "HEALTHY" ? "ok" : verd === "DEGRADED" ? "warn" : "err";
   h.push('<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>');
-  h.push("<title>Quniverse Fleet Dashboard</title><style>");
-  h.push("*{box-sizing:border-box}html,body{height:100%;margin:0}");
-  h.push("body{font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:#0d1117;color:#c9d1d9;overflow:hidden}");
-  h.push("a{color:#58a6ff;text-decoration:none}.sub{color:#8b949e;font-size:10px}");
-  h.push(".app{display:grid;grid-template-columns:1.5fr 1fr 1.25fr;grid-template-rows:auto minmax(0,1.2fr) minmax(0,1fr);gap:7px;height:100vh;padding:7px}");
-  h.push(".hdr{grid-column:1/4;display:flex;align-items:center;gap:9px;flex-wrap:wrap;border-bottom:1px solid #30363d;padding-bottom:6px}");
-  h.push(".hdr h1{font-size:15px;margin:0 4px 0 0}");
-  h.push(".panel{border:1px solid #30363d;border-radius:6px;padding:6px 8px;overflow:auto;min-height:0}");
-  h.push(".panel h2{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b949e;margin:0 0 5px}");
-  h.push(".chips{display:flex;gap:5px;flex-wrap:wrap}.chip{padding:1px 7px;border-radius:9px;font-size:10px;white-space:nowrap}");
-  h.push(".chip-ok{background:#12291b;color:#3fb950;border:1px solid #238636}.chip-err{background:#2d1215;color:#f85149;border:1px solid #da3633}");
-  h.push(".chip-warn{background:#2d1f0c;color:#d29922;border:1px solid #9e6a03}.chip-idle{background:#161b22;color:#8b949e;border:1px solid #30363d}.chip-info{background:#0d2333;color:#58a6ff;border:1px solid #1f6feb}");
-  h.push("table{border-collapse:collapse;width:100%;font-size:10px}th,td{border-bottom:1px solid #21262d;padding:2px 4px;text-align:left;vertical-align:top}th{color:#8b949e}");
-  h.push("tr:hover td{background:#161b22}.issue-err{color:#f85149}.issue-warn{color:#d29922}");
-  h.push(".dot{display:inline-block;width:7px;height:7px;border-radius:4px;margin-right:4px}.dot-ok{background:#3fb950}.dot-err{background:#f85149}.dot-warn{background:#d29922}.dot-idle{background:#6e7681}");
-  h.push(".iss{border-left:2px solid #da3633;padding:1px 0 2px 6px;margin:3px 0}.iss.w{border-left-color:#9e6a03}");
-  h.push(".gauge{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px}");
+  h.push('<title>Quniverse Fleet Dashboard</title><style>');
+  h.push('*{box-sizing:border-box}html,body{height:100%;margin:0}');
+  h.push('body{font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:#0d1117;color:#c9d1d9;overflow:hidden}');
+  h.push('a{color:#58a6ff;text-decoration:none}.sub{color:#8b949e;font-size:10px}');
+  h.push('.app{display:grid;grid-template-columns:1.5fr 1fr 1.25fr;grid-template-rows:auto minmax(0,1.2fr) minmax(0,1fr);gap:7px;height:100vh;padding:7px}');
+  h.push('.hdr{grid-column:1/4;display:flex;align-items:center;gap:9px;flex-wrap:wrap;border-bottom:1px solid #30363d;padding-bottom:6px}');
+  h.push('.hdr h1{font-size:15px;margin:0 4px 0 0}');
+  h.push('.panel{border:1px solid #30363d;border-radius:6px;padding:6px 8px;overflow:auto;min-height:0}');
+  h.push('.panel h2{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b949e;margin:0 0 5px}');
+  h.push('.chips{display:flex;gap:5px;flex-wrap:wrap}.chip{padding:1px 7px;border-radius:9px;font-size:10px;white-space:nowrap}');
+  h.push('.chip-ok{background:#12291b;color:#3fb950;border:1px solid #238636}.chip-err{background:#2d1215;color:#f85149;border:1px solid #da3633}');
+  h.push('.chip-warn{background:#2d1f0c;color:#d29922;border:1px solid #9e6a03}.chip-idle{background:#161b22;color:#8b949e;border:1px solid #30363d}.chip-info{background:#0d2333;color:#58a6ff;border:1px solid #1f6feb}');
+  h.push('table{border-collapse:collapse;width:100%;font-size:10px}th,td{border-bottom:1px solid #21262d;padding:2px 4px;text-align:left;vertical-align:top}th{color:#8b949e}');
+  h.push('tr:hover td{background:#161b22}.issue-err{color:#f85149}.issue-warn{color:#d29922}');
+  h.push('.dot{display:inline-block;width:7px;height:7px;border-radius:4px;margin-right:4px}.dot-ok{background:#3fb950}.dot-err{background:#f85149}.dot-warn{background:#d29922}.dot-idle{background:#6e7681}');
+  h.push('.iss{border-left:2px solid #da3633;padding:1px 0 2px 6px;margin:3px 0}.iss.w{border-left-color:#9e6a03}');
+  h.push('.gauge{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px}');
   h.push('</style></head><body><div class="app">');
   h.push('<div class="hdr"><h1>Quniverse Fleet</h1><span class="chip chip-' + vcls + '">' + esc(verd) + '</span><span class="chips">');
   h.push(chip("info", st.fleet.workers + " workers") + chip("info", st.fleet.scheduled + " sched") + chip("info", st.fleet.d1_databases + " D1") + chip("info", st.totals.req24 + " req/24h"));
@@ -1915,51 +1698,50 @@ function pageHtml(st) {
   if (totalNoRun > 0) h.push(chip("warn", totalNoRun + " no-run"));
   h.push(ig.drift && ig.drift.ghost ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
   h.push(ig.drift && ig.drift.unregistered ? chip("warn", ig.drift.unregistered + " unreg") : chip("ok", "0 unreg"));
-  h.push('</span><span class="sub" style="margin-left:auto">v' + esc(st.version) + " &middot; " + esc(String(st.generated_at || "").slice(0, 16).replace("T", " ")) + 'U &middot; <a href="/api/state">state</a> <a href="/api/actions">actions</a> <a href="/api/loop">loop</a></span></div>');
-  h.push('<div class="panel"><h2>Fleet topology &middot; ' + (ig.registered || 0) + " nodes / " + (ig.edges || 0) + " worker edges / " + (ig.contract_edges || 0) + " contract edges &middot; density " + (ig.density == null ? "n/a" : ig.density) + " worker / " + (ig.density_contract == null ? "n/a" : ig.density_contract) + " contract</h2>");
+  h.push('</span><span class="sub" style="margin-left:auto">v' + esc(st.version) + ' &middot; ' + esc(String(st.generated_at || "").slice(0, 16).replace("T", " ")) + 'U &middot; <a href="/api/state">state</a> <a href="/api/actions">actions</a> <a href="/api/loop">loop</a></span></div>');
+  h.push('<div class="panel"><h2>Fleet topology &middot; ' + (ig.registered || 0) + ' nodes / ' + (ig.edges || 0) + ' edges &middot; density ' + (ig.density == null ? "n/a" : ig.density) + '</h2>');
   h.push(topologySvg(ig));
-  h.push('<div class="chips">' + chip("info", (ig.live == null ? "?" : ig.live) + " live") + chip("ok", (ig.registered || 0) + " registered") + (ig.hubs && ig.hubs.length ? chip("info", "top hub " + esc(ig.hubs[0].service) + " (" + ig.hubs[0].out + " out)") : "") + (ig.islands && ig.islands.length ? chip("warn", ig.islands.length + " islands") : "") + (ig.drift && ig.drift.unversioned ? chip("warn", ig.drift.unversioned + " unversioned") : "") + "</div>");
-  if (ig.islands && ig.islands.length) h.push('<div class="sub" style="margin-top:3px">islands (no declared edge): ' + esc(ig.islands.slice(0, 16).join(", ")) + "</div>");
-  h.push("</div>");
+  h.push('<div class="chips">' + chip("info", (ig.live == null ? "?" : ig.live) + " live") + chip("ok", (ig.registered || 0) + " registered") + (ig.hubs && ig.hubs.length ? chip("info", "top hub " + esc(ig.hubs[0].service) + " (" + ig.hubs[0].out + " out)") : "") + (ig.islands && ig.islands.length ? chip("warn", ig.islands.length + " islands") : "") + (ig.drift && ig.drift.unversioned ? chip("warn", ig.drift.unversioned + " unversioned") : "") + '</div>');
+  if (ig.islands && ig.islands.length) h.push('<div class="sub" style="margin-top:3px">islands (no declared edge): ' + esc(ig.islands.slice(0, 16).join(", ")) + '</div>');
+  h.push('</div>');
   h.push('<div class="panel"><h2>Systems report card</h2><div class="gauge">');
-  h.push('<span class="sub">Decision</span><span>LoA ' + (rc.loa || "n/a") + "</span>");
-  h.push('<span class="sub">Intelligence</span><span>' + esc(rc.agi || "n/a") + "</span>");
-  h.push('<span class="sub">VSM</span><span>' + esc(rc.vsm || "n/a") + "</span>");
-  h.push('<span class="sub">OODA</span><span>' + esc(rc.ooda || "n/a") + "</span>");
-  h.push('<span class="sub">Watchmaker</span><span>' + esc(rc.watchmaker || "n/a") + "</span>");
+  h.push('<span class="sub">Decision</span><span>LoA ' + (rc.loa || "n/a") + '</span>');
+  h.push('<span class="sub">Intelligence</span><span>' + esc(rc.agi || "n/a") + '</span>');
+  h.push('<span class="sub">VSM</span><span>' + esc(rc.vsm || "n/a") + '</span>');
+  h.push('<span class="sub">OODA</span><span>' + esc(rc.ooda || "n/a") + '</span>');
+  h.push('<span class="sub">Watchmaker</span><span>' + esc(rc.watchmaker || "n/a") + '</span>');
   h.push('</div><div class="chips" style="margin-top:6px">');
   h.push(rc.human_open === 0 ? chip("ok", "human-gated 0") : chip("warn", "human-gated " + rc.human_open));
   h.push(chip("info", "self-heal " + rc.self_heal_total));
   h.push(rc.open_issues === 0 ? chip("ok", "open issues 0") : chip("warn", "open issues " + rc.open_issues));
   h.push(rc.drift_total > 0 ? chip("warn", "drift " + rc.drift_total) : chip("ok", "drift 0"));
   h.push('</div><div class="sub" style="margin-top:6px">Objective: human-intervention&rarr;0, drift&rarr;0, self-heal&rarr;1.</div></div>');
-  h.push('<div class="panel"><h2>Action board &middot; ' + errs.length + " err / " + warns.length + " warn</h2>");
+  h.push('<div class="panel"><h2>Action board &middot; ' + errs.length + ' err / ' + warns.length + ' warn</h2>');
   if (!issues.length) h.push('<div class="sub">HEALTHY - no active conditions.</div>');
-  else for (const i of issues.slice(0, 60)) h.push('<div class="iss' + (i.sev === "err" ? "" : " w") + '"><b class="' + (i.sev === "err" ? "issue-err" : "issue-warn") + '">' + esc(i.category || i.sev) + "</b> " + esc(String(i.title || i.detail || "").slice(0, 160)) + "</div>");
-  h.push("</div>");
+  else for (const i of issues.slice(0, 60)) h.push('<div class="iss' + (i.sev === "err" ? "" : " w") + '"><b class="' + (i.sev === "err" ? "issue-err" : "issue-warn") + '">' + esc(i.category || i.sev) + '</b> ' + esc(String(i.title || i.detail || "").slice(0, 160)) + '</div>');
+  h.push('</div>');
   h.push('<div class="panel"><h2>Scheduled workers &middot; next runs UTC</h2><table><tr><th></th><th>worker</th><th>cron</th><th>next</th><th>24h</th><th>err</th><th>last</th></tr>');
   for (const s of sched) {
     const dc = s.status === "ERR" ? "err" : s.status === "OK" ? "ok" : s.status === "NO-RUN" ? "warn" : "idle";
-    h.push('<tr><td><span class="dot dot-' + dc + '"></span></td><td>' + esc(s.name) + '</td><td class="sub">' + esc((s.crons || []).join(",")) + '</td><td class="sub">' + esc(s.next && s.next.length ? s.next[0].at : "-") + "</td><td>" + s.req24 + "</td><td>" + (s.err24 > 0 ? '<b class="issue-err">' + s.err24 + "</b>" : s.err24) + '</td><td class="sub">' + esc(String(s.lastRun || "").slice(5, 16).replace("T", " ")) + "</td></tr>");
+    h.push('<tr><td><span class="dot dot-' + dc + '"></span></td><td>' + esc(s.name) + '</td><td class="sub">' + esc((s.crons || []).join(",")) + '</td><td class="sub">' + esc(s.next && s.next.length ? s.next[0].at : "-") + '</td><td>' + s.req24 + '</td><td>' + (s.err24 > 0 ? '<b class="issue-err">' + s.err24 + '</b>' : s.err24) + '</td><td class="sub">' + esc(String(s.lastRun || "").slice(5, 16).replace("T", " ")) + '</td></tr>');
   }
-  h.push("</table></div>");
-  h.push('<div class="panel"><h2>Probes ' + probeOk + "/" + probes.length + " up &middot; audits</h2><table>");
-  for (const p of probes) h.push("<tr><td>" + (p.ok ? '<span class="dot dot-ok"></span>' : '<span class="dot dot-warn"></span>') + "</td><td>" + esc(p.name) + '</td><td class="sub">' + esc(p.url || "") + "</td><td>" + p.status + "</td><td>" + p.ms + "ms</td></tr>");
-  for (const a of st.audits || []) h.push("<tr><td>" + chip(a.state, a.state) + '</td><td colspan="4" class="sub">' + esc(a.label) + ": " + esc(a.detail || "") + "</td></tr>");
-  h.push("</table></div>");
+  h.push('</table></div>');
+  h.push('<div class="panel"><h2>Probes ' + probeOk + '/' + probes.length + ' up &middot; audits</h2><table>');
+  for (const p of probes) h.push('<tr><td>' + (p.ok ? '<span class="dot dot-ok"></span>' : '<span class="dot dot-warn"></span>') + '</td><td>' + esc(p.name) + '</td><td class="sub">' + esc(p.url || "") + '</td><td>' + p.status + '</td><td>' + p.ms + 'ms</td></tr>');
+  for (const a of (st.audits || [])) h.push('<tr><td>' + chip(a.state, a.state) + '</td><td colspan="4" class="sub">' + esc(a.label) + ': ' + esc(a.detail || "") + '</td></tr>');
+  h.push('</table></div>');
   h.push('<div class="panel"><h2>Chains, queues &amp; device</h2>');
-  if (st.integration && st.integration.system && st.integration.system.score) h.push('<div class="sub">system integration: score ' + esc(st.integration.system.score.total) + " &middot; chains " + esc(st.integration.system.score.chains) + " &middot; coverage " + esc(st.integration.system.score.coverage) + " &middot; freshness " + esc(st.integration.system.score.freshness) + "</div>");
-  h.push("<table>");
-  for (const q of st.queues || []) h.push("<tr><td>" + esc(q.queue) + '</td><td class="sub">' + esc(q.db) + "</td><td>open " + q.open + "</td><td>" + (q.stale ? '<span class="chip chip-warn">stale ' + (q.age_h || "?") + "h</span>" : '<span class="chip chip-ok">fresh</span>') + "</td></tr>");
-  h.push("</table>");
-  h.push('<div class="sub">device ' + esc(String(st.device && st.device.captured_at || "").slice(0, 16)) + " &middot; " + (st.device && st.device.windows_tasks ? st.device.windows_tasks.length : 0) + " win-tasks &middot; front-end only (CLOUD-FRONTEND-ONLY-1)</div>");
-  h.push("</div>");
-  h.push("</div></body></html>");
+  if (st.integration && st.integration.system && st.integration.system.score) h.push('<div class="sub">system integration: score ' + esc(st.integration.system.score.total) + ' &middot; chains ' + esc(st.integration.system.score.chains) + ' &middot; coverage ' + esc(st.integration.system.score.coverage) + ' &middot; freshness ' + esc(st.integration.system.score.freshness) + '</div>');
+  h.push('<table>');
+  for (const q of (st.queues || [])) h.push('<tr><td>' + esc(q.queue) + '</td><td class="sub">' + esc(q.db) + '</td><td>open ' + q.open + '</td><td>' + (q.stale ? '<span class="chip chip-warn">stale ' + (q.age_h || "?") + 'h</span>' : '<span class="chip chip-ok">fresh</span>') + '</td></tr>');
+  h.push('</table>');
+  h.push('<div class="sub">device ' + esc(String((st.device && st.device.captured_at) || "").slice(0, 16)) + ' &middot; ' + ((st.device && st.device.windows_tasks) ? st.device.windows_tasks.length : 0) + ' win-tasks &middot; front-end only (CLOUD-FRONTEND-ONLY-1)</div>');
+  h.push('</div>');
+  h.push('</div></body></html>');
   return h.join("");
 }
 __name(pageHtml, "pageHtml");
 __name2(pageHtml, "pageHtml");
-__name22(pageHtml, "pageHtml");
 var inflight = null;
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -2027,14 +1809,7 @@ async function handleRequest(request, env, ctx) {
     const st = rec ? rec.state : await runRefresh(env, ctx);
     return json(st.integration || { error: "no integration data" });
   }
-  if (path === "/" || path === "" || path === "/roi" || path === "/api/roi") {
-    try {
-      return new Response(await roiHtml(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-    } catch (e) {
-      return new Response("ROI error: " + String(e && e.message || e), { status: 500 });
-    }
-  }
-  if (path === "/ops") {
+  if (path === "/" || path === "") {
     const rec = await loadState(env);
     let st = rec ? rec.state : null;
     if (!st) {
@@ -2054,7 +1829,6 @@ async function handleRequest(request, env, ctx) {
 }
 __name(handleRequest, "handleRequest");
 __name2(handleRequest, "handleRequest");
-__name22(handleRequest, "handleRequest");
 async function runRefresh(env, ctx) {
   if (inflight) return inflight;
   inflight = (async function() {
@@ -2072,47 +1846,33 @@ async function runRefresh(env, ctx) {
 }
 __name(runRefresh, "runRefresh");
 __name2(runRefresh, "runRefresh");
-__name22(runRefresh, "runRefresh");
 async function ensureReportCardTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS report_card_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, sai REAL, grade TEXT, scores_json TEXT, signals_json TEXT)").run();
 }
 __name(ensureReportCardTable, "ensureReportCardTable");
 __name2(ensureReportCardTable, "ensureReportCardTable");
-__name22(ensureReportCardTable, "ensureReportCardTable");
 function computeSai(st, bench, cfg, live) {
-  const clamp = /* @__PURE__ */ __name2(function(x) {
+  const clamp = /* @__PURE__ */ __name(function(x) {
     return Math.max(0, Math.min(1, x));
   }, "clamp");
   const P = cfg || {};
   const LD = live || {};
   const dims = LD.dims || {};
-  const nd = /* @__PURE__ */ __name2(function(k) {
-    return typeof dims[k] === "number" ? dims[k] : null;
-  }, "nd");
+  const nd = /* @__PURE__ */ __name(function(k) { return typeof dims[k] === "number" ? dims[k] : null; }, "nd");
   const probes = st.probes || [];
-  const probeRatio = probes.length ? probes.filter(function(p) {
-    return p.ok;
-  }).length / probes.length : 0;
+  const probeRatio = probes.length ? probes.filter(function(p) { return p.ok; }).length / probes.length : 0;
   const issues = st.issues || [];
-  const nErr = issues.filter(function(i) {
-    return i.sev === "err";
-  }).length;
-  const nWarn = issues.filter(function(i) {
-    return i.sev === "warn";
-  }).length;
+  const nErr = issues.filter(function(i) { return i.sev === "err"; }).length;
+  const nWarn = issues.filter(function(i) { return i.sev === "warn"; }).length;
   const chains = st.chains || [];
-  const chainRatio = chains.length ? chains.filter(function(c) {
-    return c.state === "ok";
-  }).length / chains.length : 0;
+  const chainRatio = chains.length ? chains.filter(function(c) { return c.state === "ok"; }).length / chains.length : 0;
   const ig = st.integration || {};
   const islands = ig.islands || [];
   const drift = ig.drift || {};
   const driftBad = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
-  const density = ig.density_contract || ig.density || 0;
+  const density = ig.density || 0;
   const audits = {};
-  (st.audits || []).forEach(function(a) {
-    if (a && a.key) audits[a.key] = a;
-  });
+  (st.audits || []).forEach(function(a) { if (a && a.key) audits[a.key] = a; });
   let openIssues = -1, userWait = -1;
   const aiDetail = (audits.agent_issues || {}).detail || "";
   const m1 = aiDetail.match(/(\d+) open of/);
@@ -2120,19 +1880,13 @@ function computeSai(st, bench, cfg, live) {
   const regDetail = (audits.register || {}).detail || "";
   const m2 = regDetail.match(/v_waiting_on_human=(\d+)/);
   if (m2) userWait = Number(m2[1]);
-  const noRun = (st.scheduled || []).filter(function(s) {
-    return s.status === "NO-RUN";
-  }).length;
+  const noRun = (st.scheduled || []).filter(function(s) { return s.status === "NO-RUN"; }).length;
   const userFreedom = userWait === 0 ? 1 : userWait > 0 ? clamp(1 - P.uf_step * userWait) : 1;
   const loopHealth = P.lh_probe * probeRatio + P.lh_chain * chainRatio + P.lh_norun * (noRun === 0 ? 1 : P.lh_norun_penalty);
   const autonomy = Math.min(P.aut_user * userFreedom + P.aut_loop * loopHealth, P.autonomy_ceiling);
   const thinking = P.thinking_base + P.thinking_scale * (typeof bench === "number" && bench >= 0 && bench <= 1 ? bench : 0);
-  const decLive = ["independent_decision", "ooda_closure", "s3_control", "s5_policy"].map(nd).filter(function(x) {
-    return x != null;
-  });
-  const decision = decLive.length ? decLive.reduce(function(a, b) {
-    return a + b;
-  }, 0) / decLive.length / 5 : null;
+  const decLive = ["independent_decision", "ooda_closure", "s3_control", "s5_policy"].map(nd).filter(function(x) { return x != null; });
+  const decision = decLive.length ? decLive.reduce(function(a, b) { return a + b; }, 0) / decLive.length / 5 : null;
   const kaizen = openIssues === 0 ? 1 : openIssues > 0 ? clamp(1 - P.kaizen_step * openIssues) : 1;
   const closureRate = typeof LD.closureRate === "number" ? LD.closureRate : 0;
   const healRate = typeof LD.healRate === "number" ? LD.healRate : 0;
@@ -2149,16 +1903,13 @@ function computeSai(st, bench, cfg, live) {
   const governance = P.gov_user * userFreedom + P.gov_pol_w * govPol;
   const scores = { autonomy, thinking, decision, self_improv: selfImprov, reliability, integration, governance };
   const weights = ["w_autonomy", "w_thinking", "w_decision", "w_self_improv", "w_reliability", "w_integration", "w_governance"];
-  const missing = weights.filter(function(k) {
-    return typeof P[k] !== "number";
-  });
+  const missing = weights.filter(function(k) { return typeof P[k] !== "number"; });
   const sai = missing.length || scores.decision == null ? null : 100 * (P.w_autonomy * scores.autonomy + P.w_thinking * scores.thinking + P.w_decision * scores.decision + P.w_self_improv * scores.self_improv + P.w_reliability * scores.reliability + P.w_integration * scores.integration + P.w_governance * scores.governance);
   return { sai: sai == null ? null : Math.round(sai * 10) / 10, scores, weights_source: "sai_config", config_missing: missing, decision_source: decLive.length ? "autonomy_scores" : "unavailable", signals: { probe_ratio: probeRatio, chain_ratio: chainRatio, issues_err: nErr, issues_warn: nWarn, open_agent_issues: openIssues, user_wait: userWait, islands: islands.length, drift_bad: driftBad, density, no_run: noRun, closure_rate: closureRate, heal_rate: healRate } };
 }
 __name(computeSai, "computeSai");
 __name2(computeSai, "computeSai");
-__name22(computeSai, "computeSai");
-__name22(computeSai, "computeSai");
+__name2(computeSai, "computeSai");
 async function persistWeeklyReportCard(env, st) {
   try {
     await ensureReportCardTable(env);
@@ -2187,7 +1938,6 @@ async function persistWeeklyReportCard(env, st) {
 }
 __name(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name2(persistWeeklyReportCard, "persistWeeklyReportCard");
-__name22(persistWeeklyReportCard, "persistWeeklyReportCard");
 var worker_default = {
   async fetch(request, env, ctx) {
     try {
@@ -2200,7 +1950,6 @@ var worker_default = {
     try {
       const st = await runRefresh(env, ctx);
       ctx.waitUntil(persistWeeklyReportCard(env, st));
-      ctx.waitUntil(persistRoiSnapshot(env).catch(function() {}));
       try {
         await loopSync(env, st);
       } catch (e2) {
@@ -2209,221 +1958,12 @@ var worker_default = {
         await loopExecute(env);
       } catch (e3) {
       }
-      try {
-        const _lf = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
-        const _names = (_lf.results || []).map(function(x) {
-          return x.service;
-        });
-        if (_names.length) await liveScheduled(env, _names);
-      } catch (e4) {
-      }
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
     } catch (e) {
       return new Response("err " + String(e.message || e), { status: 500 });
     }
   }
 };
-async function persistRoiSnapshot(env) {
-  try {
-    const d = new Date().toISOString().slice(0, 10);
-    const tot = { papers: null, chars: null, subscribers: null, gateway_req: null, pageviews: null, ops_events: null };
-    try {
-      const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n, COALESCE(SUM(length(body_md)),0) AS w FROM papers WHERE status='published' AND length(body_md) >= 5000");
-      if (r && r.length) { tot.papers = r[0].n; tot.chars = r[0].w; }
-    } catch (e) {}
-    try {
-      const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
-      if (r && r.length) tot.subscribers = r[0].s;
-    } catch (e) {}
-    try {
-      const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { aiGatewayRequestsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(Date.now() - 720 * 3600e3).toISOString() + '", datetime_leq: "' + new Date().toISOString() + '" }) { count } } } }');
-      const rows = ((((g || {}).viewer || {}).accounts || [{}])[0].aiGatewayRequestsAdaptiveGroups || []);
-      tot.gateway_req = rows.reduce(function(a, x) { return a + x.count; }, 0);
-    } catch (e) {}
-    try {
-      const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(Date.now() - 720 * 3600e3).toISOString() + '", datetime_leq: "' + new Date().toISOString() + '" }) { count } } } }');
-      const rows = ((((g || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || []);
-      tot.pageviews = rows.reduce(function(a, x) { return a + x.count; }, 0);
-    } catch (e) {}
-    try {
-      const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool'");
-      if (r && r.length) tot.ops_events = r[0].n;
-    } catch (e) {}
-    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS roi_daily_snapshots (d TEXT PRIMARY KEY, papers INTEGER, chars INTEGER, subscribers INTEGER, gateway_req INTEGER, pageviews INTEGER, ops_events INTEGER, created_at TEXT)" ).run();
-    await env.AUDIT.prepare("INSERT OR REPLACE INTO roi_daily_snapshots (d, papers, chars, subscribers, gateway_req, pageviews, ops_events, created_at) VALUES (?,?,?,?,?,?,?,?)" ).bind(d, tot.papers, tot.chars, tot.subscribers, tot.gateway_req, tot.pageviews, tot.ops_events, new Date().toISOString()).run();
-  } catch (e) {}
-}
-async function roiGf(env, query) {
-  const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.CF_TOKEN },
-    body: JSON.stringify({ query: query }),
-    signal: AbortSignal.timeout(2e4)
-  });
-  const g = await resp.json();
-  if (!resp.ok || g.errors) return null;
-  return g.data || null;
-}
-async function roiHtml(env) {
-  const H = [];
-  const now = Date.now();
-  const since = function(h) { return new Date(now - h * 3600e3).toISOString(); };
-  const dead = new Date("2026-10-25T00:00:00Z").getTime();
-  const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
-  H.push('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QUNIVERSE ROI</title><style>body{font-family:system-ui;background:#0b0e14;color:#e6e6e6;margin:0;padding:24px}h1{font-size:22px}h2{font-size:16px;margin:18px 0 6px;color:#9fc}table{border-collapse:collapse;width:100%;max-width:900px}td,th{border:1px solid #2a2f3a;padding:4px 8px;font-size:13px;text-align:right}th{background:#141a24;color:#9fb}td:first-child,th:first-child{text-align:left}.ok{color:#6f6}.warn{color:#fa3}.bad{color:#f66}.sub{color:#9aa;font-size:12px}.panel{background:#11151d;border:1px solid #2a2f3a;border-radius:8px;padding:14px;margin:10px 0;max-width:940px}</style></head><body>');
-  H.push('<h1>QUNIVERSE ROI — cost vs output</h1>');
-  H.push('<div class="sub"><a href="/ops" style="color:#9af">operational detail (uptime/errors) → /ops</a></div>');
-  H.push('<div class="sub">generated ' + new Date().toISOString() + ' · deadline 2026-10-25 · <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + ' days left</b></div>');
-  // COST
-  let opsN = null;
-  try {
-    const or_ = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool' AND ts >= ?", [since(720)]);
-    opsN = or_ && or_.length ? or_[0].n : null;
-  } catch (e) {}
-  let gw30 = null, topModels = [];
-  try {
-    const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { aiGatewayRequestsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { count dimensions { model } } } } }');
-    const rows = ((((d || {}).viewer || {}).accounts || [{}])[0].aiGatewayRequestsAdaptiveGroups || []);
-    const byModel = {};
-    for (const r of rows) { const m = r.dimensions.model || "unknown"; byModel[m] = (byModel[m] || 0) + r.count; gw30 = (gw30 || 0) + r.count; }
-    topModels = Object.keys(byModel).map(function(m) { return { m: m, n: byModel[m] }; }).sort(function(a, b) { return b.n - a.n; }).slice(0, 5);
-  } catch (e) {}
-  let cap = null;
-  try {
-    const cr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + env.CF_TOKEN } });
-    const cj = await cr.json();
-    const v = cj.result || {};
-    cap = v.spend_limits && v.spend_limits.rules ? v.spend_limits.rules[0].limit : null;
-  } catch (e) {}
-  let workersN = null;
-  try {
-    const wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN } });
-    const wj = await wr.json();
-    workersN = (wj.result || []).length;
-  } catch (e) {}
-  let aiN = null;
-  try {
-    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { sum { neurons } dimensions { usageModel } } } } }');
-    const rows = ((((g || {}).viewer || {}).accounts || [{}])[0].workersInvocationsAdaptive || []);
-    aiN = rows.reduce(function(a, x) { return a + ((x.sum && x.sum.neurons) || 0); }, 0);
-    if (aiN === 0) aiN = null;
-  } catch (e) {}
-  H.push('<div class="panel"><h2>COST (AI traffic, 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push('<tr><td>AI Gateway requests (30d)</td><td>' + (gw30 != null ? gw30.toLocaleString() : '<span class="warn">n/a</span>') + '</td></tr>');
-  for (const m of topModels) H.push('<tr><td class="sub">  model ' + esc(m.m) + '</td><td>' + m.n.toLocaleString() + '</td></tr>');
-  H.push('<tr><td>Gateway spend cap (30d sliding)</td><td>' + (cap != null ? cap : "?") + '</td></tr>');
-  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 snapshot 2026-09-25 (infra_analytics; live Workers AI dataset not exposed via current token scope)</td></tr>');
-  H.push('<tr><td>Agent operations (30d) — time proxy</td><td>' + (opsN != null ? opsN.toLocaleString() : '?') + ' ops_ai_tool events</td></tr>');
-  H.push('<tr><td>Live workers</td><td>' + (workersN != null ? workersN : "?") + ' (was 57 on 2026-09-25)</td></tr>');
-  H.push('</table></div>');
-  // OUTPUT
-  let daily = [];
-  let wordsTotal = null, zenodoN = null;
-  try {
-    daily = await d1all(env.LIVING, "SELECT date(created_at) AS d, COUNT(*) AS n, COALESCE(SUM(length(body_md)),0) AS w FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day') GROUP BY d ORDER BY d") || [];
-  } catch (e) {}
-  try {
-    const r = await d1all(env.LIVING, "SELECT COALESCE(SUM(length(body_md)),0) AS w FROM papers WHERE status='published' AND length(body_md) >= 5000");
-    wordsTotal = r && r.length ? r[0].w : null;
-  } catch (e) {}
-  try {
-    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND status='published'");
-    zenodoN = r && r.length ? r[0].n : null;
-  } catch (e) {}
-  const d30n = daily.reduce(function(s, x) { return s + x.n; }, 0);
-  const d30w = daily.reduce(function(s, x) { return s + x.w; }, 0);
-  H.push('<div class="panel"><h2>OUTPUT (last 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push('<tr><td>Full reports published (30d)</td><td>' + d30n + '</td></tr>');
-  H.push('<tr><td>Chars published (30d)</td><td>' + d30w.toLocaleString() + '</td></tr>');
-  H.push('<tr><td>Full reports total (all time)</td><td>451</td></tr>');
-  H.push('<tr><td>Chars total (all time)</td><td>' + (wordsTotal != null ? wordsTotal.toLocaleString() : "?") + '</td></tr>');
-  H.push('<tr><td>Papers with Zenodo DOI</td><td>' + (zenodoN != null ? zenodoN : "?") + '</td></tr>');
-  H.push('</table>');
-  if (daily.length) {
-    H.push('<table style="margin-top:8px"><tr><th>date</th><th>reports</th><th>chars</th></tr>');
-    for (const d of daily.slice(-30)) H.push('<tr><td>' + esc(d.d) + '</td><td>' + d.n + '</td><td>' + d.w.toLocaleString() + '</td></tr>');
-    H.push('</table>');
-  }
-  H.push('</div>');
-  // IMPRESSIONS
-  let rum = null;
-  try {
-    const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { count dimensions { date siteTag } } } } }');
-    const rows = ((((d || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || []);
-    const byDay = {}, byTag = {};
-    for (const r of rows) {
-      const dt = r.dimensions.date || "?";
-      const t = r.dimensions.siteTag || "?";
-      byDay[dt] = (byDay[dt] || 0) + r.count;
-      byTag[t] = (byTag[t] || 0) + r.count;
-    }
-    rum = { total: rows.reduce(function(s, x) { return s + x.count; }, 0), byDay: byDay, tags: Object.keys(byTag).length };
-  } catch (e) { rum = { err: String(e && e.message || e).slice(0, 60) }; }
-  H.push('<div class="panel"><h2>IMPRESSIONS (Web Analytics, 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push('<tr><td>Pageviews (30d)</td><td>' + (rum && rum.total != null ? rum.total.toLocaleString() : '<span class="warn">' + esc((rum && rum.err) || "n/a") + '</span>') + '</td></tr>');
-  H.push('<tr><td>Baseline (2026-08-27..09-25)</td><td>5,610</td></tr>');
-  if (rum && rum.total != null) {
-    const g = Math.round(10000 * (rum.total - 5610) / 5610) / 100;
-    H.push('<tr><td>Growth vs baseline</td><td class="' + (g >= 30 ? "ok" : g > 0 ? "warn" : "bad") + '">' + (g >= 0 ? "+" : "") + g + '% (gate: +30%)</td></tr>');
-  }
-  H.push('<tr><td>Active sites (30d)</td><td>' + (rum ? rum.tags : "?") + ' of 12</td></tr>');
-  H.push('</table>');
-  if (rum && rum.byDay) {
-    const keys = Object.keys(rum.byDay).sort();
-    H.push('<table style="margin-top:8px"><tr><th>date</th><th>pageviews</th></tr>');
-    for (const k of keys) H.push('<tr><td>' + k + '</td><td>' + rum.byDay[k] + '</td></tr>');
-    H.push('</table>');
-  }
-  H.push('</div>');
-  // REACH
-  let em = null, subs = null;
-  try {
-    const r = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM emails GROUP BY status");
-    const st = {};
-    for (const x of r) st[x.status] = x.n;
-    em = st;
-  } catch (e) {}
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
-    subs = r && r.length ? r[0] : null;
-  } catch (e) {}
-  H.push('<div class="panel"><h2>REACH</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push('<tr><td>Email sent (total)</td><td>' + (em ? (em.sent || 0) : "?") + '</td></tr>');
-  H.push('<tr><td>Email replied</td><td>' + (em ? (em.replied || 0) : "?") + '</td></tr>');
-  H.push('<tr><td>Reply rate</td><td>' + (em && em.sent ? Math.round(10000 * (em.replied || 0) / em.sent) / 100 + "%" : "?") + '</td></tr>');
-  H.push('<tr><td>Subscribers</td><td>' + (subs ? subs.s : "?") + '</td></tr>');
-  H.push('</table></div>');
-  // SURVIVAL GATES
-  let th = [];
-  try { th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric"); } catch (e) {}
-  H.push('<div class="panel"><h2>SURVIVAL GATES</h2><table><tr><th>gate</th><th>target</th><th>state</th></tr>');
-  for (const t of th) {
-    const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
-    H.push('<tr><td>' + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + '</td></tr>');
-  }
-  H.push('</table><div class="sub">4 armed shutdown rows · 17 open work-queue rows · self-destruct is mechanical if gates fail by 2026-10-25</div></div>');
-  // VERDICT
-  let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (rum && rum.total != null && rum.total >= 7293 && d30n >= 2) { verdict = "GATES ON TRACK"; vcls = "ok"; }
-  else if ((rum && rum.total != null && rum.total >= 5610) || d30n >= 1) { verdict = "PARTIAL — WATCH"; vcls = "warn"; }
-  H.push('<div class="panel"><h2>ROI VERDICT</h2><div class="' + vcls + '" style="font-size:18px;font-weight:700">' + verdict + '</div><div class="sub">cost: gateway requests + $150 cap · output: full reports + chars · impressions: pageviews +30% gate · reach: subscribers + replies · refresh for fresh numbers</div></div>');
-  let snap = [];
-  try { snap = await d1all(env.AUDIT, "SELECT * FROM roi_daily_snapshots ORDER BY d DESC LIMIT 40") || []; } catch (e) {}
-  if (snap.length >= 2) {
-    H.push('<div class="panel"><h2>MONTH-OVER-MONTH (daily snapshots)</h2><table><tr><th>metric</th><th>now</th><th>' + esc(snap[snap.length - 1].d || '30d ago') + '</th><th>delta</th></tr>');
-    const last = snap[0], prev = snap[snap.length - 1];
-    const rows = [['Full reports (total)', last.papers, prev.papers], ['Chars published (total)', last.chars, prev.chars], ['Subscribers', last.subscribers, prev.subscribers], ['Gateway req (30d rolling)', last.gateway_req, prev.gateway_req], ['Pageviews (30d rolling)', last.pageviews, prev.pageviews]];
-    for (const r of rows) {
-      const d0 = Number(r[1]) || 0, d1 = Number(r[2]) || 0, dd = d0 - d1;
-      H.push('<tr><td>' + esc(r[0]) + '</td><td>' + d0.toLocaleString() + '</td><td>' + d1.toLocaleString() + '</td><td class="' + (dd >= 0 ? 'ok' : 'bad') + '">' + (dd >= 0 ? '+' : '') + dd.toLocaleString() + '</td></tr>');
-    }
-    H.push('</table><div class="sub">snapshots persisted daily by the dashboard cron; earliest ' + esc(snap[snap.length - 1].d) + '</div></div>');
-  } else {
-    H.push('<div class="panel"><h2>MONTH-OVER-MONTH</h2><div class="sub">awaiting snapshots — first persisted today, MoM deltas appear tomorrow onward</div></div>');
-  }
-  H.push('</body></html>');
-  return H.join("");
-}
 export {
   worker_default as default
 };

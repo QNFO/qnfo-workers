@@ -1,0 +1,25 @@
+name = "personal-events-radar"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[triggers]
+crons = ["30 5 * * 2"]
+
+[[d1_databases]]
+binding = "AUDIT_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[[d1_databases]]
+binding = "PERSONAL_DB"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
+[[services]]
+binding = "CAL_API"
+service = "calendar-api"
+
+[[services]]
+binding = "OBSIDIAN_WRITER"
+service = "obsidian-writer"

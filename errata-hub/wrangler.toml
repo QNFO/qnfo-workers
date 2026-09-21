@@ -1,0 +1,37 @@
+name = "errata-hub"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)
+[ai]
+binding = "AI"
+
+[[browser]]
+binding = "BROWSER"
+
+[[d1_databases]]
+binding = "GRAPH_DB"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+[[r2_buckets]]
+binding = "MIRROR"
+bucket_name = "qnfo-releases"
+
+[[d1_databases]]
+binding = "PAPERS_DB"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[d1_databases]]
+binding = "WATCH_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# send_email binding: cannot be expressed in wrangler.toml (CF-managed Email Routing)
+# Set via CF dashboard: Workers > errata-hub > Settings > Email Bindings > SEND_EMAIL
+
+# Secrets (set via wrangler secret put):
+# ERRATA_TOKEN
+# ZENODO_TOKEN

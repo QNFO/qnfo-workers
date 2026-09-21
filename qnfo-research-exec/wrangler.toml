@@ -35,9 +35,9 @@ database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 binding = "PDF_SVC"
 service = "qnfo-pdf"
 
-# Cron: research pipeline drain (hourly — reorg 2026-09-25)
+# Cron: research pipeline drain (10-min cadence, matches prior API schedule)
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/10 * * * *"]
 
 [observability]
 enabled = true

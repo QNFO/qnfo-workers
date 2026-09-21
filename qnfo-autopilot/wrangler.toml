@@ -1,0 +1,45 @@
+name = "qnfo-autopilot"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+# qnfo-autopilot v0.3.1 - L4 decide-loop: fleet's own deferred-work executor.
+# Purpose: drain the open-work queue autonomously (overdue census -> receipts), snapshot per-worker
+# activity into D1, and self-report daily. This is the answer to "stop deferring to future agent sessions".
+# Canonical source: QNFO/qnfo-workers/qnfo-autopilot/worker.js
+# Cron: hourly at :05 (cloud layer).
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+[triggers]
+crons = ["5 * * * *"]
+
+[ai]
+binding = "AI"
+
+# SERVICE-BINDING-1 (2026-09-10): synchronous runtime-verify for seed workers.
+# Service bindings bypass egress->workers.dev=1042 (same-account workers.dev fetch 404s from a Worker).
+# SB_CITATION_WATCH removed 2026-09-15: qnfo-citation-watch no longer deployed (worker consolidation);
+# binding was never referenced in code (verified by grep) and blocked every redeploy (API code 10144).
+[[services]]
+binding = "SB_EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+[[services]]
+binding = "SB_AI_SEARCH"
+service = "qnfo-ai-search"
+environment = "production"
+
+[[services]]
+binding = "SB_OBSIDIAN"
+service = "obsidian-writer"
+environment = "production"
+
+[[services]]
+binding = "SB_LIFECYCLE"
+service = "qnfo-lifecycle"
+environment = "production"
