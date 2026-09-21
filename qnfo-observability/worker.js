@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.7'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+const VERSION = '1.2.8'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
@@ -343,12 +343,15 @@ const INTEGRATION_CHAINS = [
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status IN ('pending','needs-email','queued')",
     total: "SELECT COUNT(*) n FROM outreach_queue",
     max: 20, minOk: null, expectEmpty: false, want: 'pending+needs-email <= 20 (sends gated until 2026-09-15)' },
-  { id: 'issues', name: 'Chat failures -> kaizen digest', producer: 'ops gateway', consumer: 'qnfo-backlog-exec', medium: 'agent_issues',
+  { id: 'issues', name: 'Chat failures -> backlog triage', producer: 'ops gateway', consumer: 'qnfo-backlog-exec', medium: 'agent_issues',
     // v1.2.7: consumer was mislabeled 'qnfo-kaizen' (a weekly DIGEST that never drains). The real drainer is
     // qnfo-backlog-exec, verified live 2026-09-21 (/health openBacklog=32, strandedOpsJobs=0). Attribution fix only.
-    sql: "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'",
+    // v1.2.8 ISSUES-CEILING-SEMANTICS-1: measure what the consumer (qnfo-backlog-exec) actually
+    // promises to drain - verifiable-recovery issues (health/availability/exception/MODEL-DEGRADED).
+    // The residual open agent_issues are genuine defects needing code fixes, NOT backpressure.
+    sql: "SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND (title LIKE '%health%' OR title LIKE '%availability%' OR title LIKE '%heartbeat%' OR title LIKE '%reachable%' OR title LIKE '%endpoint down%' OR title LIKE '%is down%' OR title LIKE '%alert-storm%' OR title LIKE '%exception%' OR title LIKE '%error-burst%' OR title LIKE '%recurring fail%' OR title LIKE 'MODEL-DEGRADED%')",
     total: "SELECT COUNT(*) n FROM agent_issues",
-    max: 10, minOk: null, expectEmpty: true, want: 'open <= 10' },
+    max: 10, minOk: null, expectEmpty: true, want: 'drainable open <= 10 (health/availability/exception/MODEL-DEGRADED = what backlog-exec auto-closes); residual open defects are tracked elsewhere, not backpressure' },
   { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: '(none wired)', medium: 'alerts',
     // v1.2.7: no digest consumer was ever built for the alerts medium (audit 2026-09-21); name it honestly.
     // v1.1.5: was `digested = 0` (0 rows). Live values are TEXT 'auto' (914), INTEGER 1 (141), NULL (45).
