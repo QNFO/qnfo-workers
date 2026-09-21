@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.6-toolmode";
+var VERSION = "4.1.7-toolmode";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1032,6 +1032,22 @@ async function buildBrief(env, withSummary) {
     notes: { recent: notes.results || [] },
     habits: habits.habits || []
   };
+  try {
+    const _exRows = await env.PERSONAL.prepare("SELECT title, venue, start_date FROM events WHERE start_date >= ?1 AND start_date <= ?2 ORDER BY start_date LIMIT 30").bind(date, next7).all();
+    const _havCal = new Set();
+    for (const s2 of brief.calendar.today || []) _havCal.add(String(s2.title || "").slice(0, 60).toLowerCase());
+    for (const s2 of brief.calendar.tomorrow || []) _havCal.add(String(s2.title || "").slice(0, 60).toLowerCase());
+    for (const e of (_exRows.results || [])) {
+      const _k = String(e.title || "").slice(0, 60).toLowerCase();
+      if (_havCal.has(_k)) continue;
+      _havCal.add(_k);
+      const _ev = { title: e.title, location: e.venue, dtstart: String(e.start_date || "").slice(0, 10), source: "personal-life", status: "confirmed" };
+      const _d = _ev.dtstart;
+      if (_d === date) brief.calendar.today.push(_ev);
+      else if (_d === tomorrow) brief.calendar.tomorrow.push(_ev);
+      else brief.calendar.upcoming7.push(_ev);
+    }
+  } catch (e) {}
   if (withSummary) {
     brief.summary = await briefNarrative(env, brief);
     if (brief.summary === null) brief.summary_degraded = true;
