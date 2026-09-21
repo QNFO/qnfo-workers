@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.6.0";
+var VERSION = "1.7.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1840,11 +1840,70 @@ var worker_default = {
           }
         }
         await steward(env);
+        if (utcHour >= 6) await sendMorningBrief(env);
       } catch (e) {
       }
     })());
   }
 };
+async function sendMorningBrief(env) {
+  try {
+    await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_morning_brief (date TEXT PRIMARY KEY, sent_at TEXT NOT NULL)").run();
+    var day = amsDayKey(/* @__PURE__ */ new Date());
+    var already = await env.PERSONAL.prepare("SELECT date FROM companion_morning_brief WHERE date = ?").bind(day).first();
+    if (already) return { ok: true, skipped: "already sent" };
+    var br = await env.PERSONAL.prepare("SELECT payload FROM daily_briefs WHERE date = ?").bind(day).first();
+    if (!br || !br.payload) return { ok: true, skipped: "no brief yet" };
+    var b = null;
+    try { b = JSON.parse(br.payload); } catch (e) { return { ok: false, error: "parse" }; }
+    if (!b) return { ok: true, skipped: "empty" };
+    var L = [];
+    L.push("Morning - " + day);
+    L.push("");
+    if (b.weather && b.weather.text) L.push("Weather: " + b.weather.text);
+    var today = (b.calendar && b.calendar.today) || [];
+    L.push("");
+    if (today.length) {
+      L.push("Today:");
+      for (var i = 0; i < today.length; i++) {
+        var e = today[i];
+        L.push("- " + (e.title || "") + (e.location ? " @ " + e.location : "") + (e.dtstart ? " (" + String(e.dtstart).slice(0, 10) + ")" : ""));
+      }
+    } else {
+      L.push("Today: nothing scheduled.");
+    }
+    var tasks = (b.open && b.open.tasks) || [];
+    if (tasks.length) {
+      L.push("");
+      L.push("Open tasks:");
+      for (var j = 0; j < tasks.length; j++) L.push("- " + (tasks[j].title || ""));
+    }
+    var up = (b.calendar && b.calendar.upcoming7) || [];
+    var ups = [];
+    for (var k = 0; k < up.length && k < 6; k++) {
+      var u = up[k];
+      if (today.length && u && u.id && today[0].id === u.id) continue;
+      ups.push("- " + (u.title || "") + (u.location ? " @ " + u.location : "") + (u.dtstart ? " (" + String(u.dtstart).slice(0, 10) + ")" : ""));
+    }
+    if (ups.length) {
+      L.push("");
+      L.push("Coming up:");
+      for (var m = 0; m < ups.length; m++) L.push(ups[m]);
+    }
+    L.push("");
+    L.push("Calendar feed: https://pub-7e5e6cd48f4b43ebb55a5ee25093cb71.r2.dev/calendar/personal-9582049ba1bb4d2a835ae709.ics");
+    var body = L.join(NL);
+    var r = await sendOne(env, "rwnquni@outlook.com", "Morning - " + day, body);
+    if (r && r.ok) {
+      await env.PERSONAL.prepare("INSERT INTO companion_morning_brief (date, sent_at) VALUES (?, ?)").bind(day, (/* @__PURE__ */ new Date()).toISOString()).run();
+    }
+    return r;
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(sendMorningBrief, "sendMorningBrief");
+
 async function steward(env) {
   try {
     await ensureSchema(env);
