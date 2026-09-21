@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.1"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.2"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -484,7 +484,9 @@ function stableKey(category, text) {
     subj = m >= 0 ? t.slice(m + 6).split(" ")[0].split(":")[0] : t.slice(0, 30);
   } else if (category === "integration-chain") {
     const m = t.indexOf("Integration chain ");
-    subj = m >= 0 ? t.slice(m + 18).split(" (")[0] : t.slice(0, 30);
+    subj = m >= 0 ? t.slice(m + 18).split(": stuck")[0].split(": stale")[0].split(" (")[0].trim().slice(0, 80) : t.slice(0, 30);
+  } else if (category === "scheduled-no-run") {
+    subj = "scheduled-no-run";
   } else if (category === "probe") {
     const m = t.indexOf("probe ");
     subj = m >= 0 ? "probe:" + t.slice(m + 6).split(" ")[0] : t.slice(0, 30);
@@ -770,7 +772,10 @@ async function dispatchIssue(env, i, gh_number) {
   const action = i.remediation && i.remediation.suggested_action || "manual";
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   try {
-    await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,?,?)").bind("fleet-issue", i.id, "[auto] " + action + " :: " + String(i.detail || "").slice(0, 200), ts, "dispatched").run();
+    // CHAIN-FLAP-NO-EPISODE-DEDUP-1 (2026-09-21): suppress a repeat [auto] row while an
+    // identical ref is already 'dispatched' - one open episode per signal, not one per cycle.
+    const dup = await env.AUDIT.prepare("SELECT id FROM self_heal_actions WHERE kind='fleet-issue' AND ref=? AND status='dispatched' LIMIT 1").bind(i.id).first();
+    if (!dup) await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,?,?)").bind("fleet-issue", i.id, "[auto] " + action + " :: " + String(i.detail || "").slice(0, 200), ts, "dispatched").run();
   } catch (e) {
   }
   try {
