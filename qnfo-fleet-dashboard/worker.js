@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.2"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.3"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -772,10 +772,11 @@ async function dispatchIssue(env, i, gh_number) {
   const action = i.remediation && i.remediation.suggested_action || "manual";
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   try {
-    // CHAIN-FLAP-NO-EPISODE-DEDUP-1 (2026-09-21): suppress a repeat [auto] row while an
-    // identical ref is already 'dispatched' - one open episode per signal, not one per cycle.
-    const dup = await env.AUDIT.prepare("SELECT id FROM self_heal_actions WHERE kind='fleet-issue' AND ref=? AND status='dispatched' LIMIT 1").bind(i.id).first();
-    if (!dup) await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,?,?)").bind("fleet-issue", i.id, "[auto] " + action + " :: " + String(i.detail || "").slice(0, 200), ts, "dispatched").run();
+    // CHAIN-FLAP-NO-EPISODE-DEDUP-1 (2026-09-21): one open episode per signal. The prior
+    // SELECT-then-INSERT raced under two concurrent loopSync invocations (v1.7.2 shipped a
+    // double row at 11:00:29Z). This ATOMIC conditional INSERT closes the race - verified
+    // directly against D1 (run 1 changes=1, run 2 changes=0).
+    await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) SELECT ?, ?, ?, ?, 'dispatched' WHERE NOT EXISTS (SELECT 1 FROM self_heal_actions WHERE kind='fleet-issue' AND ref=? AND status='dispatched')").bind("fleet-issue", i.id, "[auto] " + action + " :: " + String(i.detail || "").slice(0, 200), ts, i.id).run();
   } catch (e) {
   }
   try {
