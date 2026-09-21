@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.0"; // ONE-SCREEN-1 (2026-09-19): single-viewport layout + fleet topology graph (nodes/edges)
+var VERSION = "1.7.1"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1336,8 +1336,32 @@ function depNamesOf(raw) {
   }
   const list = Array.isArray(arr) ? arr : [arr];
   for (const d of list) {
-    const m = String(d).match(/[a-z0-9][a-z0-9._-]{2,}/i);
+    // SYMBOLIC-DEP-RESOLVE-1 (issue 923): a dep may be a prefixed contract token
+    // (service:X, consumed-by:X, d1:X, r2:X, cron:X). The TARGET is the part AFTER the
+    // first colon; the old first-token match returned the PREFIX (service:X -> "service"),
+    // so contract edges were invisible and contract-integrated workers became false islands.
+    const entry = String(d);
+    const ci = entry.indexOf(":");
+    const tail = ci >= 0 ? entry.slice(ci + 1) : entry;
+    const m = String(tail).match(/[a-z0-9][a-z0-9._-]{2,}/i);
     if (m) out.push(m[0].toLowerCase());
+  }
+  return out;
+}
+function contractDepsOf(raw) {
+  // Count deps that are DATA-CONTRACT edges to a non-worker medium (D1/R2/Vectorize/KV/cron/AI),
+  // so a worker integrated only via a data contract is not misreported as an island (issue 923).
+  const out = [];
+  if (!raw) return out;
+  let arr;
+  try { arr = JSON.parse(raw); } catch (e) { arr = String(raw).split(/[,;]/); }
+  const list = Array.isArray(arr) ? arr : [arr];
+  for (const d of list) {
+    const entry = String(d).trim();
+    const ci = entry.indexOf(":");
+    if (ci <= 0) continue;
+    const prefix = entry.slice(0, ci).toLowerCase();
+    if (/^(d1|r2|vectorize|kv|queue|cron|ai|send_email)$/.test(prefix)) out.push(prefix);
   }
   return out;
 }
@@ -1397,7 +1421,7 @@ async function integrationView(env, liveNames) {
     let vstate = "ok";
     if (!version || version === "null" || version === "undefined") vstate = "unversioned";
     else if (!semver.test(version)) vstate = "non-semver";
-    nodes.push({ service: svc, kind: String(r.kind || ""), version, vstate, live: liveSet.size ? liveSet.has(svc) : true, deps: depNamesOf(r.deps) });
+    nodes.push({ service: svc, kind: String(r.kind || ""), version, vstate, live: liveSet.size ? liveSet.has(svc) : true, deps: depNamesOf(r.deps), contract: contractDepsOf(r.deps) });
   }
   const regLower = new Set(Array.from(regSet).map(function(n) {
     return n.toLowerCase();
@@ -1420,9 +1444,11 @@ async function integrationView(env, liveNames) {
   const deg = /* @__PURE__ */ __name2(function(s) {
     return { out: outbound.get(s) || 0, in: inbound.get(s) || 0 };
   }, "deg");
+  let contractEdgeCount = 0;
+  for (const n of nodes) { if (n.contract && n.contract.length) contractEdgeCount += n.contract.length; }
   const islands = nodes.filter(function(n) {
     const d = deg(n.service);
-    return d.out === 0 && d.in === 0;
+    return d.out === 0 && d.in === 0 && (!n.contract || n.contract.length === 0);
   }).map(function(n) {
     return n.service;
   });
@@ -1457,6 +1483,7 @@ async function integrationView(env, liveNames) {
     registered: nodes.length,
     live: liveNames ? liveNames.length : null,
     edges: edges.length,
+    contract_edges: contractEdgeCount,
     edge_list: edges.slice(0, 500),
     density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
     islands,
