@@ -3,14 +3,14 @@
  * Semantic (Vectorize) indexer for the Obsidian vault (single source of truth = obsidian-vault R2).
  * Reads note docs -> chunk -> embed (@cf/baai/bge-base-en-v1.5, 768d) -> upsert Vectorize personal-life
  * + personal-life D1 files/chunks. Feeds the personal-twin RAG. Runs on cron every 5 minutes.
- * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 400 per run, parallel embed (8x), batched upserts.
+ * CPU-safe: full GET bounded, chunks max 24 per doc, docs max 250 per run, parallel embed (8x), batched upserts.
  * v0.1.3: parallel embedding; stale-row reconcile (legacy orphans removed); vault_indexer_runs log; POST /drain.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.4";
+var VERSION = "0.1.5";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 20;
-var MAX_DOCS = 400;
+var MAX_DOCS = 250;
 var MAX_BYTES = 262144;
 var CHUNK_SIZE = 900;
 var CHUNK_OVERLAP = 120;
