@@ -7,7 +7,7 @@
  * v0.1.3: parallel embedding; stale-row reconcile (legacy orphans removed); vault_indexer_runs log; POST /drain.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.3";
+var VERSION = "0.1.4";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 20;
 var MAX_DOCS = 400;
@@ -24,6 +24,7 @@ var MD_RE = /\.(md|markdown|mdx|txt)$/i;
 
 function json(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } }); }
 function basename(k) { var p = k.split("/"); return p[p.length - 1] || k; }
+function chunkArr(a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
 function extOf(key) { var i = key.lastIndexOf("."); return i >= 0 ? key.slice(i + 1).toLowerCase() : ""; }
 function sanitize(s, max) { return String(s || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ").replace(/[\uD800-\uDFFF]/g, "").trim().slice(0, max || 800); }
 
