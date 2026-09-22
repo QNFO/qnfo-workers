@@ -12,9 +12,10 @@
  * v0.1.10: range-read oversized docs (partial index instead of blanket skip) + record a files row for content-short docs so they leave the `changed` set (fixes perpetual head-blocking).
  * v0.1.11: EMBED_CONCURRENCY 5 -> 3 (reduce Workers AI 2003 rate-limit pressure, which coexists with the 2045 spend wall).
  * v0.1.12: DIAGNOSTIC - record the keys that return null from getFull (the dominant skip branch) into run notes; root-causing the head-blocking.
+ * v0.1.13: STABILIZE - RUN_DEADLINE_MS (110s) bounds every run so it always completes/logs/releases the lock (fixes F7b lock starvation); retry budget tightened (3 attempts, backoff cap 3s). Reverts the v0.1.8 12s backoff that made adverse runs exceed the 4-min lock TTL.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.12";
+var VERSION = "0.1.13";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -24,6 +25,7 @@ var CHUNK_OVERLAP = 120;
 var MAX_CHUNKS = 24;
 var GET_CONCURRENCY = 16;
 var EMBED_CONCURRENCY = 3;
+var RUN_DEADLINE_MS = 110000;
 var PATH_PREFIX = "obsidian/";
 var SKIP_PREFIXES = [".obsidian/", "releases/", "Attachments/", "Archive/", ".git/"];
 var INGEST_ROOTS = ["notes/", "Inbox/", "Projects/", "Areas/", "Resources/"];
@@ -180,6 +182,7 @@ async function run(env, cap) {
 
   var prepared = new Array(work.length);
   for (var eb = 0; eb < work.length; eb += EMBED_CONCURRENCY) {
+    if (Date.now() - t0 > RUN_DEADLINE_MS) { s.notes.push("deadline-embed@" + eb); break; }
     var eslice = work.slice(eb, eb + EMBED_CONCURRENCY);
     await Promise.all(eslice.map(async function (w, k) {
       var idx = eb + k;
@@ -188,13 +191,13 @@ async function run(env, cap) {
       var chs = chunkText(text);
       if (chs.length === 0) { prepared[idx] = { skip: true, w: w }; return; }
       var resp = null, lastErr = "";
-      for (var attempt = 0; attempt < 5 && !resp; attempt++) {
+      for (var attempt = 0; attempt < 3 && !resp; attempt++) {
         try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
         catch (e) {
           lastErr = String((e && e.message) || e);
           var rt = /429|1010|rate.?limit|throttl|overload|503|502|504|busy|timeout/i.test(lastErr) && !/spend limit|2045|budget|quota/i.test(lastErr);
           if (!rt && attempt >= 1) break;
-          var backoff = Math.min(12000, 400 * Math.pow(2, attempt)) + Math.floor(Math.random() * 400);
+          var backoff = Math.min(3000, 400 * Math.pow(2, attempt)) + Math.floor(Math.random() * 400);
           await new Promise(function (r) { setTimeout(r, backoff); });
         }
       }
@@ -207,6 +210,7 @@ async function run(env, cap) {
   }
 
   for (var x = 0; x < work.length; x++) {
+    if (Date.now() - t0 > RUN_DEADLINE_MS) { s.notes.push("deadline-acct@" + x); break; }
     var p = prepared[x];
     if (p === null) { s.skipped++; continue; }
     if (p.skip) { s.skipped++; try { var sw = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'general',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(sw.path, extOf(sw.key), sw.obj.size, (sw.obj.uploaded ? sw.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(sw.key)).run(); } catch (e) {} continue; }
