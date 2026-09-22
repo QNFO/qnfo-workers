@@ -10,9 +10,10 @@
  * v0.1.8: exponential backoff + jitter embed retry (5x, retryable-only), VZ upsert retry, per-run error notes persisted to vault_indexer_runs.notes.
  * v0.1.9: retryable classification excludes AI Gateway spend-limit (2045) - a spend wall is non-retryable.
  * v0.1.10: range-read oversized docs (partial index instead of blanket skip) + record a files row for content-short docs so they leave the `changed` set (fixes perpetual head-blocking).
+ * v0.1.11: EMBED_CONCURRENCY 5 -> 3 (reduce Workers AI 2003 rate-limit pressure, which coexists with the 2045 spend wall).
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.10";
+var VERSION = "0.1.11";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -21,7 +22,7 @@ var CHUNK_SIZE = 900;
 var CHUNK_OVERLAP = 120;
 var MAX_CHUNKS = 24;
 var GET_CONCURRENCY = 16;
-var EMBED_CONCURRENCY = 5;
+var EMBED_CONCURRENCY = 3;
 var PATH_PREFIX = "obsidian/";
 var SKIP_PREFIXES = [".obsidian/", "releases/", "Attachments/", "Archive/", ".git/"];
 var INGEST_ROOTS = ["notes/", "Inbox/", "Projects/", "Areas/", "Resources/"];
