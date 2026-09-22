@@ -1,0 +1,13 @@
+name = "qnfo-artifacts"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# Cloudflare Artifacts (closed beta; access granted on account quniverse).
+# The namespace is fixed at bind time -- the worker never takes a namespace parameter.
+[[artifacts]]
+binding = "ARTIFACTS"
+namespace = "qnfo"
+
+[vars]
+ARTIFACTS_NAMESPACE = "qnfo"
