@@ -13,9 +13,10 @@
  * v0.1.11: EMBED_CONCURRENCY 5 -> 3 (reduce Workers AI 2003 rate-limit pressure, which coexists with the 2045 spend wall).
  * v0.1.12: DIAGNOSTIC - record the keys that return null from getFull (the dominant skip branch) into run notes; root-causing the head-blocking.
  * v0.1.13: STABILIZE - RUN_DEADLINE_MS (110s) bounds every run so it always completes/logs/releases the lock (fixes F7b lock starvation); retry budget tightened (3 attempts, backoff cap 3s). Reverts the v0.1.8 12s backoff that made adverse runs exceed the 4-min lock TTL.
+ * v0.1.14: F9 FIX - bound the embed phase at 0.65*RUN_DEADLINE_MS so the write phase always gets budget (v0.1.13's single deadline let the embed phase consume everything, so truncated runs wrote nothing).
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.13";
+var VERSION = "0.1.14";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -182,7 +183,7 @@ async function run(env, cap) {
 
   var prepared = new Array(work.length);
   for (var eb = 0; eb < work.length; eb += EMBED_CONCURRENCY) {
-    if (Date.now() - t0 > RUN_DEADLINE_MS) { s.notes.push("deadline-embed@" + eb); break; }
+    if (Date.now() - t0 > RUN_DEADLINE_MS * 0.65) { s.notes.push("deadline-embed@" + eb); break; }
     var eslice = work.slice(eb, eb + EMBED_CONCURRENCY);
     await Promise.all(eslice.map(async function (w, k) {
       var idx = eb + k;
