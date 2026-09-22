@@ -36,6 +36,9 @@ function subjectClean(subject) {
 __name(subjectClean, "subjectClean");
 async function sendRaw(env, from, to, subject, bodyText) {
   try {
+    // SUPPRESSION-1 (2026-09-22): honour opt-out before any send (fail-open on DB error).
+    const _db = env.QNFO_AUDIT || env.AUDIT_DB || env.AUDIT;
+    if (_db) { try { const _e = String(to).toLowerCase(); const _s = await _db.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(_e).first(); if (_s) return { ok: false, err: "suppressed", to: to }; const _l = await _db.prepare("SELECT suppress FROM contact_ledger WHERE lower(email)=?1").bind(_e).first(); if (_l && _l.suppress) return { ok: false, err: "suppressed", to: to }; } catch (_e) {} }
     const r = await env.SEND_EMAIL.send({ to, from, subject, text: bodyText });
     const mid = r && r.messageId ? String(r.messageId) : null;
     return { ok: true, err: "", messageId: mid };
@@ -148,6 +151,16 @@ async function scanReplies(env) {
     rows = ((await env.QNFO_AUDIT.prepare("SELECT id, sender, subject, substr(COALESCE(body_text,''),1,3000) body FROM emails WHERE id > ?1 AND status != 'sent' ORDER BY id ASC LIMIT 200").bind(last).all()).results) || [];
   } catch (e) { return { scanned: 0, suppressed: 0, err: String(e).slice(0, 120) }; }
   const STOP = /\b(unsubscribe|opt[\s-]?out|remove me|stop emailing|do not contact|don'?t contact|take me off|no further (emails?|contact)|leave me alone)\b/i;
+  // REPLY-SCAN-QUOTED-FIX (2026-09-22): strip quoted history + our own footer/URLs before matching,
+  // so a genuine reply that merely quotes our unsubscribe footer is NOT misread as a STOP opt-out.
+  const stripQuoted = function (s) {
+    let t = String(s || "");
+    t = t.split(/\r?\n/).filter(function (l) { return !/^\s*>/.test(l); }).join("\n");
+    t = t.split(/\r?\n\s*(?:On .{0,120}?wrote:|Am .{0,120}?schrieb|Le .{0,120}?écrit|From: .{0,120})\s*:?/i)[0];
+    t = t.replace(/https?:\/\/\S*unsubscribe\S*/gi, " ");
+    t = t.replace(/This was sent once, to one person[\s\S]*$/i, " ");
+    return t;
+  };
   let maxId = last, n = 0;
   for (const row of rows) {
     if (row.id > maxId) maxId = row.id;
@@ -156,7 +169,7 @@ async function scanReplies(env) {
     const m = from.match(/[^@\s<>]+@[^@\s<>]+/);
     const addr = m ? m[0].replace(/[>,]+$/, "") : "";
     if (!addr || !EMAIL_RE.test(addr)) continue;
-    if (STOP.test(String(row.subject || "") + " " + String(row.body || ""))) {
+    if (STOP.test(String(row.subject || "") + " " + stripQuoted(row.body))) {
       try {
         await env.QNFO_AUDIT.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1,'reply-stop','reply-scan') ON CONFLICT(email) DO UPDATE SET reason='reply-stop', source='reply-scan', created_at=datetime('now')").bind(addr).run();
         await env.OUTREACH_D1.prepare("UPDATE contacts SET suppress=1, suppress_reason=?1 WHERE lower(email)=?2").bind("reply-stop " + utcDay(), addr).run();

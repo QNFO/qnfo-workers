@@ -1267,6 +1267,8 @@ __name(mailOut, "mailOut");
 __name2(mailOut, "mailOut");
 __name22(mailOut, "mailOut");
 async function sendOne(env, to, subject, body) {
+  // SUPPRESSION-1 (2026-09-22): honour opt-out stored in qnfo-audit before any direct send.
+  try { if (env.AUDIT) { const _s = await env.AUDIT.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_s) return { ok: false, suppressed: true, to: to }; const _l = await env.AUDIT.prepare("SELECT suppress FROM contact_ledger WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_l && _l.suppress) return { ok: false, suppressed: true, to: to }; } } catch (e) {}
   if (env.SEND_EMAIL) {
     try {
       await env.SEND_EMAIL.send({ to, from: "rowan.quni@qnfo.org", subject, text: body });

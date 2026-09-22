@@ -266,6 +266,8 @@ async function respondToItem(env, item) {
 __name(respondToItem, "respondToItem");
 async function notifyUser(env, paper, corr, action) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
+  // SUPPRESSION-1 (2026-09-22): honour owner opt-out before emailing the receipt.
+  try { if (env.AUDIT_DB) { const _s = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)='rwnquni@outlook.com'").first(); if (_s) return { skipped: "owner opted out" }; } } catch (e) {}
   try {
     const subject = "QNFO errata drafted: " + (paper.slug || paper.doi || "");
     const text = [
