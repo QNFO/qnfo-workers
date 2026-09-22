@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.44";
+var VERSION = "2.36.45";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2624,9 +2624,10 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     const txt = await resp.text();
     _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
     if (resp.status < 500 && resp.status !== 429) {
-      if (o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB) {
+      const _fbFrom = (o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB) ? o.upstreamModel : (!o.upstreamModel && body.model === UPSTREAM_MODEL && UPSTREAM_MODEL_FB) ? UPSTREAM_MODEL : null;
+      if (_fbFrom) {
         body.model = UPSTREAM_MODEL_FB;
-        console.log("OPS_EXEC_MODEL_FALLBACK " + o.upstreamModel + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
+        console.log("OPS_EXEC_MODEL_FALLBACK " + _fbFrom + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
         continue;
       }
       throw new Error(_dsLastErr);
@@ -2880,7 +2881,8 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   }, "fail");
   try {
     if (isStream) {
-      const upBody = upstreamModel ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
+      const _relayIsOAI = relayUp.indexOf("openai/") === 0 || relayUp.indexOf("gpt-5") >= 0 || relayUp.indexOf("dynamic/") === 0;
+      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
@@ -3019,7 +3021,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     { const _cg = await costGuard(env); if (_cg.blocked) return json({ error: "ops daily cost cap reached ($" + _cg.cap + "/day, spent $" + _cg.usd + ")" }, 429); }
     const _today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const _capN = Number(env.OPS_DAILY_CAP);
-    const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 250;
+    const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 1000;
     const _cnt = env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts LIKE ?1").bind(_today + "%").first() : null;
     if (_cnt && _cnt.c >= _cap) return json({ error: "ops endpoint daily request cap reached (" + _cap + " per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
   } catch (e) {
@@ -4255,7 +4257,7 @@ var worker_default = {
         const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
         const wk = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
         const month = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
-        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 250, ts: iso() });
+        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1000, ts: iso() });
       } catch (e) {
         return json({ error: "cost query failed: " + (e && e.message || String(e)) }, 502);
       }
