@@ -14,9 +14,10 @@
  * v0.1.12: DIAGNOSTIC - record the keys that return null from getFull (the dominant skip branch) into run notes; root-causing the head-blocking.
  * v0.1.13: STABILIZE - RUN_DEADLINE_MS (110s) bounds every run so it always completes/logs/releases the lock (fixes F7b lock starvation); retry budget tightened (3 attempts, backoff cap 3s). Reverts the v0.1.8 12s backoff that made adverse runs exceed the 4-min lock TTL.
  * v0.1.14: F9 FIX - bound the embed phase at 0.65*RUN_DEADLINE_MS so the write phase always gets budget (v0.1.13's single deadline let the embed phase consume everything, so truncated runs wrote nothing).
+ * v0.1.15: raise RUN_DEADLINE_MS 110s -> 200s (still < the 240s lock TTL, so no overlap) to amortize the fixed per-run R2 listing overhead and restore throughput; embed still bounded at 0.65*deadline.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.14";
+var VERSION = "0.1.15";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -26,7 +27,7 @@ var CHUNK_OVERLAP = 120;
 var MAX_CHUNKS = 24;
 var GET_CONCURRENCY = 16;
 var EMBED_CONCURRENCY = 3;
-var RUN_DEADLINE_MS = 110000;
+var RUN_DEADLINE_MS = 200000;
 var PATH_PREFIX = "obsidian/";
 var SKIP_PREFIXES = [".obsidian/", "releases/", "Attachments/", "Archive/", ".git/"];
 var INGEST_ROOTS = ["notes/", "Inbox/", "Projects/", "Areas/", "Resources/"];
