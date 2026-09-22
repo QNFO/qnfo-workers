@@ -10,7 +10,7 @@
  * v0.1.8: exponential backoff + jitter embed retry (5x, retryable-only), VZ upsert retry, per-run error notes persisted to vault_indexer_runs.notes.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.8";
+var VERSION = "0.1.9";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -188,7 +188,7 @@ async function run(env, cap) {
         try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
         catch (e) {
           lastErr = String((e && e.message) || e);
-          var rt = /429|1010|rate.?limit|throttl|overload|exceed|limit|503|502|504|busy|timeout/i.test(lastErr);
+          var rt = /429|1010|rate.?limit|throttl|overload|503|502|504|busy|timeout/i.test(lastErr) && !/spend limit|2045|budget|quota/i.test(lastErr);
           if (!rt && attempt >= 1) break;
           var backoff = Math.min(12000, 400 * Math.pow(2, attempt)) + Math.floor(Math.random() * 400);
           await new Promise(function (r) { setTimeout(r, backoff); });
