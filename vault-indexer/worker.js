@@ -8,9 +8,11 @@
  * v0.1.6: overlap lock (one run at a time, TTL takeover); MAX_LIST_PAGES 100; _meta/ shared status channel.
  * v0.1.7: embed retry (3x backoff) + EMBED_CONCURRENCY 5 (transient AI-throttle errors self-heal).
  * v0.1.8: exponential backoff + jitter embed retry (5x, retryable-only), VZ upsert retry, per-run error notes persisted to vault_indexer_runs.notes.
+ * v0.1.9: retryable classification excludes AI Gateway spend-limit (2045) - a spend wall is non-retryable.
+ * v0.1.10: range-read oversized docs (partial index instead of blanket skip) + record a files row for content-short docs so they leave the `changed` set (fixes perpetual head-blocking).
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.9";
+var VERSION = "0.1.10";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -93,8 +95,8 @@ async function getFull(env, key) {
   try {
     if (!MD_RE.test(key)) return null;
     var head = await env.VAULT.head(key);
-    if (head && head.size > MAX_BYTES) return null;
-    var o = await env.VAULT.get(key);
+    var big = head && head.size > MAX_BYTES;
+    var o = big ? await env.VAULT.get(key, { range: { offset: 0, length: MAX_BYTES } }) : await env.VAULT.get(key);
     if (!o) return null;
     return await o.text();
   } catch (e) { return null; }
@@ -182,7 +184,7 @@ async function run(env, cap) {
       var text = texts[idx];
       if (text === null) { prepared[idx] = null; return; }
       var chs = chunkText(text);
-      if (chs.length === 0) { prepared[idx] = null; return; }
+      if (chs.length === 0) { prepared[idx] = { skip: true, w: w }; return; }
       var resp = null, lastErr = "";
       for (var attempt = 0; attempt < 5 && !resp; attempt++) {
         try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
@@ -205,6 +207,7 @@ async function run(env, cap) {
   for (var x = 0; x < work.length; x++) {
     var p = prepared[x];
     if (p === null) { s.skipped++; continue; }
+    if (p.skip) { s.skipped++; try { var sw = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'general',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(sw.path, extOf(sw.key), sw.obj.size, (sw.obj.uploaded ? sw.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(sw.key)).run(); } catch (e) {} continue; }
     if (p.error) { s.errors++; if (p.msg) s.notes.push(p.msg); continue; }
     var w = p.w;
     var dg = await sha256hex(w.path);
