@@ -11,9 +11,10 @@
  * v0.1.9: retryable classification excludes AI Gateway spend-limit (2045) - a spend wall is non-retryable.
  * v0.1.10: range-read oversized docs (partial index instead of blanket skip) + record a files row for content-short docs so they leave the `changed` set (fixes perpetual head-blocking).
  * v0.1.11: EMBED_CONCURRENCY 5 -> 3 (reduce Workers AI 2003 rate-limit pressure, which coexists with the 2045 spend wall).
+ * v0.1.12: DIAGNOSTIC - record the keys that return null from getFull (the dominant skip branch) into run notes; root-causing the head-blocking.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.11";
+var VERSION = "0.1.12";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -183,7 +184,7 @@ async function run(env, cap) {
     await Promise.all(eslice.map(async function (w, k) {
       var idx = eb + k;
       var text = texts[idx];
-      if (text === null) { prepared[idx] = null; return; }
+      if (text === null) { s.notes.push("null:" + String(w.key).slice(-34)); prepared[idx] = null; return; }
       var chs = chunkText(text);
       if (chs.length === 0) { prepared[idx] = { skip: true, w: w }; return; }
       var resp = null, lastErr = "";
