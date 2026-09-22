@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.1";
+var VERSION = "0.3.2";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -183,7 +183,7 @@ async function sendGated(env) {
   if (canWarmup && !canExternal) {
     const selfToday = await env.OUTREACH_D1.prepare("SELECT 1 FROM sends WHERE kind = 'selfcheck' AND sent_at LIKE ?1 LIMIT 1").bind(day + "%").first();
     if (!selfToday) {
-      const res = await sendRaw(env, FROM_ACADEMIC, "alerts@qnfo.org", "Outreach pipeline self-check " + day, "Automated daily self-check of the qnfo-outreach send path. No action needed.");
+      const res = await sendRaw(env, FROM_ACADEMIC, "rwnquni@outlook.com", "Outreach pipeline self-check " + day, "Automated daily self-check of the qnfo-outreach send path. No action needed.");
       await env.OUTREACH_D1.prepare(
         "INSERT INTO sends (id, campaign_id, contact_id, kind, channel, subject, body, status, sent_at) VALUES (?1,NULL,NULL,'selfcheck','email','Outreach pipeline self-check','self-check',?2,datetime('now'))"
       ).bind(makeId("s-"), res.ok ? "sent" : "failed").run();
@@ -288,7 +288,7 @@ var worker_default = {
       } catch (e) {
         body = {};
       }
-      const to = String(body.to || "alerts@qnfo.org").toLowerCase();
+      const to = String(body.to || "qnfo@qnfo.org").toLowerCase();
       if (!WARMUP_ALLOWLIST.includes(to)) return json({ ok: false, err: "recipient not in own-mailbox allowlist" }, 403);
       const res = await sendRaw(env, FROM_ACADEMIC, to, "Outreach pipeline self-check " + utcDay(), "Automated self-check of the qnfo-outreach send path. No action needed.");
       await env.OUTREACH_D1.prepare(
