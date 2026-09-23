@@ -16,9 +16,10 @@
  * v0.1.14: F9 FIX - bound the embed phase at 0.65*RUN_DEADLINE_MS so the write phase always gets budget (v0.1.13's single deadline let the embed phase consume everything, so truncated runs wrote nothing).
  * v0.1.15: raise RUN_DEADLINE_MS 110s -> 200s (still < the 240s lock TTL, so no overlap) to amortize the fixed per-run R2 listing overhead and restore throughput; embed still bounded at 0.65*deadline.
  * v0.1.16: F10 FIX - a terminal embed failure (e.g. 3043 Internal server error) now records a files row (chunks=0, category embed-failed) so the doc leaves `changed` instead of re-erroring every run; errors fall to 0, and the doc re-indexes if its R2 object changes.
+ * v0.1.17: F10 CORRECTED - bounded retry. A terminal embed failure now increments an embed_failures counter; the doc is recorded (chunks=0, embed-failed) only after 3 consecutive failures (1h staleness reset). Transient blips self-heal; persistent failures still leave `changed`.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.16";
+var VERSION = "0.1.17";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -217,7 +218,7 @@ async function run(env, cap) {
     var p = prepared[x];
     if (p === null) { s.skipped++; continue; }
     if (p.skip) { s.skipped++; try { var sw = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'general',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(sw.path, extOf(sw.key), sw.obj.size, (sw.obj.uploaded ? sw.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(sw.key)).run(); } catch (e) {} continue; }
-    if (p.error) { s.errors++; if (p.msg) s.notes.push(p.msg); if (p.w) { try { var ew = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'embed-failed',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(ew.path, extOf(ew.key), ew.obj.size, (ew.obj.uploaded ? ew.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(ew.key)).run(); } catch (e) {} } continue; }
+    if (p.error) { s.errors++; if (p.msg) s.notes.push(p.msg); if (p.w) { try { var ew = p.w; var fr = await env.PERSONAL.prepare("SELECT fails,last_at FROM embed_failures WHERE path=?1").bind(ew.path).first(); var prevAt = (fr && fr.last_at) ? Date.parse(fr.last_at) : 0; var stale = (Date.now() - prevAt) > 3600000; var nf = ((fr && fr.fails && !stale) ? fr.fails : 0) + 1; if (nf >= 3) { await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'embed-failed',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(ew.path, extOf(ew.key), ew.obj.size, (ew.obj.uploaded ? ew.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(ew.key)).run(); await env.PERSONAL.prepare("DELETE FROM embed_failures WHERE path=?1").bind(ew.path).run(); } else { await env.PERSONAL.prepare("INSERT INTO embed_failures (path,fails,last_at) VALUES (?1,?2,?3) ON CONFLICT(path) DO UPDATE SET fails=?2,last_at=?3").bind(ew.path, nf, new Date().toISOString()).run(); } } catch (e) {} } continue; }
     var w = p.w;
     var dg = await sha256hex(w.path);
     var vecBatch = [], chunkStmts = [];
