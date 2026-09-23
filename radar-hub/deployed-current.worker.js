@@ -1,10 +1,14 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
+// HUB-VERSION-SCOPE-1 (2026-09-23): radar-hub's OWN version, at MODULE scope so the hub's
+// `export default` can read it. Each embedded sub-worker IIFE declares its own `VERSION`
+// inside its own scope; a bare reference from module scope throws ReferenceError.
+var VERSION = "1.0.9";
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.7-writeassert";
+var VERSION = "1.0.8";
 var WORKER = "events-radar";
 var DOMAINS = [
   { code: "ADL", name: "Adelic Physics / p-adic info", kw: ["adelic", "p-adic", "idelic", "non-archimedean", "shannon", "rate-distortion", "rate distortion", "entropy", "number theory", "adele", "adelic shannon"] },
@@ -1284,10 +1288,16 @@ const JobMarketWatchWorkflow = jmwMod.JobMarketWatchWorkflow;
 export { JobMarketWatchWorkflow };
 
 // ===== MERGED RADAR HUB v2 (2026-09-11: + job-market-watch + personal-events-radar) =====
+// HUB-VERSION-SCOPE-1 (2026-09-23): the hub's own VERSION is declared at MODULE scope (top of
+// this file). The sub-worker IIFEs each declare their own `VERSION` in their own function
+// scope, so a bare `VERSION` reference here previously resolved to nothing -> ReferenceError
+// -> /health returned CF error 1101 (the old hardcoded "1.0.0" literal had masked it).
+// Module scope also makes the deploy tooling's "first VERSION in file" extraction report the
+// HUB version rather than events-radar's.
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: "1.0.0", radars: 6 }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 6 }), { headers: { "content-type": "application/json" } });
     function sub(prefix) { const u = new URL(request.url); u.pathname = p.slice(prefix.length) || "/"; return new Request(u.toString(), request); }
     if (p === "/events" || p.startsWith("/events/")) return eventsMod.default.fetch(sub("/events"), env, ctx);
     if (p === "/citation" || p.startsWith("/citation/")) return citationMod.fetch(sub("/citation"), env, ctx);

@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.44";
+var VERSION = "2.36.47";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1651,7 +1651,7 @@ async function cfWorkerRead(env, args) {
     } else {
       src = await srcR.text();
     }
-    const vMatch = src.match(/var VERSION\s*=\s*["']([^"']+)["']/);
+    const vMatch = src.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/);
     const version = vMatch ? vMatch[1] : meta.modified_on ? "unknown (modified " + meta.modified_on + ")" : "unknown";
     return { ok: true, worker, version, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
   } catch (e) {
@@ -1704,7 +1704,25 @@ async function cfWorkerDeploy(env, args) {
     const _mp = (args && args.service_worker) ? { body_part: "worker.js" } : { main_module: "worker.js" }; // MODULE-FORMAT-1: vectorize/DO/workflow bindings require ES module format (CF 100329)
   const _exports = {};
   for (const _b of bindingsOut) { if (_b.type === "durable_object_namespace" && _b.class_name) _exports[_b.class_name] = { type: "durable-object", storage: "sqlite" }; }
-  const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, (Object.keys(_exports).length ? { exports: _exports } : {}))); // DO-EXPORT-EXPLICIT-1: provisioned DO classes must be declared in exports (CF 100402)
+  // CF-DEPLOY-COMPAT-PRESERVE-1: the deploy metadata MUST carry the live compatibility date/flags.
+  // Omitting them makes Cloudflare CLEAR them, silently disabling date-gated APIs. With
+  // `streams_enable_constructors` off, `new ReadableStream()` throws at every construction site
+  // (5 in this worker), so EVERY streaming response 502s (relay) or 1101s (agent), while
+  // non-streaming keeps working - a silent, shape-dependent outage. Canonical regression:
+  // qnfo-ops 2026-09-23 (the first /ops/deploy wiped compatibility_date, breaking all streaming).
+  let _compatDate = "2026-08-01";
+  let _compatFlags = [];
+  try {
+    const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
+    if (_sResp.ok) {
+      const _sj = await _sResp.json().catch(() => null);
+      const _sr = _sj && _sj.result;
+      if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
+      if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
+    }
+  } catch (_e) { }
+  if (!_compatDate) _compatDate = "2026-08-01";
+  const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, (_compatFlags.length ? { compatibility_flags: _compatFlags } : {}), (Object.keys(_exports).length ? { exports: _exports } : {}))); // DO-EXPORT-EXPLICIT-1 + CF-DEPLOY-COMPAT-PRESERVE-1
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
@@ -2624,9 +2642,10 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     const txt = await resp.text();
     _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
     if (resp.status < 500 && resp.status !== 429) {
-      if (o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB) {
+      const _fbFrom = (o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB) ? o.upstreamModel : (!o.upstreamModel && body.model === UPSTREAM_MODEL && UPSTREAM_MODEL_FB) ? UPSTREAM_MODEL : null;
+      if (_fbFrom) {
         body.model = UPSTREAM_MODEL_FB;
-        console.log("OPS_EXEC_MODEL_FALLBACK " + o.upstreamModel + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
+        console.log("OPS_EXEC_MODEL_FALLBACK " + _fbFrom + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
         continue;
       }
       throw new Error(_dsLastErr);
@@ -2880,7 +2899,8 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   }, "fail");
   try {
     if (isStream) {
-      const upBody = upstreamModel ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
+      const _relayIsOAI = relayUp.indexOf("openai/") === 0 || relayUp.indexOf("gpt-5") >= 0 || relayUp.indexOf("dynamic/") === 0;
+      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
@@ -3019,7 +3039,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     { const _cg = await costGuard(env); if (_cg.blocked) return json({ error: "ops daily cost cap reached ($" + _cg.cap + "/day, spent $" + _cg.usd + ")" }, 429); }
     const _today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const _capN = Number(env.OPS_DAILY_CAP);
-    const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 250;
+    const _cap = Number.isFinite(_capN) && _capN > 0 ? Math.floor(_capN) : 1000;
     const _cnt = env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts LIKE ?1").bind(_today + "%").first() : null;
     if (_cnt && _cnt.c >= _cap) return json({ error: "ops endpoint daily request cap reached (" + _cap + " per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
   } catch (e) {
@@ -4090,7 +4110,7 @@ async function opsDeploy(env, args) {
       const gj = await gr.json();
       const b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
       const content = atob(b64);
-      const srcVer = (content.match(/var VERSION = "([^"]+)"/) || [])[1] || null;
+      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) { result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer }; return Object.assign({ log: log }, result); }
       const dep = await cfWorkerDeploy(env, { worker: worker, content: content, version: toVer || srcVer || undefined, expected_version: fromVer || undefined });
@@ -4255,7 +4275,7 @@ var worker_default = {
         const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
         const wk = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
         const month = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
-        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 250, ts: iso() });
+        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1000, ts: iso() });
       } catch (e) {
         return json({ error: "cost query failed: " + (e && e.message || String(e)) }, 502);
       }

@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.0-wastecut";
+var VERSION = "1.2.1-noskip";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -391,11 +391,12 @@ async function gatewayFailureSweep(env, t0) {
   var startIso = new Date(lastTs).toISOString();
   var buckets = {};
   var rows = [];
+  var fetchFail = false;
   var limit = 3;
   try {
     for (var page = 1; page <= limit; page++) {
       var r = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs?per_page=50&page=" + page + "&success=false&start_time=" + encodeURIComponent(startIso), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 25e3);
-      if (r.status !== 200 || !r.data || !Array.isArray(r.data.result)) break;
+      if (r.status !== 200 || !r.data || !Array.isArray(r.data.result)) { fetchFail = true; out.ok = false; out.summary = "gw-log fetch HTTP " + r.status + " - sweep window NOT advanced"; break; }
       var arr = r.data.result;
       if (!arr.length) break;
       for (var i = 0; i < arr.length; i++) {
@@ -484,9 +485,11 @@ async function gatewayFailureSweep(env, t0) {
     }
   } catch (e) {
   }
-  try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO ai_calibration_config (key, value) VALUES ('gw_sweep_last_ts', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1").bind(String(t0)).run();
-  } catch (e) {
+  if (!fetchFail) {
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO ai_calibration_config (key, value) VALUES ('gw_sweep_last_ts', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1").bind(String(t0)).run();
+    } catch (e) {
+    }
   }
   out.summary = cls.length ? parts.join("; ") : "clean (0 failed requests in window)";
   return out;

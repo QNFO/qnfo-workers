@@ -1,0 +1,78 @@
+--- qnfo-ops/deployed-current.worker.js	2026-09-16 (VERSION 2.30.2, 233907 bytes, sha256 37b5c47581b234b0fc94b26d2467379e3cf39e63e3db1a3f0a4622bca7f198c5)
++++ qnfo-ops/deployed-current.worker.js	2026-09-16 (VERSION 2.31.0)
+@@ -14,7 +14,7 @@
+ __name(fnv32, "fnv32");
+ var __defProp2 = Object.defineProperty;
+ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+-var VERSION = "2.30.2";
++var VERSION = "2.31.0";
+ function firstFrameIdx(s) {
+   if (!s || typeof s !== "string") return -1;
+   const bar = "\uFF5C";
+@@ -35,6 +35,31 @@
+ var WORKER = "qnfo-ops";
+ var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec"];
+ var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
++var AIGW_URL = "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/ai/v1/chat/completions";
++var AIGW_GATEWAY_ID = "default";
++var AIGW_MODEL_MAP = { "deepseek-v4-flash": "@cf/deepseek-ai/deepseek-v4-flash-0731", "deepseek-v4-pro": "deepseek/deepseek-v4-pro" };
++async function upstreamChat(env, body) {
++  if (env.AIGW_ENABLED !== "0" && env.CF_API_TOKEN) {
++    var gwBody = Object.assign({}, body, { model: AIGW_MODEL_MAP[body.model] || body.model });
++    try {
++      var r = await fetch(AIGW_URL, {
++        method: "POST",
++        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_API_TOKEN, "cf-aig-gateway-id": AIGW_GATEWAY_ID },
++        body: JSON.stringify(gwBody)
++      });
++      if (r.ok) return r;
++      console.log("OPS_AIGW_FALLBACK status=" + r.status);
++    } catch (e) {
++      console.log("OPS_AIGW_FALLBACK err=" + (e && e.message || e));
++    }
++  }
++  return fetch(DEEPSEEK_URL, {
++    method: "POST",
++    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
++    body: JSON.stringify(body)
++  });
++}
++__name(upstreamChat, "upstreamChat");
+ var UPSTREAM_MODEL = "deepseek-v4-flash";
+ var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+ var CODE_MODEL_CTX = 262144;
+@@ -2153,11 +2178,7 @@
+   }
+   let resp = null, _dsLastErr = "";
+   for (let _dsTry = 0; _dsTry < 3; _dsTry++) {
+-    resp = await fetch(DEEPSEEK_URL, {
+-      method: "POST",
+-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+-      body: JSON.stringify(body)
+-    });
++    resp = await upstreamChat(env, body);
+     if (resp.ok) break;
+     const txt = await resp.text();
+     _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
+@@ -2231,11 +2252,7 @@
+         upBody.tools = clientTools;
+         upBody.tool_choice = clientToolChoice;
+       }
+-      const resp = await fetch(DEEPSEEK_URL, {
+-        method: "POST",
+-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") },
+-        body: JSON.stringify(upBody)
+-      });
++      const resp = await upstreamChat(env, upBody);
+       if (!resp.ok || !resp.body) {
+         await fail("upstream " + resp.status + ": " + (await resp.text()).slice(0, 300));
+         return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
+@@ -2499,7 +2516,7 @@
+     }
+     const upBody = { model: UPSTREAM_MODEL, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: answerCap, temperature, top_p: topP, stream: true, stream_options: { include_usage: true } };
+     try {
+-      const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.DEEPSEEK_API_KEY || "") }, body: JSON.stringify(upBody) });
++      const up = await upstreamChat(env, upBody);
+       if (!up.ok || !up.body) {
+         const t = up.ok ? "" : await up.text();
+         throw new Error("deepseek " + up.status + ": " + String(t || "").slice(0, 300));

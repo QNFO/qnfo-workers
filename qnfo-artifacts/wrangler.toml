@@ -1,0 +1,19 @@
+name = "qnfo-artifacts"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# Cloudflare Artifacts (closed beta; access granted on account quniverse).
+# The namespace is fixed at bind time -- the worker never takes a namespace parameter.
+# SECRET/ARTIFACTS-REMEDIATE-1 2026-09-22 (R1): `artifacts` is NOT expressible in
+# wrangler.toml - verified: both `[[artifacts]]` and `[artifacts]` are rejected by
+# `wrangler deploy --dry-run` (config parse ERROR). The block below is therefore
+# DELIBERATELY left in an unsupported form so a wrangler deploy FAILS CLOSED rather
+# than silently dropping the ARTIFACTS binding and breaking the worker. The operative
+# deploy path for this worker is scripts/raw_put.py (binding-preserving /content PUT).
+[[artifacts]]
+binding = "ARTIFACTS"
+namespace = "qnfo"
+
+[vars]
+ARTIFACTS_NAMESPACE = "qnfo"
