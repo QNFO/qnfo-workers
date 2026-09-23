@@ -87,3 +87,13 @@ REVIEW_MODEL = "@cf/openai/gpt-oss-120b"
 
 # Secrets (set via CF API; values in credential stores / rotated 2026-09-11):
 # CF_API_TOKEN, CF_DEPLOY_TOKEN, DEPLOY_ADMIN_TOKEN, ADVISOR_TOKEN, SELFHEAL_TOKEN, RUN_SECRET
+
+# FleetAdvisor DO (AUDIT-REMEDIATE-1 2026-09-22; verified vs live CF bindings).
+# The class already exists (created via raw_put); see the migration note above.
+[[durable_objects.bindings]]
+name = "FleetAdvisor"
+class_name = "FleetAdvisor"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FleetAdvisor"]

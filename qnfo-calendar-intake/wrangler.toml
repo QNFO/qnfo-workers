@@ -3,6 +3,14 @@ main = "worker.js"
 compatibility_date = "2026-09-13"
 compatibility_flags = ["nodejs_compat"]
 
+# Native Email Routing send binding (tokenless).
+# AUDIT-REMEDIATE-1 2026-09-22: the previous `[[send_email]]` array-of-tables form was
+# invalid and the binding was undeclared at top level (a wrangler deploy would have
+# wiped SEND_EMAIL). Top-level keys must precede any [table]/[[array]] header.
+send_email = [
+  { name = "SEND_EMAIL", allowed_destination_addresses = ["rwnquni@outlook.com"] }
+]
+
 [triggers]
 crons = ["*/5 * * * *"]
 
@@ -14,10 +22,9 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 [[services]]
 binding = "CAL_API"
 service = "calendar-api"
+environment = "production"
 
 [ai]
 binding = "AI"
 
-[[send_email]]
-name = "SEND_EMAIL"
-allowed_destination_addresses = ["rwnquni@outlook.com"]
+# Secrets (wrangler secret put): CAL_EMAIL_TOKEN, INGEST_TOKEN

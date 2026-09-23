@@ -1,0 +1,40 @@
+name = "qnfo-agent-ws"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+send_email = [
+  { name = "EMAIL" }
+]
+
+[ai]
+binding = "AI"
+
+# UNSUPPORTED type=send_email name=EMAIL
+
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+[[vectorize]]
+binding = "PAPER_VZ"
+index_name = "qwav-research-v2"
+
+[[durable_objects.bindings]]
+name = "QnfoAgent"
+class_name = "QnfoAgent"
+
+# QnfoAgent class already exists (created via API, not a wrangler migration).
+# Binding-only: a Create migration for an existing class is rejected by CF.
+
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+
+[[d1_databases]]
+binding = "QNFO_GRAPH"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
+
+# Secrets (wrangler secret put): CF_API_TOKEN, ROUTER_AUTH_KEY, SYNC_TOKEN
