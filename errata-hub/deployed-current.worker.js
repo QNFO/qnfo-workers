@@ -1,5 +1,6 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
+var VERSION = "1.0.0"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 var erratawatchMod = (function(){
 const QNFO_VERSION = "qnfo-errata-watch/fabric-20260910";
 var __defProp = Object.defineProperty;

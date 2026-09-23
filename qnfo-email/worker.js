@@ -1,4 +1,4 @@
-const VERSION = "2.0.8";
+var VERSION = "2.0.8"; // var (not const): qnfo-ops cfWorkerRead needs /var VERSION = "..."/ for the /ops/deploy expected_version guard
 const QNFO_VERSION = "qnfo-email/reply-capture-942-tone-950-norepeat-947";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
