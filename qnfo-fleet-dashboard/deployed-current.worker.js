@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.3"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.4"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -787,7 +787,7 @@ async function dispatchIssue(env, i, gh_number) {
 __name(dispatchIssue, "dispatchIssue");
 __name2(dispatchIssue, "dispatchIssue");
 var EXEC_COOLDOWN_MS = 5 * 60 * 1e3;
-function execTargetFor(category, resource) {
+function execTargetFor(category, resource, env) {
   const r = String(resource || "").toLowerCase();
   if (category === "queue-freshness") {
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
@@ -798,7 +798,9 @@ function execTargetFor(category, resource) {
     // Each chain maps to its consumer worker's trigger endpoint.
     if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research pipeline (research-exec /run)" };
     if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
-    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log" };
+    if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return (env && env.REVISER_TOKEN)
+      ? { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log", auth: "X-Reviser-Token" }
+      : { safe: false, noAction: true, note: "PAPER-REVISER-SCAN-UNAUTHORIZED-1: /run/scan needs qnfo-paper-reviser X-Reviser-Token which this worker does not hold; qnfo-paper-reviser cron 37 */4 drains it - no auto-dispatch" };
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: true, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "run observability ingest to digest alerts" };
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
@@ -821,7 +823,7 @@ async function execOne(env, row, prevState) {
   } catch (e) {
   }
   const resource = payload.resource || payload.title || "";
-  const spec = execTargetFor(row.category, resource);
+  const spec = execTargetFor(row.category, resource, env);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const prior = prevState || null;
   if (!spec || !spec.safe) {
@@ -841,7 +843,9 @@ async function execOne(env, row, prevState) {
   let ok = false, status = 0, body = "";
   try {
     if (!svc) throw new Error("binding " + spec.svc + " not bound");
-    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: { "User-Agent": PROBE_UA } });
+    const _eh = { "User-Agent": PROBE_UA };
+    if (spec.auth === "X-Reviser-Token" && env.REVISER_TOKEN) _eh["X-Reviser-Token"] = env.REVISER_TOKEN;
+    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: _eh });
     status = res.status;
     ok = res.ok;
     body = squash(await res.text()).slice(0, 240);
