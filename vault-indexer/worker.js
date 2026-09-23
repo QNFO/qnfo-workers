@@ -15,9 +15,10 @@
  * v0.1.13: STABILIZE - RUN_DEADLINE_MS (110s) bounds every run so it always completes/logs/releases the lock (fixes F7b lock starvation); retry budget tightened (3 attempts, backoff cap 3s). Reverts the v0.1.8 12s backoff that made adverse runs exceed the 4-min lock TTL.
  * v0.1.14: F9 FIX - bound the embed phase at 0.65*RUN_DEADLINE_MS so the write phase always gets budget (v0.1.13's single deadline let the embed phase consume everything, so truncated runs wrote nothing).
  * v0.1.15: raise RUN_DEADLINE_MS 110s -> 200s (still < the 240s lock TTL, so no overlap) to amortize the fixed per-run R2 listing overhead and restore throughput; embed still bounded at 0.65*deadline.
+ * v0.1.16: F10 FIX - a terminal embed failure (e.g. 3043 Internal server error) now records a files row (chunks=0, category embed-failed) so the doc leaves `changed` instead of re-erroring every run; errors fall to 0, and the doc re-indexes if its R2 object changes.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.15";
+var VERSION = "0.1.16";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -203,10 +204,10 @@ async function run(env, cap) {
           await new Promise(function (r) { setTimeout(r, backoff); });
         }
       }
-      if (!resp) { prepared[idx] = { error: true, msg: "embed:" + lastErr.slice(0, 90) }; return; }
+      if (!resp) { prepared[idx] = { error: true, msg: "embed:" + lastErr.slice(0, 90), w: w }; return; }
       var vectors = (resp && resp.data) || [];
       var valid = vectors.filter(function (v) { return Array.isArray(v) && v.length === 768; }).map(function (v) { return v.map(function (z) { return Number.isFinite(z) ? z : 0; }); });
-      if (valid.length === 0) { prepared[idx] = { error: true }; return; }
+      if (valid.length === 0) { prepared[idx] = { error: true, w: w }; return; }
       prepared[idx] = { w: w, chs: chs, valid: valid, cat: categorize(chs.join(" "), w.key) };
     }));
   }
@@ -216,7 +217,7 @@ async function run(env, cap) {
     var p = prepared[x];
     if (p === null) { s.skipped++; continue; }
     if (p.skip) { s.skipped++; try { var sw = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'general',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(sw.path, extOf(sw.key), sw.obj.size, (sw.obj.uploaded ? sw.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(sw.key)).run(); } catch (e) {} continue; }
-    if (p.error) { s.errors++; if (p.msg) s.notes.push(p.msg); continue; }
+    if (p.error) { s.errors++; if (p.msg) s.notes.push(p.msg); if (p.w) { try { var ew = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'embed-failed',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(ew.path, extOf(ew.key), ew.obj.size, (ew.obj.uploaded ? ew.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(ew.key)).run(); } catch (e) {} } continue; }
     var w = p.w;
     var dg = await sha256hex(w.path);
     var vecBatch = [], chunkStmts = [];
