@@ -101,7 +101,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var INDEX_TOKEN = "chnx-idx-v1-k9m2n4p7r5t8";
+// SECRET-HYGIENE-1 2026-09-22: the token is no longer hardcoded in source; it is read
+// from the INDEX_TOKEN secret binding. (The value was previously committed here and in
+// wrangler.toml; rotate it and treat the old value as burned.)
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -260,7 +262,7 @@ var worker_default = {
     const slug = url.searchParams.get("slug");
     if (path === "/webhook" || path === "/index") {
       const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      if (token !== env.INDEX_TOKEN && token !== INDEX_TOKEN) return json({ error: "unauthorized" }, 401);
+      if (token !== env.INDEX_TOKEN) return json({ error: "unauthorized" }, 401);
     }
     try {
       switch (path) {

@@ -4,11 +4,11 @@ compatibility_date = "2026-08-10"
 workers_dev = true
 
 # Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)
+# SECRET-HYGIENE-1 2026-09-22: the stale `[vars] INDEX_TOKEN` was removed. It was not
+# live, and the worker now reads the token from the INDEX_TOKEN *secret* binding.
+# Secrets (wrangler secret put): INDEX_TOKEN
 [ai]
 binding = "AI"
-
-[vars]
-INDEX_TOKEN = "chnx-idx-v1-k9m2n4p7r5t8"
 
 [[d1_databases]]
 binding = "LIVING_PAPER"
