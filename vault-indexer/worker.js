@@ -19,9 +19,10 @@
  * v0.1.17: F10 CORRECTED - bounded retry. A terminal embed failure now increments an embed_failures counter; the doc is recorded (chunks=0, embed-failed) only after 3 consecutive failures (1h staleness reset). Transient blips self-heal; persistent failures still leave `changed`.
  * v0.1.18: F1b SELF-HEAL - on version change the worker self-reports VERSION to the deploy-guard /ledger (R2 marker guards it to once per change), so service_registry stays current regardless of deploy path (raw wrangler deploys no longer re-stale it).
  * v0.1.19: F1b self-heal hardened - only re-mark on a 2xx report; re-report every 6h (heals drift without a version change); expose the outcome via the status JSON (self.selfreport).
+ * v0.1.20: F1b self-heal bounded - write the R2 marker even on a non-2xx report so a failing report retries at most every 6h (not every run); the report outcome remains in the status JSON (self.selfreport). Canonical deploy path = POST /ops/deploy.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.19";
+var VERSION = "0.1.20";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -265,7 +266,7 @@ async function run(env, cap) {
       try {
         var rr = await fetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ worker: WORKER, to: VERSION, note: "self-report version-change (F1b self-heal)", actor: "vault-indexer/" + VERSION, ok: true }) });
         selfreport = "sent:" + rr.status;
-        if (rr.ok) await env.VAULT.put("_meta/self-version.txt", VERSION + "|" + new Date().toISOString(), { httpMetadata: { contentType: "text/plain" } });
+        await env.VAULT.put("_meta/self-version.txt", VERSION + "|" + new Date().toISOString(), { httpMetadata: { contentType: "text/plain" } });
       } catch (e) { selfreport = "fetch-err:" + String((e && e.message) || e).slice(0, 110); }
     }
   } catch (e) { selfreport = "outer-err:" + String((e && e.message) || e).slice(0, 110); }
