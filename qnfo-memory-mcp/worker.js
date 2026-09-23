@@ -1,4 +1,3 @@
-var VERSION = "2.0.3"; // VERSION-SOURCE-1: top-level canonical version so the fleet extractor (var|const|let VERSION) resolves it; previously only a bare `VERSION = "2.0.3"` existed, invisible to the extractor
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 

@@ -1,5 +1,3 @@
-import { Agent, routeAgentRequest } from "../vendor/agents/index.js";
- 
 /**
  * qnfo-artifact-agent -- an Agents-SDK agent that owns Cloudflare Artifacts workspaces.
  *
@@ -14,13 +12,10 @@ import { Agent, routeAgentRequest } from "../vendor/agents/index.js";
  *   PRE:    env.ARTIFACTS is an Artifacts binding to namespace "qnfo"; the ArtifactAgent
  *           Durable Object class is migrated (new_sqlite_classes).
  *   POST:   every route returns JSON; the agent's ledger is durable across eviction.
- *   INVARIANT:
- *     I1 FAIL-CLOSED AUTH -- if ARTIFACTS_TOKEN is unset every route except /health and /
- *        returns 503; it never degrades to open. Missing/incorrect bearer -> 401.
- *     I2 LEDGER SECRECY -- the ledger never stores token plaintext; tokens are returned
- *        to the caller once and never persisted by the agent.
+ *   INVARIANT: the ledger never stores token plaintext; tokens are returned to the caller
+ *              once and never persisted by the agent.
  *
- * ROUTES (agent-scoped; the SDK kebab-cases the DO name: /agents/artifact-agent/:session)
+ * ROUTES (agent-scoped, under /agents/ArtifactAgent/:session)
  *   GET  /health                 liveness + session identity
  *   GET  /ledger                 durable workspace ledger for this session
  *   GET  /repos                  repos in the qnfo namespace (live)
@@ -29,38 +24,9 @@ import { Agent, routeAgentRequest } from "../vendor/agents/index.js";
  *   GET  /log?repo=:name         commit log for a repo
  */
 
-const VERSION = "1.0.2";
+const VERSION = "1.0.0";
 const MAX_TTL = 86400;
 const DEFAULT_TTL = 3600;
-
-/** Constant-time compare so the gate does not leak length/prefix timing. */
-function safeEqual(a, b) {
-  const A = String(a == null ? "" : a);
-  const B = String(b == null ? "" : b);
-  if (A.length !== B.length) return false;
-  let d = 0;
-  for (let i = 0; i < A.length; i++) d |= A.charCodeAt(i) ^ B.charCodeAt(i);
-  return d === 0;
-}
-
-function bearer(request) {
-  const h = request.headers.get("Authorization") || "";
-  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
-  return m ? m[1].trim() : "";
-}
-
-/** I1: "ok" | "denied" | "unconfigured" -- never coerces a missing secret to open. */
-function authState(request, env) {
-  if (!env.ARTIFACTS_TOKEN) return "unconfigured";
-  return safeEqual(bearer(request), env.ARTIFACTS_TOKEN) ? "ok" : "denied";
-}
-
-function authError(state) {
-  if (state === "unconfigured") {
-    return json({ ok: false, error: "auth_unconfigured", message: "ARTIFACTS_TOKEN secret is not set; refusing to serve (fail-closed)" }, 503);
-  }
-  return json({ ok: false, error: "unauthorized", message: "provide Authorization: Bearer <ARTIFACTS_TOKEN>" }, 401);
-}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
@@ -82,11 +48,6 @@ export class ArtifactAgent extends Agent {
     const method = request.method.toUpperCase();
     const tail = (s) => path.endsWith(s);
 
-    // I1 defense in depth: the worker fetch already gates HTTP, but the DO enforces it too
-    // so a future direct binding/RPC path cannot bypass the gate.
-    const st = authState(request, this.env);
-    if (st !== "ok") return authError(st);
-
     if (tail("/health")) {
       return json({
         status: "ok",
@@ -94,9 +55,6 @@ export class ArtifactAgent extends Agent {
         version: VERSION,
         agent: "ArtifactAgent",
         session: this.name,
-        // The Agents SDK kebab-cases the DO binding name when building the URL:
-        // binding `ArtifactAgent` -> path segment `artifact-agent`.
-        route: "/agents/artifact-agent/" + this.name,
         namespace: this.env.ARTIFACTS_NAMESPACE || "qnfo",
         workspaces: (this.state.workspaces || []).length,
         capabilities: ["agents-sdk", "durable-agent-session", "agent-workspace-provisioning", "scoped-git-tokens"],
@@ -171,15 +129,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return json({ status: "ok", worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", namespace: env.ARTIFACTS_NAMESPACE || "qnfo", auth: !!env.ARTIFACTS_TOKEN });
+      return json({ status: "ok", worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", namespace: env.ARTIFACTS_NAMESPACE || "qnfo" });
     }
     if (url.pathname === "/" ) {
-      return json({ worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", route_prefix: "/agents/artifact-agent/:session", auth: !!env.ARTIFACTS_TOKEN, docs: "GET /agents/artifact-agent/:session/{health|ledger|repos|log}, POST /agents/artifact-agent/:session/{provision|token} (all require Authorization: Bearer <ARTIFACTS_TOKEN>)" });
+      return json({ worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", docs: "GET /agents/ArtifactAgent/:session/{health|ledger|repos|log}, POST /agents/ArtifactAgent/:session/{provision|token}" });
     }
-    // I1 FAIL-CLOSED AUTH: every agent route (including the session /health route and the
-    // mutating /provision and /token routes) requires the bearer token.
-    const state = authState(request, env);
-    if (state !== "ok") return authError(state);
     const routed = await routeAgentRequest(request, env);
     if (routed) return routed;
     return json({ ok: false, error: "not_found" }, 404);

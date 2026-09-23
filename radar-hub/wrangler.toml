@@ -51,6 +51,3 @@ bucket_name = "obsidian-vault"
 binding = "JOB_MARKET_WATCH"
 name = "job-market-watch"
 class_name = "JobMarketWatchWorkflow"
-
-[triggers]
-crons = ["0 11 1,15 * *", "0 5 * * 1", "0 6 * * *", "0 6 1 * *", "0 7 * * 2", "0 8 * * 7", "0 9 * * 7", "30 5 * * 2", "30 8 * * *"]

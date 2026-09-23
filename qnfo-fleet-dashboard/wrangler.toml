@@ -30,7 +30,7 @@ database_name = "qnfo-graph"
 database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/15 * * * *"]
 
 [[services]]
 binding = "SVC_QNFO_AI"

@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.3.0"; // var + double quotes: qnfo-ops cfWorkerRead greps /var VERSION = "([^"]+)"/ for the /ops/deploy expected_version guard // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+const VERSION = '1.2.9'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -365,8 +365,8 @@ const INTEGRATION_CHAINS = [
     sql: "SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND (title LIKE '%health%' OR title LIKE '%availability%' OR title LIKE '%heartbeat%' OR title LIKE '%reachable%' OR title LIKE '%endpoint down%' OR title LIKE '%is down%' OR title LIKE '%alert-storm%' OR title LIKE '%exception%' OR title LIKE '%error-burst%' OR title LIKE '%recurring fail%' OR title LIKE 'MODEL-DEGRADED%')",
     total: "SELECT COUNT(*) n FROM agent_issues",
     max: 10, minOk: null, expectEmpty: true, want: 'drainable open <= 10 (health/availability/exception/MODEL-DEGRADED = what backlog-exec auto-closes); residual open defects are tracked elsewhere, not backpressure' },
-  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: 'qnfo-observability evSweep -> issue_events (AUTO-SWEEP)', medium: 'alerts',
-    // v1.3.0 FIX-ALERTS-DIGEST-CONSUMER-2: the evSweep consumer exists (alerts -> issue_events/issue_ledger AUTO-SWEEP); name it, and stamp alerts.digested='sweep' on consume so the chain measures true undigested count.
+  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: '(none wired)', medium: 'alerts',
+    // v1.2.7: no digest consumer was ever built for the alerts medium (audit 2026-09-21); name it honestly.
     // v1.1.5: was `digested = 0` (0 rows). Live values are TEXT 'auto' (914), INTEGER 1 (141), NULL (45).
     // The column is declared INTEGER but producers write TEXT, so an equality test on 0 can never match.
     sql: "SELECT COUNT(*) n FROM alerts WHERE digested IS NULL OR digested = '' OR digested = 0",
@@ -562,7 +562,7 @@ async function evSweep(env) {
       const ex = await env.AUDIT.prepare('SELECT fingerprint FROM issue_ledger WHERE fingerprint=?1').bind(fp).first();
       if (!ex) await env.AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,'alert','AUTO-SWEEP: ' || substr(?4,1,220),'open',?5,?5,1,?4,?5)").bind(fp, String(a.source || 'unknown').slice(0, 80), lvl, String(a.message || ''), now).run();
       else await env.AUDIT.prepare('UPDATE issue_ledger SET occurrences=occurrences+1, last_seen=?1, last_detail=?2, updated_at=?1 WHERE fingerprint=?3').bind(now, String(a.message || '').slice(0, 1000), fp).run();
-      await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,?3,'alert','AUTO-SWEEP',?4,?5)").bind(fp, String(a.source || 'unknown').slice(0, 80), lvl, key, now).run(); await env.AUDIT.prepare("UPDATE alerts SET digested='sweep' WHERE id=?1").bind(a.id).run(); alertsN++;
+      await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,?3,'alert','AUTO-SWEEP',?4,?5)").bind(fp, String(a.source || 'unknown').slice(0, 80), lvl, key, now).run(); alertsN++;
     }
   } catch (e) { alertsN = -1; }
   try {
