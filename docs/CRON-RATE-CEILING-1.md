@@ -60,6 +60,14 @@ eventual-consistency artefact — a **concurrent actor re-timed LIVE out-of-band
 been realigned to LIVE. `*/15` (96 fires/24h, 15-minute spacing) satisfies the same ceiling
 as `*/10` (144/24h) and leaves headroom rather than sitting exactly on the limit.
 
+**Drift is ongoing, not a one-off (observed 2026-09-23, same cycle).** While this cycle was
+closing out, a further live sweep showed `qnfo-deploy-guard` and `qnfo-research-exec` at
+`*/20 * * * *` (repo still declares `*/10`). Both are compliant, but repo/LIVE parity cannot
+be *held* while a concurrent actor keeps re-timing schedules out-of-band. This is the
+argument for **enforcement over pinning**: the ceiling is guaranteed by
+`cron_rate_guard.py --live` running on a fleet cron — which rejects any value, no matter who
+writes it — rather than by aligning individual strings in the repo.
+
 **Dispatcher safety is a precondition, not an assumption.** `jnl-pipeline` is a *counter-example*
 and was deliberately NOT re-timed: its `scheduled()` branches on the literal cron string —
 
