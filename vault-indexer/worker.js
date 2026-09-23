@@ -17,9 +17,10 @@
  * v0.1.15: raise RUN_DEADLINE_MS 110s -> 200s (still < the 240s lock TTL, so no overlap) to amortize the fixed per-run R2 listing overhead and restore throughput; embed still bounded at 0.65*deadline.
  * v0.1.16: F10 FIX - a terminal embed failure (e.g. 3043 Internal server error) now records a files row (chunks=0, category embed-failed) so the doc leaves `changed` instead of re-erroring every run; errors fall to 0, and the doc re-indexes if its R2 object changes.
  * v0.1.17: F10 CORRECTED - bounded retry. A terminal embed failure now increments an embed_failures counter; the doc is recorded (chunks=0, embed-failed) only after 3 consecutive failures (1h staleness reset). Transient blips self-heal; persistent failures still leave `changed`.
+ * v0.1.18: F1b SELF-HEAL - on version change the worker self-reports VERSION to the deploy-guard /ledger (R2 marker guards it to once per change), so service_registry stays current regardless of deploy path (raw wrangler deploys no longer re-stale it).
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.17";
+var VERSION = "0.1.18";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -249,6 +250,18 @@ async function run(env, cap) {
   if (haveLock) { try { await env.PERSONAL.prepare("DELETE FROM vault_indexer_lock WHERE id=1").run(); } catch (e) { } }
   try {
     await env.VAULT.put("_meta/vault-indexer.status.json", JSON.stringify({ ts: new Date().toISOString(), scanned: s.scanned, changed: s.changed, indexed: s.indexed, chunks: s.chunks, reconciled: s.reconciled, errors: s.errors }), { httpMetadata: { contentType: "application/json" } });
+  } catch (e) { }
+
+  // F1b SELF-HEAL (v0.1.18): self-report the deployed VERSION to the deploy-guard on version change so
+  // service_registry stays current regardless of the deploy path (a raw `wrangler deploy` no longer
+  // re-stales it). Guarded by an R2 marker -> fires once per version change, not every run.
+  try {
+    var svObj = await env.VAULT.get("_meta/self-version.txt");
+    var lastV = svObj ? (await svObj.text()) : "";
+    if (String(lastV).trim() !== VERSION) {
+      await fetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ worker: WORKER, to: VERSION, note: "self-report version-change (F1b self-heal)", actor: "vault-indexer/" + VERSION, ok: true }) });
+      await env.VAULT.put("_meta/self-version.txt", VERSION, { httpMetadata: { contentType: "text/plain" } });
+    }
   } catch (e) { }
 
   s.elapsedMs = Date.now() - t0;
