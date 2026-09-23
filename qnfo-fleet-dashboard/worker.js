@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.6"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.7"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1984,6 +1984,16 @@ var worker_default = {
       try {
         await loopExecute(env);
       } catch (e3) {
+      }
+      // FLEET-SCHEDULES-CRON-REFRESH-1 (2026-09-23): refresh the worker_schedules census ON THE CRON.
+      // liveScheduled() was only reachable via a view/route (worker.js:1243), so the census re-staled
+      // whenever nobody loaded the dashboard. Wire it into the scheduled handler so it self-maintains
+      // every */30 and the substantiveness/deprecation policy always reads a live-matching census.
+      try {
+        const _lf = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
+        const _names = (_lf.results || []).map(function (x) { return x.service; });
+        if (_names.length) await liveScheduled(env, _names);
+      } catch (e4) {
       }
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
     } catch (e) {
