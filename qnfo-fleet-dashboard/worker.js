@@ -422,7 +422,8 @@ async function liveScheduled(env, liveNames) {
             const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
             if (!r.ok) return { n, c: [], ok: false };
             const j = await r.json();
-            const arr = (j.result && j.result.schedules) || [];
+            if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
+            const arr = j.result.schedules;
             return { n, c: arr.map(function(s) { return s.cron; }), ok: true };
           } catch (e) { return { n, c: [], ok: false }; }
         }));
