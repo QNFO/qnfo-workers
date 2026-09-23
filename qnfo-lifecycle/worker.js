@@ -1,5 +1,4 @@
 const QNFO_VERSION = "1.6.2";
-var VERSION = "1.6.2"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -67,7 +66,7 @@ function health(env, origin) {
   return new Response(JSON.stringify({
     status: "ok",
     worker: "qnfo-lifecycle",
-    version: VERSION,
+    version: "1.6.1",
     cronSchedules: 9,
     features: ["lifecycle-scan", "graph-seed", "backup", "drift-audit-enhanced", "secrets-audit-enhanced", "registry-sync", "infra-ping", "ula-check", "memory-maintain"],
     bindings: { d1: ["qnfo-audit", "qnfo-graph", "portfolio-state", "living-paper", "ipatent-db"], r2: ["qnfo", "qnfo-audit", "qnfo-backups"] }

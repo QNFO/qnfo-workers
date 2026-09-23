@@ -1,4 +1,4 @@
-var VERSION = "1.1.0",V = VERSION,TO='rwnquni@outlook.com',OFF=[60,1440];
+const V='1.0.0',TO='rwnquni@outlook.com',OFF=[60,1440];
 const iso=()=>new Date().toISOString();
 const J=(d,s)=>new Response(JSON.stringify(d),{status:s||200,headers:{'content-type':'application/json','access-control-allow-origin':'*'}});
 const au=(r,e)=>{const t=String(r.headers.get('Authorization')||'').replace(/^Bearer /i,'');return!e.INGEST_TOKEN||t===e.INGEST_TOKEN;};
