@@ -1,4 +1,4 @@
-const QNFO_VERSION = "1.6.1";
+const QNFO_VERSION = "1.6.2";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -458,6 +458,33 @@ __name22222(runSecretsAudit, "runSecretsAudit");
 __name222222(runSecretsAudit, "runSecretsAudit");
 async function runSync(env) {
   console.log("[lifecycle] syncing registry...");
+  var out = { status: "registry-synced", checked: 0, updated: 0, failed: 0, changes: [] };
+  try {
+    var rows = await env.QNFO_AUDIT.prepare("SELECT service, version, base_url FROM service_registry").all();
+    var list = rows.results || [];
+    var probe = async function(r) {
+      out.checked++;
+      var url = (r.base_url || ("https://" + r.service + ".q08.workers.dev")).replace(/\/+$/, "");
+      try {
+        var resp = await fetch(url + "/health", { signal: AbortSignal.timeout(6000) });
+        if (!resp.ok) { out.failed++; return; }
+        var t = (await resp.text()).replace(/\s+/g, " ");
+        var m = t.match(/"version"\s*:\s*"([^"]{1,60})"/);
+        var live = m && m[1] ? m[1] : null;
+        if (!live) { out.failed++; return; }
+        if (live !== r.version) {
+          await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(live, new Date().toISOString(), r.service).run();
+          out.updated++;
+          if (out.changes.length < 30) out.changes.push(r.service + ": " + (r.version || "null") + " -> " + live);
+        }
+      } catch (e) { out.failed++; }
+    };
+    for (var i = 0; i < list.length; i += 10) {
+      await Promise.all(list.slice(i, i + 10).map(probe));
+    }
+  } catch (e) { out.error = String(e && e.message || e).slice(0, 160); }
+  console.log("[lifecycle] registry sync: checked=" + out.checked + " updated=" + out.updated + " failed=" + out.failed);
+  return out;
 }
 __name(runSync, "runSync");
 __name2(runSync, "runSync");
