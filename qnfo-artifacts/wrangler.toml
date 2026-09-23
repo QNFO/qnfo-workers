@@ -5,22 +5,15 @@ workers_dev = true
 
 # Cloudflare Artifacts (closed beta; access granted on account quniverse).
 # The namespace is fixed at bind time -- the worker never takes a namespace parameter.
+# SECRET/ARTIFACTS-REMEDIATE-1 2026-09-22 (R1): `artifacts` is NOT expressible in
+# wrangler.toml - verified: both `[[artifacts]]` and `[artifacts]` are rejected by
+# `wrangler deploy --dry-run` (config parse ERROR). The block below is therefore
+# DELIBERATELY left in an unsupported form so a wrangler deploy FAILS CLOSED rather
+# than silently dropping the ARTIFACTS binding and breaking the worker. The operative
+# deploy path for this worker is scripts/raw_put.py (binding-preserving /content PUT).
 [[artifacts]]
 binding = "ARTIFACTS"
 namespace = "qnfo"
 
-# Re-falsification store for the beta dependency (artifacts_probes).
-[[d1_databases]]
-binding = "AUDIT_DB"
-database_name = "qnfo-audit"
-database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
-
-# Item 3: periodic re-probe so a beta revocation/shape change is recorded, not silent.
-[triggers]
-crons = ["17 */6 * * *"]
-
 [vars]
 ARTIFACTS_NAMESPACE = "qnfo"
-
-# ARTIFACTS_TOKEN is a secret (wrangler secret put ARTIFACTS_TOKEN --name qnfo-artifacts).
-# The worker fails closed (503) until it is set. Never commit the value.

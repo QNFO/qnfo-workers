@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.2.9"; // var + double quotes: qnfo-ops cfWorkerRead greps /var VERSION = "([^"]+)"/ for the /ops/deploy expected_version guard // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+const VERSION = '1.2.9'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census

@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.1.1";
+var VERSION = "0.1.0";
 var WORKER_NAME = "qnfo-proof";
 var BASE_URL = "https://qnfo-proof.q08.workers.dev";
 var CLEARED_CHILD_STATES = ["validated", "admitted", "archived"];
@@ -374,7 +374,7 @@ async function selfRegister(env) {
     routes: ["/health", "/proofs", "/proofs/:id/status", "/proofs/:id/export"],
     tools: [],
     models: [],
-    deps: ["d1:qnfo-audit", "service:qnfo-ops"]
+    deps: ["qnfo-audit D1 (proofs/proof_events/proof_nodes/proof_challenges)", "qnfo-ops registry"]
   };
   const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
     method: "POST",

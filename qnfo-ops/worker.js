@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.54";
+var VERSION = "2.36.47";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1653,7 +1653,7 @@ async function cfWorkerRead(env, args) {
     }
     const vMatch = src.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/);
     const version = vMatch ? vMatch[1] : meta.modified_on ? "unknown (modified " + meta.modified_on + ")" : "unknown";
-    return { ok: true, worker, version, version_known: !!vMatch, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
+    return { ok: true, worker, version, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
   } catch (e) {
     return { ok: false, error: "cf_worker_read failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -1671,14 +1671,7 @@ async function cfWorkerDeploy(env, args) {
   if (!content) return { ok: false, error: "content (JS source) required" };
   if (args && args.expected_version) {
     const cur = await cfWorkerRead(env, { worker, maxChars: 500 });
-    // VERSION-READ-FALLBACK-1 (2026-09-24): when the deployed bundle carries no recognizable
-    // var/const/let VERSION the read returns "unknown"; accept expected_version (the caller's
-    // from_version) as the base and PROCEED instead of hard-failing. The old equality check returned
-    // "VERSION MISMATCH: live=unknown" and blocked the canonical route for qnfo-agent-ws,
-    // qnfo-artifact-agent and qnfo-ops itself, forcing non-canonical with-lock workarounds.
-    // A KNOWN live version still gets the full race guard - this only relaxes the unreadable case.
-    const liveUnknown = !!(cur && cur.ok && cur.version_known === false);
-    if (cur.ok && !liveUnknown && cur.version !== String(args.expected_version)) {
+    if (cur.ok && cur.version !== String(args.expected_version)) {
       return { ok: false, rejected: true, error: "VERSION MISMATCH: live=" + cur.version + " expected=" + args.expected_version + " \u2014 concurrent agent may have deployed. Read current bundle first (cf_worker_read) before retrying." };
     }
   }
@@ -3520,7 +3513,7 @@ function manifest() {
     }),
     models: opsModelIds(),
     limitations: OPS_ENDPOINT_LIMITATIONS,
-    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-email-orchestrator", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
+    deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "REGISTRY_TOKEN (fleet self-registration)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
     generatedAt: iso()
   };
 }
@@ -3569,63 +3562,17 @@ async function registryRefresh(env) {
       sweepTried++;
       try {
         const r2 = await fetch("https://" + w.id + ".q08.workers.dev/health", { signal: AbortSignal.timeout(8e3) });
-        let v2 = null;
-        if (r2.ok) {
-          try {
-            const j2 = await r2.json();
-            v2 = j2 && j2.version ? String(j2.version) : null;
-          } catch (e) {
-            v2 = null;
-          }
-        }
-        if (!v2) {
-          // ROUTELESS-WORKER-VERSION-1 (2026-09-24): workers with subdomain.enabled=false
-          // answer CF 1042/404 on <name>.q08.workers.dev, so the /health probe can never
-          // version them and they sit as permanent `version IS NULL` drift. Fall back to
-          // reading the VERSION constant out of the DEPLOYED script via the CF API.
-          try {
-            const rs = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + w.id, {
-              headers: { "Authorization": "Bearer " + env.CF_API_TOKEN },
-              signal: AbortSignal.timeout(8e3)
-            });
-            if (rs.ok) {
-              const txt = await rs.text();
-              // SEMVER-EXTRACT-AUTHORITY-1 (2026-09-24): String.match returned the FIRST `VERSION = "..."`
-              // in the bundle. Merged workers carry LEGACY constants BEFORE the current one
-              // (osf: QNFO_VERSION="osf-integrity-check/fabric-20260910"; artifact-agent/MCP: "2025-11-25";
-              // idea-hub: "qnfo-idea-factory/fabric-20260910"; radar-hub: 5 constants), so this sweep
-              // wrote a NON-SEMVER version every cron and reverted every manual repair. Collect ALL
-              // VERSION assignments, prefer the first SEMVER-shaped one, and never write non-semver.
-              const allV = String(txt).match(/VERSION\s*=\s*["']([^"']+)["']/g) || [];
-              const vals = allV.map(function (x) { return (x.match(/["']([^"']+)["']/) || [])[1]; }).filter(Boolean);
-              const sem = vals.filter(function (x) { return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(x); });
-              if (sem.length) v2 = sem[0];
-            }
-          } catch (e) {
-            /* fall through to the noversion report below */
-          }
-        }
+        if (!r2.ok) return w.id + ":HTTP" + r2.status;
+        const j2 = await r2.json();
+        const v2 = j2 && j2.version ? String(j2.version) : null;
         if (!v2) return w.id + ":noversion";
         await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(v2, now, w.id).run();
         swept++;
         return null;
       } catch (e) { return w.id + ":" + String(e && e.message || e).slice(0, 70); }
     }, "probe");
-    // REGISTRY-SWEEP-CONCURRENCY-COVERAGE (#1075, 2026-09-24): an UNCAPPED Promise.all fired all
-    // ~56 CF-API fetches at once, so rate-limiting/timeouts made the ":noversion" set
-    // NON-DETERMINISTIC (observed 6, then 8, then 13 across identical runs) and the reported gap
-    // unmeasurable. Run a bounded pool (8 concurrent) so the coverage gap is stable + auditable.
-    const POOL = 8;
-    const results = [];
-    for (let pi = 0; pi < others.length; pi += POOL) {
-      const part = await Promise.all(others.slice(pi, pi + POOL).map(probe));
-      for (const x of part) results.push(x);
-    }
-    // COVERAGE-GAP-REPORT-1 (2026-09-24): slice(0,6) truncated the failure list in
-    // non-deterministic Promise.all order, so the reported ":noversion" set CHANGED between runs
-    // and UNDERSTATED the true coverage gap (measured 8, reported 6). Report ALL failures so the
-    // gap size is auditable. (This is the same failure-hiding class the ROUTELESS fallback fixed.)
-    sweepErrs = results.filter(Boolean);
+    const results = await Promise.all(others.map(probe));
+    sweepErrs = results.filter(Boolean).slice(0, 6);
   }
 
   let rich = 0;
@@ -4161,12 +4108,7 @@ async function opsDeploy(env, args) {
       const gr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + file + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
       if (!gr.ok) { result = { ok: false, error: "github contents " + gr.status }; return Object.assign({ log: log }, result); }
       const gj = await gr.json();
-      let b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
-      if (!b64 && gj.sha) {
-        const br = await fetch("https://api.github.com/repos/" + repo + "/git/blobs/" + gj.sha, { headers: hdrs });
-        if (br.ok) { const bj = await br.json(); b64 = String(bj.content || "").replace(/[^A-Za-z0-9+/=]/g, ""); }
-        log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
-      }
+      const b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
       const content = atob(b64);
       const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
@@ -4235,24 +4177,7 @@ var worker_default = {
       }
       return json(out);
     }
-    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) {
-          // SELF-HEAL-AUTOCLOSE-NO-REPROBE (#1076, 2026-09-24): the blanket 'adaptive-sampled'
-          // rationale CLOSED REAL findings (proven: qnfo-chat-canary's own log is 5 days stale).
-          // Resolve ONLY when an EXTERNAL liveness probe exists in 24h -- and specifically NOT a
-          // 'cf-api-list' row, which proves EXISTENCE only (FLEET-PROBE-COVERAGE-1), never that the
-          // worker runs or writes. Otherwise annotate + escalate for per-worker verification.
-          const wm = String(row.action || "").match(/:\s*([a-z0-9][a-z0-9._-]{2,})\s*\(/);
-          const wName = wm ? wm[1] : null;
-          let probed = false;
-          if (wName) {
-            try {
-              const pr = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM fleet_probe_log WHERE name=?1 AND ok=1 AND (transport IS NULL OR transport <> 'cf-api-list') AND ts >= ?2").bind(wName, new Date(Date.now() - 864e5).toISOString()).first();
-              probed = !!(pr && pr.c > 0);
-            } catch (e) { probed = false; }
-          }
-          if (probed) rat = "undercount false-positive (adaptive-sampled) -- external liveness probe ok in 24h";
-          else { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, claim=?, confidence='medium' WHERE id=?").bind("escalated", "SELF-HEAL-AUTOCLOSE-NO-REPROBE: no EXTERNAL liveness probe (non-watchdog) for " + (wName || "unknown") + " in 24h - NOT auto-closed; needs per-worker verification (its own log may be stale)", row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: "escalated-no-external-liveness-probe" }); }
-        } if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
+    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) rat = "undercount false-positive (adaptive-sampled)"; if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
       const bindings = {};
       for (const k of BINDING_KEYS) bindings[k.toLowerCase()] = !!(env[k] && env[k].fetch);
       bindings.audit = !!env.QNFO_AUDIT;
