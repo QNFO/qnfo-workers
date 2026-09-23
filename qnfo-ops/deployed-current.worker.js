@@ -26,7 +26,7 @@ __name222(fnv32, "fnv32");
 __name2222(fnv32, "fnv32");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.45";
+var VERSION = "2.36.46";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1750,7 +1750,20 @@ async function cfWorkerDeploy(env, args) {
     for (const _b of bindingsOut) {
       if (_b.type === "durable_object_namespace" && _b.class_name) _exports[_b.class_name] = { type: "durable-object", storage: "sqlite" };
     }
-    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, Object.keys(_exports).length ? { exports: _exports } : {}));
+    let _compatDate = "2026-08-01";
+    let _compatFlags = [];
+    try {
+      const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
+      if (_sResp.ok) {
+        const _sj = await _sResp.json().catch(() => null);
+        const _sr = _sj && _sj.result;
+        if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
+        if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
+      }
+    } catch (_e) {
+    }
+    if (!_compatDate) _compatDate = "2026-08-01";
+    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
