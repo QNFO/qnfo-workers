@@ -6,3 +6,7 @@
 *.bak
 *.bak-*
 *.bak.*
+
+# python bytecode (never commit)
+__pycache__/
+*.pyc
