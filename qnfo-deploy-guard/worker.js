@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.6";
+var VERSION = "1.3.7";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -43,7 +43,11 @@ async function fileIssue(env, title, desc, priority) {
   var res = await auditRun(env, "INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [title, String(desc).slice(0, 900), "qnfo-deploy-guard", "reliability", priority || "high", "open", "qnfo-deploy-guard/" + VERSION, now, now]);
   return { filed: true, ok: res && res.ok !== false, error: res && res.error };
 }
-async function fileAlert(env, level, message) { await auditRun(env, "INSERT INTO alerts (source, level, message, digested, created_at) VALUES (?1,?2,?3,0,?4)", ["qnfo-deploy-guard", level, String(message).slice(0, 500), nowIso()]); }
+// ALERTS-CHAIN-NO-CONSUMER-1 (2026-09-23): deploy-guard alerts are INFORMATIONAL self-notifications -
+// the actionable output is the agent_issues it files. Writing digested=0 fed a queue with no consumer,
+// permanently sticking the alerts integration chain (9 of 10 undigested). Self-digest (digested=1): the
+// alert is a log entry, not a pending queue item.
+async function fileAlert(env, level, message) { await auditRun(env, "INSERT INTO alerts (source, level, message, digested, created_at) VALUES (?1,?2,?3,1,?4)", ["qnfo-deploy-guard", level, String(message).slice(0, 500), nowIso()]); }
 // REGISTRY-UNREGISTERED-WORKER-2 (2026-09-21): register-at-deploy. Any live worker absent from
 // service_registry (the census authority) gets a stub row immediately, cutting the drift window
 // from qnfo-register-guard's 24h to <=10min. The daily register-guard still does the full reconcile.
