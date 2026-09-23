@@ -47,9 +47,18 @@ At-the-ceiling but **compliant** (exactly 144 fires/24h at exactly 10-minute spa
 
 | worker | was | now | safety argument |
 | --- | --- | --- | --- |
-| `qnfo-calendar-intake` | `*/5 * * * *` | `*/10 * * * *` | `scheduled()` runs `sch()` + `dis()` with no cron-string branch; `dis()` dispatches `WHERE remind_at <= now LIMIT 20`, so reminders land within 10 min of target instead of 5. Reminder offsets (-1440 / -60 min) unaffected. |
-| `vault-indexer` | `*/5 * * * *` | `*/10 * * * *` | `scheduled(event, env, ctx)` calls `run(env)` with no cron-string branch. |
+| `qnfo-calendar-intake` | `*/5 * * * *` | `*/15 * * * *` | `scheduled()` runs `sch()` + `dis()` with no cron-string branch; `dis()` dispatches `WHERE remind_at <= now LIMIT 20`, so reminders land within one interval of target. Reminder offsets (-1440 / -60 min) unaffected. |
+| `vault-indexer` | `*/5 * * * *` | `*/15 * * * *` | `scheduled(event, env, ctx)` calls `run(env)` with no cron-string branch. |
+
 | `qnfo-email` | `*/5 * * * *` (repo) | `0 7 * * *` (repo) | Repo declaration re-synced to the value already LIVE. The repo was a latent violation any `wrangler deploy` would have applied. |
+
+**External drift, re-probe 2026-09-23 (CRON-SCHEDULE-EXTERNAL-DRIFT-1).** This cycle first
+set both workers to `*/10` in LIVE (verified: `PUT` 200, then `GET /schedules` returned
+`["*/10 * * * *"]`). A later re-probe found LIVE at `*/15` on both. `*/15` is neither the
+prior value (`*/5`) nor the value this cycle wrote (`*/10`), so it cannot be an
+eventual-consistency artefact — a **concurrent actor re-timed LIVE out-of-band**. Repo has
+been realigned to LIVE. `*/15` (96 fires/24h, 15-minute spacing) satisfies the same ceiling
+as `*/10` (144/24h) and leaves headroom rather than sitting exactly on the limit.
 
 **Dispatcher safety is a precondition, not an assumption.** `jnl-pipeline` is a *counter-example*
 and was deliberately NOT re-timed: its `scheduled()` branches on the literal cron string —
