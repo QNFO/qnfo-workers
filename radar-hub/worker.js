@@ -1284,10 +1284,15 @@ const JobMarketWatchWorkflow = jmwMod.JobMarketWatchWorkflow;
 export { JobMarketWatchWorkflow };
 
 // ===== MERGED RADAR HUB v2 (2026-09-11: + job-market-watch + personal-events-radar) =====
+// HUB-VERSION-SCOPE-1 (2026-09-23): the hub's OWN version must be declared at MODULE scope.
+// `VERSION` exists only INSIDE the eventsMod / arxivMod / perMod IIFEs above, so referencing
+// it from this module-scope `export default` threw ReferenceError and /health returned CF
+// error 1101. The previous hardcoded "1.0.0" literal masked the missing binding.
+const HUB_VERSION = "1.0.9";
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 6 }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: HUB_VERSION, radars: 6 }), { headers: { "content-type": "application/json" } });
     function sub(prefix) { const u = new URL(request.url); u.pathname = p.slice(prefix.length) || "/"; return new Request(u.toString(), request); }
     if (p === "/events" || p.startsWith("/events/")) return eventsMod.default.fetch(sub("/events"), env, ctx);
     if (p === "/citation" || p.startsWith("/citation/")) return citationMod.fetch(sub("/citation"), env, ctx);
