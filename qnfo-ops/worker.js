@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.46";
+var VERSION = "2.36.47";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1651,7 +1651,7 @@ async function cfWorkerRead(env, args) {
     } else {
       src = await srcR.text();
     }
-    const vMatch = src.match(/var VERSION\s*=\s*["']([^"']+)["']/);
+    const vMatch = src.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/);
     const version = vMatch ? vMatch[1] : meta.modified_on ? "unknown (modified " + meta.modified_on + ")" : "unknown";
     return { ok: true, worker, version, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
   } catch (e) {
@@ -4110,7 +4110,7 @@ async function opsDeploy(env, args) {
       const gj = await gr.json();
       const b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
       const content = atob(b64);
-      const srcVer = (content.match(/var VERSION = "([^"]+)"/) || [])[1] || null;
+      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) { result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer }; return Object.assign({ log: log }, result); }
       const dep = await cfWorkerDeploy(env, { worker: worker, content: content, version: toVer || srcVer || undefined, expected_version: fromVer || undefined });
