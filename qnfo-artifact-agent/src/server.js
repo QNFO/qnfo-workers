@@ -1,3 +1,5 @@
+import { Agent, routeAgentRequest } from "../vendor/agents/index.js";
+ 
 /**
  * qnfo-artifact-agent -- an Agents-SDK agent that owns Cloudflare Artifacts workspaces.
  *
@@ -15,7 +17,7 @@
  *   INVARIANT: the ledger never stores token plaintext; tokens are returned to the caller
  *              once and never persisted by the agent.
  *
- * ROUTES (agent-scoped, under /agents/ArtifactAgent/:session)
+ * ROUTES (agent-scoped; the SDK kebab-cases the DO name: /agents/artifact-agent/:session)
  *   GET  /health                 liveness + session identity
  *   GET  /ledger                 durable workspace ledger for this session
  *   GET  /repos                  repos in the qnfo namespace (live)
@@ -24,7 +26,7 @@
  *   GET  /log?repo=:name         commit log for a repo
  */
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const MAX_TTL = 86400;
 const DEFAULT_TTL = 3600;
 
@@ -55,6 +57,9 @@ export class ArtifactAgent extends Agent {
         version: VERSION,
         agent: "ArtifactAgent",
         session: this.name,
+        // The Agents SDK kebab-cases the DO binding name when building the URL:
+        // binding `ArtifactAgent` -> path segment `artifact-agent`.
+        route: "/agents/artifact-agent/" + this.name,
         namespace: this.env.ARTIFACTS_NAMESPACE || "qnfo",
         workspaces: (this.state.workspaces || []).length,
         capabilities: ["agents-sdk", "durable-agent-session", "agent-workspace-provisioning", "scoped-git-tokens"],
@@ -132,7 +137,7 @@ export default {
       return json({ status: "ok", worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", namespace: env.ARTIFACTS_NAMESPACE || "qnfo" });
     }
     if (url.pathname === "/" ) {
-      return json({ worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", docs: "GET /agents/ArtifactAgent/:session/{health|ledger|repos|log}, POST /agents/ArtifactAgent/:session/{provision|token}" });
+      return json({ worker: "qnfo-artifact-agent", version: VERSION, agent: "ArtifactAgent", route_prefix: "/agents/artifact-agent/:session", docs: "GET /agents/artifact-agent/:session/{health|ledger|repos|log}, POST /agents/artifact-agent/:session/{provision|token}" });
     }
     const routed = await routeAgentRequest(request, env);
     if (routed) return routed;
