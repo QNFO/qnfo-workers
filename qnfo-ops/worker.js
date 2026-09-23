@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.45";
+var VERSION = "2.36.46";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1704,7 +1704,25 @@ async function cfWorkerDeploy(env, args) {
     const _mp = (args && args.service_worker) ? { body_part: "worker.js" } : { main_module: "worker.js" }; // MODULE-FORMAT-1: vectorize/DO/workflow bindings require ES module format (CF 100329)
   const _exports = {};
   for (const _b of bindingsOut) { if (_b.type === "durable_object_namespace" && _b.class_name) _exports[_b.class_name] = { type: "durable-object", storage: "sqlite" }; }
-  const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, (Object.keys(_exports).length ? { exports: _exports } : {}))); // DO-EXPORT-EXPLICIT-1: provisioned DO classes must be declared in exports (CF 100402)
+  // CF-DEPLOY-COMPAT-PRESERVE-1: the deploy metadata MUST carry the live compatibility date/flags.
+  // Omitting them makes Cloudflare CLEAR them, silently disabling date-gated APIs. With
+  // `streams_enable_constructors` off, `new ReadableStream()` throws at every construction site
+  // (5 in this worker), so EVERY streaming response 502s (relay) or 1101s (agent), while
+  // non-streaming keeps working - a silent, shape-dependent outage. Canonical regression:
+  // qnfo-ops 2026-09-23 (the first /ops/deploy wiped compatibility_date, breaking all streaming).
+  let _compatDate = "2026-08-01";
+  let _compatFlags = [];
+  try {
+    const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
+    if (_sResp.ok) {
+      const _sj = await _sResp.json().catch(() => null);
+      const _sr = _sj && _sj.result;
+      if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
+      if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
+    }
+  } catch (_e) { }
+  if (!_compatDate) _compatDate = "2026-08-01";
+  const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, (_compatFlags.length ? { compatibility_flags: _compatFlags } : {}), (Object.keys(_exports).length ? { exports: _exports } : {}))); // DO-EXPORT-EXPLICIT-1 + CF-DEPLOY-COMPAT-PRESERVE-1
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
