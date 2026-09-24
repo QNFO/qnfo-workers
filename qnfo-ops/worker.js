@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.54";
+var VERSION = "2.36.55";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1662,6 +1662,67 @@ __name(cfWorkerRead, "cfWorkerRead");
 __name2(cfWorkerRead, "cfWorkerRead");
 __name22(cfWorkerRead, "cfWorkerRead");
 __name222(cfWorkerRead, "cfWorkerRead");
+// BINDING-INSTALL-WHEN-EMPTY-1 (2026-09-24, closes P1 DEPLOY-ROUTE-NEVER-INSTALLS-BINDINGS):
+// BINDING-PRESERVE-1 preserves EXISTING bindings; when a worker has NONE (GET /bindings -> 404)
+// the canonical route deployed with `bindings: []` and reported bindings_preserved: 0 as ordinary
+// success - so a worker that lost its bindings became a SILENT NO-OP the canonical path could never
+// repair (canonical: qnfo-chat-canary + ai-health-prober, both 0 bindings, 2026-09-24). This reads
+// the repo wrangler.toml and INSTALLS the declared non-secret bindings. Only invoked when the live
+// binding set is empty, so workers that already have bindings are completely unaffected.
+async function installDeclaredBindings(env, worker) {
+  const out = { installed: 0, note: null, bindings: [] };
+  try {
+    const dirs = [worker];
+    if (worker.indexOf("qnfo-") === 0) dirs.push(worker.slice(5));
+    const hdrs = { "Accept": "application/vnd.github+json", "User-Agent": "qnfo-ops-binding-install" };
+    if (env.GITHUB_TOKEN) hdrs["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+    let toml = null;
+    for (const d of dirs) {
+      const tr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + d + "/wrangler.toml?ref=main", { headers: hdrs });
+      if (!tr.ok) continue;
+      const tj = await tr.json().catch(function () { return null; });
+      const b64 = tj && tj.content ? String(tj.content).replace(/[^A-Za-z0-9+/=]/g, "") : "";
+      if (b64) { toml = atob(b64); break; }
+    }
+    if (!toml) { out.note = "no wrangler.toml in the repo for this worker"; return out; }
+    const sections = [];
+    let cur = null;
+    for (const raw of String(toml).split(/\r?\n/)) {
+      const l = raw.replace(/#.*$/, "").trim();
+      if (!l) continue;
+      const m = l.match(/^\[\[?\s*([A-Za-z0-9_.]+)\s*\]\]?$/);
+      if (m) { cur = { name: m[1], kv: {} }; sections.push(cur); continue; }
+      if (cur) {
+        const eq = l.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+        if (eq) cur.kv[eq[1]] = eq[2].trim().replace(/^"|"$/g, "").replace(/,$/, "");
+      }
+    }
+    const decl = [];
+    for (const s of sections) {
+      const k = s.kv;
+      const nm = k.binding || k.name || null;
+      if (!nm) continue;
+      if (s.name === "d1_databases" && k.database_id) decl.push({ type: "d1", name: nm, id: k.database_id });
+      else if (s.name === "r2_buckets" && k.bucket_name) decl.push({ type: "r2_bucket", name: nm, bucket_name: k.bucket_name });
+      else if (s.name === "kv_namespaces" && k.id) decl.push({ type: "kv_namespace", name: nm, namespace_id: k.id });
+      else if (s.name === "ai") decl.push({ type: "ai", name: nm });
+      else if (s.name === "services" && k.service) decl.push({ type: "service", name: nm, service: k.service, environment: k.environment || "production" });
+      else if (s.name === "vectorize" && k.index_name) decl.push({ type: "vectorize", name: nm, index_name: k.index_name });
+      else if (s.name === "durable_objects.bindings" && k.class_name) decl.push({ type: "durable_object_namespace", name: nm, class_name: k.class_name });
+      else if (s.name === "queues" && k.queue_name) decl.push({ type: "queue", name: nm, queue_name: k.queue_name });
+      else if (s.name === "workflows" && k.class_name) decl.push({ type: "workflow", name: nm, class_name: k.class_name });
+      else if (s.name === "send_email") decl.push({ type: "send_email", name: nm });
+      else if (s.name === "browser") decl.push({ type: "browser", name: nm });
+      else if (s.name === "ai_search") decl.push({ type: "ai_search", name: nm });
+      else if (s.name === "artifacts") decl.push({ type: "artifacts", name: nm });
+    }
+    out.bindings = decl;
+    out.installed = decl.length;
+    if (!decl.length) out.note = "wrangler.toml declares no installable non-secret bindings";
+    return out;
+  } catch (e) { out.note = String(e && e.message || e).slice(0, 140); return out; }
+}
+__name(installDeclaredBindings, "installDeclaredBindings");
 async function cfWorkerDeploy(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
   const worker = String(args && args.worker || "").trim();
@@ -1700,12 +1761,19 @@ async function cfWorkerDeploy(env, args) {
   } else {
     return { ok: false, error: "cf_worker_deploy ABORTED: bindings fetch status " + bResp.status + " \u2014 refusing to deploy with bindings:[]" };
   }
-  const bindingsOut = existingBindings.filter(function(b) {
+  let bindingsOut = existingBindings.filter(function(b) {
     return b.type !== "secret_text" && b.type !== "secret_key";
   }).map(function(b) {
     const c = Object.assign({}, b);
     return c;
   });
+  let bindingsInstalled = 0;
+  let bindingInstallNote = null;
+  if (bindingsOut.length === 0) {
+    const _ins = await installDeclaredBindings(env, worker);
+    bindingInstallNote = _ins.note || null;
+    if (_ins.bindings && _ins.bindings.length) { bindingsOut = _ins.bindings; bindingsInstalled = _ins.installed; }
+  }
   try {
     const boundary = "ops-deploy-" + Date.now().toString(16);
     const _mp = (args && args.service_worker) ? { body_part: "worker.js" } : { main_module: "worker.js" }; // MODULE-FORMAT-1: vectorize/DO/workflow bindings require ES module format (CF 100329)
@@ -1737,7 +1805,7 @@ async function cfWorkerDeploy(env, args) {
     );
     const j = await resp.json().catch(() => ({}));
     if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400) };
-    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: (bindingsOut.length === 0) ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -4172,7 +4240,7 @@ async function opsDeploy(env, args) {
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) { result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer }; return Object.assign({ log: log }, result); }
       const dep = await cfWorkerDeploy(env, { worker: worker, content: content, version: toVer || srcVer || undefined, expected_version: fromVer || undefined });
-      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved });
+      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null });
       if (!dep.ok) { result = { ok: false, error: dep.error, rejected: dep.rejected || false }; return Object.assign({ log: log }, result); }
       let live = null;
       try {
@@ -4183,7 +4251,7 @@ async function opsDeploy(env, args) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
       }
       ok = !toVer || live === toVer;
-      result = { ok: ok, worker: worker, from: fromVer, to: toVer, live: live, version_id: (dep.result && dep.result.id) || null, bindings_preserved: dep.bindings_preserved };
+      result = { ok: ok, worker: worker, from: fromVer, to: toVer, live: live, version_id: (dep.result && dep.result.id) || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0 };
       return Object.assign({ log: log }, result);
     } finally {
       try { await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, actor: "qnfo-ops/ops-deploy", from: fromVer, to: toVer, ok: ok, note: "server-side deploy (opsDeploy route)" }) }); } catch (e) {}
