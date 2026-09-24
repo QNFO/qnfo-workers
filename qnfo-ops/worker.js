@@ -4244,7 +4244,7 @@ async function opsDeploy(env, args) {
         log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
       }
       const content = atob(b64);
-      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
+      const srcVer = (content.match(/(?:var\s+|const\s+|let\s+)?\bVERSION\s*=\s*["']([^"']+)["']/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) { result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer }; return Object.assign({ log: log }, result); }
       const dep = await cfWorkerDeploy(env, { worker: worker, content: content, version: toVer || srcVer || undefined, expected_version: fromVer || undefined });
