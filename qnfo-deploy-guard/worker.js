@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.10";
+var VERSION = "1.3.12";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -115,7 +115,12 @@ async function scan(env) {
     var was = prev[ww.name];
     if (was && was.mo && mo && String(was.mo) !== String(mo)) {
       var lg = lastLedger[ww.name] || null;
-      var logged = !!(lg && lg.ok !== 0 && ms(lg.ts) >= ms(mo) - 180000);
+      // FAILED-LEDGER-ROW-1 (v1.3.11): a FAILED latest ledger row (ok=0) is STILL a logged mutation.
+      // Reading ok=0 as "no row" misclassified a failed deploy as an unlogged-mutation (high) -- the
+      // canonical false-positive (qnfo-artifacts 2026-09-24: 08:26 deploy WAS ledgered at 08:26:54 but
+      // ok=0). The failure itself is still surfaced by the non-canonical-deploy pass below
+      // (nlr.ok === 0), so no signal is lost.
+      var logged = !!(lg && ms(lg.ts) >= ms(mo) - 180000);
       var rec = { type: logged ? "deploy-observed" : "unlogged-mutation", worker: ww.name, from_mod: was.mo, to_mod: mo, ledger_to: lg ? lg.to_sha : null, ledger_ts: lg ? lg.ts : null, lock_owner: active[ww.name] ? active[ww.name].owner : null, lock_held: !!active[ww.name] };
       changed.push(rec);
       if (!logged) anomalies.push(rec);
@@ -128,9 +133,16 @@ async function scan(env) {
   // canonical route (POST /ops/deploy -> note "server-side deploy (opsDeploy route)"). with-lock /
   // redeploy-script paths POST /ledger (so they pass the unlogged-mutation rule) yet bypass the
   // canonical sequence (uncached GitHub-source fetch + binding preservation). Aggregated to one anomaly.
+  var liveNames = {}; for (var lw = 0; lw < fleet.length; lw++) liveNames[fleet[lw].name] = 1;
+  var haveLive = fleet.length > 0;
   var nonCanon = [];
   for (var ncw in lastLedger) {
     if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
+    // FLEET-GHOST-LEDGER-1 (v1.3.12): a retired/ghost worker (present only in the ledger, absent from the
+    // live fleet) is not a deploy target -- its stale row must not permanently drive the aggregate (canonical
+    // offender: qnfo-fleet-advisor, retired, last ledger row 2026-09-09). Guarded by haveLive so a failed
+    // fleet probe cannot silently disable the non-canonical check.
+    if (haveLive && !liveNames[ncw]) continue;
     var nlr = lastLedger[ncw] || {};
     var nnote = String(nlr.note || "");
     if (/self-test|deliberately/i.test(nnote)) continue; // deliberate detector self-tests (e.g. ops-gateway)
