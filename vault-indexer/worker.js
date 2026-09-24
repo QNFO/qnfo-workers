@@ -7,9 +7,23 @@
  * v0.1.3: parallel embedding; stale-row reconcile (legacy orphans removed); vault_indexer_runs log; POST /drain.
  * v0.1.6: overlap lock (one run at a time, TTL takeover); MAX_LIST_PAGES 100; _meta/ shared status channel.
  * v0.1.7: embed retry (3x backoff) + EMBED_CONCURRENCY 5 (transient AI-throttle errors self-heal).
+ * v0.1.8: exponential backoff + jitter embed retry (5x, retryable-only), VZ upsert retry, per-run error notes persisted to vault_indexer_runs.notes.
+ * v0.1.9: retryable classification excludes AI Gateway spend-limit (2045) - a spend wall is non-retryable.
+ * v0.1.10: range-read oversized docs (partial index instead of blanket skip) + record a files row for content-short docs so they leave the `changed` set (fixes perpetual head-blocking).
+ * v0.1.11: EMBED_CONCURRENCY 5 -> 3 (reduce Workers AI 2003 rate-limit pressure, which coexists with the 2045 spend wall).
+ * v0.1.12: DIAGNOSTIC - record the keys that return null from getFull (the dominant skip branch) into run notes; root-causing the head-blocking.
+ * v0.1.13: STABILIZE - RUN_DEADLINE_MS (110s) bounds every run so it always completes/logs/releases the lock (fixes F7b lock starvation); retry budget tightened (3 attempts, backoff cap 3s). Reverts the v0.1.8 12s backoff that made adverse runs exceed the 4-min lock TTL.
+ * v0.1.14: F9 FIX - bound the embed phase at 0.65*RUN_DEADLINE_MS so the write phase always gets budget (v0.1.13's single deadline let the embed phase consume everything, so truncated runs wrote nothing).
+ * v0.1.15: raise RUN_DEADLINE_MS 110s -> 200s (still < the 240s lock TTL, so no overlap) to amortize the fixed per-run R2 listing overhead and restore throughput; embed still bounded at 0.65*deadline.
+ * v0.1.16: F10 FIX - a terminal embed failure (e.g. 3043 Internal server error) now records a files row (chunks=0, category embed-failed) so the doc leaves `changed` instead of re-erroring every run; errors fall to 0, and the doc re-indexes if its R2 object changes.
+ * v0.1.17: F10 CORRECTED - bounded retry. A terminal embed failure now increments an embed_failures counter; the doc is recorded (chunks=0, embed-failed) only after 3 consecutive failures (1h staleness reset). Transient blips self-heal; persistent failures still leave `changed`.
+ * v0.1.18: F1b SELF-HEAL - on version change the worker self-reports VERSION to the deploy-guard /ledger (R2 marker guards it to once per change), so service_registry stays current regardless of deploy path (raw wrangler deploys no longer re-stale it).
+ * v0.1.19: F1b self-heal hardened - only re-mark on a 2xx report; re-report every 6h (heals drift without a version change); expose the outcome via the status JSON (self.selfreport).
+ * v0.1.20: F1b self-heal bounded - write the R2 marker even on a non-2xx report so a failing report retries at most every 6h (not every run); the report outcome remains in the status JSON (self.selfreport). Canonical deploy path = POST /ops/deploy.
+ * v0.1.21: removed the superseded F1b self-heal - the canonical deploy path (POST /ops/deploy) writes /ledger and refreshes the registry server-side, so the worker self-report (which 404'd on the workers.dev subrequest path) is no longer needed.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.7";
+var VERSION = "0.1.21";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -18,7 +32,8 @@ var CHUNK_SIZE = 900;
 var CHUNK_OVERLAP = 120;
 var MAX_CHUNKS = 24;
 var GET_CONCURRENCY = 16;
-var EMBED_CONCURRENCY = 5;
+var EMBED_CONCURRENCY = 3;
+var RUN_DEADLINE_MS = 200000;
 var PATH_PREFIX = "obsidian/";
 var SKIP_PREFIXES = [".obsidian/", "releases/", "Attachments/", "Archive/", ".git/"];
 var INGEST_ROOTS = ["notes/", "Inbox/", "Projects/", "Areas/", "Resources/"];
@@ -92,8 +107,8 @@ async function getFull(env, key) {
   try {
     if (!MD_RE.test(key)) return null;
     var head = await env.VAULT.head(key);
-    if (head && head.size > MAX_BYTES) return null;
-    var o = await env.VAULT.get(key);
+    var big = head && head.size > MAX_BYTES;
+    var o = big ? await env.VAULT.get(key, { range: { offset: 0, length: MAX_BYTES } }) : await env.VAULT.get(key);
     if (!o) return null;
     return await o.text();
   } catch (e) { return null; }
@@ -175,30 +190,39 @@ async function run(env, cap) {
 
   var prepared = new Array(work.length);
   for (var eb = 0; eb < work.length; eb += EMBED_CONCURRENCY) {
+    if (Date.now() - t0 > RUN_DEADLINE_MS * 0.65) { s.notes.push("deadline-embed@" + eb); break; }
     var eslice = work.slice(eb, eb + EMBED_CONCURRENCY);
     await Promise.all(eslice.map(async function (w, k) {
       var idx = eb + k;
       var text = texts[idx];
-      if (text === null) { prepared[idx] = null; return; }
+      if (text === null) { s.notes.push("null:" + String(w.key).slice(-34)); prepared[idx] = null; return; }
       var chs = chunkText(text);
-      if (chs.length === 0) { prepared[idx] = null; return; }
-      var resp = null;
+      if (chs.length === 0) { prepared[idx] = { skip: true, w: w }; return; }
+      var resp = null, lastErr = "";
       for (var attempt = 0; attempt < 3 && !resp; attempt++) {
         try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
-        catch (e) { await new Promise(function (r) { setTimeout(r, 200 * (attempt + 1)); }); }
+        catch (e) {
+          lastErr = String((e && e.message) || e);
+          var rt = /429|1010|rate.?limit|throttl|overload|503|502|504|busy|timeout/i.test(lastErr) && !/spend limit|2045|budget|quota/i.test(lastErr);
+          if (!rt && attempt >= 1) break;
+          var backoff = Math.min(3000, 400 * Math.pow(2, attempt)) + Math.floor(Math.random() * 400);
+          await new Promise(function (r) { setTimeout(r, backoff); });
+        }
       }
-      if (!resp) { prepared[idx] = { error: true }; return; }
+      if (!resp) { prepared[idx] = { error: true, msg: "embed:" + lastErr.slice(0, 90), w: w }; return; }
       var vectors = (resp && resp.data) || [];
       var valid = vectors.filter(function (v) { return Array.isArray(v) && v.length === 768; }).map(function (v) { return v.map(function (z) { return Number.isFinite(z) ? z : 0; }); });
-      if (valid.length === 0) { prepared[idx] = { error: true }; return; }
+      if (valid.length === 0) { prepared[idx] = { error: true, w: w }; return; }
       prepared[idx] = { w: w, chs: chs, valid: valid, cat: categorize(chs.join(" "), w.key) };
     }));
   }
 
   for (var x = 0; x < work.length; x++) {
+    if (Date.now() - t0 > RUN_DEADLINE_MS) { s.notes.push("deadline-acct@" + x); break; }
     var p = prepared[x];
     if (p === null) { s.skipped++; continue; }
-    if (p.error) { s.errors++; continue; }
+    if (p.skip) { s.skipped++; try { var sw = p.w; await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'general',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(sw.path, extOf(sw.key), sw.obj.size, (sw.obj.uploaded ? sw.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(sw.key)).run(); } catch (e) {} continue; }
+    if (p.error) { s.errors++; if (p.msg) s.notes.push(p.msg); if (p.w) { try { var ew = p.w; var fr = await env.PERSONAL.prepare("SELECT fails,last_at FROM embed_failures WHERE path=?1").bind(ew.path).first(); var prevAt = (fr && fr.last_at) ? Date.parse(fr.last_at) : 0; var stale = (Date.now() - prevAt) > 3600000; var nf = ((fr && fr.fails && !stale) ? fr.fails : 0) + 1; if (nf >= 3) { await env.PERSONAL.prepare("INSERT INTO files (path,type,size,modified,indexed_at,chunks,title,category,wbs,qnfo_link) VALUES (?1,?2,?3,?4,?5,0,?6,'embed-failed',NULL,NULL) ON CONFLICT(path) DO UPDATE SET type=?2,size=?3,modified=?4,indexed_at=?5,chunks=0,title=?6").bind(ew.path, extOf(ew.key), ew.obj.size, (ew.obj.uploaded ? ew.obj.uploaded.toISOString() : new Date().toISOString()), new Date().toISOString(), basename(ew.key)).run(); await env.PERSONAL.prepare("DELETE FROM embed_failures WHERE path=?1").bind(ew.path).run(); } else { await env.PERSONAL.prepare("INSERT INTO embed_failures (path,fails,last_at) VALUES (?1,?2,?3) ON CONFLICT(path) DO UPDATE SET fails=?2,last_at=?3").bind(ew.path, nf, new Date().toISOString()).run(); } } catch (e) {} } continue; }
     var w = p.w;
     var dg = await sha256hex(w.path);
     var vecBatch = [], chunkStmts = [];
@@ -207,8 +231,13 @@ async function run(env, cap) {
       vecBatch.push({ id: id, values: p.valid[ci], metadata: { path: w.path, type: extOf(w.key), chunk: String(ci), category: String(p.cat), modified: String(w.obj.uploaded ? w.obj.uploaded.toISOString() : ""), text: sanitize(p.chs[ci], 800) } });
       chunkStmts.push(env.PERSONAL.prepare("INSERT INTO chunks (id,path,chunk_idx,text_len) VALUES (?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET path=?2,chunk_idx=?3,text_len=?4").bind(id, w.path, ci, p.chs[ci].length));
     }
-    try { await env.VZ.upsert(vecBatch); s.vectors += vecBatch.length; s.chunks += vecBatch.length; }
-    catch (e) { s.errors++; continue; }
+    var vzOk = false;
+    for (var va = 0; va < 3 && !vzOk; va++) {
+      try { await env.VZ.upsert(vecBatch); vzOk = true; }
+      catch (e) { if (va < 2) await new Promise(function (r) { setTimeout(r, 300 * (va + 1)); }); else s.notes.push("vz-upsert:" + String((e && e.message) || e).slice(0, 90)); }
+    }
+    if (!vzOk) { s.errors++; continue; }
+    s.vectors += vecBatch.length; s.chunks += vecBatch.length;
     try { await env.PERSONAL.batch(chunkStmts); } catch (e) { }
     try {
       var mod = w.obj.uploaded ? w.obj.uploaded.toISOString() : new Date().toISOString();
@@ -218,7 +247,7 @@ async function run(env, cap) {
   }
 
   try {
-    await env.PERSONAL.prepare("INSERT INTO vault_indexer_runs (started,finished,scanned,changed,indexed,chunks,skipped,reconciled,errors) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(new Date(t0).toISOString(), new Date().toISOString(), s.scanned, s.changed, s.indexed, s.chunks, s.skipped, s.reconciled, s.errors).run();
+    await env.PERSONAL.prepare("INSERT INTO vault_indexer_runs (started,finished,scanned,changed,indexed,chunks,skipped,reconciled,errors,notes) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(new Date(t0).toISOString(), new Date().toISOString(), s.scanned, s.changed, s.indexed, s.chunks, s.skipped, s.reconciled, s.errors, JSON.stringify((s.notes || []).slice(0, 50))).run();
   } catch (e) { }
 
   if (haveLock) { try { await env.PERSONAL.prepare("DELETE FROM vault_indexer_lock WHERE id=1").run(); } catch (e) { } }

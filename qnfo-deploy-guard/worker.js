@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.3 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution)
+// qnfo-deploy-guard v1.3.10 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.4";
+var VERSION = "1.3.10";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -43,7 +43,11 @@ async function fileIssue(env, title, desc, priority) {
   var res = await auditRun(env, "INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [title, String(desc).slice(0, 900), "qnfo-deploy-guard", "reliability", priority || "high", "open", "qnfo-deploy-guard/" + VERSION, now, now]);
   return { filed: true, ok: res && res.ok !== false, error: res && res.error };
 }
-async function fileAlert(env, level, message) { await auditRun(env, "INSERT INTO alerts (source, level, message, digested, created_at) VALUES (?1,?2,?3,0,?4)", ["qnfo-deploy-guard", level, String(message).slice(0, 500), nowIso()]); }
+// ALERTS-CHAIN-NO-CONSUMER-1 (2026-09-23): deploy-guard alerts are INFORMATIONAL self-notifications -
+// the actionable output is the agent_issues it files. Writing digested=0 fed a queue with no consumer,
+// permanently sticking the alerts integration chain (9 of 10 undigested). Self-digest (digested=1): the
+// alert is a log entry, not a pending queue item.
+async function fileAlert(env, level, message) { await auditRun(env, "INSERT INTO alerts (source, level, message, digested, created_at) VALUES (?1,?2,?3,1,?4)", ["qnfo-deploy-guard", level, String(message).slice(0, 500), nowIso()]); }
 // REGISTRY-UNREGISTERED-WORKER-2 (2026-09-21): register-at-deploy. Any live worker absent from
 // service_registry (the census authority) gets a stub row immediately, cutting the drift window
 // from qnfo-register-guard's 24h to <=10min. The daily register-guard still does the full reconcile.
@@ -60,6 +64,28 @@ async function ensureRegistry(env, fleet) {
   } catch (e) {}
   return added;
 }
+// REGISTRY-VERSION-CURRENCY-1 (2026-09-21): on redeploy, fetch the worker's live /health and
+// UPDATE service_registry.version. The prior register-at-deploy wrote only a first-seen stub
+// (version NULL or stale), so /lock/acquire's expected_version check compared against a stale
+// value and refused valid redeploys with a false "version-mismatch".
+async function refreshRegistryVersion(env, w, explicitVer) {
+  try {
+    var ver = explicitVer ? String(explicitVer) : "";
+    if (!ver) {
+      // Best-effort only. A Worker cannot reliably subrequest another account Worker's
+      // *.workers.dev /health (canonical: qnfo-ops /fleet.version is empty fleet-wide for the
+      // same reason), so the deployer-supplied version is the PRIMARY source.
+      var url = "https://" + w + ".q08.workers.dev/health";
+      var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+      var r = await fetch(url, { signal: c.signal, headers: { accept: "application/json" } });
+      clearTimeout(t);
+      if (r.ok) { var j = await r.json(); if (j && j.version) ver = String(j.version); }
+    }
+    if (!ver) return null;
+    await auditRun(env, "UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3", [ver, nowIso(), w]);
+    return ver;
+  } catch (e) { return null; }
+}
 async function scan(env) {
   var t0 = Date.now();
   var fp = await getJson(FLEET_URLS, 15000);
@@ -72,7 +98,7 @@ async function scan(env) {
     var month = (ca.j.last_30d && ca.j.last_30d.cost) || 0;
     cost = { day_usd: day, month_usd: month, cap_per_utc_day: ca.j.cap_per_utc_day, thresholds: thr };
   }
-  var ledger = await auditAll(env, "SELECT worker, to_sha, ts FROM fleet_deploys ORDER BY id", []);
+  var ledger = await auditAll(env, "SELECT worker, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
   var lastLedger = {}; for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; }
   var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
   var active = {};
@@ -98,6 +124,19 @@ async function scan(env) {
   }
   if (denials.length) anomalies.push({ type: "lock-contention", worker: "fleet", count: denials.length, sample: denials.slice(-3) });
   if (cost && (cost.day_usd > cost.thresholds.day_usd || cost.month_usd > cost.thresholds.month_usd)) anomalies.push({ type: "cost-threshold", worker: "qnfo-ops", day_usd: cost.day_usd, month_usd: cost.month_usd, thresholds: cost.thresholds });
+  // NON-CANONICAL-DEPLOY-1 (v1.3.8): flag workers whose most recent ledgered deploy did NOT use the
+  // canonical route (POST /ops/deploy -> note "server-side deploy (opsDeploy route)"). with-lock /
+  // redeploy-script paths POST /ledger (so they pass the unlogged-mutation rule) yet bypass the
+  // canonical sequence (uncached GitHub-source fetch + binding preservation). Aggregated to one anomaly.
+  var nonCanon = [];
+  for (var ncw in lastLedger) {
+    if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
+    var nlr = lastLedger[ncw] || {};
+    var nnote = String(nlr.note || "");
+    if (/self-test|deliberately/i.test(nnote)) continue; // deliberate detector self-tests (e.g. ops-gateway)
+    if (nnote.indexOf("opsDeploy route") < 0 || nlr.ok === 0) nonCanon.push(ncw); // non-canonical path OR a FAILED canonical attempt (ok:0 carries the canonical note)
+  }
+  if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
   var seen = {}; var uniq = []; for (var m = 0; m < anomalies.length; m++) { var key = anomalies[m].type + "|" + anomalies[m].worker; if (!seen[key]) { seen[key] = 1; uniq.push(anomalies[m]); } }
   var filed = [];
   for (var n = 0; n < uniq.length; n++) {
@@ -167,7 +206,9 @@ export default {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);
       var rl = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [String(bl.worker), String(bl.actor || "unknown"), bl.session_id ? String(bl.session_id) : null, bl.from || null, bl.to || null, bl.source_path || null, bl.ok === false ? 0 : 1, String(bl.note || "").slice(0, 400), nowIso()]);
       try { await ensureRegistry(env, [{ name: String(bl.worker) }]); } catch (e) {}
-      return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error });
+      var refreshedVer = null;
+      try { refreshedVer = await refreshRegistryVersion(env, String(bl.worker), bl.version || bl.to || bl.to_version); } catch (e) {}
+      return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error, registry_version: refreshedVer });
     }
     if (p === "/thresholds" && request.method === "POST") { var bt = await request.json().catch(function () { return {}; }); await env.FLEET_CONFIG.put(THR_KEY, JSON.stringify({ day_usd: Number(bt.day_usd || 10), month_usd: Number(bt.month_usd || 150) })); return json({ set: true }); }
     if (p === "/scan" && (request.method === "POST" || request.method === "GET")) { return json(await scan(env)); }

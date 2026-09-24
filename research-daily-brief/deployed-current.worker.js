@@ -1,7 +1,7 @@
 // research-daily-brief v1.1.0
 // FIX 2026-09-13: fetchArxiv now has 3-attempt exponential backoff (1s/3s/9s) + Semantic Scholar fallback
 // FIX 2026-09-13: scheduled() no longer silently drops errors; alertMsg fires on every failure
-var VERSION = '1.1.0';
+var VERSION = '1.1.1';
 var ARXIV = 'https://export.arxiv.org/api/query';
 var ZENODO = 'https://zenodo.org/api/records';
 var UA = 'QNFO-Research-Bot/1.1 (research@qnfo.org)';
@@ -139,7 +139,10 @@ async function sendEmail(env, to, subject, body, from) {
   return txt;
 }
 async function alertMsg(env, msg) {
-  try { await sendEmail(env, ALERTS, '[research-daily-brief] FAILED ' + new Date().toISOString(), msg); } catch(e){}
+  try {
+    await env.OUTREACH_DB.prepare('CREATE TABLE IF NOT EXISTS brief_alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, text TEXT)').run();
+    await env.OUTREACH_DB.prepare('INSERT INTO brief_alerts (ts, text) VALUES (?,?)').bind(new Date().toISOString(), String(msg).slice(0,4000)).run();
+  } catch(e){}
 }
 async function runBrief(env, dateStr, dry) {
   var ymd = dateStr.replace(/-/g,'');
@@ -155,9 +158,10 @@ async function runBrief(env, dateStr, dry) {
     return { status: 'dry', date: dateStr, scanned: papers.length, matched: matched.length, preview: text.slice(0,500) };
   }
   try {
-    var resp = await sendEmail(env, ALERTS, subject, text, '');
+    await env.OUTREACH_DB.prepare('CREATE TABLE IF NOT EXISTS brief_artifacts (id INTEGER PRIMARY KEY AUTOINCREMENT, brief_date TEXT, body TEXT, created_at TEXT)').run();
+    await env.OUTREACH_DB.prepare('INSERT INTO brief_artifacts (brief_date, body, created_at) VALUES (?,?,?)').bind(dateStr, text.slice(0,30000), new Date().toISOString()).run();
     await env.OUTREACH_DB.prepare('UPDATE sent_log SET status=?, sent_at=? WHERE brief_date=? AND paper_id=?').bind('sent', new Date().toISOString(), dateStr, pid).run();
-    return { status: 'sent', date: dateStr, scanned: papers.length, matched: matched.length, email: resp.slice(0,80) };
+    return { status: 'persisted', date: dateStr, scanned: papers.length, matched: matched.length };
   } catch(e) {
     await env.OUTREACH_DB.prepare('UPDATE sent_log SET status=?, sent_at=? WHERE brief_date=? AND paper_id=?').bind('failed', new Date().toISOString(), dateStr, pid).run();
     throw e;
