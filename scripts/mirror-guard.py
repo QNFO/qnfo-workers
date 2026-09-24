@@ -26,6 +26,22 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONST = re.compile(r'(?:var|let|const)\s+([A-Za-z0-9_]*VERSION[A-Za-z0-9_]*)\s*=\s*"([^"]*)"')
 
 
+def is_captured(path):
+    """True if the mirror is a CAPTURED multipart-upload body (the raw CF API
+    PUT /content request), not a plain source mirror. Detected by a leading MIME
+    boundary or a Content-Disposition: form-data header. cp is DESTRUCTIVE on these:
+    it strips the envelope and silently replaces a captured artifact with the source.
+    Canonical near-miss 2026-09-24: qnfo-ops (298900 B capture vs 301146 B source) and
+    qnfo-infra (26594 vs 26475) were each one cp away from corruption.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            head = f.read(400)
+    except OSError:
+        return False
+    return "Content-Disposition: form-data" in head or head.startswith("--")
+
+
 def versions(path):
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -37,7 +53,7 @@ def versions(path):
 
 def main(argv):
     fix = "--fix" in argv
-    rows, drift, missing, fixed = [], [], [], []
+    rows, drift, missing, fixed, captured = [], [], [], [], []
 
     for name in sorted(os.listdir(ROOT)):
         d = os.path.join(ROOT, name)
@@ -55,6 +71,10 @@ def main(argv):
             rows.append((name, "MISSING", str(s), "-"))
             continue
         if s == m:
+            continue
+        if is_captured(mir_p):
+            captured.append(name)
+            rows.append((name, "CAPTURED", "plain source", "multipart-upload capture - NOT auto-fixable"))
             continue
 
         same_names = set(s) == set(m)
