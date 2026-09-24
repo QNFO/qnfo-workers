@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.4";
+var VERSION = "1.2.5";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -408,7 +408,7 @@ function renderContext(retrieved) {
 __name(renderContext, "renderContext");
 var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "*/5 * * * *") {
+    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "*/10 * * * *") {
       const s = await collectState(env);
       await store(env, "snapshot", s);
       const a = await collectAnalytics(env);
