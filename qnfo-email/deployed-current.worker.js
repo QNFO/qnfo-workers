@@ -1,4 +1,4 @@
-const VERSION = "2.0.8";
+var VERSION = "2.0.8"; // var (not const): qnfo-ops cfWorkerRead needs /var VERSION = "..."/ for the /ops/deploy expected_version guard
 const QNFO_VERSION = "qnfo-email/reply-capture-942-tone-950-norepeat-947";
 const BODY_MAX_TEXT = 1e4;
 const BODY_MAX_HTML = 2e4;
@@ -466,14 +466,16 @@ async function sendInboundDigest(env) {
   const OWNER = "rwnquni@outlook.com";
   const MACHINE = /srs0=|cf-bounce|cfbounces|dmarcreport|mailer-daemon|postmaster|bounces\+/i;
   const CRITICAL = /api access|spend|threshold|action needed|rejected|undelivered|discontinu|postpon|pricing|billing|turned off|suspension/i;
+  // SUPPRESSION-1 (2026-09-22): honour owner opt-out before any digest send.
+  try { const _s = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(OWNER).first(); if (_s) return { sent: false, reason: "owner suppressed" }; } catch (e) {}
   let rows = [];
   try {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const r = await env.AUDIT_DB.prepare("SELECT id, sender, recipient, subject, classification, status, received_at FROM emails WHERE status != 'sent' AND received_at >= ? ORDER BY id DESC LIMIT 200").bind(since).all();
+    const r = await env.AUDIT_DB.prepare("SELECT id, sender, recipient, subject, classification, status, received_at FROM emails WHERE status NOT IN ('sent','spam','archived','rejected') AND received_at >= ? ORDER BY id DESC LIMIT 200").bind(since).all();
     rows = r.results || [];
   } catch (e) { return { sent: false, error: "query: " + String(e && e.message || e).slice(0, 150) }; }
   const crit = [], human = [], seen = {};
-  for (const r of rows) { const s = decodeSubject(r.subject); if (CRITICAL.test(s) || /cfbounces\+ndrdrop/.test(String(r.sender || ""))) { crit.push(r); seen[r.id] = 1; } }
+  for (const r of rows) { if (MACHINE.test(String(r.sender || ""))) continue; const s = decodeSubject(r.subject); if (CRITICAL.test(s)) { crit.push(r); seen[r.id] = 1; } }
   for (const r of rows) { if (seen[r.id]) continue; if (MACHINE.test(String(r.sender || ""))) continue; human.push(r); }
   if (!crit.length && !human.length) return { sent: false, reason: "nothing to surface" };
   const day = new Date().toISOString().slice(0, 10);

@@ -114,9 +114,21 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.8'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.3.0"; // var + double quotes: qnfo-ops cfWorkerRead greps /var VERSION = "([^"]+)"/ for the /ops/deploy expected_version guard // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
+// FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
+// authority) instead of the hardcoded snapshot above. The snapshot carried 10 ghosts + was missing
+// 9 live workers, so workers_silent_24h reported phantom silent workers and fleet_size was stale.
+// FLEET is retained only as a fallback when the registry read fails.
+async function liveFleet(env) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
+    const names = (r.results || []).map(function (x) { return x.service; });
+    if (names.length) return names;
+  } catch (e) {}
+  return FLEET;
+}
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
 const RETENTION_DAYS = 30;      // worker_logs retention window
 const EMPTY_MATCH_MIN_TOTAL = 20; // rows in the medium before an empty match is suspicious
@@ -246,13 +258,14 @@ async function digest(env, ingestResult) {
     FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(dayAgo).all();
   const rows = (agg.results || []);
   const seen = new Set(rows.map(r => r.script_name));
+  const fl = await liveFleet(env);
   const summary = {
     generated_at: nowIso(),
     version: VERSION,
     ingest: ingestResult,
     total_events_24h: rows.reduce((a, r) => a + r.n, 0),
     workers_seen_24h: rows.length,
-    workers_silent_24h: FLEET.filter(w => !seen.has(w)),
+    workers_silent_24h: fl.filter(w => !seen.has(w)),
     anomalies: [],
   };
   for (const r of rows) {
@@ -352,8 +365,8 @@ const INTEGRATION_CHAINS = [
     sql: "SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND (title LIKE '%health%' OR title LIKE '%availability%' OR title LIKE '%heartbeat%' OR title LIKE '%reachable%' OR title LIKE '%endpoint down%' OR title LIKE '%is down%' OR title LIKE '%alert-storm%' OR title LIKE '%exception%' OR title LIKE '%error-burst%' OR title LIKE '%recurring fail%' OR title LIKE 'MODEL-DEGRADED%')",
     total: "SELECT COUNT(*) n FROM agent_issues",
     max: 10, minOk: null, expectEmpty: true, want: 'drainable open <= 10 (health/availability/exception/MODEL-DEGRADED = what backlog-exec auto-closes); residual open defects are tracked elsewhere, not backpressure' },
-  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: '(none wired)', medium: 'alerts',
-    // v1.2.7: no digest consumer was ever built for the alerts medium (audit 2026-09-21); name it honestly.
+  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: 'qnfo-observability evSweep -> issue_events (AUTO-SWEEP)', medium: 'alerts',
+    // v1.3.0 FIX-ALERTS-DIGEST-CONSUMER-2: the evSweep consumer exists (alerts -> issue_events/issue_ledger AUTO-SWEEP); name it, and stamp alerts.digested='sweep' on consume so the chain measures true undigested count.
     // v1.1.5: was `digested = 0` (0 rows). Live values are TEXT 'auto' (914), INTEGER 1 (141), NULL (45).
     // The column is declared INTEGER but producers write TEXT, so an equality test on 0 can never match.
     sql: "SELECT COUNT(*) n FROM alerts WHERE digested IS NULL OR digested = '' OR digested = 0",
@@ -549,7 +562,7 @@ async function evSweep(env) {
       const ex = await env.AUDIT.prepare('SELECT fingerprint FROM issue_ledger WHERE fingerprint=?1').bind(fp).first();
       if (!ex) await env.AUDIT.prepare("INSERT INTO issue_ledger (fingerprint, source, level, category, title, status, first_seen, last_seen, occurrences, last_detail, updated_at) VALUES (?1,?2,?3,'alert','AUTO-SWEEP: ' || substr(?4,1,220),'open',?5,?5,1,?4,?5)").bind(fp, String(a.source || 'unknown').slice(0, 80), lvl, String(a.message || ''), now).run();
       else await env.AUDIT.prepare('UPDATE issue_ledger SET occurrences=occurrences+1, last_seen=?1, last_detail=?2, updated_at=?1 WHERE fingerprint=?3').bind(now, String(a.message || '').slice(0, 1000), fp).run();
-      await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,?3,'alert','AUTO-SWEEP',?4,?5)").bind(fp, String(a.source || 'unknown').slice(0, 80), lvl, key, now).run(); alertsN++;
+      await env.AUDIT.prepare("INSERT INTO issue_events (fingerprint, source, level, category, title, detail, ts) VALUES (?1,?2,?3,'alert','AUTO-SWEEP',?4,?5)").bind(fp, String(a.source || 'unknown').slice(0, 80), lvl, key, now).run(); await env.AUDIT.prepare("UPDATE alerts SET digested='sweep' WHERE id=?1").bind(a.id).run(); alertsN++;
     }
   } catch (e) { alertsN = -1; }
   try {
@@ -673,7 +686,7 @@ export default {
       const latestProbe = {};
       for (const row of (probes.results || [])) { if (!latestProbe[row.name] || row.ts > latestProbe[row.name].ts) latestProbe[row.name] = row; }
       const agg = await env.AUDIT.prepare(`SELECT script_name, COUNT(*) n, SUM(CASE WHEN outcome != 'ok' OR status >= 500 THEN 1 ELSE 0 END) bad, MAX(ts_ms) last_ts FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(Date.now() - 86400000).all();
-      return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: FLEET.length, probes: latestProbe, log_stats: agg.results || [] });
+      return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: (await liveFleet(env)).length, fleet_size_source: "service_registry", probes: latestProbe, log_stats: agg.results || [] });
     }
     // JOBS-STATUS-PUBLIC-1 (2026-09-13, v1.1.4): keyless read-only view of the qnfo-ops async-job ledger.
     // WHY: the operator requirement is that a job status link be visible WITHOUT a key. The ops bearer is the

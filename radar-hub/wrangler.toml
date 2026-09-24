@@ -45,3 +45,12 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 [[r2_buckets]]
 binding = "VAULT"
 bucket_name = "obsidian-vault"
+
+# workflow binding (AUDIT-REMEDIATE-1 2026-09-22; verified vs live CF bindings)
+[[workflows]]
+binding = "JOB_MARKET_WATCH"
+name = "job-market-watch"
+class_name = "JobMarketWatchWorkflow"
+
+[triggers]
+crons = ["0 11 1,15 * *", "0 5 * * 1", "0 6 * * *", "0 6 1 * *", "0 7 * * 2", "0 8 * * 7", "0 9 * * 7", "30 5 * * 2", "30 8 * * *"]

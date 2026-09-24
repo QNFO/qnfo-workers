@@ -1,3 +1,9 @@
+# DO-MIGRATION-NOTE-1 2026-09-22 (R3/F2): a `wrangler deploy --dry-run` validates
+# client-side structure ONLY - it cannot prove the server accepts this migration. The
+# class already exists (created via the API), so a real wrangler deploy may FAIL CLOSED
+# (Cloudflare rejects a creating migration for an already-depended-on class). It never
+# wipes. The operative deploy path remains scripts/raw_put.py (binding-preserving).
+
 name = "qnfo-ops"
 main = "worker.js"
 compatibility_date = "2026-08-01"
