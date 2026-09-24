@@ -1,4 +1,4 @@
---08cb9366e75cc087b142ab7d104e03e73b1fc08fa572b12a71ae0d7a1e5b
+--8fc1a95bc0309a5dcac770391d19eb3b20145126803e41bf24103ca1acf1
 Content-Disposition: form-data; name="worker.js"; filename="worker.js"
 Content-Type: application/javascript+module
 
@@ -27,12 +27,12 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.52";
+var VERSION = "2.36.57";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
   let best = -1;
-  const marks = [bar + bar + "DSML", "<tool_calls", "<invoke"];
+  const marks = [bar + bar + "DSML", "<tool_call", "<invoke", "<arg_key", "<arg_value"];
   for (let i = 0; i < marks.length; i++) {
     const p = s.indexOf(marks[i]);
     if (p >= 0 && (best < 0 || p < best)) best = p;
@@ -51,6 +51,14 @@ __name(stripToolFrames, "stripToolFrames");
 __name2(stripToolFrames, "stripToolFrames");
 __name22(stripToolFrames, "stripToolFrames");
 __name222(stripToolFrames, "stripToolFrames");
+function isOAIUpstream(m) {
+  // OAI-MAXTOKENS-1 (2026-09-24): OpenAI-family upstreams reject `max_tokens` ("Use max_completion_tokens
+  // instead"). Detect the WHOLE family (openai/, dynamic/, gpt-*, o1/o3/o4*, *-codex) -- the old
+  // indexOf("gpt-5") check missed o4-mini and bare gpt-4.1 -> upstream 400 (4x, last 2026-09-22).
+  const t = String(m || "");
+  return /^openai\//i.test(t) || /^dynamic\//i.test(t) || /gpt[-_.]/i.test(t) || /^o[1-9](?:[-\/]|$)/i.test(t) || /-codex/i.test(t);
+}
+__name(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -867,7 +875,7 @@ async function runCodeTool(env, args) {
   const head = 'export default { async fetch(request, env) { const _t0 = Date.now(); const _out = [], _err = [], _warn = []; const _s = (x) => { try { return typeof x === "string" ? x : JSON.stringify(x) ?? String(x); } catch(e) { return String(x); } }; const console = { log: (...a) => _out.push(a.map(_s).join(" ")), error: (...a) => _err.push(a.map(_s).join(" ")), warn: (...a) => _warn.push(a.map(_s).join(" ")), info: (...a) => _out.push(a.map(_s).join(" ")), debug: (...a) => _out.push(a.map(_s).join(" ")) }; const performance = { now: () => Date.now() - _t0 }; try { const __r = await (async () => { ';
   const tail = ' })(); const _rv = __r === undefined ? "" : _s(__r); const _stdout = _out.join("\\n") || _rv; return new Response(JSON.stringify({ ok: true, stdout: _stdout.slice(0, ' + capStr + '), stderr: _err.join("\\n").slice(0,4000), warnings: _warn.join("\\n").slice(0,2000), return_value: _rv.slice(0,4000), elapsed_ms: Date.now()-_t0, truncated: _stdout.length>' + capStr + ' }), { headers: { "Content-Type": "application/json" } }); } catch(e) { return new Response(JSON.stringify({ ok: false, error: String((e&&e.message)||e).slice(0,3000), stack: (e&&e.stack||"").slice(0,1000), elapsed_ms: Date.now()-_t0 }), { headers: { "Content-Type": "application/json" } }); } } };';
   try {
-    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + code + tail }, globalOutbound: null });
+    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", compatibilityFlags: ["streams_enable_constructors"], mainModule: "index.js", modules: { "index.js": head + code + tail }, globalOutbound: null });
     const resp = await worker.getEntrypoint().fetch("https://code-exec.invalid/");
     const j = await resp.json();
     if (j && j.ok) return { ok: true, output: j.stdout || j.return_value || "", stdout: j.stdout || "", stderr: j.stderr || "", warnings: j.warnings || "", return_value: j.return_value || "", elapsed_ms: j.elapsed_ms, truncated: !!j.truncated };
@@ -1666,6 +1674,67 @@ __name(cfWorkerRead, "cfWorkerRead");
 __name2(cfWorkerRead, "cfWorkerRead");
 __name22(cfWorkerRead, "cfWorkerRead");
 __name222(cfWorkerRead, "cfWorkerRead");
+// BINDING-INSTALL-WHEN-EMPTY-1 (2026-09-24, closes P1 DEPLOY-ROUTE-NEVER-INSTALLS-BINDINGS):
+// BINDING-PRESERVE-1 preserves EXISTING bindings; when a worker has NONE (GET /bindings -> 404)
+// the canonical route deployed with `bindings: []` and reported bindings_preserved: 0 as ordinary
+// success - so a worker that lost its bindings became a SILENT NO-OP the canonical path could never
+// repair (canonical: qnfo-chat-canary + ai-health-prober, both 0 bindings, 2026-09-24). This reads
+// the repo wrangler.toml and INSTALLS the declared non-secret bindings. Only invoked when the live
+// binding set is empty, so workers that already have bindings are completely unaffected.
+async function installDeclaredBindings(env, worker) {
+  const out = { installed: 0, note: null, bindings: [] };
+  try {
+    const dirs = [worker];
+    if (worker.indexOf("qnfo-") === 0) dirs.push(worker.slice(5));
+    const hdrs = { "Accept": "application/vnd.github+json", "User-Agent": "qnfo-ops-binding-install" };
+    if (env.GITHUB_TOKEN) hdrs["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+    let toml = null;
+    for (const d of dirs) {
+      const tr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + d + "/wrangler.toml?ref=main", { headers: hdrs });
+      if (!tr.ok) continue;
+      const tj = await tr.json().catch(function () { return null; });
+      const b64 = tj && tj.content ? String(tj.content).replace(/[^A-Za-z0-9+/=]/g, "") : "";
+      if (b64) { toml = atob(b64); break; }
+    }
+    if (!toml) { out.note = "no wrangler.toml in the repo for this worker"; return out; }
+    const sections = [];
+    let cur = null;
+    for (const raw of String(toml).split(/\r?\n/)) {
+      const l = raw.replace(/#.*$/, "").trim();
+      if (!l) continue;
+      const m = l.match(/^\[\[?\s*([A-Za-z0-9_.]+)\s*\]\]?$/);
+      if (m) { cur = { name: m[1], kv: {} }; sections.push(cur); continue; }
+      if (cur) {
+        const eq = l.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+        if (eq) cur.kv[eq[1]] = eq[2].trim().replace(/^"|"$/g, "").replace(/,$/, "");
+      }
+    }
+    const decl = [];
+    for (const s of sections) {
+      const k = s.kv;
+      const nm = k.binding || k.name || null;
+      if (!nm) continue;
+      if (s.name === "d1_databases" && k.database_id) decl.push({ type: "d1", name: nm, id: k.database_id });
+      else if (s.name === "r2_buckets" && k.bucket_name) decl.push({ type: "r2_bucket", name: nm, bucket_name: k.bucket_name });
+      else if (s.name === "kv_namespaces" && k.id) decl.push({ type: "kv_namespace", name: nm, namespace_id: k.id });
+      else if (s.name === "ai") decl.push({ type: "ai", name: nm });
+      else if (s.name === "services" && k.service) decl.push({ type: "service", name: nm, service: k.service, environment: k.environment || "production" });
+      else if (s.name === "vectorize" && k.index_name) decl.push({ type: "vectorize", name: nm, index_name: k.index_name });
+      else if (s.name === "durable_objects.bindings" && k.class_name) decl.push({ type: "durable_object_namespace", name: nm, class_name: k.class_name });
+      else if (s.name === "queues" && k.queue_name) decl.push({ type: "queue", name: nm, queue_name: k.queue_name });
+      else if (s.name === "workflows" && k.class_name) decl.push({ type: "workflow", name: nm, class_name: k.class_name });
+      else if (s.name === "send_email") decl.push({ type: "send_email", name: nm });
+      else if (s.name === "browser") decl.push({ type: "browser", name: nm });
+      else if (s.name === "ai_search") decl.push({ type: "ai_search", name: nm });
+      else if (s.name === "artifacts") decl.push({ type: "artifacts", name: nm });
+    }
+    out.bindings = decl;
+    out.installed = decl.length;
+    if (!decl.length) out.note = "wrangler.toml declares no installable non-secret bindings";
+    return out;
+  } catch (e) { out.note = String(e && e.message || e).slice(0, 140); return out; }
+}
+__name(installDeclaredBindings, "installDeclaredBindings");
 async function cfWorkerDeploy(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
   const worker = String(args && args.worker || "").trim();
@@ -1704,12 +1773,19 @@ async function cfWorkerDeploy(env, args) {
   } else {
     return { ok: false, error: "cf_worker_deploy ABORTED: bindings fetch status " + bResp.status + " \u2014 refusing to deploy with bindings:[]" };
   }
-  const bindingsOut = existingBindings.filter(function(b) {
+  let bindingsOut = existingBindings.filter(function(b) {
     return b.type !== "secret_text" && b.type !== "secret_key";
   }).map(function(b) {
     const c = Object.assign({}, b);
     return c;
   });
+  let bindingsInstalled = 0;
+  let bindingInstallNote = null;
+  if (bindingsOut.length === 0) {
+    const _ins = await installDeclaredBindings(env, worker);
+    bindingInstallNote = _ins.note || null;
+    if (_ins.bindings && _ins.bindings.length) { bindingsOut = _ins.bindings; bindingsInstalled = _ins.installed; }
+  }
   try {
     const boundary = "ops-deploy-" + Date.now().toString(16);
     const _mp = (args && args.service_worker) ? { body_part: "worker.js" } : { main_module: "worker.js" }; // MODULE-FORMAT-1: vectorize/DO/workflow bindings require ES module format (CF 100329)
@@ -1741,7 +1817,7 @@ async function cfWorkerDeploy(env, args) {
     );
     const j = await resp.json().catch(() => ({}));
     if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400) };
-    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: (bindingsOut.length === 0) ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -2112,7 +2188,7 @@ async function runCodeNet(env, args) {
   const head = 'export default { async fetch(request, env) { const _t0=Date.now(),_o=[],_e=[]; const _s=(x)=>{try{return typeof x==="string"?x:JSON.stringify(x)??String(x);}catch(e){return String(x);}}; const console={log:(...a)=>_o.push(a.map(_s).join(" ")),error:(...a)=>_e.push(a.map(_s).join(" ")),warn:(...a)=>_o.push("[w] "+a.map(_s).join(" ")),info:(...a)=>_o.push(a.map(_s).join(" "))}; try { const __r=await(async()=>{';
   const tail = '})(); const _rv=__r===undefined?"":_s(__r); const _out=_o.join("\\n")||_rv; return new Response(JSON.stringify({ok:true,stdout:_out.slice(0,' + capS + '),stderr:_e.join("\\n").slice(0,2000),return_value:_rv.slice(0,2000),elapsed_ms:Date.now()-_t0}),{headers:{"Content-Type":"application/json"}}); } catch(e){return new Response(JSON.stringify({ok:false,error:String((e&&e.message)||e).slice(0,2000),elapsed_ms:Date.now()-_t0}),{headers:{"Content-Type":"application/json"}});} }};';
   try {
-    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + code + tail } });
+    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", compatibilityFlags: ["streams_enable_constructors"], mainModule: "index.js", modules: { "index.js": head + code + tail } });
     const resp = await worker.getEntrypoint().fetch("https://code-exec-net.invalid/");
     const j = await resp.json();
     if (j && j.ok) return { ok: true, output: j.stdout || j.return_value || "", stdout: j.stdout || "", stderr: j.stderr || "", return_value: j.return_value || "", elapsed_ms: j.elapsed_ms };
@@ -2636,7 +2712,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0 || modelToUse.indexOf("dynamic/") === 0; let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
+  const _isOAI = isOAIUpstream(modelToUse); let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -2680,7 +2756,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   const o = opts || {};
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0 || modelToUse.indexOf("dynamic/") === 0;
+  const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = o.toolChoice || "auto"; }
   const resp = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(body) });
@@ -2910,7 +2986,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   }, "fail");
   try {
     if (isStream) {
-      const _relayIsOAI = relayUp.indexOf("openai/") === 0 || relayUp.indexOf("gpt-5") >= 0 || relayUp.indexOf("dynamic/") === 0;
+      const _relayIsOAI = isOAIUpstream(relayUp);
       const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
@@ -3209,7 +3285,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + String(e && e.message || e).slice(0, 180));
       }
     }
-    const _streamModel = execUpstream || UPSTREAM_MODEL; const _streamIsOAI = _streamModel.indexOf("openai/") === 0 || _streamModel.indexOf("gpt-5") >= 0; const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const _streamModel = execUpstream || UPSTREAM_MODEL; const _streamIsOAI = isOAIUpstream(_streamModel); const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
@@ -3615,7 +3691,16 @@ async function registryRefresh(env) {
         return null;
       } catch (e) { return w.id + ":" + String(e && e.message || e).slice(0, 70); }
     }, "probe");
-    const results = await Promise.all(others.map(probe));
+    // REGISTRY-SWEEP-CONCURRENCY-COVERAGE (#1075, 2026-09-24): an UNCAPPED Promise.all fired all
+    // ~56 CF-API fetches at once, so rate-limiting/timeouts made the ":noversion" set
+    // NON-DETERMINISTIC (observed 6, then 8, then 13 across identical runs) and the reported gap
+    // unmeasurable. Run a bounded pool (8 concurrent) so the coverage gap is stable + auditable.
+    const POOL = 8;
+    const results = [];
+    for (let pi = 0; pi < others.length; pi += POOL) {
+      const part = await Promise.all(others.slice(pi, pi + POOL).map(probe));
+      for (const x of part) results.push(x);
+    }
     // COVERAGE-GAP-REPORT-1 (2026-09-24): slice(0,6) truncated the failure list in
     // non-deterministic Promise.all order, so the reported ":noversion" set CHANGED between runs
     // and UNDERSTATED the true coverage gap (measured 8, reported 6). Report ALL failures so the
@@ -4156,13 +4241,18 @@ async function opsDeploy(env, args) {
       const gr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + file + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
       if (!gr.ok) { result = { ok: false, error: "github contents " + gr.status }; return Object.assign({ log: log }, result); }
       const gj = await gr.json();
-      const b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+      let b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+      if (!b64 && gj.sha) {
+        const br = await fetch("https://api.github.com/repos/" + repo + "/git/blobs/" + gj.sha, { headers: hdrs });
+        if (br.ok) { const bj = await br.json(); b64 = String(bj.content || "").replace(/[^A-Za-z0-9+/=]/g, ""); }
+        log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
+      }
       const content = atob(b64);
       const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) { result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer }; return Object.assign({ log: log }, result); }
       const dep = await cfWorkerDeploy(env, { worker: worker, content: content, version: toVer || srcVer || undefined, expected_version: fromVer || undefined });
-      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved });
+      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null });
       if (!dep.ok) { result = { ok: false, error: dep.error, rejected: dep.rejected || false }; return Object.assign({ log: log }, result); }
       let live = null;
       try {
@@ -4173,7 +4263,7 @@ async function opsDeploy(env, args) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
       }
       ok = !toVer || live === toVer;
-      result = { ok: ok, worker: worker, from: fromVer, to: toVer, live: live, version_id: (dep.result && dep.result.id) || null, bindings_preserved: dep.bindings_preserved };
+      result = { ok: ok, worker: worker, from: fromVer, to: toVer, live: live, version_id: (dep.result && dep.result.id) || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0 };
       return Object.assign({ log: log }, result);
     } finally {
       try { await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker: worker, actor: "qnfo-ops/ops-deploy", from: fromVer, to: toVer, ok: ok, note: "server-side deploy (opsDeploy route)" }) }); } catch (e) {}
@@ -4225,7 +4315,24 @@ var worker_default = {
       }
       return json(out);
     }
-    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) rat = "undercount false-positive (adaptive-sampled)"; if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
+    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) {
+          // SELF-HEAL-AUTOCLOSE-NO-REPROBE (#1076, 2026-09-24): the blanket 'adaptive-sampled'
+          // rationale CLOSED REAL findings (proven: qnfo-chat-canary's own log is 5 days stale).
+          // Resolve ONLY when an EXTERNAL liveness probe exists in 24h -- and specifically NOT a
+          // 'cf-api-list' row, which proves EXISTENCE only (FLEET-PROBE-COVERAGE-1), never that the
+          // worker runs or writes. Otherwise annotate + escalate for per-worker verification.
+          const wm = String(row.action || "").match(/:\s*([a-z0-9][a-z0-9._-]{2,})\s*\(/);
+          const wName = wm ? wm[1] : null;
+          let probed = false;
+          if (wName) {
+            try {
+              const pr = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM fleet_probe_log WHERE name=?1 AND ok=1 AND (transport IS NULL OR transport <> 'cf-api-list') AND ts >= ?2").bind(wName, new Date(Date.now() - 864e5).toISOString()).first();
+              probed = !!(pr && pr.c > 0);
+            } catch (e) { probed = false; }
+          }
+          if (probed) rat = "undercount false-positive (adaptive-sampled) -- external liveness probe ok in 24h";
+          else { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, claim=?, confidence='medium' WHERE id=?").bind("escalated", "SELF-HEAL-AUTOCLOSE-NO-REPROBE: no EXTERNAL liveness probe (non-watchdog) for " + (wName || "unknown") + " in 24h - NOT auto-closed; needs per-worker verification (its own log may be stale)", row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: "escalated-no-external-liveness-probe" }); }
+        } if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
       const bindings = {};
       for (const k of BINDING_KEYS) bindings[k.toLowerCase()] = !!(env[k] && env[k].fetch);
       bindings.audit = !!env.QNFO_AUDIT;
@@ -4614,4 +4721,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
---08cb9366e75cc087b142ab7d104e03e73b1fc08fa572b12a71ae0d7a1e5b--
+--8fc1a95bc0309a5dcac770391d19eb3b20145126803e41bf24103ca1acf1--
