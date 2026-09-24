@@ -13,7 +13,7 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["30 6 * * *", "0 18 * * *"]
+crons = ["*/5 * * * *", "30 6 * * *", "0 18 * * *"]
 
 # v1.2.0 UNIFIED RETRIEVAL ORACLE — D1 bindings (state snapshots + records)
 [[d1_databases]]
