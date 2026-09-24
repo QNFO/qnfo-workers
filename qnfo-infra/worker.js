@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.7";
+var VERSION = "1.2.8";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -438,7 +438,7 @@ var worker_default = {
     if (path === "/state" && method === "GET") {
       const forceLive = url.searchParams.get("live") === "1";
       const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='snapshot' ORDER BY ts DESC LIMIT 1").first();
-      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 36e4;
+      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 6e5;
       let payload = fresh ? JSON.parse(row.data) : null;
       if (!payload) { payload = await collectState(env); await store(env, "snapshot", payload); }
       return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
@@ -446,7 +446,7 @@ var worker_default = {
     if (path === "/analytics" && method === "GET") {
       const forceLive = url.searchParams.get("live") === "1";
       const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='analytics' ORDER BY ts DESC LIMIT 1").first();
-      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 36e4;
+      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 6e5;
       let payload = fresh ? JSON.parse(row.data) : null;
       if (!payload) { payload = await collectAnalytics(env); await store(env, "analytics", payload); }
       return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
@@ -454,7 +454,7 @@ var worker_default = {
     if (path === "/records" && method === "GET") {
       const forceLive = url.searchParams.get("live") === "1";
       const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='records' ORDER BY ts DESC LIMIT 1").first();
-      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 36e4;
+      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 6e5;
       let payload = fresh ? JSON.parse(row.data) : null;
       if (!payload) { payload = await collectRecords(env); await store(env, "records", payload); }
       return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
