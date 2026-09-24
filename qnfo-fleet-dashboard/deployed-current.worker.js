@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.9"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.10"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1898,7 +1898,7 @@ function computeSai(st, bench, cfg, live) {
   const islands = ig.islands || [];
   const drift = ig.drift || {};
   const driftBad = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
-  const density = ig.density || 0;
+  const density = ig.density_contract || ig.density || 0;
   const audits = {};
   (st.audits || []).forEach(function(a) { if (a && a.key) audits[a.key] = a; });
   let openIssues = -1, userWait = -1;
