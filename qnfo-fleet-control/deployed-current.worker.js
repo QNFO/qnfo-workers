@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.17-advisordedupe";
+var VERSION = "0.4.20-crondrift";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1328,6 +1328,19 @@ async function redeploy(env, worker) {
   }
   var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
   var toSha = await sha256(c.code);
+  // REDEPLOY-CRON-LOCK-1: acquire the distributed deploy lock so a locked manual deploy is
+  // never clobbered by the redeploy cron (DEPLOY-GUARD-BYPASS-1, cron side). Skip if held.
+  var lockTok = null;
+  try {
+    var lr2 = await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, owner: "qnfo-fleet-control/redeploy", ttl_sec: 120, expected_version: depV }) }, 8e3);
+    if (lr2 && lr2.status === 409) {
+      await audit(env, worker, "deploy", depV || "?", canV, c.path, false, "skipped: deploy lock held by another owner (REDEPLOY-CRON-LOCK-1)");
+      return { ok: false, status: 409, note: "deploy lock held by another owner - skipped", from: depV, to: canV };
+    }
+    var lj2 = lr2 ? await lr2.json().catch(function() { return null; }) : null;
+    lockTok = lj2 && lj2.token ? lj2.token : null;
+  } catch (e) {
+  }
   var r;
   if (isModule(c.code)) {
     var fd = new FormData();
@@ -1347,11 +1360,95 @@ async function redeploy(env, worker) {
   var depV2 = dep2 ? versionOf(dep2) : null;
   var ok = putOk && depV2 === canV;
   var note = !putOk ? "HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180) : ok ? "redeployed " + depV + " -> " + canV : "PUT-ok but deployed still " + (depV2 || "?") + " (wrangler-managed no-op?)";
+  if (lockTok) {
+    try {
+      await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lockTok }) }, 8e3);
+    } catch (e) {
+    }
+  }
+  // DEPLOY-LEDGER-1 (2026-09-19): write the mutation to the qnfo-deploy-guard ledger.
+  // qnfo-deploy-guard marks a mutation "logged" only when a fleet_deploys row exists for the
+  // worker with ok=1 and ts within 180s of the script modified_on; otherwise it files
+  // DEPLOY-UNLOGGED-MUTATION, and DEPLOY-UNCOORDINATED-DEPLOY once the 120s lock has expired
+  // before the guard samples. This cron locked but never ledgered, so the redeploy path was the
+  // one deploy path that always tripped the guard. Record it here (fail-soft: a ledger outage
+  // must not abort the deploy, but it WILL leave a visible anomaly for the guard to file).
+  try {
+    await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, actor: "qnfo-fleet-control/redeploy", from: depV || "?", to: canV, source_path: c.path, ok: ok, note: String(note || "").slice(0, 280) }) }, 8e3);
+  } catch (e) {
+  }
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
   return { ok, status: ok ? 200 : 502, note, from: depV, to: canV, direction, source: c.path, bytes: c.code.length };
 }
 __name(redeploy, "redeploy");
 __name2(redeploy, "redeploy");
+
+// CRON-TRIGGER-DRIFT-1 (2026-09-23): detect LIVE cron triggers that diverge from the
+// DECLARED [triggers].crons in the repo wrangler.toml. A content PUT never sets
+// /schedules, so a lost trigger is invisible to the version scan (qnfo-ai-calibration
+// ran live with ZERO triggers for 4.5 days, silently freezing the AI-error recorder).
+// Declared source = repo wrangler.toml (worker_schedules mirrors LIVE, not declared).
+// Heal ONLY total loss (declared non-empty AND live empty) - never revert an
+// intentional cadence change by healing a partial divergence.
+function tomlCrons(t) {
+  var ti = t.indexOf("[triggers]");
+  if (ti < 0) return [];
+  var ci = t.indexOf("crons", ti);
+  if (ci < 0) return [];
+  var ob = t.indexOf("[", ci);
+  if (ob < 0) return [];
+  var cb = t.indexOf("]", ob);
+  if (cb < 0) return [];
+  return t.slice(ob + 1, cb).split(",").map(function(x) { return x.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean).sort();
+}
+async function declaredCrons(env, worker) {
+  var cands = [worker];
+  if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
+  for (var a = 0; a < cands.length; a++) {
+    try {
+      var r = await timedFetch(GH + "qnfo-workers/main/" + cands[a] + "/wrangler.toml?cb=" + Math.floor(Date.now() / FRESH_MS), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+      if (!r.ok) continue;
+      var t = await r.text();
+      if (!t || t.slice(0, 4) === "404:") continue;
+      return tomlCrons(t);
+    } catch (e) {}
+  }
+  return null;
+}
+async function liveCrons(env, worker) {
+  try {
+    var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/schedules", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
+    if (!r.ok) return null;
+    var j = await r.json();
+    return ((j.result && j.result.schedules) || []).map(function(x) { return x.cron; }).sort();
+  } catch (e) { return null; }
+}
+async function cronDrift(env, names, out) {
+  out.cronDrift = 0; out.cronHealed = 0; out.cronDetails = [];
+  if (!names || !names.length) return;
+  for (var i = 0; i < names.length; i++) {
+    var n = names[i];
+    if (NO_SELF.indexOf(n) >= 0) continue;
+    try {
+      var decl = await declaredCrons(env, n);
+      if (decl === null) continue;
+      var live = await liveCrons(env, n);
+      if (live === null) continue;
+      var ds = decl.join(" "), ls = live.join(" ");
+      if (ds === ls) continue;
+      out.cronDrift++;
+      if (out.cronDetails.length < 60) out.cronDetails.push(n + ":decl[" + ds + "] live[" + ls + "]");
+      await report(env, n, ls, ds, "wrangler.toml[triggers].crons", "cron-drift declared=" + ds + " live=" + ls);
+      if (decl.length > 0 && live.length === 0) {
+        try {
+          var put = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(decl.map(function(c) { return { cron: c }; })) }, FETCH_TIMEOUT_MS);
+          if (put.ok) { out.cronHealed++; await audit(env, n, "cron-heal", ls, ds, "wrangler.toml[triggers].crons", true, "restored " + decl.length + " cron trigger(s)"); }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+}
+
 async function scan(env, heal) {
   var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
@@ -1458,6 +1555,7 @@ async function scan(env, heal) {
   } catch (e) {
     out.contentSignalError = String(e && e.message || e).slice(0, 120);
   }
+  try { await cronDrift(env, names, out); } catch (e) {}
   return out;
 }
 __name(scan, "scan");
