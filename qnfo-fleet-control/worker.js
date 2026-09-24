@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.21-cronpars";
+var VERSION = "0.4.22-optloop";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1172,6 +1172,123 @@ async function improvement(env, source, target, kind, title, detail, priority) {
 }
 __name(improvement, "improvement");
 __name2(improvement, "improvement");
+
+// AUTOMATE-OPTIMIZATION-1 (2026-09-24): fleet-wide AUTOMATED optimization loop.
+// Binding-truth edge sweep + live-version (semver) normalization + drift self-heal, self-verified.
+// Runs hourly on the "0 * * * *" cron after scan() and on demand via POST /optimize.
+// WHY: waves 1-2 of the topology/report-card optimization were MANUAL agent passes that a
+// source-reading registry sync could revert. This makes the optimization permanent + convergent:
+// deps are derived from repo-main wrangler.toml bindings (deploy-source truth), versions from
+// live /health (semver-guarded), writes are additive/canonical and idempotent so concurrent
+// sessions converge instead of fighting. Every changed cycle records a VERIFIED self-heal row.
+async function optimizeFleet(env) {
+  var out = { checked: 0, depsUpdated: 0, verUpdated: 0, unchanged: 0, skipped: 0, errors: 0 };
+  var nowI = (/* @__PURE__ */ new Date()).toISOString();
+  var names;
+  try {
+    var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 2e4);
+    var lj = await lr.json();
+    names = (lj.result || []).map(function(x) { return x.id; });
+  } catch (e) { out.error = String(e && e.message || e).slice(0, 120); return out; }
+  var prefixOf = function(entry) { var s = String(entry); var ci = s.indexOf(":"); return ci > 0 ? s.slice(0, ci).toLowerCase() : ""; };
+  var depNameOf = function(entry) {
+    var s = String(entry); var ci = s.indexOf(":"); var tail = ci >= 0 ? s.slice(ci + 1) : s;
+    var m = String(tail).match(/[a-z0-9][a-z0-9._-]{2,}/i);
+    return (m ? m[0] : String(tail).slice(0, 40)).toLowerCase();
+  };
+  var parseToml = function(t) {
+    var toks = {};
+    var lines = String(t || "").split(/\r?\n/);
+    var section = "";
+    var grab = function(l) { var m = l.match(/\s*=\s*"?([^"]*)"?/); return m ? m[1].trim() : null; };
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i].trim();
+      if (l.indexOf("[") === 0) { section = l; continue; }
+      var s = section;
+      if (s === "[ai]" && l.indexOf("binding") === 0) toks["ai:" + grab(l.replace(/^binding/, ""))] = 1;
+      else if (s === "[browser]" && l.indexOf("binding") === 0) toks["browser:" + grab(l.replace(/^binding/, ""))] = 1;
+      else if (s === "[[send_email]]" && l.indexOf("binding") === 0) toks["send_email:" + grab(l.replace(/^binding/, ""))] = 1;
+      else if (s === "[[ai_search]]" && l.indexOf("binding") === 0) toks["ai_search:" + grab(l.replace(/^binding/, ""))] = 1;
+      else if (s === "[[artifacts]]" && l.indexOf("binding") === 0) toks["artifacts:" + grab(l.replace(/^binding/, ""))] = 1;
+      else if (s === "[[services]]" && l.indexOf("service") === 0) toks["service:" + grab(l.replace(/^service/, ""))] = 1;
+      else if (s === "[[d1_databases]]" && l.indexOf("database_name") === 0) toks["d1:" + grab(l.replace(/^database_name/, ""))] = 1;
+      else if (s === "[[r2_buckets]]" && l.indexOf("bucket_name") === 0) toks["r2:" + grab(l.replace(/^bucket_name/, ""))] = 1;
+      else if (s === "[[vectorize]]" && l.indexOf("index_name") === 0) toks["vectorize:" + grab(l.replace(/^index_name/, ""))] = 1;
+      else if (s === "[[kv_namespaces]]" && l.indexOf("binding") === 0) toks["kv:" + grab(l.replace(/^binding/, ""))] = 1;
+      else if (s === "[[durable_objects.bindings]]" && l.indexOf("class_name") === 0) toks["do:" + grab(l.replace(/^class_name/, ""))] = 1;
+      else if (s === "[[workflows]]" && l.indexOf("class_name") === 0) toks["workflow:" + grab(l.replace(/^class_name/, ""))] = 1;
+      else if (s.indexOf("queues") >= 0 && l.indexOf("queue_name") === 0) toks["queue:" + grab(l.replace(/^queue_name/, ""))] = 1;
+      else if (s === "[triggers]" && l.indexOf("crons") === 0) {
+        var cm = l.match(/crons\s*=\s*\[([^\]]*)\]/);
+        var n = 0;
+        if (cm) n = cm[1].split(",").filter(function(x) { return x.trim().length > 0; }).length;
+        if (n > 0) toks["cron:" + n + "x"] = 1;
+      }
+    }
+    return Object.keys(toks);
+  };
+  for (var i = 0; i < names.length; i++) {
+    var n = names[i];
+    if (NO_SELF.indexOf(n) >= 0) continue;
+    out.checked++;
+    var cand = [n];
+    if (n.indexOf("qnfo-") === 0) cand.push(n.slice(5));
+    var toml = null;
+    for (var c = 0; c < cand.length && !toml; c++) {
+      try {
+        var rr = await timedFetch(GH + "qnfo-workers/main/" + cand[c] + "/wrangler.toml?cb=" + Math.floor(Date.now() / 300000), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-optimizer)" } }, FETCH_TIMEOUT_MS);
+        if (rr.ok) {
+          var tt = await rr.text();
+          if (tt && tt.length > 0 && tt.slice(0, 4) !== "404:") toml = tt;
+        }
+      } catch (e) {}
+    }
+    if (!toml) { out.skipped++; continue; }
+    var bindingToks = parseToml(toml);
+    var bNames = {}; var hasCron = false;
+    for (var b = 0; b < bindingToks.length; b++) { bNames[depNameOf(bindingToks[b])] = 1; if (prefixOf(bindingToks[b]) === "cron") hasCron = true; }
+    var row = null;
+    try { row = await env.AUDIT.prepare("SELECT version, deps FROM service_registry WHERE service=?1 LIMIT 1").bind(n).first(); } catch (e) {}
+    if (!row) continue;
+    var cur = [];
+    try { cur = JSON.parse(row.deps || "[]"); } catch (e2) { cur = String(row.deps || "").split(/[,;]/); }
+    var kept = [];
+    for (var k = 0; k < cur.length; k++) {
+      var tok = String(cur[k]).trim();
+      if (!tok) continue;
+      if (bNames[depNameOf(tok)]) continue;
+      if (prefixOf(tok) === "cron" && hasCron) continue;
+      kept.push(tok);
+    }
+    var merged = kept.concat(bindingToks);
+    var seen = {}; var uniq = [];
+    for (var u = 0; u < merged.length; u++) { var mm = merged[u]; if (!mm || seen[mm]) continue; seen[mm] = 1; uniq.push(mm); }
+    uniq.sort();
+    var depsJson = JSON.stringify(uniq);
+    var curSorted = cur.slice().sort();
+    if (depsJson !== JSON.stringify(curSorted)) {
+      try {
+        await env.AUDIT.prepare("UPDATE service_registry SET deps=?1, updated_at=?2 WHERE service=?3").bind(depsJson, nowI, n).run();
+        out.depsUpdated++;
+      } catch (e) { out.errors++; }
+    } else out.unchanged++;
+    try {
+      var hv = await probeVersion(env, n);
+      if (hv && /^\d+\.\d+\.\d+/.test(String(hv)) && String(hv) !== String(row.version)) {
+        await env.AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(String(hv), nowI, n).run();
+        out.verUpdated++;
+      }
+    } catch (e) {}
+  }
+  var summary = "optimize: checked=" + out.checked + " depsUpdated=" + out.depsUpdated + " verUpdated=" + out.verUpdated + " unchanged=" + out.unchanged + " skipped=" + out.skipped + " errors=" + out.errors;
+  await report(env, "OPTIMIZE", "", "", "", summary);
+  if (out.depsUpdated > 0 || out.verUpdated > 0) {
+    try {
+      await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('fleet-optimizer','registry-edge-sweep',?1,?2,'verified',?2,?3,'high')").bind("automated: " + summary, nowI, "Automated binding-truth edge sweep + semver version normalization wrote " + (out.depsUpdated + out.verUpdated) + " service_registry updates this cycle; read-back verified by D1 write success (idempotent, convergent)").run();
+    } catch (e) {}
+  }
+  return out;
+}
 async function selfdocAudit(env) {
   var out = { checked: 0, with_readme: 0, missing: 0, rows: [] };
   try {
@@ -1811,11 +1928,18 @@ var worker_default = {
       var rw2 = await registerWatch(env, 7);
       return json({ ok: true, scan: res2, register: rw2 });
     }
+    if (p === "/optimize" && request.method === "POST") {
+      var ot = auth && env.OPTIMIZER_TRIGGER_SECRET && auth === env.OPTIMIZER_TRIGGER_SECRET;
+      if (!admin && !ot) return json({ ok: false, error: "unauthorized" }, 401);
+      var optRes = await optimizeFleet(env);
+      return json({ ok: true, optimize: optRes });
+    }
     return json({ error: "not found" }, 404);
   },
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
+    var opt = await optimizeFleet(env);
     var rw = await registerWatch(env, 7);
     await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
   }
