@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.22-optloop";
+var VERSION = "0.4.23-optdebug";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
