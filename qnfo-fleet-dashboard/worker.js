@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.6"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.10"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -406,8 +406,8 @@ __name2(liveDevice, "liveDevice");
 async function liveScheduled(env, liveNames) {
   try {
     try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run(); } catch (e) {}
-    const meta = await d1all(env.AUDIT, "SELECT MAX(refreshed_at) AS m FROM worker_schedules");
-    const ageH = meta && meta[0] && meta[0].m ? (Date.now() - new Date(meta[0].m).getTime()) / 36e5 : 1e9;
+    const meta = await d1all(env.AUDIT, "SELECT (julianday('now') - julianday(MAX(refreshed_at))) * 24 AS ageh FROM worker_schedules");
+    const ageH = meta && meta[0] && meta[0].ageh != null ? Number(meta[0].ageh) : 1e9;
     const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM worker_schedules");
     if (ageH > 1 || !(cnt && cnt[0] && cnt[0].c > 0)) {
       const reg = await d1all(env.AUDIT, "SELECT service, purpose FROM service_registry") || [];
@@ -422,7 +422,8 @@ async function liveScheduled(env, liveNames) {
             const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
             if (!r.ok) return { n, c: [], ok: false };
             const j = await r.json();
-            const arr = (j.result && j.result.schedules) || [];
+            if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
+            const arr = j.result.schedules;
             return { n, c: arr.map(function(s) { return s.cron; }), ok: true };
           } catch (e) { return { n, c: [], ok: false }; }
         }));
@@ -434,7 +435,7 @@ async function liveScheduled(env, liveNames) {
       }
     }
   } catch (e) {}
-  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at >= ?1 ORDER BY name", [new Date(Date.now() - 6 * 36e5).toISOString()]) || [];
+  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
   const out = [];
   for (const r of rows) { try { out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" }); } catch (e) {} }
   return out;
@@ -1083,8 +1084,8 @@ async function buildState(env, ctx) {
       ts: mt && mt.latest ? new Date(Number(mt.latest)).toISOString() : null });
   });
   await safeAudit("gw_calibration", "AI calibration probes (24h)", async function() {
-    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration'", [epoch24]);
-    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%'", [epoch24]);
+    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
     const ctotal = c && c.length ? c[0].total : 0;
     const ctc = ct.map(function(r) {
       return r.error_class + ":" + r.c;
@@ -1897,7 +1898,7 @@ function computeSai(st, bench, cfg, live) {
   const islands = ig.islands || [];
   const drift = ig.drift || {};
   const driftBad = (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0);
-  const density = ig.density || 0;
+  const density = ig.density_contract || ig.density || 0;
   const audits = {};
   (st.audits || []).forEach(function(a) { if (a && a.key) audits[a.key] = a; });
   let openIssues = -1, userWait = -1;
@@ -1984,6 +1985,16 @@ var worker_default = {
       try {
         await loopExecute(env);
       } catch (e3) {
+      }
+      // FLEET-SCHEDULES-CRON-REFRESH-1 (2026-09-23): refresh the worker_schedules census ON THE CRON.
+      // liveScheduled() was only reachable via a view/route (worker.js:1243), so the census re-staled
+      // whenever nobody loaded the dashboard. Wire it into the scheduled handler so it self-maintains
+      // every */30 and the substantiveness/deprecation policy always reads a live-matching census.
+      try {
+        const _lf = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
+        const _names = (_lf.results || []).map(function (x) { return x.service; });
+        if (_names.length) await liveScheduled(env, _names);
+      } catch (e4) {
       }
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
     } catch (e) {
