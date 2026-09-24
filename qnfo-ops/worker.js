@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.50";
+var VERSION = "2.36.51";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3590,8 +3590,16 @@ async function registryRefresh(env) {
             });
             if (rs.ok) {
               const txt = await rs.text();
-              const m2 = txt.match(/VERSION\s*=\s*"([^"]+)"/) || txt.match(/VERSION\s*=\s*'([^']+)'/);
-              if (m2) v2 = m2[1];
+              // SEMVER-EXTRACT-AUTHORITY-1 (2026-09-24): String.match returned the FIRST `VERSION = "..."`
+              // in the bundle. Merged workers carry LEGACY constants BEFORE the current one
+              // (osf: QNFO_VERSION="osf-integrity-check/fabric-20260910"; artifact-agent/MCP: "2025-11-25";
+              // idea-hub: "qnfo-idea-factory/fabric-20260910"; radar-hub: 5 constants), so this sweep
+              // wrote a NON-SEMVER version every cron and reverted every manual repair. Collect ALL
+              // VERSION assignments, prefer the first SEMVER-shaped one, and never write non-semver.
+              const allV = String(txt).match(/VERSION\s*=\s*["']([^"']+)["']/g) || [];
+              const vals = allV.map(function (x) { return (x.match(/["']([^"']+)["']/) || [])[1]; }).filter(Boolean);
+              const sem = vals.filter(function (x) { return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(x); });
+              if (sem.length) v2 = sem[0];
             }
           } catch (e) {
             /* fall through to the noversion report below */
