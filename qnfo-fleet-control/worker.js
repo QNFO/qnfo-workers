@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.24-optloop";
+var VERSION = "0.4.25-optfix";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1272,13 +1272,23 @@ async function optimizeFleet(env) {
         out.depsUpdated++;
       } catch (e) { out.errors++; }
     } else out.unchanged++;
-    try {
-      var hv = await probeVersion(env, n);
-      if (hv && /^\d+\.\d+\.\d+/.test(String(hv)) && String(hv) !== String(row.version)) {
-        await env.AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(String(hv), nowI, n).run();
-        out.verUpdated++;
-      }
-    } catch (e) {}
+    var rowV = row.version == null ? "" : String(row.version);
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(rowV)) {
+      // STALE-PROBE-GUARD (2026-09-24): only FILL missing or NON-SEMVER registry versions.
+      // Never overwrite an existing semver from probe-derived evidence: fleet_probe_log bodies can
+      // be days old and the first live run regressed 7 correct versions (fleet-control 0.4.24->0.4.18,
+      // qnfo-ops 2.36.50->2.36.49, qnfo-infra 1.2.5->1.2.4, ...). Direct /health first, probe fallback.
+      try {
+        var hv = null;
+        var hr = await timedFetch("https://" + n + ".q08.workers.dev/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-optimizer)" } }, 8000);
+        if (hr.ok) { var hj = await hr.json(); if (hj && hj.version) hv = String(hj.version); }
+        if (!hv) hv = await probeVersion(env, n);
+        if (hv && /^\d+\.\d+\.\d+/.test(hv) && hv !== rowV) {
+          await env.AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(hv, nowI, n).run();
+          out.verUpdated++;
+        }
+      } catch (e) {}
+    }
   }
   var summary = "optimize: checked=" + out.checked + " depsUpdated=" + out.depsUpdated + " verUpdated=" + out.verUpdated + " unchanged=" + out.unchanged + " skipped=" + out.skipped + " errors=" + out.errors;
   await report(env, "OPTIMIZE", "", "", "", summary);
