@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.7"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.8"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -406,8 +406,8 @@ __name2(liveDevice, "liveDevice");
 async function liveScheduled(env, liveNames) {
   try {
     try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run(); } catch (e) {}
-    const meta = await d1all(env.AUDIT, "SELECT MAX(refreshed_at) AS m FROM worker_schedules");
-    const ageH = meta && meta[0] && meta[0].m ? (Date.now() - new Date(meta[0].m).getTime()) / 36e5 : 1e9;
+    const meta = await d1all(env.AUDIT, "SELECT (julianday('now') - julianday(MAX(refreshed_at))) * 24 AS ageh FROM worker_schedules");
+    const ageH = meta && meta[0] && meta[0].ageh != null ? Number(meta[0].ageh) : 1e9;
     const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM worker_schedules");
     if (ageH > 1 || !(cnt && cnt[0] && cnt[0].c > 0)) {
       const reg = await d1all(env.AUDIT, "SELECT service, purpose FROM service_registry") || [];
@@ -435,7 +435,7 @@ async function liveScheduled(env, liveNames) {
       }
     }
   } catch (e) {}
-  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at >= ?1 ORDER BY name", [new Date(Date.now() - 6 * 36e5).toISOString()]) || [];
+  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
   const out = [];
   for (const r of rows) { try { out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" }); } catch (e) {} }
   return out;
