@@ -23,12 +23,12 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.55";
+var VERSION = "2.36.56";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
   let best = -1;
-  const marks = [bar + bar + "DSML", "<tool_calls", "<invoke"];
+  const marks = [bar + bar + "DSML", "<tool_call", "<invoke", "<arg_key", "<arg_value"];
   for (let i = 0; i < marks.length; i++) {
     const p = s.indexOf(marks[i]);
     if (p >= 0 && (best < 0 || p < best)) best = p;
@@ -47,6 +47,14 @@ __name(stripToolFrames, "stripToolFrames");
 __name2(stripToolFrames, "stripToolFrames");
 __name22(stripToolFrames, "stripToolFrames");
 __name222(stripToolFrames, "stripToolFrames");
+function isOAIUpstream(m) {
+  // OAI-MAXTOKENS-1 (2026-09-24): OpenAI-family upstreams reject `max_tokens` ("Use max_completion_tokens
+  // instead"). Detect the WHOLE family (openai/, dynamic/, gpt-*, o1/o3/o4*, *-codex) -- the old
+  // indexOf("gpt-5") check missed o4-mini and bare gpt-4.1 -> upstream 400 (4x, last 2026-09-22).
+  const t = String(m || "");
+  return /^openai\//i.test(t) || /^dynamic\//i.test(t) || /gpt[-_.]/i.test(t) || /^o[1-9](?:[-\/]|$)/i.test(t) || /-codex/i.test(t);
+}
+__name(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -2700,7 +2708,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0 || modelToUse.indexOf("dynamic/") === 0; let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
+  const _isOAI = isOAIUpstream(modelToUse); let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -2744,7 +2752,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   const o = opts || {};
   const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  const _isOAI = modelToUse.indexOf("openai/") === 0 || modelToUse.indexOf("gpt-5") >= 0 || modelToUse.indexOf("dynamic/") === 0;
+  const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = o.toolChoice || "auto"; }
   const resp = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(body) });
@@ -2974,7 +2982,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   }, "fail");
   try {
     if (isStream) {
-      const _relayIsOAI = relayUp.indexOf("openai/") === 0 || relayUp.indexOf("gpt-5") >= 0 || relayUp.indexOf("dynamic/") === 0;
+      const _relayIsOAI = isOAIUpstream(relayUp);
       const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
@@ -3273,7 +3281,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + String(e && e.message || e).slice(0, 180));
       }
     }
-    const _streamModel = execUpstream || UPSTREAM_MODEL; const _streamIsOAI = _streamModel.indexOf("openai/") === 0 || _streamModel.indexOf("gpt-5") >= 0; const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const _streamModel = execUpstream || UPSTREAM_MODEL; const _streamIsOAI = isOAIUpstream(_streamModel); const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
