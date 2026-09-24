@@ -1,9 +1,13 @@
+--f8243044af9d373b31aad8bdc5e67b6042ce23825cb5158b514147910a99
+Content-Disposition: form-data; name="worker.js"; filename="worker.js"
+Content-Type: application/javascript+module
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.3";
+var VERSION = "1.2.5";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -408,7 +412,7 @@ function renderContext(retrieved) {
 __name(renderContext, "renderContext");
 var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *") {
+    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "*/10 * * * *") {
       const s = await collectState(env);
       await store(env, "snapshot", s);
       const a = await collectAnalytics(env);
@@ -436,16 +440,28 @@ var worker_default = {
       return new Response(JSON.stringify({ ok: true, ids }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/state" && method === "GET") {
-      const row = await env.AUDIT.prepare("SELECT data FROM infra_state WHERE kind='snapshot' ORDER BY ts DESC LIMIT 1").first();
-      return new Response(JSON.stringify(row ? JSON.parse(row.data) : { error: "no snapshot yet" }), { headers: { "Content-Type": "application/json", ...cors } });
+      const forceLive = url.searchParams.get("live") === "1";
+      const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='snapshot' ORDER BY ts DESC LIMIT 1").first();
+      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 36e4;
+      let payload = fresh ? JSON.parse(row.data) : null;
+      if (!payload) { payload = await collectState(env); await store(env, "snapshot", payload); }
+      return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/analytics" && method === "GET") {
-      const row = await env.AUDIT.prepare("SELECT data FROM infra_state WHERE kind='analytics' ORDER BY ts DESC LIMIT 1").first();
-      return new Response(JSON.stringify(row ? JSON.parse(row.data) : { error: "no analytics yet" }), { headers: { "Content-Type": "application/json", ...cors } });
+      const forceLive = url.searchParams.get("live") === "1";
+      const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='analytics' ORDER BY ts DESC LIMIT 1").first();
+      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 36e4;
+      let payload = fresh ? JSON.parse(row.data) : null;
+      if (!payload) { payload = await collectAnalytics(env); await store(env, "analytics", payload); }
+      return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/records" && method === "GET") {
-      const row = await env.AUDIT.prepare("SELECT data FROM infra_state WHERE kind='records' ORDER BY ts DESC LIMIT 1").first();
-      return new Response(JSON.stringify(row ? JSON.parse(row.data) : { error: "no records yet" }), { headers: { "Content-Type": "application/json", ...cors } });
+      const forceLive = url.searchParams.get("live") === "1";
+      const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='records' ORDER BY ts DESC LIMIT 1").first();
+      const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 36e4;
+      let payload = fresh ? JSON.parse(row.data) : null;
+      if (!payload) { payload = await collectRecords(env); await store(env, "records", payload); }
+      return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/retrieve" && method === "GET") {
       const q = (url.searchParams.get("q") || "").trim();
@@ -470,3 +486,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+--f8243044af9d373b31aad8bdc5e67b6042ce23825cb5158b514147910a99--

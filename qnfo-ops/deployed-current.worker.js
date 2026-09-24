@@ -1,3 +1,7 @@
+--26d9d56f028452a60afccd9943a48a332b4613867af9bb5e7afbfc1479d2
+Content-Disposition: form-data; name="worker.js"; filename="worker.js"
+Content-Type: application/javascript+module
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -23,7 +27,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.49";
+var VERSION = "2.36.51";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3520,7 +3524,7 @@ function manifest() {
     }),
     models: opsModelIds(),
     limitations: OPS_ENDPOINT_LIMITATIONS,
-    deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "REGISTRY_TOKEN (fleet self-registration)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
+    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-email-orchestrator", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
     generatedAt: iso()
   };
 }
@@ -3590,8 +3594,16 @@ async function registryRefresh(env) {
             });
             if (rs.ok) {
               const txt = await rs.text();
-              const m2 = txt.match(/VERSION\s*=\s*"([^"]+)"/) || txt.match(/VERSION\s*=\s*'([^']+)'/);
-              if (m2) v2 = m2[1];
+              // SEMVER-EXTRACT-AUTHORITY-1 (2026-09-24): String.match returned the FIRST `VERSION = "..."`
+              // in the bundle. Merged workers carry LEGACY constants BEFORE the current one
+              // (osf: QNFO_VERSION="osf-integrity-check/fabric-20260910"; artifact-agent/MCP: "2025-11-25";
+              // idea-hub: "qnfo-idea-factory/fabric-20260910"; radar-hub: 5 constants), so this sweep
+              // wrote a NON-SEMVER version every cron and reverted every manual repair. Collect ALL
+              // VERSION assignments, prefer the first SEMVER-shaped one, and never write non-semver.
+              const allV = String(txt).match(/VERSION\s*=\s*["']([^"']+)["']/g) || [];
+              const vals = allV.map(function (x) { return (x.match(/["']([^"']+)["']/) || [])[1]; }).filter(Boolean);
+              const sem = vals.filter(function (x) { return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(x); });
+              if (sem.length) v2 = sem[0];
             }
           } catch (e) {
             /* fall through to the noversion report below */
@@ -4598,3 +4610,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+--26d9d56f028452a60afccd9943a48a332b4613867af9bb5e7afbfc1479d2--
