@@ -2,13 +2,13 @@
  * qnfo-artifacts -- Cloudflare Artifacts control plane + agent workspace provisioner.
  *
  * WHY: Artifacts is "versioned storage that speaks Git". The fleet needs one
- *      server-side control plane that can (a) enumerate/create repos in the qnfo
- *      namespace and (b) mint short-lived scoped Git tokens so an agent, task, or
- *      branch gets an isolated repo it can clone, commit, and push to.
+ *      server-side control plane that can (a) enumerate/create/delete repos in the
+ *      qnfo namespace and (b) mint short-lived scoped Git tokens so an agent, task,
+ *      or branch gets an isolated repo it can clone, commit, and push to.
  *
  * CONTRACT
  *   PRE:    env.ARTIFACTS is an Artifacts binding to namespace "qnfo";
- *           env.ARTIFACTS_TOKEN is a Worker secret.
+ *           env.ARTIFACTS_TOKEN is a Worker secret (distinct from the agent's).
  *   POST:   every handler returns JSON; GET /health is 200 while the worker is live.
  *   INVARIANT:
  *     I1 FAIL-CLOSED AUTH -- if ARTIFACTS_TOKEN is unset every non-health route
@@ -17,23 +17,31 @@
  *        ceiling 86400s. Token plaintext is returned once and never stored.
  *     I3 HEAD TRUTH -- Artifacts beta never populates `last_push_at`, so repo
  *        freshness is read from the commit log (GET /repos/:name/head).
+ *     I4 PROBE RECORD -- every re-probe records whether auth was configured AT
+ *        PROBE TIME, so the durable row does not depend on /health's propagation.
  *
  * ROUTES (all except /health and / require `Authorization: Bearer <ARTIFACTS_TOKEN>`)
- *   GET  /health                          liveness + self-doc (OPEN)
- *   GET  /                                self-doc (OPEN)
- *   GET  /probe                           run the Artifacts re-probe now
- *   GET  /probes?limit                    recent probe rows (beta re-falsification)
- *   GET  /repos?limit&cursor              list repos in the namespace
- *   POST /repos   {name,description,defaultBranch,readOnly}   create a repo
- *   GET  /repos/:name                     repo handle check
- *   GET  /repos/:name/head                authoritative head commit (log-derived)
- *   GET  /repos/:name/log?limit           commit log
- *   POST /repos/:name/token {scope,ttl}   mint a scoped Git token
- *   POST /workspace {unit,kind}           create ONE isolated repo for an agent/task
- *   GET  /tokens?repo=:name               list token ids (no secrets)
+ *   GET    /health                        liveness + self-doc (OPEN)
+ *   GET    /                              self-doc (OPEN)
+ *   GET    /probe                         run the Artifacts re-probe now (records auth state)
+ *   GET    /probes?limit                  recent probe rows (beta re-falsification)
+ *   GET    /repos?limit&cursor            list repos in the namespace
+ *   POST   /repos   {name,...}            create a repo
+ *   GET    /repos/:name                   repo handle check
+ *   DELETE /repos/:name                   permanently delete a repo
+ *   GET    /repos/:name/head              authoritative head commit (log-derived)
+ *   GET    /repos/:name/log?limit         commit log
+ *   POST   /repos/:name/token {scope,ttl} mint a scoped Git token
+ *   POST   /workspace {unit,kind}         create ONE isolated repo for an agent/task
+ *   GET    /tokens?repo=:name             list token ids (no secrets)
+ *
+ * NOTE (/health.auth): the flag reflects the CURRENT deployment's env and can lag a
+ * `wrangler secret put` by up to ~1 minute. The authoritative gate signal is the
+ * 503 -> 401 transition, not this flag. Monitors must not treat `auth:false` alone
+ * as proof the gate is open.
  */
 
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 const MAX_TTL = 86400;
 const DEFAULT_TTL = 3600;
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -47,6 +55,7 @@ const CAPABILITIES = [
   "scoped-git-tokens",
   "bearer-auth-fail-closed",
   "beta-access-reprobe",
+  "repo-delete",
   "self-registration",
 ];
 
@@ -77,7 +86,7 @@ function bearer(request) {
   return m ? m[1].trim() : "";
 }
 
-/** I1: returns "ok" | "denied" | "unconfigured" -- never coerces a missing secret to open. */
+/** I1: "ok" | "denied" | "unconfigured" -- never coerces a missing secret to open. */
 function authState(request, env) {
   if (!env.ARTIFACTS_TOKEN) return "unconfigured";
   return safeEqual(bearer(request), env.ARTIFACTS_TOKEN) ? "ok" : "denied";
@@ -94,13 +103,15 @@ async function readJson(request) {
 }
 
 /**
- * I3 / item-3: actively re-probe Artifacts so a closed-beta revocation or a REST
+ * I4 / item-3: actively re-probe Artifacts so a closed-beta revocation or a REST
  * shape change surfaces as a recorded failure instead of silent rot.
- * Writes one row per run; the table is owned by this worker.
+ * `auth_configured` is captured here so the stored row is independent of the
+ * /health flag's post-secret propagation lag.
  */
 async function probeArtifacts(env) {
   const ts = new Date().toISOString();
   const namespace = env.ARTIFACTS_NAMESPACE || "qnfo";
+  const authConfigured = !!env.ARTIFACTS_TOKEN;
   let ok = false, repos = 0, detail = "";
   try {
     const page = await env.ARTIFACTS.list({ limit: 100 });
@@ -113,18 +124,18 @@ async function probeArtifacts(env) {
   if (env.AUDIT_DB) {
     try {
       await env.AUDIT_DB.prepare(
-        "INSERT INTO artifacts_probes (ts, ok, namespace, repos, detail) VALUES (?1,?2,?3,?4,?5)"
-      ).bind(ts, ok ? 1 : 0, namespace, repos, detail).run();
+        "INSERT INTO artifacts_probes (ts, ok, namespace, repos, detail, auth_configured) VALUES (?1,?2,?3,?4,?5,?6)"
+      ).bind(ts, ok ? 1 : 0, namespace, repos, detail, authConfigured ? 1 : 0).run();
     } catch (e) { /* schema not present; probe result still returned */ }
   }
-  return { ok: ok, repoCount: repos, namespace: namespace, detail: detail, ts: ts };
+  return { ok: ok, repoCount: repos, namespace: namespace, detail: detail, authConfigured: authConfigured, ts: ts };
 }
 
 async function readProbes(env, limit) {
   if (!env.AUDIT_DB) return { ok: false, error: "AUDIT_DB not bound" };
   try {
     const r = await env.AUDIT_DB.prepare(
-      "SELECT ts, ok, namespace, repos, detail FROM artifacts_probes ORDER BY id DESC LIMIT ?1"
+      "SELECT ts, ok, namespace, repos, detail, auth_configured FROM artifacts_probes ORDER BY id DESC LIMIT ?1"
     ).bind(Math.min(Math.max(Number(limit) || 20, 1), 100)).all();
     return { ok: true, probes: (r.results || []) };
   } catch (e) {
@@ -149,6 +160,7 @@ export default {
         routes: ["/health", "/", "/probe", "/probes", "/repos", "/repos/:name", "/repos/:name/head", "/repos/:name/log", "/repos/:name/token", "/workspace", "/tokens"],
         backend: "cloudflare-artifacts",
         auth: !!env.ARTIFACTS_TOKEN,
+        auth_note: "auth may lag a secret write by ~1min; the authoritative signal is the 503->401 transition",
         auth_model: "bearer ARTIFACTS_TOKEN on every route except /health and / (fail-closed)",
         triggers: { crons: [PROBE_CRON] },
       });
@@ -205,6 +217,14 @@ export default {
       catch (e) { return fail("repo '" + name + "' not found or not ready", 404, "repo_not_found"); }
 
       if (!sub && method === "GET") return json({ ok: true, repo: { name: name, handle: true } });
+
+      // Item 5 residue hygiene: gated, deliberate, irreversible.
+      if (!sub && method === "DELETE") {
+        try {
+          await env.ARTIFACTS.delete(name);
+          return json({ ok: true, repo: name, deleted: true });
+        } catch (e) { return fail(String((e && e.message) || e), 502, "delete_failed"); }
+      }
 
       // I3: authoritative freshness -- never trusts last_push_at (beta leaves it null).
       if (sub === "/head" && method === "GET") {
