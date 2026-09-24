@@ -12,8 +12,13 @@ workers_dev = true
 enabled = true
 head_sampling_rate = 1
 
+# ALIGN-2 (PRODUCTION==CONSUMPTION, 2026-09-24): NO background cron writer.
+# infra_state is a READ-THROUGH cache: it is written lazily only when a real consumer
+# misses (GET /state|/analytics|/records). Production therefore equals consumption exactly.
+# Read TTL = 6e5 ms = 10 min = the CRON-MANDATE-1 floor (the smallest compliant interval),
+# so a served value is never older than 10 min and a miss does a live collect.
 [triggers]
-crons = ["30 6 * * *", "0 18 * * *"]
+crons = []
 
 # v1.2.0 UNIFIED RETRIEVAL ORACLE — D1 bindings (state snapshots + records)
 [[d1_databases]]

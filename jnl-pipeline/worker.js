@@ -1,3 +1,4 @@
+var VERSION = "0.1.9"; // VERSION-SOURCE-1: top-level canonical version (first match for the fleet extractor; /health derives from it)
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1868,7 +1869,7 @@ __name2(jnlRefCall, "jnlRefCall");
 var worker_default = {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "jnl-pipeline", version: "1.0.0" }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "jnl-pipeline", version: VERSION }), { headers: { "content-type": "application/json" } });
     function sub(prefix, mod) {
       const u = new URL(request.url);
       u.pathname = p.slice(prefix.length) || "/";
