@@ -115,7 +115,12 @@ def main(argv):
         elif os.path.getsize(target) < MIN_BYTES:
             problem = "HOLLOW main: %s is %d bytes (< %d)" % (rel, os.path.getsize(target), MIN_BYTES)
         if problem:
-            if is_live:
+            if live is None:
+                # RESIDUAL-3 FAIL-CLOSED: we could not classify live status, so we must NOT
+                # assume "not live" and downgrade to a warning -- an unclassifiable hollow main
+                # could be a production worker. Unknown => blocking.
+                blocking.append(problem + " [LIVE-STATUS UNKNOWN - cannot classify; failing closed]")
+            elif is_live:
                 blocking.append(problem + " [worker IS LIVE -- deploy would clobber production]")
             else:
                 warnings.append(problem + " [worker not live -- placeholder/pre-build]")
