@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.4-toolmode";
+var VERSION = "5.28.5-oaitokens";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1047,9 +1047,18 @@ function extractWAContent(result, depth = 0) {
 __name(extractWAContent, "extractWAContent");
 __name2(extractWAContent, "extractWAContent");
 __name22(extractWAContent, "extractWAContent");
+function isOAIUpstream(m) {
+  // OAI-MAXTOKENS-1 (2026-09-24): OpenAI-family upstreams reject `max_tokens` ("Use
+  // max_completion_tokens instead"). Detect the whole family -- a plain indexOf("gpt-5")
+  // check misses o4-mini and gpt-4*. Root cause of gateway 400s for gpt-5-mini routed here.
+  const t = String(m || "");
+  return /^openai\//i.test(t) || /^dynamic\//i.test(t) || /gpt[-_.]/i.test(t) || /^o[1-9](?:[-\/]|$)/i.test(t) || /-codex/i.test(t);
+}
+__name(isOAIUpstream, "isOAIUpstream");
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
   const { temperature, top_p, tool_choice } = opts;
-  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT), stream: stream || false };
+  const _mt2 = clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT);
+  const body = isOAIUpstream(apiModel) ? { model: apiModel, messages, max_completion_tokens: _mt2, stream: stream || false } : { model: apiModel, messages, max_tokens: _mt2, stream: stream || false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = tool_choice || "auto";
@@ -1072,7 +1081,7 @@ async function callGateway(env, model, messages, maxTokens, stream) {
   const resp = await fetch(GW_COMPAT, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.CF_API_TOKEN}` },
-    body: JSON.stringify({ model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
+    body: JSON.stringify(isOAIUpstream(model) ? { model, messages, max_completion_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false } : { model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
   });
   if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   if (stream) return resp;
