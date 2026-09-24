@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.53";
+var VERSION = "2.36.54";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4161,7 +4161,12 @@ async function opsDeploy(env, args) {
       const gr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + file + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
       if (!gr.ok) { result = { ok: false, error: "github contents " + gr.status }; return Object.assign({ log: log }, result); }
       const gj = await gr.json();
-      const b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+      let b64 = String(gj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+      if (!b64 && gj.sha) {
+        const br = await fetch("https://api.github.com/repos/" + repo + "/git/blobs/" + gj.sha, { headers: hdrs });
+        if (br.ok) { const bj = await br.json(); b64 = String(bj.content || "").replace(/[^A-Za-z0-9+/=]/g, ""); }
+        log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
+      }
       const content = atob(b64);
       const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
