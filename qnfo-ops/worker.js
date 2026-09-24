@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.49";
+var VERSION = "2.36.50";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3520,7 +3520,7 @@ function manifest() {
     }),
     models: opsModelIds(),
     limitations: OPS_ENDPOINT_LIMITATIONS,
-    deps: ["api.deepseek.com (DEEPSEEK_API_KEY)", "qnfo-audit D1", "qnfo-intent-orchestrator (QNFO_INTENT + INTENT_TOKEN)", "Cloudflare API (CF_API_TOKEN)", "REGISTRY_TOKEN (fleet self-registration)", "D1 x8 + Vectorize x5 + R2 x4 + KV + Workers AI (WAI)"],
+    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-email-orchestrator", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
     generatedAt: iso()
   };
 }
