@@ -84,10 +84,45 @@ def deploy(worker, directory, from_version, to_version):
     return 0 if j.get("ok") else 1
 
 
+def mirror_preflight(worker):
+    """MIRROR-STALENESS-DEPLOY-FAIL-1: refuse a deploy whose repo mirror lags its source.
+
+    opsDeploy fetches <dir>/deployed-current.worker.js, NOT <dir>/worker.js. A lagging
+    mirror makes the route verify a stale version and fail closed with an opaque ok=0
+    (canonical: osf-integrity-check 2026-09-24T11:49:27Z) - and a qnfo-fleet-control repo
+    redeploy can silently REVERT a source fix that never reached the mirror
+    (canonical: qnfo-deploy-guard 1.3.11 vs 1.3.10). Scoped to the target worker only, so
+    one lagging worker never blocks an unrelated deploy.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    guard = os.path.join(here, "mirror-guard.py")
+    if not os.path.exists(guard):
+        return 0
+    import subprocess
+    try:
+        p = subprocess.run([sys.executable, guard], capture_output=True, text=True)
+    except Exception:
+        return 0
+    if p.returncode == 0:
+        return 0
+    out = (p.stdout or "") + (p.stderr or "")
+    for line in out.splitlines():
+        if line.startswith(worker) and " LAG " in line:
+            print(json.dumps({"error": "mirror-preflight-failed", "worker": worker,
+                              "detail": "deployed-current.worker.js lags worker.js - run "
+                                        "'python scripts/mirror-guard.py --fix' and commit BOTH files",
+                              "line": line.strip()}))
+            return 1
+    return 0
+
+
 def main(argv):
     if len(argv) != 5:
         print(__doc__)
         return 2
+    rcm = mirror_preflight(argv[1])
+    if rcm:
+        return rcm
     return deploy(argv[1], argv[2], argv[3], argv[4])
 
 
