@@ -1,3 +1,4 @@
+var VERSION = "0.1.2-glm53"; // VERSION-SOURCE-1: top-level canonical version (first match for the fleet extractor; /health derives from it)
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -2781,7 +2782,7 @@ var m1 = (function() {
 var worker_default = {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "idea-hub", version: "1.0.0", merged: ["idea-hub", "qnfo-thread-ingest"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "idea-hub", version: VERSION, merged: ["idea-hub", "qnfo-thread-ingest"] }), { headers: { "content-type": "application/json" } });
     if (p === "/health") return m0.default.fetch(request, env, ctx);
     if (p === "/run") return m0.default.fetch(request, env, ctx);
     return m0.default.fetch(request, env, ctx);

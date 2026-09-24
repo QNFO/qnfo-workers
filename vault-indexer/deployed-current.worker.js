@@ -1,3 +1,7 @@
+--1a9247270a0d91e0a98293ea8c5b4726dd702299c0ecddec98170a7f218b
+Content-Disposition: form-data; name="worker.js"; filename="worker.js"
+Content-Type: application/javascript+module
+
 /**
  * vault-indexer v0.1.0
  * Semantic (Vectorize) indexer for the Obsidian vault (single source of truth = obsidian-vault R2).
@@ -300,3 +304,4 @@ var worker_default = {
   async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); }
 };
 export { worker_default as default };
+--1a9247270a0d91e0a98293ea8c5b4726dd702299c0ecddec98170a7f218b--

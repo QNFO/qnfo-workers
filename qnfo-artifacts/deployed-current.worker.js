@@ -1,3 +1,7 @@
+--4aa69e9839badc8159d6ab32305d92587f306dda5829620cb7aaeedbfcce
+Content-Disposition: form-data; name="worker.js"; filename="worker.js"
+Content-Type: application/javascript+module
+
 /**
  * qnfo-artifacts -- Cloudflare Artifacts control plane + agent workspace provisioner.
  *
@@ -297,3 +301,4 @@ export default {
     ctx.waitUntil(probeArtifacts(env));
   },
 };
+--4aa69e9839badc8159d6ab32305d92587f306dda5829620cb7aaeedbfcce--
