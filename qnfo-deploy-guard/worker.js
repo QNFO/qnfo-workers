@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.10";
+var VERSION = "1.3.11";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -115,7 +115,12 @@ async function scan(env) {
     var was = prev[ww.name];
     if (was && was.mo && mo && String(was.mo) !== String(mo)) {
       var lg = lastLedger[ww.name] || null;
-      var logged = !!(lg && lg.ok !== 0 && ms(lg.ts) >= ms(mo) - 180000);
+      // FAILED-LEDGER-ROW-1 (v1.3.11): a FAILED latest ledger row (ok=0) is STILL a logged mutation.
+      // Reading ok=0 as "no row" misclassified a failed deploy as an unlogged-mutation (high) -- the
+      // canonical false-positive (qnfo-artifacts 2026-09-24: 08:26 deploy WAS ledgered at 08:26:54 but
+      // ok=0). The failure itself is still surfaced by the non-canonical-deploy pass below
+      // (nlr.ok === 0), so no signal is lost.
+      var logged = !!(lg && ms(lg.ts) >= ms(mo) - 180000);
       var rec = { type: logged ? "deploy-observed" : "unlogged-mutation", worker: ww.name, from_mod: was.mo, to_mod: mo, ledger_to: lg ? lg.to_sha : null, ledger_ts: lg ? lg.ts : null, lock_owner: active[ww.name] ? active[ww.name].owner : null, lock_held: !!active[ww.name] };
       changed.push(rec);
       if (!logged) anomalies.push(rec);
