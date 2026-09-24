@@ -1930,7 +1930,7 @@ var worker_default = {
     }
     if (p === "/optimize" && request.method === "POST") {
       var ot = auth && env.OPTIMIZER_TRIGGER_SECRET && auth === env.OPTIMIZER_TRIGGER_SECRET;
-      if (!admin && !ot) return json({ ok: false, error: "unauthorized" }, 401);
+      if (!admin && !ot) return json({ ok: false, error: "unauthorized", d: { authLen: String(auth || "").length, otLen: String(env.OPTIMIZER_TRIGGER_SECRET || "").length, adminLen: String(env.DEPLOY_ADMIN_TOKEN || "").length } }, 401);
       var optRes = await optimizeFleet(env);
       return json({ ok: true, optimize: optRes });
     }
