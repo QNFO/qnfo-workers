@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.6";
+var VERSION = "1.2.7";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -240,10 +240,10 @@ function summarize(kind, data) {
 }
 __name(summarize, "summarize");
 async function store(env, kind, data) {
-  const id = kind + "-" + Date.now().toString(36);
+  const id = kind; // ALIGN-1: fixed key per kind -> upsert (was append per fire = 144 writes/day vs ~3 reads/day)
   const ts = data.ts || (/* @__PURE__ */ new Date()).toISOString();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS infra_state (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, data TEXT)").run();
-  await env.AUDIT.prepare("INSERT INTO infra_state (id, ts, kind, data) VALUES (?1,?2,?3,?4)").bind(id, ts, kind, JSON.stringify(data)).run();
+  await env.AUDIT.prepare("INSERT INTO infra_state (id, ts, kind, data) VALUES (?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, data=excluded.data").bind(id, ts, kind, JSON.stringify(data)).run();
   try {
     const text = summarize(kind, data);
     const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [text.slice(0, 1e3)] });
@@ -408,7 +408,7 @@ function renderContext(retrieved) {
 __name(renderContext, "renderContext");
 var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === "30 6 * * *" || event.cron === "6 18 * * *" || event.cron === "*/10 * * * *") {
+    if (event.cron === "30 6 * * *" || event.cron === "6 18 * * *" || event.cron === "0 * * * *") {
       const s = await collectState(env);
       await store(env, "snapshot", s);
       const a = await collectAnalytics(env);
