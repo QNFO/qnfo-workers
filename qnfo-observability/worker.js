@@ -114,9 +114,21 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.8'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.2.9"; // var + double quotes: qnfo-ops cfWorkerRead greps /var VERSION = "([^"]+)"/ for the /ops/deploy expected_version guard // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
+// FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
+// authority) instead of the hardcoded snapshot above. The snapshot carried 10 ghosts + was missing
+// 9 live workers, so workers_silent_24h reported phantom silent workers and fleet_size was stale.
+// FLEET is retained only as a fallback when the registry read fails.
+async function liveFleet(env) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT service FROM service_registry WHERE state='live'").all();
+    const names = (r.results || []).map(function (x) { return x.service; });
+    if (names.length) return names;
+  } catch (e) {}
+  return FLEET;
+}
 const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
 const RETENTION_DAYS = 30;      // worker_logs retention window
 const EMPTY_MATCH_MIN_TOTAL = 20; // rows in the medium before an empty match is suspicious
@@ -246,13 +258,14 @@ async function digest(env, ingestResult) {
     FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(dayAgo).all();
   const rows = (agg.results || []);
   const seen = new Set(rows.map(r => r.script_name));
+  const fl = await liveFleet(env);
   const summary = {
     generated_at: nowIso(),
     version: VERSION,
     ingest: ingestResult,
     total_events_24h: rows.reduce((a, r) => a + r.n, 0),
     workers_seen_24h: rows.length,
-    workers_silent_24h: FLEET.filter(w => !seen.has(w)),
+    workers_silent_24h: fl.filter(w => !seen.has(w)),
     anomalies: [],
   };
   for (const r of rows) {
@@ -673,7 +686,7 @@ export default {
       const latestProbe = {};
       for (const row of (probes.results || [])) { if (!latestProbe[row.name] || row.ts > latestProbe[row.name].ts) latestProbe[row.name] = row; }
       const agg = await env.AUDIT.prepare(`SELECT script_name, COUNT(*) n, SUM(CASE WHEN outcome != 'ok' OR status >= 500 THEN 1 ELSE 0 END) bad, MAX(ts_ms) last_ts FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(Date.now() - 86400000).all();
-      return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: FLEET.length, probes: latestProbe, log_stats: agg.results || [] });
+      return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: (await liveFleet(env)).length, fleet_size_source: "service_registry", probes: latestProbe, log_stats: agg.results || [] });
     }
     // JOBS-STATUS-PUBLIC-1 (2026-09-13, v1.1.4): keyless read-only view of the qnfo-ops async-job ledger.
     // WHY: the operator requirement is that a job status link be visible WITHOUT a key. The ops bearer is the

@@ -78,3 +78,10 @@ jobs:
             fi
           done
           exit $rc
+
+      # CRON-RATE-CEILING-1 (owner directive 2026-09-23): no worker cron may execute more
+      # than once every 10 minutes, nor more than 144 times in any 24-hour period.
+      # Runs on EVERY push over ALL worker dirs -- a cron regression must fail CI even when
+      # the edited worker is not the one carrying the offending cron.
+      - name: CRON-RATE-CEILING-1 sweep (all worker dirs)
+        run: python3 scripts/cron_rate_guard.py --root .

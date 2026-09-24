@@ -2,7 +2,6 @@ name = "qnfo-ddocs-indexer"
 main = "worker.js"
 compatibility_date = "2026-08-10"
 workers_dev = true
-usage_model = "standard"
 
 [[r2_buckets]]
 binding = "DDOCS"
@@ -23,6 +22,9 @@ binding = "AI"
 [triggers]
 crons = ["37 */2 * * *"]
 
-[vars]
-INDEX_TOKEN = "ddx-v1-2026-k9m2n4p7r5t8w3x6"
-DDOC_PREFIX = "2026-09-04"
+# SECRET-HYGIENE-1 2026-09-22:
+#  - INDEX_TOKEN migrated to a *secret* binding. CF refuses a secret while a same-named
+#    plain_text var exists, so the var is dropped on the next deploy and the secret set
+#    immediately after. The previously-committed value must be treated as burned + rotated.
+#  - DDOC_PREFIX removed: it is NOT live and the worker treats env.DDOC_PREFIX as an
+#    OPTIONAL OVERRIDE, so declaring it here would silently change behaviour on deploy.

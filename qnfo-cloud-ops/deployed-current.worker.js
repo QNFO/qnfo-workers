@@ -1,9 +1,13 @@
+--dcef6f5575eb2a856f49d7e661d2b2211a2999ddd2146b3ddd2e11a2405f
+Content-Disposition: form-data; name="worker.js"; filename="worker.js"
+Content-Type: application/javascript+module
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.14.4";
+var VERSION = "1.14.5";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -733,7 +737,7 @@ async function jobBriefing(env) {
     if (regText) {
       const now = /* @__PURE__ */ new Date();
       const due = [];
-      const re = /^- \[ \] (\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?.*? — (.+)$/gm;
+      const re = /^- \[ \] (\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?.*? â (.+)$/gm;
       let m;
       while ((m = re.exec(regText)) !== null) {
         const d2 = /* @__PURE__ */ new Date(m[1] + "T00:00:00Z");
@@ -1304,7 +1308,7 @@ async function jobBoardSync(env) {
   const existingLower = new Set(existing.map((t) => t.toLowerCase()));
   const haveCode = /* @__PURE__ */ new Set();
   for (const t of existing) {
-    const m = t.match(/^([A-Z0-9.]+)—/);
+    const m = t.match(/^([A-Z0-9.]+)â/);
     if (m) haveCode.add(m[1].trim());
   }
   const esc = /* @__PURE__ */ __name((s) => String(s || "").replace(/\\/g, "").replace(/"/g, "'").replace(/\n/g, " ").replace(/\r/g, " ").slice(0, 400), "esc");
@@ -2092,7 +2096,7 @@ async function selfRegister(env) {
     routes: ["/health", "/run", "/search", "/record"],
     tools: [],
     models: [],
-    deps: ["qnfo-audit D1", "qnfo-infra", "qnfo-graph", "living-paper", "portfolio-state", "qnfo-outreach", "qnfo-email", "send_email", "VAULT R2"]
+    deps: ["ai:AI", "cron:24x", "d1:living-paper", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-graph", "d1:qnfo-outreach", "r2:d-drive", "send_email:SEND_EMAIL", "service:qnfo-email", "service:qnfo-infra", "service:qnfo-ops", "vectorize:qnfo-cloud-ops"]
   };
   const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
     method: "POST",
@@ -2244,3 +2248,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+--dcef6f5575eb2a856f49d7e661d2b2211a2999ddd2146b3ddd2e11a2405f--
