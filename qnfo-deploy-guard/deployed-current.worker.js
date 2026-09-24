@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.8 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection)
+// qnfo-deploy-guard v1.3.9 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection, excluding synthetic/test rows)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.8";
+var VERSION = "1.3.9";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -129,7 +129,12 @@ async function scan(env) {
   // redeploy-script paths POST /ledger (so they pass the unlogged-mutation rule) yet bypass the
   // canonical sequence (uncached GitHub-source fetch + binding preservation). Aggregated to one anomaly.
   var nonCanon = [];
-  for (var ncw in lastLedger) { var nnote = String((lastLedger[ncw] && lastLedger[ncw].note) || ""); if (nnote.indexOf("opsDeploy route") < 0) nonCanon.push(ncw); }
+  for (var ncw in lastLedger) {
+    if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
+    var nnote = String((lastLedger[ncw] && lastLedger[ncw].note) || "");
+    if (/self-test|deliberately/i.test(nnote)) continue; // deliberate detector self-tests (e.g. ops-gateway)
+    if (nnote.indexOf("opsDeploy route") < 0) nonCanon.push(ncw);
+  }
   if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
   var seen = {}; var uniq = []; for (var m = 0; m < anomalies.length; m++) { var key = anomalies[m].type + "|" + anomalies[m].worker; if (!seen[key]) { seen[key] = 1; uniq.push(anomalies[m]); } }
   var filed = [];
