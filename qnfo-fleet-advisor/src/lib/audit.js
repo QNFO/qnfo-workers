@@ -5,7 +5,7 @@
 // 24h-deduped via ai_advisor_actions), Tier-2 agent_issues filed with open-title dedupe.
 // Gate refs: CLOUD-AUTONOMY-100-1 ($90/30d spend guard), GW-FAIL-DEDUP-1, RECURRENCE-ZERO-1.
 
-export const AUDIT_VERSION = '1.0.0';
+export const AUDIT_VERSION = '1.0.1-gw-log-params';
 export const TARGET_SPEND_LIMIT = 90;              // mandate: AI Gateway $90 / 30d spend guard
 export const MAX_TIER1 = 2;                        // hard cap on autonomous mutations per cycle
 export const DEDUPE_MS = 24 * 3600 * 1000;         // action dedupe window
@@ -99,7 +99,10 @@ export async function runGatewayAudit(env, mode = 'scheduled') {
 
   let logs = [];
   try {
-    const r = await cfFetch(env, '/accounts/' + env.ACCOUNT_ID + '/ai-gateway/gateways/default/logs?per_page=' + LOGS_PER_PAGE + '&page=1&order_by=created_at&order=desc');
+    // AI Gateway logs API accepts pagination (`per_page`, `page`) here; older ordering
+    // params (`order_by`, `order`, `direction`, `start_time`, `max_results`) were
+    // silently ignored and created false confidence in ordered/time-bounded reads.
+    const r = await cfFetch(env, '/accounts/' + env.ACCOUNT_ID + '/ai-gateway/gateways/default/logs?per_page=' + LOGS_PER_PAGE + '&page=1');
     logs = (r && r.result) || [];
   } catch (e) {
     findings.push({ severity: 'critical', code: 'GW-LOGS-FETCH-FAIL', detail: String(e.message || e).slice(0, 200) });
