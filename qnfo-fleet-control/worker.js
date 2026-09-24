@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.23-optdebug";
+var VERSION = "0.4.24-optloop";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1815,6 +1815,12 @@ var worker_default = {
     var ah = request.headers.get("Authorization") || "";
     var auth = ah.indexOf("Bearer ") === 0 ? ah.slice(7) : ah;
     if (p === "/health") return json({ status: "ok", worker: "qnfo-fleet-deploy", version: VERSION, enabled: await enabled(env), auto_heal: await autoHeal(env) });
+    if (p === "/optimize" && request.method === "POST") {
+      var ot = auth && env.OPTIMIZER_TRIGGER_SECRET && auth === env.OPTIMIZER_TRIGGER_SECRET;
+      if (!ot) return json({ ok: false, error: "unauthorized", d: { authLen: String(auth || "").length, otLen: String(env.OPTIMIZER_TRIGGER_SECRET || "").length } }, 401);
+      var optRes = await optimizeFleet(env);
+      return json({ ok: true, optimize: optRes });
+    }
     var admin = auth && env.DEPLOY_ADMIN_TOKEN && auth === env.DEPLOY_ADMIN_TOKEN;
     var sh = auth && env.SELFHEAL_TOKEN && auth === env.SELFHEAL_TOKEN;
     if (!admin && !sh) return json({ error: "unauthorized" }, 401);
@@ -1927,12 +1933,6 @@ var worker_default = {
       await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
       var rw2 = await registerWatch(env, 7);
       return json({ ok: true, scan: res2, register: rw2 });
-    }
-    if (p === "/optimize" && request.method === "POST") {
-      var ot = auth && env.OPTIMIZER_TRIGGER_SECRET && auth === env.OPTIMIZER_TRIGGER_SECRET;
-      if (!admin && !ot) return json({ ok: false, error: "unauthorized", d: { authLen: String(auth || "").length, otLen: String(env.OPTIMIZER_TRIGGER_SECRET || "").length, adminLen: String(env.DEPLOY_ADMIN_TOKEN || "").length } }, 401);
-      var optRes = await optimizeFleet(env);
-      return json({ ok: true, optimize: optRes });
     }
     return json({ error: "not found" }, 404);
   },
