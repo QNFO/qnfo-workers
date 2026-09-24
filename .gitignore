@@ -10,3 +10,6 @@
 # python bytecode (never commit)
 __pycache__/
 *.pyc
+
+# deploy_gate wrangler --dry-run build output (DRYRUN-TMP-NESTED-1)
+.dryrun-tmp/
