@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.8"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.9"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1084,8 +1084,8 @@ async function buildState(env, ctx) {
       ts: mt && mt.latest ? new Date(Number(mt.latest)).toISOString() : null });
   });
   await safeAudit("gw_calibration", "AI calibration probes (24h)", async function() {
-    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration'", [epoch24]);
-    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source = 'qnfo-ai-calibration' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
+    const c = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%'", [epoch24]);
+    const ct = await d1all(env.AUDIT, "SELECT error_class, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= ? AND source LIKE 'gw-sweep%' GROUP BY error_class ORDER BY c DESC LIMIT 4", [epoch24]);
     const ctotal = c && c.length ? c[0].total : 0;
     const ctc = ct.map(function(r) {
       return r.error_class + ":" + r.c;
