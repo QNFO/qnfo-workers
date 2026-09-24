@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.19-ledger";
+var VERSION = "0.4.20-crondrift";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1382,6 +1382,73 @@ async function redeploy(env, worker) {
 }
 __name(redeploy, "redeploy");
 __name2(redeploy, "redeploy");
+
+// CRON-TRIGGER-DRIFT-1 (2026-09-23): detect LIVE cron triggers that diverge from the
+// DECLARED [triggers].crons in the repo wrangler.toml. A content PUT never sets
+// /schedules, so a lost trigger is invisible to the version scan (qnfo-ai-calibration
+// ran live with ZERO triggers for 4.5 days, silently freezing the AI-error recorder).
+// Declared source = repo wrangler.toml (worker_schedules mirrors LIVE, not declared).
+// Heal ONLY total loss (declared non-empty AND live empty) - never revert an
+// intentional cadence change by healing a partial divergence.
+function tomlCrons(t) {
+  var ti = t.indexOf("[triggers]");
+  if (ti < 0) return [];
+  var ci = t.indexOf("crons", ti);
+  if (ci < 0) return [];
+  var ob = t.indexOf("[", ci);
+  if (ob < 0) return [];
+  var cb = t.indexOf("]", ob);
+  if (cb < 0) return [];
+  return t.slice(ob + 1, cb).split(",").map(function(x) { return x.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean).sort();
+}
+async function declaredCrons(env, worker) {
+  var cands = [worker];
+  if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
+  for (var a = 0; a < cands.length; a++) {
+    try {
+      var r = await timedFetch(GH + "qnfo-workers/main/" + cands[a] + "/wrangler.toml?cb=" + Math.floor(Date.now() / FRESH_MS), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+      if (!r.ok) continue;
+      var t = await r.text();
+      if (!t || t.slice(0, 4) === "404:") continue;
+      return tomlCrons(t);
+    } catch (e) {}
+  }
+  return null;
+}
+async function liveCrons(env, worker) {
+  try {
+    var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/schedules", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
+    if (!r.ok) return null;
+    var j = await r.json();
+    return ((j.result && j.result.schedules) || []).map(function(x) { return x.cron; }).sort();
+  } catch (e) { return null; }
+}
+async function cronDrift(env, names, out) {
+  out.cronDrift = 0; out.cronHealed = 0; out.cronDetails = [];
+  if (!names || !names.length) return;
+  for (var i = 0; i < names.length; i++) {
+    var n = names[i];
+    if (NO_SELF.indexOf(n) >= 0) continue;
+    try {
+      var decl = await declaredCrons(env, n);
+      if (decl === null) continue;
+      var live = await liveCrons(env, n);
+      if (live === null) continue;
+      var ds = decl.join(" "), ls = live.join(" ");
+      if (ds === ls) continue;
+      out.cronDrift++;
+      if (out.cronDetails.length < 60) out.cronDetails.push(n + ":decl[" + ds + "] live[" + ls + "]");
+      await report(env, n, ls, ds, "wrangler.toml[triggers].crons", "cron-drift declared=" + ds + " live=" + ls);
+      if (decl.length > 0 && live.length === 0) {
+        try {
+          var put = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(decl.map(function(c) { return { cron: c }; })) }, FETCH_TIMEOUT_MS);
+          if (put.ok) { out.cronHealed++; await audit(env, n, "cron-heal", ls, ds, "wrangler.toml[triggers].crons", true, "restored " + decl.length + " cron trigger(s)"); }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+}
+
 async function scan(env, heal) {
   var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
@@ -1488,6 +1555,7 @@ async function scan(env, heal) {
   } catch (e) {
     out.contentSignalError = String(e && e.message || e).slice(0, 120);
   }
+  try { await cronDrift(env, names, out); } catch (e) {}
   return out;
 }
 __name(scan, "scan");
