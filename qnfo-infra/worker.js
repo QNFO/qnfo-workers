@@ -408,7 +408,7 @@ function renderContext(retrieved) {
 __name(renderContext, "renderContext");
 var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "*/10 * * * *") {
+    if (event.cron === "30 6 * * *" || event.cron === "6 18 * * *" || event.cron === "*/10 * * * *") {
       const s = await collectState(env);
       await store(env, "snapshot", s);
       const a = await collectAnalytics(env);
