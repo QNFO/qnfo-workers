@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __name2 = /* @__PURE__ */ __name((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 var REGISTRY = null;;
-var VERSION = "1.7.10"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
+var VERSION = "1.7.11"; // SYMBOLIC-DEP-RESOLVE-1 (issue 923): resolve prefixed contract deps to their TARGET + count contract edges, so data-contract-integrated workers are no longer false islands
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1519,6 +1519,12 @@ async function integrationView(env, liveNames) {
     edges_total: edges.length + contractEdgeCount,
     edge_list: edges.slice(0, 500),
     density: nodes.length > 1 ? +(edges.length / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
+    // V1.7.11 METRIC-HONESTY-1: separate observability probe fan-out from functional control coupling.
+    // The single prober (qnfo-fleet-dashboard) holds an out-edge to every worker; counting those as
+    // "connectivity" inflates density ~75%. functional = edges NOT originating from the prober.
+    probe_edges: edges.filter(function(e) { return e && e.from === "qnfo-fleet-dashboard"; }).length,
+    edges_worker_functional: edges.filter(function(e) { return e && e.from !== "qnfo-fleet-dashboard"; }).length,
+    density_functional: nodes.length > 1 ? +((edges.filter(function(e) { return e && e.from !== "qnfo-fleet-dashboard"; }).length) / (nodes.length * (nodes.length - 1))).toFixed(4) : 0,
     density_contract: nodes.length > 1 ? +(Number(((edges.length + contractEdgeCount) / (nodes.length * (nodes.length - 1))).toFixed(4))) : 0,
     islands,
     sinks,
