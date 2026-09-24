@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.56";
+var VERSION = "2.36.57";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -871,7 +871,7 @@ async function runCodeTool(env, args) {
   const head = 'export default { async fetch(request, env) { const _t0 = Date.now(); const _out = [], _err = [], _warn = []; const _s = (x) => { try { return typeof x === "string" ? x : JSON.stringify(x) ?? String(x); } catch(e) { return String(x); } }; const console = { log: (...a) => _out.push(a.map(_s).join(" ")), error: (...a) => _err.push(a.map(_s).join(" ")), warn: (...a) => _warn.push(a.map(_s).join(" ")), info: (...a) => _out.push(a.map(_s).join(" ")), debug: (...a) => _out.push(a.map(_s).join(" ")) }; const performance = { now: () => Date.now() - _t0 }; try { const __r = await (async () => { ';
   const tail = ' })(); const _rv = __r === undefined ? "" : _s(__r); const _stdout = _out.join("\\n") || _rv; return new Response(JSON.stringify({ ok: true, stdout: _stdout.slice(0, ' + capStr + '), stderr: _err.join("\\n").slice(0,4000), warnings: _warn.join("\\n").slice(0,2000), return_value: _rv.slice(0,4000), elapsed_ms: Date.now()-_t0, truncated: _stdout.length>' + capStr + ' }), { headers: { "Content-Type": "application/json" } }); } catch(e) { return new Response(JSON.stringify({ ok: false, error: String((e&&e.message)||e).slice(0,3000), stack: (e&&e.stack||"").slice(0,1000), elapsed_ms: Date.now()-_t0 }), { headers: { "Content-Type": "application/json" } }); } } };';
   try {
-    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + code + tail }, globalOutbound: null });
+    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", compatibilityFlags: ["streams_enable_constructors"], mainModule: "index.js", modules: { "index.js": head + code + tail }, globalOutbound: null });
     const resp = await worker.getEntrypoint().fetch("https://code-exec.invalid/");
     const j = await resp.json();
     if (j && j.ok) return { ok: true, output: j.stdout || j.return_value || "", stdout: j.stdout || "", stderr: j.stderr || "", warnings: j.warnings || "", return_value: j.return_value || "", elapsed_ms: j.elapsed_ms, truncated: !!j.truncated };
@@ -2184,7 +2184,7 @@ async function runCodeNet(env, args) {
   const head = 'export default { async fetch(request, env) { const _t0=Date.now(),_o=[],_e=[]; const _s=(x)=>{try{return typeof x==="string"?x:JSON.stringify(x)??String(x);}catch(e){return String(x);}}; const console={log:(...a)=>_o.push(a.map(_s).join(" ")),error:(...a)=>_e.push(a.map(_s).join(" ")),warn:(...a)=>_o.push("[w] "+a.map(_s).join(" ")),info:(...a)=>_o.push(a.map(_s).join(" "))}; try { const __r=await(async()=>{';
   const tail = '})(); const _rv=__r===undefined?"":_s(__r); const _out=_o.join("\\n")||_rv; return new Response(JSON.stringify({ok:true,stdout:_out.slice(0,' + capS + '),stderr:_e.join("\\n").slice(0,2000),return_value:_rv.slice(0,2000),elapsed_ms:Date.now()-_t0}),{headers:{"Content-Type":"application/json"}}); } catch(e){return new Response(JSON.stringify({ok:false,error:String((e&&e.message)||e).slice(0,2000),elapsed_ms:Date.now()-_t0}),{headers:{"Content-Type":"application/json"}});} }};';
   try {
-    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", mainModule: "index.js", modules: { "index.js": head + code + tail } });
+    const worker = env.LOADER.load({ compatibilityDate: "2026-09-03", compatibilityFlags: ["streams_enable_constructors"], mainModule: "index.js", modules: { "index.js": head + code + tail } });
     const resp = await worker.getEntrypoint().fetch("https://code-exec-net.invalid/");
     const j = await resp.json();
     if (j && j.ok) return { ok: true, output: j.stdout || j.return_value || "", stdout: j.stdout || "", stderr: j.stderr || "", return_value: j.return_value || "", elapsed_ms: j.elapsed_ms };
