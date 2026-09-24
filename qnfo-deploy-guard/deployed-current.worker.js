@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.9 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection, excluding synthetic/test rows)
+// qnfo-deploy-guard v1.3.10 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.9";
+var VERSION = "1.3.10";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -98,7 +98,7 @@ async function scan(env) {
     var month = (ca.j.last_30d && ca.j.last_30d.cost) || 0;
     cost = { day_usd: day, month_usd: month, cap_per_utc_day: ca.j.cap_per_utc_day, thresholds: thr };
   }
-  var ledger = await auditAll(env, "SELECT worker, to_sha, ts, note FROM fleet_deploys ORDER BY id", []);
+  var ledger = await auditAll(env, "SELECT worker, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
   var lastLedger = {}; for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; }
   var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
   var active = {};
@@ -131,9 +131,10 @@ async function scan(env) {
   var nonCanon = [];
   for (var ncw in lastLedger) {
     if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
-    var nnote = String((lastLedger[ncw] && lastLedger[ncw].note) || "");
+    var nlr = lastLedger[ncw] || {};
+    var nnote = String(nlr.note || "");
     if (/self-test|deliberately/i.test(nnote)) continue; // deliberate detector self-tests (e.g. ops-gateway)
-    if (nnote.indexOf("opsDeploy route") < 0) nonCanon.push(ncw);
+    if (nnote.indexOf("opsDeploy route") < 0 || nlr.ok === 0) nonCanon.push(ncw); // non-canonical path OR a FAILED canonical attempt (ok:0 carries the canonical note)
   }
   if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
   var seen = {}; var uniq = []; for (var m = 0; m < anomalies.length; m++) { var key = anomalies[m].type + "|" + anomalies[m].worker; if (!seen[key]) { seen[key] = 1; uniq.push(anomalies[m]); } }
