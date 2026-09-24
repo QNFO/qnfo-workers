@@ -22,6 +22,7 @@ Exit codes: 0 ok | 1 route reported not-ok | 2 usage | 3 auth/transport error
 """
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -45,6 +46,65 @@ def load_key():
     except OSError:
         pass
     return None
+
+
+def load_env_value(name):
+    """Return a config value from the environment or the ~/.env mirror (the value is never printed)."""
+    v = os.environ.get(name)
+    if v:
+        return v.strip()
+    try:
+        for line in open(os.path.join(os.path.expanduser("~"), ".env"), encoding="utf-8"):
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+def sync_mirror(worker, directory):
+    """MIRROR-WRITE-AUTOMATION-1 (2026-09-24): keep <dir>/deployed-current.worker.js == the live bundle.
+
+    WHY: qnfo-fleet-control's canonical() reads the repo mirror FIRST, so a stale mirror makes the
+    scan report a FALSE 'deployed-ahead' drift and hides the true deployed version. Canonical
+    2026-09-24: six workers were flagged 'deployed-ahead' purely from stale mirrors and had to be
+    synced by hand. Runs ONLY after a verified deploy, is best-effort, and writes its own status to
+    stderr so stdout's last line stays the deploy JSON.
+    """
+    def say(o):
+        print(json.dumps(o), file=sys.stderr)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    d = os.path.join(repo, directory.rstrip("/"))
+    if not os.path.isdir(d):
+        say({"mirror": "skipped", "reason": "dir not found", "dir": d})
+        return
+    mirror = os.path.join(d, "deployed-current.worker.js")
+    token = load_env_value("CLOUDFLARE_API_TOKEN")
+    acct = load_env_value("CLOUDFLARE_ACCOUNT_ID") or "edb167b78c9fb901ea5bca3ce58ccc4b"
+    if not token:
+        say({"mirror": "skipped", "reason": "CLOUDFLARE_API_TOKEN not found"})
+        return
+    url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/%s/content/v2" % (acct, worker)
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "qnfo-ops-deploy-client/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = r.read()
+    if len(body) < 200:
+        say({"mirror": "skipped", "reason": "live content too small", "bytes": len(body)})
+        return
+    old = b""
+    if os.path.exists(mirror):
+        old = open(mirror, "rb").read()
+    if old == body:
+        say({"mirror": "unchanged", "path": mirror})
+        return
+    with open(mirror, "wb") as f:
+        f.write(body)
+    rel = os.path.relpath(mirror, repo).replace("\\", "/")
+    subprocess.call(["git", "-C", repo, "add", rel])
+    subprocess.call(["git", "-C", repo, "commit", "-m", "chore(mirror): auto-sync %s deployed-current.worker.js (MIRROR-WRITE-AUTOMATION-1)" % worker])
+    subprocess.call(["git", "-C", repo, "pull", "--rebase", "origin", "main"])
+    subprocess.call(["git", "-C", repo, "push", "origin", "main"])
+    say({"mirror": "synced", "path": mirror, "bytes": len(body)})
 
 
 def deploy(worker, directory, from_version, to_version):
@@ -81,6 +141,11 @@ def deploy(worker, directory, from_version, to_version):
         print(json.dumps({"error": str(e)}))
         return 3
     print(json.dumps(j))
+    if j.get("ok"):
+        try:
+            sync_mirror(worker, directory)
+        except Exception:  # noqa: BLE001 - a mirror failure must never fail the deploy
+            pass
     return 0 if j.get("ok") else 1
 
 
