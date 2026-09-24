@@ -1000,7 +1000,7 @@ var calibratorMod = (function() {
 })();
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.20-crondrift";
+var VERSION = "0.4.21-cronpars";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1391,15 +1391,17 @@ __name2(redeploy, "redeploy");
 // Heal ONLY total loss (declared non-empty AND live empty) - never revert an
 // intentional cadence change by healing a partial divergence.
 function tomlCrons(t) {
-  var ti = t.indexOf("[triggers]");
+  var LF = String.fromCharCode(10);
+  var body = t.split(LF).filter(function(l) { return l.trim().charAt(0) !== "#"; }).join(LF);
+  var ti = body.indexOf("[triggers]");
   if (ti < 0) return [];
-  var ci = t.indexOf("crons", ti);
+  var ci = body.indexOf("crons", ti);
   if (ci < 0) return [];
-  var ob = t.indexOf("[", ci);
+  var ob = body.indexOf("[", ci);
   if (ob < 0) return [];
-  var cb = t.indexOf("]", ob);
+  var cb = body.indexOf("]", ob);
   if (cb < 0) return [];
-  return t.slice(ob + 1, cb).split(",").map(function(x) { return x.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean).sort();
+  return body.slice(ob + 1, cb).split(",").map(function(x) { return x.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean).sort();
 }
 async function declaredCrons(env, worker) {
   var cands = [worker];
@@ -1426,26 +1428,38 @@ async function liveCrons(env, worker) {
 async function cronDrift(env, names, out) {
   out.cronDrift = 0; out.cronHealed = 0; out.cronDetails = [];
   if (!names || !names.length) return;
-  for (var i = 0; i < names.length; i++) {
-    var n = names[i];
-    if (NO_SELF.indexOf(n) >= 0) continue;
-    try {
-      var decl = await declaredCrons(env, n);
-      if (decl === null) continue;
-      var live = await liveCrons(env, n);
-      if (live === null) continue;
-      var ds = decl.join(" "), ls = live.join(" ");
-      if (ds === ls) continue;
-      out.cronDrift++;
-      if (out.cronDetails.length < 60) out.cronDetails.push(n + ":decl[" + ds + "] live[" + ls + "]");
-      await report(env, n, ls, ds, "wrangler.toml[triggers].crons", "cron-drift declared=" + ds + " live=" + ls);
-      if (decl.length > 0 && live.length === 0) {
+  var targets = names.filter(function(n) { return NO_SELF.indexOf(n) < 0; });
+  var results = [];
+  var CONC = 8;
+  for (var bi = 0; bi < targets.length; bi += CONC) {
+    var batch = targets.slice(bi, bi + CONC);
+    var rs = await Promise.all(batch.map(function(n) {
+      return (async function() {
         try {
-          var put = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + n + "/schedules", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(decl.map(function(c) { return { cron: c }; })) }, FETCH_TIMEOUT_MS);
-          if (put.ok) { out.cronHealed++; await audit(env, n, "cron-heal", ls, ds, "wrangler.toml[triggers].crons", true, "restored " + decl.length + " cron trigger(s)"); }
-        } catch (e) {}
-      }
-    } catch (e) {}
+          var decl = await declaredCrons(env, n);
+          if (decl === null) return null;
+          var live = await liveCrons(env, n);
+          if (live === null) return null;
+          return { n: n, decl: decl, live: live };
+        } catch (e) { return null; }
+      })();
+    }));
+    for (var ri = 0; ri < rs.length; ri++) results.push(rs[ri]);
+  }
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+    if (!r) continue;
+    var ds = r.decl.join(" "), ls = r.live.join(" ");
+    if (ds === ls) continue;
+    out.cronDrift++;
+    if (out.cronDetails.length < 60) out.cronDetails.push(r.n + ":decl[" + ds + "] live[" + ls + "]");
+    await report(env, r.n, ls, ds, "wrangler.toml[triggers].crons", "cron-drift declared=" + ds + " live=" + ls);
+    if (r.decl.length > 0 && r.live.length === 0) {
+      try {
+        var put = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + r.n + "/schedules", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(r.decl.map(function(c) { return { cron: c }; })) }, FETCH_TIMEOUT_MS);
+        if (put.ok) { out.cronHealed++; await audit(env, r.n, "cron-heal", ls, ds, "wrangler.toml[triggers].crons", true, "restored " + r.decl.length + " cron trigger(s)"); }
+      } catch (e) {}
+    }
   }
 }
 
