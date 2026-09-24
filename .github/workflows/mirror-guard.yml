@@ -1,0 +1,38 @@
+name: mirror-guard
+
+# MIRROR-GUARD-AT-COMMIT-1 / MIRROR-STALENESS-DEPLOY-FAIL-1
+#
+# BOTH canonical deploy paths read <dir>/deployed-current.worker.js, NOT <dir>/worker.js:
+#   scripts/ops_deploy.py          -> path = "<dir>/deployed-current.worker.js"
+#   qnfo-fleet-control.canonical() -> qnfo-workers/main/<name>/deployed-current.worker.js
+# A mirror that lags its source makes both routes verify a stale version and fail closed
+# with an OPAQUE ok=0. Canonical: osf-integrity-check 2026-09-24T11:49:27Z, where
+# worker.js carried QNFO_VERSION "2.1.0" while the mirror still carried the non-semver
+# "osf-integrity-check/fabric-20260910".
+#
+# WHY CI AND NOT A PRE-DEPLOY PREFLIGHT: a preflight cannot close this. The lag can be
+# created BETWEEN the fix and the push by a rebase. Canonical: commit 5925c3a
+# regenerated the qnfo-deploy-guard mirror at 1.3.11, then rebased onto 60c44e7
+# (source -> 1.3.12) and pushed, leaving source 1.3.12 / mirror 1.3.11 on main. The
+# check must evaluate the FINAL PUSHED TREE, which is what this workflow does.
+#
+# scripts/mirror-guard.py exits 1 ONLY on the LAG class (same version-constant names,
+# different values, plain mirror). MISSING and CAPTURED are reported but do not fail,
+# so this gate cannot go red on the classes that are pending owner decisions.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  mirror-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: VERSION-pair mirror guard (fails on LAG only)
+        run: python scripts/mirror-guard.py

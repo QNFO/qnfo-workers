@@ -22,6 +22,7 @@ Exit codes: 0 ok | 1 route reported not-ok | 2 usage | 3 auth/transport error
 """
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -45,6 +46,65 @@ def load_key():
     except OSError:
         pass
     return None
+
+
+def load_env_value(name):
+    """Return a config value from the environment or the ~/.env mirror (the value is never printed)."""
+    v = os.environ.get(name)
+    if v:
+        return v.strip()
+    try:
+        for line in open(os.path.join(os.path.expanduser("~"), ".env"), encoding="utf-8"):
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+def sync_mirror(worker, directory):
+    """MIRROR-WRITE-AUTOMATION-1 (2026-09-24): keep <dir>/deployed-current.worker.js == the live bundle.
+
+    WHY: qnfo-fleet-control's canonical() reads the repo mirror FIRST, so a stale mirror makes the
+    scan report a FALSE 'deployed-ahead' drift and hides the true deployed version. Canonical
+    2026-09-24: six workers were flagged 'deployed-ahead' purely from stale mirrors and had to be
+    synced by hand. Runs ONLY after a verified deploy, is best-effort, and writes its own status to
+    stderr so stdout's last line stays the deploy JSON.
+    """
+    def say(o):
+        print(json.dumps(o), file=sys.stderr)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    d = os.path.join(repo, directory.rstrip("/"))
+    if not os.path.isdir(d):
+        say({"mirror": "skipped", "reason": "dir not found", "dir": d})
+        return
+    mirror = os.path.join(d, "deployed-current.worker.js")
+    token = load_env_value("CLOUDFLARE_API_TOKEN")
+    acct = load_env_value("CLOUDFLARE_ACCOUNT_ID") or "edb167b78c9fb901ea5bca3ce58ccc4b"
+    if not token:
+        say({"mirror": "skipped", "reason": "CLOUDFLARE_API_TOKEN not found"})
+        return
+    url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/%s/content/v2" % (acct, worker)
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "qnfo-ops-deploy-client/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = r.read()
+    if len(body) < 200:
+        say({"mirror": "skipped", "reason": "live content too small", "bytes": len(body)})
+        return
+    old = b""
+    if os.path.exists(mirror):
+        old = open(mirror, "rb").read()
+    if old == body:
+        say({"mirror": "unchanged", "path": mirror})
+        return
+    with open(mirror, "wb") as f:
+        f.write(body)
+    rel = os.path.relpath(mirror, repo).replace("\\", "/")
+    subprocess.call(["git", "-C", repo, "add", rel])
+    subprocess.call(["git", "-C", repo, "commit", "-m", "chore(mirror): auto-sync %s deployed-current.worker.js (MIRROR-WRITE-AUTOMATION-1)" % worker])
+    subprocess.call(["git", "-C", repo, "pull", "--rebase", "origin", "main"])
+    subprocess.call(["git", "-C", repo, "push", "origin", "main"])
+    say({"mirror": "synced", "path": mirror, "bytes": len(body)})
 
 
 def deploy(worker, directory, from_version, to_version):
@@ -81,13 +141,87 @@ def deploy(worker, directory, from_version, to_version):
         print(json.dumps({"error": str(e)}))
         return 3
     print(json.dumps(j))
+    if j.get("ok"):
+        try:
+            sync_mirror(worker, directory)
+        except Exception:  # noqa: BLE001 - a mirror failure must never fail the deploy
+            pass
     return 0 if j.get("ok") else 1
+
+
+def source_sanity(worker, directory):
+    """Refuse to deploy a source that is a redaction placeholder or implausibly small.
+
+    build_body() sends <dir>/worker.js to /ops/deploy. For at least one worker that file is
+    an intentional PLACEHOLDER, not the real source: personal-api/worker.js is 33 bytes
+    containing '<REDACTED - commit via ops agent>', while the real 175503-byte bundle exists
+    ONLY in personal-api/deployed-current.worker.js. Deploying the stub would replace a live
+    production worker with a placeholder string. Fail closed on suspicious size or an explicit
+    REDACTED marker. Found 2026-09-24 while tracing a prompt-store-verify failure, which reads
+    the stub - so that failure was an artifact of the placeholder, not a missing clause in the
+    live twin.
+    """
+    src = os.path.join(directory, "worker.js")
+    try:
+        size = os.path.getsize(src)
+        with open(src, "r", encoding="utf-8", errors="replace") as f:
+            head = f.read(300)
+    except OSError:
+        return 0
+    if size < 512 or "REDACTED" in head:
+        print(json.dumps({
+            "error": "source-is-placeholder",
+            "worker": worker,
+            "size": size,
+            "detail": "worker.js is %d bytes and/or carries a REDACTED marker; the real "
+                      "artifact is deployed-current.worker.js. Refusing to deploy a "
+                      "placeholder over a live worker." % size}))
+        return 1
+    return 0
+
+
+def mirror_preflight(worker):
+    """CORRECTED 2026-09-24 after reading line 58 of this file. The previous docstring
+    claimed opsDeploy fetches <dir>/deployed-current.worker.js. THAT IS FALSE - build_body()
+    sends `path = directory + "/worker.js"`, so /ops/deploy reads the SOURCE, not the mirror.
+    The mirror matters to the OTHER canonical path: qnfo-fleet-control.canonical() fetches
+    qnfo-workers/main/<name>/deployed-current.worker.js - i.e. the fleet-control redeploy
+    cron, which can silently revert a source fix that never reached the mirror (canonical
+    case: qnfo-deploy-guard source 1.3.12 / mirror 1.3.11). Scoped to the target worker only,
+    so one lagging worker never blocks an unrelated deploy.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    guard = os.path.join(here, "mirror-guard.py")
+    if not os.path.exists(guard):
+        return 0
+    import subprocess
+    try:
+        p = subprocess.run([sys.executable, guard], capture_output=True, text=True)
+    except Exception:
+        return 0
+    if p.returncode == 0:
+        return 0
+    out = (p.stdout or "") + (p.stderr or "")
+    for line in out.splitlines():
+        if line.startswith(worker) and " LAG " in line:
+            print(json.dumps({"error": "mirror-preflight-failed", "worker": worker,
+                              "detail": "deployed-current.worker.js lags worker.js - run "
+                                        "'python scripts/mirror-guard.py --fix' and commit BOTH files",
+                              "line": line.strip()}))
+            return 1
+    return 0
 
 
 def main(argv):
     if len(argv) != 5:
         print(__doc__)
         return 2
+    rcs = source_sanity(argv[1], argv[2])
+    if rcs:
+        return rcs
+    rcm = mirror_preflight(argv[1])
+    if rcm:
+        return rcm
     return deploy(argv[1], argv[2], argv[3], argv[4])
 
 
