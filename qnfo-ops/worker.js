@@ -3562,9 +3562,34 @@ async function registryRefresh(env) {
       sweepTried++;
       try {
         const r2 = await fetch("https://" + w.id + ".q08.workers.dev/health", { signal: AbortSignal.timeout(8e3) });
-        if (!r2.ok) return w.id + ":HTTP" + r2.status;
-        const j2 = await r2.json();
-        const v2 = j2 && j2.version ? String(j2.version) : null;
+        let v2 = null;
+        if (r2.ok) {
+          try {
+            const j2 = await r2.json();
+            v2 = j2 && j2.version ? String(j2.version) : null;
+          } catch (e) {
+            v2 = null;
+          }
+        }
+        if (!v2) {
+          // ROUTELESS-WORKER-VERSION-1 (2026-09-24): workers with subdomain.enabled=false
+          // answer CF 1042/404 on <name>.q08.workers.dev, so the /health probe can never
+          // version them and they sit as permanent `version IS NULL` drift. Fall back to
+          // reading the VERSION constant out of the DEPLOYED script via the CF API.
+          try {
+            const rs = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + w.id, {
+              headers: { "Authorization": "Bearer " + env.CF_API_TOKEN },
+              signal: AbortSignal.timeout(8e3)
+            });
+            if (rs.ok) {
+              const txt = await rs.text();
+              const m2 = txt.match(/VERSION\s*=\s*"([^"]+)"/) || txt.match(/VERSION\s*=\s*'([^']+)'/);
+              if (m2) v2 = m2[1];
+            }
+          } catch (e) {
+            /* fall through to the noversion report below */
+          }
+        }
         if (!v2) return w.id + ":noversion";
         await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(v2, now, w.id).run();
         swept++;
