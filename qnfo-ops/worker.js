@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.52";
+var VERSION = "2.36.53";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3611,7 +3611,16 @@ async function registryRefresh(env) {
         return null;
       } catch (e) { return w.id + ":" + String(e && e.message || e).slice(0, 70); }
     }, "probe");
-    const results = await Promise.all(others.map(probe));
+    // REGISTRY-SWEEP-CONCURRENCY-COVERAGE (#1075, 2026-09-24): an UNCAPPED Promise.all fired all
+    // ~56 CF-API fetches at once, so rate-limiting/timeouts made the ":noversion" set
+    // NON-DETERMINISTIC (observed 6, then 8, then 13 across identical runs) and the reported gap
+    // unmeasurable. Run a bounded pool (8 concurrent) so the coverage gap is stable + auditable.
+    const POOL = 8;
+    const results = [];
+    for (let pi = 0; pi < others.length; pi += POOL) {
+      const part = await Promise.all(others.slice(pi, pi + POOL).map(probe));
+      for (const x of part) results.push(x);
+    }
     // COVERAGE-GAP-REPORT-1 (2026-09-24): slice(0,6) truncated the failure list in
     // non-deterministic Promise.all order, so the reported ":noversion" set CHANGED between runs
     // and UNDERSTATED the true coverage gap (measured 8, reported 6). Report ALL failures so the
@@ -4221,7 +4230,24 @@ var worker_default = {
       }
       return json(out);
     }
-    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) rat = "undercount false-positive (adaptive-sampled)"; if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
+    if (path === "/self-heal" && method === "POST") { if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized" }, 401); const open = await env.QNFO_AUDIT.prepare("SELECT id, kind, ref, action FROM self_heal_actions WHERE verified_at IS NULL ORDER BY id DESC LIMIT 100").all(); const closed = []; for (const row of (open.results || [])) { const a = String(row.action || "").toLowerCase(); let rat = null; if (row.kind === "agentic-canary" && a.indexOf("does not emit tool_calls") >= 0) rat = "resolved: ops-frontier emits tool_calls (GPT-5.5 verified); ops-exec is server-side by design"; else if (a.indexOf("cron-trigger") >= 0 && a.indexOf("saw 0 invocations") >= 0) {
+          // SELF-HEAL-AUTOCLOSE-NO-REPROBE (#1076, 2026-09-24): the blanket 'adaptive-sampled'
+          // rationale CLOSED REAL findings (proven: qnfo-chat-canary's own log is 5 days stale).
+          // Resolve ONLY when an EXTERNAL liveness probe exists in 24h -- and specifically NOT a
+          // 'cf-api-list' row, which proves EXISTENCE only (FLEET-PROBE-COVERAGE-1), never that the
+          // worker runs or writes. Otherwise annotate + escalate for per-worker verification.
+          const wm = String(row.action || "").match(/:\s*([a-z0-9][a-z0-9._-]{2,})\s*\(/);
+          const wName = wm ? wm[1] : null;
+          let probed = false;
+          if (wName) {
+            try {
+              const pr = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM fleet_probe_log WHERE name=?1 AND ok=1 AND (transport IS NULL OR transport <> 'cf-api-list') AND ts >= ?2").bind(wName, new Date(Date.now() - 864e5).toISOString()).first();
+              probed = !!(pr && pr.c > 0);
+            } catch (e) { probed = false; }
+          }
+          if (probed) rat = "undercount false-positive (adaptive-sampled) -- external liveness probe ok in 24h";
+          else { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, claim=?, confidence='medium' WHERE id=?").bind("escalated", "SELF-HEAL-AUTOCLOSE-NO-REPROBE: no EXTERNAL liveness probe (non-watchdog) for " + (wName || "unknown") + " in 24h - NOT auto-closed; needs per-worker verification (its own log may be stale)", row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: "escalated-no-external-liveness-probe" }); }
+        } if (rat) { await env.QNFO_AUDIT.prepare("UPDATE self_heal_actions SET status=?, verified_at=? WHERE id=?").bind("resolved", iso(), row.id).run(); closed.push({ id: row.id, kind: row.kind, ref: row.ref, rationale: rat }); } } return json({ closed: closed.length, details: closed }); }if (path === "/health" && method === "GET") {
       const bindings = {};
       for (const k of BINDING_KEYS) bindings[k.toLowerCase()] = !!(env[k] && env[k].fetch);
       bindings.audit = !!env.QNFO_AUDIT;
