@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.51";
+var VERSION = "2.36.52";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3612,7 +3612,11 @@ async function registryRefresh(env) {
       } catch (e) { return w.id + ":" + String(e && e.message || e).slice(0, 70); }
     }, "probe");
     const results = await Promise.all(others.map(probe));
-    sweepErrs = results.filter(Boolean).slice(0, 6);
+    // COVERAGE-GAP-REPORT-1 (2026-09-24): slice(0,6) truncated the failure list in
+    // non-deterministic Promise.all order, so the reported ":noversion" set CHANGED between runs
+    // and UNDERSTATED the true coverage gap (measured 8, reported 6). Report ALL failures so the
+    // gap size is auditable. (This is the same failure-hiding class the ROUTELESS fallback fixed.)
+    sweepErrs = results.filter(Boolean);
   }
 
   let rich = 0;

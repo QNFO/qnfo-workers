@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.5";
+var VERSION = "1.2.6";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
