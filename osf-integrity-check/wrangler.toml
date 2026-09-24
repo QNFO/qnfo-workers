@@ -3,6 +3,17 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
+# OSF-CONFIG-PARITY-1 (2026-09-24): this worker had NO canonical wrangler.toml, so
+# qnfo-ops opsDeploy (BINDING-PRESERVE-1) had no source of truth to reconcile
+# bindings against and CORRECTLY failed closed (fleet_deploys.ok=0 at 11:49:27)
+# rather than deploy blind. The binding and schedule below were read back from the
+# LIVE worker via the Cloudflare API, so this file now describes production exactly:
+#   GET /workers/scripts/osf-integrity-check/bindings  -> [{type:d1,name:AUDIT}]
+#   GET /workers/scripts/osf-integrity-check/schedules -> ["0 9 * * *"]
+#   settings.compatibility_date                       -> "2026-08-01"
+# An out-of-band deploy path was the only way to ship this worker before; with this
+# file the canonical server-side route can preserve bindings and verify parity.
+
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"
