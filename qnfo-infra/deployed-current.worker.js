@@ -1,4 +1,4 @@
---f8243044af9d373b31aad8bdc5e67b6042ce23825cb5158b514147910a99
+--90d3ac31955e3289984980cb026f084b86263d24a259ca3128ffc1ea5553
 Content-Disposition: form-data; name="worker.js"; filename="worker.js"
 Content-Type: application/javascript+module
 
@@ -7,7 +7,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.5";
+var VERSION = "1.2.6";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -412,7 +412,7 @@ function renderContext(retrieved) {
 __name(renderContext, "renderContext");
 var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "*/10 * * * *") {
+    if (event.cron === "30 6 * * *" || event.cron === "6 18 * * *" || event.cron === "*/10 * * * *") {
       const s = await collectState(env);
       await store(env, "snapshot", s);
       const a = await collectAnalytics(env);
@@ -486,4 +486,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
---f8243044af9d373b31aad8bdc5e67b6042ce23825cb5158b514147910a99--
+--90d3ac31955e3289984980cb026f084b86263d24a259ca3128ffc1ea5553--
