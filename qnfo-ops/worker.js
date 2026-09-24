@@ -23,7 +23,7 @@ __name22(fnv32, "fnv32");
 __name222(fnv32, "fnv32");
 var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.48";
+var VERSION = "2.36.49";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1653,7 +1653,7 @@ async function cfWorkerRead(env, args) {
     }
     const vMatch = src.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/);
     const version = vMatch ? vMatch[1] : meta.modified_on ? "unknown (modified " + meta.modified_on + ")" : "unknown";
-    return { ok: true, worker, version, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
+    return { ok: true, worker, version, version_known: !!vMatch, size: src.length, modified_on: meta.modified_on || null, bundle_snippet: src.slice(0, maxChars), truncated: src.length > maxChars };
   } catch (e) {
     return { ok: false, error: "cf_worker_read failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -1671,7 +1671,14 @@ async function cfWorkerDeploy(env, args) {
   if (!content) return { ok: false, error: "content (JS source) required" };
   if (args && args.expected_version) {
     const cur = await cfWorkerRead(env, { worker, maxChars: 500 });
-    if (cur.ok && cur.version !== String(args.expected_version)) {
+    // VERSION-READ-FALLBACK-1 (2026-09-24): when the deployed bundle carries no recognizable
+    // var/const/let VERSION the read returns "unknown"; accept expected_version (the caller's
+    // from_version) as the base and PROCEED instead of hard-failing. The old equality check returned
+    // "VERSION MISMATCH: live=unknown" and blocked the canonical route for qnfo-agent-ws,
+    // qnfo-artifact-agent and qnfo-ops itself, forcing non-canonical with-lock workarounds.
+    // A KNOWN live version still gets the full race guard - this only relaxes the unreadable case.
+    const liveUnknown = !!(cur && cur.ok && cur.version_known === false);
+    if (cur.ok && !liveUnknown && cur.version !== String(args.expected_version)) {
       return { ok: false, rejected: true, error: "VERSION MISMATCH: live=" + cur.version + " expected=" + args.expected_version + " \u2014 concurrent agent may have deployed. Read current bundle first (cf_worker_read) before retrying." };
     }
   }
