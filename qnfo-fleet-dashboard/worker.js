@@ -2027,14 +2027,14 @@ async function handleRequest(request, env, ctx) {
     const st = rec ? rec.state : await runRefresh(env, ctx);
     return json(st.integration || { error: "no integration data" });
   }
-  if (path === "/roi" || path === "/api/roi") {
+  if (path === "/" || path === "" || path === "/roi" || path === "/api/roi") {
     try {
       return new Response(await roiHtml(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
     } catch (e) {
       return new Response("ROI error: " + String(e && e.message || e), { status: 500 });
     }
   }
-  if (path === "/" || path === "") {
+  if (path === "/ops") {
     const rec = await loadState(env);
     let st = rec ? rec.state : null;
     if (!st) {
