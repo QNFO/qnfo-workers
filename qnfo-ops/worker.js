@@ -3941,7 +3941,7 @@ __name2(createJobFromBody, "createJobFromBody");
 __name22(createJobFromBody, "createJobFromBody");
 __name222(createJobFromBody, "createJobFromBody");
 __name2222(createJobFromBody, "createJobFromBody");
-var AgenticOpsExec = class {
+var AgenticOpsExec = class extends DurableObject {
   static {
     __name(this, "AgenticOpsExec");
   }
