@@ -3941,7 +3941,7 @@ __name2(createJobFromBody, "createJobFromBody");
 __name22(createJobFromBody, "createJobFromBody");
 __name222(createJobFromBody, "createJobFromBody");
 __name2222(createJobFromBody, "createJobFromBody");
-var AgenticOpsExec = class extends DurableObject {
+export class AgenticOpsExec extends DurableObject {
   static {
     __name(this, "AgenticOpsExec");
   }
@@ -4712,7 +4712,6 @@ var worker_default = {
   }
 };
 export {
-  AgenticOpsExec,
   OpsExecWorkflow,
   worker_default as default
 };
