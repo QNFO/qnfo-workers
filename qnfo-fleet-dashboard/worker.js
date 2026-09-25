@@ -2266,10 +2266,8 @@ async function roiHtml(env) {
   H.push('<div class="panel"><h2>COST (AI traffic, 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
   H.push('<tr><td>AI Gateway requests (30d)</td><td>' + (gw30 != null ? gw30.toLocaleString() : '<span class="warn">n/a</span>') + '</td></tr>');
   for (const m of topModels) H.push('<tr><td class="sub">  model ' + esc(m.m) + '</td><td>' + m.n.toLocaleString() + '</td></tr>');
-  H.push('<tr><td>Gateway spend cap (30d sliding)</td><td>
-//# sourceMappingURL=worker.js.map
- + (cap != null ? cap : "?") + '</td></tr>');
-  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 (last measured)</td></tr>');
+  H.push('<tr><td>Gateway spend cap (30d sliding)</td><td>' + (cap != null ? cap : "?") + '</td></tr>');
+  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 baseline snapshot 2026-09-25 (infra_analytics; live gateway counts above)</td></tr>');
   H.push('<tr><td>Live workers</td><td>' + (workersN != null ? workersN : "?") + ' (was 57 on 2026-09-25)</td></tr>');
   H.push('</table></div>');
   // OUTPUT
