@@ -757,7 +757,7 @@ __name222(citationAuthorsMeta, "citationAuthorsMeta");
 __name2222(citationAuthorsMeta, "citationAuthorsMeta");
 __name22222(citationAuthorsMeta, "citationAuthorsMeta");
 function renderPaperHTML(paper) {
-  const cleanMd = fixMojibake(stripFrontmatter(paper.body_md || ""));
+  const rawBody = paper.body_md || ""; const cleanMd = rawBody.length >= 5000 ? fixMojibake(stripFrontmatter(rawBody)) : "";
   const md = cleanMd;
   const abstract = (paper.abstract || "").slice(0, 300);
   const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "Unknown";
