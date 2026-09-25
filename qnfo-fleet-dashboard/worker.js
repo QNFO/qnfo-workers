@@ -2200,6 +2200,7 @@ var worker_default = {
     try {
       const st = await runRefresh(env, ctx);
       ctx.waitUntil(persistWeeklyReportCard(env, st));
+      ctx.waitUntil(persistRoiSnapshot(env).catch(function() {}));
       try {
         await loopSync(env, st);
       } catch (e2) {
@@ -2222,6 +2223,36 @@ var worker_default = {
     }
   }
 };
+async function persistRoiSnapshot(env) {
+  try {
+    const d = new Date().toISOString().slice(0, 10);
+    const tot = { papers: null, chars: null, subscribers: null, gateway_req: null, pageviews: null, ops_events: null };
+    try {
+      const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n, COALESCE(SUM(length(body_md)),0) AS w FROM papers WHERE status='published' AND length(body_md) >= 5000");
+      if (r && r.length) { tot.papers = r[0].n; tot.chars = r[0].w; }
+    } catch (e) {}
+    try {
+      const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
+      if (r && r.length) tot.subscribers = r[0].s;
+    } catch (e) {}
+    try {
+      const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { aiGatewayRequestsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(Date.now() - 720 * 3600e3).toISOString() + '", datetime_leq: "' + new Date().toISOString() + '" }) { count } } } }');
+      const rows = ((((g || {}).viewer || {}).accounts || [{}])[0].aiGatewayRequestsAdaptiveGroups || []);
+      tot.gateway_req = rows.reduce(function(a, x) { return a + x.count; }, 0);
+    } catch (e) {}
+    try {
+      const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(Date.now() - 720 * 3600e3).toISOString() + '", datetime_leq: "' + new Date().toISOString() + '" }) { count } } } }');
+      const rows = ((((g || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || []);
+      tot.pageviews = rows.reduce(function(a, x) { return a + x.count; }, 0);
+    } catch (e) {}
+    try {
+      const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool'");
+      if (r && r.length) tot.ops_events = r[0].n;
+    } catch (e) {}
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS roi_daily_snapshots (d TEXT PRIMARY KEY, papers INTEGER, chars INTEGER, subscribers INTEGER, gateway_req INTEGER, pageviews INTEGER, ops_events INTEGER, created_at TEXT)" ).run();
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO roi_daily_snapshots (d, papers, chars, subscribers, gateway_req, pageviews, ops_events, created_at) VALUES (?,?,?,?,?,?,?,?)" ).bind(d, tot.papers, tot.chars, tot.subscribers, tot.gateway_req, tot.pageviews, tot.ops_events, new Date().toISOString()).run();
+  } catch (e) {}
+}
 async function roiGf(env, query) {
   const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
     method: "POST",
@@ -2241,6 +2272,7 @@ async function roiHtml(env) {
   const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
   H.push('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QUNIVERSE ROI</title><style>body{font-family:system-ui;background:#0b0e14;color:#e6e6e6;margin:0;padding:24px}h1{font-size:22px}h2{font-size:16px;margin:18px 0 6px;color:#9fc}table{border-collapse:collapse;width:100%;max-width:900px}td,th{border:1px solid #2a2f3a;padding:4px 8px;font-size:13px;text-align:right}th{background:#141a24;color:#9fb}td:first-child,th:first-child{text-align:left}.ok{color:#6f6}.warn{color:#fa3}.bad{color:#f66}.sub{color:#9aa;font-size:12px}.panel{background:#11151d;border:1px solid #2a2f3a;border-radius:8px;padding:14px;margin:10px 0;max-width:940px}</style></head><body>');
   H.push('<h1>QUNIVERSE ROI — cost vs output</h1>');
+  H.push('<div class="sub"><a href="/ops" style="color:#9af">operational detail (uptime/errors) → /ops</a></div>');
   H.push('<div class="sub">generated ' + new Date().toISOString() + ' · deadline 2026-10-25 · <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + ' days left</b></div>');
   // COST
   let opsN = null;
@@ -2269,11 +2301,18 @@ async function roiHtml(env) {
     const wj = await wr.json();
     workersN = (wj.result || []).length;
   } catch (e) {}
+  let aiN = null;
+  try {
+    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { sum { neurons } dimensions { usageModel } } } } }');
+    const rows = ((((g || {}).viewer || {}).accounts || [{}])[0].workersInvocationsAdaptive || []);
+    aiN = rows.reduce(function(a, x) { return a + ((x.sum && x.sum.neurons) || 0); }, 0);
+    if (aiN === 0) aiN = null;
+  } catch (e) {}
   H.push('<div class="panel"><h2>COST (AI traffic, 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
   H.push('<tr><td>AI Gateway requests (30d)</td><td>' + (gw30 != null ? gw30.toLocaleString() : '<span class="warn">n/a</span>') + '</td></tr>');
   for (const m of topModels) H.push('<tr><td class="sub">  model ' + esc(m.m) + '</td><td>' + m.n.toLocaleString() + '</td></tr>');
   H.push('<tr><td>Gateway spend cap (30d sliding)</td><td>' + (cap != null ? cap : "?") + '</td></tr>');
-  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 baseline snapshot 2026-09-25 (infra_analytics; live gateway counts above)</td></tr>');
+  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 snapshot 2026-09-25 · neurons 30d: ' + (aiN != null ? aiN.toLocaleString() : '?') + ' (live)</td></tr>');
   H.push('<tr><td>Agent operations (30d) — time proxy</td><td>' + (opsN != null ? opsN.toLocaleString() : '?') + ' ops_ai_tool events</td></tr>');
   H.push('<tr><td>Live workers</td><td>' + (workersN != null ? workersN : "?") + ' (was 57 on 2026-09-25)</td></tr>');
   H.push('</table></div>');
