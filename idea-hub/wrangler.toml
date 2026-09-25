@@ -4,10 +4,6 @@ compatibility_date = "2026-09-01"
 workers_dev = true
 
 # Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)
-[[services]]
-binding = "AGENT_ORCH"
-service = "qnfo-agent-orchestrator"
-environment = "production"
 
 [ai]
 binding = "AI"
