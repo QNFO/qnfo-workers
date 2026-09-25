@@ -2312,7 +2312,7 @@ async function roiHtml(env) {
   H.push('<tr><td>AI Gateway requests (30d)</td><td>' + (gw30 != null ? gw30.toLocaleString() : '<span class="warn">n/a</span>') + '</td></tr>');
   for (const m of topModels) H.push('<tr><td class="sub">  model ' + esc(m.m) + '</td><td>' + m.n.toLocaleString() + '</td></tr>');
   H.push('<tr><td>Gateway spend cap (30d sliding)</td><td>' + (cap != null ? cap : "?") + '</td></tr>');
-  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 snapshot 2026-09-25 · neurons 30d: ' + (aiN != null ? aiN.toLocaleString() : '?') + ' (live)</td></tr>');
+  H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 snapshot 2026-09-25 (infra_analytics; live Workers AI dataset not exposed via current token scope)</td></tr>');
   H.push('<tr><td>Agent operations (30d) — time proxy</td><td>' + (opsN != null ? opsN.toLocaleString() : '?') + ' ops_ai_tool events</td></tr>');
   H.push('<tr><td>Live workers</td><td>' + (workersN != null ? workersN : "?") + ' (was 57 on 2026-09-25)</td></tr>');
   H.push('</table></div>');
@@ -2407,6 +2407,20 @@ async function roiHtml(env) {
   if (rum && rum.total != null && rum.total >= 7293 && d30n >= 2) { verdict = "GATES ON TRACK"; vcls = "ok"; }
   else if ((rum && rum.total != null && rum.total >= 5610) || d30n >= 1) { verdict = "PARTIAL — WATCH"; vcls = "warn"; }
   H.push('<div class="panel"><h2>ROI VERDICT</h2><div class="' + vcls + '" style="font-size:18px;font-weight:700">' + verdict + '</div><div class="sub">cost: gateway requests + $150 cap · output: full reports + chars · impressions: pageviews +30% gate · reach: subscribers + replies · refresh for fresh numbers</div></div>');
+  let snap = [];
+  try { snap = await d1all(env.AUDIT, "SELECT * FROM roi_daily_snapshots ORDER BY d DESC LIMIT 40") || []; } catch (e) {}
+  if (snap.length >= 2) {
+    H.push('<div class="panel"><h2>MONTH-OVER-MONTH (daily snapshots)</h2><table><tr><th>metric</th><th>now</th><th>' + esc(snap[snap.length - 1].d || '30d ago') + '</th><th>delta</th></tr>');
+    const last = snap[0], prev = snap[snap.length - 1];
+    const rows = [['Full reports (total)', last.papers, prev.papers], ['Chars published (total)', last.chars, prev.chars], ['Subscribers', last.subscribers, prev.subscribers], ['Gateway req (30d rolling)', last.gateway_req, prev.gateway_req], ['Pageviews (30d rolling)', last.pageviews, prev.pageviews]];
+    for (const r of rows) {
+      const d0 = Number(r[1]) || 0, d1 = Number(r[2]) || 0, dd = d0 - d1;
+      H.push('<tr><td>' + esc(r[0]) + '</td><td>' + d0.toLocaleString() + '</td><td>' + d1.toLocaleString() + '</td><td class="' + (dd >= 0 ? 'ok' : 'bad') + '">' + (dd >= 0 ? '+' : '') + dd.toLocaleString() + '</td></tr>');
+    }
+    H.push('</table><div class="sub">snapshots persisted daily by the dashboard cron; earliest ' + esc(snap[snap.length - 1].d) + '</div></div>');
+  } else {
+    H.push('<div class="panel"><h2>MONTH-OVER-MONTH</h2><div class="sub">awaiting snapshots — first persisted today, MoM deltas appear tomorrow onward</div></div>');
+  }
   H.push('</body></html>');
   return H.join("");
 }
