@@ -1,9 +1,0 @@
-name = "obsidian-writer"
-main = "worker.js"
-compatibility_date = "2026-01-01"
-workers_dev = true
-
-# Bindings verified from live CF API + sibling radar-hub/job-market-watch (BINDING-PRESERVATION-1)
-[[r2_buckets]]
-binding = "VAULT"
-bucket_name = "obsidian-vault"
