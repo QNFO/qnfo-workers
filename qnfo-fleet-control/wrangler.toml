@@ -49,10 +49,6 @@ bucket_name = "qnfo-canonical"
 binding = "KV_CAL"
 id = "d3768b93a76640be83151b00a8b42717"
 
-[[vectorize]]
-binding = "VEC_CAL"
-index_name = "qnfo-calibration"
-[[services]]
 binding = "SVC_PERSONAL_API"
 service = "personal-api"
 environment = "production"
