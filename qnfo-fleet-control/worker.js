@@ -1974,10 +1974,41 @@ var worker_default2 = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     if (cron === "*/20 * * * *") return advisorMod.default.scheduled(event, env, ctx);
-    if (cron === "0 3 * * *" || cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
+    if (cron === "0 3 * * *") { ctx.waitUntil(disposeRetired(env)); return calibratorMod.default.scheduled(event, env, ctx); }
+    if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
     return deployDefault.scheduled(event, env, ctx);
   }
 };
+async function disposeRetired(env) {
+  try {
+    var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+    var token = env.CF_API_TOKEN;
+    if (!token) return;
+    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1 };
+    var q = await env.AUDIT_DB.prepare("SELECT id, item FROM reorg_work_queue WHERE state='OPEN' AND item LIKE 'delete-worker:%'").all();
+    var targets = {};
+    for (var i = 0; i < (q.results || []).length; i++) {
+      var m = /delete-worker:([a-z0-9-]+)/i.exec(q.results[i].item || "");
+      if (m) targets[m[1]] = 1;
+    }
+    for (var name in targets) {
+      if (protectedNames[name]) continue;
+      var recent = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE ? AND ts > datetime('now','-1 day')").bind(name + "%").first();
+      if (recent && recent.n > 0) continue;
+      var res = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + name, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
+      var j = await res.json().catch(function () { return {}; });
+      if (j && j.success) {
+        await env.AUDIT_DB.prepare("UPDATE service_registry SET state='deleted', updated_at=datetime('now') WHERE service = ?").bind(name).run();
+        await env.AUDIT_DB.prepare("UPDATE reorg_work_queue SET state='EXECUTED' WHERE item LIKE 'delete-worker:" + name + "%' AND state='OPEN'").run();
+        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'disposed-worker', 'qnfo-fleet-control', ?)").bind(name).run();
+      } else {
+        var msg = (j && j.errors && j.errors[0] && j.errors[0].message) || "unknown";
+        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: " + String(msg).slice(0, 280)).run();
+      }
+    }
+  } catch (e) {}
+}
+
 var FleetAdvisor = advisorMod.FleetAdvisor;
 export {
   FleetAdvisor,
