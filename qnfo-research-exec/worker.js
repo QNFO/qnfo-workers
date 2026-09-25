@@ -1914,7 +1914,7 @@ __name2(remediationPublish, "remediationPublish");
 __name22(remediationPublish, "remediationPublish");
 __name222(remediationPublish, "remediationPublish");
 async function run(env) {
-  await logEvent(env, "heartbeat", "run");
+  /* reorg-2026-09-25: heartbeat self-talk spam removed */
   try {
     let row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='review' AND stage='publish' LIMIT 1").first();
     if (row) {
@@ -1935,7 +1935,7 @@ async function run(env) {
     }
     row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY score DESC LIMIT 1").first();
     if (!row) {
-      await logEvent(env, "idle", "no work");
+      /* reorg-2026-09-25: idle self-talk spam removed */
       return { status: "ok", claimed: 0 };
     }
     const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage='ground', claimed_at=?, attempt=attempt+1 WHERE id=? AND status='queued'").bind(nowIso(), row.id).run();
