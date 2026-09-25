@@ -1865,6 +1865,7 @@ function topologySvg(ig) {
 __name(topologySvg, "topologySvg");
 function pageHtml(st) {
   const h = [];
+  h.push('<div style="margin:8px 0 16px;padding:10px 14px;background:#0d1a12;border:1px solid #2a4d33;border-radius:8px"><b>ROI view:</b> <a href="/roi" style="color:#6f6">cost vs output vs impressions vs reach</a></div>');
   const issues = st.issues || [];
   const errs = issues.filter(function(i) {
     return i.sev === "err";
@@ -2242,6 +2243,11 @@ async function roiHtml(env) {
   H.push('<h1>QUNIVERSE ROI — cost vs output</h1>');
   H.push('<div class="sub">generated ' + new Date().toISOString() + ' · deadline 2026-10-25 · <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + ' days left</b></div>');
   // COST
+  let opsN = null;
+  try {
+    const or_ = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool' AND ts >= ?", [since(720)]);
+    opsN = or_ && or_.length ? or_[0].n : null;
+  } catch (e) {}
   let gw30 = null, topModels = [];
   try {
     const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { aiGatewayRequestsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { count dimensions { model } } } } }');
@@ -2268,6 +2274,7 @@ async function roiHtml(env) {
   for (const m of topModels) H.push('<tr><td class="sub">  model ' + esc(m.m) + '</td><td>' + m.n.toLocaleString() + '</td></tr>');
   H.push('<tr><td>Gateway spend cap (30d sliding)</td><td>' + (cap != null ? cap : "?") + '</td></tr>');
   H.push('<tr><td>Workers AI est cost 30d</td><td>$15.03 baseline snapshot 2026-09-25 (infra_analytics; live gateway counts above)</td></tr>');
+  H.push('<tr><td>Agent operations (30d) — time proxy</td><td>' + (opsN != null ? opsN.toLocaleString() : '?') + ' ops_ai_tool events</td></tr>');
   H.push('<tr><td>Live workers</td><td>' + (workersN != null ? workersN : "?") + ' (was 57 on 2026-09-25)</td></tr>');
   H.push('</table></div>');
   // OUTPUT
