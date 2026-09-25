@@ -63,10 +63,6 @@ binding = "SVC_QNFO_RESEARCH_EXEC"
 service = "qnfo-research-exec"
 environment = "production"
 
-[[services]]
-binding = "SVC_QNFO_OBSERVABILITY"
-service = "qnfo-observability"
-environment = "production"
 [[kv_namespaces]]
 binding = "FLEET_CFG"
 id = "d3768b93a76640be83151b00a8b42717"
