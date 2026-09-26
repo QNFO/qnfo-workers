@@ -6,7 +6,7 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var PL_SEARCH = "https://personal-life-search.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
-var VERSION = "1.1.4"; // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
+var VERSION = "1.1.5"; // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
 var TOOLS = [
   { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
   { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
@@ -21,7 +21,7 @@ var TOOLS = [
   { name: "email_check", description: "Check the qnfo.org (and other QNFO domain) email accounts: list recent inbound/outbound emails with status. Optionally fetch the full body of one email by id (body_id).", inputSchema: { type: "object", properties: { limit: { type: "number", description: "max rows (1-100, default 20)" }, status: { type: "string", description: "filter: received/processed/sent/replied/archived/spam/read/rejected" }, body_id: { type: "number", description: "email id whose full body/headers to fetch" } } } },
   { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", inputSchema: { type: "object", properties: {} } },
   { name: "email_search", description: "Search email subject/sender/body text across the QNFO domain email accounts.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, limit: { type: "number", description: "max rows (1-100, default 20)" } }, required: ["q"] } },
-  { name: "email_respond", description: "Send an email reply (or new email) FROM a QNFO domain account via the qnfo-email Worker. Pass reply_to_id to reply to an existing inbound email (worker marks it replied). `from` defaults to qnfo@qnfo.org; pass rowan.quni@qnfo.org for academic outreach. Body field is `body` (plain text) with optional `html`.", inputSchema: { type: "object", properties: { to: { type: "string", description: "recipient email" }, subject: { type: "string", description: 'subject (use "Re: <original>" for replies)' }, body: { type: "string", description: "plain-text body" }, html: { type: "string", description: "optional HTML body" }, reply_to_id: { type: "number", description: "id of the inbound email being replied to (marks it replied)" }, from: { type: "string", description: "QNFO domain sender (default qnfo@qnfo.org; rowan.quni@qnfo.org for outreach)" } }, required: ["to", "subject", "body"] } },
+  { name: "email_respond", description: "Send an email reply (or new email) FROM a QNFO domain account via the qnfo-email Worker. Pass reply_to_id to reply to an existing inbound email (worker marks it replied). `from` defaults to qnfo@qnfo.org; pass rowan.quni@qnfo.org for academic outreach. Body field is `body` (plain text) with optional `html`.", inputSchema: { type: "object", properties: { to: { type: "string", description: "recipient email" }, subject: { type: "string", description: 'subject (use "Re: <original>" for replies)' }, body: { type: "string", description: "plain-text body" }, html: { type: "string", description: "optional HTML body" }, reply_to_id: { type: "number", description: "id of the inbound email being replied to (marks it replied)" }, affirm: { type: "boolean", description: "must be TRUE to send a NEW outbound email when reply_to_id is absent (MCP-COLD-SEND-UNGATED-1); replies do not need it" }, from: { type: "string", description: "QNFO domain sender (default qnfo@qnfo.org; rowan.quni@qnfo.org for outreach)" } }, required: ["to", "subject", "body"] } },
   { name: "email_mark", description: "Update the status of an email row (received/processed/sent/replied/archived/spam/read/rejected).", inputSchema: { type: "object", properties: { id: { type: "number", description: "email id" }, status: { type: "string", description: "new status" } }, required: ["id", "status"] } }
 ];
 function tokenEq(token, expected) {
@@ -162,6 +162,12 @@ async function callTool(env, name, args) {
     if (!String(args.to || "").includes("@")) return { error: "to is required" };
     if (!String(args.subject || "").trim()) return { error: "subject is required" };
     if (!String(args.body || "").trim() && !String(args.html || "").trim()) return { error: "body or html is required" };
+    // MCP-COLD-SEND-UNGATED-1 (2026-09-24): a COLD send (no reply_to_id) must be explicitly
+    // affirmed. The prior schema accepted to+subject+body alone, so an unattended caller could
+    // cold-send with no gate. Replies (reply_to_id present) are completely unaffected.
+    const _cold = !args.reply_to_id;
+    if (_cold && args.affirm !== true) return { error: "cold send rejected: pass reply_to_id to reply, or affirm:true to confirm a NEW outbound email (MCP-COLD-SEND-UNGATED-1)" };
+    if (_cold && /(^|[^a-z])(test|verify|canary|matrix)([^a-z]|$)/i.test(String(args.subject || ""))) return { error: "cold send rejected: subject carries a test/canary token (EMAIL-SUBJECT-SPAM-TOKENS-1)" };
     const payload = { to: String(args.to), subject: String(args.subject), body: String(args.body || "") };
     if (args.html) payload.html = String(args.html);
     if (args.reply_to_id) payload.reply_to_id = parseInt(args.reply_to_id, 10);
