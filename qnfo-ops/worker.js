@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.4-fm7gate-failsafe";
+var VERSION = "2.37.5-fm7gate-latent";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2073,10 +2073,10 @@ async function cfWorkerDeploy(env, args) {
         const _ln = _lines[_li];
         if ((_ln.indexOf("/health") >= 0 || _ln.indexOf('status: "ok"') >= 0 || _ln.indexOf("status:\"ok\"") >= 0 || _ln.indexOf("ok: true") >= 0) && _ln.indexOf("version:") >= 0 && _ln.indexOf("version: VERSION") < 0) {
           const _m = _ln.match(/version:\s*["']([^"']+)["']/);
-          if (_m && _m[1] !== _vv) _bad.push(_m[1]);
+          if (_m) _bad.push(_m[1]);
         }
       }
-      if (_bad.length) return { ok: false, rejected: true, error: "FM7-HEALTH-VERSION-PARITY-1: source /health returns hardcoded version " + JSON.stringify(_bad) + " != VERSION const " + JSON.stringify(_vv) + " - use `version: VERSION` in the health response (Worker Contract v1). Refusing deploy: a lying /health poisons the registry + deploy guard." };
+      if (_bad.length) return { ok: false, rejected: true, error: "FM7-HEALTH-VERSION-PARITY-1: source /health returns a hardcoded version literal " + JSON.stringify(_bad) + " instead of the VERSION ident (const=" + JSON.stringify(_vv) + "). A literal is a LATENT violation: it diverges the moment VERSION is bumped (canonical: qnfo-gateway). Use `version: VERSION` (Worker Contract v1). Refusing deploy." };
     }
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
