@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.10-guard-ledger-retry";
+var VERSION = "2.37.11-fm-empty-relay-402";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3141,7 +3141,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       // COST-ROUTING-STACK-1 L3: a persistent 4xx AUTH error (401/403) means the paid path is unusable
       // but a free path exists -> degrade rather than terminate (BUDGET-CAP-FREE-FALLBACK-1). Other 4xx
       // (400 bad-format etc.) stay fatal: a fallback cannot fix a malformed request.
-      if (resp.status === 401 || resp.status === 403) {
+      if (resp.status === 401 || resp.status === 403 || resp.status === 402) {
         const _fbA = await budgetFallback(env, messages, maxTokens, tools, o);
         if (_fbA) { console.log("OPS_PAID_AUTH_FREE_FALLBACK " + resp.status); return _fbA; }
       }
@@ -3524,8 +3524,17 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
         body: JSON.stringify(upBody)
       });
       if (!resp.ok || !resp.body) {
-        await fail("upstream " + resp.status + ": " + (await resp.text()).slice(0, 300));
-        return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
+        const _rs = resp.status;
+        const _rtxt = await resp.text().catch(function() { return ""; });
+        if (_rs === 401 || _rs === 403 || _rs === 429 || _rs === 402) {
+          const _fb = await budgetFallback(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
+          const _fc = _fb && _fb.resp && _fb.resp.choices && _fb.resp.choices[0] && _fb.resp.choices[0].message;
+          const _ftxt = String(_fc && (_fc.content || _fc.reasoning_content) || "");
+          ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: relayDisp, strategy: "relay", prompt, response: _ftxt.slice(0, 2e4), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: estTokens(_ftxt), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: _ftxt.trim() ? 1 : 0, upstream_model: _fb && _fb.servedBy || null }));
+          return json({ id: randId("chatcmpl-"), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: relayDisp, choices: [{ index: 0, message: { role: "assistant", content: _ftxt }, finish_reason: "stop" }], usage: {} });
+        }
+        await fail("upstream " + _rs + ": " + String(_rtxt || "").slice(0, 300));
+        return json({ error: "upstream relay failed (" + _rs + ")" }, 502);
       }
       const recId = randId("ops-");
       ctx.waitUntil(logOps(env, { id: recId, ts: iso(), model: relayDisp, strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
@@ -4075,6 +4084,25 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           }
           if (!content || !String(content).trim()) {
             content = "The answer was truncated by the token budget (thinking consumed the tool-round cap) and the retry returned no content. Please re-send your request.";
+            finishReason = "stop";
+          }
+        }
+        if (toolLog.length && !String(content || "").trim()) {
+          // FM-EMPTY-RESPONSE (2026-09-26): the model returned EMPTY content after successful tool rounds
+          // (finish_reason "stop" with no text). Re-run WITHOUT tools under the budget-exhausted directive so
+          // the loop produces a final summary instead of logging an empty ok=0 response (seen live 3x today).
+          try {
+            work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+            const { resp: r4, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+            if (_sb3) servedBy = _sb3;
+            const c4 = r4 && r4.choices && r4.choices[0];
+            content = String(c4 && c4.message && c4.message.content || "");
+            finishReason = c4 && c4.finish_reason || "stop";
+            upstreamUsage = r4 && r4.usage || upstreamUsage;
+          } catch (e4) {
+          }
+          if (!String(content || "").trim()) {
+            content = "The tool loop completed its operations but the model returned no final summary. Please re-send your request for a concise answer.";
             finishReason = "stop";
           }
         }
