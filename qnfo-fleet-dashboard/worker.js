@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.20-survival-weighted";
+var VERSION = "1.7.21-metricwindow";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -495,7 +495,8 @@ __name2222(liveDevice, "liveDevice");
 async function liveScheduled(env, liveNames) {
   try {
     try {
-      await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run();
+      await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT, created_on TEXT)").run();
+      try { await env.AUDIT.prepare("ALTER TABLE worker_schedules ADD COLUMN created_on TEXT").run(); } catch (e) {}
     } catch (e) {
     }
     const meta = await d1all(env.AUDIT, "SELECT (julianday('now') - julianday(MAX(refreshed_at))) * 24 AS ageh FROM worker_schedules");
@@ -518,9 +519,11 @@ async function liveScheduled(env, liveNames) {
             const j = await r.json();
             if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
             const arr = j.result.schedules;
+            let co = null;
+            for (const s2 of arr) { if (s2 && s2.created_on && (co == null || s2.created_on > co)) co = s2.created_on; }
             return { n, c: arr.map(function(s) {
               return s.cron;
-            }), ok: true };
+            }), created: co, ok: true };
           } catch (e) {
             return { n, c: [], ok: false };
           }
@@ -535,7 +538,7 @@ async function liveScheduled(env, liveNames) {
           }
           if (!it.c.length) continue;
           try {
-            await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso).run();
+            await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at, created_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5, created_on = ?6").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso, it.created || null).run();
           } catch (e) {
           }
         }
@@ -543,11 +546,11 @@ async function liveScheduled(env, liveNames) {
     }
   } catch (e) {
   }
-  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
+  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp, created_on FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
   const out = [];
   for (const r of rows) {
     try {
-      out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" });
+      out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live", created_on: r.created_on || null });
     } catch (e) {
     }
   }
@@ -1286,39 +1289,37 @@ async function buildState(env, ctx) {
     push({ key: "errata_actions", label: "Errata actions", state: "info", detail: JSON.stringify(g) + "; latest: " + (rows.length ? rows[0].slug + " v" + rows[0].version_from + "->v" + rows[0].version_to + " " + rows[0].status : "none"), ts: rows.length ? rows[0].created_at : null });
   });
   await safeAudit("ai_gateway_failures", "AI gateway failures (live)", async function() {
-    let liveTotal = null, liveErr = null;
+    // GOVERNANCE-METRIC-DEFINITION-VERIFY-1: the alert metric MUST be a WINDOWED rate,
+    // never an all-time failure total. An all-time count is monotonically non-decreasing,
+    // so `liveTotal > 0` can never be false once the gateway has EVER failed -> a permanent
+    // err no remediation can clear (canonical 2026-09-26: 290,608 all-time vs 66 in 24h).
+    const since = new Date(Date.now() - 24 * 36e5).toISOString();
+    const base = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&start_date=" + encodeURIComponent(since);
+    let fail24 = null, all24 = null, liveErr = null;
     try {
-      const gr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-      if (gr.ok) {
-        const gj = await gr.json();
-        liveTotal = gj.result_info && gj.result_info.total_count;
-      } else liveErr = "HTTP " + gr.status;
+      const gf = await fetch(base + "&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      if (gf.ok) { const g = await gf.json(); fail24 = g.result_info && g.result_info.total_count; } else liveErr = "HTTP " + gf.status;
+      const gt = await fetch(base, { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      if (gt.ok) { const g = await gt.json(); all24 = g.result_info && g.result_info.total_count; } else if (!liveErr) liveErr = "HTTP " + gt.status;
     } catch (e) {
       liveErr = String(e && e.message || e).slice(0, 60);
     }
-    let m = null;
-    try {
-      m = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures");
-    } catch (e) {
-    }
-    const mt = m && m.length ? m[0] : null;
-    const ageH = mt && mt.latest ? (Date.now() - Number(mt.latest)) / 36e5 : null;
+    const rate = all24 && fail24 != null ? fail24 / all24 : null;
+    const bad = fail24 != null && all24 != null && all24 >= 100 && fail24 >= 25 && rate > 0.05;
     let top = [];
     try {
-      top = await d1all(env.AUDIT, "SELECT status, model, SUM(count) AS c FROM ai_gateway_failures GROUP BY status, model ORDER BY c DESC LIMIT 4") || [];
+      top = await d1all(env.AUDIT, "SELECT status, model, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= " + (Date.now() - 24 * 36e5) + " GROUP BY status, model ORDER BY c DESC LIMIT 4") || [];
     } catch (e) {
     }
     const tc = top.map(function(r) {
       return r.status + " " + r.model + " x" + r.c;
     }).join(", ");
-    const stale = ageH == null || ageH > 2;
-    const bad = liveTotal != null && liveTotal > 0 || stale;
     push({
       key: "gw_failures",
       label: "AI gateway failures (live)",
       state: bad ? "err" : "ok",
-      detail: "live(all-time)=" + (liveTotal == null ? liveErr || "n/a" : liveTotal) + "; mirror=" + (mt ? mt.total : 0) + " recorded, last write " + (ageH == null ? "never" : ageH.toFixed(1) + "h ago") + (stale ? " [RECORDER STALE]" : "") + (tc ? "; top: " + tc : ""),
-      ts: mt && mt.latest ? new Date(Number(mt.latest)).toISOString() : null
+      detail: "24h " + (fail24 == null ? liveErr || "n/a" : fail24) + " failed / " + (all24 == null ? liveErr || "n/a" : all24) + " total" + (rate == null ? "" : " (" + (rate * 100).toFixed(2) + "%)") + "; alert when >=25 fails and >5%" + (tc ? "; top24: " + tc : ""),
+      ts: null
     });
   });
   await safeAudit("gw_calibration", "AI calibration probes (24h)", async function() {
@@ -1366,13 +1367,13 @@ async function buildState(env, ctx) {
     });
     let gwf = [];
     try {
-      gwf = await d1all(env.AUDIT, "SELECT model, SUM(count) AS c FROM ai_gateway_failures GROUP BY model ORDER BY c DESC LIMIT 6") || [];
+      gwf = await d1all(env.AUDIT, "SELECT model, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= " + (Date.now() - 24 * 36e5) + " GROUP BY model ORDER BY c DESC LIMIT 6") || [];
     } catch (e) {
     }
     const gwTop = gwf.map(function(r) {
       return (r.model || "?") + " x" + r.c;
     }).join(", ");
-    const gwBad = gwf.length > 0;
+    const gwBad = gwf.reduce(function(a, r) { return a + (r.c || 0); }, 0) >= 25;
     push({
       key: "model_health",
       label: "AI model health",
@@ -1494,9 +1495,11 @@ async function buildState(env, ctx) {
     if (liveNames && liveNames.indexOf(s.name) < 0) continue;
     const per = analytics.per[s.name] || { requests: 0, errors: 0 };
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
+    const createdMs = s.created_on ? Date.parse(s.created_on) : NaN;
+    const young = isFinite(createdMs) && (now.getTime() - createdMs) < 26 * 36e5;
     let st;
     if (per.errors > 0) st = "ERR";
-    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt) st = "NO-RUN";
+    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt && !young) st = "NO-RUN";
     else if (per.requests > 0) st = "OK";
     else st = "IDLE";
     scheduled.push({

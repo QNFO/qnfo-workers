@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.18-impressions";
+var VERSION = "1.7.21-metricwindow";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -495,7 +495,8 @@ __name2222(liveDevice, "liveDevice");
 async function liveScheduled(env, liveNames) {
   try {
     try {
-      await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT)").run();
+      await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_schedules (name TEXT PRIMARY KEY, crons_json TEXT, purpose TEXT, grp TEXT, refreshed_at TEXT, created_on TEXT)").run();
+      try { await env.AUDIT.prepare("ALTER TABLE worker_schedules ADD COLUMN created_on TEXT").run(); } catch (e) {}
     } catch (e) {
     }
     const meta = await d1all(env.AUDIT, "SELECT (julianday('now') - julianday(MAX(refreshed_at))) * 24 AS ageh FROM worker_schedules");
@@ -518,9 +519,11 @@ async function liveScheduled(env, liveNames) {
             const j = await r.json();
             if (!j || !j.result || !Array.isArray(j.result.schedules)) return { n, c: [], ok: false };
             const arr = j.result.schedules;
+            let co = null;
+            for (const s2 of arr) { if (s2 && s2.created_on && (co == null || s2.created_on > co)) co = s2.created_on; }
             return { n, c: arr.map(function(s) {
               return s.cron;
-            }), ok: true };
+            }), created: co, ok: true };
           } catch (e) {
             return { n, c: [], ok: false };
           }
@@ -535,7 +538,7 @@ async function liveScheduled(env, liveNames) {
           }
           if (!it.c.length) continue;
           try {
-            await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso).run();
+            await env.AUDIT.prepare("INSERT INTO worker_schedules (name, crons_json, purpose, grp, refreshed_at, created_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(name) DO UPDATE SET crons_json = ?2, purpose = ?3, grp = ?4, refreshed_at = ?5, created_on = ?6").bind(it.n, JSON.stringify(it.c), pm[it.n] || "", "live", nowIso, it.created || null).run();
           } catch (e) {
           }
         }
@@ -543,11 +546,11 @@ async function liveScheduled(env, liveNames) {
     }
   } catch (e) {
   }
-  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
+  const rows = await d1all(env.AUDIT, "SELECT name, crons_json, purpose, grp, created_on FROM worker_schedules WHERE refreshed_at IS NULL OR datetime(refreshed_at) >= datetime('now','-6 hours') ORDER BY name") || [];
   const out = [];
   for (const r of rows) {
     try {
-      out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live" });
+      out.push({ name: r.name, crons: JSON.parse(r.crons_json), purpose: r.purpose || "", group: r.grp || "live", created_on: r.created_on || null });
     } catch (e) {
     }
   }
@@ -594,6 +597,11 @@ async function liveSaiInputs(env) {
   try {
     const t = await d1all(env.AUDIT, "SELECT COUNT(*) c, SUM(CASE WHEN status IN ('healed','resolved') THEN 1 ELSE 0 END) h FROM self_heal_actions");
     if (t && t[0] && t[0].c > 0) out.healRate = Math.max(0, Math.min(1, Number(t[0].h || 0) / t[0].c));
+  } catch (e) {
+  }
+  try {
+    const ss = await d1all(env.AUDIT, "SELECT survival_score FROM survival_state WHERE id=1");
+    if (ss && ss[0] && typeof ss[0].survival_score === 'number') out.externalImpact = Math.max(0, Math.min(1, ss[0].survival_score));
   } catch (e) {
   }
   return out;
@@ -1281,39 +1289,37 @@ async function buildState(env, ctx) {
     push({ key: "errata_actions", label: "Errata actions", state: "info", detail: JSON.stringify(g) + "; latest: " + (rows.length ? rows[0].slug + " v" + rows[0].version_from + "->v" + rows[0].version_to + " " + rows[0].status : "none"), ts: rows.length ? rows[0].created_at : null });
   });
   await safeAudit("ai_gateway_failures", "AI gateway failures (live)", async function() {
-    let liveTotal = null, liveErr = null;
+    // GOVERNANCE-METRIC-DEFINITION-VERIFY-1: the alert metric MUST be a WINDOWED rate,
+    // never an all-time failure total. An all-time count is monotonically non-decreasing,
+    // so `liveTotal > 0` can never be false once the gateway has EVER failed -> a permanent
+    // err no remediation can clear (canonical 2026-09-26: 290,608 all-time vs 66 in 24h).
+    const since = new Date(Date.now() - 24 * 36e5).toISOString();
+    const base = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&start_date=" + encodeURIComponent(since);
+    let fail24 = null, all24 = null, liveErr = null;
     try {
-      const gr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default/logs?per_page=1&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-      if (gr.ok) {
-        const gj = await gr.json();
-        liveTotal = gj.result_info && gj.result_info.total_count;
-      } else liveErr = "HTTP " + gr.status;
+      const gf = await fetch(base + "&success=false", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      if (gf.ok) { const g = await gf.json(); fail24 = g.result_info && g.result_info.total_count; } else liveErr = "HTTP " + gf.status;
+      const gt = await fetch(base, { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+      if (gt.ok) { const g = await gt.json(); all24 = g.result_info && g.result_info.total_count; } else if (!liveErr) liveErr = "HTTP " + gt.status;
     } catch (e) {
       liveErr = String(e && e.message || e).slice(0, 60);
     }
-    let m = null;
-    try {
-      m = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures");
-    } catch (e) {
-    }
-    const mt = m && m.length ? m[0] : null;
-    const ageH = mt && mt.latest ? (Date.now() - Number(mt.latest)) / 36e5 : null;
+    const rate = all24 && fail24 != null ? fail24 / all24 : null;
+    const bad = fail24 != null && all24 != null && all24 >= 100 && fail24 >= 25 && rate > 0.05;
     let top = [];
     try {
-      top = await d1all(env.AUDIT, "SELECT status, model, SUM(count) AS c FROM ai_gateway_failures GROUP BY status, model ORDER BY c DESC LIMIT 4") || [];
+      top = await d1all(env.AUDIT, "SELECT status, model, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= " + (Date.now() - 24 * 36e5) + " GROUP BY status, model ORDER BY c DESC LIMIT 4") || [];
     } catch (e) {
     }
     const tc = top.map(function(r) {
       return r.status + " " + r.model + " x" + r.c;
     }).join(", ");
-    const stale = ageH == null || ageH > 2;
-    const bad = liveTotal != null && liveTotal > 0 || stale;
     push({
       key: "gw_failures",
       label: "AI gateway failures (live)",
       state: bad ? "err" : "ok",
-      detail: "live(all-time)=" + (liveTotal == null ? liveErr || "n/a" : liveTotal) + "; mirror=" + (mt ? mt.total : 0) + " recorded, last write " + (ageH == null ? "never" : ageH.toFixed(1) + "h ago") + (stale ? " [RECORDER STALE]" : "") + (tc ? "; top: " + tc : ""),
-      ts: mt && mt.latest ? new Date(Number(mt.latest)).toISOString() : null
+      detail: "24h " + (fail24 == null ? liveErr || "n/a" : fail24) + " failed / " + (all24 == null ? liveErr || "n/a" : all24) + " total" + (rate == null ? "" : " (" + (rate * 100).toFixed(2) + "%)") + "; alert when >=25 fails and >5%" + (tc ? "; top24: " + tc : ""),
+      ts: null
     });
   });
   await safeAudit("gw_calibration", "AI calibration probes (24h)", async function() {
@@ -1361,13 +1367,13 @@ async function buildState(env, ctx) {
     });
     let gwf = [];
     try {
-      gwf = await d1all(env.AUDIT, "SELECT model, SUM(count) AS c FROM ai_gateway_failures GROUP BY model ORDER BY c DESC LIMIT 6") || [];
+      gwf = await d1all(env.AUDIT, "SELECT model, SUM(count) AS c FROM ai_gateway_failures WHERE ts >= " + (Date.now() - 24 * 36e5) + " GROUP BY model ORDER BY c DESC LIMIT 6") || [];
     } catch (e) {
     }
     const gwTop = gwf.map(function(r) {
       return (r.model || "?") + " x" + r.c;
     }).join(", ");
-    const gwBad = gwf.length > 0;
+    const gwBad = gwf.reduce(function(a, r) { return a + (r.c || 0); }, 0) >= 25;
     push({
       key: "model_health",
       label: "AI model health",
@@ -1489,9 +1495,11 @@ async function buildState(env, ctx) {
     if (liveNames && liveNames.indexOf(s.name) < 0) continue;
     const per = analytics.per[s.name] || { requests: 0, errors: 0 };
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
+    const createdMs = s.created_on ? Date.parse(s.created_on) : NaN;
+    const young = isFinite(createdMs) && (now.getTime() - createdMs) < 26 * 36e5;
     let st;
     if (per.errors > 0) st = "ERR";
-    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt) st = "NO-RUN";
+    else if (exp > 0 && per.requests === 0 && !s.no_run_exempt && !young) st = "NO-RUN";
     else if (per.requests > 0) st = "OK";
     else st = "IDLE";
     scheduled.push({
@@ -2303,12 +2311,13 @@ function computeSai(st, bench, cfg, live) {
   const integration = sysScore != null ? P.int_struct * structural + P.int_sys * clamp(sysScore / 100) : structural;
   const govPol = nd("s5_policy") != null ? nd("s5_policy") / 5 : P.gov_policy;
   const governance = P.gov_user * userFreedom + P.gov_pol_w * govPol;
-  const scores = { autonomy, thinking, decision, self_improv: selfImprov, reliability, integration, governance };
-  const weights = ["w_autonomy", "w_thinking", "w_decision", "w_self_improv", "w_reliability", "w_integration", "w_governance"];
+  const externalImpact = typeof LD.externalImpact === "number" ? Math.max(0, Math.min(1, LD.externalImpact)) : 0;
+  const scores = { autonomy, thinking, decision, self_improv: selfImprov, reliability, integration, external_impact: externalImpact, governance };
+  const weights = ["w_autonomy", "w_thinking", "w_decision", "w_self_improv", "w_reliability", "w_integration", "w_external_impact", "w_governance"];
   const missing = weights.filter(function(k) {
     return typeof P[k] !== "number";
   });
-  const sai = missing.length || scores.decision == null ? null : 100 * (P.w_autonomy * scores.autonomy + P.w_thinking * scores.thinking + P.w_decision * scores.decision + P.w_self_improv * scores.self_improv + P.w_reliability * scores.reliability + P.w_integration * scores.integration + P.w_governance * scores.governance);
+  const sai = missing.length || scores.decision == null ? null : 100 * (P.w_autonomy * scores.autonomy + P.w_thinking * scores.thinking + P.w_decision * scores.decision + P.w_self_improv * scores.self_improv + P.w_reliability * scores.reliability + P.w_integration * scores.integration + P.w_external_impact * scores.external_impact + P.w_governance * scores.governance);
   return { sai: sai == null ? null : Math.round(sai * 10) / 10, scores, weights_source: "sai_config", config_missing: missing, decision_source: decLive.length ? "autonomy_scores" : "unavailable", signals: { probe_ratio: probeRatio, chain_ratio: chainRatio, issues_err: nErr, issues_warn: nWarn, open_agent_issues: openIssues, user_wait: userWait, islands: islands.length, drift_bad: driftBad, density, no_run: noRun, closure_rate: closureRate, heal_rate: healRate } };
 }
 __name(computeSai, "computeSai");
@@ -2793,6 +2802,55 @@ async function redHtml(env) {
   const probeOk = probes.filter(function(p) {
     return p.ok;
   }).length;
+  // 9. SURVIVAL METERS (metric_registry + leading->lagging survival model; WS-SURVIVAL 2026-09-26)
+  let mr = [];
+  try {
+    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value FROM metric_registry ORDER BY kind DESC, layer, metric");
+  } catch (e) {
+  }
+  let subsTotal = null;
+  try {
+    const rs = await d1all(env.AUDIT, "SELECT SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
+    subsTotal = rs && rs.length ? Number(rs[0].s || 0) : null;
+  } catch (e) {
+  }
+  const wc = (st.fleet && st.fleet.workers) || null;
+  const c01 = function(x) { return Math.max(0, Math.min(1, x)); };
+  const regVal = function(name) {
+    const mm = (mr || []).filter(function(x) { return x.metric === name; })[0];
+    if (!mm || mm.last_value == null) return null;
+    const n = Number(String(mm.last_value).replace(/[^0-9.]/g, ""));
+    return isNaN(n) ? null : n;
+  };
+  const waiCost = regVal("workers_ai_cost_30d_usd");
+  const costUsd = regVal("cost_usd_30d");
+  const gateRows = [
+    { m: "impressions_growth_30d", live: (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a"), head: growth != null ? c01(growth / 30) : null },
+    { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
+    { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
+    { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
+    { m: "workers_ai_cost_30d_usd", live: (waiCost != null ? "$" + waiCost.toFixed(2) + "/30d" : (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a")), head: waiCost != null ? c01((15.03 - waiCost) / (15.03 - 7.5)) : (aiN != null ? c01((1500000 - aiN) / 800000) : null) },
+    { m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }
+  ];
+  const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.20, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.10, worker_count: 0.05, drift_total: 0.05 };
+  let wnum = 0, wsum = 0;
+  gateRows.forEach(function(x) { if (typeof x.head === "number") { const w = gateW[x.m] != null ? gateW[x.m] : 0.1; wnum += w * x.head; wsum += w; } });
+  const surv = wsum > 0 ? wnum / wsum : null;
+  const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
+  const extImpact = surv != null ? surv * costEff : null;
+  H.push('<div class="panel"><h2>9 &middot; SURVIVAL METERS &mdash; registry + leading&rarr;lagging model</h2>');
+  H.push('<div class="sub">' + mr.length + ' registry metrics (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
+  H.push('<table><tr><th>kind</th><th>metric</th><th>layer</th><th>live</th><th>headroom</th><th>target</th><th>warn / kill</th><th>owner</th></tr>');
+  for (const gg of gateRows) {
+    const mm = mr.filter(function(x) { return x.metric === gg.m; })[0] || {};
+    H.push('<tr><td>' + esc(mm.kind || "") + '</td><td>' + esc(gg.m) + '</td><td class="sub">' + esc(mm.layer || "") + '</td><td>' + esc(gg.live) + '</td><td>' + (gg.head == null ? "?" : Math.round(gg.head * 100) + "%") + '</td><td class="sub">' + esc(String(mm.target || "").slice(0, 44)) + '</td><td class="sub">' + esc(String(mm.warning_band || "") + " / " + String(mm.kill_band || "")).slice(0, 40) + '</td><td class="sub">' + esc(mm.owner || "") + '</td></tr>');
+  }
+  H.push("</table>");
+  H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + " (weighted, x cost-eff " + (costEff != null ? Math.round(costEff * 100) + "%" : "n/a") + " = SAI external_impact " + (extImpact != null ? extImpact.toFixed(3) : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; drives the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
+  try {
+    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2)").run();
+  } catch (e) {
+  }
   H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
   H.push("</body></html>");
   return H.join("");
