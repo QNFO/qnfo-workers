@@ -1,4 +1,4 @@
-var VERSION="3.7.1-indexnow";
+var VERSION="3.7.2-indexnow";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -979,14 +979,22 @@ async function collectPaperUrls(env) {
 __name(collectPaperUrls, "collectPaperUrls");
 async function indexNowSubmit(urls) {
   const out = [];
-  for (let i = 0; i < urls.length; i += 10000) {
-    const chunk = urls.slice(i, i + 10000);
-    try {
-      const r = await fetch("https://api.indexnow.org/indexnow", { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body: JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk }) });
-      out.push({ chunk: chunk.length, status: r.status });
-    } catch (e) {
-      out.push({ chunk: chunk.length, error: String(e).slice(0, 120) });
+  const CHUNK = 100;
+  for (let i = 0; i < urls.length; i += CHUNK) {
+    const chunk = urls.slice(i, i + CHUNK);
+    let status = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await fetch("https://api.indexnow.org/indexnow", { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body: JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk }) });
+        status = r.status;
+        if (r.status !== 429) break;
+      } catch (e) {
+        status = "err:" + String(e).slice(0, 60);
+      }
+      await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
     }
+    out.push({ chunk: chunk.length, status });
+    if (i + CHUNK < urls.length) await new Promise((res) => setTimeout(res, 1200));
   }
   return out;
 }
@@ -1003,8 +1011,7 @@ async function handleSitemap(env) {
     const base = "https://papers.qnfo.org";
     const all = [
       { loc: base + "/", priority: "1.0" },
-      { loc: base + "/papers", priority: "0.9" },
-      { loc: "https://qnfo.org/about", priority: "0.8" }
+      { loc: base + "/papers", priority: "0.9" }
     ].concat(res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
       lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
