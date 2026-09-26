@@ -2,16 +2,20 @@
 """deploy-drift-guard.py - repo<->live VERSION drift (DRIFT-ZERO).
 
 Closes the gap left by the other guards:
-  - scripts/mirror-guard.py   : repo-INTERNAL  (worker.js vs deployed-current.worker.js)
+  - scripts/mirror-guard.py   : repo-INTERNAL (worker.js vs deployed-current.worker.js)
   - scripts/cron_rate_guard.py: cron cadence
-  - THIS                      : repo(worker.js) VERSION vs LIVE /health
+  - THIS                      : repo(canonical) VERSION vs LIVE /health
 
-Default scope = the NARRATIVE-generation workers we own (the shared surface whose
-source must track live). `--all` scans every repo worker that is LIVE (404 = not
-deployed = skipped, NOT drift).
+CANONICAL ARTIFACT: the server-side deploy (qnfo-ops POST /ops/deploy) and the
+qnfo-fleet-control redeploy fetch <dir>/deployed-current.worker.js, NOT <dir>/worker.js
+(see mirror-guard.py). So this monitor reads the canonical artifact first, falling back
+to worker.js, and accepts VERSION or QNFO_VERSION.
 
-Canonical case 2026-09-26: a concurrent session deployed qnfo-ai v5.28.8-rag live and
-committed locally but did not push; origin/main lagged live until reconciled.
+Default scope = the narrative-generation surfaces we own. `--all` scans every repo
+worker that is LIVE (HTTP 404 = not deployed = skipped, NOT drift).
+
+Canonical case 2026-09-26: a concurrent session deployed a worker live and committed
+locally without pushing (origin/main lagged live) until reconciled.
 
 Exit: 0 in sync | 1 drift found (repo VERSION != live VERSION for a live worker)
 """
@@ -23,18 +27,24 @@ import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONST = re.compile(r'(?:var|let|const)\s+VERSION\s*=\s*"([^"]+)"')
+CONST = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*"([^"]+)"')
+CANON = ("deployed-current.worker.js", "worker.js")
 TIMEOUT = 12
 NARRATIVE = ["qnfo-ai", "qnfo-research-exec", "qnfo-ipatent", "qnfo-gateway"]
 
 
-def repo_version(path):
-    try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            m = CONST.search(fh.read())
-        return m.group(1) if m else None
-    except OSError:
-        return None
+def repo_version(d):
+    for fn in CANON:
+        p = os.path.join(ROOT, d, fn)
+        if os.path.isfile(p):
+            try:
+                with open(p, encoding="utf-8", errors="replace") as fh:
+                    m = CONST.search(fh.read())
+            except OSError:
+                m = None
+            if m:
+                return m.group(1)
+    return None
 
 
 def live_version(worker):
@@ -59,10 +69,9 @@ def main():
     for d in sorted(os.listdir(ROOT)):
         if wanted and d not in wanted:
             continue
-        wp = os.path.join(ROOT, d, "worker.js")
-        if not os.path.isfile(wp):
+        if not os.path.isdir(os.path.join(ROOT, d)):
             continue
-        rv = repo_version(wp)
+        rv = repo_version(d)
         if not rv:
             continue
         lv = live_version(d)
@@ -74,10 +83,11 @@ def main():
             drift.append((d, rv, lv))
     for d, rv, lv in drift:
         print(f"DRIFT {d}: repo={rv} live={lv}")
+    tag = "all-live" if scan_all else "narrative"
     if drift:
-        print(f"deploy-drift-guard: {len(drift)}/{checked} live drifted ({notlive} not-deployed skipped)")
+        print(f"deploy-drift-guard[{tag}]: {len(drift)}/{checked} drifted ({notlive} not-deployed skipped)")
         return 1
-    print(f"deploy-drift-guard: {checked}/{checked} in sync; {notlive} not-deployed skipped")
+    print(f"deploy-drift-guard[{tag}]: {checked}/{checked} in sync ({notlive} not-deployed skipped)")
     return 0
 
 
