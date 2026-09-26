@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.11";
+var VERSION = "0.9.12";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -339,7 +339,7 @@ async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
     title,
     upload_type: "publication",
     publication_type: "preprint",
-    description: (abstract || title).slice(0, 3e3),
+    description: (abstract || title).slice(0, 3e3) + (slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + slug + '/">papers.qnfo.org/papers/' + slug + '/</a></p>' : ''),
     creators: [{ name: AUTHOR, orcid: ORCID }],
     access_right: "open",
     license: "cc-by",
@@ -1105,7 +1105,7 @@ async function publishV2(env, row) {
   delete metaClean.related_identifiers;
   if (row.related_repo) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Source: " + row.related_repo;
   var ab = String(row.corrected_md || "").match(/##\s*Abstract\s*\r?\n([\s\S]*?)(?=\r?\n##\s|\r?\n#\s|$)/i);
-  if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim();
+  if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim() + (row.slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + row.slug + '/">papers.qnfo.org/papers/' + row.slug + '/</a></p>' : '');
   var mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
   if (mput && mput._status && mput._status >= 400) {
     await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
