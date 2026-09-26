@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.9-dissem';
+var VERSION = '0.7.10-linkcheck';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -471,6 +471,18 @@ var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
 // WS-A3 (2026-09-26): consume the orphaned dissemination_tracker queue. 19 papers sat at
 // action='queued'/channel='bluesky' since 2026-09-03 because nothing drained it (social_threads
 // only carries the q08 essay threads). Post each queued paper to Bluesky, then mark it posted.
+// LINK-RESOLUTION-GATE-1 (2026-09-26): never post a URL that does not resolve 200. A 301/302 is
+// NOT a resolvable destination for our links (the retired q08.org essays 301 to the qnfo.org
+// homepage) and a 404 is a filtered/unpublished paper (status quarantined/duplicate/kg-backfill).
+async function urlResolves(url) {
+  try {
+    const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-gate)" } });
+    return r.status === 200;
+  } catch (e) {
+    return false;
+  }
+}
+__name(urlResolves, "urlResolves");
 async function drainDissemination(env) {
   await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
   await env.DB.prepare("UPDATE dissemination_tracker SET action='queued', retry_count=COALESCE(retry_count,0)+1, updated_at=datetime('now') WHERE action='failed' AND COALESCE(retry_count,0) < 3 AND updated_at < datetime('now','-30 minutes')").run();
@@ -484,6 +496,11 @@ async function drainDissemination(env) {
     try {
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posting', updated_at=datetime('now') WHERE id=? AND action='queued'").bind(row.id).run();
       const link = row.pages_url || ("https://papers.qnfo.org/papers/" + String(row.paper_slug) + "/");
+      if (!(await urlResolves(link))) {
+        await env.DB.prepare("UPDATE dissemination_tracker SET action='link-dead', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind("LINK-RESOLUTION-GATE: does not resolve 200: " + link, row.id).run();
+        console.log("LINK_DEAD dissemination " + row.id + " " + link);
+        continue;
+      }
       const text = truncateSafe(String(row.paper_title || row.paper_slug) + " \u2014 " + link, 290);
       const s = await session(env);
       const r = await postText(s, text, { embed: { title: String(row.paper_title || 'QNFO'), desc: 'QNFO research \u2014 open access' } });
@@ -519,6 +536,11 @@ async function drainQueue(env) {
       const s = await session(env);
       let threadLink = null;
       for (const pt of posts) { const u = extractUrls(String(pt)); if (u.length) { threadLink = u[0]; break; } }
+      if (threadLink && !(await urlResolves(threadLink))) {
+        await env.DB.prepare("UPDATE social_threads SET status='link-dead', error=?, updated_at=datetime('now') WHERE id=?").bind("LINK-RESOLUTION-GATE: does not resolve 200: " + threadLink, row.id).run();
+        console.log("LINK_DEAD thread " + row.id + " " + threadLink);
+        continue;
+      }
       const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined });
       // Buffer (Mastodon/LinkedIn/X) posts plain text with no facet/embed support - the
       // link MUST be applied to the text itself here, mirroring what postThread() does
