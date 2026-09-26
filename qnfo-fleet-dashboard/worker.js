@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.18-impressions";
+var VERSION = "1.7.19-survival";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -594,6 +594,11 @@ async function liveSaiInputs(env) {
   try {
     const t = await d1all(env.AUDIT, "SELECT COUNT(*) c, SUM(CASE WHEN status IN ('healed','resolved') THEN 1 ELSE 0 END) h FROM self_heal_actions");
     if (t && t[0] && t[0].c > 0) out.healRate = Math.max(0, Math.min(1, Number(t[0].h || 0) / t[0].c));
+  } catch (e) {
+  }
+  try {
+    const ss = await d1all(env.AUDIT, "SELECT survival_score FROM survival_state WHERE id=1");
+    if (ss && ss[0] && typeof ss[0].survival_score === 'number') out.externalImpact = Math.max(0, Math.min(1, ss[0].survival_score));
   } catch (e) {
   }
   return out;
@@ -2303,12 +2308,13 @@ function computeSai(st, bench, cfg, live) {
   const integration = sysScore != null ? P.int_struct * structural + P.int_sys * clamp(sysScore / 100) : structural;
   const govPol = nd("s5_policy") != null ? nd("s5_policy") / 5 : P.gov_policy;
   const governance = P.gov_user * userFreedom + P.gov_pol_w * govPol;
-  const scores = { autonomy, thinking, decision, self_improv: selfImprov, reliability, integration, governance };
-  const weights = ["w_autonomy", "w_thinking", "w_decision", "w_self_improv", "w_reliability", "w_integration", "w_governance"];
+  const externalImpact = typeof LD.externalImpact === "number" ? Math.max(0, Math.min(1, LD.externalImpact)) : 0;
+  const scores = { autonomy, thinking, decision, self_improv: selfImprov, reliability, integration, external_impact: externalImpact, governance };
+  const weights = ["w_autonomy", "w_thinking", "w_decision", "w_self_improv", "w_reliability", "w_integration", "w_external_impact", "w_governance"];
   const missing = weights.filter(function(k) {
     return typeof P[k] !== "number";
   });
-  const sai = missing.length || scores.decision == null ? null : 100 * (P.w_autonomy * scores.autonomy + P.w_thinking * scores.thinking + P.w_decision * scores.decision + P.w_self_improv * scores.self_improv + P.w_reliability * scores.reliability + P.w_integration * scores.integration + P.w_governance * scores.governance);
+  const sai = missing.length || scores.decision == null ? null : 100 * (P.w_autonomy * scores.autonomy + P.w_thinking * scores.thinking + P.w_decision * scores.decision + P.w_self_improv * scores.self_improv + P.w_reliability * scores.reliability + P.w_integration * scores.integration + P.w_external_impact * scores.external_impact + P.w_governance * scores.governance);
   return { sai: sai == null ? null : Math.round(sai * 10) / 10, scores, weights_source: "sai_config", config_missing: missing, decision_source: decLive.length ? "autonomy_scores" : "unavailable", signals: { probe_ratio: probeRatio, chain_ratio: chainRatio, issues_err: nErr, issues_warn: nWarn, open_agent_issues: openIssues, user_wait: userWait, islands: islands.length, drift_bad: driftBad, density, no_run: noRun, closure_rate: closureRate, heal_rate: healRate } };
 }
 __name(computeSai, "computeSai");
@@ -2793,6 +2799,43 @@ async function redHtml(env) {
   const probeOk = probes.filter(function(p) {
     return p.ok;
   }).length;
+  // 9. SURVIVAL METERS (metric_registry + leading->lagging survival model; WS-SURVIVAL 2026-09-26)
+  let mr = [];
+  try {
+    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band FROM metric_registry ORDER BY kind DESC, layer, metric");
+  } catch (e) {
+  }
+  let subsTotal = null;
+  try {
+    const rs = await d1all(env.AUDIT, "SELECT SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
+    subsTotal = rs && rs.length ? Number(rs[0].s || 0) : null;
+  } catch (e) {
+  }
+  const wc = (st.fleet && st.fleet.workers) || null;
+  const c01 = function(x) { return Math.max(0, Math.min(1, x)); };
+  const gateRows = [
+    { m: "impressions_growth_30d", live: (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a"), head: growth != null ? c01(growth / 30) : null },
+    { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
+    { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
+    { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
+    { m: "workers_ai_cost_30d_usd", live: (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a"), head: aiN != null ? c01((1500000 - aiN) / 800000) : null },
+    { m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }
+  ];
+  const hs = gateRows.map(function(x) { return x.head; }).filter(function(x) { return typeof x === "number"; });
+  const surv = hs.length ? hs.reduce(function(a, b) { return a + b; }, 0) / hs.length : null;
+  H.push('<div class="panel"><h2>9 &middot; SURVIVAL METERS &mdash; registry + leading&rarr;lagging model</h2>');
+  H.push('<div class="sub">' + mr.length + ' registry metrics (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
+  H.push('<table><tr><th>kind</th><th>metric</th><th>layer</th><th>live</th><th>headroom</th><th>target</th><th>warn / kill</th><th>owner</th></tr>');
+  for (const gg of gateRows) {
+    const mm = mr.filter(function(x) { return x.metric === gg.m; })[0] || {};
+    H.push('<tr><td>' + esc(mm.kind || "") + '</td><td>' + esc(gg.m) + '</td><td class="sub">' + esc(mm.layer || "") + '</td><td>' + esc(gg.live) + '</td><td>' + (gg.head == null ? "?" : Math.round(gg.head * 100) + "%") + '</td><td class="sub">' + esc(String(mm.target || "").slice(0, 44)) + '</td><td class="sub">' + esc(String(mm.warning_band || "") + " / " + String(mm.kill_band || "")).slice(0, 40) + '</td><td class="sub">' + esc(mm.owner || "") + '</td></tr>');
+  }
+  H.push("</table>");
+  H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; feeds the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
+  try {
+    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, surv, JSON.stringify(gateRows), "mean gate progress (redHtml refresh)").run();
+  } catch (e) {
+  }
   H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
   H.push("</body></html>");
   return H.join("");
