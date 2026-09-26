@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.64";
+var VERSION = "2.36.65";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2887,7 +2887,7 @@ async function budgetFallback(env, messages, maxTokens, tools, opts) {
       let _msg = null;
       if (_r && Array.isArray(_r.choices) && _r.choices[0]) _msg = _r.choices[0].message;
       else { const _t = _r && (_r.response != null ? _r.response : _r.answer) || ""; if (_t) _msg = { role: "assistant", content: String(_t) }; }
-      if (_msg) { console.log("OPS_FREE_FALLBACK served by " + _free[_i]); return { resp: { choices: [{ index: 0, message: _msg, finish_reason: "stop" }], usage: _r && _r.usage || {} }, servedBy: _free[_i] + " (free-fallback)" }; }
+      if (_msg && (_msg.content || _msg.reasoning_content || (_msg.tool_calls && _msg.tool_calls.length))) { if (!_msg.content && _msg.reasoning_content && !(_msg.tool_calls && _msg.tool_calls.length)) _msg.content = String(_msg.reasoning_content); console.log("OPS_FREE_FALLBACK served by " + _free[_i]); return { resp: { choices: [{ index: 0, message: _msg, finish_reason: "stop" }], usage: _r && _r.usage || {} }, servedBy: _free[_i] + " (free-fallback)" }; }
     } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); }
   }
   return null;
@@ -5140,7 +5140,6 @@ var worker_default = {
         const ttl = new Date(Date.now() - 14 * 864e5).toISOString();
         await env.QNFO_AUDIT.prepare("UPDATE ops_jobs SET status='failed', error=COALESCE(error,'') || ' auto-fail: stuck queued >30m (' || ?1 || ')', updated_at=?1 WHERE status='queued' AND updated_at < ?2").bind(nowIso, grace).run();
         await env.QNFO_AUDIT.prepare("DELETE FROM ops_jobs WHERE status IN ('succeeded','failed','terminated') AND updated_at < ?1").bind(ttl).run();
-        await env.QNFO_AUDIT.prepare("DELETE FROM cloud_ops_events WHERE kind='ops_ai_tool' AND ts < ?1").bind(ttl).run();
       }
     } catch (eS) {
       console.log("ops_jobs sweep failed:", eS && eS.message || eS);
