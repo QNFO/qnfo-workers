@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.10-compat";
+var VERSION = "4.1.11-ui";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -2501,7 +2501,7 @@ var api_default = {
       return json({ ok: true, worker: "personal-api", version: VERSION });
     }
     if (path === "/" && request.method === "GET") {
-      return new Response(PLAYGROUND_HTML.replace("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "tokens/personal-api").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "your personal API key (Bearer)").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
     }
     if (path === "/v1/web/search" && request.method === "GET") {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
