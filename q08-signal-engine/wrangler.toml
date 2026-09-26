@@ -3,6 +3,17 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
+# Q08-ROUTE-1 (2026-09-26): q08.org/* and www.q08.org/* MUST be Workers routes to this
+# worker. They were documented in README since 2026-09-14 but never declared here, so the
+# hostnames kept resolving to the qnfo-hub Pages custom domain (audit_pages id=11,
+# status=active) and q08.org served the generic QNFO hub template with a catch-all 200.
+# Declaring them makes the next `wrangler deploy` install the routes. The qnfo-hub Pages
+# custom domains for these hostnames must be detached for the routes to take effect.
+routes = [
+  { pattern = "q08.org/*", zone_name = "q08.org" },
+  { pattern = "www.q08.org/*", zone_name = "q08.org" }
+]
+
 # Native Email Routing send binding — tokenless (no EMAIL_API_KEY needed).
 # Proven pattern from qnfo-outreach. q08.org Email Routing is enabled/ready.
 # NOTE: must be a TOP-LEVEL key (before any [table]) or TOML scopes it away.
