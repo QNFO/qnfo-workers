@@ -2898,26 +2898,27 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
 __name(callDeepSeekStream, "callDeepSeekStream");
 __name2(callDeepSeekStream, "callDeepSeekStream");
 function attachmentGuard(text) {
-  const m = String(text || "");
-  if (!/FILE_CONTENT\s*=/.test(m)) return "";
-  let size = 0, mm;
-  const re = /FILE_SIZE\s*=\s*(\d+)/g;
-  while ((mm = re.exec(m))) { if (Number(mm[1]) > size) size = Number(mm[1]); }
-  if (size <= 0) return "";
-  const emptyContent = !/FILE_CONTENT\s*=\s*\S/.test(m);
-  return emptyContent ? "OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it." : "";
+  var m = String(text || '');
+  var ki = m.indexOf('FILE_CONTENT=');
+  if (ki < 0) return '';
+  var maxSize = 0, p = 0;
+  while ((p = m.indexOf('FILE_SIZE=', p)) >= 0) { p += 10; var j = p; while (j < m.length && m.charAt(j) >= '0' && m.charAt(j) <= '9') j++; var n = Number(m.slice(p, j)); if (n > maxSize) maxSize = n; }
+  if (maxSize <= 0) return '';
+  var ws = String.fromCharCode(32, 9, 13, 10);
+  var q = ki + 13;
+  while (q < m.length && ws.indexOf(m.charAt(q)) >= 0) q++;
+  var emptyContent = (q >= m.length) || (m.charAt(q) === ']');
+  if (!emptyContent) return '';
+  return 'OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it.';
 }
-__name(attachmentGuard, "attachmentGuard");
-
+__name(attachmentGuard, 'attachmentGuard');
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] && arr[i].role === "user") {
-      const _c = String(arr[i].content || "");
-      const _g = attachmentGuard(_c);
-      if (_g) { const _nc = _c + "
-
-[" + _g + "]"; arr[i].content = _nc; return _nc; }
+    if (arr[i] && arr[i].role === 'user') {
+      var _c = String(arr[i].content || '');
+      var _g = attachmentGuard(_c);
+      if (_g) { var _nl = String.fromCharCode(10); var _nc = _c + _nl + _nl + '[' + _g + ']'; arr[i].content = _nc; return _nc; }
       return _c;
     }
   }
@@ -3695,7 +3696,7 @@ async function registryRegister(env, body) {
   const canonBase = CANON_BASE[service] || body.base_url || null;
   await ensureSchema(env);
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=COALESCE(excluded.purpose, service_registry.purpose), capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, body.kind || "worker", body.version || null, canonBase, body.purpose || null, JSON.stringify(body.capabilities || []), JSON.stringify(body.routes || []), JSON.stringify(body.tools || []), JSON.stringify(body.models || []), JSON.stringify(body.deps || []), iso()).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, body.kind || "worker", body.version || null, canonBase, body.purpose || null, JSON.stringify(body.capabilities || []), JSON.stringify(body.routes || []), JSON.stringify(body.tools || []), JSON.stringify(body.models || []), JSON.stringify(body.deps || []), iso()).run();
     return { ok: true, registered: service, version: body.version || null, ts: iso() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : String(e) };
@@ -3800,7 +3801,7 @@ async function registryRefresh(env) {
   const now = iso();
   const upsert = /* @__PURE__ */ __name22222(async function(service, kind, fields) {
     try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=COALESCE(excluded.purpose, service_registry.purpose), capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=CASE WHEN excluded.deps IS NULL OR excluded.deps='[]' THEN service_registry.deps ELSE excluded.deps END, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=CASE WHEN excluded.deps IS NULL OR excluded.deps='[]' THEN service_registry.deps ELSE excluded.deps END, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
     } catch (e) {
     }
   }, "upsert");
