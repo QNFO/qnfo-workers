@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.72";
+var VERSION = "2.36.73";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -96,6 +96,7 @@ var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
 var MAX_TOOL_ITERS = 12;
+var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
@@ -4550,7 +4551,24 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
         upUsage.completion_tokens += Number(rU.usage.completion_tokens) || 0;
       }
     }, "addUsage");
+    const jobCostCapUsd = (function() {
+      const n = Number(env.OPS_JOB_COST_CAP_USD);
+      return Number.isFinite(n) && n > 0 ? n : OPS_JOB_COST_CAP_DEFAULT;
+    })();
+    const _jobCostSoFar = function() {
+      return costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0);
+    };
     for (let turn = 0; turn <= maxTurns; turn++) {
+      const _jobUsedCost = _jobCostSoFar();
+      if (_jobUsedCost >= jobCostCapUsd) {
+        final = { status: "failed", error: "JOB_BUDGET_EXCEEDED: accumulated $" + _jobUsedCost.toFixed(4) + " >= per-job cap $" + jobCostCapUsd + " after " + turn + " turn(s)", response: content };
+        break;
+      }
+      const _jobEstNext = costUsdCalc((upUsage && upUsage.prompt_tokens || 0) + estTokens(JSON.stringify(work)), Math.min(answerCap, 8192));
+      if (_jobUsedCost + _jobEstNext > jobCostCapUsd) {
+        final = { status: "failed", error: "JOB_BUDGET_EXCEEDED: projected $" + (_jobUsedCost + _jobEstNext).toFixed(4) + " would exceed per-job cap $" + jobCostCapUsd + " before turn " + turn, response: content };
+        break;
+      }
       const withTools = turn < maxTurns;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
       if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
@@ -4907,7 +4925,7 @@ var worker_default = {
         const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
         const wk = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
         const month = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
-        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1e3, ts: iso() });
+        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1e3, job_cost_cap_usd: Number(env.OPS_JOB_COST_CAP_USD) > 0 ? Number(env.OPS_JOB_COST_CAP_USD) : OPS_JOB_COST_CAP_DEFAULT, ts: iso() });
       } catch (e) {
         return json({ error: "cost query failed: " + (e && e.message || String(e)) }, 502);
       }
