@@ -1718,7 +1718,10 @@ async function budgetAudit(env, names) {
     if (out.over.length) {
       out.note = "BUDGET-OVER " + out.over.join("; ");
       try {
-        await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES ('node-budget','fleet-budget',?1,datetime('now'),'detected')").bind(out.note).run();
+        var recent = await env.AUDIT.prepare("SELECT COUNT(*) n FROM self_heal_actions WHERE kind='node-budget' AND ts > datetime('now','-30 minutes')").first();
+        if (!recent || Number(recent.n || 0) === 0) {
+          await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES ('node-budget','fleet-budget',?1,datetime('now'),'detected')").bind(out.note).run();
+        }
       } catch (e) {
       }
       try {
@@ -1730,6 +1733,10 @@ async function budgetAudit(env, names) {
     }
   } catch (e) {
     out.note = "budgetAudit error: " + String(e && e.message || e).slice(0, 120);
+    try {
+      await report(env, "BUDGET", "", "", "", "BUDGET-AUDIT-ERROR " + out.note);
+    } catch (e2) {
+    }
   }
   return out;
 }
