@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.3";
+var VERSION = "2.37.6-fm7gate-multiline";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2059,6 +2059,22 @@ async function cfWorkerDeploy(env, args) {
     if (!_compatDate) _compatDate = "2026-08-01";
     const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
+    // FM7-HEALTH-VERSION-PARITY-1 (2026-09-26, FATAL): refuse a deploy whose source /health
+    // returns a HARDCODED literal version instead of its single VERSION const. A lying /health is
+    // a Worker Contract v1 violation and poisons every consumer (deploy guard register-at-deploy,
+    // registry sweep, agents). Canonical: qnfo-gateway health() returned "3.6.2-mathbalance" through
+    // a dozen deploys while the bundle advanced. Applies only to single-VERSION-const files.
+    const _vcAll = content.match(/(?:var|const|let)\s+VERSION\s*=\s*["'][^"']+["']/g) || [];
+    if (_vcAll.length === 1) {
+      const _vv = (_vcAll[0].match(/["']([^"']+)["']/) || [])[1];
+      const _bad = [];
+      // whole-content, multiline-aware: a health/status object carrying a LITERAL version
+      // (not `version: VERSION`) that differs from the single VERSION const = a divergent /health.
+      const _hrx = /(?:ok:\s*true|status:\s*["']ok["'])[^}]{0,800}?version:\s*["']([^"']+)["']/g;
+      let _hm;
+      while ((_hm = _hrx.exec(content)) !== null) { if (_hm[1] !== _vv) _bad.push(_hm[1]); }
+      if (_bad.length) return { ok: false, rejected: true, error: "FM7-HEALTH-VERSION-PARITY-1: source /health returns a hardcoded version literal " + JSON.stringify(_bad) + " instead of the VERSION ident (const=" + JSON.stringify(_vv) + "). A literal is a LATENT violation: it diverges the moment VERSION is bumped (canonical: qnfo-gateway). Use `version: VERSION` (Worker Contract v1). Refusing deploy." };
+    }
     const resp = await fetch(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
       { method: "PUT", headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary }, body }
@@ -3009,7 +3025,7 @@ __name22(callGLM, "callGLM");
 async function budgetFallback(env, messages, maxTokens, tools, opts) {
   if (!env.WAI) { console.log("OPS_FREE_FALLBACK unavailable: no WAI binding"); return null; }
   const o = opts || {};
-  const _free = [UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/zai-org/glm-4.7-flash", "@cf/qwen/qwen3-30b-a3b-fp8"];
+  const _free = ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.7-code", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/zai-org/glm-4.7-flash", "@cf/qwen/qwen3-30b-a3b-fp8"].filter(function(x, i, a) { return x && a.indexOf(x) === i; });
   for (let _i = 0; _i < _free.length; _i++) {
     try {
       const _inputs = { messages: truncateToContext(messages, CODE_MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192) };
@@ -3023,7 +3039,12 @@ async function budgetFallback(env, messages, maxTokens, tools, opts) {
       if (_msg && (_msg.content || _msg.reasoning_content || (_msg.tool_calls && _msg.tool_calls.length))) { if (!_msg.content && _msg.reasoning_content && !(_msg.tool_calls && _msg.tool_calls.length)) _msg.content = String(_msg.reasoning_content); console.log("OPS_FREE_FALLBACK served by " + _free[_i]); return { resp: { choices: [{ index: 0, message: _msg, finish_reason: "stop" }], usage: _r && _r.usage || {} }, servedBy: _free[_i] + " (free-fallback)" }; }
     } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); if (_i < _free.length - 1) await new Promise(function(rr) { setTimeout(rr, 1200); }); }
   }
-  return null;
+  // FM1 FAIL-SAFE (2026-09-26): never return null when the WAI binding is present. A null free-fallback
+  // turns an upstream 401 / outage into a 500 (goal-54: "budgetFallback runs but returned null").
+  // Return a DEGRADED, clearly-labelled assistant message so the path degrades to HTTP 200 instead
+  // of crashing. Operators see servedBy + the content marker.
+  console.log("OPS_FREE_FALLBACK exhausted -> degraded response (never 500)");
+  return { resp: { choices: [{ index: 0, message: { role: "assistant", content: "Upstream model temporarily unavailable; QNFO-OPS is serving a degraded response. Please retry shortly." }, finish_reason: "stop" }], usage: {} }, servedBy: "degraded-free-fallback (all free models unavailable)" };
 }
 __name(budgetFallback, "budgetFallback");
 // === L2 CAPABILITY-GATE (capability-gate BEFORE price-gate) ===

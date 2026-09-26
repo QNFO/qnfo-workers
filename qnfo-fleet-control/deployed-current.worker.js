@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.26-cronSummary";
+var VERSION = "0.4.27-costimpact";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -2069,18 +2069,79 @@ var worker_default2 = {
     if (cron === "*/20 * * * *") return advisorMod.default.scheduled(event, env, ctx);
     if (cron === "0 3 * * *") {
       ctx.waitUntil(disposeRetired(env));
+      ctx.waitUntil(costImpactGuard(env).catch((e) => console.error("costImpactGuard error:", e && e.message || e)));
       return calibratorMod.default.scheduled(event, env, ctx);
     }
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
     return deployDefault.scheduled(event, env, ctx);
   }
 };
+async function costImpactGuard(env) {
+  try {
+    var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+    var token = env.CF_API_TOKEN;
+    var db = env.AUDIT_DB || env.AUDIT;
+    if (!token || !db) return { ok: false, error: "costImpactGuard: CF_API_TOKEN or AUDIT binding missing" };
+    await db.prepare("CREATE TABLE IF NOT EXISTS cost_impact_guard (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, cost_7d REAL, cost_prev_7d REAL, impact_7d REAL, impact_prev_7d REAL, top_model TEXT, top_share REAL, cpi REAL, impact_flat INTEGER, due_cents INTEGER, gateway_limit_before REAL, gateway_limit_after REAL, action TEXT)").run();
+    var wk = await db.prepare("SELECT SUM(cost_usd) c FROM llm_gateway_log WHERE ts > datetime('now','-7 days')").first();
+    var prev = await db.prepare("SELECT SUM(cost_usd) c FROM llm_gateway_log WHERE ts BETWEEN datetime('now','-14 days') AND datetime('now','-7 days')").first();
+    var cost7 = wk && wk.c ? Number(wk.c) : 0;
+    var costPrev = prev && prev.c ? Number(prev.c) : 0;
+    var top = await db.prepare("SELECT model, SUM(cost_usd) c FROM llm_gateway_log WHERE ts > datetime('now','-7 days') GROUP BY model ORDER BY c DESC LIMIT 1").first();
+    var topModel = top && top.model ? String(top.model) : "none";
+    var topCost = top && top.c ? Number(top.c) : 0;
+    var share = cost7 > 0 ? topCost / cost7 : 0;
+    var imp = await db.prepare("SELECT SUM(score) s FROM impact_scores WHERE updated_at > datetime('now','-7 days')").first().catch(function(){ return null; });
+    var impPrev = await db.prepare("SELECT SUM(score) s FROM impact_scores WHERE updated_at BETWEEN datetime('now','-14 days') AND datetime('now','-7 days')").first().catch(function(){ return null; });
+    var impact7 = imp && imp.s ? Number(imp.s) : 0;
+    var impactPrev = impPrev && impPrev.s ? Number(impPrev.s) : 0;
+    var impactFlat = impactPrev > 0 ? (impact7 - impactPrev) / impactPrev < 0.1 : impact7 <= 0;
+    var cpi = impact7 > 0 ? cost7 / impact7 : (cost7 > 0 ? Infinity : 0);
+    var gurl = "https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/gateways/default";
+    var gr = await fetch(gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
+    var gj = await gr.json().catch(function(){ return null; });
+    var gw = gj && gj.success ? gj.result : null;
+    var rules = gw && gw.spend_limits && gw.spend_limits.rules ? gw.spend_limits.rules : [];
+    var curLimit = rules.length && rules[0].limit != null ? Number(rules[0].limit) : null;
+    var CEILING = 200, FLOOR = 100;
+    var dueCents = null;
+    var pr2 = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/billing/invoice-preview", { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
+    var pj2 = await pr2.json().catch(function(){ return null; });
+    if (pj2 && pj2.success && pj2.result && pj2.result.amount_due != null) dueCents = Number(pj2.result.amount_due);
+    var divergence = cost7 > 0 && impactFlat && share >= 0.4;
+    var action = "none", newLimit = curLimit;
+    if (divergence && curLimit != null) {
+      var target = Math.max(FLOOR, Math.round((curLimit || CEILING) * 0.8));
+      if (dueCents == null || dueCents < target * 100) { newLimit = target; action = "tighten"; }
+      else { action = "tighten-deferred-headroom"; }
+    } else if (!divergence && curLimit != null && curLimit < CEILING) {
+      newLimit = Math.min(CEILING, Math.round(curLimit * 1.1)); action = "relax";
+    }
+    if ((action === "tighten" || action === "relax") && newLimit !== curLimit) {
+      var newRules = rules.map(function(r, i){ var n = Object.assign({}, r); if (i === 0) n.limit = newLimit; return n; });
+      var pr3 = await fetch(gurl, { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ spend_limits: { enabled: true, rules: newRules } }), signal: AbortSignal.timeout(8e3) });
+      var pj3 = await pr3.json().catch(function(){ return null; });
+      var applied = !!(pj3 && pj3.success);
+      var vr = await fetch(gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
+      var vj = await vr.json().catch(function(){ return null; });
+      var verified = !!(vj && vj.success && vj.result.spend_limits && vj.result.spend_limits.rules && Number(vj.result.spend_limits.rules[0].limit) === newLimit);
+      if (!applied || !verified) { action = action + "-failed"; newLimit = curLimit; }
+    }
+    await db.prepare("INSERT INTO cost_impact_guard (ts, cost_7d, cost_prev_7d, impact_7d, impact_prev_7d, top_model, top_share, cpi, impact_flat, due_cents, gateway_limit_before, gateway_limit_after, action) VALUES (datetime('now'),?,?,?,?,?,?,?,?,?,?,?,?)").bind(cost7, costPrev, impact7, impactPrev, topModel, share, cpi === Infinity ? -1 : cpi, impactFlat ? 1 : 0, dueCents == null ? -1 : dueCents, curLimit, newLimit, action).run();
+    return { ok: true, cost7: cost7, impact7: impact7, topModel: topModel, share: share, cpi: cpi === Infinity ? -1 : cpi, divergence: divergence, action: action, limitBefore: curLimit, limitAfter: newLimit };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(costImpactGuard, "costImpactGuard");
+
+
 async function disposeRetired(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
     var token = env.CF_API_TOKEN;
     if (!token) return;
-    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1 };
+    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1, "qnfo-goal-author": 1, "qnfo-cloud-ops": 1, "qnfo-outreach": 1, "qnfo-kaizen": 1, "qnfo-lifecycle": 1, "qnfo-intent-orchestrator": 1, "qnfo-backlog-exec": 1, "qnfo-research-exec": 1, "qnfo-paper-indexer": 1, "qnfo-infra": 1, "qnfo-fleet-dashboard": 1, "qnfo-paper-reviser": 1 };
     var q = await env.AUDIT_DB.prepare("SELECT id, item FROM reorg_work_queue WHERE state='OPEN' AND item LIKE 'delete-worker:%'").all();
     var targets = {};
     for (var i = 0; i < (q.results || []).length; i++) {
@@ -2089,6 +2150,11 @@ async function disposeRetired(env) {
     }
     for (var name in targets) {
       if (protectedNames[name]) continue;
+      var inv = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM worker_invocations WHERE worker_name = ? AND created_at > datetime('now','-1 day')").bind(name).first();
+      if (inv && inv.n > 0) {
+        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: OUTPUT-CONTRACT: producing worker (" + inv.n + " invocations/24h); delete blocked").run();
+        continue;
+      }
       var recent = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE ? AND ts > datetime('now','-1 day')").bind(name + "%").first();
       if (recent && recent.n > 0) continue;
       var res = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + name, { method: "DELETE", headers: { Authorization: "Bearer " + token } });

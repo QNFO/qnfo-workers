@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.13";
+var VERSION = "1.3.14-verifyadvance";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -70,16 +70,26 @@ async function ensureRegistry(env, fleet) {
 // value and refused valid redeploys with a false "version-mismatch".
 async function refreshRegistryVersion(env, w, explicitVer) {
   try {
-    var ver = explicitVer ? String(explicitVer) : "";
-    if (!ver) {
-      // Best-effort only. A Worker cannot reliably subrequest another account Worker's
-      // *.workers.dev /health (canonical: qnfo-ops /fleet.version is empty fleet-wide for the
-      // same reason), so the deployer-supplied version is the PRIMARY source.
+    // FM6 VERIFY-BEFORE-ADVANCE (2026-09-26): always read the LIVE /health first. The old form
+    // let explicitVer (the deployer's CLAIMED version) win unconditionally, so a FAILED deploy
+    // that still POSTed /ledger with to=<claim> advanced service_registry.version and wedged
+    // every later deploy (registry-as-truth, deploy-guard expected_version). Now the claim is
+    // recorded ONLY when the live worker agrees; a claim the live worker does not report is
+    // REFUSED (no registry write), so a failed deploy can never wedge the guard.
+    var liveVer = "";
+    try {
       var url = "https://" + w + ".q08.workers.dev/health";
       var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
       var r = await fetch(url, { signal: c.signal, headers: { accept: "application/json" } });
       clearTimeout(t);
-      if (r.ok) { var j = await r.json(); if (j && j.version) ver = String(j.version); }
+      if (r.ok) { var j = await r.json(); if (j && j.version) liveVer = String(j.version); }
+    } catch (e) {}
+    var ver = "";
+    if (explicitVer && String(explicitVer)) {
+      if (liveVer && liveVer !== String(explicitVer)) return null;
+      ver = String(explicitVer);
+    } else if (liveVer) {
+      ver = liveVer;
     }
     if (!ver) return null;
     await auditRun(env, "UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3", [ver, nowIso(), w]);
