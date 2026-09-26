@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.76";
+var VERSION = "2.36.77";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4703,7 +4703,7 @@ async function opsDeploy(env, args) {
         result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer };
         return Object.assign({ log }, result);
       }
-      const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0 });
+      const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0, service_worker: !!(args && args.service_worker) });
       log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null });
       if (!dep.ok) {
         result = { ok: false, error: dep.error, rejected: dep.rejected || false };
