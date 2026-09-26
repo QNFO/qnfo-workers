@@ -5140,6 +5140,7 @@ var worker_default = {
         const ttl = new Date(Date.now() - 14 * 864e5).toISOString();
         await env.QNFO_AUDIT.prepare("UPDATE ops_jobs SET status='failed', error=COALESCE(error,'') || ' auto-fail: stuck queued >30m (' || ?1 || ')', updated_at=?1 WHERE status='queued' AND updated_at < ?2").bind(nowIso, grace).run();
         await env.QNFO_AUDIT.prepare("DELETE FROM ops_jobs WHERE status IN ('succeeded','failed','terminated') AND updated_at < ?1").bind(ttl).run();
+        await env.QNFO_AUDIT.prepare("DELETE FROM cloud_ops_events WHERE kind='ops_ai_tool' AND ts < ?1").bind(ttl).run();
       }
     } catch (eS) {
       console.log("ops_jobs sweep failed:", eS && eS.message || eS);
