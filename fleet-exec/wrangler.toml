@@ -51,6 +51,3 @@ database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 binding = "PORTFOLIO"
 database_name = "portfolio-state"
 database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
-
-[triggers]
-crons = ["0 * * * *"]

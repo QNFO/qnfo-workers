@@ -20,6 +20,3 @@ binding = "QNFO_BUCKET"
 bucket_name = "qnfo"
 
 # Secrets (wrangler secret put): SYNC_TOKEN, TURNSTILE_SECRET
-
-[triggers]
-crons = ["0 6 * * *"]

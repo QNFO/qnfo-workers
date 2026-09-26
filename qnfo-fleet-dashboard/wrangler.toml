@@ -63,7 +63,19 @@ binding = "SVC_QNFO_RESEARCH_EXEC"
 service = "qnfo-research-exec"
 environment = "production"
 
+[[services]]
+binding = "SVC_QNFO_OBSERVABILITY"
+service = "qnfo-observability"
+environment = "production"
+[[services]]
+binding = "SVC_QNFO_SOCIAL"
+service = "qnfo-social"
+environment = "production"
 
+[[services]]
+binding = "SVC_QNFO_OUTREACH"
+service = "qnfo-outreach"
+environment = "production"
 
 [[kv_namespaces]]
 binding = "FLEET_CFG"

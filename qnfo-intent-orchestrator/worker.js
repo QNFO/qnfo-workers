@@ -2,10 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.6";
+var VERSION = "1.3.5";
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -22,12 +20,10 @@ function auth(token, env) {
   return d === 0;
 }
 __name(auth, "auth");
-__name2(auth, "auth");
 function clamp(s, n) {
   return String(s || "").slice(0, n);
 }
 __name(clamp, "clamp");
-__name2(clamp, "clamp");
 function classifyRules(desire) {
   const t = desire.toLowerCase();
   let type = "note", domain = "general", priority = "medium", due = null;
@@ -47,7 +43,6 @@ function classifyRules(desire) {
   return { type, domain, priority, due };
 }
 __name(classifyRules, "classifyRules");
-__name2(classifyRules, "classifyRules");
 function withTimeout(p, ms, label) {
   let timer;
   return Promise.race([p, new Promise(function(_, rej) {
@@ -57,7 +52,6 @@ function withTimeout(p, ms, label) {
   })]);
 }
 __name(withTimeout, "withTimeout");
-__name2(withTimeout, "withTimeout");
 async function recordClassify(env, model, ok, retry) {
   try {
     await env.D1.prepare("INSERT INTO intent_classify_stats (ts, model, ok, retry) VALUES (?1,?2,?3,?4)").bind((/* @__PURE__ */ new Date()).toISOString(), model, ok ? 1 : 0, retry ? 1 : 0).run();
@@ -65,7 +59,6 @@ async function recordClassify(env, model, ok, retry) {
   }
 }
 __name(recordClassify, "recordClassify");
-__name2(recordClassify, "recordClassify");
 async function pickClassifier(env) {
   try {
     const cutoff = new Date(Date.now() - 7 * 864e5).toISOString();
@@ -78,7 +71,6 @@ async function pickClassifier(env) {
   return "glm-5.2";
 }
 __name(pickClassifier, "pickClassifier");
-__name2(pickClassifier, "pickClassifier");
 async function classifyAI(env, desire) {
   const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only. Do not fabricate fields or values the desire does not state; when ambiguous, classify type:"unknown" rather than guessing. ADVERSARIAL-REASONING-1 (label uncertainty, never invent a classification the text does not support).';
   const first = await pickClassifier(env);
@@ -118,7 +110,6 @@ async function classifyAI(env, desire) {
   return null;
 }
 __name(classifyAI, "classifyAI");
-__name2(classifyAI, "classifyAI");
 async function storeNote(env, intent) {
   try {
     const text = intent.desire;
@@ -136,7 +127,6 @@ async function storeNote(env, intent) {
   }
 }
 __name(storeNote, "storeNote");
-__name2(storeNote, "storeNote");
 async function handleIntent(env, body, source, device) {
   const desire = clamp(body.desire, 4e3);
   if (!desire) return { error: "desire required" };
@@ -186,7 +176,6 @@ async function handleIntent(env, body, source, device) {
   return intent;
 }
 __name(handleIntent, "handleIntent");
-__name2(handleIntent, "handleIntent");
 async function promoteCalendar(env, intent) {
   try {
     if (!env.CAL_API) return;
@@ -210,7 +199,6 @@ async function promoteCalendar(env, intent) {
   }
 }
 __name(promoteCalendar, "promoteCalendar");
-__name2(promoteCalendar, "promoteCalendar");
 function digestLines(intents) {
   const out = [];
   const notes = intents.filter((i) => i.type === "note");
@@ -226,7 +214,6 @@ function digestLines(intents) {
   return out.join(NL);
 }
 __name(digestLines, "digestLines");
-__name2(digestLines, "digestLines");
 var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 async function sendDigest(env, subject, text) {
   const dom = String(env.DIGEST_TO || "").split("@")[1] || "";
@@ -245,7 +232,6 @@ async function sendDigest(env, subject, text) {
   return { status: r.status, success: !!j.success, result: j.result || j.errors || null };
 }
 __name(sendDigest, "sendDigest");
-__name2(sendDigest, "sendDigest");
 var NOISE_RE = [
   /^call (the )?[a-z_]+( tool)?(\s|$)/i,
   /(email_check|express_intent|intents_list|social_compose|search_research|search_papers tool)/i,
@@ -268,7 +254,6 @@ function isNoise(text) {
   });
 }
 __name(isNoise, "isNoise");
-__name2(isNoise, "isNoise");
 var schemaReady = null;
 function ensureSchema(env) {
   if (!schemaReady) {
@@ -293,7 +278,6 @@ function ensureSchema(env) {
   return schemaReady;
 }
 __name(ensureSchema, "ensureSchema");
-__name2(ensureSchema, "ensureSchema");
 async function triageAI(env, desire) {
   try {
     const r = await env.QNFO_AI.fetch(ROUTER + "/v1/chat/completions", {
@@ -313,7 +297,7 @@ async function triageAI(env, desire) {
     const m = content.match(/\{[\s\S]*\}/);
     if (!m) return null;
     const p = JSON.parse(m[0]);
-    const num = /* @__PURE__ */ __name2(function(x, lo, hi) {
+    const num = /* @__PURE__ */ __name(function(x, lo, hi) {
       return Math.max(lo, Math.min(hi, Math.round(Number(x) || 0)));
     }, "num");
     return {
@@ -330,12 +314,10 @@ async function triageAI(env, desire) {
   }
 }
 __name(triageAI, "triageAI");
-__name2(triageAI, "triageAI");
 function scoreOf(t) {
   return Math.round(0.35 * t.merit + 0.35 * t.impact + 0.15 * t.novelty + 0.15 * t.feasibility);
 }
 __name(scoreOf, "scoreOf");
-__name2(scoreOf, "scoreOf");
 async function storeIntentEmbed(env, row) {
   try {
     const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
@@ -351,7 +333,6 @@ async function storeIntentEmbed(env, row) {
   }
 }
 __name(storeIntentEmbed, "storeIntentEmbed");
-__name2(storeIntentEmbed, "storeIntentEmbed");
 async function findDuplicate(env, row) {
   try {
     const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(row.desire, 1e3)] });
@@ -365,7 +346,6 @@ async function findDuplicate(env, row) {
   return null;
 }
 __name(findDuplicate, "findDuplicate");
-__name2(findDuplicate, "findDuplicate");
 async function triageIntent(env, row) {
   const id = row.id;
   const lock = await env.D1.prepare("UPDATE intents SET status='triaging' WHERE id=? AND status='pending'").bind(id).run();
@@ -407,7 +387,6 @@ async function triageIntent(env, row) {
   }
 }
 __name(triageIntent, "triageIntent");
-__name2(triageIntent, "triageIntent");
 async function runBatchTriage(env) {
   await ensureSchema(env);
   const rows = await env.D1.prepare("SELECT * FROM intents WHERE status='pending' AND type='research' ORDER BY created_at DESC LIMIT 40").all();
@@ -426,7 +405,6 @@ async function runBatchTriage(env) {
   return { counts, results: out };
 }
 __name(runBatchTriage, "runBatchTriage");
-__name2(runBatchTriage, "runBatchTriage");
 function researchPrompt(c) {
   return [
     "QNFO research brief - autonomous pipeline task.",
@@ -446,7 +424,6 @@ function researchPrompt(c) {
   ].join("\n");
 }
 __name(researchPrompt, "researchPrompt");
-__name2(researchPrompt, "researchPrompt");
 async function dispatchCandidate(env, c) {
   if (!env.DISPATCH_TOKEN) return { dispatched: false, error: "DISPATCH_TOKEN not configured" };
   const r = await fetch(AGENT_ORCH + "/task", {
@@ -463,7 +440,6 @@ async function dispatchCandidate(env, c) {
   return { dispatched: true, candidate: c.id, question: c.question, agent_task_id: tid, poll: "/task/" + tid };
 }
 __name(dispatchCandidate, "dispatchCandidate");
-__name2(dispatchCandidate, "dispatchCandidate");
 async function syncDispatched(env) {
   const rows = await env.D1.prepare("SELECT * FROM research_candidates WHERE status='dispatched'").all();
   const out = [];
@@ -492,7 +468,6 @@ async function syncDispatched(env) {
   return out;
 }
 __name(syncDispatched, "syncDispatched");
-__name2(syncDispatched, "syncDispatched");
 async function autoDispatch(env) {
   const active = await env.D1.prepare("SELECT COUNT(*) AS n FROM research_candidates WHERE status='dispatched'").first();
   if (active && active.n > 0) return { dispatched: false, reason: "active-task-exists", active: active.n };
@@ -501,7 +476,6 @@ async function autoDispatch(env) {
   return dispatchCandidate(env, top);
 }
 __name(autoDispatch, "autoDispatch");
-__name2(autoDispatch, "autoDispatch");
 async function selfRegister(env) {
   const manifest = {
     service: "qnfo-intent-orchestrator",
@@ -513,7 +487,7 @@ async function selfRegister(env) {
     routes: ["/health", "/intent", "/intents", "/intents/stats", "/digest", "/digest/send", "/triage/run", "/triage/sync", "/triage/candidates", "/triage/stats", "/triage/dispatch", "/triage/candidate"],
     tools: [],
     models: [],
-    deps: ["ai:AI", "cron:2x", "d1:qnfo-audit", "service:calendar-api", "service:qnfo-agent-orchestrator", "service:qnfo-ai", "service:qnfo-ops", "vectorize:personal-life", "vectorize:qnfo-ai-log"]
+    deps: ["qnfo-ai (router, RT)", "D1 qnfo-audit", "personal-life-search", "calendar-api", "AI (embeddings)", "INTENT_TOKEN"]
   };
   const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
     method: "POST",
@@ -523,7 +497,6 @@ async function selfRegister(env) {
   return resp.ok;
 }
 __name(selfRegister, "selfRegister");
-__name2(selfRegister, "selfRegister");
 var worker_default = {
   async scheduled(event, env) {
     if (event.cron === "0 6 * * *") {

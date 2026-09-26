@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.7.1-adv1";
+var VERSION = "1.7.0";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1050,8 +1050,7 @@ __name22(extractLede, "extractLede");
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
   var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
-  var P_ADV1 = L("ADVERSARIAL-REASONING-1 (binding): DISAGREE-WITH-EVIDENCE - state disagreement plainly with counter-evidence when evidence contradicts the user/source/corpus; SEEK-DISCONFIRMATION - name and test the strongest argument against the current answer; EXPOSE-FAILURE-MODES - state at least one concrete failure mode per substantive response; LABEL-UNCERTAINTY - tie confidence to evidence, never inflate it, and say I do not know with a reason when required.");
-  var sys = [P_STYLE, P_ADV1, "", formContract, "", outRule].join(NL);
+  var sys = [P_STYLE, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular from the source material. Name the paper, the theorem, the number, or the place. A sentence that could have been written without the source material is a failed sentence.";
   var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1800 to 2400 words. This is a requirement, not a suggestion." : "Length: 1800 to 2400 words, in 3 to 5 movements. This is a requirement, not a suggestion.");
   var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : ""].join(NL);

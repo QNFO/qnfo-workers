@@ -13,4 +13,4 @@ binding = "FLEET_CONFIG"
 id = "d3768b93a76640be83151b00a8b42717"
 
 [triggers]
-crons = ["*/20 * * * *"]
+crons = ["*/10 * * * *"]

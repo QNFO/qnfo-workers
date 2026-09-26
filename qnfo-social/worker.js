@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.9-dissem';
+var VERSION = '0.7.5';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -468,34 +468,6 @@ var DRAIN_DAILY_CAP = 30;   // hard ceiling on posts per UTC day
 var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
 
 // Drain the share queue oldest-first under a daily ceiling.
-// WS-A3 (2026-09-26): consume the orphaned dissemination_tracker queue. 19 papers sat at
-// action='queued'/channel='bluesky' since 2026-09-03 because nothing drained it (social_threads
-// only carries the q08 essay threads). Post each queued paper to Bluesky, then mark it posted.
-async function drainDissemination(env) {
-  await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
-  await env.DB.prepare("UPDATE dissemination_tracker SET action='queued', retry_count=COALESCE(retry_count,0)+1, updated_at=datetime('now') WHERE action='failed' AND COALESCE(retry_count,0) < 3 AND updated_at < datetime('now','-30 minutes')").run();
-  const cap = await env.DB.prepare("SELECT COUNT(*) n FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','start of day')").first();
-  const postedToday = (cap && cap.n) || 0;
-  if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
-  let posted = 0, failed = 0;
-  for (let i = 0; i < DRAIN_PER_RUN; i++) {
-    const row = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 1").first();
-    if (!row) break;
-    try {
-      await env.DB.prepare("UPDATE dissemination_tracker SET action='posting', updated_at=datetime('now') WHERE id=? AND action='queued'").bind(row.id).run();
-      const link = row.pages_url || ("https://papers.qnfo.org/papers/" + String(row.paper_slug) + "/");
-      const text = truncateSafe(String(row.paper_title || row.paper_slug) + " \u2014 " + link, 290);
-      const s = await session(env);
-      const r = await postText(s, text, { embed: { title: String(row.paper_title || 'QNFO'), desc: 'QNFO research \u2014 open access' } });
-      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, updated_at=datetime('now') WHERE id=?").bind(r.uri, r.uri, row.id).run();
-      posted++;
-    } catch (e) {
-      failed++;
-      await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(String(e).slice(0, 180), row.id).run();
-    }
-  }
-  return { posted, failed };
-}
 async function drainQueue(env) {
   await env.DB.prepare(
     "UPDATE social_threads SET status = CASE WHEN retry_count < ? THEN 'queued' ELSE 'failed' END, retry_count = retry_count + 1 WHERE status = 'posting'"
@@ -547,7 +519,6 @@ export default {
     if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
     await recheckDrafts(env);
     await drainQueue(env);
-    await drainDissemination(env);
   },
 
   async fetch(request, env) {
@@ -558,10 +529,6 @@ export default {
     if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     if (!auth(request, env)) return new Response('unauthorized', { status: 401, headers: cors });
     try {
-      if (p === '/drain-dissemination') {
-        const r = await drainDissemination(env);
-        return new Response(JSON.stringify({ ok: true, ...r }), { headers: { 'Content-Type': 'application/json', ...cors } });
-      }
       if (p === '/post' && m === 'POST') {
         const b = await request.json();
         const s = await session(env);

@@ -57,6 +57,12 @@ export default {
       receivedAt: receivedAt, inReplyTo: inReplyTo, refsHdr: refsHdr
     });
     try {
+      var __evRaw = rawText || "";
+      var __subj = String(subject || "").toLowerCase();
+      var __isEv = __evRaw.indexOf("BEGIN:VCALENDAR") >= 0 || __evRaw.indexOf("text/calendar") >= 0 || /invitation|appointment|confirmation|booking|reservation|check-in|itinerary|flight|reminder:/.test(__subj);
+      if (__isEv && env.EVENTS) {
+        ctx.waitUntil(env.EVENTS.fetch("https://qnfo-events/ingest", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (env.INGEST_TOKEN || "") }, body: JSON.stringify({ messageId: messageId, from: from, to: to, subject: subject, raw: __evRaw.slice(0, 60000), body: (bodyText || "").slice(0, 4000) }) }).catch(function (e) { console.error("events forward", e && e.message || e); }));
+      }
     } catch (e) { console.error("events hook", e && e.message || e); }
     await sendNotification(env, { messageId: messageId, emailId: emailId, from: from, to: to, subject: subject, classification: classification, preview: truncate(bodyText, PREVIEW_LENGTH), bodySize: rawSize, receivedAt: receivedAt });
     if (filterResult.action === "auto_reply" && filterResult.replyTemplate) {

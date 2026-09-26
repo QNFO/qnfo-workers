@@ -2,11 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var advisorMod = (function() {
   var __defProp3 = Object.defineProperty;
-  var __name3 = /* @__PURE__ */ __name2((target, value) => __defProp3(target, "name", { value, configurable: true }), "__name");
+  var __name3 = /* @__PURE__ */ __name((target, value) => __defProp3(target, "name", { value, configurable: true }), "__name");
   var VERSION2 = "0.3.3";
   var WORKER = "qnfo-fleet-advisor";
   var nowIso = /* @__PURE__ */ __name3(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
@@ -21,9 +19,10 @@ var advisorMod = (function() {
     }
   }
   __name(workerNameSet, "workerNameSet");
-  __name2(workerNameSet, "workerNameSet");
   async function probeHealth(name, names) {
     if (names && names.size) {
+      // FLEET-PROBE-COVERAGE-1 (2026-09-17): cf-api-list proves EXISTENCE only, not liveness.
+      // Mark it existence_only so runAudit never reports an existence check as "up" (healthy).
       if (names.has(name)) return { ok: true, via: "cf-api-list", version: null, existence_only: true };
       return { ok: false, detail: "not-in-cf-worker-list" };
     }
@@ -52,7 +51,6 @@ var advisorMod = (function() {
     return { ok: false, detail: tried.join(" ") };
   }
   __name(probeHealth, "probeHealth");
-  __name2(probeHealth, "probeHealth");
   __name3(probeHealth, "probeHealth");
   async function d1All(env, sql, params) {
     const st = env.AUDIT_DB.prepare(sql);
@@ -60,14 +58,12 @@ var advisorMod = (function() {
     return x && x.results ? x.results : [];
   }
   __name(d1All, "d1All");
-  __name2(d1All, "d1All");
   __name3(d1All, "d1All");
   async function d1Run(env, sql, params) {
     const st = env.AUDIT_DB.prepare(sql);
     return await (params ? st.bind(...params).run() : st.run());
   }
   __name(d1Run, "d1Run");
-  __name2(d1Run, "d1Run");
   __name3(d1Run, "d1Run");
   async function gatewayConfigAudit(env) {
     if (!env.CF_API_TOKEN) return { skipped: true, reason: "CF_API_TOKEN secret not set" };
@@ -88,7 +84,6 @@ var advisorMod = (function() {
     }
   }
   __name(gatewayConfigAudit, "gatewayConfigAudit");
-  __name2(gatewayConfigAudit, "gatewayConfigAudit");
   __name3(gatewayConfigAudit, "gatewayConfigAudit");
   async function spendGuardAudit(env) {
     if (!env.CF_API_TOKEN) return { skipped: true, reason: "no CF_API_TOKEN" };
@@ -105,7 +100,6 @@ var advisorMod = (function() {
     }
   }
   __name(spendGuardAudit, "spendGuardAudit");
-  __name2(spendGuardAudit, "spendGuardAudit");
   __name3(spendGuardAudit, "spendGuardAudit");
   var MAX_ADVISOR_ITERS = 3;
   async function collectFeedback(env) {
@@ -131,7 +125,6 @@ var advisorMod = (function() {
     return fb;
   }
   __name(collectFeedback, "collectFeedback");
-  __name2(collectFeedback, "collectFeedback");
   __name3(collectFeedback, "collectFeedback");
   async function runAudit(env) {
     const ts = nowIso();
@@ -167,6 +160,9 @@ var advisorMod = (function() {
       if (n > 8) {
         findings.push({ kind: "backlog", severity: "low", title: "OPEN-ISSUES-BACKLOG", detail: n + " open agent_issues (excluding advisor OPEN-ISSUES tickets)" });
       } else {
+        // FM-4 FLAP-GUARD (2026-09-17): close the backlog ticket ONLY when the condition cleared.
+        // The prior code closed it unconditionally every run, defeating the title-dedup in the
+        // filing loop and re-filing a fresh OPEN-ISSUES-BACKLOG ticket every ~20 min (churn).
         await d1Run(env, "UPDATE agent_issues SET status='closed', updated_at=? WHERE status='open' AND source=? AND category='backlog' AND title LIKE 'OPEN-ISSUES %'", [ts, WORKER]);
       }
     } catch (e) {
@@ -222,8 +218,13 @@ var advisorMod = (function() {
     let filed = 0;
     for (const f of findings) {
       try {
+        // ADVISOR-FILES-NOT-FIXES-1 (dedupe): model-health and gateway-config findings carry a
+        // volatile model/drift list in their title, so exact-title dedupe NEVER matched and the
+        // advisor re-filed a fresh ticket every ~20 min. Dedupe those kinds by stable PREFIX.
         const prefixDedupe = f.kind === "model-health" ? "MODEL-DEGRADED %" : f.kind === "gateway-config" ? "GATEWAY-DRIFT %" : null;
-        const existing = prefixDedupe ? await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title LIKE ?", [prefixDedupe]) : await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title = ?", [f.title]);
+        const existing = prefixDedupe
+          ? await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title LIKE ?", [prefixDedupe])
+          : await d1All(env, "SELECT id FROM agent_issues WHERE status='open' AND title = ?", [f.title]);
         if (existing && existing.length) {
           await d1Run(env, "UPDATE agent_issues SET description=?, updated_at=? WHERE id=?", ["[advisor] " + f.detail.slice(0, 600), ts, existing[0].id]);
           continue;
@@ -249,14 +250,10 @@ var advisorMod = (function() {
     return { ok: true, worker: WORKER, version: VERSION2, ts, probed: PROBES.length, up: PROBES.length - down.length - existenceOnly.length, down: down.length, existence_only: existenceOnly.length, findings: findings.length, filed, suggestion: suggestion ? suggestion.slice(0, 400) : null };
   }
   __name(runAudit, "runAudit");
-  __name2(runAudit, "runAudit");
   __name3(runAudit, "runAudit");
   var FleetAdvisor2 = class {
     static {
-      __name(this, "FleetAdvisor2");
-    }
-    static {
-      __name2(this, "FleetAdvisor");
+      __name(this, "FleetAdvisor");
     }
     static {
       __name3(this, "FleetAdvisor");
@@ -297,7 +294,7 @@ var advisorMod = (function() {
 })();
 var calibratorMod = (function() {
   var __defProp3 = Object.defineProperty;
-  var __name3 = /* @__PURE__ */ __name2((target, value) => __defProp3(target, "name", { value, configurable: true }), "__name");
+  var __name3 = /* @__PURE__ */ __name((target, value) => __defProp3(target, "name", { value, configurable: true }), "__name");
   var VERSION2 = "1.0.0";
   var WORKER = "qnfo-fleet-calibrator";
   var DAY_MS = 864e5;
@@ -310,7 +307,6 @@ var calibratorMod = (function() {
     return (/* @__PURE__ */ new Date()).toISOString();
   }
   __name(nowIso, "nowIso");
-  __name2(nowIso, "nowIso");
   __name3(nowIso, "nowIso");
   function uid() {
     try {
@@ -320,7 +316,6 @@ var calibratorMod = (function() {
     }
   }
   __name(uid, "uid");
-  __name2(uid, "uid");
   __name3(uid, "uid");
   function jp(s, fb) {
     if (s === null || s === void 0) return fb;
@@ -331,13 +326,11 @@ var calibratorMod = (function() {
     }
   }
   __name(jp, "jp");
-  __name2(jp, "jp");
   __name3(jp, "jp");
   function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
   }
   __name(clamp, "clamp");
-  __name2(clamp, "clamp");
   __name3(clamp, "clamp");
   function sjs(v) {
     try {
@@ -347,7 +340,6 @@ var calibratorMod = (function() {
     }
   }
   __name(sjs, "sjs");
-  __name2(sjs, "sjs");
   __name3(sjs, "sjs");
   function safeEqual(a, b) {
     if (!a || !b || a.length !== b.length) return false;
@@ -356,7 +348,6 @@ var calibratorMod = (function() {
     return d === 0;
   }
   __name(safeEqual, "safeEqual");
-  __name2(safeEqual, "safeEqual");
   __name3(safeEqual, "safeEqual");
   var PROBES = [
     { id: "qnfo-ai-health", kind: "http", url: "https://qnfo-ai.q08.workers.dev/health", binding: "SVC_QNFO_AI", expect: 200 },
@@ -401,7 +392,6 @@ var calibratorMod = (function() {
     }
   }
   __name(ensureSchema, "ensureSchema");
-  __name2(ensureSchema, "ensureSchema");
   __name3(ensureSchema, "ensureSchema");
   async function stateGet2(env, k) {
     try {
@@ -411,14 +401,12 @@ var calibratorMod = (function() {
       return null;
     }
   }
-  __name(stateGet2, "stateGet2");
-  __name2(stateGet2, "stateGet");
+  __name(stateGet2, "stateGet");
   __name3(stateGet2, "stateGet");
   async function stateSet2(env, k, v) {
     await env.DB_AUDIT.prepare("INSERT INTO fleet_cal_state (k,v,updated_at) VALUES (?1,?2,?3) ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at").bind(k, v, nowIso()).run();
   }
-  __name(stateSet2, "stateSet2");
-  __name2(stateSet2, "stateSet");
+  __name(stateSet2, "stateSet");
   __name3(stateSet2, "stateSet");
   async function learn(env, runId, topic, insight) {
     try {
@@ -427,7 +415,6 @@ var calibratorMod = (function() {
     }
   }
   __name(learn, "learn");
-  __name2(learn, "learn");
   __name3(learn, "learn");
   async function act(env, runId, at, target, reason, before, after) {
     try {
@@ -438,13 +425,11 @@ var calibratorMod = (function() {
     }
   }
   __name(act, "act");
-  __name2(act, "act");
   __name3(act, "act");
   function ua() {
     return { "User-Agent": "qnfo-fleet-calibrator/" + VERSION2 + " (self-calibration)" };
   }
   __name(ua, "ua");
-  __name2(ua, "ua");
   __name3(ua, "ua");
   async function fetcher(url, method, headers, body, ms) {
     const ac = new AbortController();
@@ -462,7 +447,6 @@ var calibratorMod = (function() {
     }
   }
   __name(fetcher, "fetcher");
-  __name2(fetcher, "fetcher");
   __name3(fetcher, "fetcher");
   async function svcFetch(env, p, method, headers, body, ms) {
     const svc = p.binding ? env[p.binding] : null;
@@ -486,7 +470,6 @@ var calibratorMod = (function() {
     }
   }
   __name(svcFetch, "svcFetch");
-  __name2(svcFetch, "svcFetch");
   __name3(svcFetch, "svcFetch");
   async function probeHttp(env, p) {
     const r = await svcFetch(env, p, "GET", ua(), null, PROBE_MS);
@@ -503,7 +486,6 @@ var calibratorMod = (function() {
     return rows;
   }
   __name(probeHttp, "probeHttp");
-  __name2(probeHttp, "probeHttp");
   __name3(probeHttp, "probeHttp");
   async function probeD1(env) {
     const t0 = Date.now();
@@ -521,7 +503,6 @@ var calibratorMod = (function() {
     }
   }
   __name(probeD1, "probeD1");
-  __name2(probeD1, "probeD1");
   __name3(probeD1, "probeD1");
   async function probeR2(env) {
     const key = "calibration/selfcheck-" + nowIso().slice(0, 10) + ".json";
@@ -545,7 +526,6 @@ var calibratorMod = (function() {
     }
   }
   __name(probeR2, "probeR2");
-  __name2(probeR2, "probeR2");
   __name3(probeR2, "probeR2");
   async function probeVec(env) {
     const t0 = Date.now();
@@ -570,7 +550,6 @@ var calibratorMod = (function() {
     }
   }
   __name(probeVec, "probeVec");
-  __name2(probeVec, "probeVec");
   __name3(probeVec, "probeVec");
   async function probeBurst(env) {
     const results = [];
@@ -604,7 +583,6 @@ var calibratorMod = (function() {
     ];
   }
   __name(probeBurst, "probeBurst");
-  __name2(probeBurst, "probeBurst");
   __name3(probeBurst, "probeBurst");
   async function probeBattery(env) {
     const rows = [];
@@ -623,13 +601,11 @@ var calibratorMod = (function() {
     return rows;
   }
   __name(probeBattery, "probeBattery");
-  __name2(probeBattery, "probeBattery");
   __name3(probeBattery, "probeBattery");
   function baselineKey(metric) {
     return metric === "latency_ms" || metric === "p95_ms" || metric === "p99_ms";
   }
   __name(baselineKey, "baselineKey");
-  __name2(baselineKey, "baselineKey");
   __name3(baselineKey, "baselineKey");
   async function updateBaselines(env, runId, metrics) {
     const tuned = [];
@@ -669,7 +645,6 @@ var calibratorMod = (function() {
     return tuned.length;
   }
   __name(updateBaselines, "updateBaselines");
-  __name2(updateBaselines, "updateBaselines");
   __name3(updateBaselines, "updateBaselines");
   async function detectAnomalies(env, runId, metrics) {
     const found = [];
@@ -723,7 +698,6 @@ var calibratorMod = (function() {
     return found.length;
   }
   __name(detectAnomalies, "detectAnomalies");
-  __name2(detectAnomalies, "detectAnomalies");
   __name3(detectAnomalies, "detectAnomalies");
   async function publishConfig(env, runId) {
     const rows = await env.DB_AUDIT.prepare("SELECT probe_id, metric, ema, p95, n FROM fleet_cal_baselines ORDER BY n DESC LIMIT 80").all();
@@ -762,7 +736,6 @@ var calibratorMod = (function() {
     return 0;
   }
   __name(publishConfig, "publishConfig");
-  __name2(publishConfig, "publishConfig");
   __name3(publishConfig, "publishConfig");
   async function tunePlanWeights(env, runId) {
     const since = new Date(Date.now() - 7 * DAY_MS).toISOString();
@@ -786,7 +759,6 @@ var calibratorMod = (function() {
     return 0;
   }
   __name(tunePlanWeights, "tunePlanWeights");
-  __name2(tunePlanWeights, "tunePlanWeights");
   __name3(tunePlanWeights, "tunePlanWeights");
   async function retentionCleanup(env, runId) {
     const cutM = new Date(Date.now() - RETENTION_METRICS_DAYS * DAY_MS).toISOString();
@@ -810,7 +782,6 @@ var calibratorMod = (function() {
     await act(env, runId, "retention-cleanup", "fleet_cal_* + R2 calibration/", "retention policy", null, meta);
   }
   __name(retentionCleanup, "retentionCleanup");
-  __name2(retentionCleanup, "retentionCleanup");
   __name3(retentionCleanup, "retentionCleanup");
   async function rollbackEngine(env, runId) {
     const acts = await env.DB_AUDIT.prepare("SELECT id, action_type, target, before_json, after_json FROM fleet_cal_actions WHERE verified=0 AND rolled_back=0 ORDER BY id ASC").all();
@@ -852,7 +823,6 @@ var calibratorMod = (function() {
     return { checked: res.length, reverted };
   }
   __name(rollbackEngine, "rollbackEngine");
-  __name2(rollbackEngine, "rollbackEngine");
   __name3(rollbackEngine, "rollbackEngine");
   async function selfAudit(env, runId, metrics, expectedProbes, startedAt) {
     const checks = [];
@@ -886,7 +856,6 @@ var calibratorMod = (function() {
     return { score, checks };
   }
   __name(selfAudit, "selfAudit");
-  __name2(selfAudit, "selfAudit");
   __name3(selfAudit, "selfAudit");
   async function runCalibration(env, type, trigger, simulate) {
     await ensureSchema(env);
@@ -969,7 +938,6 @@ var calibratorMod = (function() {
     return { run_id: runId, type, status, metrics: metrics.length, anomalies, actions: actions + tuned, tuned, audit: audit2.score, roll };
   }
   __name(runCalibration, "runCalibration");
-  __name2(runCalibration, "runCalibration");
   __name3(runCalibration, "runCalibration");
   var worker_default3 = {
     async scheduled(controller, env, ctx) {
@@ -1030,20 +998,19 @@ var calibratorMod = (function() {
   };
   return { default: worker_default3 };
 })();
-var __defProp22 = Object.defineProperty;
-var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.26-cronSummary";
+var __defProp2 = Object.defineProperty;
+var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var VERSION = "0.4.17-advisordedupe";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
-var FRESH_MS = 3e5;
+var FRESH_MS = 3e5; // DEPLOY-CACHE-STALE-1: was 30min - a still-fresh R2 canonical cache silently reverted pushed fixes; 5min bounds deploy latency
 var NO_SELF = ["qnfo-fleet-deploy"];
 function json(d, s) {
   return new Response(JSON.stringify(d), { status: s || 200, headers: { "Content-Type": "application/json" } });
 }
 __name(json, "json");
 __name2(json, "json");
-__name22(json, "json");
 function versionOf(code) {
   code = code || "";
   var cands = [];
@@ -1070,6 +1037,8 @@ function versionOf(code) {
     i = code.indexOf("VERSION", q + 1);
   }
   if (!cands.length) return null;
+  // Prefer semver-shaped values (d.d[.d][-suffix]); a fabric tag like
+  // "name/fabric-20260910" must never win over "1.8.0".
   for (var a = 0; a < cands.length; a++) {
     if (/^\d+\.\d+(\.\d+)?([-.][A-Za-z0-9.-]{0,24})?$/.test(cands[a]) && cands[a].indexOf("/") < 0) return cands[a];
   }
@@ -1077,7 +1046,6 @@ function versionOf(code) {
 }
 __name(versionOf, "versionOf");
 __name2(versionOf, "versionOf");
-__name22(versionOf, "versionOf");
 function newer(a, b) {
   a = String(a || "");
   b = String(b || "");
@@ -1093,7 +1061,6 @@ function newer(a, b) {
   }
   __name(num, "num");
   __name2(num, "num");
-  __name22(num, "num");
   var ap = num(a), bp = num(b);
   var len = Math.max(ap.length, bp.length);
   for (var i = 0; i < len; i++) {
@@ -1104,13 +1071,11 @@ function newer(a, b) {
 }
 __name(newer, "newer");
 __name2(newer, "newer");
-__name22(newer, "newer");
 function isModule(code) {
   return (code || "").indexOf("export default") >= 0 || (code || "").indexOf("export {") >= 0 || /^\s*import\s/.test(code || "");
 }
 __name(isModule, "isModule");
 __name2(isModule, "isModule");
-__name22(isModule, "isModule");
 async function timedFetch(url, opts, ms) {
   var ac = new AbortController();
   var t = setTimeout(function() {
@@ -1124,7 +1089,6 @@ async function timedFetch(url, opts, ms) {
 }
 __name(timedFetch, "timedFetch");
 __name2(timedFetch, "timedFetch");
-__name22(timedFetch, "timedFetch");
 async function sha256(str) {
   var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
   return Array.from(new Uint8Array(d)).map(function(b) {
@@ -1133,7 +1097,6 @@ async function sha256(str) {
 }
 __name(sha256, "sha256");
 __name2(sha256, "sha256");
-__name22(sha256, "sha256");
 async function stateGet(env, key, fb) {
   try {
     var r = await env.AUDIT.prepare("SELECT value FROM fleet_deploy_state WHERE key=?1").bind(key).first();
@@ -1144,7 +1107,6 @@ async function stateGet(env, key, fb) {
 }
 __name(stateGet, "stateGet");
 __name2(stateGet, "stateGet");
-__name22(stateGet, "stateGet");
 async function stateSet(env, key, value) {
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_deploy_state (key,value,updated_at) VALUES (?1,?2,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')").bind(key, String(value)).run();
@@ -1153,19 +1115,16 @@ async function stateSet(env, key, value) {
 }
 __name(stateSet, "stateSet");
 __name2(stateSet, "stateSet");
-__name22(stateSet, "stateSet");
 async function enabled(env) {
   return await stateGet(env, "enabled", "0") === "1";
 }
 __name(enabled, "enabled");
 __name2(enabled, "enabled");
-__name22(enabled, "enabled");
 async function autoHeal(env) {
   return await stateGet(env, "auto_heal", "0") === "1";
 }
 __name(autoHeal, "autoHeal");
 __name2(autoHeal, "autoHeal");
-__name22(autoHeal, "autoHeal");
 async function audit(env, w, actor, from, to, src2, ok, note) {
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7, datetime('now'))").bind(w, actor, from || "", to || "", src2 || "", ok ? 1 : 0, String(note || "").slice(0, 500)).run();
@@ -1174,7 +1133,6 @@ async function audit(env, w, actor, from, to, src2, ok, note) {
 }
 __name(audit, "audit");
 __name2(audit, "audit");
-__name22(audit, "audit");
 async function report(env, w, depV, canV, path, note) {
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_drift_report (worker, deployed_version, canonical_version, source_path, note, ts) VALUES (?1,?2,?3,?4,?5, datetime('now'))").bind(w, depV || "", canV || "", path || "", String(note || "").slice(0, 200)).run();
@@ -1183,7 +1141,6 @@ async function report(env, w, depV, canV, path, note) {
 }
 __name(report, "report");
 __name2(report, "report");
-__name22(report, "report");
 async function scanErr(env, w, reason, depV, canV, path) {
   try {
     var key = "scanerr:" + w;
@@ -1196,7 +1153,6 @@ async function scanErr(env, w, reason, depV, canV, path) {
 }
 __name(scanErr, "scanErr");
 __name2(scanErr, "scanErr");
-__name22(scanErr, "scanErr");
 async function clearScanErr(env, w) {
   try {
     if (await stateGet(env, "scanerr:" + w, "")) await stateSet(env, "scanerr:" + w, "");
@@ -1205,7 +1161,6 @@ async function clearScanErr(env, w) {
 }
 __name(clearScanErr, "clearScanErr");
 __name2(clearScanErr, "clearScanErr");
-__name22(clearScanErr, "clearScanErr");
 async function improvement(env, source, target, kind, title, detail, priority) {
   try {
     var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO fleet_improvements (source,target,kind,title,detail,priority,status) VALUES (?1,?2,?3,?4,?5,?6,'proposed')").bind(source, target, kind, title, String(detail || "").slice(0, 500), priority).run();
@@ -1217,169 +1172,6 @@ async function improvement(env, source, target, kind, title, detail, priority) {
 }
 __name(improvement, "improvement");
 __name2(improvement, "improvement");
-__name22(improvement, "improvement");
-async function optimizeFleet(env) {
-  var out = { checked: 0, depsUpdated: 0, verUpdated: 0, unchanged: 0, skipped: 0, errors: 0 };
-  var nowI = (/* @__PURE__ */ new Date()).toISOString();
-  var names;
-  try {
-    var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 2e4);
-    var lj = await lr.json();
-    names = (lj.result || []).map(function(x) {
-      return x.id;
-    });
-  } catch (e) {
-    out.error = String(e && e.message || e).slice(0, 120);
-    return out;
-  }
-  var prefixOf = /* @__PURE__ */ __name(function(entry) {
-    var s = String(entry);
-    var ci = s.indexOf(":");
-    return ci > 0 ? s.slice(0, ci).toLowerCase() : "";
-  }, "prefixOf");
-  var depNameOf = /* @__PURE__ */ __name(function(entry) {
-    var s = String(entry);
-    var ci = s.indexOf(":");
-    var tail = ci >= 0 ? s.slice(ci + 1) : s;
-    var m = String(tail).match(/[a-z0-9][a-z0-9._-]{2,}/i);
-    return (m ? m[0] : String(tail).slice(0, 40)).toLowerCase();
-  }, "depNameOf");
-  var parseToml = /* @__PURE__ */ __name(function(t) {
-    var toks = {};
-    var lines = String(t || "").split(/\r?\n/);
-    var section = "";
-    var grab = /* @__PURE__ */ __name(function(l2) {
-      var m = l2.match(/\s*=\s*"?([^"]*)"?/);
-      return m ? m[1].trim() : null;
-    }, "grab");
-    for (var i2 = 0; i2 < lines.length; i2++) {
-      var l = lines[i2].trim();
-      if (l.indexOf("[") === 0) {
-        section = l;
-        continue;
-      }
-      var s = section;
-      if (s === "[ai]" && l.indexOf("binding") === 0) toks["ai:" + grab(l.replace(/^binding/, ""))] = 1;
-      else if (s === "[browser]" && l.indexOf("binding") === 0) toks["browser:" + grab(l.replace(/^binding/, ""))] = 1;
-      else if (s === "[[send_email]]" && l.indexOf("binding") === 0) toks["send_email:" + grab(l.replace(/^binding/, ""))] = 1;
-      else if (s === "[[ai_search]]" && l.indexOf("binding") === 0) toks["ai_search:" + grab(l.replace(/^binding/, ""))] = 1;
-      else if (s === "[[artifacts]]" && l.indexOf("binding") === 0) toks["artifacts:" + grab(l.replace(/^binding/, ""))] = 1;
-      else if (s === "[[services]]" && l.indexOf("service") === 0) toks["service:" + grab(l.replace(/^service/, ""))] = 1;
-      else if (s === "[[d1_databases]]" && l.indexOf("database_name") === 0) toks["d1:" + grab(l.replace(/^database_name/, ""))] = 1;
-      else if (s === "[[r2_buckets]]" && l.indexOf("bucket_name") === 0) toks["r2:" + grab(l.replace(/^bucket_name/, ""))] = 1;
-      else if (s === "[[vectorize]]" && l.indexOf("index_name") === 0) toks["vectorize:" + grab(l.replace(/^index_name/, ""))] = 1;
-      else if (s === "[[kv_namespaces]]" && l.indexOf("binding") === 0) toks["kv:" + grab(l.replace(/^binding/, ""))] = 1;
-      else if (s === "[[durable_objects.bindings]]" && l.indexOf("class_name") === 0) toks["do:" + grab(l.replace(/^class_name/, ""))] = 1;
-      else if (s === "[[workflows]]" && l.indexOf("class_name") === 0) toks["workflow:" + grab(l.replace(/^class_name/, ""))] = 1;
-      else if (s.indexOf("queues") >= 0 && l.indexOf("queue_name") === 0) toks["queue:" + grab(l.replace(/^queue_name/, ""))] = 1;
-      else if (s === "[triggers]" && l.indexOf("crons") === 0) {
-        var cm = l.match(/crons\s*=\s*\[([^\]]*)\]/);
-        var n2 = 0;
-        if (cm) n2 = cm[1].split(",").filter(function(x) {
-          return x.trim().length > 0;
-        }).length;
-        if (n2 > 0) toks["cron:" + n2 + "x"] = 1;
-      }
-    }
-    return Object.keys(toks);
-  }, "parseToml");
-  for (var i = 0; i < names.length; i++) {
-    var n = names[i];
-    if (NO_SELF.indexOf(n) >= 0) continue;
-    out.checked++;
-    var cand = [n];
-    if (n.indexOf("qnfo-") === 0) cand.push(n.slice(5));
-    var toml = null;
-    for (var c = 0; c < cand.length && !toml; c++) {
-      try {
-        var rr = await timedFetch(GH + "qnfo-workers/main/" + cand[c] + "/wrangler.toml?cb=" + Math.floor(Date.now() / 3e5), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-optimizer)" } }, FETCH_TIMEOUT_MS);
-        if (rr.ok) {
-          var tt = await rr.text();
-          if (tt && tt.length > 0 && tt.slice(0, 4) !== "404:") toml = tt;
-        }
-      } catch (e) {
-      }
-    }
-    if (!toml) {
-      out.skipped++;
-      continue;
-    }
-    var bindingToks = parseToml(toml);
-    var bNames = {};
-    var hasCron = false;
-    for (var b = 0; b < bindingToks.length; b++) {
-      bNames[depNameOf(bindingToks[b])] = 1;
-      if (prefixOf(bindingToks[b]) === "cron") hasCron = true;
-    }
-    var row = null;
-    try {
-      row = await env.AUDIT.prepare("SELECT version, deps FROM service_registry WHERE service=?1 LIMIT 1").bind(n).first();
-    } catch (e) {
-    }
-    if (!row) continue;
-    var cur = [];
-    try {
-      cur = JSON.parse(row.deps || "[]");
-    } catch (e2) {
-      cur = String(row.deps || "").split(/[,;]/);
-    }
-    var kept = [];
-    for (var k = 0; k < cur.length; k++) {
-      var tok = String(cur[k]).trim();
-      if (!tok) continue;
-      if (bNames[depNameOf(tok)]) continue;
-      if (prefixOf(tok) === "cron" && hasCron) continue;
-      kept.push(tok);
-    }
-    var merged = kept.concat(bindingToks);
-    var seen = {};
-    var uniq = [];
-    for (var u = 0; u < merged.length; u++) {
-      var mm = merged[u];
-      if (!mm || seen[mm]) continue;
-      seen[mm] = 1;
-      uniq.push(mm);
-    }
-    uniq.sort();
-    var depsJson = JSON.stringify(uniq);
-    var curSorted = cur.slice().sort();
-    if (depsJson !== JSON.stringify(curSorted)) {
-      try {
-        await env.AUDIT.prepare("UPDATE service_registry SET deps=?1, updated_at=?2 WHERE service=?3").bind(depsJson, nowI, n).run();
-        out.depsUpdated++;
-      } catch (e) {
-        out.errors++;
-      }
-    } else out.unchanged++;
-    var rowV = row.version == null ? "" : String(row.version);
-    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(rowV)) {
-      try {
-        var hv = null;
-        var hr = await timedFetch("https://" + n + ".q08.workers.dev/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-optimizer)" } }, 8e3);
-        if (hr.ok) {
-          var hj = await hr.json();
-          if (hj && hj.version) hv = String(hj.version);
-        }
-        if (!hv) hv = await probeVersion(env, n);
-        if (hv && /^\d+\.\d+\.\d+/.test(hv) && hv !== rowV) {
-          await env.AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3").bind(hv, nowI, n).run();
-          out.verUpdated++;
-        }
-      } catch (e) {
-      }
-    }
-  }
-  var summary = "optimize: checked=" + out.checked + " depsUpdated=" + out.depsUpdated + " verUpdated=" + out.verUpdated + " unchanged=" + out.unchanged + " skipped=" + out.skipped + " errors=" + out.errors;
-  await report(env, "OPTIMIZE", "", "", "", summary);
-  if (out.depsUpdated > 0 || out.verUpdated > 0) {
-    try {
-      await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('fleet-optimizer','registry-edge-sweep',?1,?2,'verified',?2,?3,'high')").bind("automated: " + summary, nowI, "Automated binding-truth edge sweep + semver version normalization wrote " + (out.depsUpdated + out.verUpdated) + " service_registry updates this cycle; read-back verified by D1 write success (idempotent, convergent)").run();
-    } catch (e) {
-    }
-  }
-  return out;
-}
-__name(optimizeFleet, "optimizeFleet");
 async function selfdocAudit(env) {
   var out = { checked: 0, with_readme: 0, missing: 0, rows: [] };
   try {
@@ -1399,7 +1191,7 @@ async function selfdocAudit(env) {
         var dirs = ["qnfo-workers/main/" + cand[a], "qnfo-ops/main/cloud/" + cand[a]];
         for (var d = 0; d < dirs.length && !found; d++) {
           try {
-            var r = await timedFetch(GH + dirs[d] + "/README.md?cb=" + Math.floor(Date.now() / 3e5), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+            var r = await timedFetch(GH + dirs[d] + "/README.md?cb=" + Math.floor(Date.now() / 300000), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
             if (r.ok) {
               var t = await r.text();
               if (t && t.length > 0 && t.slice(0, 4) !== "404:") found = true;
@@ -1423,7 +1215,6 @@ async function selfdocAudit(env) {
 }
 __name(selfdocAudit, "selfdocAudit");
 __name2(selfdocAudit, "selfdocAudit");
-__name22(selfdocAudit, "selfdocAudit");
 async function r2Read(env, worker) {
   try {
     if (!env.CANONICAL) return null;
@@ -1440,7 +1231,6 @@ async function r2Read(env, worker) {
 }
 __name(r2Read, "r2Read");
 __name2(r2Read, "r2Read");
-__name22(r2Read, "r2Read");
 async function canonical(env, worker) {
   var r2 = await r2Read(env, worker);
   if (r2 && r2.fresh) return r2;
@@ -1455,7 +1245,7 @@ async function canonical(env, worker) {
   }
   for (var i = 0; i < cs.length; i++) {
     try {
-      var r = await timedFetch(GH + cs[i] + "?cb=" + Math.floor(Date.now() / 3e5), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
+      var r = await timedFetch(GH + cs[i] + "?cb=" + Math.floor(Date.now() / 300000), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
       if (r.ok) {
         var c = await r.text();
         if (c && c.length > 0 && c.slice(0, 4) !== "404:") {
@@ -1474,7 +1264,6 @@ async function canonical(env, worker) {
 }
 __name(canonical, "canonical");
 __name2(canonical, "canonical");
-__name22(canonical, "canonical");
 async function deployedContent(env, worker) {
   try {
     var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/content/v2", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
@@ -1486,7 +1275,6 @@ async function deployedContent(env, worker) {
 }
 __name(deployedContent, "deployedContent");
 __name2(deployedContent, "deployedContent");
-__name22(deployedContent, "deployedContent");
 async function probeVersion(env, worker) {
   try {
     var bodies = [];
@@ -1506,13 +1294,12 @@ async function probeVersion(env, worker) {
 }
 __name(probeVersion, "probeVersion");
 __name2(probeVersion, "probeVersion");
-__name22(probeVersion, "probeVersion");
 async function cooldown(env, worker) {
   try {
     var r = await env.AUDIT.prepare("SELECT ts FROM fleet_deploys WHERE worker=?1 AND ok=1 ORDER BY id DESC LIMIT 1").bind(worker).first();
     if (r && r.ts) {
       var age = Date.now() - (/* @__PURE__ */ new Date(String(r.ts).replace(" ", "T") + "Z")).getTime();
-      if (!isNaN(age) && age < 216e5) return true;
+      if (!isNaN(age) && age < 2.16e7) return true;
     }
   } catch (e) {
   }
@@ -1520,7 +1307,6 @@ async function cooldown(env, worker) {
 }
 __name(cooldown, "cooldown");
 __name2(cooldown, "cooldown");
-__name22(cooldown, "cooldown");
 async function redeploy(env, worker) {
   if (!/^[a-zA-Z0-9-]+$/.test(worker)) return { ok: false, status: 400, note: "invalid name" };
   if (NO_SELF.indexOf(worker) >= 0) return { ok: false, status: 400, note: "self-redeploy refused" };
@@ -1542,19 +1328,6 @@ async function redeploy(env, worker) {
   }
   var direction = newer(depV || "", canV) ? "downgrade" : "upgrade";
   var toSha = await sha256(c.code);
-  var lockTok = null;
-  try {
-    var lr2 = await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, owner: "qnfo-fleet-control/redeploy", ttl_sec: 120, expected_version: depV }) }, 8e3);
-    if (lr2 && lr2.status === 409) {
-      await audit(env, worker, "deploy", depV || "?", canV, c.path, false, "skipped: deploy lock held by another owner (REDEPLOY-CRON-LOCK-1)");
-      return { ok: false, status: 409, note: "deploy lock held by another owner - skipped", from: depV, to: canV };
-    }
-    var lj2 = lr2 ? await lr2.json().catch(function() {
-      return null;
-    }) : null;
-    lockTok = lj2 && lj2.token ? lj2.token : null;
-  } catch (e) {
-  }
   var r;
   if (isModule(c.code)) {
     var fd = new FormData();
@@ -1574,119 +1347,11 @@ async function redeploy(env, worker) {
   var depV2 = dep2 ? versionOf(dep2) : null;
   var ok = putOk && depV2 === canV;
   var note = !putOk ? "HTTP " + r.status + " " + JSON.stringify(j || {}).slice(0, 180) : ok ? "redeployed " + depV + " -> " + canV : "PUT-ok but deployed still " + (depV2 || "?") + " (wrangler-managed no-op?)";
-  if (lockTok) {
-    try {
-      await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lockTok }) }, 8e3);
-    } catch (e) {
-    }
-  }
-  try {
-    await timedFetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, actor: "qnfo-fleet-control/redeploy", from: depV || "?", to: canV, source_path: c.path, ok, note: String(note || "").slice(0, 280) }) }, 8e3);
-  } catch (e) {
-  }
   await audit(env, worker, "deploy", depV || "?", canV, c.path, ok, note);
   return { ok, status: ok ? 200 : 502, note, from: depV, to: canV, direction, source: c.path, bytes: c.code.length };
 }
 __name(redeploy, "redeploy");
 __name2(redeploy, "redeploy");
-__name22(redeploy, "redeploy");
-function tomlCrons(t) {
-  var LF = String.fromCharCode(10);
-  var body = t.split(LF).filter(function(l) {
-    return l.trim().charAt(0) !== "#";
-  }).join(LF);
-  var ti = body.indexOf("[triggers]");
-  if (ti < 0) return [];
-  var ci = body.indexOf("crons", ti);
-  if (ci < 0) return [];
-  var ob = body.indexOf("[", ci);
-  if (ob < 0) return [];
-  var cb = body.indexOf("]", ob);
-  if (cb < 0) return [];
-  return body.slice(ob + 1, cb).split(",").map(function(x) {
-    return x.trim().replace(/^["']|["']$/g, "");
-  }).filter(Boolean).sort();
-}
-__name(tomlCrons, "tomlCrons");
-async function declaredCrons(env, worker) {
-  var cands = [worker];
-  if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
-  for (var a = 0; a < cands.length; a++) {
-    try {
-      var r = await timedFetch(GH + "qnfo-workers/main/" + cands[a] + "/wrangler.toml?cb=" + Math.floor(Date.now() / FRESH_MS), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
-      if (!r.ok) continue;
-      var t = await r.text();
-      if (!t || t.slice(0, 4) === "404:") continue;
-      return tomlCrons(t);
-    } catch (e) {
-    }
-  }
-  return null;
-}
-__name(declaredCrons, "declaredCrons");
-async function liveCrons(env, worker) {
-  try {
-    var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + worker + "/schedules", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, FETCH_TIMEOUT_MS);
-    if (!r.ok) return null;
-    var j = await r.json();
-    return (j.result && j.result.schedules || []).map(function(x) {
-      return x.cron;
-    }).sort();
-  } catch (e) {
-    return null;
-  }
-}
-__name(liveCrons, "liveCrons");
-async function cronDrift(env, names, out) {
-  out.cronDrift = 0;
-  out.cronHealed = 0;
-  out.cronDetails = [];
-  if (!names || !names.length) return;
-  var targets = names.filter(function(n) {
-    return NO_SELF.indexOf(n) < 0;
-  });
-  var results = [];
-  var CONC = 8;
-  for (var bi = 0; bi < targets.length; bi += CONC) {
-    var batch = targets.slice(bi, bi + CONC);
-    var rs = await Promise.all(batch.map(function(n) {
-      return (async function() {
-        try {
-          var decl = await declaredCrons(env, n);
-          if (decl === null) return null;
-          var live = await liveCrons(env, n);
-          if (live === null) return null;
-          return { n, decl, live };
-        } catch (e) {
-          return null;
-        }
-      })();
-    }));
-    for (var ri = 0; ri < rs.length; ri++) results.push(rs[ri]);
-  }
-  for (var i = 0; i < results.length; i++) {
-    var r = results[i];
-    if (!r) continue;
-    var ds = r.decl.join("|"), ls = r.live.join("|");
-    if (ds === ls) continue;
-    out.cronDrift++;
-    if (out.cronDetails.length < 60) out.cronDetails.push(r.n + ":decl[" + ds + "] live[" + ls + "]");
-    await report(env, r.n, ls, ds, "wrangler.toml[triggers].crons", "cron-drift declared=" + ds + " live=" + ls);
-    if (r.decl.length > 0 && r.live.length === 0) {
-      try {
-        var put = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts/" + r.n + "/schedules", { method: "PUT", headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(r.decl.map(function(c) {
-          return { cron: c };
-        })) }, FETCH_TIMEOUT_MS);
-        if (put.ok) {
-          out.cronHealed++;
-          await audit(env, r.n, "cron-heal", ls, ds, "wrangler.toml[triggers].crons", true, "restored " + r.decl.length + " cron trigger(s)");
-        }
-      } catch (e) {
-      }
-    }
-  }
-}
-__name(cronDrift, "cronDrift");
 async function scan(env, heal) {
   var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
@@ -1793,15 +1458,20 @@ async function scan(env, heal) {
   } catch (e) {
     out.contentSignalError = String(e && e.message || e).slice(0, 120);
   }
-  try {
-    await cronDrift(env, names, out);
-  } catch (e) {
-  }
   return out;
 }
 __name(scan, "scan");
 __name2(scan, "scan");
-__name22(scan, "scan");
+// Self-referential detect step: read the fleet's own published analysis (signals
+// source=q08|reading) and file any failure mode that is currently ACTIVE in the
+// fleet (matches_failure_mode=1) and not yet resolved. Files a fleet_improvements
+// row (scan's canonical track-and-resolve mechanism) + a self_heal_actions row.
+// This closes the loop: content published -> signal emitted -> scan detects ->
+// self_heal_action created -> repair -> re-observe.
+// Fresh-probe map: domain -> cheap SQL probe against qnfo-audit. activeWhen=gt0
+// means the failure mode is active when the count is >0 (drift present); zero means
+// active when the count is 0 (liveness failure). Domains absent from the map keep
+// the snapshot observation.
 var SIGNAL_PROBES = {
   registry: { sql: "SELECT COUNT(*) n FROM service_registry WHERE state='live' AND (updated_at IS NULL OR updated_at < datetime('now','-2 days'))", activeWhen: "gt0" },
   versioning: { sql: "SELECT COUNT(*) n FROM fleet_drift_report WHERE worker != 'SCAN' AND ts >= datetime('now','-6 hours') AND note IN ('deployed-ahead','canonical-ahead')", activeWhen: "gt0" },
@@ -1817,23 +1487,23 @@ async function contentSignalAudit(env) {
     var rows = await env.AUDIT.prepare(
       "SELECT s.id, s.source, s.content, s.domain, s.evidential_weight, s.decision, fso.matches_failure_mode, fso.action_taken FROM signals s LEFT JOIN fleet_signal_observations fso ON fso.signal_id = s.id WHERE s.source IN ('q08','reading') AND s.status = 'open'"
     ).all();
-    var rs = rows && rows.results || [];
+    var rs = (rows && rows.results) || [];
     out.signals = rs.length;
-    var probeDomain = /* @__PURE__ */ __name(async function(domain) {
+    var probeDomain = async function(domain) {
       var spec = SIGNAL_PROBES[domain];
       if (!spec) return null;
       if (probeCache[domain] !== void 0) return probeCache[domain];
       try {
         var row = await env.AUDIT.prepare(spec.sql).first();
         var n = row && row.n != null ? Number(row.n) : 0;
-        var act = spec.activeWhen === "zero" ? n === 0 ? 1 : 0 : n > 0 ? 1 : 0;
+        var act = spec.activeWhen === "zero" ? (n === 0 ? 1 : 0) : (n > 0 ? 1 : 0);
         probeCache[domain] = { active: act, n };
         return probeCache[domain];
       } catch (e) {
         probeCache[domain] = { active: null, n: -1 };
         return probeCache[domain];
       }
-    }, "probeDomain");
+    };
     for (var i = 0; i < rs.length; i++) {
       var s = rs[i];
       var dom = String(s.domain || "");
@@ -1873,8 +1543,7 @@ async function contentSignalAudit(env) {
   }
   return out;
 }
-__name(contentSignalAudit, "contentSignalAudit");
-__name22(contentSignalAudit, "contentSignalAudit");
+__name2(contentSignalAudit, "contentSignalAudit");
 async function registerWatch(env, horizonDays) {
   try {
     var out = { open: 0, done: 0, cancelled: 0, overdue: 0, dueSoon: 0, donePct: null, overdueRows: [], escalated: 0 };
@@ -1910,7 +1579,6 @@ async function registerWatch(env, horizonDays) {
 }
 __name(registerWatch, "registerWatch");
 __name2(registerWatch, "registerWatch");
-__name22(registerWatch, "registerWatch");
 var worker_default = {
   async fetch(request, env) {
     var u = new URL(request.url);
@@ -1918,12 +1586,6 @@ var worker_default = {
     var ah = request.headers.get("Authorization") || "";
     var auth = ah.indexOf("Bearer ") === 0 ? ah.slice(7) : ah;
     if (p === "/health") return json({ status: "ok", worker: "qnfo-fleet-deploy", version: VERSION, enabled: await enabled(env), auto_heal: await autoHeal(env) });
-    if (p === "/optimize" && request.method === "POST") {
-      var ot = auth && env.OPTIMIZER_TRIGGER_SECRET && auth === env.OPTIMIZER_TRIGGER_SECRET;
-      if (!ot) return json({ ok: false, error: "unauthorized", d: { authLen: String(auth || "").length, otLen: String(env.OPTIMIZER_TRIGGER_SECRET || "").length } }, 401);
-      var optRes = await optimizeFleet(env);
-      return json({ ok: true, optimize: optRes });
-    }
     var admin = auth && env.DEPLOY_ADMIN_TOKEN && auth === env.DEPLOY_ADMIN_TOKEN;
     var sh = auth && env.SELFHEAL_TOKEN && auth === env.SELFHEAL_TOKEN;
     if (!admin && !sh) return json({ error: "unauthorized" }, 401);
@@ -2027,7 +1689,7 @@ var worker_default = {
     }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
-      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds));
+      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds));
       var rw = await registerWatch(env, 7);
       return json({ ok: true, scan: res, register: rw });
     }
@@ -2042,9 +1704,8 @@ var worker_default = {
   async scheduled(event, env, ctx) {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
-    var opt = await optimizeFleet(env);
     var rw = await registerWatch(env, 7);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
   }
 };
 var deployDefault = worker_default;
@@ -2067,47 +1728,10 @@ var worker_default2 = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     if (cron === "*/20 * * * *") return advisorMod.default.scheduled(event, env, ctx);
-    if (cron === "0 3 * * *") {
-      ctx.waitUntil(disposeRetired(env));
-      return calibratorMod.default.scheduled(event, env, ctx);
-    }
-    if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
+    if (cron === "0 3 * * *" || cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
     return deployDefault.scheduled(event, env, ctx);
   }
 };
-async function disposeRetired(env) {
-  try {
-    var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
-    var token = env.CF_API_TOKEN;
-    if (!token) return;
-    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1 };
-    var q = await env.AUDIT_DB.prepare("SELECT id, item FROM reorg_work_queue WHERE state='OPEN' AND item LIKE 'delete-worker:%'").all();
-    var targets = {};
-    for (var i = 0; i < (q.results || []).length; i++) {
-      var m = /delete-worker:([a-z0-9-]+)/i.exec(q.results[i].item || "");
-      if (m) targets[m[1]] = 1;
-    }
-    for (var name in targets) {
-      if (protectedNames[name]) continue;
-      var recent = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE ? AND ts > datetime('now','-1 day')").bind(name + "%").first();
-      if (recent && recent.n > 0) continue;
-      var res = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + name, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
-      var j = await res.json().catch(function() {
-        return {};
-      });
-      if (j && j.success) {
-        await env.AUDIT_DB.prepare("UPDATE service_registry SET state='deleted', updated_at=datetime('now') WHERE service = ?").bind(name).run();
-        await env.AUDIT_DB.prepare("UPDATE reorg_work_queue SET state='EXECUTED' WHERE item LIKE 'delete-worker:" + name + "%' AND state='OPEN'").run();
-        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'disposed-worker', 'qnfo-fleet-control', ?)").bind(name).run();
-      } else {
-        var msg = j && j.errors && j.errors[0] && j.errors[0].message || "unknown";
-        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: " + String(msg).slice(0, 280)).run();
-      }
-    }
-  } catch (e) {
-  }
-}
-__name(disposeRetired, "disposeRetired");
 var FleetAdvisor = advisorMod.FleetAdvisor;
 export {
   FleetAdvisor,

@@ -46,6 +46,9 @@ index_name = "qnfo-handoffs"
 binding = "INFRA_VZ"
 index_name = "qnfo-infra"
 
+[[vectorize]]
+binding = "CLOUD_OPS_VZ"
+index_name = "qnfo-cloud-ops"
 
 [[vectorize]]
 binding = "IPATENT_VZ"
@@ -66,6 +69,10 @@ service = "qnfo-infra"
 environment = "production"
 
 # v5.14.0 - QNFO.OPS.010 Stage C: twin calendar retrieval (plane=qnfo)
+[[services]]
+binding = "CAL_API"
+service = "calendar-api"
+environment = "production"
 
 # v5.16.2 - QNFO.OPS.011: restore QNFO_INTENT service binding. auto-express (expressIdea)
 # was silently 404ing: the binding was absent so expressIdea fell back to a public
@@ -87,6 +94,3 @@ bucket_name = "qnfo-media"
 # fresh module via env.LOADER.load (same mechanism as qnfo-ops run_code).
 [[worker_loaders]]
 binding = "LOADER"
-
-[triggers]
-crons = ["23 3 * * *"]
