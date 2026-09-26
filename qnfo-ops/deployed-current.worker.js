@@ -1,6 +1,3 @@
---ff0d5ebf903e7650e3794fca3c91e9a821c32eb974113cbd3f32cd223f72
-Content-Disposition: form-data; name="worker.js"
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -4950,5 +4947,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
-
---ff0d5ebf903e7650e3794fca3c91e9a821c32eb974113cbd3f32cd223f72--
