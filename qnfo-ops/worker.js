@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.0";
+var VERSION = "2.37.1";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -66,7 +66,7 @@ __name2(isOAIUpstream, "isOAIUpstream");
 __name22(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/cost-router/stats", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
-var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/ops/compat/chat/completions";
+var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 // COST-ROUTING-STACK-1 L3 PRICE LADDER (2026-09-26): cheapest-capable-first within the agent-loop
 // canary PASS set. Live canaries 2026-09-26T13:2xZ: deepseek-v4-flash, deepseek-v4-pro, gpt-5.5,
 // gpt-5-mini ALL emit valid tool_calls at ops tool-schema scale. Ladder: T2 flash -> T2 pro -> free
