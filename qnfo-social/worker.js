@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.11-linkcheck';
+var VERSION = '0.7.12-linkcheck-marker';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -474,10 +474,17 @@ var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
 // LINK-RESOLUTION-GATE-1 (2026-09-26): never post a URL that does not resolve 200. A 301/302 is
 // NOT a resolvable destination for our links (the retired q08.org essays 301 to the qnfo.org
 // homepage) and a 404 is a filtered/unpublished paper (status quarantined/duplicate/kg-backfill).
-async function urlResolves(url) {
+async function urlResolves(url, marker) {
   try {
     const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-gate)" } });
-    return r.status === 200;
+    if (r.status !== 200) return false;
+    if (marker) {
+      // LINK-RESOLUTION-GATE R4 (2026-09-26): a bare 200 is not enough - a catch-all (e.g. a list
+      // page) also returns 200. Require the marker (the paper slug) to appear in the fetched body.
+      const body = await r.text();
+      if (body.indexOf(marker) < 0) return false;
+    }
+    return true;
   } catch (e) {
     return false;
   }
@@ -495,7 +502,7 @@ async function drainDissemination(env) {
     try {
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posting', updated_at=datetime('now') WHERE id=? AND action='queued'").bind(row.id).run();
       const link = row.pages_url || ("https://papers.qnfo.org/papers/" + String(row.paper_slug) + "/");
-      if (!(await urlResolves(link))) {
+      if (!(await urlResolves(link, String(row.paper_slug || "").slice(0, 40)))) {
         await env.DB.prepare("UPDATE dissemination_tracker SET action='link-dead', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind("LINK-RESOLUTION-GATE: does not resolve 200: " + link, row.id).run();
         console.log("LINK_DEAD dissemination " + row.id + " " + link);
         continue;
