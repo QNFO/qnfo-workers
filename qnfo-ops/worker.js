@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.78";
+var VERSION = "2.36.79";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2991,7 +2991,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   if (!resp || !resp.ok) { const _fb = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb) { console.log("OPS_PAID_FAIL_FREE_FALLBACK callDeepSeek"); return _fb; } throw new Error(_dsLastErr || "deepseek upstream unavailable after 3 attempts"); }
   const _out = await resp.json();
-  const _servedBy = o.codeMode ? o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL : o.upstreamModel ? o.upstreamModel : o.__glmFallbackErr ? UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL : modelToUse;
+  const _servedBy = o.codeMode ? o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL : modelToUse;
   return { resp: _out, servedBy: _servedBy };
 }
 __name(callDeepSeek, "callDeepSeek");
