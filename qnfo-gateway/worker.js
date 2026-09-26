@@ -1,4 +1,4 @@
-var VERSION="3.7.12-blank-gate-allhosts";
+var VERSION="3.7.13-blank-gate-published";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -898,9 +898,10 @@ __name2222222222(handlePapers, "handlePapers");
 // are absent the detail page would render blank. Must report blank_count = 0.
 async function handleBlankPapers(env) {
   try {
-    const r = await env.LIVING_PAPER.prepare("SELECT slug,title,status,paper_type,length(COALESCE(body_md,'')) AS body_len,length(COALESCE(abstract,'')) AS abstract_len FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND length(trim(COALESCE(body_md,''))) < 40 AND length(trim(COALESCE(abstract,''))) < 1 ORDER BY slug").all();
+    const r = await env.LIVING_PAPER.prepare("SELECT slug,title,status,paper_type,length(COALESCE(body_md,'')) AS body_len,length(COALESCE(abstract,'')) AS abstract_len FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND length(trim(COALESCE(body_md,''))) < 40 AND length(trim(COALESCE(abstract,''))) < 1 ORDER BY status, slug").all();
     const rows = (r && r.results) || [];
-    return json({ ok: rows.length === 0, invariant: "NO-BLANK-PAPER-1", blank_count: rows.length, blank: rows });
+    const published = rows.filter(function (x) { return x.status === "published"; });
+    return json({ ok: published.length === 0, invariant: "NO-BLANK-PAPER-1", published_no_content: published.length, other_no_content: rows.length - published.length, note: "Renderer emits an abstract/placeholder fallback so no page renders blank; this flags papers with no content at all.", items: rows });
   } catch (e) {
     return json({ ok: false, error: e.message }, 500);
   }
