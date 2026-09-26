@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.13-suppress-nonpublished';
+var VERSION = '0.7.14-retract';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -532,6 +532,22 @@ async function drainDissemination(env) {
   }
   return { posted, failed };
 }
+// RETRACT-DEAD-LINKS-1 (2026-09-26): the post-side gate stops POSTING bad links, but a paper can be
+// published -> disseminated -> posted, then LATER reclassified (quarantined/duplicate/kg-backfill) by
+// an out-of-band sweep, leaving a stale live post. Re-verify every posted paper link each cron and
+// retract (delete the Bluesky post + flag) so the account can never carry a dead link.
+async function retractDeadLinks(env) {
+  const rows = await env.DB.prepare("SELECT id, post_id, pages_url FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id IS NOT NULL AND pages_url IS NOT NULL").all();
+  let retracted = 0;
+  for (const row of (rows.results || [])) {
+    if (await urlResolves(row.pages_url)) continue;
+    try { const s = await session(env); await deleteRecord(s, String(row.post_id)); retracted++; }
+    catch (e) { console.log("RETRACT del fail " + row.id + " " + String(e && e.message || e).slice(0, 80)); }
+    await env.DB.prepare("UPDATE dissemination_tracker SET action='link-dead', post_text_snippet='RETRACTED: no longer resolves 200', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+  }
+  if (retracted) console.log("RETRACTED " + retracted + " dead paper posts");
+  return { retracted };
+}
 async function drainQueue(env) {
   await env.DB.prepare(
     "UPDATE social_threads SET status = CASE WHEN retry_count < ? THEN 'queued' ELSE 'failed' END, retry_count = retry_count + 1 WHERE status = 'posting'"
@@ -589,6 +605,7 @@ export default {
     await recheckDrafts(env);
     await drainQueue(env);
     await drainDissemination(env);
+    await retractDeadLinks(env);
   },
 
   async fetch(request, env) {
