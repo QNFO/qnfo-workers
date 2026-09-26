@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.13-wsa2-link";
+var VERSION = "0.9.14-wsa2-nodesc";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1111,7 +1111,12 @@ async function publishV2(env, row) {
   var _plink = row.slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + row.slug + '/">papers.qnfo.org/papers/' + row.slug + '/</a></p>' : '';
   var ab = String(row.corrected_md || "").match(/##\s*Abstract\s*\r?\n([\s\S]*?)(?=\r?\n##\s|\r?\n#\s|$)/i);
   if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim() + _plink;
-  else if (_plink && metaClean.description && String(metaClean.description).indexOf("Full text and updates") < 0) metaClean.description = String(metaClean.description) + _plink;
+  else if (_plink) {
+    // WS-A2 R5 (2026-09-26): also append when there is NO description at all (the prior form
+    // required metaClean.description to be truthy, so an abstract-less revision shipped no link).
+    var _base = metaClean.description ? String(metaClean.description) : String(row.title || row.slug || "");
+    if (_base.indexOf("Full text and updates") < 0) metaClean.description = _base + _plink;
+  }
   var mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
   if (mput && mput._status && mput._status >= 400) {
     await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
