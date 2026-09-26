@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.14-wsa2-nodesc";
+var VERSION = "0.9.15-noblankpublish";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -411,6 +411,13 @@ async function publishStage(env, row) {
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
   if (!paper) {
     await markError(env, row, "paper row missing for slug " + slug);
+    return { ok: false, stage: "publish" };
+  }
+  // NO-BLANK-PUBLISH-1 (2026-09-26): never publish a paper with no renderable content.
+  // A published paper whose body and abstract are both empty renders a blank detail page.
+  const _bodyStripped = String(paper.body_md || "").replace(/^---[\s\S]*?---/, "").replace(/^\+\+\+[\s\S]*?\+\+\+/, "").trim();
+  if (_bodyStripped.length < 40 && String(paper.abstract || "").trim().length < 40) {
+    await markError(env, row, "NO-BLANK-PUBLISH-1: body and abstract both empty for slug " + slug);
     return { ok: false, stage: "publish" };
   }
   const pub = await publishToZenodo(env, paper.title, paper.abstract, paper.body_md, slug);
