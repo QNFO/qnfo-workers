@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.23-metric-def";
+var VERSION = "1.7.24-gate-aware";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1505,9 +1505,14 @@ async function buildState(env, ctx) {
     // Drainable = the selector the send worker actually consumes. needs-contact is tracked separately.
     const drainable = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, MAX(created_at) AS mx FROM outreach_queue WHERE status IN ('pending','needs-email','queued')");
     const open = Number(drainable.c) || 0, age = ageOf(drainable.mx);
-    const stale = open > 0 && age !== null && age > 24;
+    // GATE-AWARENESS (2026-09-26): a non-advancing drainable queue is EXPECTED, not "stale", while the
+    // operator kill switch is off. Read it from the outreach DB so the signal never fake-flags staleness.
+    let gate = null;
+    try { const gs = await d1all(env.OUTREACH, "SELECT value FROM pipeline_state WHERE key='external_sends_enabled'"); gate = gs && gs.length ? String(gs[0].value) : null; } catch (e) { gate = null; }
+    const gated = gate === "0" || gate === "false";
+    const stale = !gated && open > 0 && age !== null && age > 24;
     queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: drainable.mx || null, age_h: age, stale, selector_drift: false, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: nc > 0 ? nc + " candidates awaiting contact enrichment (no email; not sendable)" : "external sends gated until 2026-09-15" });
-    push({ key: "queue_outreach", label: "Queue outreach_queue", state: stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
+    push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24h)" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
   });
   const analytics = await analytics24(env);
   const d1c = await d1Count(env);
