@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.8-dissem';
+var VERSION = '0.7.9-dissem';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -473,6 +473,7 @@ var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
 // only carries the q08 essay threads). Post each queued paper to Bluesky, then mark it posted.
 async function drainDissemination(env) {
   await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
+  await env.DB.prepare("UPDATE dissemination_tracker SET action='queued', retry_count=COALESCE(retry_count,0)+1, updated_at=datetime('now') WHERE action='failed' AND COALESCE(retry_count,0) < 3 AND updated_at < datetime('now','-30 minutes')").run();
   const cap = await env.DB.prepare("SELECT COUNT(*) n FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','start of day')").first();
   const postedToday = (cap && cap.n) || 0;
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
