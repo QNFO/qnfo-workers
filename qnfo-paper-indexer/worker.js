@@ -267,14 +267,14 @@ var worker_default = {
     try {
       switch (path) {
         case "/health":
-          return json({ status: "ok", worker: "qnfo-paper-indexer", version: "3.0.1", features: ["on-demand-webhook","on-demand-batch","scheduled-daily","citation-impact"], bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
+          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, features: ["on-demand-webhook","on-demand-batch","scheduled-daily","citation-impact"], bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
         case "/count": {
           const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state").first();
           return json({ count: c ? c.c : 0, worker: "qnfo-paper-indexer" });
         }
         case "/webhook": return await handleWebhook(env, slug);
         case "/index": return await handleIndex(env, url);
-        case "/cron/debug": return json({ worker: "qnfo-paper-indexer", version: "3.0.1", crons: ["5 6 * * *","0 4 * * *"] });
+        case "/cron/debug": return json({ worker: "qnfo-paper-indexer", version: VERSION, crons: ["5 6 * * *","0 4 * * *"] });
         case "/run": {
           const commit = url.searchParams.get("commit") === "1";
           if (commit && !auth(request, env)) return json({ error: "unauthorized" }, 401);

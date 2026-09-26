@@ -1,4 +1,4 @@
-var VERSION="3.7.6-indexnow-fanout";
+var VERSION="3.7.7-indexnow-multi";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -992,7 +992,10 @@ async function indexNowSubmit(urls) {
   // Fan out to the engine-specific endpoints as well - Bing and Yandex keep their own rate budgets,
   // so a 429 from the shared relay does not imply a 429 from the engines. First endpoint that
   // ACCEPTS a chunk wins; the exhausted case records the last status for diagnosis.
-  const _EPS = ["https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow", "https://yandex.com/indexnow"];
+  // R1: ordered by empirically-observed acceptance from the Cloudflare egress. yandex.com is the
+  // proven-accepting endpoint (202) and goes FIRST; the shared relay + Bing 429 the CF egress IP;
+  // Seznam + Naver are additional IndexNow participants kept as further redundancy.
+  const _EPS = ["https://yandex.com/indexnow", "https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow", "https://search.seznam.cz/indexnow", "https://searchadvisor.naver.com/indexnow"];
   for (let i = 0; i < urls.length; i += CHUNK) {
     const chunk = urls.slice(i, i + CHUNK);
     const body = JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk });
