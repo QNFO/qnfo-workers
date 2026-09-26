@@ -2913,6 +2913,23 @@ async function budgetFallback(env, messages, maxTokens, tools, opts) {
   return null;
 }
 __name(budgetFallback, "budgetFallback");
+// === L2 CAPABILITY-GATE (capability-gate BEFORE price-gate) ===
+// The agent/coding loop REQUIRES valid tool_calls. A cheap model that fails the tool-call
+// canary costs MORE via retries than the model it replaced. routing_capability (qnfo-audit)
+// records per-model tool_call_ok per task_class. This gate forces a tool-calling model for any
+// tool-bearing call. Fail-open: on any D1 error the resolved model is left unchanged.
+var UPSTREAM_TOOLCALL_MODEL = "deepseek/deepseek-v4-flash";
+var _capIncap = null, _capTs = 0;
+async function agentLoopIncapable(env) {
+  var now = Date.now();
+  if (_capIncap && now - _capTs < 300000) return _capIncap;
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT model FROM routing_capability WHERE task_class='agent-loop' AND tool_call_ok=0").all();
+    var s = {};
+    ((r && r.results) || []).forEach(function(x) { s[x.model] = 1; });
+    _capIncap = s; _capTs = now; return s;
+  } catch (e) { return _capIncap || {}; }
+}
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
   if (o.codeMode && env.WAI) {
@@ -2934,7 +2951,8 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     }
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
-  const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
+  let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
+  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
@@ -2995,7 +3013,8 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     } catch (_eg) { console.log("OPS_STREAM_GLM_FALLBACK " + String(_eg && _eg.message || _eg).slice(0, 120)); }
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
-  const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
+  let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
+  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
