@@ -2486,7 +2486,7 @@ async function redHtml(env) {
   H.push("<tr><td>Auto top-up</td><td>" + (tup ? "refill " + usd(tup.amount) + " when balance &lt; " + usd(tup.threshold) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? aiN.toLocaleString() + " neurons (&asymp;$15 est, model-mix dependent)" : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push('<tr><td>Spend limit</td><td>$150 / 30d sliding (monthly-150, enabled)</td></tr>');
-  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (inv ? usd(inv.amount_due) : "n/a") + " " + (inv && Number(inv.amount_due) / 100 >= 150 ? '<b class="bad">&ge; $150/30d (half-true)</b>' : '&lt; $150/30d') + " &middot; publish_events: <b class="bad">UNDEFINED</b> &mdash; cannot auto-evaluate; owner must define publish_events or the kill path stays ambiguous</td></tr>");
+  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (inv ? usd(inv.amount_due) : "n/a") + " " + (inv && Number(inv.amount_due) / 100 >= 150 ? '<b class="bad">&ge; $150/30d (half-true)</b>' : '&lt; $150/30d') + ' &middot; publish_events: <b class="bad">UNDEFINED</b> &mdash; cannot auto-evaluate; owner must define publish_events or the kill path stays ambiguous</td></tr>');
   H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits (e.g. $18.08 pretax credit on the gpt-5.5 line); gateway spend is dominated by agent-session LLM traffic.</div></div>');
 
   // 4. COMPLETE OPEN-ISSUE INVENTORY
