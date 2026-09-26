@@ -151,7 +151,6 @@ function opsModelCatalog() {
 __name(opsModelCatalog, "opsModelCatalog");
 __name2(opsModelCatalog, "opsModelCatalog");
 var MODEL_CTX = 1048576;
-var OPS_PROMPT_CTX = 262144; // OPS-PROMPT-CAP-1 (2026-09-26): cap ops prompt budget (was MODEL_CTX=1M; enabled multi-MB runaway prompts billed ~$86 on 2026-09-13)
 var CORS_HEADERS = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -1195,8 +1194,11 @@ async function telemetryAnalyze(env, hours) {
     out.scanned = (rows.results || []).length;
     for (const r of rows.results || []) {
       if ((r.n || 0) < 2) continue;
+      const _tm = String(r.text).match(/(?:tool|tool_name|called)[=: ]+([A-Za-z0-9_.-]+)/i);
+      const toolKey = _tm ? _tm[1] : "";
+      if (!toolKey) continue;
       try {
-        const okRow = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts > ?1 AND status = 'ok' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2").bind(r.last_ts, r.text).first();
+        const okRow = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts > ?1 AND status = 'ok' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text LIKE ('%' || ?2 || '%')").bind(r.last_ts, toolKey).first();
         if (okRow && okRow.c > 0) {
           out.recovered++;
           try {
@@ -1212,7 +1214,6 @@ async function telemetryAnalyze(env, hours) {
         }
       } catch (e2) {
       }
-      const toolKey = String(r.text).slice(0, 60);
       const title = "[self-heal] tool " + toolKey + " failing x" + r.n + " (" + h + "h no recovery)";
       try {
         const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey);
@@ -2857,7 +2858,7 @@ __name22222(callWorkersAI, "callWorkersAI");
 __name222222(callWorkersAI, "callWorkersAI");
 async function callGLM(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
-  const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const inputs = { messages: msgs };
   if (maxTokens) inputs.max_tokens = maxTokens;
   if (o.temperature != null) inputs.temperature = o.temperature;
@@ -2914,7 +2915,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       console.log("OPS_GLM_FALLBACK " + UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__glmFallbackErr);
     }
   }
-  const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
@@ -2961,7 +2962,7 @@ __name22222(callDeepSeek, "callDeepSeek");
 __name222222(callDeepSeek, "callDeepSeek");
 async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta) {
   const o = opts || {};
-  const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
@@ -3137,7 +3138,7 @@ async function handleWaiRelay(env, body, messages, maxTokens, isStream, ua, ctx,
   const NL = String.fromCharCode(10);
   const norm = normalizeMessages(messages);
   const maxOut = Math.min(clamp(maxTokens, 128e3) || 128e3, 128e3);
-  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
   const up = { messages: truncateToContext(norm, 2e5 - maxOut - 8192), max_completion_tokens: maxOut };
   if (clientTools) {
     up.tools = clientTools;
@@ -3199,7 +3200,7 @@ async function handleFrontier(env, body, messages, maxTokens, isStream, ua, ctx,
   const t0 = Date.now();
   const norm = normalizeMessages(messages);
   const maxOut = Math.min(clamp(maxTokens, spec.maxOut) || spec.maxOut, spec.maxOut);
-  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
   const clientToolChoice = body && body.tool_choice || "auto";
   const prompt = lastUserText(norm).slice(0, 4e3);
   const up = { messages: truncateToContext(norm, spec.ctx - maxOut - 8192), max_completion_tokens: maxOut };
@@ -3280,7 +3281,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   const relayDisp = displayModel || "deepseek-v4-flash";
   const norm = normalizeMessages(messages);
   const maxOut = clamp(maxTokens, 393216);
-  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
   const clientToolChoice = body && body.tool_choice || "auto";
   const relayTemp = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : 0.5;
   const relayTopP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : 0.9;
@@ -3467,7 +3468,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   if (WAI_PASSTHROUGH[wanted]) return await handleWaiRelay(env, body, messages, max_tokens, !!stream, ua, ctx, WAI_PASSTHROUGH[wanted], wanted);
   const t0 = Date.now();
   const isStream = !!stream;
-  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools : null;
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
   const clientToolChoice = body && body.tool_choice || "auto";
   const source = detectSource(ua);
   const domain = frontierMode ? "ops" : classifyDomain(lastUserText(messages));
@@ -3607,7 +3608,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     }
     const _streamModel = execUpstream || UPSTREAM_MODEL;
     const _streamIsOAI = isOAIUpstream(_streamModel);
-    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
