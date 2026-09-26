@@ -1,9 +1,36 @@
 // MERGED qnfo-paper-indexer <- qnfo-impact (absorbed 2026-09-13)
+// v3.0.3-status-filter-purge (2026-09-26) - completes #1153 PUBLICATION-INDEXER-NO-STATUS-FILTER-1
+//   Merges peer v3.0.2 (write-side status guard, FLAGGED_STATUSES denylist) and adds the
+//   missing remediation half: the ~1563 vectors ALREADY embedded from non-canonical
+//   records were never removed by v3.0.2, which only stopped NEW writes.
+//   CHANGES ON TOP OF v3.0.2:
+//     (1) CORPUS_STATUSES allowlist replaces the denylist as the primary gate. A denylist
+//         leaks any future status value that is not on it; an allowlist fails closed.
+//         Today both give the identical set (published 452 + distributed 2 +
+//         external_preprint 2 = 456 rows with body_md).
+//     (2) /purge (token-guarded, ?commit=1 to apply, default dry-run) deletes contaminated
+//         vectors via PAPER_VZ.deleteByIds and their index_state rows, plus stale
+//         index_state rows whose slug has no papers row.
+//     (3) the daily 06:05Z cron runs purge BEFORE reindexing -> corpus self-heals with no
+//         operator action.
+//     (4) /count reports corpus_total and contaminated counts for drift detection.
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// worker.js
-var VERSION = "3.0.1";
+var VERSION = "3.0.3-status-filter-purge";
+var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
+var CHUNK_SIZE = 1e3;
+var CHUNK_OVERLAP = 200;
+var EMBED_BATCH = 32;
+var VZ_BATCH = 100;
+var DEFAULT_INDEX_LIMIT = 300;
+// SECRET-HYGIENE-1 2026-09-22: the token is no longer hardcoded in source; it is read
+// from the INDEX_TOKEN secret binding.
+// CORPUS_STATUSES = the ONLY papers.status values permitted in qwav-research-v2.
+var CORPUS_STATUSES = ["published", "external_preprint", "distributed"];
+var CORPUS_IN = "('published','external_preprint','distributed')";
+var CORPUS_WHERE = "body_md IS NOT NULL AND body_md != '' AND status IN " + CORPUS_IN;
+
 function auth(req, env) {
   if (!env.IMPACT_TOKEN) return true;
   const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
@@ -14,12 +41,10 @@ function auth(req, env) {
   for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-__name(auth, "auth");
 async function ensureSchema(env) {
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS citation_stats (id TEXT PRIMARY KEY, doi TEXT, source TEXT, metric TEXT, value REAL, collected_at TEXT)").run();
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS impact_scores (doi TEXT PRIMARY KEY, score REAL, updated_at TEXT)").run();
 }
-__name(ensureSchema, "ensureSchema");
 async function fetchJson(url, timeoutMs = 2e4) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -33,7 +58,6 @@ async function fetchJson(url, timeoutMs = 2e4) {
     clearTimeout(t);
   }
 }
-__name(fetchJson, "fetchJson");
 async function runImpact(env, commit, limit) {
   await ensureSchema(env);
   const out = { papers: 0, stats: [], errors: [] };
@@ -93,36 +117,16 @@ async function runImpact(env, commit, limit) {
   }
   return out;
 }
-__name(runImpact, "runImpact");
 
-var __defProp = Object.defineProperty;
-var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-
-// worker.js
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-// SECRET-HYGIENE-1 2026-09-22: the token is no longer hardcoded in source; it is read
-// from the INDEX_TOKEN secret binding. (The value was previously committed here and in
-// wrangler.toml; rotate it and treat the old value as burned.)
-var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-var CHUNK_SIZE = 1e3;
-var CHUNK_OVERLAP = 200;
-var EMBED_BATCH = 32;
-var VZ_BATCH = 100;
-var DEFAULT_INDEX_LIMIT = 300;
 function sha256hex(str) {
   const enc = new TextEncoder().encode(str);
   return crypto.subtle.digest("SHA-256", enc).then(
     (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("")
   );
 }
-__name(sha256hex, "sha256hex");
-__name2(sha256hex, "sha256hex");
 function sanitize(s) {
   return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uD800-\uDFFF]/g, "").trim().substring(0, 800);
 }
-__name(sanitize, "sanitize");
-__name2(sanitize, "sanitize");
 function chunkText(text) {
   const chunks = [];
   let start = 0;
@@ -140,23 +144,7 @@ function chunkText(text) {
   }
   return chunks.filter((c) => c.length > 20);
 }
-__name(chunkText, "chunkText");
-__name2(chunkText, "chunkText");
-async function handleWebhook(env, slug) {
-  if (!slug) return json({ error: "missing slug" }, 400);
-  const paper = await env.LIVING_PAPER.prepare(
-    "SELECT slug, body_md, updated_at FROM papers WHERE slug = ?1"
-  ).bind(slug).first();
-  if (!paper) return json({ success: false, error: "slug not found" }, 404);
-  if (!paper.body_md) return json({ success: true, indexed: false, skipped: true, reason: "empty_body_md" });
-  const hash = await sha256hex(paper.body_md);
-  const existing = await env.LIVING_PAPER.prepare(
-    "SELECT body_hash FROM index_state WHERE slug = ?1"
-  ).bind(slug).first();
-  if (existing && existing.body_hash === hash) {
-    return json({ success: true, indexed: false, skipped: true, reason: "unchanged" });
-  }
-  const chunks = chunkText(paper.body_md);
+async function embedVectors(env, slug, chunks) {
   const vectors = [];
   for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
     const batch = chunks.slice(i, i + EMBED_BATCH);
@@ -166,14 +154,32 @@ async function handleWebhook(env, slug) {
       vectors.push({
         id: (await sha256hex(slug + ":" + idx)).slice(0, 32),
         values: result.data[j],
-        metadata: {
-          slug: sanitize(slug),
-          chunk: String(idx),
-          total: String(chunks.length)
-        }
+        metadata: { slug: sanitize(slug), chunk: String(idx), total: String(chunks.length) }
       });
     }
   }
+  return vectors;
+}
+
+async function handleWebhook(env, slug) {
+  if (!slug) return json({ error: "missing slug" }, 400);
+  const paper = await env.LIVING_PAPER.prepare(
+    "SELECT slug, body_md, updated_at, status FROM papers WHERE slug = ?1"
+  ).bind(slug).first();
+  if (!paper) return json({ success: false, error: "slug not found" }, 404);
+  if (!CORPUS_STATUSES.includes(String(paper.status))) {
+    return json({ success: true, indexed: false, skipped: true, reason: "status_not_in_corpus", status: paper.status }, 409);
+  }
+  if (!paper.body_md) return json({ success: true, indexed: false, skipped: true, reason: "empty_body_md" });
+  const hash = await sha256hex(paper.body_md);
+  const existing = await env.LIVING_PAPER.prepare(
+    "SELECT body_hash FROM index_state WHERE slug = ?1"
+  ).bind(slug).first();
+  if (existing && existing.body_hash === hash) {
+    return json({ success: true, indexed: false, skipped: true, reason: "unchanged" });
+  }
+  const chunks = chunkText(paper.body_md);
+  const vectors = await embedVectors(env, slug, chunks);
   for (let i = 0; i < vectors.length; i += VZ_BATCH) {
     await env.PAPER_VZ.upsert(vectors.slice(i, i + VZ_BATCH));
   }
@@ -182,16 +188,15 @@ async function handleWebhook(env, slug) {
   ).bind(slug, chunks.length, hash, paper.body_md.length).run();
   return json({ success: true, indexed: true, skipped: false, chunks: chunks.length, body_len: paper.body_md.length, errors: 0 });
 }
-__name(handleWebhook, "handleWebhook");
-__name2(handleWebhook, "handleWebhook");
+
 async function handleIndex(env, url) {
   const offset = parseInt(url.searchParams.get("offset") || "0") || 0;
   const limit = Math.min(parseInt(url.searchParams.get("limit") || String(DEFAULT_INDEX_LIMIT)) || DEFAULT_INDEX_LIMIT, 500);
   const rows = await env.LIVING_PAPER.prepare(
-    "SELECT slug, body_md FROM papers WHERE body_md IS NOT NULL AND body_md != '' ORDER BY slug LIMIT ?1 OFFSET ?2"
+    "SELECT slug, body_md FROM papers WHERE " + CORPUS_WHERE + " ORDER BY slug LIMIT ?1 OFFSET ?2"
   ).bind(limit, offset).all();
   const total = await env.LIVING_PAPER.prepare(
-    "SELECT COUNT(*) AS c FROM papers WHERE body_md IS NOT NULL AND body_md != ''"
+    "SELECT COUNT(*) AS c FROM papers WHERE " + CORPUS_WHERE
   ).first();
   const totalCount = total ? total.c : 0;
   let indexed = 0, skipped = 0, totalChunks = 0, errors = 0;
@@ -207,22 +212,8 @@ async function handleIndex(env, url) {
         continue;
       }
       const chunks = chunkText(row.body_md);
-      for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
-        const batch = chunks.slice(i, i + EMBED_BATCH);
-        const result = await env.AI.run(EMBED_MODEL, { text: batch }, { gateway: { id: "default" } });
-        for (let j = 0; j < batch.length; j++) {
-          const idx = i + j;
-          allVectors.push({
-            id: (await sha256hex(row.slug + ":" + idx)).slice(0, 32),
-            values: result.data[j],
-            metadata: {
-              slug: sanitize(row.slug),
-              chunk: String(idx),
-              total: String(chunks.length)
-            }
-          });
-        }
-      }
+      const vs = await embedVectors(env, row.slug, chunks);
+      for (const v of vs) allVectors.push(v);
       await env.LIVING_PAPER.prepare(
         "INSERT OR REPLACE INTO index_state (slug, chunks, body_hash, body_len, indexed_at, errors) VALUES (?1, ?2, ?3, ?4, datetime('now'), 0)"
       ).bind(row.slug, chunks.length, hash, row.body_md.length).run();
@@ -241,40 +232,77 @@ async function handleIndex(env, url) {
     done,
     total: totalCount,
     offset: offset + limit,
-    pct: Math.round((offset + limit) / totalCount * 100),
+    pct: totalCount ? Math.round((offset + limit) / totalCount * 100) : 100,
     batch: { indexed, skipped, chunks: totalChunks, errors }
   });
 }
-__name(handleIndex, "handleIndex");
-__name2(handleIndex, "handleIndex");
+
+// Remediation half of #1153: remove vectors already embedded from non-canonical records.
+async function handlePurge(env, dryRun) {
+  const bad = await env.LIVING_PAPER.prepare(
+    "SELECT i.slug AS slug, i.chunks AS chunks, p.status AS status FROM index_state i JOIN papers p ON p.slug = i.slug WHERE p.status NOT IN " + CORPUS_IN
+  ).all();
+  const stale = await env.LIVING_PAPER.prepare(
+    "SELECT i.slug AS slug, i.chunks AS chunks FROM index_state i LEFT JOIN papers p ON p.slug = i.slug WHERE p.slug IS NULL"
+  ).all();
+  const targets = [];
+  for (const r of bad.results || []) targets.push({ slug: r.slug, chunks: r.chunks || 0, reason: "status=" + r.status });
+  for (const r of stale.results || []) targets.push({ slug: r.slug, chunks: r.chunks || 0, reason: "no_papers_row" });
+  let vectorsDeleted = 0;
+  const detail = [];
+  for (const t of targets) {
+    const ids = [];
+    for (let idx = 0; idx < t.chunks; idx++) ids.push((await sha256hex(t.slug + ":" + idx)).slice(0, 32));
+    if (!dryRun) {
+      for (let i = 0; i < ids.length; i += VZ_BATCH) {
+        const slice = ids.slice(i, i + VZ_BATCH);
+        try {
+          await env.PAPER_VZ.deleteByIds(slice);
+          vectorsDeleted += slice.length;
+        } catch (e) {
+        }
+      }
+      try {
+        await env.LIVING_PAPER.prepare("DELETE FROM index_state WHERE slug = ?1").bind(t.slug).run();
+      } catch (e) {
+      }
+    }
+    detail.push({ slug: t.slug, chunks: t.chunks, reason: t.reason });
+  }
+  return { success: true, dry_run: !!dryRun, records: targets.length, vectors_deleted: vectorsDeleted, detail };
+}
+
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
-__name(json, "json");
-__name2(json, "json");
+
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const slug = url.searchParams.get("slug");
-    if (path === "/webhook" || path === "/index") {
+    if (path === "/webhook" || path === "/index" || path === "/purge") {
       const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       if (token !== env.INDEX_TOKEN) return json({ error: "unauthorized" }, 401);
     }
     try {
       switch (path) {
         case "/health":
-          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, features: ["on-demand-webhook","on-demand-batch","scheduled-daily","citation-impact"], bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
+          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "cron-self-heal"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
         case "/count": {
           const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state").first();
-          return json({ count: c ? c.c : 0, worker: "qnfo-paper-indexer" });
+          const g = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE " + CORPUS_WHERE).first();
+          const b = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state i JOIN papers p ON p.slug = i.slug WHERE p.status NOT IN " + CORPUS_IN).first();
+          const s = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state i LEFT JOIN papers p ON p.slug = i.slug WHERE p.slug IS NULL").first();
+          return json({ count: c ? c.c : 0, corpus_total: g ? g.c : 0, contaminated: b ? b.c : 0, stale: s ? s.c : 0, worker: "qnfo-paper-indexer", version: VERSION });
         }
+        case "/purge": return json(await handlePurge(env, url.searchParams.get("commit") !== "1"));
         case "/webhook": return await handleWebhook(env, slug);
         case "/index": return await handleIndex(env, url);
-        case "/cron/debug": return json({ worker: "qnfo-paper-indexer", version: VERSION, crons: ["5 6 * * *","0 4 * * *"] });
+        case "/cron/debug": return json({ worker: "qnfo-paper-indexer", version: VERSION, crons: ["5 6 * * *", "0 4 * * *"], corpus_statuses: CORPUS_STATUSES, purge_in_cron: "5 6 * * *" });
         case "/run": {
           const commit = url.searchParams.get("commit") === "1";
           if (commit && !auth(request, env)) return json({ error: "unauthorized" }, 401);
@@ -296,6 +324,8 @@ var worker_default = {
         const r = await runImpact(env, true, 50);
         console.log("[qnfo-impact] scheduled:", JSON.stringify({ papers: r.papers, errors: r.errors.length }));
       } else {
+        const p = await handlePurge(env, false);
+        console.log("[qnfo-paper-indexer] scheduled purge:", JSON.stringify({ records: p.records, vectors_deleted: p.vectors_deleted }));
         const fakeUrl = new URL("https://internal/?offset=0&limit=300");
         const result = await handleIndex(env, fakeUrl);
         console.log("[qnfo-paper-indexer] scheduled index:", JSON.stringify(result));
