@@ -53,10 +53,6 @@ binding = "EMAIL"
 service = "qnfo-email"
 environment = "production"
 
-[[services]]
-binding = "ORCH"
-service = "qnfo-email-orchestrator"
-environment = "production"
 
 [[services]]
 binding = "INDEXER"
