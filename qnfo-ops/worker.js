@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.75";
+var VERSION = "2.36.76";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -69,7 +69,6 @@ var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/te
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var UPSTREAM_MODEL = "dynamic/opsdynamic";
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5";
-var UPSTREAM_BUDGET_MODEL = "deepseek/deepseek-v4-flash"; // A9 budget-gated downgrade target (model_ladder_budget.blocked=1 -> cheap tool-calling tier)
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" };
@@ -2935,8 +2934,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     }
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
-  let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  try { const _b = await env.QNFO_AUDIT.prepare("SELECT blocked FROM model_ladder_budget WHERE month=strftime('%Y-%m','now')").first(); if (_b && _b.blocked) modelToUse = UPSTREAM_BUDGET_MODEL; } catch (_) {}
+  const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
@@ -2992,8 +2990,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     } catch (_eg) { console.log("OPS_STREAM_GLM_FALLBACK " + String(_eg && _eg.message || _eg).slice(0, 120)); }
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
-  let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  try { const _b = await env.QNFO_AUDIT.prepare("SELECT blocked FROM model_ladder_budget WHERE month=strftime('%Y-%m','now')").first(); if (_b && _b.blocked) modelToUse = UPSTREAM_BUDGET_MODEL; } catch (_) {}
+  const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
