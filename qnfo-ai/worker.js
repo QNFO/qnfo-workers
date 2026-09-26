@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.12-budgetfb";
+var VERSION = "5.28.13-singlemodel";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1573,7 +1573,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     ...extra
   }), "mkRouter");
   const reqModel = body.model;
-  const isAuto = reqModel === "auto";
+  const isAuto = reqModel === "auto" || reqModel === "qnfo";
   const isEnsemble = reqModel === "ensemble";
   let estInputTokens = estimateInputTokens(messages);
   const autoHealth = isAuto ? await loadModelHealth(env) : null;
@@ -2365,18 +2365,12 @@ var worker_default = {
           }
         };
       });
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      return json({ object: "list", data });
+      // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
+      return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
-      const id = path.split("/").pop();
-      if (id === "auto" || id === "ensemble") {
-        return json({ id, object: "model", created: 171e7, owned_by: "qnfo", contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, limit: { context: 1310720, output: 32768 }, capabilities: ["chat", "agent", "code", "streaming"].concat(id === "ensemble" ? ["reasoning"] : []), tool_call: true, temperature: true, default_tool_mode: "agent" });
-      }
-      const m = MODELS[id];
-      if (!m) return json({ error: "model not found" }, 404);
-      return json({ id, object: "model", created: 171e7, owned_by: m.tier === 0 ? "workers-ai" : m.family });
+      // QNFO-SINGLE-MODEL-1: any id resolves to the single public model (never 404 on model).
+      return json({ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, limit: { context: 1310720, output: 32768 }, capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], tool_call: true, temperature: true, default_tool_mode: "agent" });
     }
     if ((path === "/v1/chat/completions" || path === "/chat/completions") && method === "POST") {
       let body;

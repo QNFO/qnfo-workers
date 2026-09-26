@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.68";
+var VERSION = "2.36.69";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -73,6 +73,11 @@ var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" };
 var WAI_PASSTHROUGH = { "pareto": "unbiased/pareto", "qwen3.8-max": "alibaba/qwen3.8-max" };
+// OPS-SINGLE-MODEL-1 (2026-09-26): the ops endpoint advertises exactly ONE model id.
+// Model routing (upstream/provider/tier) is a back-end concern, never exposed to clients.
+// Every legacy id stays ACCEPTED as an alias so existing clients do not break.
+var OPS_PUBLIC_MODEL = "ops";
+var OPS_PUBLIC_ALIAS = { "ops": 1, "ops-exec": 1, "ops-frontier": 1, "ops-frontier-mini": 1, "ops-frontier-reason": 1 };
 var OPS_EXEC_MODELS = {
   "ops-frontier": "openai/gpt-5.5",
   "ops-frontier-mini": "openai/gpt-5.5",
@@ -150,6 +155,12 @@ function opsModelCatalog() {
 }
 __name(opsModelCatalog, "opsModelCatalog");
 __name2(opsModelCatalog, "opsModelCatalog");
+function opsPublicCatalog() {
+  // OPS-SINGLE-MODEL-1: one advertised model; no _router / upstream / limitations leakage.
+  return [{ id: OPS_PUBLIC_MODEL, object: "model", created: 171e7, owned_by: "qnfo", description: "QNFO ops endpoint - single cost-optimized agentic model (server-side execution, 60+ ops tools).", execution: "server-side-agent-loop", context_window: MODEL_CTX, contextWindow: MODEL_CTX, context_length: MODEL_CTX, max_output: DEFAULT_MAX_OUT, maxOutput: DEFAULT_MAX_OUT, max_output_tokens: DEFAULT_MAX_OUT, max_tokens: DEFAULT_MAX_OUT, max_input_tokens: MODEL_CTX, capabilities: ["chat", "agent", "code", "tool_use", "streaming", "server-side-execution", "reasoning"], limit: { context: MODEL_CTX, output: DEFAULT_MAX_OUT }, temperature: true, tool_call: true, default_tool_mode: "agent" }];
+}
+__name(opsPublicCatalog, "opsPublicCatalog");
+__name2(opsPublicCatalog, "opsPublicCatalog");
 var MODEL_CTX = 1048576;
 var OPS_PROMPT_CTX = 262144; // OPS-PROMPT-CAP-1 (2026-09-26): cap ops prompt budget (was MODEL_CTX=1M; enabled multi-MB runaway prompts billed ~$86 on 2026-09-13)
 var CORS_HEADERS = {
@@ -2963,6 +2974,15 @@ __name22222(callDeepSeek, "callDeepSeek");
 __name222222(callDeepSeek, "callDeepSeek");
 async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta) {
   const o = opts || {};
+  // OPS-STREAM-FREE-FIRST-1 (2026-09-26): the streaming path previously had NO free-first branch,
+  // so EVERY streamed ops conversation was billed against the paid gateway route (cost root cause).
+  // Mirror callDeepSeek: prefer the free Workers-AI model, paid path only as last-resort fallback.
+  if (!o.upstreamModel && env.WAI) {
+    try {
+      const _rg = await callGLM(env, messages, maxTokens, tools, o);
+      if (_rg && _rg.choices && _rg.choices[0] && _rg.choices[0].message) { console.log("OPS_STREAM_FREE_FIRST served by " + UPSTREAM_GLM_MODEL); return { resp: _rg, servedBy: UPSTREAM_GLM_MODEL }; }
+    } catch (_eg) { console.log("OPS_STREAM_GLM_FALLBACK " + String(_eg && _eg.message || _eg).slice(0, 120)); }
+  }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
@@ -3461,7 +3481,9 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
   const execUpstream = OPS_EXEC_MODELS[wanted];
   const frontierMode = !!execUpstream;
-  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash" && !frontierMode && !PASSTHROUGH_MODELS[wanted] && !WAI_PASSTHROUGH[wanted]) return json({ error: "unknown model " + rawWanted + " (available: ops-exec, " + Object.keys(OPS_EXEC_MODELS).join(", ") + ", deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
+  // UNIVERSAL-OPENAI-MODEL-COMPAT-1 (2026-09-26): the endpoint NEVER rejects a model id. Any
+  // unrecognized / foreign id (gpt-4o, gpt-3.5-turbo, claude-*, "", null, provider-qualified)
+  // is routed to the single public ops model (server-side agent loop). Routing stays back-end.
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
   if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
@@ -4892,15 +4914,11 @@ var worker_default = {
       }
     }
     if (path === "/v1/models" && method === "GET") {
-      return json({ object: "list", data: opsModelCatalog() });
+      return json({ object: "list", data: opsPublicCatalog() });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
       const id = decodeURIComponent(path.split("/").pop());
-      const found = opsModelCatalog().filter(function(m2) {
-        return m2.id === id;
-      })[0];
-      if (!found) return json({ error: "model not found: " + id }, 404);
-      return json(found);
+      return json(opsPublicCatalog()[0]);
     }
     if (path === "/v1/responses" && method === "POST") {
       let body;
