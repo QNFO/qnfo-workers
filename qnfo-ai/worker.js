@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.13-singlemodel";
+var VERSION = "5.29.0";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1575,6 +1575,20 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const reqModel = body.model;
   const isAuto = reqModel === "auto" || reqModel === "qnfo";
   const isEnsemble = reqModel === "ensemble";
+  // COST-ROUTING-STACK-1 L1 SEMANTIC CACHE: serve above-threshold past answers for the single-model
+  // path (no tools, no images, fresh single turn, same routed model, cosine >= 0.95, 30d freshness).
+  if (!isAuto && !isEnsemble && !(tools && tools.length) && !wantsCode && !hasImage && !isStream && messages.length <= 2) {
+    try {
+      const _sc = await semanticCacheLookup(env, lastUserText(messages), reqModel);
+      if (_sc && _sc.text) {
+        const _screc = { ...mkLogRec(), model: reqModel, streamed: 0, response: String(_sc.text).slice(0, 2e5), prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), cost_usd: 0, latency_ms: Date.now() - t0, _cache_hit: 1 };
+        if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, _screc));
+        return json({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: reqModel, choices: [{ index: 0, message: { role: "assistant", content: _sc.text }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), total_tokens: estimateOutputTokens(_sc.text) }, _router: { cache: "semantic", score: _sc.score, source_model: _sc.model, tier: 0, cost_usd: 0 } });
+      }
+    } catch (e) {
+      console.log("semantic cache serve failed:", e && e.message || e);
+    }
+  }
   let estInputTokens = estimateInputTokens(messages);
   const autoHealth = isAuto ? await loadModelHealth(env) : null;
   let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
