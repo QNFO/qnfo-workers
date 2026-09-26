@@ -26,7 +26,7 @@ __name222(fnv32, "fnv32");
 __name2222(fnv32, "fnv32");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.58";
+var VERSION = "2.36.59";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -117,7 +117,7 @@ function opsDefaultToolMode(id) {
 }
 __name(opsDefaultToolMode, "opsDefaultToolMode");
 function opsModelEntry(id, o) {
-  return { id, object: "model", created: 171e7, owned_by: "qnfo", description: o.description, execution: o.execution, context_window: MODEL_CTX, max_output: DEFAULT_MAX_OUT, capabilities: o.capabilities, limitations: o.limitations, limit: { context: MODEL_CTX, output: DEFAULT_MAX_OUT }, temperature: true, tool_call: true, default_tool_mode: opsDefaultToolMode(id), _router: { model: o.upstream, endpoint: "https://ops.qnfo.org/v1", upstream: o.upstream, tier: o.tier, family: opsModelFamily(o.upstream), reasoning: !!o.reasoning, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: typeof o.in === "number" ? o.in : null, costPer1MOutput: typeof o.out === "number" ? o.out : null, availability: "key-required" } };
+  return { id, object: "model", created: 171e7, owned_by: "qnfo", description: o.description, execution: o.execution, context_window: MODEL_CTX, contextWindow: MODEL_CTX, context_length: MODEL_CTX, max_output: DEFAULT_MAX_OUT, maxOutput: DEFAULT_MAX_OUT, max_output_tokens: DEFAULT_MAX_OUT, max_tokens: DEFAULT_MAX_OUT, max_input_tokens: MODEL_CTX, capabilities: o.capabilities, limitations: o.limitations, limit: { context: MODEL_CTX, output: DEFAULT_MAX_OUT }, temperature: true, tool_call: true, default_tool_mode: opsDefaultToolMode(id), _router: { model: o.upstream, endpoint: "https://ops.qnfo.org/v1", upstream: o.upstream, tier: o.tier, family: opsModelFamily(o.upstream), reasoning: !!o.reasoning, ctx: MODEL_CTX, maxOut: DEFAULT_MAX_OUT, temperature: 0.5, top_p: 0.9, vision: false, tools: true, costPer1MInput: typeof o.in === "number" ? o.in : null, costPer1MOutput: typeof o.out === "number" ? o.out : null, availability: "key-required" } };
 }
 __name(opsModelEntry, "opsModelEntry");
 function opsModelCatalog() {

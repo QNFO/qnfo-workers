@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.8-rag";
+var VERSION = "5.28.9-ui";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1114,6 +1114,14 @@ __name(stripToolMarkup, "stripToolMarkup");
 __name2(stripToolMarkup, "stripToolMarkup");
 async function runEnsemble(env, messages, maxTokens, domain) {
   const t0 = Date.now();
+  // ENSEMBLE-BUDGET-1 (2026-09-26): bound the whole ensemble. Previously the worst case was
+  // primary(40s)+fallback(40s)+retry(25s)+validator(15s)+reviewer(35s) = ~155s, which read as
+  // "unresponsive" on model=auto for science/high-complexity queries. Each stage now takes at
+  // most min(stageCap, remaining); stages are skipped once the budget is spent, falling back to
+  // whatever text we already have.
+  const ENSEMBLE_BUDGET_MS = 45e3;
+  const _deadline = t0 + ENSEMBLE_BUDGET_MS;
+  const _remaining = () => Math.max(0, _deadline - Date.now());
   let primaryText = "";
   const useCoderPrimary = domain === "code";
   const _key = (function() {
@@ -1129,14 +1137,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
-    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), 4e4, "ensemble-primary");
+    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-primary");
     primaryText = extractWAContent(primary);
   } catch (e) {
     primaryText = "";
   }
   if (!primaryText) {
     try {
-      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), 4e4, "ensemble-fallback");
+      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
     } catch (e2) {
@@ -1147,7 +1155,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (!primaryText) {
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), 25e3, "ensemble-primary-retry");
+      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), Math.min(25e3, _remaining()), "ensemble-primary-retry");
       const rt = extractWAContent(retry);
       if (rt && String(rt).trim()) {
         primaryText = rt;
@@ -1177,14 +1185,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 15e3, "ensemble-validator");
+      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), Math.min(15e3, _remaining()), "ensemble-validator");
       const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
       if (pass) {
         agreementRate = 1;
       } else {
         try {
-          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 35e3, "ensemble-reviewer");
+          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), Math.min(35e3, _remaining()), "ensemble-reviewer");
           const rText = rOut ? extractWAContent(rOut) : "";
           if (rText.trim()) {
             finalText = rText;
@@ -2522,7 +2530,7 @@ var worker_default = {
       }
     }
     if (path === "/" && method === "GET") {
-      return new Response(PLAYGROUND_HTML.replace("__TITLE__", "QNFO Notes - research chat (qnfo-ai router)").replace("__KEY_HINT__", "tokens/qnfo-ai").replace("__DEFAULT_MODEL__", "auto").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "QNFO Notes - research chat (qnfo-ai router)").replace("__KEY_HINT__", "your router key (Bearer)").replace("__DEFAULT_MODEL__", "auto").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
     }
     if (path === "/v1/web/search" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
