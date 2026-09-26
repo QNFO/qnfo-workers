@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.12";
+var VERSION = "0.9.11-wsa2-link";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1104,8 +1104,14 @@ async function publishV2(env, row) {
   }
   delete metaClean.related_identifiers;
   if (row.related_repo) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Source: " + row.related_repo;
+  // WS-A2 (2026-09-26): append the read-online link UNCONDITIONALLY. The prior form appended it
+  // only when a `## Abstract` heading was found, so a revision whose corrected body lacked that
+  // heading shipped an abstract-only description with NO papers.qnfo.org link (live: 10.5281/
+  // zenodo.22764745 v2.0.0). Fall back to the existing description and dedupe.
+  var _plink = row.slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + row.slug + '/">papers.qnfo.org/papers/' + row.slug + '/</a></p>' : '';
   var ab = String(row.corrected_md || "").match(/##\s*Abstract\s*\r?\n([\s\S]*?)(?=\r?\n##\s|\r?\n#\s|$)/i);
-  if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim() + (row.slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + row.slug + '/">papers.qnfo.org/papers/' + row.slug + '/</a></p>' : '');
+  if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim() + _plink;
+  else if (_plink && metaClean.description && String(metaClean.description).indexOf("Full text and updates") < 0) metaClean.description = String(metaClean.description) + _plink;
   var mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
   if (mput && mput._status && mput._status >= 400) {
     await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
