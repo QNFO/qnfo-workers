@@ -2915,10 +2915,10 @@ __name(attachmentGuard, 'attachmentGuard');
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] && arr[i].role === 'user') {
-      var _c = String(arr[i].content || '');
-      var _g = attachmentGuard(_c);
-      if (_g) { var _nl = String.fromCharCode(10); var _nc = _c + _nl + _nl + '[' + _g + ']'; arr[i].content = _nc; return _nc; }
+    if (arr[i] && arr[i].role === "user") {
+      const _c = String(arr[i].content || "");
+      const _g = attachmentGuard(_c);
+      if (_g) { const _nc = _c + "\n\n[" + _g + "]"; arr[i].content = _nc; return _nc; }
       return _c;
     }
   }
@@ -3696,7 +3696,7 @@ async function registryRegister(env, body) {
   const canonBase = CANON_BASE[service] || body.base_url || null;
   await ensureSchema(env);
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, body.kind || "worker", body.version || null, canonBase, body.purpose || null, JSON.stringify(body.capabilities || []), JSON.stringify(body.routes || []), JSON.stringify(body.tools || []), JSON.stringify(body.models || []), JSON.stringify(body.deps || []), iso()).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=COALESCE(excluded.purpose, service_registry.purpose), capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=excluded.deps, updated_at=excluded.updated_at").bind(service, body.kind || "worker", body.version || null, canonBase, body.purpose || null, JSON.stringify(body.capabilities || []), JSON.stringify(body.routes || []), JSON.stringify(body.tools || []), JSON.stringify(body.models || []), JSON.stringify(body.deps || []), iso()).run();
     return { ok: true, registered: service, version: body.version || null, ts: iso() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : String(e) };
@@ -3801,7 +3801,7 @@ async function registryRefresh(env) {
   const now = iso();
   const upsert = /* @__PURE__ */ __name22222(async function(service, kind, fields) {
     try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=excluded.purpose, capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=CASE WHEN excluded.deps IS NULL OR excluded.deps='[]' THEN service_registry.deps ELSE excluded.deps END, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(service) DO UPDATE SET kind=excluded.kind, version=excluded.version, base_url=excluded.base_url, purpose=COALESCE(excluded.purpose, service_registry.purpose), capabilities=excluded.capabilities, routes=excluded.routes, tools=excluded.tools, models=excluded.models, deps=CASE WHEN excluded.deps IS NULL OR excluded.deps='[]' THEN service_registry.deps ELSE excluded.deps END, updated_at=excluded.updated_at").bind(service, kind, fields.version || null, fields.base_url || null, fields.purpose || null, JSON.stringify(fields.capabilities || []), JSON.stringify(fields.routes || []), JSON.stringify(fields.tools || []), JSON.stringify(fields.models || []), JSON.stringify(fields.deps || []), now).run();
     } catch (e) {
     }
   }, "upsert");
