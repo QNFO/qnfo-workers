@@ -33,13 +33,13 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.28-live-origin"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.29-live-origin2"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
 var HN_ITEMS  = "https://hn.algolia.com/api/v1/items/";
 var ROUTER    = "https://qnfo-ai.internal/v1/chat/completions";
-var UA        = "q08-signal-engine/0.1.0 (+https://q08.org)";
+var UA        = "q08-signal-engine/0.1.0 (+https://q08-signal-engine.q08.workers.dev)";
 var ORIGIN = "https://q08-signal-engine.q08.workers.dev";
 // IndexNow: search-engine instant indexing (Bing, Yandex, Seznam, Naver).
 var INDEXNOW_KEY = "3f8a1c9e7b2d6045a1f3c8e5b9d20147";
@@ -826,7 +826,7 @@ function renderFeed(pieces) {
   var items = pieces.map(function(p) {
     var date = new Date(p.published_at || Date.now()).toUTCString();
     var desc = (p.body_md || "").replace(/\\/g, "").replace(/[<>&"]/g, function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];}).slice(0, 500);
-    return "<item><title>" + escHtml(p.title) + "</title><link>https://q08.org/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + "...</description></item>";
+    return "<item><title>" + escHtml(p.title) + "</title><link>https://q08-signal-engine.q08.workers.dev/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + "...</description></item>";
   }).join("\n");
   return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>q08</title><link>https://q08-signal-engine.q08.workers.dev</link><description>Systems-level critique. Structural. Timeless.</description>' + items + '</channel></rss>';
 }
@@ -868,7 +868,7 @@ async function sendDigest(env) {
   var list = rows.map(function(r){ return "- " + r.title + " - https://q08-signal-engine.q08.workers.dev/p/" + r.slug; }).join("\n");
   var sent = 0;
   for (var s of (subs.results || [])) {
-    var unsubUrl = "https://q08.org/unsubscribe?t=" + s.token;
+    var unsubUrl = "https://q08-signal-engine.q08.workers.dev/unsubscribe?t=" + s.token;
     var body = "q08 - daily digest (" + day + ")\n\n" + list + "\n\nUnsubscribe: " + unsubUrl;
     var r = await sendEmail(env, s.email, "q08 - daily digest", body, unsubUrl);
     if (r && r.ok) sent++;
@@ -893,7 +893,7 @@ async function pingIndexNow(env, url) {
 async function queueForDistribution(env, title, slug) {
   if (!env.AUDIT) return { ok: false, skip: "no audit binding" };
   try {
-    var text = (title + " \u2014 https://q08.org/p/" + slug).slice(0, 280);
+    var text = (title + " \u2014 https://q08-signal-engine.q08.workers.dev/p/" + slug).slice(0, 280);
     var id = "q08-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     await env.AUDIT.prepare("INSERT OR IGNORE INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'queued')").bind(id, String(title || "").slice(0, 300), JSON.stringify([text])).run();
     return { ok: true, queued: id };
@@ -915,7 +915,7 @@ async function handleSubscribe(req, env, url) {
   }
   var token = await sha16(email + ":q08:sub");
   await env.DB.prepare("INSERT INTO subscribers(email, status, token, created_at) VALUES(?, 'pending', ?, ?) ON CONFLICT(email) DO UPDATE SET token=excluded.token, status=CASE WHEN status='confirmed' THEN 'confirmed' ELSE 'pending' END").bind(email, token, nowIso()).run();
-  await sendEmail(env, email, "Confirm your q08 subscription", "Tap to confirm: https://q08.org/confirm?t=" + token);
+  await sendEmail(env, email, "Confirm your q08 subscription", "Tap to confirm: https://q08-signal-engine.q08.workers.dev/confirm?t=" + token);
   return html("<h2>Almost there</h2><p>Check your inbox for a confirmation link.</p>");
 }
 
