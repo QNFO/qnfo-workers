@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.10-models";
+var VERSION = "5.28.11-log502";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1753,6 +1753,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       }
       return json({ error: "no stream path for model" }, 400);
     } catch (e) {
+      try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) {}
       return json({ error: "stream failed: " + e.message }, 502);
     }
   }
@@ -1834,6 +1835,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
+    try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) {}
     return json({ error: e.message }, 502);
   }
 }
