@@ -19,7 +19,7 @@
 //   v1.1.4 and earlier did `import { FLEET } from './fleet.js'`, making this a MULTI-MODULE worker.
 //   The control plane deploys from a single R2 key (r2:qnfo-canonical/qnfo-observability.js), and one
 //   key cannot carry two modules — so every deploy failed with:
-//     HTTP 400 code 10021 "No such module \"fleet.js\". imported from \"worker.js\""
+//     HTTP 400 code 10021 "No such module \"fleet.js\". imported from \"worker.js\"
 //   (observed: fleet_deploys id 76, 2026-09-13T14:04:01Z, ok:0.)
 //   This was NOT transient and could not be fixed by re-running the deploy: the worker's module
 //   topology was incompatible with the deploy transport. FLEET is now inlined below and the import
@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = '1.2.9'; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+const VERSION = "1.2.10-research-queue-enum"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -377,7 +377,11 @@ const INTEGRATION_CHAINS = [
     total: "SELECT COUNT(*) n FROM emails",
     max: 10, minOk: null, expectEmpty: true, want: 'unprocessed <= 10 (received unused; 0 = drained)' },
   { id: 'research', name: 'Research queue -> execution', producer: 'supervisor / radars', consumer: 'qnfo-research-exec', medium: 'research_queue',
-    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('pending','researching','ensemble-draft','claimed')",
+    // STATUS-DRIFT-FIX (2026-09-26, GOVERNANCE-METRIC-DEFINITION-VERIFY-1): the producer writes status
+    // 'queued' (live enum: published=19, queued=9, researching=1, wontfix=27), but the predicate watched
+    // 'pending'/'ensemble-draft'/'claimed' -> 0 of 56 matched while 10 were genuinely pending -> a permanent
+    // false 'empty-match' warn. Watch the real enum.
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('queued','pending','researching','ensemble-draft','claimed')",
     total: "SELECT COUNT(*) n FROM research_queue",
     max: 10, minOk: null, expectEmpty: false, want: 'queued/active <= 10' },
   { id: 'revisions', name: 'Revision log -> publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'paper_revision_log',
