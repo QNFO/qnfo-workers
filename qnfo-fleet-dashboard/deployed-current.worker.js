@@ -7,7 +7,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.13"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var VERSION = "1.7.14"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2412,7 +2412,7 @@ async function redHtml(env) {
   }
   H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + sh.length + ' ARMED kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>');
   for (const r of sh) H.push('<tr><td class="bad"><b>' + esc(r.id) + '</b></td><td>' + esc(r.phase) + '</td><td class="bad">' + esc(r.component) + '</td><td>' + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + '</td><td>' + esc(r.due_date) + '</td><td class="bad">' + esc(r.state) + "</td></tr>");
-  H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory.</div></div>');
+  H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory.</div><div class="sub">EARLY-TRIGGER evaluation: invoice spend ' + (inv ? usd(inv.amount_due) : "n/a") + ' ' + (inv && Number(inv.amount_due) / 100 >= 150 ? '<b class="bad">&ge; $150/30d (half-true)</b>' : '&lt; $150/30d') + ' &middot; publish_events metric: <b class="bad">UNDEFINED</b> &mdash; cannot auto-evaluate; owner must define publish_events or the kill path stays ambiguous.</div></div>');
 
   // 2. SURVIVAL GATES vs measured
   let th = [];
@@ -2427,7 +2427,7 @@ async function redHtml(env) {
     rumTotal = rows.reduce(function(s, x) {
       return s + x.count;
     }, 0);
-    growth = Math.round(1e4 * (rumTotal - 5610) / 5610) / 100;
+    growth = rumTotal != null ? Math.round(1e4 * (rumTotal - 5610) / 5610) / 100 : null;
   } catch (e) {
   }
   try {
@@ -2440,7 +2440,7 @@ async function redHtml(env) {
     const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
     H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
   }
-  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &rarr; growth " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " against +30% gate" + (growth != null && growth < 30 ? ' &mdash; <b class="bad">GATE FAILING</b>' : "") + "</div></div>");
+  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &rarr; growth vs frozen baseline (2026-08-27..09-25): " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " &middot; MoM (snapshots): " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + " &middot; gate is +30% MoM " + (snapMoM != null && snapMoM < 30 ? '&mdash; <b class="bad">GATE FAILING</b>' : '&mdash; MoM n/a (needs 2 snapshots)') + " &middot; spend " + (burn != null ? "$" + burn.toFixed(2) : "?") + " vs $150/30d cap</div></div>");
 
   // 3. COST TRUTH (live billing, cents-audited)
   let inv = null, bal = null, tup = null, aiN = null;
@@ -2486,7 +2486,7 @@ async function redHtml(env) {
   H.push("<tr><td>Auto top-up</td><td>" + (tup ? "refill " + usd(tup.amount) + " when balance &lt; " + usd(tup.threshold) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? aiN.toLocaleString() + " neurons (&asymp;$15 est, model-mix dependent)" : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push('<tr><td>Spend limit</td><td>$150 / 30d sliding (monthly-150, enabled)</td></tr>');
-  H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); gateway spend is dominated by agent-session LLM traffic.</div></div>');
+  H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits (e.g. $18.08 pretax credit on the gpt-5.5 line); gateway spend is dominated by agent-session LLM traffic.</div></div>');
 
   // 4. COMPLETE OPEN-ISSUE INVENTORY
   let ghIssues = null, ghTotal = null;
@@ -2642,10 +2642,17 @@ async function redHtml(env) {
   H.push("<tr><td>email_parse_failures (open)</td><td>" + (pr != null ? pr : "?") + "</td><td>inbound mail the parser could not read</td></tr>");
   H.push("<tr><td>email_send_violations (unresolved)</td><td>" + (sv != null ? sv : "?") + "</td><td>outbound-send policy violations</td></tr>");
   H.push("<tr><td>dead_links (open)</td><td>" + (er != null ? er : "?") + "</td><td>checked links still failing</td></tr>");
+  let oq = null;
+  try {
+    const r = await d1all(env.OUTREACH, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled')");
+    oq = r && r.length ? r[0].n : null;
+  } catch (e) {
+  }
+  H.push("<tr><td>outreach_queue (open)</td><td class=\"" + (oq > 0 ? "bad" : "ok") + '">' + (oq != null ? oq : "?") + "</td><td>outreach rows not yet sent/skipped</td></tr>");
   H.push("</table></div>");
 
   // 7. MONEY MATH (decision metrics)
-  let em = null, subs = null, zenodoN = null;
+  let em = null, subs = null, zenodoN = null, repTotal = null, snapMoM = null;
   try {
     const r = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM emails GROUP BY status");
     const m = {};
@@ -2663,18 +2670,28 @@ async function redHtml(env) {
     zenodoN = r && r.length ? r[0].n : null;
   } catch (e) {
   }
+  try {
+    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000");
+    repTotal = r && r.length ? r[0].n : null;
+  } catch (e) {
+  }
+  try {
+    const sn = await d1all(env.AUDIT, "SELECT d, pageviews FROM roi_daily_snapshots ORDER BY d DESC LIMIT 2") || [];
+    if (sn.length === 2 && Number(sn[0].pageviews) > 0 && Number(sn[1].pageviews) > 0) snapMoM = Math.round(1e4 * (Number(sn[0].pageviews) - Number(sn[1].pageviews)) / Number(sn[1].pageviews)) / 100;
+  } catch (e) {
+  }
   const burn = inv ? Number(inv.amount_due) / 100 : null;
-  const waiEst = aiN != null ? 15.12 : null;
-  const monthly = burn != null ? burn + (waiEst || 0) : null;
+  const monthly = burn;
   const cpr = monthly != null && rep30 > 0 ? monthly / rep30 : null;
   H.push('<div class="panel"><h2>7 &middot; MONEY MATH (decision metrics)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push("<tr><td>Monthly burn (GW invoice draft + Workers AI est)</td><td class=\"bad\">" + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
+  H.push("<tr><td>Monthly burn (AI Gateway invoice draft, includes Workers AI prepaid)</td><td class=\"bad\">" + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Revenue</td><td class=\"bad\">$0.00 &mdash; no payment rail exists</td></tr>");
   H.push("<tr><td>Subscribers (active)</td><td>" + (subs ? subs.s : "?") + "</td></tr>");
-  H.push("<tr><td>Outreach</td><td>" + (em ? (em.sent || 0) + " sent &middot; " + (em.replied || 0) + " replied &middot; " + (em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "% reply rate" : "?") : "?") + "</td></tr>");
-  H.push("<tr><td>Output (30d / all-time)</td><td>" + (rep30 != null ? rep30 : "?") + " full reports / 451 total &middot; " + (zenodoN != null ? zenodoN : "?") + " Zenodo DOIs</td></tr>");
+  H.push("<tr><td>Email (sent / replied)</td><td>" + (em ? (em.sent || 0) + " sent &middot; " + (em.replied || 0) + " replied &middot; " + (em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "% reply rate" : "?") : "?") + "</td></tr>");
+  H.push("<tr><td>Output (30d / all-time)</td><td>" + (rep30 != null ? rep30 : "?") + " full reports / " + (repTotal != null ? repTotal : "?") + " total &middot; " + (zenodoN != null ? zenodoN : "?") + " Zenodo DOIs</td></tr>");
   H.push("<tr><td>Cost per full report (30d)</td><td>" + (cpr != null ? "$" + cpr.toFixed(2) : "?") + "</td></tr>");
   H.push("<tr><td>Break-even at $10/mo subscriber</td><td>" + (monthly != null ? Math.ceil(monthly / 10) + " paying subscribers" : "?") + "</td></tr>");
+  H.push("<tr><td>Pageviews MoM (snapshots)</td><td>" + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("</table>");
   let verdict = "NO JUSTIFICATION YET", vcls = "bad";
   if (growth != null && growth >= 30 && rep30 != null && rep30 >= 2) {
