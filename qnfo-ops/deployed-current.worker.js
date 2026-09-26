@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.6-fm7gate-multiline";
+var VERSION = "2.37.11-fm-empty-relay-402";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1996,6 +1996,20 @@ async function cfWorkerDeploy(env, args) {
   const versionNote = String(args && args.version || "").trim();
   if (!worker) return { ok: false, error: "worker name required" };
   if (!content) return { ok: false, error: "content (JS source) required" };
+  // FM8-VERSION-DOWNGRADE (2026-09-26): refuse a SEMVER DOWNGRADE by default. A stale
+  // WORKTREE-GRAFT-PUSH-1 reverts the repo to OLD versions (canonical: qnfo-gateway 3.7.4 to
+  // 3.6.1, qnfo-ops 2.37.6 to 2.36.47) and, because GitHub main is the deploy source, the
+  // redeploy cron would then clobber the live fleet. A repo-vs-live parity sweep does NOT catch
+  // this (both sides revert together, so they MATCH); the invariant that does is monotonicity:
+  // a deploy must not move a worker BACKWARD. An intentional rollback passes allow_downgrade:true.
+  if (args && args.expected_version && !(args && args.allow_downgrade)) {
+    const _px = function(v) { const m = String(v || "").match(/^(\d+)\.(\d+)\.(\d+)/); return m ? [+m[1], +m[2], +m[3]] : null; };
+    const _a = _px(versionNote), _b = _px(args.expected_version);
+    if (_a && _b) {
+      const _lt = _a[0] < _b[0] || (_a[0] === _b[0] && _a[1] < _b[1]) || (_a[0] === _b[0] && _a[1] === _b[1] && _a[2] < _b[2]);
+      if (_lt) return { ok: false, rejected: true, error: "FM8-VERSION-DOWNGRADE: to_version " + versionNote + " sorts BELOW live " + args.expected_version + " -- refusing a downgrade (a stale source push must not clobber the live fleet). Pass allow_downgrade:true for an intentional rollback." };
+    }
+  }
   if (args && args.expected_version) {
     const cur = await cfWorkerRead(env, { worker, maxChars: 500 });
     const liveUnknown = !!(cur && cur.ok && cur.version_known === false);
@@ -3127,7 +3141,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       // COST-ROUTING-STACK-1 L3: a persistent 4xx AUTH error (401/403) means the paid path is unusable
       // but a free path exists -> degrade rather than terminate (BUDGET-CAP-FREE-FALLBACK-1). Other 4xx
       // (400 bad-format etc.) stay fatal: a fallback cannot fix a malformed request.
-      if (resp.status === 401 || resp.status === 403) {
+      if (resp.status === 401 || resp.status === 403 || resp.status === 402) {
         const _fbA = await budgetFallback(env, messages, maxTokens, tools, o);
         if (_fbA) { console.log("OPS_PAID_AUTH_FREE_FALLBACK " + resp.status); return _fbA; }
       }
@@ -3510,8 +3524,17 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
         body: JSON.stringify(upBody)
       });
       if (!resp.ok || !resp.body) {
-        await fail("upstream " + resp.status + ": " + (await resp.text()).slice(0, 300));
-        return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
+        const _rs = resp.status;
+        const _rtxt = await resp.text().catch(function() { return ""; });
+        if (_rs === 401 || _rs === 403 || _rs === 429 || _rs === 402) {
+          const _fb = await budgetFallback(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
+          const _fc = _fb && _fb.resp && _fb.resp.choices && _fb.resp.choices[0] && _fb.resp.choices[0].message;
+          const _ftxt = String(_fc && (_fc.content || _fc.reasoning_content) || "");
+          ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: relayDisp, strategy: "relay", prompt, response: _ftxt.slice(0, 2e4), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: estTokens(_ftxt), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: _ftxt.trim() ? 1 : 0, upstream_model: _fb && _fb.servedBy || null }));
+          return json({ id: randId("chatcmpl-"), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: relayDisp, choices: [{ index: 0, message: { role: "assistant", content: _ftxt }, finish_reason: "stop" }], usage: {} });
+        }
+        await fail("upstream " + _rs + ": " + String(_rtxt || "").slice(0, 300));
+        return json({ error: "upstream relay failed (" + _rs + ")" }, 502);
       }
       const recId = randId("ops-");
       ctx.waitUntil(logOps(env, { id: recId, ts: iso(), model: relayDisp, strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
@@ -4064,6 +4087,25 @@ async function handleChat(env, body, authHeader, ua, ctx) {
             finishReason = "stop";
           }
         }
+        if (toolLog.length && !String(content || "").trim()) {
+          // FM-EMPTY-RESPONSE (2026-09-26): the model returned EMPTY content after successful tool rounds
+          // (finish_reason "stop" with no text). Re-run WITHOUT tools under the budget-exhausted directive so
+          // the loop produces a final summary instead of logging an empty ok=0 response (seen live 3x today).
+          try {
+            work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+            const { resp: r4, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+            if (_sb3) servedBy = _sb3;
+            const c4 = r4 && r4.choices && r4.choices[0];
+            content = String(c4 && c4.message && c4.message.content || "");
+            finishReason = c4 && c4.finish_reason || "stop";
+            upstreamUsage = r4 && r4.usage || upstreamUsage;
+          } catch (e4) {
+          }
+          if (!String(content || "").trim()) {
+            content = "The tool loop completed its operations but the model returned no final summary. Please re-send your request for a concise answer.";
+            finishReason = "stop";
+          }
+        }
         return await finalize();
       }
       content = String(content || "Ops tool loop reached the iteration cap.");
@@ -4277,7 +4319,15 @@ async function registryRefresh(env) {
   for (const w of apiList) {
     if (w.id === "qnfo-ops") continue;
     try {
-      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(w.id, "worker", null, "https://" + w.id + ".q08.workers.dev", null, "[]", "[]", "[]", "[]", "[]", now).run();
+      // FM6 AUTHORITATIVE-READ (2026-09-26): set the version from the DEPLOYED BUNDLE via
+      // cfWorkerRead (/content/v2 -> VERSION), NOT a null stub and NOT a /health probe
+      // (CF egress cannot reliably reach *.workers.dev -> 1042; the bundle read is authoritative).
+      let _wv = null;
+      try { const _rd = await cfWorkerRead(env, { worker: w.id, maxChars: 400 }); if (_rd && _rd.ok && _rd.version) _wv = String(_rd.version); } catch (e) {
+      }
+      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(w.id, "worker", _wv, "https://" + w.id + ".q08.workers.dev", null, "[]", "[]", "[]", "[]", "[]", now).run();
+      if (_wv) { try { await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3 AND (version IS NULL OR version=?1)").bind(_wv, now, w.id).run(); } catch (e) {
+      } }
     } catch (e) {
     }
   }
@@ -4950,7 +5000,7 @@ async function opsDeploy(env, args) {
         log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
       }
       const content = atob(b64);
-      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
+      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) {
         result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer };
@@ -4969,6 +5019,23 @@ async function opsDeploy(env, args) {
         log.push({ step: "verify", live_version: live });
       } catch (e) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
+      }
+      // DEPLOY-GUARD-LEDGER-SYNC-1 (2026-09-26): advance the deploy-guard registry
+      // version to the newly-live version in the SAME deploy. Without this the guard's
+      // current_version lags by one, and EVERY subsequent deploy is refused with
+      // version-mismatch until an operator manually reconciles the ledger.
+      try {
+        const _glVer = live || toVer || srcVer || null;
+        for (let _gi = 0; _gi < 4; _gi++) {
+          const gl = await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, to: _glVer, actor: "qnfo-ops/ops-deploy", ok: !!(dep && dep.ok), note: "auto-advance deploy-guard registry after deploy" }) });
+          let gj = {};
+          try { gj = await gl.json(); } catch (_ge) {}
+          log.push({ step: "guard-ledger", attempt: _gi, http: gl.status, registry_version: gj && gj.registry_version || null });
+          if (gj && gj.registry_version && (!_glVer || String(gj.registry_version) === String(_glVer))) break;
+          if (_gi < 3) await new Promise(function (r) { setTimeout(r, 4000); });
+        }
+      } catch (e3) {
+        log.push({ step: "guard-ledger", error: String(e3 && e3.message || e3).slice(0, 140) });
       }
       try {
         var wtPath = (file.slice(-11) === "/worker.js") ? file.slice(0, -11) + "/wrangler.toml" : file;
