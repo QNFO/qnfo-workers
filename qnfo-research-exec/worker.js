@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.11";
+var VERSION = "0.9.12";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
