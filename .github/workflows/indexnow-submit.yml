@@ -1,0 +1,25 @@
+name: indexnow-submit
+
+# EXTERNAL (non-Cloudflare) IndexNow submitter.
+#
+# The qnfo-gateway Worker cron shares Cloudflare's egress IP, which IndexNow throttles (429)
+# across the shared relay and Bing. A Worker cannot change its egress IP, so the durable floor
+# is a submitter on a DIFFERENT IP: GitHub Actions runs on GitHub/Azure egress. This runs the
+# same submission the operator path proved (460/460 landed) and is belt-and-braces with the
+# Worker fan-out (which keeps yandex.com first, since that engine still accepts CF egress).
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: submit papers.qnfo.org URLs to IndexNow (external egress)
+        run: python scripts/indexnow-submit.py
