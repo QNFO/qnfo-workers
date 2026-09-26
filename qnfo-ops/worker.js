@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.69";
+var VERSION = "2.36.70";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -106,9 +106,9 @@ var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND id
 var OPS_ALIAS_LIMITS = OPS_ALIAS_LIMITATIONS;
 var OPS_ENDPOINT_LIMITATIONS = ["executing-agent models run a PURE SERVER-SIDE tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "relay models (deepseek-v4-flash, gpt-5*, o4-mini, pareto, qwen3.8-max) do NOT execute code/tools server-side", "no vision/image input on any advertised model", "ops-frontier-mini and ops-frontier-reason are aliases of ops-frontier (not distinct models)", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
 function opsModelIds() {
-  return opsModelCatalog().map(function(m) {
-    return m.id;
-  });
+  // OPS-SINGLE-MODEL-1 (2026-09-26): never expose the internal routing list (manifest/health).
+  // The endpoint advertises exactly one model; provider/upstream selection stays back-end.
+  return [OPS_PUBLIC_MODEL];
 }
 __name(opsModelIds, "opsModelIds");
 __name2(opsModelIds, "opsModelIds");

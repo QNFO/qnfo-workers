@@ -55,5 +55,11 @@ environment = "production"
 name = "PERSONAL_TWIN_AGENT"
 class_name = "PersonalTwinAgent"
 
+# DO-EXPORTS-RECONCILE-1 (2026-09-26): wrangler 4.118 fails a deploy unless every provisioned
+# Durable Object class is declared in `exports`. Mirrors the qnfo-fleet-control fix.
+[exports.PersonalTwinAgent]
+type = "durable-object"
+storage = "sqlite"
+
 [triggers]
 crons = ["5 5 * * *"]
