@@ -26,7 +26,7 @@ __name222(fnv32, "fnv32");
 __name2222(fnv32, "fnv32");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.59";
+var VERSION = "2.36.60";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2897,10 +2897,29 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
 }
 __name(callDeepSeekStream, "callDeepSeekStream");
 __name2(callDeepSeekStream, "callDeepSeekStream");
+function attachmentGuard(text) {
+  const m = String(text || "");
+  if (!/FILE_CONTENT\s*=/.test(m)) return "";
+  let size = 0, mm;
+  const re = /FILE_SIZE\s*=\s*(\d+)/g;
+  while ((mm = re.exec(m))) { if (Number(mm[1]) > size) size = Number(mm[1]); }
+  if (size <= 0) return "";
+  const emptyContent = !/FILE_CONTENT\s*=\s*\S/.test(m);
+  return emptyContent ? "OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it." : "";
+}
+__name(attachmentGuard, "attachmentGuard");
+
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] && arr[i].role === "user") return String(arr[i].content || "");
+    if (arr[i] && arr[i].role === "user") {
+      const _c = String(arr[i].content || "");
+      const _g = attachmentGuard(_c);
+      if (_g) { const _nc = _c + "
+
+[" + _g + "]"; arr[i].content = _nc; return _nc; }
+      return _c;
+    }
   }
   return "";
 }
