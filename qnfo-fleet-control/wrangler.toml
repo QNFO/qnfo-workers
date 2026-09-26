@@ -97,6 +97,6 @@ REVIEW_MODEL = "@cf/openai/gpt-oss-120b"
 name = "FleetAdvisor"
 class_name = "FleetAdvisor"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["FleetAdvisor"]
+[exports.FleetAdvisor]
+type = "durable-object"
+storage = "sqlite"
