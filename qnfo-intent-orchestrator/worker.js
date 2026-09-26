@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.6";
+var VERSION = "1.3.5";
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -487,7 +487,7 @@ async function selfRegister(env) {
     routes: ["/health", "/intent", "/intents", "/intents/stats", "/digest", "/digest/send", "/triage/run", "/triage/sync", "/triage/candidates", "/triage/stats", "/triage/dispatch", "/triage/candidate"],
     tools: [],
     models: [],
-    deps: ["ai:AI", "cron:2x", "d1:qnfo-audit", "service:calendar-api", "service:qnfo-agent-orchestrator", "service:qnfo-ai", "service:qnfo-ops", "vectorize:personal-life", "vectorize:qnfo-ai-log"]
+    deps: ["qnfo-ai (router, RT)", "D1 qnfo-audit", "personal-life-search", "calendar-api", "AI (embeddings)", "INTENT_TOKEN"]
   };
   const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
     method: "POST",

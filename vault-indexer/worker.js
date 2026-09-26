@@ -20,10 +20,9 @@
  * v0.1.18: F1b SELF-HEAL - on version change the worker self-reports VERSION to the deploy-guard /ledger (R2 marker guards it to once per change), so service_registry stays current regardless of deploy path (raw wrangler deploys no longer re-stale it).
  * v0.1.19: F1b self-heal hardened - only re-mark on a 2xx report; re-report every 6h (heals drift without a version change); expose the outcome via the status JSON (self.selfreport).
  * v0.1.20: F1b self-heal bounded - write the R2 marker even on a non-2xx report so a failing report retries at most every 6h (not every run); the report outcome remains in the status JSON (self.selfreport). Canonical deploy path = POST /ops/deploy.
- * v0.1.21: removed the superseded F1b self-heal - the canonical deploy path (POST /ops/deploy) writes /ledger and refreshes the registry server-side, so the worker self-report (which 404'd on the workers.dev subrequest path) is no longer needed.
  * Canonical source: QNFO/qnfo-workers vault-indexer/
  */
-var VERSION = "0.1.21";
+var VERSION = "0.1.20";
 var WORKER = "vault-indexer";
 var MAX_LIST_PAGES = 100;
 var MAX_DOCS = 250;
@@ -251,8 +250,29 @@ async function run(env, cap) {
   } catch (e) { }
 
   if (haveLock) { try { await env.PERSONAL.prepare("DELETE FROM vault_indexer_lock WHERE id=1").run(); } catch (e) { } }
+  // F1b SELF-HEAL (v0.1.19): self-report VERSION to the deploy-guard on version change OR after 6h,
+  // so service_registry stays current regardless of the deploy path (a raw `wrangler deploy` no longer
+  // re-stales it). The R2 marker records VERSION|ISO and is rewritten only on a 2xx response; the
+  // outcome is exposed via the status JSON (readable at GET /stats -> self.selfreport).
+  var selfreport = "skip";
   try {
-    await env.VAULT.put("_meta/vault-indexer.status.json", JSON.stringify({ ts: new Date().toISOString(), scanned: s.scanned, changed: s.changed, indexed: s.indexed, chunks: s.chunks, reconciled: s.reconciled, errors: s.errors }), { httpMetadata: { contentType: "application/json" } });
+    var svObj = await env.VAULT.get("_meta/self-version.txt");
+    var raw = svObj ? String(await svObj.text()) : "";
+    var seg = raw.split("|");
+    var lastV = (seg[0] || "").trim();
+    var lastTs = seg[1] ? Date.parse(seg[1]) : 0;
+    var due = (lastV !== VERSION) || !lastTs || ((Date.now() - lastTs) > 21600000);
+    if (due) {
+      try {
+        var rr = await fetch("https://qnfo-deploy-guard.q08.workers.dev/ledger", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ worker: WORKER, to: VERSION, note: "self-report version-change (F1b self-heal)", actor: "vault-indexer/" + VERSION, ok: true }) });
+        selfreport = "sent:" + rr.status;
+        await env.VAULT.put("_meta/self-version.txt", VERSION + "|" + new Date().toISOString(), { httpMetadata: { contentType: "text/plain" } });
+      } catch (e) { selfreport = "fetch-err:" + String((e && e.message) || e).slice(0, 110); }
+    }
+  } catch (e) { selfreport = "outer-err:" + String((e && e.message) || e).slice(0, 110); }
+
+  try {
+    await env.VAULT.put("_meta/vault-indexer.status.json", JSON.stringify({ ts: new Date().toISOString(), scanned: s.scanned, changed: s.changed, indexed: s.indexed, chunks: s.chunks, reconciled: s.reconciled, errors: s.errors, selfreport: selfreport }), { httpMetadata: { contentType: "application/json" } });
   } catch (e) { }
 
   s.elapsedMs = Date.now() - t0;

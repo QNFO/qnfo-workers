@@ -93,9 +93,11 @@ def main(argv):
         print("%-34s %-14s %-40s %s" % ("worker", "verdict", "source", "mirror"))
         for r in rows:
             print("%-34s %-14s %-40s %s" % r)
-    print("\nsummary: lagging=%d fixed=%d missing_mirror=%d" % (len(drift), len(fixed), len(missing)))
+    print("\nsummary: lagging=%d fixed=%d missing_mirror=%d captured=%d" % (len(drift), len(fixed), len(missing), len(captured)))
     if missing:
         print("missing mirror: " + ", ".join(missing))
+    if captured:
+        print("captured mirror: " + ", ".join(captured))
     if drift and not fix:
         print("\nDRIFT GATE FAILED - run with --fix to regenerate from source, then commit BOTH files")
     return 1 if (drift and not fix) else 0
