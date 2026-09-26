@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.63";
+var VERSION = "2.36.64";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2873,6 +2873,26 @@ async function callGLM(env, messages, maxTokens, tools, opts) {
 __name(callGLM, "callGLM");
 __name2(callGLM, "callGLM");
 __name22(callGLM, "callGLM");
+async function budgetFallback(env, messages, maxTokens, tools, opts) {
+  if (!env.WAI) { console.log("OPS_FREE_FALLBACK unavailable: no WAI binding"); return null; }
+  const o = opts || {};
+  const _free = [UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/meta/llama-3.3-70b-instruct-fp8-fast"];
+  for (let _i = 0; _i < _free.length; _i++) {
+    try {
+      const _inputs = { messages: truncateToContext(messages, CODE_MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192) };
+      if (maxTokens) _inputs.max_tokens = maxTokens;
+      if (o.temperature != null) _inputs.temperature = o.temperature;
+      if (tools && tools.length) { _inputs.tools = tools; if (o.toolChoice) _inputs.tool_choice = o.toolChoice; }
+      const _r = await env.WAI.run(_free[_i], _inputs);
+      let _msg = null;
+      if (_r && Array.isArray(_r.choices) && _r.choices[0]) _msg = _r.choices[0].message;
+      else { const _t = _r && (_r.response != null ? _r.response : _r.answer) || ""; if (_t) _msg = { role: "assistant", content: String(_t) }; }
+      if (_msg) { console.log("OPS_FREE_FALLBACK served by " + _free[_i]); return { resp: { choices: [{ index: 0, message: _msg, finish_reason: "stop" }], usage: _r && _r.usage || {} }, servedBy: _free[_i] + " (free-fallback)" }; }
+    } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); }
+  }
+  return null;
+}
+__name(budgetFallback, "budgetFallback");
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
   if (o.codeMode && env.WAI) {
@@ -2926,7 +2946,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400));
     });
   }
-  if (!resp || !resp.ok) throw new Error(_dsLastErr || "deepseek upstream unavailable after 3 attempts");
+  if (!resp || !resp.ok) { const _fb = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb) { console.log("OPS_PAID_FAIL_FREE_FALLBACK callDeepSeek"); return _fb; } throw new Error(_dsLastErr || "deepseek upstream unavailable after 3 attempts"); }
   const _out = await resp.json();
   const _servedBy = o.codeMode ? o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL : o.upstreamModel ? o.upstreamModel : o.__glmFallbackErr ? UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_MODEL;
   return { resp: _out, servedBy: _servedBy };
@@ -2961,7 +2981,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     if (_st < 500 && _st !== 429) break;
     if (_dsTry < 2) await new Promise(function(rr) { setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400)); });
   }
-  if (!resp || !resp.ok || !resp.body) throw new Error(_dsLastErr || "deepseek stream upstream unavailable after 3 attempts");
+  if (!resp || !resp.ok || !resp.body) { const _fb = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb) { console.log("OPS_PAID_FAIL_FREE_FALLBACK callDeepSeekStream"); return _fb; } throw new Error(_dsLastErr || "deepseek stream upstream unavailable after 3 attempts"); }
   const reader = resp.body.getReader();
   const dec = new TextDecoder();
   let buf = "", content = "", finish = "stop", usage = null;
