@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.8-authoritative-registry";
+var VERSION = "2.37.9-guard-ledger-sync";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4991,6 +4991,16 @@ async function opsDeploy(env, args) {
         log.push({ step: "verify", live_version: live });
       } catch (e) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
+      }
+      // DEPLOY-GUARD-LEDGER-SYNC-1 (2026-09-26): advance the deploy-guard registry
+      // version to the newly-live version in the SAME deploy. Without this the guard's
+      // current_version lags by one, and EVERY subsequent deploy is refused with
+      // version-mismatch until an operator manually reconciles the ledger.
+      try {
+        const gl = await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, to: live || toVer || srcVer || null, actor: "qnfo-ops/ops-deploy", ok: !!(dep && dep.ok), note: "auto-advance deploy-guard registry after deploy" }) });
+        log.push({ step: "guard-ledger", http: gl.status });
+      } catch (e3) {
+        log.push({ step: "guard-ledger", error: String(e3 && e3.message || e3).slice(0, 140) });
       }
       try {
         var wtPath = (file.slice(-11) === "/worker.js") ? file.slice(0, -11) + "/wrangler.toml" : file;
