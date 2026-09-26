@@ -29,7 +29,7 @@ __name222(fnv32, "fnv32");
 __name2222(fnv32, "fnv32");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.57";
+var VERSION = "2.36.58";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -673,7 +673,7 @@ __name2222(listIssues, "listIssues");
 __name22222(listIssues, "listIssues");
 async function triggerBacklog(env, args, userText) {
   function userAffirmative(t2) {
-    return /\b(yes|yep|yeah|confirm|confirmed|go ahead|do it|run it|proceed|drain|execute|run|trigger|fix|start|please)\b/i.test(String(t2 || ""));
+    return /\b(yes|yep|yeah|confirm|confirmed|go ahead|do it|run it|proceed|drain|execute|exec|run|trigger|fix|start|please|remediate|remediation|resolve|close|clear|backlog)\b/i.test(String(t2 || ""));
   }
   __name(userAffirmative, "userAffirmative");
   __name2(userAffirmative, "userAffirmative");
