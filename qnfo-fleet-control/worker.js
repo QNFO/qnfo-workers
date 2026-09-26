@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.27-costimpact";
+var VERSION = "0.4.28-budgetgate";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1377,6 +1377,11 @@ async function optimizeFleet(env) {
     } catch (e) {
     }
   }
+  try {
+    out.budget = await budgetAudit(env, names);
+  } catch (e) {
+    out.budgetError = String(e && e.message || e).slice(0, 120);
+  }
   return out;
 }
 __name(optimizeFleet, "optimizeFleet");
@@ -1687,6 +1692,48 @@ async function cronDrift(env, names, out) {
   }
 }
 __name(cronDrift, "cronDrift");
+// NODE-BUDGET-GATE-1 (2026-09-26): standing per-class node budget (qnfo-audit.fleet_budget).
+// Every scan/optimize refreshes fleet_budget.current for workers from the live CF script list and,
+// when a class is at/over cap, files a disposition row + report line. NET-ZERO RULE: at/over cap a
+// NEW worker registration must name a same-class retirement; growth is never silently absorbed.
+async function budgetAudit(env, names) {
+  var out = { classes: 0, over: [] };
+  try {
+    var live = Array.isArray(names) ? names.length : null;
+    var rows = await env.AUDIT.prepare("SELECT node_class, cap, target, current FROM fleet_budget").all();
+    var rs = rows && rows.results || [];
+    for (var i = 0; i < rs.length; i++) {
+      var r = rs[i];
+      out.classes++;
+      if (r.node_class === "workers" && live != null) {
+        try {
+          await env.AUDIT.prepare("UPDATE fleet_budget SET current=?1, updated_at=datetime('now') WHERE node_class='workers'").bind(live).run();
+        } catch (e) {
+        }
+        if (live > Number(r.cap)) out.over.push("workers live=" + live + " cap=" + r.cap + " (+" + (live - Number(r.cap)) + ")");
+      } else if (Number(r.current) > Number(r.cap)) {
+        out.over.push(r.node_class + " cur=" + r.current + " cap=" + r.cap);
+      }
+    }
+    if (out.over.length) {
+      out.note = "BUDGET-OVER " + out.over.join("; ");
+      try {
+        await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES ('node-budget','fleet-budget',?1,datetime('now'),'detected')").bind(out.note).run();
+      } catch (e) {
+      }
+      try {
+        await report(env, "BUDGET", "", "", "", out.note);
+      } catch (e) {
+      }
+    } else {
+      out.note = "BUDGET-OK classes=" + out.classes;
+    }
+  } catch (e) {
+    out.note = "budgetAudit error: " + String(e && e.message || e).slice(0, 120);
+  }
+  return out;
+}
+
 async function scan(env, heal) {
   var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
@@ -1796,6 +1843,11 @@ async function scan(env, heal) {
   try {
     await cronDrift(env, names, out);
   } catch (e) {
+  }
+  try {
+    out.budget = await budgetAudit(env, names);
+  } catch (e) {
+    out.budgetError = String(e && e.message || e).slice(0, 120);
   }
   return out;
 }
