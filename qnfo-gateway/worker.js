@@ -1,4 +1,4 @@
-var VERSION="3.7.3-sitemap";
+var VERSION="3.7.4-healthver";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1129,7 +1129,7 @@ __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.2-mathbalance" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1602,7 +1602,7 @@ var gateway_worker_default = {
         if (method === "GET" && p.startsWith("/neighbors/")) return handleNeighbors(p.replace("/neighbors/", ""), env);
         if (method === "GET" && p === "/edges") return handleEdges(u, env);
         if (method === "GET" && p.startsWith("/impact/")) return handleImpact(p.replace("/impact/", ""), env);
-        if (p === "/" || p === "/health") return json({ status: "ok", version: "3.4", database: "qnfo-graph" });
+        if (p === "/" || p === "/health") return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, database: "qnfo-graph" });
         return json({ error: "Not found", path: p }, 404);
       } catch (e) {
         return json({ error: e.message }, 500);
