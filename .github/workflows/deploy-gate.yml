@@ -85,3 +85,9 @@ jobs:
       # the edited worker is not the one carrying the offending cron.
       - name: CRON-RATE-CEILING-1 sweep (all worker dirs)
         run: python3 scripts/cron_rate_guard.py --root .
+
+      # NARRATIVE-PROMPT-GUARD-1 (2026-09-26): a free-form narrative system prompt must
+      # guide PROCESS, not prescribe specific output TEXT. Fails if a narrative-generation
+      # worker source re-acquires the output-text prescriptions stripped from qnfo-ai v5.28.6.
+      - name: NARRATIVE-PROMPT-GUARD-1 (narrative prompt guides process, not output text)
+        run: python3 scripts/narrative-prompt-guard.py
