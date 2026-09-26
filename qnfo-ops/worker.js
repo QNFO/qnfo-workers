@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.7-downgrade-gate";
+var VERSION = "2.37.8-authoritative-registry";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4291,7 +4291,15 @@ async function registryRefresh(env) {
   for (const w of apiList) {
     if (w.id === "qnfo-ops") continue;
     try {
-      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(w.id, "worker", null, "https://" + w.id + ".q08.workers.dev", null, "[]", "[]", "[]", "[]", "[]", now).run();
+      // FM6 AUTHORITATIVE-READ (2026-09-26): set the version from the DEPLOYED BUNDLE via
+      // cfWorkerRead (/content/v2 -> VERSION), NOT a null stub and NOT a /health probe
+      // (CF egress cannot reliably reach *.workers.dev -> 1042; the bundle read is authoritative).
+      let _wv = null;
+      try { const _rd = await cfWorkerRead(env, { worker: w.id, maxChars: 400 }); if (_rd && _rd.ok && _rd.version) _wv = String(_rd.version); } catch (e) {
+      }
+      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(w.id, "worker", _wv, "https://" + w.id + ".q08.workers.dev", null, "[]", "[]", "[]", "[]", "[]", now).run();
+      if (_wv) { try { await env.QNFO_AUDIT.prepare("UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3 AND (version IS NULL OR version=?1)").bind(_wv, now, w.id).run(); } catch (e) {
+      } }
     } catch (e) {
     }
   }
