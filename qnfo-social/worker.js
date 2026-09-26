@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.12-linkcheck-marker';
+var VERSION = '0.7.13-suppress-nonpublished';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -489,6 +489,14 @@ async function urlResolves(url, marker) {
     return false;
   }
 }
+async function httpStatus(url) {
+  try {
+    const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-gate)" } });
+    return r.status;
+  } catch (e) {
+    return 0;
+  }
+}
 async function drainDissemination(env) {
   await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
   await env.DB.prepare("UPDATE dissemination_tracker SET action='queued', retry_count=COALESCE(retry_count,0)+1, updated_at=datetime('now') WHERE action='failed' AND COALESCE(retry_count,0) < 3 AND updated_at < datetime('now','-30 minutes')").run();
@@ -503,8 +511,13 @@ async function drainDissemination(env) {
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posting', updated_at=datetime('now') WHERE id=? AND action='queued'").bind(row.id).run();
       const link = row.pages_url || ("https://papers.qnfo.org/papers/" + String(row.paper_slug) + "/");
       if (!(await urlResolves(link, String(row.paper_slug || "").slice(0, 40)))) {
-        await env.DB.prepare("UPDATE dissemination_tracker SET action='link-dead', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind("LINK-RESOLUTION-GATE: does not resolve 200: " + link, row.id).run();
-        console.log("LINK_DEAD dissemination " + row.id + " " + link);
+        // SUPPRESS-NON-PUBLISHED-1 (2026-09-26): a 404 means the target paper is no longer
+        // published (e.g. quarantined after enqueue) -> suppress, never spam link-dead.
+        const st = await httpStatus(link);
+        const act = st === 404 ? "suppressed" : "link-dead";
+        const note = st === 404 ? "SUPPRESSED: target paper not published (404): " : "LINK-RESOLUTION-GATE: does not resolve 200: ";
+        await env.DB.prepare("UPDATE dissemination_tracker SET action=?, post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(act, note + link, row.id).run();
+        console.log("LINK_GATE dissemination " + row.id + " " + act + " " + link);
         continue;
       }
       const text = truncateSafe(String(row.paper_title || row.paper_slug) + " \u2014 " + link, 290);
