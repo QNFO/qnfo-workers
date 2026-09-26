@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.74";
+var VERSION = "2.36.75";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2804,7 +2804,13 @@ async function ensureSchema(env) {
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_ai_log (id TEXT PRIMARY KEY, ts TEXT NOT NULL, model TEXT, strategy TEXT, complexity TEXT, domain TEXT, prompt TEXT, response TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost_usd REAL, latency_ms INTEGER, tool_calls TEXT, source TEXT, ua TEXT, streamed INTEGER DEFAULT 0, ok INTEGER DEFAULT 1)").run();
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS service_registry (service TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'worker', version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT)").run();
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS capability_audit_snapshot (service TEXT PRIMARY KEY, version TEXT, capabilities TEXT, limitations TEXT, ts TEXT)").run();
-    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS llm_gateway_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), provider TEXT, model TEXT, tier TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, status INTEGER DEFAULT 200, error TEXT, streamed INTEGER DEFAULT 0, prompt_chars INTEGER DEFAULT 0, source TEXT)").run();
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS llm_gateway_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), provider TEXT, model TEXT, tier TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, status INTEGER DEFAULT 200, error TEXT, streamed INTEGER DEFAULT 0, prompt_chars INTEGER DEFAULT 0, source TEXT, upstream_model TEXT)").run();
+    // OPS-TRACE-1 (2026-09-26): attribution + task-level-join columns. upstream_model records the REAL served
+    // upstream (ONE-MODEL-PER-ENDPOINT-1 hides it behind the public 'ops' alias); job_id gives an exact
+    // task-level join to ops_jobs.status so calibration can use per-TASK outcomes, not per-call ok.
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN upstream_model TEXT").run(); } catch (eA1) {}
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN job_id TEXT").run(); } catch (eA2) {}
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE llm_gateway_log ADD COLUMN upstream_model TEXT").run(); } catch (eA3) {}
   } catch (e) {
   }
 }
@@ -2819,12 +2825,12 @@ async function logOps(env, rec) {
   await ensureSchema(env);
   if (rec && String(rec.ua || "").indexOf("QNFO-AI-Calibration") >= 0) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)").bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", rec.domain || "ops", typeof rec.prompt === "string" ? rec.prompt : rec.prompt ? JSON.stringify(rec.prompt) : "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok, upstream_model, job_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)").bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", rec.domain || "ops", typeof rec.prompt === "string" ? rec.prompt : rec.prompt ? JSON.stringify(rec.prompt) : "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0, rec.upstream_model || null, rec.job_id || null).run();
   } catch (e) {
     console.log("ops_ai_log insert failed:", e && e.message || e);
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO llm_gateway_log (ts, provider, model, tier, in_tokens, out_tokens, cost_usd, latency_ms, status, error, streamed, prompt_chars, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)").bind(rec.ts, "workers-ai", rec.model, rec.strategy || null, rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.ok ? 200 : 500, rec.ok ? null : String(rec.response || "").slice(0, 300), rec.streamed ? 1 : 0, String(rec.prompt || "").length, rec.source || "deepchat").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO llm_gateway_log (ts, provider, model, tier, in_tokens, out_tokens, cost_usd, latency_ms, status, error, streamed, prompt_chars, source, upstream_model) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)").bind(rec.ts, "workers-ai", rec.model, rec.strategy || null, rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.ok ? 200 : 500, rec.ok ? null : String(rec.response || "").slice(0, 300), rec.streamed ? 1 : 0, String(rec.prompt || "").length, rec.source || "deepchat", rec.upstream_model || null).run();
   } catch (e2) {
   }
   if (rec && !rec.ok) {
@@ -3699,7 +3705,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     content = stripToolFrames(content);
     const truncMark = /truncated by the token budget|please re-send your request|reached the iteration cap|tool loop reached the iteration cap/i;
     const okFlag = String(content || "").trim().length > 0 && !truncMark.test(String(content || "")) ? 1 : 0;
-    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? servedBy || UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: okFlag };
+    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? servedBy || UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, upstream_model: servedBy || null, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: okFlag };
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {
@@ -3815,7 +3821,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       return await finalize();
     } catch (e) {
       const errText = "ops agent error: " + (e && e.message ? e.message : String(e));
-      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "agent", prompt, response: errText.slice(0, 2e3), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "agent", prompt, response: errText.slice(0, 2e3), upstream_model: servedBy || null, latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
       if (isStream) {
         emitChunk({ role: "assistant", content: errText }, null);
         emitChunk({}, "stop");
@@ -4547,6 +4553,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     let finishReason = "stop";
     let final = null;
     let upUsage = null;
+    let jobServedBy = null;
     const addUsage = /* @__PURE__ */ __name222222(function(rU) {
       if (rU && rU.usage) {
         if (!upUsage) upUsage = { prompt_tokens: 0, completion_tokens: 0 };
@@ -4578,7 +4585,8 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "3 seconds", backoff: "linear" }, timeout: "15 minutes" }, async function() {
-          const { resp: r } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
+          const { resp: r, servedBy: _sb } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
+          jobServedBy = _sb || jobServedBy;
           return JSON.parse(JSON.stringify(r));
         });
       } catch (e) {
@@ -4621,7 +4629,8 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       finishReason = choice && choice.finish_reason || "stop";
       if (withTools && finishReason === "length") {
         try {
-          const { resp: r3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
+          const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
+          jobServedBy = _sb3 || jobServedBy;
           addUsage(r3);
           const c3 = r3 && r3.choices && r3.choices[0];
           const m3 = c3 && c3.message;
@@ -4637,7 +4646,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     if (!final) final = { status: "succeeded", response: String(content || "(iteration cap reached with no final answer)"), finishReason };
     const doneRes = await step.do("job-finalize", async function() {
       await jobSet(env, jobId, final.status, { response: final.response, tool_log: JSON.stringify(toolLog).slice(0, 3e3), strategy: "job-workflow" });
-      const rec = { id: randId("ops-"), ts: iso(), model: body.model || "ops-exec", strategy: "job-workflow", prompt, response: String(final.response || "").slice(0, 2e4) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: upUsage && upUsage.prompt_tokens ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: upUsage && upUsage.completion_tokens ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.error ? 0 : String(final.response || "").trim() ? 1 : 0 };
+      const rec = { id: randId("ops-"), ts: iso(), model: body.model || "ops-exec", strategy: "job-workflow", upstream_model: jobServedBy || execUpstream || null, job_id: jobId, prompt, response: String(final.response || "").slice(0, 2e4) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: upUsage && upUsage.prompt_tokens ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: upUsage && upUsage.completion_tokens ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.error ? 0 : String(final.response || "").trim() ? 1 : 0 };
       await logOps(env, rec);
       return { status: final.status, error: final.error || null, response: String(final.response || "").slice(0, 2e3) };
     });
