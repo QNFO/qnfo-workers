@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.10";
+var VERSION = "0.9.11";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -180,6 +180,14 @@ async function markError(env, row, msg) {
     ).bind(String(msg).slice(0, 300), row.id).run();
   } else {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
+    try {
+      var _rid = String(row.id).slice(0, 8);
+      var _ex = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 LIMIT 1").bind("RESEARCH-TERMINAL " + _rid + "%").first();
+      if (!_ex) {
+        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,'qnfo-research-exec','pipeline','medium','open',CAST(strftime('%s','now') AS INTEGER)*1000,CAST(strftime('%s','now') AS INTEGER)*1000)").bind("RESEARCH-TERMINAL " + _rid + ": " + String(msg).slice(0, 110), "research_queue row " + row.id + " went terminal at recover_count>=3: " + String(msg).slice(0, 280)).run();
+      }
+      await logEvent(env, "terminal-issue", "filed agent_issue for terminal row " + _rid, "error");
+    } catch (eF) {}
   }
 }
 __name(markError, "markError");
