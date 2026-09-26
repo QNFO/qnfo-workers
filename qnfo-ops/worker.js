@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.65";
+var VERSION = "2.36.66";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -151,6 +151,7 @@ function opsModelCatalog() {
 __name(opsModelCatalog, "opsModelCatalog");
 __name2(opsModelCatalog, "opsModelCatalog");
 var MODEL_CTX = 1048576;
+var OPS_PROMPT_CTX = 262144; // OPS-PROMPT-CAP-1 (2026-09-26): cap ops prompt budget (was MODEL_CTX=1M; enabled multi-MB runaway prompts billed ~$86 on 2026-09-13)
 var CORS_HEADERS = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -2856,7 +2857,7 @@ __name22222(callWorkersAI, "callWorkersAI");
 __name222222(callWorkersAI, "callWorkersAI");
 async function callGLM(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
-  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const inputs = { messages: msgs };
   if (maxTokens) inputs.max_tokens = maxTokens;
   if (o.temperature != null) inputs.temperature = o.temperature;
@@ -2913,7 +2914,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       console.log("OPS_GLM_FALLBACK " + UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__glmFallbackErr);
     }
   }
-  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
@@ -2960,7 +2961,7 @@ __name22222(callDeepSeek, "callDeepSeek");
 __name222222(callDeepSeek, "callDeepSeek");
 async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta) {
   const o = opts || {};
-  const msgs = truncateToContext(messages, MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192);
+  const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
@@ -3606,7 +3607,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     }
     const _streamModel = execUpstream || UPSTREAM_MODEL;
     const _streamIsOAI = isOAIUpstream(_streamModel);
-    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, MODEL_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
