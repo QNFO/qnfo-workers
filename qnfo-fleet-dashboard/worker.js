@@ -7,7 +7,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.14"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var VERSION = "1.7.15"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2412,7 +2412,7 @@ async function redHtml(env) {
   }
   H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + sh.length + ' ARMED kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>');
   for (const r of sh) H.push('<tr><td class="bad"><b>' + esc(r.id) + '</b></td><td>' + esc(r.phase) + '</td><td class="bad">' + esc(r.component) + '</td><td>' + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + '</td><td>' + esc(r.due_date) + '</td><td class="bad">' + esc(r.state) + "</td></tr>");
-  H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory.</div><div class="sub">EARLY-TRIGGER evaluation: invoice spend ' + (inv ? usd(inv.amount_due) : "n/a") + ' ' + (inv && Number(inv.amount_due) / 100 >= 150 ? '<b class="bad">&ge; $150/30d (half-true)</b>' : '&lt; $150/30d') + ' &middot; publish_events metric: <b class="bad">UNDEFINED</b> &mdash; cannot auto-evaluate; owner must define publish_events or the kill path stays ambiguous.</div></div>');
+  H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory. EARLY-TRIGGER is evaluated in the COST TRUTH panel below.</div></div>');
 
   // 2. SURVIVAL GATES vs measured
   let th = [];
@@ -2486,6 +2486,7 @@ async function redHtml(env) {
   H.push("<tr><td>Auto top-up</td><td>" + (tup ? "refill " + usd(tup.amount) + " when balance &lt; " + usd(tup.threshold) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? aiN.toLocaleString() + " neurons (&asymp;$15 est, model-mix dependent)" : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push('<tr><td>Spend limit</td><td>$150 / 30d sliding (monthly-150, enabled)</td></tr>');
+  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (inv ? usd(inv.amount_due) : "n/a") + " " + (inv && Number(inv.amount_due) / 100 >= 150 ? '<b class="bad">&ge; $150/30d (half-true)</b>' : '&lt; $150/30d') + " &middot; publish_events: <b class="bad">UNDEFINED</b> &mdash; cannot auto-evaluate; owner must define publish_events or the kill path stays ambiguous</td></tr>");
   H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits (e.g. $18.08 pretax credit on the gpt-5.5 line); gateway spend is dominated by agent-session LLM traffic.</div></div>');
 
   // 4. COMPLETE OPEN-ISSUE INVENTORY
