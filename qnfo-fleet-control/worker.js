@@ -2089,6 +2089,11 @@ async function disposeRetired(env) {
     }
     for (var name in targets) {
       if (protectedNames[name]) continue;
+      var inv = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM worker_invocations WHERE worker_name = ? AND created_at > datetime('now','-1 day')").bind(name).first();
+      if (inv && inv.n > 0) {
+        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: OUTPUT-CONTRACT: producing worker (" + inv.n + " invocations/24h); delete blocked").run();
+        continue;
+      }
       var recent = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE ? AND ts > datetime('now','-1 day')").bind(name + "%").first();
       if (recent && recent.n > 0) continue;
       var res = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts/" + name, { method: "DELETE", headers: { Authorization: "Bearer " + token } });
