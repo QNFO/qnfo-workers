@@ -1,70 +1,82 @@
-# COST-OPTIMIZED MODEL-CALL STRATEGY (fleet v1)
+# COST-OPTIMIZED MODEL-CALL STACK (fleet v2 — IMPLEMENTED)
 
-Status: strategy, grounded in live telemetry, 2026-09-26.
-Evidence: qnfo-audit D1 — llm_gateway_log, model_ladder_tiers/models/routes/budget, chat_canary, ai_model_health.
+Status: **IMPLEMENTED FLEETWIDE** 2026-09-26 (COST-ROUTING-STACK-1). This document is the
+permanent reference: what we built, where it lives, how it is measured, and what future
+updates must preserve. Skill twin: `cost-optimized-routing` (qnfo-skills + DeepChat).
 
-## 0. Thesis (one line)
-A cheap/free model matches a frontier model on a task only when (a) the task is routed to the
-cheapest model that passes a CAPABILITY GATE for that task class, (b) a DETERMINISTIC VERIFIER
-catches its failures and triggers escalation, and (c) CONTEXT COST is controlled. Without (b)/(c),
-"cheap" is a trap that costs more in retries and context than the frontier call it replaced.
+Live implementation: qnfo-ops **v2.37.x** (deployed, verified) · qnfo-ai **v5.29.0** (deployed, verified)
+· AI Gateway `default` + `ops` cache-tuned · D1 qnfo-audit routing_capability / routing_policy /
+model_ladder_* / cost_router_metrics.
 
-## 1. Live evidence (2026-09-26)
-- Gateway-path spend (llm_gateway_log) 30d: $3.98. Consolidated AI-Gateway burn Sept 2026: $188.10
-  (model_ladder_budget) — the ops agent path is a small fraction; context/other traffic dominates.
-- Input:output ratio ~34:1 (ops-exec 6.93M in / 0.20M out over 138 calls = ~50K in/call;
-  ops-frontier-mini ~100K in/call). Input tokens are the cost surface.
-- cache_read_tokens = 0 across ALL rows -> prompt/prefix caching is NOT realized, although every
-  catalog row carries a cache_in price. This is the single largest unclaimed lever.
-- A 3-tier ladder already exists: T1 free $0, T2 low-cost frontier $120/mo, T3 top-cost $30/mo;
-  18-model catalog with quality scores + per-tier documented failure modes; task-class routing.
-- BUT model_ladder_routes was last calibrated 2026-09-15; canary_passes=0 and fail_count_24h=0
-  everywhere -> the adaptive routing layer is dormant, not learning from live outcomes.
-- chat_canary: ensemble 294/294, deepseek-v4-flash 147/157, ops-exec 4/10, ops-frontier 2/6
-  (stale) -> tool-call validity is the discriminating capability for agent loops.
+Thesis (one line): a cheap/free model matches a frontier model on a task only when (a) the task is
+routed to the cheapest model that passes a CAPABILITY GATE for that task class, (b) a DETERMINISTIC
+VERIFIER catches its failures and triggers escalation, and (c) CONTEXT COST is controlled. Without
+(b)/(c), "cheap" is a trap that costs more in retries and context than the frontier call it replaced.
 
-## 2. Definitions (fix the common confusion)
-- Mixture-of-Experts (MoE) is an ARCHITECTURE inside one model (sparse expert sub-networks). It is
-  NOT a cross-model routing strategy. "Send each query to the right model" is MODEL ROUTING.
-- Ensemble / Mixture-of-Agents (MoA) = several models per query. Self-consistency = several samples
-  of one model. Both are N x inference -> economical only on free or cached models.
+## The layered stack (cheapest lever first)
 
-## 3. The layered strategy (cheapest lever first)
-L0 DETERMINISTIC-FIRST — answer without a model: SQL/regex/probe handlers, templates, cached facts.
-   Biggest lever: removes the call entirely.
-L1 CONTEXT ECONOMICS — prompt/prefix caching; history compaction/summarization; retrieval instead of
-   full-context; bounded tool outputs; structured state in D1 instead of re-injected prose.
-   (Fleet gap: 0% cache reads at ~50-100K input tokens/call.)
-L2 CACHE — exact KV cache; SEMANTIC cache (embed query -> Vectorize -> serve above a cosine threshold).
-L3 CAPABILITY GATE, THEN PRICE — route only to models that pass the tool-call / schema canary for the
-   task class; a cheap model that fails tool_calls costs MORE via retries.
-L4 CASCADE (FrugalGPT) — cheap first; escalate ONLY on verifier failure (tests, schema, lint,
-   re-probe). The verifier is what makes cheap safe; for code, tests are the verifier.
-L5 CONSISTENCY ESCALATION — sample the cheap model k times; disagreement = uncertainty -> escalate.
-   Cheaper than always-frontier; a cheap uncertainty signal.
-L6 MoA / ENSEMBLE — only with FREE (@cf) or cached models. Correlated failure is real (shared training
-   data) -> still verify. Never an ensemble of paid models.
-L7 DRAFT-VERIFY (agent-level speculative) — cheap drafts, frontier verifies/repairs; or frontier plans,
-   cheap executes.
-L8 DISTILLATION — frontier generates labeled trajectories -> small specialist (Workers AI LoRA) or a
-   few-shot exemplar bank; amortizes frontier cost across many cheap inferences.
-L9 BUDGET-AWARE SCHEDULING — off-peak pricing (deepseek peak x2), batch APIs 50% off, per-tier caps,
-   free-fallback on cap hit (BUDGET-CAP-FREE-FALLBACK-1).
+| Layer | Mechanism | Where it lives (2026-09-26) | Status |
+|---|---|---|---|
+| **L0** deterministic-first | answer without a model: SQL/regex/probe handlers, templates | qnfo-ops `deterministicOpsAnswer()` in handleChat (cost / version / health / models / `run tools.exec: A*B` probe); zero tokens, `_router.deterministic:true` | **LIVE** (verified) |
+| **L1** cache (exact + semantic) | AI Gateway response cache; KV exact-match; Vectorize semantic (embed query → nearest cache; serve above cosine threshold); context economics (prefix reuse, compaction, bounded tool outputs, never re-send full history) | Gateway `cache_ttl=86400` + `cache_invalidate_on_update=true` on `default`+`ops`; qnfo-ops exact KV `qnfo-ops-cache` (1h TTL) + semantic `qnfo-ops-semcache` (cosine≥0.93); qnfo-ai semantic cache over `qnfo-ai-log` LOG_VZ (cosine≥0.95, same-model, 30d); context economics: `OPS_PROMPT_CTX=262144` + `truncateToContext` + bounded tool results | **LIVE** (exact-KV hit verified: $0, hit rate 1.0) |
+| **L2** capability gate before price gate | a cheap model that fails tool_calls costs MORE via retries → route only to models passing the canary for that class | qnfo-ops `agentLoopIncapable()` reads `routing_capability` (D1, 5-min cache); free-first @cf restricted to the CHAT class (tools-bearing calls skip the free tier); capability matrix canary-refreshed (below) | **LIVE** |
+| **L3** cascade / router | free @cf → cheap paid → frontier; escalate ONLY on measured failure signals (empty content, tool-call parse failure, validation failure, 429); a deterministic verifier makes cascades cheap | qnfo-ops ladder `deepseek/deepseek-v4-flash` → `deepseek/deepseek-v4-pro` → free last-resort (`budgetFallback`); tool-call validator (unknown names / unparseable args = escalation), provider tool-array repair, relay tools cap 64, 429→free; every escalation row → `model_ladder_escalations` | **LIVE** |
+| **L4** ensemble / MoA | N× cost — only when components are FREE or CACHED; correlated failure is real, verification still required | qnfo-ai research ensemble is all-@cf free models with bounded stage budget (ENSEMBLE-BUDGET-1); no paid-model ensembles anywhere | **LIVE** |
+| **L5** distillation / tiny-specialist | frontier generates labeled trajectories offline → LoRA / exemplar bank for recurring tasks | deferred: approach + schema documented; no code yet | ABSENT (documented) |
+| **L6** speculative draft-verify | draft with cheap model, verify/repair with frontier only when checks fail | partial: code class drafts on free `kimi-k2.7-code` with paid repair; tests-as-verifier agent pattern | PARTIAL |
+| **L7** budget scheduler + per-tier caps | A9 ceiling, per-tier daily caps, graceful degradation order, free fallback on cap hit | `model_ladder_daily` per-tier ledger (T2 default $2/day `OPS_T2_DAILY_CAP`, T3 $0.5) → degrade to free tier, never terminate (BUDGET-CAP-FREE-FALLBACK-1); gateway `monthly-200` on both gateways; OPS-JOB-COST-CAP-1 per-job ceiling | **LIVE** |
+| **CTX** context economics (cross-cutting, the #1 observed lever) | 130–270K-token repeated contexts dominate input cost: prefix caching, compaction, structured D1 state, retrieval, bounded tool output | `OPS_PROMPT_CTX` + truncation live; prompt/prefix-cache realization (cache_read_tokens=0) is the documented next lever | PARTIAL |
+| **MEA** measurement | cost per SUCCESSFUL task by task class (not per token), escalation rate, cache hit rate, tool-call validity rate — cost-per-outcome | `cost_router_metrics` written by qnfo-ops (finalize + deterministic path) and qnfo-ai (logQuery); `GET /cost-router/stats` aggregates | **LIVE** (verified with real traffic) |
 
-## 4. Fleet status: have vs missing
-HAVE: L0 (partial), L3 (catalog + tiers), L4 (free-first + budget downgrade), L6 (research ensemble),
-      L9 (tier caps + budget.blocked).
-MISSING: L1 (the big one), L2 (no semantic cache), L5, L7, L8; and L3/L4 are not fed by live outcomes.
+## Capability matrix (canary-refreshed 2026-09-26)
 
-## 5. Concrete next actions
-1. CONTEXT-ECONOMICS PASS (highest $): find the top input-token callers; add prefix caching /
-   compaction / bounded outputs; instrument cache_read_tokens as a first-class metric.
-2. REVIVE ADAPTIVE ROUTING: feed chat_canary + llm_gateway_log outcomes into model_ladder_routes
-   nightly (canary_passes, fail_count_24h, demote current_tier on 2+ fails).
-3. SEMANTIC CACHE in qnfo-ai: embed -> Vectorize -> serve above threshold; measure hit rate.
-4. CONSISTENCY ESCALATION for code: k cheap samples, escalate on disagreement.
-5. DISTILLATION PILOT: one recurring task -> frontier trajectories -> few-shot exemplar bank.
+Canary protocol: prompt = "call <tool> with no args and reply with the exact returned value";
+tool schema = realistic ops tools (fleet_status / ops_d1_query / r2_list / web_fetch / email_check);
+PASS = model emits a syntactically valid tool_calls block for the right tool.
 
-## 6. Anti-patterns
-Price-only routing; paid ensembles; re-sending full history; unbounded tool output; capability-agnostic
-cheap routing; caching without invalidation; treating a cheap model's config as its capability.
+| Model | agent-loop (ops-scale) | chat | Evidence |
+|---|---|---|---|
+| deepseek/deepseek-v4-flash | **PASS** | PASS | live canary 2026-09-26; production default |
+| deepseek/deepseek-v4-pro | **PASS** | PASS | live canary 2026-09-26; T2 escalation |
+| openai/gpt-5.5 | **PASS** | PASS | live canary 2026-09-26 — **REFUTES the 2026-09-19 pin**; prior no-tool_calls failures were a `max_tokens`-vs-`max_completion_tokens` parameter artifact |
+| openai/gpt-5-mini | **PASS** | PASS | live canary 2026-09-26 |
+| @cf free tier (glm-5.3-flash, kimi-k2.7-code, llama-3.3-70b, deepseek-v4-flash/pro-0813, glm-5.3) | unproven at full 60-tool scale | PASS (simple canary) | free-first restricted to chat class by the L2 gate; free tier remains the last-resort fallback |
+
+Ruling for future changes: **any upstream change MUST re-run the ops-scale tool canary and update
+`routing_capability` BEFORE deploy** (AGENTIC-CANARY-1). Deploying a non-tool-calling upstream for
+agent loops is a REGRESSION. The recurrence-guard row: `fleet_loop_meta.model_pin` (v2, 2026-09-26).
+
+## Measurement (cost-per-outcome)
+
+- `cost_router_metrics` (qnfo-audit): ts, worker, task_class, tier, model, in/out tokens, cost_usd,
+  latency_ms, cache_hit, escalations, tool_calls, tool_calls_ok, success.
+- `GET https://ops.qnfo.org/cost-router/stats` → by_task_class (calls/ok/cost/cache_hit_rate/
+  escalation count/tool-call validity) for 24h (or `?hours=N`), daily per-tier budget, tier caps,
+  recent escalations.
+- Per-tier daily ledger: `model_ladder_daily`; monthly: `model_ladder_budget`.
+- Live first-day sample (2026-09-26): deterministic $0 · chat-cache-exact-kv $0 (hit rate 1.0) ·
+  agent-tools validity 1.0 · T2 spend $0.008 across 5 paid calls.
+
+## Anti-patterns (do not reintroduce)
+
+Price-only routing (retries cost more) · paid ensembles · re-sending full history · unbounded tool
+outputs · capability-agnostic cheap routing · caching without invalidation · treating a model's
+config/catalog row as its capability (canary it).
+
+## Maintenance gates (checked on EVERY future AI-calling worker update)
+
+1. L2 gate intact: free-first fires only when `!(tools && tools.length)`; agent loops consult
+   `routing_capability`.
+2. Ladder is cheapest-capable-first: T2 flash → T2 pro → free last-resort; no T3 default.
+3. Escalations are logged (`model_ladder_escalations`), not silent.
+4. Metrics written in every completion path (`cost_router_metrics`); `/cost-router/stats` green.
+5. Caches invalidate: gateway `cache_invalidate_on_update=true`; KV TTL; semantic threshold ≥0.93 (ops) / ≥0.95 (ai).
+6. Registry drift zero after deploy; R2 `qnfo-canonical/<worker>.js` refreshed.
+7. `routing_policy` rows in D1 stay truthful (LIVE/PARTIAL/ABSENT + evidence).
+
+## Follow-ups (registered in routing_policy)
+
+1. L5 distillation: exemplar bank / Workers-AI LoRA for recurring task classes.
+2. L6 formal draft-verify pipeline (cheap draft + deterministic check → repair on fail).
+3. Prefix-cache realization: instrument `cache_read_tokens` per call; move system prompt + tools to a
+   stable prefix so provider prefix caches actually hit (currently 0% across all rows).
