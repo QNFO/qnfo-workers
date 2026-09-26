@@ -1,4 +1,4 @@
-var VERSION="3.7.8-subscribe-cta";
+var VERSION="3.7.9-source-attribution";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1557,7 +1557,7 @@ async function handleSubscribeProxy(request, env) {
         "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "",
         "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300)
       },
-      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: "qnfo.org" }),
+      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: String(payload && payload.source || "qnfo.org").slice(0, 80) }),
       signal: ctrl.signal
     });
     const data = await r.json().catch(function() {
