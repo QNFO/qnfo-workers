@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.22-loop-lock";
+var VERSION = "1.7.23-metric-def";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1382,7 +1382,10 @@ async function buildState(env, ctx) {
       return;
     }
     const r = g[0];
-    push({ key: "ops_gateway", label: "Ops AI gateway (24h)", state: r.bad > 0 ? "err" : "ok", detail: r.c + " calls, " + r.bad + " failed (ok=0), avg " + r.avgms + "ms", ts: r.latest });
+    const _calls = Number(r.c) || 0, _bad = Number(r.bad) || 0;
+    const _rate = _calls > 0 ? _bad / _calls : 0;
+    const _st = _rate >= 0.2 ? "err" : _rate >= 0.05 ? "warn" : "ok";
+    push({ key: "ops_gateway", label: "Ops AI gateway (24h)", state: _st, detail: _calls + " calls, " + _bad + " failed (ok=0, " + Math.round(_rate * 1e3) / 10 + "%), avg " + r.avgms + "ms", ts: r.latest });
   });
   await safeAudit("ai_model_health", "AI model health", async function() {
     const rows = await d1all(env.AUDIT, "SELECT model_id, status, consecutive_failures, last_probe_ts FROM ai_model_health ORDER BY model_id");
@@ -1496,11 +1499,15 @@ async function buildState(env, ctx) {
       push({ key: "queue_outreach", label: "Queue outreach_queue", state: "warn", detail: "probe error " + (o.__err || p.__err || n.__err), ts: null });
       return;
     }
-    const open = Number(o.open) || 0, pend = Number(p.c) || 0, nc = Number(n.c) || 0, age = ageOf(o.mx);
+    const pend = Number(p.c) || 0, nc = Number(n.c) || 0;
+    // MEASUREMENT (2026-09-26): 'needs-contact' rows are arxiv-radar candidates with NO email (author='', email NULL)
+    // -- they are NOT drainable by the send worker, so they must NOT count as "open" or gate freshness.
+    // Drainable = the selector the send worker actually consumes. needs-contact is tracked separately.
+    const drainable = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, MAX(created_at) AS mx FROM outreach_queue WHERE status IN ('pending','needs-email','queued')");
+    const open = Number(drainable.c) || 0, age = ageOf(drainable.mx);
     const stale = open > 0 && age !== null && age > 24;
-    const selectorDrift = pend === 0 && nc > 0;
-    queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: o.mx || null, age_h: age, stale, selector_drift: selectorDrift, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: selectorDrift ? "drain selector status='pending' does not match producer status 'needs-contact' - align selector" : "external sends gated until 2026-09-15" });
-    push({ key: "queue_outreach", label: "Queue outreach_queue", state: stale || selectorDrift ? "warn" : open > 0 ? "info" : "ok", detail: "open=" + open + " (pending=" + pend + ", needs-contact=" + nc + ") newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + (selectorDrift ? " SELECTOR-DRIFT drain=status'pending' queue='" + nc + " needs-contact'" : "") + " sends gated until 2026-09-15", ts: o.mx || null });
+    queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: drainable.mx || null, age_h: age, stale, selector_drift: false, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: nc > 0 ? nc + " candidates awaiting contact enrichment (no email; not sendable)" : "external sends gated until 2026-09-15" });
+    push({ key: "queue_outreach", label: "Queue outreach_queue", state: stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
   });
   const analytics = await analytics24(env);
   const d1c = await d1Count(env);
