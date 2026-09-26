@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.62";
+var VERSION = "2.36.63";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -754,11 +754,15 @@ async function d1Query(env, args) {
   if (!/^(select|with)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only" };
   if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, rejected: true, error: "single read statement only" };
   if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
-  if (!/\blimit\s+\d+/i.test(sql) && !/\b(count|sum|avg|min|max|total|group_concat)\s*\(/i.test(sql) && !/\bgroup\s+by\b/i.test(sql) && !/select\s+sqlite_version/i.test(sql)) return { ok: false, rejected: true, error: "add LIMIT n (aggregate exempt)" };
+  let sqlEff = sql;
+  var _lo = sqlEff.toLowerCase();
+  var _agg = _lo.indexOf("count(") >= 0 || _lo.indexOf("sum(") >= 0 || _lo.indexOf("avg(") >= 0 || _lo.indexOf("min(") >= 0 || _lo.indexOf("max(") >= 0 || _lo.indexOf("group_concat(") >= 0 || _lo.indexOf("group by") >= 0;
+  var _hasLimit = false; var _li = _lo.indexOf("limit"); if (_li >= 0) { var _k = _li + 5; while (_k < _lo.length && _lo.charAt(_k) === " ") _k++; _hasLimit = /[0-9]/.test(_lo.charAt(_k)); }
+  if (!_hasLimit && !_agg) sqlEff = sqlEff + " LIMIT 100";
   const bind = DB_MAP[String(args && args.db || "audit")] || DB_MAP.audit;
   if (!env[bind]) return { ok: false, error: "db not bound: " + bind + " (available: audit|living|graph|portfolio|outreach|cms|ipatent|personal)" };
   try {
-    const res = await env[bind].prepare(sql).all();
+    const res = await env[bind].prepare(sqlEff).all();
     const rows = (res.results || []).slice(0, 100);
     return { ok: true, db: bind, rowCount: rows.length, rows };
   } catch (e) {
