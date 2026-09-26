@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.11-ui";
+var VERSION = "4.1.12-streamfix";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1005,6 +1005,12 @@ function fakeStream(text, id) {
 __name(fakeStream, "fakeStream");
 __name2(fakeStream, "fakeStream");
 __name22(fakeStream, "fakeStream");
+function sseText(text, id) {
+  const _mk = (delta, finish) => "data: " + JSON.stringify({ id: id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, delta: delta, finish_reason: finish }] }) + String.fromCharCode(10, 10);
+  return new Response(_mk({ role: "assistant", content: String(text || "") }, null) + _mk({}, "stop") + "data: [DONE]" + String.fromCharCode(10, 10), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+}
+__name2(sseText, "sseText");
+
 async function buildBrief(env, withSummary) {
   const date = isoDateNow();
   const tomorrow = isoDatePlus(1);
@@ -2124,100 +2130,16 @@ var api_default = {
         if (loopFinal && !toolsUsed && loopUp) {
           const streamId = "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24);
           ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, body && body.model || loopUp.model, loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
-          return new Response(fakeStream(loopFinal, streamId), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+          return sseText(loopFinal, streamId);
         }
-        const msgs = [{ role: "system", content: finalSystem }].concat(finalMsgs);
-        let upStream = null;
-        const streamErrors = [];
-        const _hasImgP = messages.some((m) => m && Array.isArray(m.content) && m.content.some((p) => p && typeof p === "object" && (p.type === "image_url" || p.type === "input_image" || p.type === "image")));
-        const _visM = /* @__PURE__ */ __name2((m) => m.indexOf("glm-5.3-flash") >= 0 || m.indexOf("glm-5.3") >= 0 || m.indexOf("kimi") >= 0, "_visM");
-        let modelList = String(body && body.model || "") === "personal-twin-pro" ? ["@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-pro-0813"] : String(body && body.model || "") === "personal-twin-reason" ? [REASON_MODEL, "@cf/deepseek-ai/deepseek-v4-pro-0813"] : String(body && body.model || "") === "personal-twin-flash" ? ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.6"] : CHAT_MODELS;
-        if (_hasImgP) {
-          const vf2 = modelList.filter(_visM);
-          if (vf2.length) modelList = vf2;
-        }
-        const isReason = isReasonL;
-        const outTokens = clampMaxTokens(body && body.max_tokens, isReason);
-        for (const model of modelList) {
-          try {
-            const s = await env.AI.run(model, { messages: msgs, temperature, max_tokens: outTokens, stream: true }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
-            upStream = s;
-            break;
-          } catch (e) {
-            streamErrors.push(model + ":" + (e && e.message || e));
-          }
-        }
-        if (!upStream) {
-          console.log("personal-api upstream stream error:", streamErrors.join(" | "));
-          if (loopFinal) {
-            const choice2 = { message: { role: "assistant", content: loopFinal }, finish_reason: "stop" };
-            ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, loopUp ? loopUp.model : "personal-twin-chat"));
-            return json({ id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, message: choice2.message, finish_reason: "stop" }], usage: {}, _meta: { elapsedMs: Date.now() - t0, retrieved: items.length, degraded, toolsUsed: toolRounds.length, streamFallback: true }, ...webSources ? { _web: { query: q.slice(0, 300), sources: webSources } } : {} });
-          }
-          return json({ error: { message: "upstream error", type: "upstream_error" } }, 502);
-        }
-        const enc8 = new TextEncoder();
-        const nlnl = String.fromCharCode(10, 10);
-        const makeChunk = /* @__PURE__ */ __name22((delta, finish) => enc8.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Date.now(), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, delta, finish_reason: finish }] }) + nlnl), "makeChunk");
-        let acc = "";
-        let markDone;
-        const doneP = new Promise((res) => {
-          markDone = res;
-        });
-        const stream = new ReadableStream({
-          async start(controller) {
-            try {
-              const processFrame = /* @__PURE__ */ __name22((frame) => {
-                let t = String(frame).trim();
-                if (!t) return;
-                if (t.indexOf("data:") === 0) t = t.slice(5).trim();
-                if (!t || t === "[DONE]") return;
-                let p;
-                try {
-                  p = JSON.parse(t);
-                } catch (e4) {
-                  return;
-                }
-                let d = "";
-                if (p.response !== void 0) d = p.response;
-                else if (p.choices && p.choices[0] && p.choices[0].delta) {
-                  const dl = p.choices[0].delta;
-                  if (dl.content !== void 0 && dl.content !== null) d = dl.content;
-                }
-                if (typeof d === "string" && d.length > 0) {
-                  acc += d;
-                  controller.enqueue(makeChunk({ content: d }, null));
-                }
-              }, "processFrame");
-              const reader = upStream.getReader();
-              let buf2 = "";
-              const nl1 = String.fromCharCode(10);
-              while (true) {
-                const x = await reader.read();
-                if (x.done) break;
-                buf2 += new TextDecoder().decode(x.value);
-                let pos;
-                while ((pos = buf2.indexOf(nl1)) !== -1) {
-                  const line = buf2.slice(0, pos);
-                  buf2 = buf2.slice(pos + 1);
-                  processFrame(line);
-                }
-              }
-              if (buf2) processFrame(buf2);
-              controller.enqueue(makeChunk({}, "stop"));
-              controller.enqueue(enc8.encode("data: [DONE]" + nlnl));
-              controller.close();
-              markDone();
-            } catch (e3) {
-              markDone();
-              controller.error(e3);
-            }
-          }
-        });
-        ctx.waitUntil(doneP.then(function() {
-          return logChat(env, q, acc, thread, request.headers.get("User-Agent") || "", "personal-twin-chat");
-        }));
-        return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+        let _sText = "";
+        try {
+          const upS = await upstreamChat(env, finalSystem, finalMsgs, temperature, clampMaxTokens(body && body.max_tokens, isReasonL), isReasonL);
+          if (upS && upS.ok) _sText = upS.body.choices && upS.body.choices[0] && upS.body.choices[0].message && upS.body.choices[0].message.content || "";
+        } catch (e) { _sText = ""; }
+        if (!_sText) _sText = "I could not generate a response right now. Please try again.";
+        ctx.waitUntil(logChat(env, q, _sText, thread, ua, "personal-twin-chat"));
+        return sseText(_sText, "chatcmpl-" + Date.now());
       }
       let up = loopUp || null;
       if (!up) {
