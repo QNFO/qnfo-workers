@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.21-metricwindow";
+var VERSION = "1.7.22-loop-lock";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -977,6 +977,10 @@ __name2222(ghComment, "ghComment");
 async function ghAddLabels(env, number, labels) {
   return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/labels", { labels });
 }
+async function ghRemoveLabel(env, number, name) {
+  return await ghCall(env, "DELETE", "/repos/" + GH_REPO + "/issues/" + number + "/labels/" + encodeURIComponent(name));
+}
+__name(ghRemoveLabel, "ghRemoveLabel");
 __name(ghAddLabels, "ghAddLabels");
 __name2(ghAddLabels, "ghAddLabels");
 __name22(ghAddLabels, "ghAddLabels");
@@ -1163,9 +1167,17 @@ async function loopSync(env, st) {
         }
       }
     }
-    if (gh_number && gh_state === "cleared") {
+    if (gh_number) {
+      // FRESH-STATE-1: never trust the cached gh_state; read the live issue so a
+      // closed issue is reopened and an open one is never falsely reported open.
+      const gi = await ghCall(env, "GET", "/repos/" + GH_REPO + "/issues/" + gh_number);
+      if (gi.ok && gi.json && gi.json.state) gh_state = gi.json.state;
+    }
+    if (gh_number && gh_state !== "open") {
       await ghCall(env, "PATCH", "/repos/" + GH_REPO + "/issues/" + gh_number, { state: "open" });
-      await ghComment(env, gh_number, "**Recurrence** - a signal with fingerprint " + i.id + " reappeared at " + (/* @__PURE__ */ new Date()).toISOString() + " after being verified cleared. Reopened; the accountability loop resets and the dispatch is re-queued.");
+      await ghComment(env, gh_number, "**Recurrence** - a signal with fingerprint " + i.id + " reappeared at " + (/* @__PURE__ */ new Date()).toISOString() + " after being closed. Reopened; the accountability loop resets and the dispatch is re-queued.");
+      await ghRemoveLabel(env, gh_number, "verified-cleared");
+      await ghRemoveLabel(env, gh_number, "stale");
       gh_state = "open";
       dispatch_state = null;
       reopened.push(i.id);
@@ -1209,6 +1221,7 @@ async function loopSync(env, st) {
     if (streak >= 2 && L.gh_number && L.gh_state === "open") {
       await ghComment(env, L.gh_number, "**Verified cleared** - the originating signal is absent for 2 consecutive cycles (checked " + now + "). Closed automatically with evidence. Fingerprint " + fp + ".");
       await ghCall(env, "PATCH", "/repos/" + GH_REPO + "/issues/" + L.gh_number, { state: "closed", state_reason: "completed" });
+      await ghRemoveLabel(env, L.gh_number, "stale");
       await ghAddLabels(env, L.gh_number, ["verified-cleared"]);
       cleared.push(L.gh_number);
       try {
@@ -1232,11 +1245,22 @@ __name2(loopSync, "loopSync");
 __name22(loopSync, "loopSync");
 __name222(loopSync, "loopSync");
 __name2222(loopSync, "loopSync");
+async function loopClaim(env, nowMs) {
+  // ATOMIC single-writer claim: D1 serializes writes, so only ONE concurrent
+  // caller sees meta.changes===1 for a given interval. This is what stops two
+  // isolates racing loopSync and double-posting the same GitHub comment.
+  try {
+    const r = await env.AUDIT.prepare("INSERT INTO fleet_loop_meta (k,v) VALUES ('sync_lock', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v WHERE CAST(fleet_loop_meta.v AS INTEGER) < ?").bind(String(nowMs), String(nowMs - LOOP_MIN_INTERVAL_MS)).run();
+    return !!(r && r.meta && Number(r.meta.changes) === 1);
+  } catch (e) {
+    return false;
+  }
+}
+__name(loopClaim, "loopClaim");
 async function loopMaybeSync(env, st) {
   try {
-    const meta = await loopMetaGet(env);
-    const last = meta.last_sync ? new Date(meta.last_sync).getTime() : 0;
-    if (Date.now() - last < LOOP_MIN_INTERVAL_MS) return { ok: true, skipped: "throttled" };
+    const claimed = await loopClaim(env, Date.now());
+    if (!claimed) return { ok: true, skipped: "throttled" };
     return await loopSync(env, st);
   } catch (e) {
     return { ok: false, error: String(e.message || e).slice(0, 200) };
