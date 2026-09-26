@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.9-toolmode";
+var VERSION = "4.1.10-compat";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1883,7 +1883,10 @@ var api_default = {
       return stub.fetch(request);
     }
     if (path === "/v1/models") {
-      if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
+      // MODEL-DISCOVERY-PUBLIC-1 (2026-09-26): serve the model list without auth so every
+      // OpenAI-compatible client (LiteLLM, LM Studio, llama.cpp, ChatBox, OpenWebUI, etc.) can
+      // probe /v1/models on "test connection" without a key and discover models. Model ids are
+      // not sensitive; chat/embeddings/data routes remain gated by API_KEY.
       return json({ object: "list", data: [
         { id: "personal-twin-chat", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "vision"], contextWindow: 1048576, context_length: 1048576, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1048576, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1048576, temperature: 0.7, top_p: 0.9, vision: true, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "deepseek-v4-pro-0813" } },
         { id: "personal-twin-pro", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 1310720, context_length: 1310720, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1310720, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1310720, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "glm-5.3" } },

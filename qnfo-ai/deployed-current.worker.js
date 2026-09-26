@@ -1,7 +1,3 @@
---dacca364740bdb4f13609fb9e71ac2b7f8fc3469d0a2723b51ea87bc58ea
-Content-Disposition: form-data; name="worker.js"; filename="worker.js"
-Content-Type: application/javascript+module
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -10,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.7-oaitokens";
+var VERSION = "5.28.8-rag";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -32,13 +28,13 @@ async function loadModelHealth(env) {
 __name(loadModelHealth, "loadModelHealth");
 __name2(loadModelHealth, "loadModelHealth");
 var MODELS = {
-  // Workers AI free â original three
-  // Workers AI free â directive substitutes (small coder/validator/reviewer class)
+  // Workers AI free — original three
+  // Workers AI free — directive substitutes (small coder/validator/reviewer class)
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
-  // capable models for lowest cost â paid OK if best value". All postpaid; $/M input noted.
-  // $0.06/M â cheap general default (131k ctx, reasoning)
+  // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
+  // $0.06/M — cheap general default (131k ctx, reasoning)
   // $0.10/M
   "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
@@ -52,22 +48,22 @@ var MODELS = {
   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
   "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.40/M 1M-ctx agentic coding
-  // v5.0.0: vision (image-to-text + OCR) â free tier-0. Routed automatically when any
+  // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
-  // this model behind a one-time Community License "agree" â ACCEPTED 2026-08-28 on the
+  // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
   "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.4, topP: 0.9, tools: true, vision: false }
-  // v4.3.7: tier-3 AI Gateway models REMOVED â the compat endpoint returns 400
+  // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
   // "Chat completion bad format" (2019) for every one of them, surfacing as router
   // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
   // is worse than not advertising them. Explicit requests for unknown models fall
   // back to deepseek-v4-flash (existing behavior).
 };
 var MAX_OUT = {
-  // Workers AI (tier-0) â output token caps, keyed by Workers AI model id.
+  // Workers AI (tier-0) — output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
   "@cf/moonshotai/kimi-k2.6": 32768,
@@ -475,7 +471,7 @@ var ENSEMBLE = {
   validator: { wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", ctx: 65536 },
   // fast flash judgment (~0.3s small-prompt; proven fallback model)
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
-  // 1M-ctx reasoning refinement ($1.32/M) â LAZY: runs only on validator FAIL
+  // 1M-ctx reasoning refinement ($1.32/M) — LAZY: runs only on validator FAIL
 };
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
@@ -1494,7 +1490,12 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   let ragSources = null;
   const ragForce = body.rag === true || body.rag === "true";
   const ragOff = body.rag === false || body.rag === "false";
-  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && (ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(lastUserText(messages).slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(lastUserText(messages).slice(0, 300)))) {
+  const _ragLastQ = lastUserText(messages).trim();
+  const _ragIsQuestion = /[?]$/.test(_ragLastQ) || /^(what|when|where|who|whom|whose|why|how|which|tell me|explain|describe|summarize|list|compare|contrast|analyze|evaluate|does|do|is|are|can|could|would|should|was|were|has|have|did|define|derive|show)\b/i.test(_ragLastQ);
+  const _ragIsGreeting = /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|bye|good morning|good afternoon|good evening)\b/i.test(_ragLastQ);
+  const _ragIsCode = cls.domain === "code";
+  const _shouldRag = ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(_ragLastQ.slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(_ragLastQ.slice(0, 300)) || (_ragIsQuestion && !_ragIsGreeting && !_ragIsCode);
+  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && _shouldRag) {
     const rq = lastUserText(messages).slice(0, 300);
     if (rq) {
       try {
@@ -2311,6 +2312,14 @@ var worker_default = {
           // + OpenAI-standard tool/limit facts. Read by DeepChat's model-catalog parser and re-synced
           // into every client's provider_models on the next model refresh.
           limit: { context: ctx2 ?? null, output: m.maxOut ?? null },
+          contextWindow: ctx2 ?? null,
+          context_length: ctx2 ?? null,
+          context_window: ctx2 ?? null,
+          maxOutput: m.maxOut ?? null,
+          max_output_tokens: m.maxOut ?? null,
+          max_output: m.maxOut ?? null,
+          max_tokens: m.maxOut ?? null,
+          max_input_tokens: ctx2 ?? null,
           temperature: true,
           tool_call: !!m.tools,
           default_tool_mode: /code/i.test(id) ? "code" : /flash/i.test(id) ? "minimal" : "agent",
@@ -2331,8 +2340,8 @@ var worker_default = {
           }
         };
       });
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       return json({ object: "list", data });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
@@ -2590,4 +2599,3 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
---dacca364740bdb4f13609fb9e71ac2b7f8fc3469d0a2723b51ea87bc58ea--
