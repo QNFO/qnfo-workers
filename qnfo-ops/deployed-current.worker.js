@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.67";
+var VERSION = "2.36.73";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -73,6 +73,11 @@ var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" };
 var WAI_PASSTHROUGH = { "pareto": "unbiased/pareto", "qwen3.8-max": "alibaba/qwen3.8-max" };
+// OPS-SINGLE-MODEL-1 (2026-09-26): the ops endpoint advertises exactly ONE model id.
+// Model routing (upstream/provider/tier) is a back-end concern, never exposed to clients.
+// Every legacy id stays ACCEPTED as an alias so existing clients do not break.
+var OPS_PUBLIC_MODEL = "ops";
+var OPS_PUBLIC_ALIAS = { "ops": 1, "ops-exec": 1, "ops-frontier": 1, "ops-frontier-mini": 1, "ops-frontier-reason": 1 };
 var OPS_EXEC_MODELS = {
   "ops-frontier": "openai/gpt-5.5",
   "ops-frontier-mini": "openai/gpt-5.5",
@@ -91,6 +96,7 @@ var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
 var MAX_TOOL_ITERS = 12;
+var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
@@ -99,11 +105,11 @@ var OPS_EXEC_LOOP_LIMITS = ["pure server-side execution: client-supplied tools a
 var OPS_RELAY_LIMITS = ["pass-through relay only: does NOT execute code or tools server-side", "no ops agent tool loop (no shell_exec/ops_d1_query/etc.)", "client-supplied tools are relayed back to the caller, not executed here"];
 var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND identical upstream (openai/gpt-5.5)", "the ops-frontier / ops-frontier-mini / ops-frontier-reason ids are NOT behaviourally distinct today"];
 var OPS_ALIAS_LIMITS = OPS_ALIAS_LIMITATIONS;
-var OPS_ENDPOINT_LIMITATIONS = ["executing-agent models run a PURE SERVER-SIDE tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "relay models (deepseek-v4-flash, gpt-5*, o4-mini, pareto, qwen3.8-max) do NOT execute code/tools server-side", "no vision/image input on any advertised model", "ops-frontier-mini and ops-frontier-reason are aliases of ops-frontier (not distinct models)", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
+var OPS_ENDPOINT_LIMITATIONS = ["single model, server-side agentic tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "no vision/image input", "model routing (provider/upstream/tier) is a back-end concern and is never exposed", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
 function opsModelIds() {
-  return opsModelCatalog().map(function(m) {
-    return m.id;
-  });
+  // OPS-SINGLE-MODEL-1 (2026-09-26): never expose the internal routing list (manifest/health).
+  // The endpoint advertises exactly one model; provider/upstream selection stays back-end.
+  return [OPS_PUBLIC_MODEL];
 }
 __name(opsModelIds, "opsModelIds");
 __name2(opsModelIds, "opsModelIds");
@@ -150,6 +156,12 @@ function opsModelCatalog() {
 }
 __name(opsModelCatalog, "opsModelCatalog");
 __name2(opsModelCatalog, "opsModelCatalog");
+function opsPublicCatalog() {
+  // OPS-SINGLE-MODEL-1: one advertised model; no _router / upstream / limitations leakage.
+  return [{ id: OPS_PUBLIC_MODEL, object: "model", created: 171e7, owned_by: "qnfo", description: "QNFO ops endpoint - single cost-optimized agentic model (server-side execution, 60+ ops tools).", execution: "server-side-agent-loop", context_window: MODEL_CTX, contextWindow: MODEL_CTX, context_length: MODEL_CTX, max_output: DEFAULT_MAX_OUT, maxOutput: DEFAULT_MAX_OUT, max_output_tokens: DEFAULT_MAX_OUT, max_tokens: DEFAULT_MAX_OUT, max_input_tokens: MODEL_CTX, capabilities: ["chat", "agent", "code", "tool_use", "streaming", "server-side-execution", "reasoning"], limit: { context: MODEL_CTX, output: DEFAULT_MAX_OUT }, temperature: true, tool_call: true, default_tool_mode: "agent" }];
+}
+__name(opsPublicCatalog, "opsPublicCatalog");
+__name2(opsPublicCatalog, "opsPublicCatalog");
 var MODEL_CTX = 1048576;
 var OPS_PROMPT_CTX = 262144; // OPS-PROMPT-CAP-1 (2026-09-26): cap ops prompt budget (was MODEL_CTX=1M; enabled multi-MB runaway prompts billed ~$86 on 2026-09-13)
 var CORS_HEADERS = {
@@ -579,7 +591,6 @@ __name22222(codeToolsPayload, "codeToolsPayload");
 var FLEET = [
   { name: "qnfo-lifecycle", binding: "LIFECYCLE" },
   { name: "qnfo-email", binding: "EMAIL", auth: true },
-  { name: "qnfo-email-orchestrator", binding: "ORCH" },
   { name: "qnfo-paper-indexer", binding: "INDEXER", countPath: "/count" },
   { name: "qnfo-kaizen", binding: "KAIZEN" },
   { name: "qnfo-gateway", binding: "GATEWAY" },
@@ -2963,6 +2974,15 @@ __name22222(callDeepSeek, "callDeepSeek");
 __name222222(callDeepSeek, "callDeepSeek");
 async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta) {
   const o = opts || {};
+  // OPS-STREAM-FREE-FIRST-1 (2026-09-26): the streaming path previously had NO free-first branch,
+  // so EVERY streamed ops conversation was billed against the paid gateway route (cost root cause).
+  // Mirror callDeepSeek: prefer the free Workers-AI model, paid path only as last-resort fallback.
+  if (!o.upstreamModel && env.WAI) {
+    try {
+      const _rg = await callGLM(env, messages, maxTokens, tools, o);
+      if (_rg && _rg.choices && _rg.choices[0] && _rg.choices[0].message) { console.log("OPS_STREAM_FREE_FIRST served by " + UPSTREAM_GLM_MODEL); return { resp: _rg, servedBy: UPSTREAM_GLM_MODEL }; }
+    } catch (_eg) { console.log("OPS_STREAM_GLM_FALLBACK " + String(_eg && _eg.message || _eg).slice(0, 120)); }
+  }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   const modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   const _isOAI = isOAIUpstream(modelToUse);
@@ -3461,7 +3481,9 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
   const execUpstream = OPS_EXEC_MODELS[wanted];
   const frontierMode = !!execUpstream;
-  if (wanted !== "ops-exec" && wanted !== "deepseek-v4-flash" && !frontierMode && !PASSTHROUGH_MODELS[wanted] && !WAI_PASSTHROUGH[wanted]) return json({ error: "unknown model " + rawWanted + " (available: ops-exec, " + Object.keys(OPS_EXEC_MODELS).join(", ") + ", deepseek-v4-flash; provider-qualified ids like QNFO-OPS/ops-exec are accepted)" }, 400);
+  // UNIVERSAL-OPENAI-MODEL-COMPAT-1 (2026-09-26): the endpoint NEVER rejects a model id. Any
+  // unrecognized / foreign id (gpt-4o, gpt-3.5-turbo, claude-*, "", null, provider-qualified)
+  // is routed to the single public ops model (server-side agent loop). Routing stays back-end.
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
   if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
@@ -3959,7 +3981,7 @@ function manifest() {
     }),
     models: opsModelIds(),
     limitations: OPS_ENDPOINT_LIMITATIONS,
-    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-email-orchestrator", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
+    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
     generatedAt: iso()
   };
 }
@@ -4529,7 +4551,24 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
         upUsage.completion_tokens += Number(rU.usage.completion_tokens) || 0;
       }
     }, "addUsage");
+    const jobCostCapUsd = (function() {
+      const n = Number(env.OPS_JOB_COST_CAP_USD);
+      return Number.isFinite(n) && n > 0 ? n : OPS_JOB_COST_CAP_DEFAULT;
+    })();
+    const _jobCostSoFar = function() {
+      return costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0);
+    };
     for (let turn = 0; turn <= maxTurns; turn++) {
+      const _jobUsedCost = _jobCostSoFar();
+      if (_jobUsedCost >= jobCostCapUsd) {
+        final = { status: "failed", error: "JOB_BUDGET_EXCEEDED: accumulated $" + _jobUsedCost.toFixed(4) + " >= per-job cap $" + jobCostCapUsd + " after " + turn + " turn(s)", response: content };
+        break;
+      }
+      const _jobEstNext = costUsdCalc((upUsage && upUsage.prompt_tokens || 0) + estTokens(JSON.stringify(work)), Math.min(answerCap, 8192));
+      if (_jobUsedCost + _jobEstNext > jobCostCapUsd) {
+        final = { status: "failed", error: "JOB_BUDGET_EXCEEDED: projected $" + (_jobUsedCost + _jobEstNext).toFixed(4) + " would exceed per-job cap $" + jobCostCapUsd + " before turn " + turn, response: content };
+        break;
+      }
       const withTools = turn < maxTurns;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
       if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
@@ -4817,7 +4856,7 @@ var worker_default = {
       return env.AGENTIC_OPS_EXEC.get(aoId).fetch(request);
     }
     if (path === "/" && method === "GET") {
-      return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Models: ops-exec, deepseek-v4-flash. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
+      return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Single model: ops. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
     }
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/manifest" && method === "GET") return json(manifest());
@@ -4886,21 +4925,17 @@ var worker_default = {
         const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
         const wk = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
         const month = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts >= ?1").bind(wk).first();
-        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1e3, ts: iso() });
+        return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1e3, job_cost_cap_usd: Number(env.OPS_JOB_COST_CAP_USD) > 0 ? Number(env.OPS_JOB_COST_CAP_USD) : OPS_JOB_COST_CAP_DEFAULT, ts: iso() });
       } catch (e) {
         return json({ error: "cost query failed: " + (e && e.message || String(e)) }, 502);
       }
     }
     if (path === "/v1/models" && method === "GET") {
-      return json({ object: "list", data: opsModelCatalog() });
+      return json({ object: "list", data: opsPublicCatalog() });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
       const id = decodeURIComponent(path.split("/").pop());
-      const found = opsModelCatalog().filter(function(m2) {
-        return m2.id === id;
-      })[0];
-      if (!found) return json({ error: "model not found: " + id }, 404);
-      return json(found);
+      return json(opsPublicCatalog()[0]);
     }
     if (path === "/v1/responses" && method === "POST") {
       let body;
