@@ -4,9 +4,13 @@ Status: **IMPLEMENTED FLEETWIDE** 2026-09-26 (COST-ROUTING-STACK-1). This docume
 permanent reference: what we built, where it lives, how it is measured, and what future
 updates must preserve. Skill twin: `cost-optimized-routing` (qnfo-skills + DeepChat).
 
-Live implementation: qnfo-ops **v2.37.x** (deployed, verified) · qnfo-ai **v5.29.0** (deployed, verified)
-· AI Gateway `default` + `ops` cache-tuned · D1 qnfo-audit routing_capability / routing_policy /
+Live implementation: qnfo-ops **v2.37.2** · qnfo-ai **v5.29.1** · AI Gateway `default` cache-tuned
+(ops gateway retired — single-gateway policy b49e422) · D1 qnfo-audit routing_capability / routing_policy /
 model_ladder_* / cost_router_metrics.
+
+**Audit record (2026-09-26, CMD RED TEAM):** the first build FAILED component-scoped — qnfo-ai v5.29.0
+shipped a call to an UNDEFINED `semanticCacheLookup` (helper never persisted) + zero metrics.
+Remediated in v5.29.1 / v2.37.2 (commit 5c7cd13); a symbol-closure gate was added to the build path.
 
 Thesis (one line): a cheap/free model matches a frontier model on a task only when (a) the task is
 routed to the cheapest model that passes a CAPABILITY GATE for that task class, (b) a DETERMINISTIC
@@ -18,9 +22,9 @@ VERIFIER catches its failures and triggers escalation, and (c) CONTEXT COST is c
 | Layer | Mechanism | Where it lives (2026-09-26) | Status |
 |---|---|---|---|
 | **L0** deterministic-first | answer without a model: SQL/regex/probe handlers, templates | qnfo-ops `deterministicOpsAnswer()` in handleChat (cost / version / health / models / `run tools.exec: A*B` probe); zero tokens, `_router.deterministic:true` | **LIVE** (verified) |
-| **L1** cache (exact + semantic) | AI Gateway response cache; KV exact-match; Vectorize semantic (embed query → nearest cache; serve above cosine threshold); context economics (prefix reuse, compaction, bounded tool outputs, never re-send full history) | Gateway `cache_ttl=86400` + `cache_invalidate_on_update=true` on `default`+`ops`; qnfo-ops exact KV `qnfo-ops-cache` (1h TTL) + semantic `qnfo-ops-semcache` (cosine≥0.93); qnfo-ai semantic cache over `qnfo-ai-log` LOG_VZ (cosine≥0.95, same-model, 30d); context economics: `OPS_PROMPT_CTX=262144` + `truncateToContext` + bounded tool results | **LIVE** (exact-KV hit verified: $0, hit rate 1.0) |
+| **L1** cache (exact + semantic) | AI Gateway response cache; KV exact-match; Vectorize semantic (embed query → nearest cache; serve above cosine threshold); context economics (prefix reuse, compaction, bounded tool outputs, never re-send full history) | Gateway `cache_ttl=86400` + `cache_invalidate_on_update=true` on `default`; qnfo-ops exact KV `qnfo-ops-cache` (1h TTL, key includes VERSION + stored prompt verified on hit) + semantic `qnfo-ops-semcache` (cosine≥0.93); qnfo-ai semantic cache over `qnfo-ai-log` LOG_VZ (cosine≥0.95, same-model, 30d); context economics: `OPS_PROMPT_CTX=262144` + `truncateToContext` + bounded tool results | **LIVE** (exact-KV + semantic each hit rate 1.0 on v2.37.2; Vectorize indexing lag ~seconds) |
 | **L2** capability gate before price gate | a cheap model that fails tool_calls costs MORE via retries → route only to models passing the canary for that class | qnfo-ops `agentLoopIncapable()` reads `routing_capability` (D1, 5-min cache); free-first @cf restricted to the CHAT class (tools-bearing calls skip the free tier); capability matrix canary-refreshed (below) | **LIVE** |
-| **L3** cascade / router | free @cf → cheap paid → frontier; escalate ONLY on measured failure signals (empty content, tool-call parse failure, validation failure, 429); a deterministic verifier makes cascades cheap | qnfo-ops ladder `deepseek/deepseek-v4-flash` → `deepseek/deepseek-v4-pro` → free last-resort (`budgetFallback`); tool-call validator (unknown names / unparseable args = escalation), provider tool-array repair, relay tools cap 64, 429→free; every escalation row → `model_ladder_escalations` | **LIVE** |
+| **L3** cascade / router | free @cf → cheap paid → frontier; escalate ONLY on measured failure signals (empty content, tool-call parse failure, validation failure, 429); a deterministic verifier makes cascades cheap | qnfo-ops ladder `deepseek/deepseek-v4-flash` → `deepseek/deepseek-v4-pro` → free last-resort (`budgetFallback`); tool-call validator (unknown names / unparseable args = escalation), provider tool-array repair, relay tools cap 64, 429 + persistent 4xx-auth (401/403) → free; every escalation row → `model_ladder_escalations` | **LIVE** |
 | **L4** ensemble / MoA | N× cost — only when components are FREE or CACHED; correlated failure is real, verification still required | qnfo-ai research ensemble is all-@cf free models with bounded stage budget (ENSEMBLE-BUDGET-1); no paid-model ensembles anywhere | **LIVE** |
 | **L5** distillation / tiny-specialist | frontier generates labeled trajectories offline → LoRA / exemplar bank for recurring tasks | deferred: approach + schema documented; no code yet | ABSENT (documented) |
 | **L6** speculative draft-verify | draft with cheap model, verify/repair with frontier only when checks fail | partial: code class drafts on free `kimi-k2.7-code` with paid repair; tests-as-verifier agent pattern | PARTIAL |
@@ -72,7 +76,11 @@ config/catalog row as its capability (canary it).
 4. Metrics written in every completion path (`cost_router_metrics`); `/cost-router/stats` green.
 5. Caches invalidate: gateway `cache_invalidate_on_update=true`; KV TTL; semantic threshold ≥0.93 (ops) / ≥0.95 (ai).
 6. Registry drift zero after deploy; R2 `qnfo-canonical/<worker>.js` refreshed.
-7. `routing_policy` rows in D1 stay truthful (LIVE/PARTIAL/ABSENT + evidence).
+7. `routing_policy` rows in D1 stay truthful (LIVE/PARTIAL/ABSENT + evidence + confidence).
+8. SYMBOL-CLOSURE GATE (2026-09-26, from the v5.29.0 defect): before deploy, assert every helper the
+   changed code CALLS is DEFINED in the same file (`grep -c 'async function NAME' == calls`). `node --check`
+   and `wrangler --dry-run` do NOT catch an undefined reference — it parses fine and only throws at runtime.
+9. Re-run the ops-scale tool canary on ANY upstream change and update `routing_capability` BEFORE deploy.
 
 ## Follow-ups (registered in routing_policy)
 
