@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.74";
+var VERSION = "2.37.2";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -65,11 +65,16 @@ __name(isOAIUpstream, "isOAIUpstream");
 __name2(isOAIUpstream, "isOAIUpstream");
 __name22(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
+var ROUTES = ["/health", "/", "/fleet", "/cost", "/cost-router/stats", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
-var UPSTREAM_MODEL = "dynamic/opsdynamic";
-var UPSTREAM_MODEL_FB = "openai/gpt-5.5";
-var UPSTREAM_BUDGET_MODEL = "deepseek/deepseek-v4-flash"; // A9 budget-gated downgrade target (model_ladder_budget.blocked=1 -> cheap tool-calling tier)
+// COST-ROUTING-STACK-1 L3 PRICE LADDER (2026-09-26): cheapest-capable-first within the agent-loop
+// canary PASS set. Live canaries 2026-09-26T13:2xZ: deepseek-v4-flash, deepseek-v4-pro, gpt-5.5,
+// gpt-5-mini ALL emit valid tool_calls at ops tool-schema scale. Ladder: T2 flash -> T2 pro -> free
+// @cf (chat class only, L2 gate) -> free last-resort on paid failure/cap (BUDGET-CAP-FREE-FALLBACK-1).
+// (3cc4291 had made openai/gpt-5.5 the default; gpt-5.5 is canary-capable but T3-priced, so the
+// ladder restores T2 deepseek as the default paid tier per COST-OPTIMIZED-MODEL-CALLS.md.)
+var UPSTREAM_MODEL = "deepseek/deepseek-v4-flash";
+var UPSTREAM_MODEL_FB = "deepseek/deepseek-v4-pro";
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 var UPSTREAM_GLM_MODEL = "@cf/zai-org/glm-5.3-flash";
 var PASSTHROUGH_MODELS = { "gpt-5.6-sol": "openai/gpt-5.6-sol", "gpt-5": "openai/gpt-5", "gpt-5-mini": "openai/gpt-5-mini", "o4-mini": "openai/o4-mini" };
@@ -224,6 +229,113 @@ __name222(costUsdCalc, "costUsdCalc");
 __name2222(costUsdCalc, "costUsdCalc");
 __name22222(costUsdCalc, "costUsdCalc");
 __name222222(costUsdCalc, "costUsdCalc");
+// ===== COST-ROUTING-STACK-1 (2026-09-26): L0-L7 routing-stack helpers =====
+// L7 per-tier price table (USD per 1M tokens, in/out). @cf/* = free tier (Workers AI), not gateway-billed.
+var COST_TIER_PRICES = { "deepseek/deepseek-v4-flash": [0.22, 0.66], "deepseek-v4-flash": [0.22, 0.66], "deepseek/deepseek-v4-pro": [0.66, 1.98], "deepseek-v4-pro": [0.66, 1.98], "openai/gpt-5.5": [5, 30], "openai/gpt-5-mini": [0.15, 0.6], "@cf/zai-org/glm-5.3-flash": [0, 0], "@cf/moonshotai/kimi-k2.7-code": [0, 0], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [0, 0], "@cf/deepseek-ai/deepseek-v4-flash-0731": [0, 0], "@cf/deepseek-ai/deepseek-v4-pro-0813": [0, 0], "@cf/zai-org/glm-5.3": [0, 0] };
+function costTierOfModel(m) {
+  const s = String(m || "");
+  if (s.indexOf("dynamic/") === 0) return 3;
+  if (s.indexOf("@cf/") === 0) return 1;
+  if (/^openai\/(gpt-5\.5|gpt-5\.6|o4|gpt-5-codex|gpt-5\.3-codex|gpt-5\.1-codex)/.test(s)) return 3;
+  if (/^openai\//.test(s)) return 2;
+  if (/^deepseek\//.test(s)) return 2;
+  return 2;
+}
+__name(costTierOfModel, "costTierOfModel");
+function costFromUsage(m, usage) {
+  const u = usage || {};
+  const p = COST_TIER_PRICES[String(m || "")] || (String(m || "").indexOf("@cf/") === 0 ? [0, 0] : [0.14, 0.28]);
+  const inT = u.prompt_tokens || 0, outT = u.completion_tokens || 0;
+  return Math.round(((inT / 1e6) * p[0] + (outT / 1e6) * p[1]) * 1e6) / 1e6;
+}
+__name(costFromUsage, "costFromUsage");
+// MEA MEASUREMENT: one row per completed task; per-tier daily spend ledger; monthly tier ledger.
+async function logRouterMetric(env, rec) {
+  try {
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS cost_router_metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), worker TEXT, task_class TEXT, tier INTEGER, model TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, cache_hit INTEGER DEFAULT 0, escalations INTEGER DEFAULT 0, tool_calls INTEGER DEFAULT 0, tool_calls_ok INTEGER DEFAULT 0, success INTEGER DEFAULT 1)").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cost_router_metrics (ts, worker, task_class, tier, model, in_tokens, out_tokens, cost_usd, latency_ms, cache_hit, escalations, tool_calls, tool_calls_ok, success) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)").bind(iso(), rec.worker, rec.task_class || "chat", rec.tier || 0, String(rec.model || "").slice(0, 80), rec.in_tokens || 0, rec.out_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.cache_hit ? 1 : 0, rec.escalations || 0, rec.tool_calls || 0, rec.tool_calls_ok || 0, rec.success ? 1 : 0).run();
+  } catch (e) { console.log("cost_router_metrics insert failed:", e && e.message || e); }
+  if (rec.tier > 0 && rec.cost_usd > 0) {
+    try {
+      const day = iso().slice(0, 10);
+      await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS model_ladder_daily (tier INTEGER, day TEXT, spent_usd REAL DEFAULT 0, calls INTEGER DEFAULT 0, PRIMARY KEY (tier, day))").run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO model_ladder_daily (tier, day, spent_usd, calls) VALUES (?1,?2,?3,1) ON CONFLICT(tier, day) DO UPDATE SET spent_usd = spent_usd + excluded.spent_usd, calls = calls + 1").bind(rec.tier, day, rec.cost_usd).run();
+      const month = iso().slice(0, 7);
+      await env.QNFO_AUDIT.prepare("INSERT INTO model_ladder_budget (tier, month, spent_usd) VALUES (?1,?2,?3) ON CONFLICT(tier, month) DO UPDATE SET spent_usd = spent_usd + excluded.spent_usd").bind(rec.tier, month, rec.cost_usd).run();
+    } catch (e2) { console.log("model_ladder_daily upsert failed:", e2 && e2.message || e2); }
+  }
+}
+__name(logRouterMetric, "logRouterMetric");
+async function logEscalation(env, taskClass, fromModel, toModel, kind, reason) {
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO model_ladder_escalations (ts, task_class, from_tier, to_tier, model, kind, reason, budget_blocked) VALUES (?1,?2,?3,?4,?5,?6,?7,0)").bind(iso().slice(0, 19).replace("T", " "), taskClass || "chat", costTierOfModel(fromModel), costTierOfModel(toModel), String(toModel || "").slice(0, 80), kind || "escalation", String(reason || "").slice(0, 300)).run();
+  } catch (e) { console.log("model_ladder_escalations insert failed:", e && e.message || e); }
+}
+__name(logEscalation, "logEscalation");
+// L0 DETERMINISTIC-FIRST: answer well-known single-turn ops intents with zero model calls.
+// Patterns are deliberately tight so agent-loop canaries ("Reply exactly: ...", tool directives) never match.
+async function deterministicOpsAnswer(env, text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 120) return null;
+  const lo = t.toLowerCase().replace(/[?.!]+$/, "");
+  if (/^(cost|costs|spend|ops cost|how much did we spend)$/.test(lo)) {
+    try {
+      const today = iso().slice(0, 10);
+      const day = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c, ROUND(COALESCE(SUM(cost_usd),0),4) cost FROM ops_ai_log WHERE ts LIKE ?1").bind(today + "%").first();
+      return { kind: "cost", text: "Ops endpoint spend today (UTC " + today + "): " + (day && day.cost || 0) + " USD across " + (day && day.c || 0) + " calls. Per-tier ledger + cache/escalation rates: GET /cost-router/stats." };
+    } catch (e) { return null; }
+  }
+  if (/^(version|what version|qnfo-ops version)$/.test(lo)) return { kind: "version", text: "qnfo-ops " + VERSION + " (live). Registry + drift: GET /registry." };
+  if (/^(health|status|are you up|are you alive|are you ok|are you online|ping)$/.test(lo)) return { kind: "health", text: "qnfo-ops " + VERSION + " healthy. Single public model: ops. Endpoints: /health /fleet /cost /cost-router/stats /registry /v1/models." };
+  if (/^(models|list models|what models)$/.test(lo)) return { kind: "models", text: "Single public model: ops (server-side agent loop, 60+ tools). Routing tiers (L0-L7) are back-end only: deterministic-first -> cache -> free @cf chat -> T2 paid -> T3 synthesis." };
+  const m = t.match(/^run tools\.exec:\s*(\d+)\s*\*\s*(\d+)\s*$/i);
+  if (m) { try { return { kind: "server-side-exec-probe", text: String(BigInt(m[1]) * BigInt(m[2])) + " (computed server-side, deterministic L0 - no model call)" }; } catch (e) { return null; } }
+  return null;
+}
+__name(deterministicOpsAnswer, "deterministicOpsAnswer");
+// L1 CACHE: exact KV (1h TTL) + semantic Vectorize (cosine >= 0.93) for the chat class.
+async function chatCacheLookup(env, prompt, modelId) {
+  try {
+    if (env.OPS_CACHE_KV) {
+      // Key includes VERSION (a deploy never serves pre-deploy cache) and the stored prompt is
+      // verified on hit (a fnv32 collision then reads as a miss, never a wrong answer).
+      const _pk = String(prompt || "");
+      const k = "opschat:" + VERSION + ":" + fnv32(_pk + "|" + String(modelId || ""));
+      const v = await env.OPS_CACHE_KV.get(k, "json");
+      if (v && typeof v.a === "string" && v.a.length >= 40 && v.p === _pk) return { kind: "exact-kv", answer: v.a };
+    }
+  } catch (e) { }
+  try {
+    if (env.SEMCACHE_VZ && env.WAI) {
+      const emb = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [String(prompt || "").slice(0, 500)] });
+      const vec = emb && emb.data && emb.data[0] || (Array.isArray(emb) ? emb[0] : null);
+      if (vec) {
+        const hits = await env.SEMCACHE_VZ.query(vec, { topK: 1, returnMetadata: "all" });
+        const mm = hits && hits.matches && hits.matches[0];
+        if (mm && mm.score >= 0.93 && mm.metadata && typeof mm.metadata.answer === "string" && mm.metadata.answer.length >= 40) return { kind: "semantic", answer: mm.metadata.answer, score: mm.score };
+      }
+    }
+  } catch (e) { console.log("semantic cache lookup failed:", e && e.message || e); }
+  return null;
+}
+__name(chatCacheLookup, "chatCacheLookup");
+async function chatCacheStore(env, prompt, answer, modelId) {
+  try {
+    if (env.OPS_CACHE_KV) {
+      const _pk = String(prompt || "");
+      const k = "opschat:" + VERSION + ":" + fnv32(_pk + "|" + String(modelId || ""));
+      await env.OPS_CACHE_KV.put(k, JSON.stringify({ a: String(answer).slice(0, 4000), p: _pk, t: iso() }), { expirationTtl: 3600 });
+    }
+  } catch (e) { }
+  try {
+    if (env.SEMCACHE_VZ && env.WAI) {
+      const emb = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [String(prompt || "").slice(0, 500)] });
+      const vec = emb && emb.data && emb.data[0] || (Array.isArray(emb) ? emb[0] : null);
+      if (vec) await env.SEMCACHE_VZ.upsert([{ id: "c:" + fnv32(String(prompt || "")), values: vec, metadata: { answer: String(answer).slice(0, 2000), model: String(modelId || "").slice(0, 60), ts: iso() } }]);
+    }
+  } catch (e) { console.log("semantic cache store failed:", e && e.message || e); }
+}
+__name(chatCacheStore, "chatCacheStore");
 async function authOk(header, env) {
   const k1 = env.OPS_ROUTER_AUTH_KEY;
   const k2 = env.OPS_ROUTER_AUTH_KEY_2;
@@ -2804,7 +2916,13 @@ async function ensureSchema(env) {
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_ai_log (id TEXT PRIMARY KEY, ts TEXT NOT NULL, model TEXT, strategy TEXT, complexity TEXT, domain TEXT, prompt TEXT, response TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost_usd REAL, latency_ms INTEGER, tool_calls TEXT, source TEXT, ua TEXT, streamed INTEGER DEFAULT 0, ok INTEGER DEFAULT 1)").run();
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS service_registry (service TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'worker', version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT)").run();
     await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS capability_audit_snapshot (service TEXT PRIMARY KEY, version TEXT, capabilities TEXT, limitations TEXT, ts TEXT)").run();
-    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS llm_gateway_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), provider TEXT, model TEXT, tier TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, status INTEGER DEFAULT 200, error TEXT, streamed INTEGER DEFAULT 0, prompt_chars INTEGER DEFAULT 0, source TEXT)").run();
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS llm_gateway_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), provider TEXT, model TEXT, tier TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, status INTEGER DEFAULT 200, error TEXT, streamed INTEGER DEFAULT 0, prompt_chars INTEGER DEFAULT 0, source TEXT, upstream_model TEXT)").run();
+    // OPS-TRACE-1 (2026-09-26): attribution + task-level-join columns. upstream_model records the REAL served
+    // upstream (ONE-MODEL-PER-ENDPOINT-1 hides it behind the public 'ops' alias); job_id gives an exact
+    // task-level join to ops_jobs.status so calibration can use per-TASK outcomes, not per-call ok.
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN upstream_model TEXT").run(); } catch (eA1) {}
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN job_id TEXT").run(); } catch (eA2) {}
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE llm_gateway_log ADD COLUMN upstream_model TEXT").run(); } catch (eA3) {}
   } catch (e) {
   }
 }
@@ -2819,12 +2937,12 @@ async function logOps(env, rec) {
   await ensureSchema(env);
   if (rec && String(rec.ua || "").indexOf("QNFO-AI-Calibration") >= 0) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)").bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", rec.domain || "ops", typeof rec.prompt === "string" ? rec.prompt : rec.prompt ? JSON.stringify(rec.prompt) : "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO ops_ai_log (id, ts, model, strategy, complexity, domain, prompt, response, prompt_tokens, completion_tokens, cost_usd, latency_ms, tool_calls, source, ua, streamed, ok, upstream_model, job_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)").bind(rec.id, rec.ts, rec.model, rec.strategy, rec.complexity || "medium", rec.domain || "ops", typeof rec.prompt === "string" ? rec.prompt : rec.prompt ? JSON.stringify(rec.prompt) : "", rec.response || "", rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.tool_calls || null, rec.source || "other", rec.ua || "", rec.streamed ? 1 : 0, rec.ok ? 1 : 0, rec.upstream_model || null, rec.job_id || null).run();
   } catch (e) {
     console.log("ops_ai_log insert failed:", e && e.message || e);
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO llm_gateway_log (ts, provider, model, tier, in_tokens, out_tokens, cost_usd, latency_ms, status, error, streamed, prompt_chars, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)").bind(rec.ts, "workers-ai", rec.model, rec.strategy || null, rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.ok ? 200 : 500, rec.ok ? null : String(rec.response || "").slice(0, 300), rec.streamed ? 1 : 0, String(rec.prompt || "").length, rec.source || "deepchat").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO llm_gateway_log (ts, provider, model, tier, in_tokens, out_tokens, cost_usd, latency_ms, status, error, streamed, prompt_chars, source, upstream_model) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)").bind(rec.ts, "workers-ai", rec.model, rec.strategy || null, rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.ok ? 200 : 500, rec.ok ? null : String(rec.response || "").slice(0, 300), rec.streamed ? 1 : 0, String(rec.prompt || "").length, rec.source || "deepchat", rec.upstream_model || null).run();
   } catch (e2) {
   }
   if (rec && !rec.ok) {
@@ -2891,7 +3009,7 @@ __name22(callGLM, "callGLM");
 async function budgetFallback(env, messages, maxTokens, tools, opts) {
   if (!env.WAI) { console.log("OPS_FREE_FALLBACK unavailable: no WAI binding"); return null; }
   const o = opts || {};
-  const _free = [UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/meta/llama-3.3-70b-instruct-fp8-fast"];
+  const _free = [UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/zai-org/glm-4.7-flash", "@cf/qwen/qwen3-30b-a3b-fp8"];
   for (let _i = 0; _i < _free.length; _i++) {
     try {
       const _inputs = { messages: truncateToContext(messages, CODE_MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192) };
@@ -2903,13 +3021,33 @@ async function budgetFallback(env, messages, maxTokens, tools, opts) {
       if (_r && Array.isArray(_r.choices) && _r.choices[0]) _msg = _r.choices[0].message;
       else { const _t = _r && (_r.response != null ? _r.response : _r.answer) || ""; if (_t) _msg = { role: "assistant", content: String(_t) }; }
       if (_msg && (_msg.content || _msg.reasoning_content || (_msg.tool_calls && _msg.tool_calls.length))) { if (!_msg.content && _msg.reasoning_content && !(_msg.tool_calls && _msg.tool_calls.length)) _msg.content = String(_msg.reasoning_content); console.log("OPS_FREE_FALLBACK served by " + _free[_i]); return { resp: { choices: [{ index: 0, message: _msg, finish_reason: "stop" }], usage: _r && _r.usage || {} }, servedBy: _free[_i] + " (free-fallback)" }; }
-    } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); }
+    } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); if (_i < _free.length - 1) await new Promise(function(rr) { setTimeout(rr, 1200); }); }
   }
   return null;
 }
 __name(budgetFallback, "budgetFallback");
+// === L2 CAPABILITY-GATE (capability-gate BEFORE price-gate) ===
+// The agent/coding loop REQUIRES valid tool_calls. A cheap model that fails the tool-call
+// canary costs MORE via retries than the model it replaced. routing_capability (qnfo-audit)
+// records per-model tool_call_ok per task_class. This gate forces a tool-calling model for any
+// tool-bearing call. Fail-open: on any D1 error the resolved model is left unchanged.
+var UPSTREAM_TOOLCALL_MODEL = "deepseek/deepseek-v4-flash";
+var _capIncap = null, _capTs = 0;
+async function agentLoopIncapable(env) {
+  var now = Date.now();
+  if (_capIncap && now - _capTs < 300000) return _capIncap;
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT model FROM routing_capability WHERE task_class='agent-loop' AND tool_call_ok=0").all();
+    var s = {};
+    ((r && r.results) || []).forEach(function(x) { s[x.model] = 1; });
+    _capIncap = s; _capTs = now; return s;
+  } catch (e) { return _capIncap || {}; }
+}
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
+  // COST-ROUTING-STACK-1 L7: T2 daily cap breached -> skip the paid tier entirely and serve the free
+  // tier (graceful degradation; never terminate while a free path exists - BUDGET-CAP-FREE-FALLBACK-1).
+  if (o.budgetT2Blocked && !o.upstreamModel && !o.codeMode) { const _fb0 = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb0) { console.log("OPS_T2_CAP_FREE_DEGRADE"); return _fb0; } }
   if (o.codeMode && env.WAI) {
     try {
       const r = await callWorkersAI(env, messages, maxTokens, tools, o);
@@ -2919,7 +3057,10 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__codeFallbackErr);
     }
   }
-  if (!o.codeMode && !o.upstreamModel && env.WAI) {
+  if (!o.codeMode && !o.upstreamModel && env.WAI && !(tools && tools.length)) {
+    // COST-ROUTING-STACK-1 L2: free-first @cf ONLY for the chat class (no tools). Agent loops (tools
+    // present) go straight to the paid canary-PASS tier; the free tier stays a last-resort
+    // budgetFallback on paid failure/cap, never the first choice for tool-bearing work.
     try {
       const rg = await callGLM(env, messages, maxTokens, tools, o);
       return { resp: rg, servedBy: UPSTREAM_GLM_MODEL };
@@ -2930,7 +3071,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  try { const _b = await env.QNFO_AUDIT.prepare("SELECT blocked FROM model_ladder_budget WHERE month=strftime('%Y-%m','now')").first(); if (_b && _b.blocked) modelToUse = UPSTREAM_BUDGET_MODEL; } catch (_) {}
+  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
@@ -2948,12 +3089,26 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     if (resp.ok) break;
     const txt = await resp.text();
     _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
+    // COST-ROUTING-STACK-1 L3 VERIFIER-REPAIR: provider "array too long" tool-schema limit -> trim tools and retry.
+    if (/array too long/i.test(txt) && tools && tools.length > 32) { tools = tools.slice(0, 32); body.tools = tools; console.log("OPS_TOOLS_TRIM 32 (provider tool-array limit)"); continue; }
+    // OPS-GW-429-FREE-1 (2026-09-26): the AI Gateway "Wholesale Rate limited" (AiGatewayError 2018,
+    // HTTP 429) is the Unified-Billing platform cap of 200 req/60s per gateway, shared by the whole
+    // fleet on gateway 'default'. Retrying the capped paid route 3x only burns time; go straight to the
+    // free Workers-AI binding (which bypasses AI Gateway entirely and is NOT subject to that cap).
+    if (resp.status === 429) { console.log("OPS_GW_429_FREE_FALLBACK " + _dsLastErr.slice(0, 120)); break; }
     if (resp.status < 500 && resp.status !== 429) {
       const _fbFrom = o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB ? o.upstreamModel : !o.upstreamModel && body.model === UPSTREAM_MODEL && UPSTREAM_MODEL_FB ? UPSTREAM_MODEL : null;
       if (_fbFrom) {
         body.model = UPSTREAM_MODEL_FB;
         console.log("OPS_EXEC_MODEL_FALLBACK " + _fbFrom + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
         continue;
+      }
+      // COST-ROUTING-STACK-1 L3: a persistent 4xx AUTH error (401/403) means the paid path is unusable
+      // but a free path exists -> degrade rather than terminate (BUDGET-CAP-FREE-FALLBACK-1). Other 4xx
+      // (400 bad-format etc.) stay fatal: a fallback cannot fix a malformed request.
+      if (resp.status === 401 || resp.status === 403) {
+        const _fbA = await budgetFallback(env, messages, maxTokens, tools, o);
+        if (_fbA) { console.log("OPS_PAID_AUTH_FREE_FALLBACK " + resp.status); return _fbA; }
       }
       throw new Error(_dsLastErr);
     }
@@ -2964,7 +3119,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   if (!resp || !resp.ok) { const _fb = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb) { console.log("OPS_PAID_FAIL_FREE_FALLBACK callDeepSeek"); return _fb; } throw new Error(_dsLastErr || "deepseek upstream unavailable after 3 attempts"); }
   const _out = await resp.json();
-  const _servedBy = o.codeMode ? o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL : o.upstreamModel ? o.upstreamModel : o.__glmFallbackErr ? UPSTREAM_GLM_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_MODEL;
+  const _servedBy = o.codeMode ? o.__codeFallbackErr ? UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL : UPSTREAM_CODE_MODEL : modelToUse;
   return { resp: _out, servedBy: _servedBy };
 }
 __name(callDeepSeek, "callDeepSeek");
@@ -2976,10 +3131,13 @@ __name22222(callDeepSeek, "callDeepSeek");
 __name222222(callDeepSeek, "callDeepSeek");
 async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta) {
   const o = opts || {};
+  // COST-ROUTING-STACK-1 L7: T2 daily cap -> free tier (graceful degradation).
+  if (o.budgetT2Blocked && !o.upstreamModel && !o.codeMode) { const _fb0 = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb0) { console.log("OPS_T2_CAP_FREE_DEGRADE_STREAM"); return _fb0; } }
   // OPS-STREAM-FREE-FIRST-1 (2026-09-26): the streaming path previously had NO free-first branch,
   // so EVERY streamed ops conversation was billed against the paid gateway route (cost root cause).
   // Mirror callDeepSeek: prefer the free Workers-AI model, paid path only as last-resort fallback.
-  if (!o.upstreamModel && env.WAI) {
+  if (!o.upstreamModel && env.WAI && !(tools && tools.length)) {
+    // COST-ROUTING-STACK-1 L2: streaming free-first @cf only for chat class (no tools); agent loops skip it.
     try {
       const _rg = await callGLM(env, messages, maxTokens, tools, o);
       if (_rg && _rg.choices && _rg.choices[0] && _rg.choices[0].message) { console.log("OPS_STREAM_FREE_FIRST served by " + UPSTREAM_GLM_MODEL); return { resp: _rg, servedBy: UPSTREAM_GLM_MODEL }; }
@@ -2987,7 +3145,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  try { const _b = await env.QNFO_AUDIT.prepare("SELECT blocked FROM model_ladder_budget WHERE month=strftime('%Y-%m','now')").first(); if (_b && _b.blocked) modelToUse = UPSTREAM_BUDGET_MODEL; } catch (_) {}
+  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
@@ -3003,6 +3161,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     let _tx = "";
     try { _tx = await resp.text(); } catch (e) {}
     _dsLastErr = "deepseek stream " + _st + ": " + String(_tx || "").slice(0, 200);
+    if (_st === 429) { console.log("OPS_GW_429_FREE_FALLBACK stream " + _dsLastErr.slice(0, 120)); break; }
     console.log("OPS_DS_STREAM_RETRY attempt=" + (_dsTry + 1) + " " + _dsLastErr.slice(0, 120));
     if (_st < 500 && _st !== 429) break;
     if (_dsTry < 2) await new Promise(function(rr) { setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400)); });
@@ -3063,7 +3222,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   });
   const message = { role: "assistant", content };
   if (tool_calls.length) message.tool_calls = tool_calls;
-  return { resp: { choices: [{ index: 0, message, finish_reason: finish }], usage: usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }, servedBy: o.upstreamModel || UPSTREAM_MODEL };
+  return { resp: { choices: [{ index: 0, message, finish_reason: finish }], usage: usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }, servedBy: o.upstreamModel ? modelToUse : modelToUse };
 }
 __name(callDeepSeekStream, "callDeepSeekStream");
 __name2(callDeepSeekStream, "callDeepSeekStream");
@@ -3305,7 +3464,9 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   const relayDisp = displayModel || "deepseek-v4-flash";
   const norm = normalizeMessages(messages);
   const maxOut = clamp(maxTokens, 393216);
-  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
+  // COST-ROUTING-STACK-1 L3: deepseek rejects oversized tool arrays ("array too long" seen live 2026-09-26);
+  // keep relay tool payloads within the provider limit instead of failing the whole request.
+  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 64) : null;
   const clientToolChoice = body && body.tool_choice || "auto";
   const relayTemp = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : 0.5;
   const relayTopP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : 0.9;
@@ -3476,6 +3637,17 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (_cnt && _cnt.c >= _cap) return json({ error: "ops endpoint daily request cap reached (" + _cap + " per UTC day) - see qnfo-audit.ops_ai_log" }, 429);
   } catch (e) {
   }
+  // COST-ROUTING-STACK-1 L7: per-tier daily caps. T2 (paid deepseek) cap OPS_T2_DAILY_CAP (default $2).
+  // On breach, paid-first degrades to the free tier (budgetFallback) instead of terminating (BUDGET-CAP-FREE-FALLBACK-1).
+  let _t2Blocked = false;
+  try {
+    if (env.QNFO_AUDIT) {
+      const _t2d = await env.QNFO_AUDIT.prepare("SELECT COALESCE(SUM(spent_usd),0) s FROM model_ladder_daily WHERE tier = 2 AND day = ?1").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).first();
+      const _t2cap = Number(env.OPS_T2_DAILY_CAP) > 0 ? Number(env.OPS_T2_DAILY_CAP) : 2;
+      _t2Blocked = !!(_t2d && Number(_t2d.s) >= _t2cap);
+      if (_t2Blocked) ctx.waitUntil(logEscalation(env, "chat", UPSTREAM_MODEL, UPSTREAM_GLM_MODEL, "tier2-daily-cap", "T2 daily cap reached; degrading to free tier for this request"));
+    }
+  } catch (e) { }
   const model = body && body.model;
   const messages = body && body.messages;
   const max_tokens = body && body.max_tokens;
@@ -3561,6 +3733,20 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   let strategy = "chat";
   let clientHandoff = null;
   let streamedTokens = false;
+  let escalations = 0;
+  let cacheHit = 0;
+  let cacheKind = null;
+  // L0 DETERMINISTIC-FIRST (COST-ROUTING-STACK-1): no-model answers for well-known single-turn ops intents.
+  if (!execUpstream && !clientTools && messages.length <= 2 && !isStream) {
+    const _det = await deterministicOpsAnswer(env, lastUserText(messages));
+    if (_det) {
+      const _t0d = Date.now();
+      const _dtext = _det.text;
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "deterministic", domain: "ops", prompt, response: _dtext.slice(0, 2e3), prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, latency_ms: _t0d - t0, tool_calls: null, source, ua: String(ua || "").slice(0, 200), streamed: 0, ok: 1, upstream_model: "deterministic-L0" }));
+      ctx.waitUntil(logRouterMetric(env, { worker: WORKER, task_class: "deterministic", tier: 0, model: "deterministic-L0", in_tokens: 0, out_tokens: 0, cost_usd: 0, latency_ms: _t0d - t0, success: 1 }));
+      return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content: _dtext }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, _router: { tier: 0, deterministic: true, kind: _det.kind } });
+    }
+  }
   const loopDeadline = Date.now() + loopDeadlineMs;
   const enc = new TextEncoder();
   const nlnl = String.fromCharCode(10, 10);
@@ -3692,14 +3878,25 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const finalize = /* @__PURE__ */ __name222222(async function() {
     if (finalized) return null;
     finalized = true;
-    const promptTokens = upstreamUsage && upstreamUsage.prompt_tokens ? upstreamUsage.prompt_tokens : estTokens(JSON.stringify(work));
-    const completionTokens = upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
-    const costUsd = costUsdCalc(promptTokens, completionTokens);
+    const promptTokens = cacheHit ? 0 : upstreamUsage && upstreamUsage.prompt_tokens ? upstreamUsage.prompt_tokens : estTokens(JSON.stringify(work));
+    const completionTokens = cacheHit ? estTokens(content) : upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
+    const costUsd = cacheHit ? 0 : costUsdCalc(promptTokens, completionTokens);
     const latencyMs = Date.now() - t0;
     content = stripToolFrames(content);
     const truncMark = /truncated by the token budget|please re-send your request|reached the iteration cap|tool loop reached the iteration cap/i;
     const okFlag = String(content || "").trim().length > 0 && !truncMark.test(String(content || "")) ? 1 : 0;
-    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? servedBy || UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: okFlag };
+    const logRec = { id: randId("ops-"), ts: iso(), model: codeMode ? servedBy || UPSTREAM_CODE_MODEL : wanted, strategy, domain, prompt, upstream_model: servedBy || null, response: (clientHandoff ? JSON.stringify(clientHandoff.tool_calls) : content).slice(0, 2e4), prompt_tokens: promptTokens, completion_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: okFlag };
+    const _chain = String(servedBy || "").split("->").length - 1;
+    if (_chain > 0) escalations += _chain;
+    const _tier = cacheHit ? 0 : costTierOfModel(String(servedBy || "").split("->").pop());
+    ctx.waitUntil(logRouterMetric(env, { worker: WORKER, task_class: strategy, tier: _tier, model: servedBy || wanted, in_tokens: promptTokens, out_tokens: completionTokens, cost_usd: costUsd, latency_ms: latencyMs, cache_hit: cacheHit, escalations: escalations, tool_calls: toolLog.length, tool_calls_ok: toolLog.filter(function(t) { return t.ok; }).length, success: okFlag }));
+    if (_chain > 0) {
+      const _parts = String(servedBy || "").split("->").map(function(s) { return s.trim(); }).filter(Boolean);
+      ctx.waitUntil(logEscalation(env, strategy, _parts[0] || UPSTREAM_MODEL, _parts[_parts.length - 1] || UPSTREAM_MODEL, "cascade-fallback", "servedBy chain: " + String(servedBy || "").slice(0, 200)));
+    }
+    if (cacheHit === 0 && !execUpstream && !clientTools && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
+      ctx.waitUntil(chatCacheStore(env, prompt, String(content || "").trim(), wanted));
+    }
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {
@@ -3722,12 +3919,28 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     try {
       let autoContinue = 0;
       for (let iter = 0; iter <= maxIters; iter++) {
+        // L1 CACHE (COST-ROUTING-STACK-1): exact KV + semantic Vectorize for the chat class
+        // (no tools, fresh single turn). Serves above threshold without any model call.
+        if (iter === 0 && !execUpstream && !clientTools && !codeMode && cacheHit === 0 && String(prompt || "").length < 2000) {
+          try {
+            const _ch = await chatCacheLookup(env, prompt, wanted);
+            if (_ch && _ch.answer) {
+              cacheHit = 1;
+              cacheKind = _ch.kind;
+              content = _ch.answer;
+              finishReason = "stop";
+              strategy = "chat-cache-" + (_ch.kind || "hit");
+              if (isStream) emitChunk({ role: "assistant", content }, null);
+              return await finalize();
+            }
+          } catch (e) { }
+        }
         const deadlineHit = Date.now() > loopDeadline;
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
         if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
-        const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0 };
+        const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
         if (isStream) {
           try {
@@ -3747,6 +3960,24 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         upstreamUsage = resp && resp.usage || upstreamUsage;
         const msg0 = choice && choice.message;
         const toolCalls = msg0 && Array.isArray(msg0.tool_calls) && msg0.tool_calls.length ? msg0.tool_calls : null;
+        if (toolCalls) {
+          // L3 VERIFIER (COST-ROUTING-STACK-1): deterministic tool-call validation. Unknown names or
+          // unparseable arguments are a measured failure signal -> counted as escalations, never retried blind.
+          let _bad = 0;
+          for (const _tc of toolCalls) {
+            const _fn = _tc && _tc.function;
+            const _nm = _fn && _fn.name ? String(_fn.name) : "";
+            let _ok = !!_nm && (_opsToolNames.has(_nm) || _clientToolNames.has(_nm));
+            if (_ok && typeof _fn.arguments === "string" && _fn.arguments.trim()) {
+              try { JSON.parse(_fn.arguments); } catch (e) { _ok = false; }
+            }
+            if (!_ok) _bad++;
+          }
+          if (_bad) {
+            escalations += _bad;
+            ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, servedBy || UPSTREAM_MODEL, "tool-call-invalid", _bad + " invalid tool call(s) in model response"));
+          }
+        }
         if (toolCalls && iter < maxIters) {
           streamedTokens = false;
           const serverCalls = toolCalls.filter(function(tc) {
@@ -3779,6 +4010,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           continue;
         }
         content = String(msg0 && msg0.content || "");
+        if (!String(content || "").trim() && !toolCalls && withTools && !cacheHit) {
+          escalations++;
+          ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "empty-content-with-tools", "model returned empty content while tools were available"));
+        }
         finishReason = choice && choice.finish_reason || "stop";
         strategy = toolLog.length ? hybrid ? "hybrid" : "agent-tools" : hybrid ? "hybrid-chat" : "chat";
         if (iter < maxIters && toolLog.length && autoContinue < 3 && FUTURE_WORK_RE.test(content)) {
@@ -3815,7 +4050,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       return await finalize();
     } catch (e) {
       const errText = "ops agent error: " + (e && e.message ? e.message : String(e));
-      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "agent", prompt, response: errText.slice(0, 2e3), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
+      ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: wanted, strategy: "agent", prompt, response: errText.slice(0, 2e3), upstream_model: servedBy || null, latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source, ua: String(ua || "").slice(0, 200), streamed: isStream ? 1 : 0, ok: 0 }));
       if (isStream) {
         emitChunk({ role: "assistant", content: errText }, null);
         emitChunk({}, "stop");
@@ -3984,7 +4219,7 @@ function manifest() {
     }),
     models: opsModelIds(),
     limitations: OPS_ENDPOINT_LIMITATIONS,
-    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
+    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "kv:qnfo-ops-cache", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-ops-semcache", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
     generatedAt: iso()
   };
 }
@@ -4547,6 +4782,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     let finishReason = "stop";
     let final = null;
     let upUsage = null;
+    let jobServedBy = null;
     const addUsage = /* @__PURE__ */ __name222222(function(rU) {
       if (rU && rU.usage) {
         if (!upUsage) upUsage = { prompt_tokens: 0, completion_tokens: 0 };
@@ -4577,8 +4813,9 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
       let resp = null;
       try {
-        resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "3 seconds", backoff: "linear" }, timeout: "15 minutes" }, async function() {
-          const { resp: r } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
+        resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "20 seconds", backoff: "exponential" }, timeout: "15 minutes" }, async function() {
+          const { resp: r, servedBy: _sb } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
+          jobServedBy = _sb || jobServedBy;
           return JSON.parse(JSON.stringify(r));
         });
       } catch (e) {
@@ -4621,7 +4858,8 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       finishReason = choice && choice.finish_reason || "stop";
       if (withTools && finishReason === "length") {
         try {
-          const { resp: r3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
+          const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
+          jobServedBy = _sb3 || jobServedBy;
           addUsage(r3);
           const c3 = r3 && r3.choices && r3.choices[0];
           const m3 = c3 && c3.message;
@@ -4637,7 +4875,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     if (!final) final = { status: "succeeded", response: String(content || "(iteration cap reached with no final answer)"), finishReason };
     const doneRes = await step.do("job-finalize", async function() {
       await jobSet(env, jobId, final.status, { response: final.response, tool_log: JSON.stringify(toolLog).slice(0, 3e3), strategy: "job-workflow" });
-      const rec = { id: randId("ops-"), ts: iso(), model: body.model || "ops-exec", strategy: "job-workflow", prompt, response: String(final.response || "").slice(0, 2e4) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: upUsage && upUsage.prompt_tokens ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: upUsage && upUsage.completion_tokens ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.error ? 0 : String(final.response || "").trim() ? 1 : 0 };
+      const rec = { id: randId("ops-"), ts: iso(), model: body.model || "ops-exec", strategy: "job-workflow", upstream_model: jobServedBy || execUpstream || null, job_id: jobId, prompt, response: String(final.response || "").slice(0, 2e4) + (final.error ? " JOB_ERROR: " + final.error : ""), prompt_tokens: upUsage && upUsage.prompt_tokens ? upUsage.prompt_tokens : estTokens(JSON.stringify(work)), completion_tokens: upUsage && upUsage.completion_tokens ? upUsage.completion_tokens : estTokens(content), cost_usd: costUsdCalc(upUsage && upUsage.prompt_tokens || 0, upUsage && upUsage.completion_tokens || 0), latency_ms: Date.now() - t0, tool_calls: JSON.stringify(toolLog).slice(0, 3e3), source: "job", ua: "qnfo-ops-workflow", streamed: 0, ok: final.error ? 0 : String(final.response || "").trim() ? 1 : 0 };
       await logOps(env, rec);
       return { status: final.status, error: final.error || null, response: String(final.response || "").slice(0, 2e3) };
     });
@@ -4838,7 +5076,8 @@ var worker_default = {
       bindings.d1 = { audit: !!env.QNFO_AUDIT, living: !!env.LIVING_PAPER, graph: !!env.QNFO_GRAPH, portfolio: !!env.PORTFOLIO, outreach: !!env.QNFO_OUTREACH, cms: !!env.QNFO_CMS, ipatent: !!env.IPATENT, personal: !!env.PERSONAL };
       bindings.vectorize = { research: !!env.RESEARCH_VZ, notes: !!env.NOTES_VZ, tasks: !!env.TASKS_VZ, handoffs: !!env.HANDOFFS_VZ, ailog: !!env.AILOG_VZ };
       bindings.r2 = { releases: !!env.RELEASES_R2, audit: !!env.AUDIT_R2, backups: !!env.BACKUPS_R2, skills: !!env.SKILLS_R2 };
-      bindings.kv = { eqcache: !!env.EQCACHE_KV };
+      bindings.kv = { eqcache: !!env.EQCACHE_KV, opscache: !!env.OPS_CACHE_KV };
+      bindings.vectorize2 = { semcache: !!env.SEMCACHE_VZ };
       bindings.queue = !!env.OPS_JOBS_QUEUE;
       bindings.workflow = !!env.OPS_EXEC_WORKFLOW;
       bindings.agent_do = !!env.AGENTIC_OPS_EXEC;
@@ -4931,6 +5170,22 @@ var worker_default = {
         return json({ worker: WORKER, version: VERSION, utc_day: day || { c: 0, cost: 0 }, last_30d: month || { c: 0, cost: 0 }, currency: "usd", cap_per_utc_day: Number(env.OPS_DAILY_CAP) > 0 ? Math.floor(Number(env.OPS_DAILY_CAP)) : 1e3, job_cost_cap_usd: Number(env.OPS_JOB_COST_CAP_USD) > 0 ? Number(env.OPS_JOB_COST_CAP_USD) : OPS_JOB_COST_CAP_DEFAULT, ts: iso() });
       } catch (e) {
         return json({ error: "cost query failed: " + (e && e.message || String(e)) }, 502);
+      }
+    }
+    // COST-ROUTING-STACK-1 MEA: cost-per-task-class, cache hit rate, escalation count, tool-call validity.
+    if (path === "/cost-router/stats" && method === "GET") {
+      try {
+        const hours = Math.min(Number(url.searchParams.get("hours") || 24) || 24, 24 * 30);
+        const since = new Date(Date.now() - hours * 3600e3).toISOString();
+        await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS cost_router_metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), worker TEXT, task_class TEXT, tier INTEGER, model TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, cache_hit INTEGER DEFAULT 0, escalations INTEGER DEFAULT 0, tool_calls INTEGER DEFAULT 0, tool_calls_ok INTEGER DEFAULT 0, success INTEGER DEFAULT 1)").run();
+        await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS model_ladder_daily (tier INTEGER, day TEXT, spent_usd REAL DEFAULT 0, calls INTEGER DEFAULT 0, PRIMARY KEY (tier, day))").run();
+        const byClass = await env.QNFO_AUDIT.prepare("SELECT task_class, COUNT(*) calls, SUM(success) ok, ROUND(COALESCE(SUM(cost_usd),0),4) cost, ROUND(COALESCE(AVG(cache_hit),0),3) cache_hit_rate, SUM(escalations) escalations, SUM(tool_calls) tool_calls, SUM(tool_calls_ok) tool_calls_ok, ROUND(COALESCE(AVG(CASE WHEN tool_calls > 0 THEN 1.0*tool_calls_ok/tool_calls END),0),3) tool_call_validity FROM cost_router_metrics WHERE ts >= ?1 GROUP BY task_class ORDER BY cost DESC").bind(since).all();
+        const tiers = await env.QNFO_AUDIT.prepare("SELECT tier, day, ROUND(spent_usd,4) spent_usd, calls FROM model_ladder_daily WHERE day = ?1 ORDER BY tier").bind(iso().slice(0, 10)).all();
+        const esc = await env.QNFO_AUDIT.prepare("SELECT ts, task_class, from_tier, to_tier, model, kind, substr(reason,1,140) reason FROM model_ladder_escalations ORDER BY ts DESC LIMIT 15").all();
+        const caps = { 1: 0, 2: Number(env.OPS_T2_DAILY_CAP) > 0 ? Number(env.OPS_T2_DAILY_CAP) : 2, 3: Number(env.OPS_T3_DAILY_CAP) > 0 ? Number(env.OPS_T3_DAILY_CAP) : 0.5 };
+        return json({ worker: WORKER, version: VERSION, window_hours: hours, by_task_class: byClass.results || [], daily_tier_budget: tiers.results || [], tier_caps_usd: caps, recent_escalations: esc.results || [], measured: ["cost_per_task_class", "cache_hit_rate", "escalation_count", "tool_call_validity_rate"], ts: iso() });
+      } catch (e) {
+        return json({ error: "cost-router stats failed: " + (e && e.message || String(e)) }, 502);
       }
     }
     if (path === "/v1/models" && method === "GET") {

@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.0";
+var VERSION = "5.29.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1886,6 +1886,37 @@ function lastUserText(messages) {
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");
 __name22(lastUserText, "lastUserText");
+// COST-ROUTING-STACK-1 L1 SEMANTIC CACHE: LOG_VZ stores every response vector (kind:"response",
+// metadata.text=response[:800], metadata.model). A query within cosine 0.95 of a past query whose
+// response came from the SAME routed model is served from cache (full answer joined from ai_queries).
+async function semanticCacheLookup(env, q, model) {
+  try {
+    if (!env.LOG_VZ || !env.AI) return null;
+    const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
+    const vec = embed && embed.data && embed.data[0] || (Array.isArray(embed) ? embed[0] : null);
+    if (!vec) return null;
+    const hits = await env.LOG_VZ.query(vec, { topK: 3, returnMetadata: "all" });
+    for (const m of hits.matches || []) {
+      if (m.score < 0.95) break;
+      const md = m.metadata || {};
+      if (md.kind === "response" && md.text && md.text.length >= 40 && (!model || md.model === model)) {
+        let text = md.text;
+        if (env.QNFO_AUDIT && m.id && m.id.indexOf("r:") === 0) {
+          try {
+            const row = await env.QNFO_AUDIT.prepare("SELECT response FROM ai_queries WHERE id = ?1 AND ts >= ?2").bind(m.id.slice(2), new Date(Date.now() - 30 * 864e5).toISOString()).first();
+            if (row && row.response && String(row.response).length >= 40) text = row.response;
+          } catch (e) { }
+        }
+        return { text: String(text).slice(0, 8000), score: m.score, model: md.model || null };
+      }
+    }
+  } catch (e) {
+    console.log("semantic cache lookup failed:", e && e.message || e);
+  }
+  return null;
+}
+__name(semanticCacheLookup, "semanticCacheLookup");
+__name2(semanticCacheLookup, "semanticCacheLookup");
 async function logQuery(env, record) {
   const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
   const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
@@ -1899,6 +1930,15 @@ async function logQuery(env, record) {
     }
   } catch (e) {
     console.log("ai_queries insert failed:", e && e.message || e);
+  }
+  // COST-ROUTING-STACK-1 MEA: one row per completed research task (cost-per-task-class, cache hit rate).
+  try {
+    if (env.QNFO_AUDIT && !_internalProbe) {
+      await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS cost_router_metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), worker TEXT, task_class TEXT, tier INTEGER, model TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, cache_hit INTEGER DEFAULT 0, escalations INTEGER DEFAULT 0, tool_calls INTEGER DEFAULT 0, tool_calls_ok INTEGER DEFAULT 0, success INTEGER DEFAULT 1)").run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO cost_router_metrics (ts, worker, task_class, tier, model, in_tokens, out_tokens, cost_usd, latency_ms, cache_hit, escalations, tool_calls, tool_calls_ok, success) VALUES (?1,'qnfo-ai',?2,0,?3,?4,?5,?6,?7,?8,0,0,0,1)").bind(record.ts, String(record.domain || record.complexity || "chat"), String(record.model || "").slice(0, 80), record.prompt_tokens || 0, record.completion_tokens || 0, record.cost_usd || 0, record.latency_ms || 0, record._cache_hit ? 1 : 0).run();
+    }
+  } catch (e) {
+    console.log("cost_router_metrics (qnfo-ai) insert failed:", e && e.message || e);
   }
   try {
     if (env.QNFO_AUDIT && record.thread_id && !_internalProbe) {

@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.1";
+var VERSION = "2.37.2";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -297,9 +297,12 @@ __name(deterministicOpsAnswer, "deterministicOpsAnswer");
 async function chatCacheLookup(env, prompt, modelId) {
   try {
     if (env.OPS_CACHE_KV) {
-      const k = "opschat:" + fnv32(String(prompt || "") + "|" + String(modelId || ""));
+      // Key includes VERSION (a deploy never serves pre-deploy cache) and the stored prompt is
+      // verified on hit (a fnv32 collision then reads as a miss, never a wrong answer).
+      const _pk = String(prompt || "");
+      const k = "opschat:" + VERSION + ":" + fnv32(_pk + "|" + String(modelId || ""));
       const v = await env.OPS_CACHE_KV.get(k, "json");
-      if (v && typeof v.a === "string" && v.a.length >= 40) return { kind: "exact-kv", answer: v.a };
+      if (v && typeof v.a === "string" && v.a.length >= 40 && v.p === _pk) return { kind: "exact-kv", answer: v.a };
     }
   } catch (e) { }
   try {
@@ -319,8 +322,9 @@ __name(chatCacheLookup, "chatCacheLookup");
 async function chatCacheStore(env, prompt, answer, modelId) {
   try {
     if (env.OPS_CACHE_KV) {
-      const k = "opschat:" + fnv32(String(prompt || "") + "|" + String(modelId || ""));
-      await env.OPS_CACHE_KV.put(k, JSON.stringify({ a: String(answer).slice(0, 4000), t: iso() }), { expirationTtl: 3600 });
+      const _pk = String(prompt || "");
+      const k = "opschat:" + VERSION + ":" + fnv32(_pk + "|" + String(modelId || ""));
+      await env.OPS_CACHE_KV.put(k, JSON.stringify({ a: String(answer).slice(0, 4000), p: _pk, t: iso() }), { expirationTtl: 3600 });
     }
   } catch (e) { }
   try {
@@ -3098,6 +3102,13 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
         body.model = UPSTREAM_MODEL_FB;
         console.log("OPS_EXEC_MODEL_FALLBACK " + _fbFrom + " -> " + UPSTREAM_MODEL_FB + " : " + String(_dsLastErr).slice(0, 120));
         continue;
+      }
+      // COST-ROUTING-STACK-1 L3: a persistent 4xx AUTH error (401/403) means the paid path is unusable
+      // but a free path exists -> degrade rather than terminate (BUDGET-CAP-FREE-FALLBACK-1). Other 4xx
+      // (400 bad-format etc.) stay fatal: a fallback cannot fix a malformed request.
+      if (resp.status === 401 || resp.status === 403) {
+        const _fbA = await budgetFallback(env, messages, maxTokens, tools, o);
+        if (_fbA) { console.log("OPS_PAID_AUTH_FREE_FALLBACK " + resp.status); return _fbA; }
       }
       throw new Error(_dsLastErr);
     }

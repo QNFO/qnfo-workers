@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.12-budgetfb";
+var VERSION = "5.29.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1573,8 +1573,22 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     ...extra
   }), "mkRouter");
   const reqModel = body.model;
-  const isAuto = reqModel === "auto";
+  const isAuto = reqModel === "auto" || reqModel === "qnfo";
   const isEnsemble = reqModel === "ensemble";
+  // COST-ROUTING-STACK-1 L1 SEMANTIC CACHE: serve above-threshold past answers for the single-model
+  // path (no tools, no images, fresh single turn, same routed model, cosine >= 0.95, 30d freshness).
+  if (!isAuto && !isEnsemble && !(tools && tools.length) && !wantsCode && !hasImage && !isStream && messages.length <= 2) {
+    try {
+      const _sc = await semanticCacheLookup(env, lastUserText(messages), reqModel);
+      if (_sc && _sc.text) {
+        const _screc = { ...mkLogRec(), model: reqModel, streamed: 0, response: String(_sc.text).slice(0, 2e5), prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), cost_usd: 0, latency_ms: Date.now() - t0, _cache_hit: 1 };
+        if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, _screc));
+        return json({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: reqModel, choices: [{ index: 0, message: { role: "assistant", content: _sc.text }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), total_tokens: estimateOutputTokens(_sc.text) }, _router: { cache: "semantic", score: _sc.score, source_model: _sc.model, tier: 0, cost_usd: 0 } });
+      }
+    } catch (e) {
+      console.log("semantic cache serve failed:", e && e.message || e);
+    }
+  }
   let estInputTokens = estimateInputTokens(messages);
   const autoHealth = isAuto ? await loadModelHealth(env) : null;
   let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
@@ -1872,6 +1886,37 @@ function lastUserText(messages) {
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");
 __name22(lastUserText, "lastUserText");
+// COST-ROUTING-STACK-1 L1 SEMANTIC CACHE: LOG_VZ stores every response vector (kind:"response",
+// metadata.text=response[:800], metadata.model). A query within cosine 0.95 of a past query whose
+// response came from the SAME routed model is served from cache (full answer joined from ai_queries).
+async function semanticCacheLookup(env, q, model) {
+  try {
+    if (!env.LOG_VZ || !env.AI) return null;
+    const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
+    const vec = embed && embed.data && embed.data[0] || (Array.isArray(embed) ? embed[0] : null);
+    if (!vec) return null;
+    const hits = await env.LOG_VZ.query(vec, { topK: 3, returnMetadata: "all" });
+    for (const m of hits.matches || []) {
+      if (m.score < 0.95) break;
+      const md = m.metadata || {};
+      if (md.kind === "response" && md.text && md.text.length >= 40 && (!model || md.model === model)) {
+        let text = md.text;
+        if (env.QNFO_AUDIT && m.id && m.id.indexOf("r:") === 0) {
+          try {
+            const row = await env.QNFO_AUDIT.prepare("SELECT response FROM ai_queries WHERE id = ?1 AND ts >= ?2").bind(m.id.slice(2), new Date(Date.now() - 30 * 864e5).toISOString()).first();
+            if (row && row.response && String(row.response).length >= 40) text = row.response;
+          } catch (e) { }
+        }
+        return { text: String(text).slice(0, 8000), score: m.score, model: md.model || null };
+      }
+    }
+  } catch (e) {
+    console.log("semantic cache lookup failed:", e && e.message || e);
+  }
+  return null;
+}
+__name(semanticCacheLookup, "semanticCacheLookup");
+__name2(semanticCacheLookup, "semanticCacheLookup");
 async function logQuery(env, record) {
   const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
   const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
@@ -1885,6 +1930,15 @@ async function logQuery(env, record) {
     }
   } catch (e) {
     console.log("ai_queries insert failed:", e && e.message || e);
+  }
+  // COST-ROUTING-STACK-1 MEA: one row per completed research task (cost-per-task-class, cache hit rate).
+  try {
+    if (env.QNFO_AUDIT && !_internalProbe) {
+      await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS cost_router_metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), worker TEXT, task_class TEXT, tier INTEGER, model TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, cache_hit INTEGER DEFAULT 0, escalations INTEGER DEFAULT 0, tool_calls INTEGER DEFAULT 0, tool_calls_ok INTEGER DEFAULT 0, success INTEGER DEFAULT 1)").run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO cost_router_metrics (ts, worker, task_class, tier, model, in_tokens, out_tokens, cost_usd, latency_ms, cache_hit, escalations, tool_calls, tool_calls_ok, success) VALUES (?1,'qnfo-ai',?2,0,?3,?4,?5,?6,?7,?8,0,0,0,1)").bind(record.ts, String(record.domain || record.complexity || "chat"), String(record.model || "").slice(0, 80), record.prompt_tokens || 0, record.completion_tokens || 0, record.cost_usd || 0, record.latency_ms || 0, record._cache_hit ? 1 : 0).run();
+    }
+  } catch (e) {
+    console.log("cost_router_metrics (qnfo-ai) insert failed:", e && e.message || e);
   }
   try {
     if (env.QNFO_AUDIT && record.thread_id && !_internalProbe) {
@@ -2365,18 +2419,12 @@ var worker_default = {
           }
         };
       });
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      return json({ object: "list", data });
+      // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
+      return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
-      const id = path.split("/").pop();
-      if (id === "auto" || id === "ensemble") {
-        return json({ id, object: "model", created: 171e7, owned_by: "qnfo", contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, limit: { context: 1310720, output: 32768 }, capabilities: ["chat", "agent", "code", "streaming"].concat(id === "ensemble" ? ["reasoning"] : []), tool_call: true, temperature: true, default_tool_mode: "agent" });
-      }
-      const m = MODELS[id];
-      if (!m) return json({ error: "model not found" }, 404);
-      return json({ id, object: "model", created: 171e7, owned_by: m.tier === 0 ? "workers-ai" : m.family });
+      // QNFO-SINGLE-MODEL-1: any id resolves to the single public model (never 404 on model).
+      return json({ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, limit: { context: 1310720, output: 32768 }, capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], tool_call: true, temperature: true, default_tool_mode: "agent" });
     }
     if ((path === "/v1/chat/completions" || path === "/chat/completions") && method === "POST") {
       let body;
