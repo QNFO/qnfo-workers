@@ -66,7 +66,7 @@ __name2(isOAIUpstream, "isOAIUpstream");
 __name22(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
 var ROUTES = ["/health", "/", "/fleet", "/cost", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
-var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
+var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/ops/compat/chat/completions";
 var UPSTREAM_MODEL = "dynamic/opsdynamic";
 var UPSTREAM_MODEL_FB = "openai/gpt-5.5";
 var UPSTREAM_CODE_MODEL = "@cf/moonshotai/kimi-k2.7-code";
