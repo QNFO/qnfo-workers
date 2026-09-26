@@ -7,7 +7,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.16"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var VERSION = "1.7.17-pubevents"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2495,8 +2495,24 @@ async function redHtml(env) {
   H.push("<tr><td>Credit balance</td><td>" + (bal ? usd(bal.balance) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Auto top-up</td><td>" + (tup ? "refill " + usd(tup.amount) + " when balance &lt; " + usd(tup.threshold) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? aiN.toLocaleString() + " neurons (&asymp;$15 est, model-mix dependent)" : '<span class="warn">n/a</span>') + "</td></tr>");
-  H.push('<tr><td>Spend limit</td><td>$150 / 30d sliding (monthly-150, enabled)</td></tr>');
-  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (inv ? usd(inv.amount_due) : "n/a") + " " + (inv && Number(inv.amount_due) / 100 >= 150 ? '<b class="bad">&ge; $150/30d (half-true)</b>' : '&lt; $150/30d') + ' &middot; publish_events: <b class="bad">UNDEFINED</b> &mdash; cannot auto-evaluate; owner must define publish_events or the kill path stays ambiguous</td></tr>');
+  let gwLimitLive = null;
+  try {
+    const rgl = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
+    const jgl = await rgl.json();
+    const rules = jgl && jgl.result && jgl.result.spend_limits && jgl.result.spend_limits.rules ? jgl.result.spend_limits.rules : [];
+    if (rules.length && rules[0].limit != null) gwLimitLive = Number(rules[0].limit);
+  } catch (e) {
+  }
+  let pubEvents = null;
+  try {
+    const rpe = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND datetime(updated_at) >= datetime('now','-30 days')");
+    pubEvents = rpe && rpe.length ? Number(rpe[0].n) : null;
+  } catch (e) {
+  }
+  const spendOver = inv ? Number(inv.amount_due) / 100 >= 150 : false;
+  const earlyFire = spendOver && pubEvents === 0;
+  H.push('<tr><td>Spend limit</td><td>' + (gwLimitLive != null ? "$" + gwLimitLive + " / 30d sliding (live gateway config)" : "$150 / 30d sliding (manifest threshold)") + '</td></tr>');
+  H.push('<tr><td>EARLY-TRIGGER</td><td>spend ' + (inv ? usd(inv.amount_due) : "n/a") + " " + (spendOver ? '<b class="bad">&ge; $150/30d</b>' : '&lt; $150/30d') + " AND publish_events_30d=" + (pubEvents == null ? '<b class="bad">n/a</b>' : pubEvents) + (pubEvents === 0 ? ' (<b class="bad">ZERO</b>)' : ' (<span class="ok">non-zero</span>)') + ' &rarr; ' + (earlyFire ? '<b class="bad">TRIGGER FIRES</b>' : '<span class="ok">not firing</span>') + ' <span class="sub">defn: version_queue status=published last 30d (WS-0)</span></td></tr>');
   H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits (e.g. $18.08 pretax credit on the gpt-5.5 line); gateway spend is dominated by agent-session LLM traffic.</div></div>');
 
   // 4. COMPLETE OPEN-ISSUE INVENTORY
