@@ -1,4 +1,4 @@
-var VERSION="3.7.10-no-blank-paper";
+var VERSION="3.7.11-blank-paper-gate";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -893,6 +893,19 @@ __name2222222(handlePapers, "handlePapers");
 __name22222222(handlePapers, "handlePapers");
 __name222222222(handlePapers, "handlePapers");
 __name2222222222(handlePapers, "handlePapers");
+// NO-BLANK-PAPER-1 gate: live invariant over the paper surface. A published,
+// renderable paper must have either a body (>=40 chars) or an abstract; if both
+// are absent the detail page would render blank. Must report blank_count = 0.
+async function handleBlankPapers(env) {
+  try {
+    const r = await env.LIVING_PAPER.prepare("SELECT slug,title,status,paper_type,length(COALESCE(body_md,'')) AS body_len,length(COALESCE(abstract,'')) AS abstract_len FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND length(trim(COALESCE(body_md,''))) < 40 AND length(trim(COALESCE(abstract,''))) < 1 ORDER BY slug").all();
+    const rows = (r && r.results) || [];
+    return json({ ok: rows.length === 0, invariant: "NO-BLANK-PAPER-1", blank_count: rows.length, blank: rows });
+  } catch (e) {
+    return json({ ok: false, error: e.message }, 500);
+  }
+}
+__name(handleBlankPapers, "handleBlankPapers");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
@@ -1631,6 +1644,7 @@ var gateway_worker_default = {
       if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
       if (p === "/api/indexnow" && (method === "GET" || method === "POST")) return handleIndexNow(env, u.searchParams.get("full") === "1");
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
+      if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/papers" || p === "/") return handlePapers(request, env);
@@ -1659,6 +1673,7 @@ var gateway_worker_default = {
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
+      if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
