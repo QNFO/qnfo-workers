@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.12-streamfix";
+var VERSION = "4.1.13-models";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -1893,13 +1893,22 @@ var api_default = {
       // OpenAI-compatible client (LiteLLM, LM Studio, llama.cpp, ChatBox, OpenWebUI, etc.) can
       // probe /v1/models on "test connection" without a key and discover models. Model ids are
       // not sensitive; chat/embeddings/data routes remain gated by API_KEY.
-      return json({ object: "list", data: [
+      const _data = [
         { id: "personal-twin-chat", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "vision"], contextWindow: 1048576, context_length: 1048576, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1048576, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1048576, temperature: 0.7, top_p: 0.9, vision: true, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "deepseek-v4-pro-0813" } },
         { id: "personal-twin-pro", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 1310720, context_length: 1310720, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1310720, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1310720, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "glm-5.3" } },
         { id: "personal-twin-reason", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 128e3, context_length: 128e3, maxOutput: 32768, max_output_tokens: 32768, limit: { context: 128e3, output: 32768 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 128e3, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "gpt-oss-120b" } },
         { id: "personal-twin-flash", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "vision"], contextWindow: 1310720, context_length: 1310720, maxOutput: 32768, max_output_tokens: 32768, limit: { context: 1310720, output: 32768 }, tool_call: false, temperature: true, default_tool_mode: "minimal", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1310720, temperature: 0.6, top_p: 0.9, vision: true, tools: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "glm-5.3-flash", note: "Cost-optimized: $0.10/M input, fast responses" } },
         { id: "bge-base-en-v1.5", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["embeddings"], contextWindow: 512, context_length: 512, maxOutput: 0, max_output_tokens: 0, limit: { context: 512, output: 0 }, tool_call: false, temperature: true, _router: { tier: 0, family: "embedding", reasoning: false, ctx: 512, temperature: 0, top_p: 1, vision: false, tools: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok" } }
-      ] });
+      ];
+      // MODEL-FIELDS-PARITY-1: mirror qnfo-ai/qnfo-ops superset so LiteLLM/LM Studio/llama.cpp
+      // read the same sizing fields from every QNFO endpoint.
+      for (const _m of _data) {
+        if (_m.max_tokens == null) _m.max_tokens = _m.maxOutput != null ? _m.maxOutput : _m.max_output_tokens;
+        if (_m.max_input_tokens == null) _m.max_input_tokens = _m.contextWindow != null ? _m.contextWindow : (_m.limit && _m.limit.context);
+        if (_m.context_window == null) _m.context_window = _m.contextWindow;
+        if (_m.max_output == null) _m.max_output = _m.maxOutput != null ? _m.maxOutput : _m.max_output_tokens;
+      }
+      return json({ object: "list", data: _data });
     }
     if (path === "/v1/chat/completions" && request.method === "POST") {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
