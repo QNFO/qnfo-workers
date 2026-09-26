@@ -2896,7 +2896,7 @@ __name22(callGLM, "callGLM");
 async function budgetFallback(env, messages, maxTokens, tools, opts) {
   if (!env.WAI) { console.log("OPS_FREE_FALLBACK unavailable: no WAI binding"); return null; }
   const o = opts || {};
-  const _free = [UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/meta/llama-3.3-70b-instruct-fp8-fast"];
+  const _free = [UPSTREAM_GLM_MODEL, UPSTREAM_CODE_MODEL, "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/zai-org/glm-4.7-flash", "@cf/qwen/qwen3-30b-a3b-fp8"];
   for (let _i = 0; _i < _free.length; _i++) {
     try {
       const _inputs = { messages: truncateToContext(messages, CODE_MODEL_CTX - Math.max(maxTokens || 0, 0) - 8192) };
@@ -2908,7 +2908,7 @@ async function budgetFallback(env, messages, maxTokens, tools, opts) {
       if (_r && Array.isArray(_r.choices) && _r.choices[0]) _msg = _r.choices[0].message;
       else { const _t = _r && (_r.response != null ? _r.response : _r.answer) || ""; if (_t) _msg = { role: "assistant", content: String(_t) }; }
       if (_msg && (_msg.content || _msg.reasoning_content || (_msg.tool_calls && _msg.tool_calls.length))) { if (!_msg.content && _msg.reasoning_content && !(_msg.tool_calls && _msg.tool_calls.length)) _msg.content = String(_msg.reasoning_content); console.log("OPS_FREE_FALLBACK served by " + _free[_i]); return { resp: { choices: [{ index: 0, message: _msg, finish_reason: "stop" }], usage: _r && _r.usage || {} }, servedBy: _free[_i] + " (free-fallback)" }; }
-    } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); }
+    } catch (e) { console.log("OPS_FREE_FALLBACK " + _free[_i] + " failed: " + String(e && e.message || e).slice(0, 120)); if (_i < _free.length - 1) await new Promise(function(rr) { setTimeout(rr, 1200); }); }
   }
   return null;
 }
@@ -2952,6 +2952,11 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     if (resp.ok) break;
     const txt = await resp.text();
     _dsLastErr = "deepseek " + resp.status + ": " + String(txt || "").slice(0, 300);
+    // OPS-GW-429-FREE-1 (2026-09-26): the AI Gateway "Wholesale Rate limited" (AiGatewayError 2018,
+    // HTTP 429) is the Unified-Billing platform cap of 200 req/60s per gateway, shared by the whole
+    // fleet on gateway 'default'. Retrying the capped paid route 3x only burns time; go straight to the
+    // free Workers-AI binding (which bypasses AI Gateway entirely and is NOT subject to that cap).
+    if (resp.status === 429) { console.log("OPS_GW_429_FREE_FALLBACK " + _dsLastErr.slice(0, 120)); break; }
     if (resp.status < 500 && resp.status !== 429) {
       const _fbFrom = o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB ? o.upstreamModel : !o.upstreamModel && body.model === UPSTREAM_MODEL && UPSTREAM_MODEL_FB ? UPSTREAM_MODEL : null;
       if (_fbFrom) {
@@ -3006,6 +3011,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     let _tx = "";
     try { _tx = await resp.text(); } catch (e) {}
     _dsLastErr = "deepseek stream " + _st + ": " + String(_tx || "").slice(0, 200);
+    if (_st === 429) { console.log("OPS_GW_429_FREE_FALLBACK stream " + _dsLastErr.slice(0, 120)); break; }
     console.log("OPS_DS_STREAM_RETRY attempt=" + (_dsTry + 1) + " " + _dsLastErr.slice(0, 120));
     if (_st < 500 && _st !== 429) break;
     if (_dsTry < 2) await new Promise(function(rr) { setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400)); });
@@ -4581,7 +4587,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
       let resp = null;
       try {
-        resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "3 seconds", backoff: "linear" }, timeout: "15 minutes" }, async function() {
+        resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "20 seconds", backoff: "exponential" }, timeout: "15 minutes" }, async function() {
           const { resp: r, servedBy: _sb } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
           jobServedBy = _sb || jobServedBy;
           return JSON.parse(JSON.stringify(r));
@@ -4703,7 +4709,7 @@ async function opsDeploy(env, args) {
         result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer };
         return Object.assign({ log }, result);
       }
-      const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0, service_worker: !!(args && args.service_worker) });
+      const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0 });
       log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null });
       if (!dep.ok) {
         result = { ok: false, error: dep.error, rejected: dep.rejected || false };
