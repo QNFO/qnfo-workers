@@ -6,8 +6,10 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.18-impressions"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var __defProp222 = Object.defineProperty;
+var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
+var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
+var VERSION = "1.7.18-impressions";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -20,6 +22,7 @@ __name(pad2, "pad2");
 __name2(pad2, "pad2");
 __name22(pad2, "pad2");
 __name222(pad2, "pad2");
+__name2222(pad2, "pad2");
 function fmtUtc(ms) {
   const d = new Date(ms);
   return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate()) + " " + pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()) + " UTC";
@@ -28,6 +31,7 @@ __name(fmtUtc, "fmtUtc");
 __name2(fmtUtc, "fmtUtc");
 __name22(fmtUtc, "fmtUtc");
 __name222(fmtUtc, "fmtUtc");
+__name2222(fmtUtc, "fmtUtc");
 function naiveUtc(ms) {
   const d = new Date(ms);
   return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate()) + " " + pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()) + ":" + pad2(d.getUTCSeconds());
@@ -36,6 +40,7 @@ __name(naiveUtc, "naiveUtc");
 __name2(naiveUtc, "naiveUtc");
 __name22(naiveUtc, "naiveUtc");
 __name222(naiveUtc, "naiveUtc");
+__name2222(naiveUtc, "naiveUtc");
 function esc(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -43,6 +48,7 @@ __name(esc, "esc");
 __name2(esc, "esc");
 __name22(esc, "esc");
 __name222(esc, "esc");
+__name2222(esc, "esc");
 function squash(s) {
   return String(s || "").split(/\s+/).join(" ").slice(0, 200);
 }
@@ -50,6 +56,7 @@ __name(squash, "squash");
 __name2(squash, "squash");
 __name22(squash, "squash");
 __name222(squash, "squash");
+__name2222(squash, "squash");
 function json(data, status) {
   return new Response(JSON.stringify(data, null, 1), {
     status: status || 200,
@@ -60,6 +67,7 @@ __name(json, "json");
 __name2(json, "json");
 __name22(json, "json");
 __name222(json, "json");
+__name2222(json, "json");
 function parseField(f, lo, hi) {
   f = String(f).trim();
   if (f === "*" || f === "") return null;
@@ -90,6 +98,7 @@ __name(parseField, "parseField");
 __name2(parseField, "parseField");
 __name22(parseField, "parseField");
 __name222(parseField, "parseField");
+__name2222(parseField, "parseField");
 var cronFieldCache = /* @__PURE__ */ new Map();
 function cronFields(cronStr) {
   let p = cronFieldCache.get(cronStr);
@@ -113,6 +122,7 @@ __name(cronFields, "cronFields");
 __name2(cronFields, "cronFields");
 __name22(cronFields, "cronFields");
 __name222(cronFields, "cronFields");
+__name2222(cronFields, "cronFields");
 function cronMatchAt(cronStr, d) {
   const p = cronFields(cronStr);
   if (p.bad) return false;
@@ -133,6 +143,7 @@ __name(cronMatchAt, "cronMatchAt");
 __name2(cronMatchAt, "cronMatchAt");
 __name22(cronMatchAt, "cronMatchAt");
 __name222(cronMatchAt, "cronMatchAt");
+__name2222(cronMatchAt, "cronMatchAt");
 function nextRuns(cronStr, fromMs, count, horizonMs) {
   const res = [];
   let t = Math.floor(fromMs / 6e4) * 6e4 + 6e4;
@@ -147,6 +158,7 @@ __name(nextRuns, "nextRuns");
 __name2(nextRuns, "nextRuns");
 __name22(nextRuns, "nextRuns");
 __name222(nextRuns, "nextRuns");
+__name2222(nextRuns, "nextRuns");
 function workerNextRuns(crons, fromMs, count) {
   const all = [];
   for (const c of crons || []) {
@@ -166,6 +178,7 @@ __name(workerNextRuns, "workerNextRuns");
 __name2(workerNextRuns, "workerNextRuns");
 __name22(workerNextRuns, "workerNextRuns");
 __name222(workerNextRuns, "workerNextRuns");
+__name2222(workerNextRuns, "workerNextRuns");
 function expectedFires(crons, fromMs, windowMs) {
   let n = 0;
   const start = fromMs - windowMs;
@@ -184,6 +197,7 @@ __name(expectedFires, "expectedFires");
 __name2(expectedFires, "expectedFires");
 __name22(expectedFires, "expectedFires");
 __name222(expectedFires, "expectedFires");
+__name2222(expectedFires, "expectedFires");
 async function d1all(db, sql, params) {
   let ps = db.prepare(sql);
   if (params && params.length) ps = ps.bind.apply(ps, params);
@@ -194,6 +208,7 @@ __name(d1all, "d1all");
 __name2(d1all, "d1all");
 __name22(d1all, "d1all");
 __name222(d1all, "d1all");
+__name2222(d1all, "d1all");
 async function ensureStateTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_dashboard_state (id INTEGER PRIMARY KEY, updated_at TEXT, state_json TEXT, refresh_ms INTEGER)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_probe_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, name TEXT, url TEXT, transport TEXT, ok INTEGER, status INTEGER, ms INTEGER, body TEXT)").run();
@@ -202,6 +217,7 @@ __name(ensureStateTable, "ensureStateTable");
 __name2(ensureStateTable, "ensureStateTable");
 __name22(ensureStateTable, "ensureStateTable");
 __name222(ensureStateTable, "ensureStateTable");
+__name2222(ensureStateTable, "ensureStateTable");
 async function saveState(env, st, ms) {
   await ensureStateTable(env);
   await env.AUDIT.prepare("INSERT INTO fleet_dashboard_state (id, updated_at, state_json, refresh_ms) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at, state_json=excluded.state_json, refresh_ms=excluded.refresh_ms").bind(st.generated_at, JSON.stringify(st), ms).run();
@@ -210,6 +226,7 @@ __name(saveState, "saveState");
 __name2(saveState, "saveState");
 __name22(saveState, "saveState");
 __name222(saveState, "saveState");
+__name2222(saveState, "saveState");
 async function loadState(env) {
   try {
     await ensureStateTable(env);
@@ -223,6 +240,7 @@ __name(loadState, "loadState");
 __name2(loadState, "loadState");
 __name22(loadState, "loadState");
 __name222(loadState, "loadState");
+__name2222(loadState, "loadState");
 async function analytics24(env) {
   const out = { per: {}, req: 0, err: 0, errWorkers: [], unattributed: 0, ts: null, error: null };
   if (!env.CF_TOKEN) {
@@ -275,6 +293,7 @@ __name(analytics24, "analytics24");
 __name2(analytics24, "analytics24");
 __name22(analytics24, "analytics24");
 __name222(analytics24, "analytics24");
+__name2222(analytics24, "analytics24");
 async function lastRuns30(env) {
   const out = {};
   if (!env.CF_TOKEN) return out;
@@ -314,6 +333,7 @@ __name(lastRuns30, "lastRuns30");
 __name2(lastRuns30, "lastRuns30");
 __name22(lastRuns30, "lastRuns30");
 __name222(lastRuns30, "lastRuns30");
+__name2222(lastRuns30, "lastRuns30");
 async function probeTargets(env) {
   try {
     const rows = await d1all(env.AUDIT, "SELECT service, base_url FROM service_registry WHERE state='live' AND base_url IS NOT NULL AND base_url <> '' AND kind='worker'") || [];
@@ -328,12 +348,13 @@ __name(probeTargets, "probeTargets");
 __name2(probeTargets, "probeTargets");
 __name22(probeTargets, "probeTargets");
 __name222(probeTargets, "probeTargets");
+__name2222(probeTargets, "probeTargets");
 async function healthProbes(env, liveNames) {
   const items = await probeTargets(env);
   const settled = await Promise.allSettled(items.map(async function(hp) {
     const t0 = Date.now();
     const kind = hp.kind || (hp.binding ? "worker" : "domain");
-    const logRow = /* @__PURE__ */ __name22(async function(out) {
+    const logRow = /* @__PURE__ */ __name222(async function(out) {
       try {
         await env.AUDIT.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status, ms, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString(), "qnfo-fleet-dashboard", hp.name, hp.url || "", out.transport, out.ok ? 1 : 0, out.status, out.ms, String(out.body || "").slice(0, 200)).run();
       } catch (logErr) {
@@ -407,6 +428,7 @@ __name(healthProbes, "healthProbes");
 __name2(healthProbes, "healthProbes");
 __name22(healthProbes, "healthProbes");
 __name222(healthProbes, "healthProbes");
+__name2222(healthProbes, "healthProbes");
 var CLOSED = { closed: 1, done: 1, resolved: 1, completed: 1, cancelled: 1, canceled: 1, wontfix: 1, dismissed: 1, superseded: 1, archived: 1, fixed: 1, rejected: 1 };
 function isOpenish(st) {
   return !CLOSED[String(st || "").toLowerCase()];
@@ -415,6 +437,7 @@ __name(isOpenish, "isOpenish");
 __name2(isOpenish, "isOpenish");
 __name22(isOpenish, "isOpenish");
 __name222(isOpenish, "isOpenish");
+__name2222(isOpenish, "isOpenish");
 function failish(st) {
   const s = String(st || "").toLowerCase();
   return s.indexOf("fail") >= 0 || s === "error" || s === "err" || s === "bounce" || s === "rejected";
@@ -423,6 +446,7 @@ __name(failish, "failish");
 __name2(failish, "failish");
 __name22(failish, "failish");
 __name222(failish, "failish");
+__name2222(failish, "failish");
 async function d1Count(env) {
   try {
     if (!env.CF_TOKEN) return null;
@@ -438,6 +462,7 @@ __name(d1Count, "d1Count");
 __name2(d1Count, "d1Count");
 __name22(d1Count, "d1Count");
 __name222(d1Count, "d1Count");
+__name2222(d1Count, "d1Count");
 async function liveDevice(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS device_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, plane TEXT, item_json TEXT, updated_at TEXT)").run();
@@ -466,6 +491,7 @@ __name(liveDevice, "liveDevice");
 __name2(liveDevice, "liveDevice");
 __name22(liveDevice, "liveDevice");
 __name222(liveDevice, "liveDevice");
+__name2222(liveDevice, "liveDevice");
 async function liveScheduled(env, liveNames) {
   try {
     try {
@@ -531,6 +557,7 @@ __name(liveScheduled, "liveScheduled");
 __name2(liveScheduled, "liveScheduled");
 __name22(liveScheduled, "liveScheduled");
 __name222(liveScheduled, "liveScheduled");
+__name2222(liveScheduled, "liveScheduled");
 async function loadSaiConfig(env) {
   try {
     const rows = await d1all(env.AUDIT, "SELECT k, v FROM sai_config") || [];
@@ -547,6 +574,7 @@ __name(loadSaiConfig, "loadSaiConfig");
 __name2(loadSaiConfig, "loadSaiConfig");
 __name22(loadSaiConfig, "loadSaiConfig");
 __name222(loadSaiConfig, "loadSaiConfig");
+__name2222(loadSaiConfig, "loadSaiConfig");
 async function liveSaiInputs(env) {
   const out = { dims: {}, closureRate: null, healRate: null };
   try {
@@ -574,6 +602,7 @@ __name(liveSaiInputs, "liveSaiInputs");
 __name2(liveSaiInputs, "liveSaiInputs");
 __name22(liveSaiInputs, "liveSaiInputs");
 __name222(liveSaiInputs, "liveSaiInputs");
+__name2222(liveSaiInputs, "liveSaiInputs");
 async function liveScripts(env) {
   try {
     if (!env.CF_TOKEN) return null;
@@ -592,6 +621,7 @@ __name(liveScripts, "liveScripts");
 __name2(liveScripts, "liveScripts");
 __name22(liveScripts, "liveScripts");
 __name222(liveScripts, "liveScripts");
+__name2222(liveScripts, "liveScripts");
 function stableKey(category, text) {
   const t = String(text || "");
   let subj = "";
@@ -618,6 +648,7 @@ __name(stableKey, "stableKey");
 __name2(stableKey, "stableKey");
 __name22(stableKey, "stableKey");
 __name222(stableKey, "stableKey");
+__name2222(stableKey, "stableKey");
 function issueFingerprint(text) {
   let h = 5381;
   const s = String(text || "");
@@ -628,6 +659,7 @@ __name(issueFingerprint, "issueFingerprint");
 __name2(issueFingerprint, "issueFingerprint");
 __name22(issueFingerprint, "issueFingerprint");
 __name222(issueFingerprint, "issueFingerprint");
+__name2222(issueFingerprint, "issueFingerprint");
 function issueCategory(text) {
   const s = String(text || "").toLowerCase();
   if (s.indexOf("probe ") === 0) return "probe";
@@ -645,6 +677,7 @@ __name(issueCategory, "issueCategory");
 __name2(issueCategory, "issueCategory");
 __name22(issueCategory, "issueCategory");
 __name222(issueCategory, "issueCategory");
+__name2222(issueCategory, "issueCategory");
 var ISSUE_META = {
   "probe": { owner: "fleet", playbook: "Re-probe the endpoint; a host probe down across 2 cycles is real - verify externally, then check the worker binding and redeploy from its canonical repo.", auto: "probe-retry" },
   "queue-freshness": { owner: "fleet-autonomy", playbook: "A queue with open items and no new row in over 24h is STALE, not healthy: dispatch the drain worker (research-exec / qnfo-cloud-ops outreach) and confirm the newest row advances.", auto: "queue-drain" },
@@ -657,7 +690,7 @@ var ISSUE_META = {
   "analytics": { owner: "fleet", playbook: "Verify CF_TOKEN secret scope; retry the GraphQL analytics query.", auto: "secret-check" },
   "general": { owner: "fleet", playbook: "Review the raw evidence and classify.", auto: null }
 };
-__name222(ISSUE_META, "ISSUE_META");
+__name2222(ISSUE_META, "ISSUE_META");
 function severityRank(sev) {
   return sev === "err" ? 0 : sev === "warn" ? 1 : 2;
 }
@@ -665,6 +698,7 @@ __name(severityRank, "severityRank");
 __name2(severityRank, "severityRank");
 __name22(severityRank, "severityRank");
 __name222(severityRank, "severityRank");
+__name2222(severityRank, "severityRank");
 function remediationFor(text, category) {
   const meta = ISSUE_META[category] || ISSUE_META.general;
   const t = String(text || "");
@@ -681,6 +715,7 @@ __name(remediationFor, "remediationFor");
 __name2(remediationFor, "remediationFor");
 __name22(remediationFor, "remediationFor");
 __name222(remediationFor, "remediationFor");
+__name2222(remediationFor, "remediationFor");
 function enrichIssues(list, firstSeen) {
   const fs = firstSeen || {};
   const out = (list || []).map(function(i) {
@@ -700,6 +735,7 @@ __name(enrichIssues, "enrichIssues");
 __name2(enrichIssues, "enrichIssues");
 __name22(enrichIssues, "enrichIssues");
 __name222(enrichIssues, "enrichIssues");
+__name2222(enrichIssues, "enrichIssues");
 async function ensureIssueLog(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_log (id TEXT PRIMARY KEY, category TEXT, sev TEXT, title TEXT, first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1)").run();
@@ -710,6 +746,7 @@ __name(ensureIssueLog, "ensureIssueLog");
 __name2(ensureIssueLog, "ensureIssueLog");
 __name22(ensureIssueLog, "ensureIssueLog");
 __name222(ensureIssueLog, "ensureIssueLog");
+__name2222(ensureIssueLog, "ensureIssueLog");
 async function readIssueLog(env) {
   const m = {};
   try {
@@ -723,6 +760,7 @@ __name(readIssueLog, "readIssueLog");
 __name2(readIssueLog, "readIssueLog");
 __name22(readIssueLog, "readIssueLog");
 __name222(readIssueLog, "readIssueLog");
+__name2222(readIssueLog, "readIssueLog");
 async function writeIssueLog(env, enriched) {
   if (!enriched || !enriched.length) return;
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -737,6 +775,7 @@ __name(writeIssueLog, "writeIssueLog");
 __name2(writeIssueLog, "writeIssueLog");
 __name22(writeIssueLog, "writeIssueLog");
 __name222(writeIssueLog, "writeIssueLog");
+__name2222(writeIssueLog, "writeIssueLog");
 var GH_REPO = "QNFO/qnfo-fleet-issues";
 var GH_API = "https://api.github.com";
 var LOOP_MIN_INTERVAL_MS = 10 * 60 * 1e3;
@@ -749,6 +788,7 @@ __name(ghHeaders, "ghHeaders");
 __name2(ghHeaders, "ghHeaders");
 __name22(ghHeaders, "ghHeaders");
 __name222(ghHeaders, "ghHeaders");
+__name2222(ghHeaders, "ghHeaders");
 async function ghCall(env, method, path, body) {
   try {
     const r = await fetch(GH_API + path, { method, headers: ghHeaders(env, body ? { "Content-Type": "application/json" } : null), body: body ? JSON.stringify(body) : void 0, signal: AbortSignal.timeout(15e3) });
@@ -766,6 +806,7 @@ __name(ghCall, "ghCall");
 __name2(ghCall, "ghCall");
 __name22(ghCall, "ghCall");
 __name222(ghCall, "ghCall");
+__name2222(ghCall, "ghCall");
 async function loopEnsure(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_issue_loop (fingerprint TEXT PRIMARY KEY, category TEXT, sev TEXT, owner TEXT, title TEXT, first_seen TEXT, last_seen TEXT, occurrences INTEGER DEFAULT 1, gh_number INTEGER, gh_state TEXT, attempts INTEGER DEFAULT 0, dispatch_state TEXT, last_action TEXT, last_verified TEXT, closed_at TEXT, miss_streak INTEGER DEFAULT 0)").run();
@@ -804,6 +845,7 @@ __name(loopEnsure, "loopEnsure");
 __name2(loopEnsure, "loopEnsure");
 __name22(loopEnsure, "loopEnsure");
 __name222(loopEnsure, "loopEnsure");
+__name2222(loopEnsure, "loopEnsure");
 async function readLoop(env) {
   const m = {};
   try {
@@ -817,6 +859,7 @@ __name(readLoop, "readLoop");
 __name2(readLoop, "readLoop");
 __name22(readLoop, "readLoop");
 __name222(readLoop, "readLoop");
+__name2222(readLoop, "readLoop");
 async function attachIssueLinks(env, enriched) {
   try {
     const ll = await readLoop(env);
@@ -832,6 +875,7 @@ __name(attachIssueLinks, "attachIssueLinks");
 __name2(attachIssueLinks, "attachIssueLinks");
 __name22(attachIssueLinks, "attachIssueLinks");
 __name222(attachIssueLinks, "attachIssueLinks");
+__name2222(attachIssueLinks, "attachIssueLinks");
 async function loopMetaGet(env) {
   const m = {};
   try {
@@ -845,6 +889,7 @@ __name(loopMetaGet, "loopMetaGet");
 __name2(loopMetaGet, "loopMetaGet");
 __name22(loopMetaGet, "loopMetaGet");
 __name222(loopMetaGet, "loopMetaGet");
+__name2222(loopMetaGet, "loopMetaGet");
 async function loopMetaSet(env, k, v) {
   try {
     await env.AUDIT.prepare("INSERT INTO fleet_loop_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, v, v).run();
@@ -855,6 +900,7 @@ __name(loopMetaSet, "loopMetaSet");
 __name2(loopMetaSet, "loopMetaSet");
 __name22(loopMetaSet, "loopMetaSet");
 __name222(loopMetaSet, "loopMetaSet");
+__name2222(loopMetaSet, "loopMetaSet");
 async function ghFindIssue(env, fp, title) {
   const q = encodeURIComponent("repo:" + GH_REPO + ' "' + fp + '" in:body');
   const r = await ghCall(env, "GET", "/search/issues?q=" + q + "&per_page=1", null);
@@ -870,6 +916,7 @@ __name(ghFindIssue, "ghFindIssue");
 __name2(ghFindIssue, "ghFindIssue");
 __name22(ghFindIssue, "ghFindIssue");
 __name222(ghFindIssue, "ghFindIssue");
+__name2222(ghFindIssue, "ghFindIssue");
 async function ghCreateIssue(env, i) {
   const labels = ["fleet-issue", i.sev === "err" ? "sev:err" : "sev:warn", i.category];
   labels.push(i.auto_actionable ? "auto" : "no-auto");
@@ -910,6 +957,7 @@ __name(ghCreateIssue, "ghCreateIssue");
 __name2(ghCreateIssue, "ghCreateIssue");
 __name22(ghCreateIssue, "ghCreateIssue");
 __name222(ghCreateIssue, "ghCreateIssue");
+__name2222(ghCreateIssue, "ghCreateIssue");
 async function ghComment(env, number, body) {
   return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/comments", { body });
 }
@@ -917,6 +965,7 @@ __name(ghComment, "ghComment");
 __name2(ghComment, "ghComment");
 __name22(ghComment, "ghComment");
 __name222(ghComment, "ghComment");
+__name2222(ghComment, "ghComment");
 async function ghAddLabels(env, number, labels) {
   return await ghCall(env, "POST", "/repos/" + GH_REPO + "/issues/" + number + "/labels", { labels });
 }
@@ -924,6 +973,7 @@ __name(ghAddLabels, "ghAddLabels");
 __name2(ghAddLabels, "ghAddLabels");
 __name22(ghAddLabels, "ghAddLabels");
 __name222(ghAddLabels, "ghAddLabels");
+__name2222(ghAddLabels, "ghAddLabels");
 async function dispatchIssue(env, i, gh_number) {
   const action = i.remediation && i.remediation.suggested_action || "manual";
   const ts = (/* @__PURE__ */ new Date()).toISOString();
@@ -940,6 +990,7 @@ __name(dispatchIssue, "dispatchIssue");
 __name2(dispatchIssue, "dispatchIssue");
 __name22(dispatchIssue, "dispatchIssue");
 __name222(dispatchIssue, "dispatchIssue");
+__name2222(dispatchIssue, "dispatchIssue");
 var EXEC_COOLDOWN_MS = 5 * 60 * 1e3;
 function execTargetFor(category, resource, env) {
   const r = String(resource || "").toLowerCase();
@@ -968,6 +1019,7 @@ __name(execTargetFor, "execTargetFor");
 __name2(execTargetFor, "execTargetFor");
 __name22(execTargetFor, "execTargetFor");
 __name222(execTargetFor, "execTargetFor");
+__name2222(execTargetFor, "execTargetFor");
 async function execOne(env, row, prevState) {
   let payload = {};
   try {
@@ -1021,6 +1073,7 @@ __name(execOne, "execOne");
 __name2(execOne, "execOne");
 __name22(execOne, "execOne");
 __name222(execOne, "execOne");
+__name2222(execOne, "execOne");
 async function loopExecute(env) {
   await loopEnsure(env);
   const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, owner, payload, gh_number, created_at, exec_state, exec_ts, exec_attempts FROM fleet_issue_dispatch WHERE state='queued' ORDER BY created_at ASC LIMIT 25") || [];
@@ -1048,6 +1101,7 @@ __name(loopExecute, "loopExecute");
 __name2(loopExecute, "loopExecute");
 __name22(loopExecute, "loopExecute");
 __name222(loopExecute, "loopExecute");
+__name2222(loopExecute, "loopExecute");
 async function loopSnapshot(env) {
   try {
     const m = await loopMetaGet(env);
@@ -1069,6 +1123,7 @@ __name(loopSnapshot, "loopSnapshot");
 __name2(loopSnapshot, "loopSnapshot");
 __name22(loopSnapshot, "loopSnapshot");
 __name222(loopSnapshot, "loopSnapshot");
+__name2222(loopSnapshot, "loopSnapshot");
 async function loopSync(env, st) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "GITHUB_TOKEN secret not set" };
   await loopEnsure(env);
@@ -1168,6 +1223,7 @@ __name(loopSync, "loopSync");
 __name2(loopSync, "loopSync");
 __name22(loopSync, "loopSync");
 __name222(loopSync, "loopSync");
+__name2222(loopSync, "loopSync");
 async function loopMaybeSync(env, st) {
   try {
     const meta = await loopMetaGet(env);
@@ -1182,11 +1238,12 @@ __name(loopMaybeSync, "loopMaybeSync");
 __name2(loopMaybeSync, "loopMaybeSync");
 __name22(loopMaybeSync, "loopMaybeSync");
 __name222(loopMaybeSync, "loopMaybeSync");
+__name2222(loopMaybeSync, "loopMaybeSync");
 async function buildState(env, ctx) {
   const nowMs = Date.now();
   const audits = [];
   const issues = [];
-  const push = /* @__PURE__ */ __name222(function(a) {
+  const push = /* @__PURE__ */ __name2222(function(a) {
     audits.push(a);
   }, "push");
   const naive24 = naiveUtc(nowMs - DAY_MS);
@@ -1203,6 +1260,7 @@ async function buildState(env, ctx) {
   __name2(safeAudit, "safeAudit");
   __name22(safeAudit, "safeAudit");
   __name222(safeAudit, "safeAudit");
+  __name2222(safeAudit, "safeAudit");
   await safeAudit("deployments", "Deployments (24h)", async function() {
     const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS c FROM deployment_history WHERE deployed_at >= ?", [naive24]);
     const rows = await d1all(env.AUDIT, "SELECT resource_name, action, version_id, deployed_at, status FROM deployment_history ORDER BY deployed_at DESC LIMIT 3");
@@ -1361,14 +1419,14 @@ async function buildState(env, ctx) {
     }
   });
   const queueStats = [];
-  const ageOf = /* @__PURE__ */ __name22(function(raw) {
+  const ageOf = /* @__PURE__ */ __name222(function(raw) {
     if (raw == null) return null;
     let ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T"));
     if (isNaN(ms) && !isNaN(Number(raw))) ms = Number(raw);
     if (isNaN(ms)) return null;
     return Math.round((nowMs - ms) / 36e5);
   }, "ageOf");
-  const qlook = /* @__PURE__ */ __name22(async function(db, sql) {
+  const qlook = /* @__PURE__ */ __name222(async function(db, sql) {
     try {
       const g = await d1all(db, sql);
       return g && g.length ? g[0] : {};
@@ -1543,6 +1601,7 @@ __name(buildState, "buildState");
 __name2(buildState, "buildState");
 __name22(buildState, "buildState");
 __name222(buildState, "buildState");
+__name2222(buildState, "buildState");
 function depNamesOf(raw) {
   const out = [];
   if (!raw) return out;
@@ -1564,6 +1623,7 @@ function depNamesOf(raw) {
 }
 __name(depNamesOf, "depNamesOf");
 __name2(depNamesOf, "depNamesOf");
+__name22(depNamesOf, "depNamesOf");
 function contractDepsOf(raw) {
   const out = [];
   if (!raw) return out;
@@ -1585,8 +1645,9 @@ function contractDepsOf(raw) {
 }
 __name(contractDepsOf, "contractDepsOf");
 __name2(contractDepsOf, "contractDepsOf");
-__name22(depNamesOf, "depNamesOf");
+__name22(contractDepsOf, "contractDepsOf");
 __name222(depNamesOf, "depNamesOf");
+__name2222(depNamesOf, "depNamesOf");
 async function readSystemIntegration(env) {
   try {
     const r = await env.AUDIT.prepare("SELECT json FROM integration_state ORDER BY id DESC LIMIT 1").first();
@@ -1599,10 +1660,11 @@ __name(readSystemIntegration, "readSystemIntegration");
 __name2(readSystemIntegration, "readSystemIntegration");
 __name22(readSystemIntegration, "readSystemIntegration");
 __name222(readSystemIntegration, "readSystemIntegration");
+__name2222(readSystemIntegration, "readSystemIntegration");
 function systemIntegrationHtml(sys) {
   if (!sys || !sys.score) return '<h2>System integration at a glance</h2><div class="sub">no assessment yet - waiting for qnfo-observability telemetry</div>';
   const sc = sys.score;
-  const badge = /* @__PURE__ */ __name22(function(status) {
+  const badge = /* @__PURE__ */ __name222(function(status) {
     const color = status === "healthy" ? "#2ea043" : status === "degraded" ? "#d29922" : status === "stuck" ? "#f85149" : "#8b949e";
     return '<span style="color:' + color + ';font-weight:600">' + status + "</span>";
   }, "badge");
@@ -1630,6 +1692,7 @@ __name(systemIntegrationHtml, "systemIntegrationHtml");
 __name2(systemIntegrationHtml, "systemIntegrationHtml");
 __name22(systemIntegrationHtml, "systemIntegrationHtml");
 __name222(systemIntegrationHtml, "systemIntegrationHtml");
+__name2222(systemIntegrationHtml, "systemIntegrationHtml");
 async function integrationView(env, liveNames) {
   const rows = await d1all(env.AUDIT, "SELECT service, kind, version, deps FROM service_registry WHERE kind='worker'") || [];
   const liveSet = new Set((liveNames || []).map(function(n) {
@@ -1665,7 +1728,7 @@ async function integrationView(env, liveNames) {
     }
     outbound.set(n.service, out);
   }
-  const deg = /* @__PURE__ */ __name222(function(s) {
+  const deg = /* @__PURE__ */ __name2222(function(s) {
     return { out: outbound.get(s) || 0, in: inbound.get(s) || 0 };
   }, "deg");
   let contractEdgeCount = 0;
@@ -1740,6 +1803,7 @@ __name(integrationView, "integrationView");
 __name2(integrationView, "integrationView");
 __name22(integrationView, "integrationView");
 __name222(integrationView, "integrationView");
+__name2222(integrationView, "integrationView");
 async function reportCardData(env, integration, audits) {
   let humanOpen = -1;
   try {
@@ -1772,10 +1836,10 @@ async function reportCardData(env, integration, audits) {
     });
   } catch (e) {
   }
-  const g = /* @__PURE__ */ __name22(function(k) {
+  const g = /* @__PURE__ */ __name222(function(k) {
     return dim[k] && typeof dim[k].score === "number" ? dim[k].score : null;
   }, "g");
-  const fmt = /* @__PURE__ */ __name22(function(v) {
+  const fmt = /* @__PURE__ */ __name222(function(v) {
     return v == null ? "n/a" : String(v);
   }, "fmt");
   const loa = g("independent_decision");
@@ -1801,6 +1865,7 @@ __name(reportCardData, "reportCardData");
 __name2(reportCardData, "reportCardData");
 __name22(reportCardData, "reportCardData");
 __name222(reportCardData, "reportCardData");
+__name2222(reportCardData, "reportCardData");
 function reportCardHtml(rc) {
   if (!rc) return "";
   const h = [];
@@ -1825,6 +1890,7 @@ __name(reportCardHtml, "reportCardHtml");
 __name2(reportCardHtml, "reportCardHtml");
 __name22(reportCardHtml, "reportCardHtml");
 __name222(reportCardHtml, "reportCardHtml");
+__name2222(reportCardHtml, "reportCardHtml");
 function integrationHtml(ig, st) {
   if (!ig) return "";
   const h = [];
@@ -1875,6 +1941,7 @@ __name(integrationHtml, "integrationHtml");
 __name2(integrationHtml, "integrationHtml");
 __name22(integrationHtml, "integrationHtml");
 __name222(integrationHtml, "integrationHtml");
+__name2222(integrationHtml, "integrationHtml");
 function chipClass(state) {
   const s = String(state || "").toUpperCase();
   if (s === "OK") return "ok";
@@ -1888,6 +1955,7 @@ __name(chipClass, "chipClass");
 __name2(chipClass, "chipClass");
 __name22(chipClass, "chipClass");
 __name222(chipClass, "chipClass");
+__name2222(chipClass, "chipClass");
 function chip(state, text) {
   return '<span class="chip chip-' + chipClass(state) + '">' + esc(text == null ? state : text) + "</span>";
 }
@@ -1895,6 +1963,7 @@ __name(chip, "chip");
 __name2(chip, "chip");
 __name22(chip, "chip");
 __name222(chip, "chip");
+__name2222(chip, "chip");
 function topologySvg(ig) {
   if (!ig || !ig.edge_list || !ig.edge_list.length) return '<div class="sub">no declared dependency edges</div>';
   const edges = ig.edge_list;
@@ -1933,6 +2002,7 @@ function topologySvg(ig) {
 }
 __name(topologySvg, "topologySvg");
 __name2(topologySvg, "topologySvg");
+__name22(topologySvg, "topologySvg");
 function pageHtml(st) {
   const h = [];
   h.push('<div style="margin:8px 0 16px;padding:10px 14px;background:#0d1a12;border:1px solid #2a4d33;border-radius:8px"><b>ROI view:</b> <a href="/roi" style="color:#6f6">cost vs output vs impressions vs reach</a></div>');
@@ -2032,6 +2102,7 @@ __name(pageHtml, "pageHtml");
 __name2(pageHtml, "pageHtml");
 __name22(pageHtml, "pageHtml");
 __name222(pageHtml, "pageHtml");
+__name2222(pageHtml, "pageHtml");
 var inflight = null;
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -2135,6 +2206,7 @@ __name(handleRequest, "handleRequest");
 __name2(handleRequest, "handleRequest");
 __name22(handleRequest, "handleRequest");
 __name222(handleRequest, "handleRequest");
+__name2222(handleRequest, "handleRequest");
 async function runRefresh(env, ctx) {
   if (inflight) return inflight;
   inflight = (async function() {
@@ -2154,6 +2226,7 @@ __name(runRefresh, "runRefresh");
 __name2(runRefresh, "runRefresh");
 __name22(runRefresh, "runRefresh");
 __name222(runRefresh, "runRefresh");
+__name2222(runRefresh, "runRefresh");
 async function ensureReportCardTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS report_card_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, sai REAL, grade TEXT, scores_json TEXT, signals_json TEXT)").run();
 }
@@ -2161,14 +2234,15 @@ __name(ensureReportCardTable, "ensureReportCardTable");
 __name2(ensureReportCardTable, "ensureReportCardTable");
 __name22(ensureReportCardTable, "ensureReportCardTable");
 __name222(ensureReportCardTable, "ensureReportCardTable");
+__name2222(ensureReportCardTable, "ensureReportCardTable");
 function computeSai(st, bench, cfg, live) {
-  const clamp = /* @__PURE__ */ __name22(function(x) {
+  const clamp = /* @__PURE__ */ __name222(function(x) {
     return Math.max(0, Math.min(1, x));
   }, "clamp");
   const P = cfg || {};
   const LD = live || {};
   const dims = LD.dims || {};
-  const nd = /* @__PURE__ */ __name22(function(k) {
+  const nd = /* @__PURE__ */ __name222(function(k) {
     return typeof dims[k] === "number" ? dims[k] : null;
   }, "nd");
   const probes = st.probes || [];
@@ -2241,7 +2315,8 @@ __name(computeSai, "computeSai");
 __name2(computeSai, "computeSai");
 __name22(computeSai, "computeSai");
 __name222(computeSai, "computeSai");
-__name222(computeSai, "computeSai");
+__name2222(computeSai, "computeSai");
+__name2222(computeSai, "computeSai");
 async function persistWeeklyReportCard(env, st) {
   try {
     await ensureReportCardTable(env);
@@ -2272,6 +2347,7 @@ __name(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name2(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name22(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name222(persistWeeklyReportCard, "persistWeeklyReportCard");
+__name2222(persistWeeklyReportCard, "persistWeeklyReportCard");
 var worker_default = {
   async fetch(request, env, ctx) {
     try {
@@ -2352,6 +2428,7 @@ async function persistRoiSnapshot(env) {
   }
 }
 __name(persistRoiSnapshot, "persistRoiSnapshot");
+__name2(persistRoiSnapshot, "persistRoiSnapshot");
 async function roiGf(env, query) {
   const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
     method: "POST",
@@ -2364,17 +2441,13 @@ async function roiGf(env, query) {
   return g.data || null;
 }
 __name(roiGf, "roiGf");
-// RED-INVENTORY-1 (2026-09-26, owner directive): the dashboard root must show FAILURES ONLY —
-// a complete inventory of open issues and unremediated items plus decision-grade metrics.
-// Greens are collapsed to one line. /roi (cost vs output) and /ops (operational drill-down) remain.
-// AI-GW-COST-UNIT-CENTS-1: every AI Gateway billing figure is USD CENTS from the API and is
-// divided by 100 in usd(); never surface cents as dollars.
+__name2(roiGf, "roiGf");
 async function redHtml(env) {
   const H = [];
   const now = Date.now();
   const dead = (/* @__PURE__ */ new Date("2026-10-25T00:00:00Z")).getTime();
   const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
-  const usd = /* @__PURE__ */ __name(function(centsV) {
+  const usd = /* @__PURE__ */ __name2(function(centsV) {
     const n = Number(centsV);
     return isFinite(n) && centsV != null ? "$" + (n / 100).toFixed(2) : "n/a";
   }, "usd");
@@ -2403,18 +2476,14 @@ async function redHtml(env) {
   H.push("<h1>QUNIVERSE FAILURE INVENTORY</h1>");
   H.push('<div class="sub">failures, flags, open issues and unremediated items only &mdash; greens are collapsed to one line at the bottom. <a href="/roi">cost/output ROI</a> &middot; <a href="/ops">operational drill-down</a> &middot; <a href="/api/state">machine state</a> &middot; generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' &middot; <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days to shutdown-gate deadline 2026-10-25</b></div>");
   if (st.error) H.push('<div class="panel"><h2>STATE ERROR</h2><div class="bad">' + esc(st.error) + "</div></div>");
-
-  // 1. SHUTDOWN MANIFEST
   let sh = [];
   try {
     sh = await d1all(env.AUDIT, "SELECT * FROM shutdown_manifest ORDER BY id");
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + sh.length + ' ARMED kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>');
-  for (const r of sh) H.push('<tr><td class="bad"><b>' + esc(r.id) + '</b></td><td>' + esc(r.phase) + '</td><td class="bad">' + esc(r.component) + '</td><td>' + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + '</td><td>' + esc(r.due_date) + '</td><td class="bad">' + esc(r.state) + "</td></tr>");
+  H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + sh.length + " ARMED kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>");
+  for (const r of sh) H.push('<tr><td class="bad"><b>' + esc(r.id) + "</b></td><td>" + esc(r.phase) + '</td><td class="bad">' + esc(r.component) + "</td><td>" + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + "</td><td>" + esc(r.due_date) + '</td><td class="bad">' + esc(r.state) + "</td></tr>");
   H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory. EARLY-TRIGGER is evaluated in the COST TRUTH panel below.</div></div>');
-
-  // 2. SURVIVAL GATES vs measured
   let th = [];
   try {
     th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric");
@@ -2434,7 +2503,9 @@ async function redHtml(env) {
   try {
     const dp = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 1440 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now - 720 * 36e5).toISOString() + '" }) { count } } } }');
     const rp = (((dp || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
-    rumPrior = rp.reduce(function(s, x) { return s + x.count; }, 0);
+    rumPrior = rp.reduce(function(s, x) {
+      return s + x.count;
+    }, 0);
     trueMoM = rumPrior > 0 ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
   } catch (e) {
   }
@@ -2458,9 +2529,7 @@ async function redHtml(env) {
     const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
     H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
   }
-  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; vs frozen baseline 5,610 (target 7,293 = +30% by 2026-10-25) = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " " + (growth != null && growth < 30 ? '&mdash; <b class="bad">NOT MET</b>' : '&mdash; <span class="ok">MET</span>') + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
-
-  // 3. COST TRUTH (live billing, cents-audited)
+  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + " (gate &ge;2 &rarr; " + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; vs frozen baseline 5,610 (target 7,293 = +30% by 2026-10-25) = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " " + (growth != null && growth < 30 ? '&mdash; <b class="bad">NOT MET</b>' : '&mdash; <span class="ok">MET</span>') + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
   let inv = null, bal = null, tup = null, aiN = null;
   try {
     const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/billing/invoice-preview", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
@@ -2491,7 +2560,7 @@ async function redHtml(env) {
   }
   H.push('<div class="panel"><h2>3 &middot; COST TRUTH (live billing, USD cents audited)</h2><table><tr><th>metric</th><th>value</th></tr>');
   if (inv) {
-    H.push('<tr><td>AI Gateway invoice draft (current period)</td><td class="bad">' + usd(inv.amount_due) + ' due</td></tr>');
+    H.push('<tr><td>AI Gateway invoice draft (current period)</td><td class="bad">' + usd(inv.amount_due) + " due</td></tr>");
     const lines = (inv.invoice_lines || []).slice().sort(function(a, b) {
       return (b.amount || 0) - (a.amount || 0);
     }).slice(0, 7);
@@ -2519,11 +2588,9 @@ async function redHtml(env) {
   }
   const spendOver = inv ? Number(inv.amount_due) / 100 >= 150 : false;
   const earlyFire = spendOver && pubEvents === 0;
-  H.push('<tr><td>Spend limit</td><td>' + (gwLimitLive != null ? "$" + gwLimitLive + " / 30d sliding (live gateway config)" : "$150 / 30d sliding (manifest threshold)") + '</td></tr>');
-  H.push('<tr><td>EARLY-TRIGGER</td><td>spend ' + (inv ? usd(inv.amount_due) : "n/a") + " " + (spendOver ? '<b class="bad">&ge; $150/30d</b>' : '&lt; $150/30d') + " AND publish_events_30d=" + (pubEvents == null ? '<b class="bad">n/a</b>' : pubEvents) + (pubEvents === 0 ? ' (<b class="bad">ZERO</b>)' : ' (<span class="ok">non-zero</span>)') + ' &rarr; ' + (earlyFire ? '<b class="bad">TRIGGER FIRES</b>' : '<span class="ok">not firing</span>') + ' <span class="sub">defn: version_queue status=published last 30d (WS-0)</span></td></tr>');
+  H.push("<tr><td>Spend limit</td><td>" + (gwLimitLive != null ? "$" + gwLimitLive + " / 30d sliding (live gateway config)" : "$150 / 30d sliding (manifest threshold)") + "</td></tr>");
+  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (inv ? usd(inv.amount_due) : "n/a") + " " + (spendOver ? '<b class="bad">&ge; $150/30d</b>' : "&lt; $150/30d") + " AND publish_events_30d=" + (pubEvents == null ? '<b class="bad">n/a</b>' : pubEvents) + (pubEvents === 0 ? ' (<b class="bad">ZERO</b>)' : ' (<span class="ok">non-zero</span>)') + " &rarr; " + (earlyFire ? '<b class="bad">TRIGGER FIRES</b>' : '<span class="ok">not firing</span>') + ' <span class="sub">defn: version_queue status=published last 30d (WS-0)</span></td></tr>');
   H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits (e.g. $18.08 pretax credit on the gpt-5.5 line); gateway spend is dominated by agent-session LLM traffic.</div></div>');
-
-  // 4. COMPLETE OPEN-ISSUE INVENTORY
   let ghIssues = null, ghTotal = null;
   try {
     const g = await ghCall(env, "GET", "/search/issues?q=org%3AQNFO+is%3Aissue+is%3Aopen&per_page=100");
@@ -2567,7 +2634,7 @@ async function redHtml(env) {
     return s + x.n;
   }, 0);
   H.push('<div class="panel"><h2>4 &middot; COMPLETE OPEN-ISSUE INVENTORY</h2><table><tr><th>source</th><th>open</th><th>detail</th></tr>');
-  H.push("<tr><td>GitHub org QNFO</td><td class=\"" + (ghTotal > 0 ? "bad" : "ok") + '">' + (ghTotal != null ? ghTotal : '<span class="warn">api n/a</span>') + "</td><td>all repos, issues not PRs</td></tr>");
+  H.push('<tr><td>GitHub org QNFO</td><td class="' + (ghTotal > 0 ? "bad" : "ok") + '">' + (ghTotal != null ? ghTotal : '<span class="warn">api n/a</span>') + "</td><td>all repos, issues not PRs</td></tr>");
   H.push('<tr><td>task_dod_register</td><td class="' + (dodOpen > 0 ? "bad" : "ok") + '">' + dodOpen + "</td><td>" + esc(dodByOwner.map(function(x) {
     return x.owner + ":" + x.n;
   }).join(", ")) + "</td></tr>");
@@ -2578,11 +2645,11 @@ async function redHtml(env) {
   H.push('<tr><td>fleet_issue_dispatch (queued)</td><td class="' + (dispOpen > 0 ? "bad" : "ok") + '">' + dispOpen + "</td><td>" + esc(dispatch.map(function(x) {
     return (x.exec_state || "undispatched") + ":" + x.n;
   }).join(", ")) + "</td></tr>");
-  H.push('<tr><td>issue_ledger (open)</td><td>' + (ilOpen != null ? ilOpen : "?") + "</td><td>fingerprinted signals not yet resolved</td></tr>");
+  H.push("<tr><td>issue_ledger (open)</td><td>" + (ilOpen != null ? ilOpen : "?") + "</td><td>fingerprinted signals not yet resolved</td></tr>");
   H.push("</table>");
   if (ghIssues && ghIssues.length) {
     H.push('<div style="margin-top:8px"><b>GitHub open issues:</b></div><table style="margin-top:4px"><tr><th>repo</th><th>#</th><th>title</th></tr>');
-    for (const gi of ghIssues) H.push('<tr><td>' + esc(gi.repo) + "</td><td>" + esc(gi.n) + '</td><td><a href="https://github.com/QNFO/' + esc(gi.repo) + "/issues/" + esc(gi.n) + '">' + esc(String(gi.t || "").slice(0, 110)) + "</a></td></tr>");
+    for (const gi of ghIssues) H.push("<tr><td>" + esc(gi.repo) + "</td><td>" + esc(gi.n) + '</td><td><a href="https://github.com/QNFO/' + esc(gi.repo) + "/issues/" + esc(gi.n) + '">' + esc(String(gi.t || "").slice(0, 110)) + "</a></td></tr>");
     H.push("</table>");
   }
   if (agOpen.length) {
@@ -2591,13 +2658,11 @@ async function redHtml(env) {
     H.push("</table>");
   }
   H.push("</div>");
-
-  // 5. FLEET RED FLAGS (live state)
   H.push('<div class="panel"><h2>5 &middot; FLEET RED FLAGS &mdash; ' + errs.length + " err / " + warns.length + " warn</h2>");
   if (!issues.length) H.push('<div class="ok">no active conditions</div>');
   else {
     H.push("<table><tr><th>sev</th><th>category</th><th>resource</th><th>condition</th><th>owner</th><th>remediation</th></tr>");
-    for (const i of issues) H.push('<tr><td class="' + (i.sev === "err" ? "bad" : "warn") + '">' + esc(i.sev) + '</td><td>' + esc(i.category || "") + "</td><td>" + esc(i.resource || "") + "</td><td>" + esc(String(i.title || i.detail || "").slice(0, 140)) + "</td><td>" + esc(i.owner || "") + "</td><td class=\"sub\">" + esc(String(typeof i.remediation === "string" ? i.remediation : i.remediation ? JSON.stringify(i.remediation) : "").slice(0, 120)) + "</td></tr>");
+    for (const i of issues) H.push('<tr><td class="' + (i.sev === "err" ? "bad" : "warn") + '">' + esc(i.sev) + "</td><td>" + esc(i.category || "") + "</td><td>" + esc(i.resource || "") + "</td><td>" + esc(String(i.title || i.detail || "").slice(0, 140)) + "</td><td>" + esc(i.owner || "") + '</td><td class="sub">' + esc(String(typeof i.remediation === "string" ? i.remediation : i.remediation ? JSON.stringify(i.remediation) : "").slice(0, 120)) + "</td></tr>");
     H.push("</table>");
   }
   const ig = st.integration || {};
@@ -2630,8 +2695,6 @@ async function redHtml(env) {
     H.push("</table>");
   }
   H.push("</div>");
-
-  // 6. UNREMEDIATED REGISTERS
   let qu = null, gwf = null, vq = [], dl = null, pr = null, sv = null, er = null;
   try {
     const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_loop_quarantine");
@@ -2668,12 +2731,12 @@ async function redHtml(env) {
   } catch (e) {
   }
   H.push('<div class="panel"><h2>6 &middot; UNREMEDIATED REGISTERS</h2><table><tr><th>register</th><th>count</th><th>meaning</th></tr>');
-  H.push("<tr><td>email_loop_quarantine</td><td class=\"" + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops held in quarantine</td></tr>");
-  H.push("<tr><td>ai_gateway_failures</td><td class=\"" + (gwf && gwf.total > 0 ? "bad" : "ok") + '">' + (gwf ? gwf.total.toLocaleString() : "?") + "</td><td>gateway error events (all-time; latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + ")</td></tr>");
+  H.push('<tr><td>email_loop_quarantine</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops held in quarantine</td></tr>");
+  H.push('<tr><td>ai_gateway_failures</td><td class="' + (gwf && gwf.total > 0 ? "bad" : "ok") + '">' + (gwf ? gwf.total.toLocaleString() : "?") + "</td><td>gateway error events (all-time; latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + ")</td></tr>");
   H.push("<tr><td>version_queue</td><td>" + esc(vq.map(function(x) {
     return x.status + ":" + x.n;
   }).join(", ") || "0") + "</td><td>paper revision publishes waiting on Zenodo/PDF/KG</td></tr>");
-  H.push("<tr><td>deploy_locks (active)</td><td class=\"" + (dl > 0 ? "warn" : "ok") + '">' + (dl != null ? dl : "?") + "</td><td>held deploy locks (immortal-lock risk)</td></tr>");
+  H.push('<tr><td>deploy_locks (active)</td><td class="' + (dl > 0 ? "warn" : "ok") + '">' + (dl != null ? dl : "?") + "</td><td>held deploy locks (immortal-lock risk)</td></tr>");
   H.push("<tr><td>email_parse_failures (open)</td><td>" + (pr != null ? pr : "?") + "</td><td>inbound mail the parser could not read</td></tr>");
   H.push("<tr><td>email_send_violations (unresolved)</td><td>" + (sv != null ? sv : "?") + "</td><td>outbound-send policy violations</td></tr>");
   H.push("<tr><td>dead_links (open)</td><td>" + (er != null ? er : "?") + "</td><td>checked links still failing</td></tr>");
@@ -2683,10 +2746,8 @@ async function redHtml(env) {
     oq = r && r.length ? r[0].n : null;
   } catch (e) {
   }
-  H.push("<tr><td>outreach_queue (open)</td><td class=\"" + (oq > 0 ? "bad" : "ok") + '">' + (oq != null ? oq : "?") + "</td><td>outreach rows not yet sent/skipped</td></tr>");
+  H.push('<tr><td>outreach_queue (open)</td><td class="' + (oq > 0 ? "bad" : "ok") + '">' + (oq != null ? oq : "?") + "</td><td>outreach rows not yet sent/skipped</td></tr>");
   H.push("</table></div>");
-
-  // 7. MONEY MATH (decision metrics)
   let em = null, subs = null, zenodoN = null;
   try {
     const r = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM emails GROUP BY status");
@@ -2705,13 +2766,12 @@ async function redHtml(env) {
     zenodoN = r && r.length ? r[0].n : null;
   } catch (e) {
   }
-
   const burn = inv ? Number(inv.amount_due) / 100 : null;
   const monthly = burn;
   const cpr = monthly != null && rep30 > 0 ? monthly / rep30 : null;
   H.push('<div class="panel"><h2>7 &middot; MONEY MATH (decision metrics)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push("<tr><td>Monthly burn (AI Gateway invoice draft, includes Workers AI prepaid)</td><td class=\"bad\">" + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
-  H.push("<tr><td>Revenue</td><td class=\"bad\">$0.00 &mdash; no payment rail exists</td></tr>");
+  H.push('<tr><td>Monthly burn (AI Gateway invoice draft, includes Workers AI prepaid)</td><td class="bad">' + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
+  H.push('<tr><td>Revenue</td><td class="bad">$0.00 &mdash; no payment rail exists</td></tr>');
   H.push("<tr><td>Subscribers (active)</td><td>" + (subs ? subs.s : "?") + "</td></tr>");
   H.push("<tr><td>Email (sent / replied)</td><td>" + (em ? (em.sent || 0) + " sent &middot; " + (em.replied || 0) + " replied &middot; " + (em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "% reply rate" : "?") : "?") + "</td></tr>");
   H.push("<tr><td>Output (30d / all-time)</td><td>" + (rep30 != null ? rep30 : "?") + " full reports / " + (repTotal != null ? repTotal : "?") + " total &middot; " + (zenodoN != null ? zenodoN : "?") + " Zenodo DOIs</td></tr>");
@@ -2723,27 +2783,25 @@ async function redHtml(env) {
   if (growth != null && growth >= 30 && rep30 != null && rep30 >= 2) {
     verdict = "GATES ON TRACK";
     vcls = "ok";
-  } else if ((growth != null && growth > 0) || rep30 >= 1) {
+  } else if (growth != null && growth > 0 || rep30 >= 1) {
     verdict = "PARTIAL \u2014 WATCH (impressions gate failing)";
     vcls = "warn";
   }
-  H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + '/mo) and zero revenue, the 2026-10-25 phase-1 retirement fires unless the +30% impressions gate passes or the gates are revised by owner.</span></div>');
+  H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + "/mo) and zero revenue, the 2026-10-25 phase-1 retirement fires unless the +30% impressions gate passes or the gates are revised by owner.</span></div>");
   H.push("</div>");
-
-  // 8. COLLAPSED GREENS
   const probes = st.probes || [];
   const probeOk = probes.filter(function(p) {
     return p.ok;
   }).length;
-  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + ' err/24h &middot; drift total ' + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
+  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
   H.push("</body></html>");
   return H.join("");
 }
-
+__name(redHtml, "redHtml");
 async function roiHtml(env) {
   const H = [];
   const now = Date.now();
-  const since = /* @__PURE__ */ __name(function(h) {
+  const since = /* @__PURE__ */ __name2(function(h) {
     return new Date(now - h * 36e5).toISOString();
   }, "since");
   const dead = (/* @__PURE__ */ new Date("2026-10-25T00:00:00Z")).getTime();
@@ -2936,6 +2994,7 @@ async function roiHtml(env) {
   return H.join("");
 }
 __name(roiHtml, "roiHtml");
+__name2(roiHtml, "roiHtml");
 export {
   worker_default as default
 };
