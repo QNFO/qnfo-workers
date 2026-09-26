@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.6-fm7gate-multiline";
+var VERSION = "2.37.7-downgrade-gate";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1996,6 +1996,20 @@ async function cfWorkerDeploy(env, args) {
   const versionNote = String(args && args.version || "").trim();
   if (!worker) return { ok: false, error: "worker name required" };
   if (!content) return { ok: false, error: "content (JS source) required" };
+  // FM8-VERSION-DOWNGRADE (2026-09-26): refuse a SEMVER DOWNGRADE by default. A stale
+  // WORKTREE-GRAFT-PUSH-1 reverts the repo to OLD versions (canonical: qnfo-gateway 3.7.4 to
+  // 3.6.1, qnfo-ops 2.37.6 to 2.36.47) and, because GitHub main is the deploy source, the
+  // redeploy cron would then clobber the live fleet. A repo-vs-live parity sweep does NOT catch
+  // this (both sides revert together, so they MATCH); the invariant that does is monotonicity:
+  // a deploy must not move a worker BACKWARD. An intentional rollback passes allow_downgrade:true.
+  if (args && args.expected_version && !(args && args.allow_downgrade)) {
+    const _px = function(v) { const m = String(v || "").match(/^(\d+)\.(\d+)\.(\d+)/); return m ? [+m[1], +m[2], +m[3]] : null; };
+    const _a = _px(versionNote), _b = _px(args.expected_version);
+    if (_a && _b) {
+      const _lt = _a[0] < _b[0] || (_a[0] === _b[0] && _a[1] < _b[1]) || (_a[0] === _b[0] && _a[1] === _b[1] && _a[2] < _b[2]);
+      if (_lt) return { ok: false, rejected: true, error: "FM8-VERSION-DOWNGRADE: to_version " + versionNote + " sorts BELOW live " + args.expected_version + " -- refusing a downgrade (a stale source push must not clobber the live fleet). Pass allow_downgrade:true for an intentional rollback." };
+    }
+  }
   if (args && args.expected_version) {
     const cur = await cfWorkerRead(env, { worker, maxChars: 500 });
     const liveUnknown = !!(cur && cur.ok && cur.version_known === false);
