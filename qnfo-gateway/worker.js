@@ -1,4 +1,4 @@
-var VERSION="3.7.0-indexnow";
+var VERSION="3.7.1-indexnow";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -974,7 +974,7 @@ __name2222(renderAboutHTML, "renderAboutHTML");
 async function collectPaperUrls(env) {
   const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
   const base = "https://papers.qnfo.org";
-  return [base + "/", base + "/papers", "https://qnfo.org/about"].concat(res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug)));
+  return [base + "/", base + "/papers"].concat(res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug)));
 }
 __name(collectPaperUrls, "collectPaperUrls");
 async function indexNowSubmit(urls) {
