@@ -7,7 +7,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.15"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var VERSION = "1.7.16"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2420,7 +2420,7 @@ async function redHtml(env) {
     th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric");
   } catch (e) {
   }
-  let rumTotal = null, growth = null, rep30 = null;
+  let rumTotal = null, growth = null, rep30 = null, repTotal = null, snapMoM = null;
   try {
     const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { count } } } }');
     const rows = (((d || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
@@ -2435,12 +2435,22 @@ async function redHtml(env) {
     rep30 = r && r.length ? r[0].n : null;
   } catch (e) {
   }
+  try {
+    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000");
+    repTotal = r && r.length ? r[0].n : null;
+  } catch (e) {
+  }
+  try {
+    const sn = await d1all(env.AUDIT, "SELECT d, pageviews FROM roi_daily_snapshots ORDER BY d DESC LIMIT 2") || [];
+    if (sn.length === 2 && Number(sn[0].pageviews) > 0 && Number(sn[1].pageviews) > 0) snapMoM = Math.round(1e4 * (Number(sn[0].pageviews) - Number(sn[1].pageviews)) / Number(sn[1].pageviews)) / 100;
+  } catch (e) {
+  }
   H.push('<div class="panel"><h2>2 &middot; SURVIVAL GATES vs measured</h2><table><tr><th>gate</th><th>target</th><th>state</th></tr>');
   for (const t of th) {
     const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
     H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
   }
-  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &rarr; growth vs frozen baseline (2026-08-27..09-25): " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " &middot; MoM (snapshots): " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + " &middot; gate is +30% MoM " + (snapMoM != null && snapMoM < 30 ? '&mdash; <b class="bad">GATE FAILING</b>' : '&mdash; MoM n/a (needs 2 snapshots)') + " &middot; spend " + (burn != null ? "$" + burn.toFixed(2) : "?") + " vs $150/30d cap</div></div>");
+  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &rarr; growth vs frozen baseline (2026-08-27..09-25): " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " &middot; MoM (snapshots): " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + " &middot; gate is +30% MoM " + (snapMoM != null && snapMoM < 30 ? '&mdash; <b class="bad">GATE FAILING</b>' : '&mdash; MoM n/a (needs 2 snapshots)') + "</div></div>");
 
   // 3. COST TRUTH (live billing, cents-audited)
   let inv = null, bal = null, tup = null, aiN = null;
@@ -2653,7 +2663,7 @@ async function redHtml(env) {
   H.push("</table></div>");
 
   // 7. MONEY MATH (decision metrics)
-  let em = null, subs = null, zenodoN = null, repTotal = null, snapMoM = null;
+  let em = null, subs = null, zenodoN = null;
   try {
     const r = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM emails GROUP BY status");
     const m = {};
@@ -2671,16 +2681,7 @@ async function redHtml(env) {
     zenodoN = r && r.length ? r[0].n : null;
   } catch (e) {
   }
-  try {
-    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000");
-    repTotal = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  try {
-    const sn = await d1all(env.AUDIT, "SELECT d, pageviews FROM roi_daily_snapshots ORDER BY d DESC LIMIT 2") || [];
-    if (sn.length === 2 && Number(sn[0].pageviews) > 0 && Number(sn[1].pageviews) > 0) snapMoM = Math.round(1e4 * (Number(sn[0].pageviews) - Number(sn[1].pageviews)) / Number(sn[1].pageviews)) / 100;
-  } catch (e) {
-  }
+
   const burn = inv ? Number(inv.amount_due) / 100 : null;
   const monthly = burn;
   const cpr = monthly != null && rep30 > 0 ? monthly / rep30 : null;
