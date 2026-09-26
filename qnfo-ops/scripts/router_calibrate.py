@@ -63,7 +63,7 @@ REBUILD = [
     # ops_ai_log: per-LLM-call outcome (ok), cost, tokens, tool_calls
     "INSERT OR IGNORE INTO router_obs (ts, source_table, source_id, task_class, strategy, model, "
     "tier, domain, complexity, tokens_in, tokens_out, cache_read_tokens, cost_usd, latency_ms, "
-    "n_tool_calls, tool_ok, success, outcome_source) "
+    "n_tool_calls, tool_ok, success, outcome_source, upstream_model, job_id) "
     "SELECT ts, 'ops_ai_log', id, COALESCE(strategy, domain, 'other'), strategy, model, "
     "CASE model WHEN 'ops' THEN 2 WHEN 'ops-exec' THEN 2 WHEN 'ops-frontier' THEN 2 "
     "WHEN 'ops-frontier-mini' THEN 2 WHEN 'ops-frontier-reason' THEN 3 "
@@ -73,7 +73,7 @@ REBUILD = [
     "COALESCE(cost_usd,0), COALESCE(latency_ms,0), "
     "CASE WHEN tool_calls IS NULL OR tool_calls='' THEN 0 "
     "ELSE (LENGTH(tool_calls)-LENGTH(REPLACE(tool_calls,'\"name\"','')))/7 END, "
-    "NULL, CASE WHEN ok=1 THEN 1 ELSE 0 END, 'ops_ai_log.ok' FROM ops_ai_log",
+    "NULL, CASE WHEN ok=1 THEN 1 ELSE 0 END, 'ops_ai_log.ok', upstream_model, job_id FROM ops_ai_log",
     # llm_gateway_log: provider-level outcome (status), cache traffic
     "INSERT OR IGNORE INTO router_obs (ts, source_table, source_id, task_class, strategy, model, "
     "tier, domain, complexity, tokens_in, tokens_out, cache_read_tokens, cost_usd, latency_ms, "
@@ -94,7 +94,18 @@ REBUILD = [
     "CASE WHEN pass=1 THEN 1 ELSE 0 END, 'benchmark_results.pass' FROM benchmark_results",
 ]
 
-_P = "(1.0*SUM(success)/COUNT(*))"
+# OPS-TASK-TRACE-1: derive a per-TASK outcome. Rows with an exact job_id join ops_jobs.status
+# (an outcome independent of the self-reported ok); single-request rows use ok, which IS the
+# task outcome for a one-request task. Idempotent.
+TASK_POPULATE = [
+    "UPDATE router_obs SET upstream_model = (SELECT a.upstream_model FROM ops_ai_log a WHERE a.id = router_obs.source_id), job_id = (SELECT a.job_id FROM ops_ai_log a WHERE a.id = router_obs.source_id) WHERE source_table='ops_ai_log' AND job_id IS NULL",
+    "UPDATE router_obs SET task_success = CASE WHEN job_id IS NOT NULL THEN (SELECT CASE WHEN j.status='succeeded' THEN 1 ELSE 0 END FROM ops_jobs j WHERE j.id = router_obs.job_id) ELSE success END, task_outcome_source = CASE WHEN job_id IS NOT NULL THEN 'ops_jobs.status' ELSE 'ops_ai_log.ok' END",
+]
+
+# OPS-TASK-TRACE-1: score on the per-TASK outcome where available (ops_jobs.status via job_id),
+# falling back to per-request ok for single-request strategies where a request IS the task.
+_S = "COALESCE(task_success, success)"
+_P = "(1.0*SUM(%s)/COUNT(*))" % _S
 _POOL = "3.8416/(2.0*COUNT(*))"
 _DEN = "(1+3.8416/COUNT(*))"
 _CENTER = "((%s + %s)/%s)" % (_P, _POOL, _DEN)
@@ -107,14 +118,14 @@ CAL_AGG = (
     "INSERT OR REPLACE INTO router_calibration (ts, task_class, model, tier, n, successes, "
     "succ_rate, wilson_lo, wilson_hi, avg_cost_usd, total_cost_usd, cost_per_success, "
     "avg_latency_ms, avg_tokens_in, meets_target, is_cheapest_ok, recommended) "
-    "SELECT datetime('now'), task_class, model, MAX(tier), COUNT(*), SUM(success), "
-    "ROUND(1.0*SUM(success)/COUNT(*),4), ROUND(%s,4), ROUND(%s,4), "
+    "SELECT datetime('now'), task_class, model, MAX(tier), COUNT(*), SUM(" + _S + "), "
+    "ROUND(1.0*SUM(" + _S + ")/COUNT(*),4), ROUND(" + _WILSON_LO + ",4), ROUND(" + _WILSON_HI + ",4), "
     "ROUND(AVG(cost_usd),6), ROUND(SUM(cost_usd),4), "
-    "ROUND(SUM(cost_usd)/NULLIF(SUM(success),0),6), ROUND(AVG(latency_ms)), "
+    "ROUND(SUM(cost_usd)/NULLIF(SUM(" + _S + "),0),6), ROUND(AVG(latency_ms)), "
     "CAST(AVG(tokens_in) AS INTEGER), "
-    "CASE WHEN %s >= %s THEN 1 ELSE 0 END, 0, 0 "
-    "FROM router_obs GROUP BY task_class, model HAVING COUNT(*) >= %s"
-) % (_WILSON_LO, _WILSON_HI, _WILSON_LO, TARGET_SUCC, MIN_N)
+    "CASE WHEN " + _WILSON_LO + " >= " + str(TARGET_SUCC) + " THEN 1 ELSE 0 END, 0, 0 "
+    "FROM router_obs GROUP BY task_class, model HAVING COUNT(*) >= " + str(MIN_N)
+)
 
 CAL_RECOMMEND = (
     "UPDATE router_calibration SET recommended = CASE WHEN "
@@ -210,7 +221,10 @@ def rebuild():
         d1(stmt)
     for stmt in REBUILD:
         d1(stmt)
-    return d1("SELECT source_table, COUNT(*) AS n, SUM(success) AS succ "
+    for stmt in TASK_POPULATE:
+        d1(stmt)
+    return d1("SELECT source_table, COUNT(*) AS n, SUM(COALESCE(task_success, success)) AS task_succ, "
+              "SUM(CASE WHEN upstream_model IS NOT NULL THEN 1 ELSE 0 END) AS with_upstream "
               "FROM router_obs GROUP BY source_table")
 
 
