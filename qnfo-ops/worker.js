@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.71";
+var VERSION = "2.36.72";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -590,7 +590,6 @@ __name22222(codeToolsPayload, "codeToolsPayload");
 var FLEET = [
   { name: "qnfo-lifecycle", binding: "LIFECYCLE" },
   { name: "qnfo-email", binding: "EMAIL", auth: true },
-  { name: "qnfo-email-orchestrator", binding: "ORCH" },
   { name: "qnfo-paper-indexer", binding: "INDEXER", countPath: "/count" },
   { name: "qnfo-kaizen", binding: "KAIZEN" },
   { name: "qnfo-gateway", binding: "GATEWAY" },
@@ -3981,7 +3980,7 @@ function manifest() {
     }),
     models: opsModelIds(),
     limitations: OPS_ENDPOINT_LIMITATIONS,
-    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-email-orchestrator", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
+    deps: ["ai:WAI", "cron:1x", "d1:ipatent-db", "d1:living-paper", "d1:personal-life", "d1:portfolio-state", "d1:qnfo-audit", "d1:qnfo-cms", "d1:qnfo-graph", "d1:qnfo-outreach", "do:AgenticOpsExec", "kv:EQCACHE_KV", "r2:qnfo-audit", "r2:qnfo-backups", "r2:qnfo-releases", "r2:qnfo-skills", "service:qnfo-ai", "service:qnfo-ai-search", "service:qnfo-archive", "service:qnfo-backlog-exec", "service:qnfo-containers-pilot", "service:qnfo-deploy-guard", "service:qnfo-email", "service:qnfo-gateway", "service:qnfo-intent-orchestrator", "service:qnfo-kaizen", "service:qnfo-lifecycle", "service:qnfo-memory-mcp", "service:qnfo-paper-indexer", "service:qnfo-skill-sync", "vectorize:qnfo-ai-log", "vectorize:qnfo-handoffs", "vectorize:qnfo-notes", "vectorize:qnfo-tasks", "vectorize:qwav-research-v2", "workflow:OpsExecWorkflow", "ext:ai-gateway", "ext:cloudflare-api", "ext:deepseek"],
     generatedAt: iso()
   };
 }
