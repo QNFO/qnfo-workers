@@ -1,6 +1,3 @@
---8258eabb848478a398ecae0ae5d0c83da18833cc6fcf6812020d05ed2ff9
-Content-Disposition: form-data; name="worker.js"
-
 // qnfo-deploy-guard v1.3.10 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
@@ -230,4 +227,3 @@ export default {
     return json({ error: "not_found", worker: WORKER }, 404);
   }
 };
---8258eabb848478a398ecae0ae5d0c83da18833cc6fcf6812020d05ed2ff9--
