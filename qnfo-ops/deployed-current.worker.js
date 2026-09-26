@@ -2898,26 +2898,27 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
 __name(callDeepSeekStream, "callDeepSeekStream");
 __name2(callDeepSeekStream, "callDeepSeekStream");
 function attachmentGuard(text) {
-  const m = String(text || "");
-  if (!/FILE_CONTENT\s*=/.test(m)) return "";
-  let size = 0, mm;
-  const re = /FILE_SIZE\s*=\s*(\d+)/g;
-  while ((mm = re.exec(m))) { if (Number(mm[1]) > size) size = Number(mm[1]); }
-  if (size <= 0) return "";
-  const emptyContent = !/FILE_CONTENT\s*=\s*\S/.test(m);
-  return emptyContent ? "OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it." : "";
+  var m = String(text || '');
+  var ki = m.indexOf('FILE_CONTENT=');
+  if (ki < 0) return '';
+  var maxSize = 0, p = 0;
+  while ((p = m.indexOf('FILE_SIZE=', p)) >= 0) { p += 10; var j = p; while (j < m.length && m.charAt(j) >= '0' && m.charAt(j) <= '9') j++; var n = Number(m.slice(p, j)); if (n > maxSize) maxSize = n; }
+  if (maxSize <= 0) return '';
+  var ws = String.fromCharCode(32, 9, 13, 10);
+  var q = ki + 13;
+  while (q < m.length && ws.indexOf(m.charAt(q)) >= 0) q++;
+  var emptyContent = (q >= m.length) || (m.charAt(q) === ']');
+  if (!emptyContent) return '';
+  return 'OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it.';
 }
-__name(attachmentGuard, "attachmentGuard");
-
+__name(attachmentGuard, 'attachmentGuard');
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] && arr[i].role === "user") {
-      const _c = String(arr[i].content || "");
-      const _g = attachmentGuard(_c);
-      if (_g) { const _nc = _c + "
-
-[" + _g + "]"; arr[i].content = _nc; return _nc; }
+    if (arr[i] && arr[i].role === 'user') {
+      var _c = String(arr[i].content || '');
+      var _g = attachmentGuard(_c);
+      if (_g) { var _nl = String.fromCharCode(10); var _nc = _c + _nl + _nl + '[' + _g + ']'; arr[i].content = _nc; return _nc; }
       return _c;
     }
   }
