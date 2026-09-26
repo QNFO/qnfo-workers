@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.3.2";
+var VERSION = "0.3.3-autopublish";
 var WORKER = "calendar-api";
 var PLANES = ["qnfo", "personal"];
 var ALLOWED_SOURCES = ["radar", "catalog", "manual", "personal-radar", "personal-profile", "personal-twin", "email"];
@@ -161,7 +161,8 @@ var worker_default = {
       const r = await env.CAL_DB.prepare(
         "INSERT INTO calendar (plane, uid, title, description, location, dtstart, dtend, all_day, url, source, domain, relevance, friction, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
       ).bind(plane, uid, b.title, b.description || null, b.location || null, b.dtstart, b.dtend || null, b.all_day ? 1 : 0, b.url || null, ALLOWED_SOURCES.includes(b.source) ? b.source : "manual", b.domain || null, b.relevance != null ? b.relevance : null, b.friction != null ? b.friction : null, b.status || "confirmed").run();
-      return json({ ok: true, id: r.meta.last_row_id, uid, plane }, 201);
+      const published = await publishICS(env).catch((e) => ({ error: e && e.message || String(e) }));
+      return json({ ok: true, id: r.meta.last_row_id, uid, plane, published }, 201);
     }
     const m = path.match(new RegExp("^/events/([0-9]+)$"));
     if (m) {
@@ -193,11 +194,13 @@ var worker_default = {
         params.push(id);
         if (!sets.length) return json({ error: "no fields" }, 400);
         await env.CAL_DB.prepare("UPDATE calendar SET " + sets.join(",") + " WHERE id=?").bind(...params).run();
-        return json({ ok: true, id });
+        const published = await publishICS(env).catch((e) => ({ error: e && e.message || String(e) }));
+        return json({ ok: true, id, published });
       }
       if (method === "DELETE") {
         await env.CAL_DB.prepare("DELETE FROM calendar WHERE id=?").bind(id).run();
-        return json({ ok: true, deleted: id });
+        const published = await publishICS(env).catch((e) => ({ error: e && e.message || String(e) }));
+        return json({ ok: true, deleted: id, published });
       }
       if (method === "GET") {
         const rows = await runQuery(env, "SELECT * FROM calendar WHERE id=? AND plane=?", [id, plane]);
