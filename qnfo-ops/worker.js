@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.70";
+var VERSION = "2.36.71";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -104,7 +104,7 @@ var OPS_EXEC_LOOP_LIMITS = ["pure server-side execution: client-supplied tools a
 var OPS_RELAY_LIMITS = ["pass-through relay only: does NOT execute code or tools server-side", "no ops agent tool loop (no shell_exec/ops_d1_query/etc.)", "client-supplied tools are relayed back to the caller, not executed here"];
 var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND identical upstream (openai/gpt-5.5)", "the ops-frontier / ops-frontier-mini / ops-frontier-reason ids are NOT behaviourally distinct today"];
 var OPS_ALIAS_LIMITS = OPS_ALIAS_LIMITATIONS;
-var OPS_ENDPOINT_LIMITATIONS = ["executing-agent models run a PURE SERVER-SIDE tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "relay models (deepseek-v4-flash, gpt-5*, o4-mini, pareto, qwen3.8-max) do NOT execute code/tools server-side", "no vision/image input on any advertised model", "ops-frontier-mini and ops-frontier-reason are aliases of ops-frontier (not distinct models)", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
+var OPS_ENDPOINT_LIMITATIONS = ["single model, server-side agentic tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "no vision/image input", "model routing (provider/upstream/tier) is a back-end concern and is never exposed", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
 function opsModelIds() {
   // OPS-SINGLE-MODEL-1 (2026-09-26): never expose the internal routing list (manifest/health).
   // The endpoint advertises exactly one model; provider/upstream selection stays back-end.
@@ -4839,7 +4839,7 @@ var worker_default = {
       return env.AGENTIC_OPS_EXEC.get(aoId).fetch(request);
     }
     if (path === "/" && method === "GET") {
-      return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Models: ops-exec, deepseek-v4-flash. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
+      return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Single model: ops. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
     }
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/manifest" && method === "GET") return json(manifest());
