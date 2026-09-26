@@ -456,10 +456,23 @@ var worker_default = {
       const forceLive = url.searchParams.get("live") === "1";
       const row = forceLive ? null : await env.AUDIT.prepare("SELECT data, ts FROM infra_state WHERE kind='snapshot' ORDER BY ts DESC LIMIT 1").first();
       const fresh = row && row.ts && Date.now() - Date.parse(row.ts) < 6e5;
-      let payload = fresh ? JSON.parse(row.data) : null;
+      let cached = null;
+      if (row && row.data) {
+        try { cached = JSON.parse(row.data); } catch (eP) { cached = null; }
+      }
+      const hasCached = cached && typeof cached === "object" && Object.keys(cached).length > 0;
+      let payload = fresh && hasCached ? cached : null;
       if (!payload) {
-        payload = await collectState(env);
-        await store(env, "snapshot", payload);
+        let live = null;
+        try { live = await collectState(env); } catch (eS) { live = null; }
+        if (live && typeof live === "object" && Object.keys(live).length > 0) {
+          payload = live;
+          await store(env, "snapshot", payload);
+        } else if (hasCached) {
+          payload = cached;
+        } else {
+          payload = { ts: (/* @__PURE__ */ new Date()).toISOString(), error: "state temporarily unavailable" };
+        }
       }
       return new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json", ...cors } });
     }

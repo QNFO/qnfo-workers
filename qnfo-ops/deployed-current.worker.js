@@ -2942,7 +2942,7 @@ async function logOps(env, rec) {
     console.log("ops_ai_log insert failed:", e && e.message || e);
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO llm_gateway_log (ts, provider, model, tier, in_tokens, out_tokens, cost_usd, latency_ms, status, error, streamed, prompt_chars, source, upstream_model) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)").bind(rec.ts, "workers-ai", rec.model, rec.strategy || null, rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.ok ? 200 : 500, rec.ok ? null : String(rec.response || "").slice(0, 300), rec.streamed ? 1 : 0, String(rec.prompt || "").length, rec.source || "deepchat", rec.upstream_model || null).run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO llm_gateway_log (ts, provider, model, tier, in_tokens, out_tokens, cost_usd, latency_ms, status, error, streamed, prompt_chars, source, upstream_model) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)").bind(rec.ts, (rec.upstream_model ? (String(rec.upstream_model).startsWith("@cf/") || String(rec.upstream_model).startsWith("workers-ai") ? "workers-ai" : rec.upstream_model === "deterministic-L0" ? "none" : String(rec.upstream_model).split("/")[0]) : "workers-ai"), rec.model, rec.strategy || null, rec.prompt_tokens || 0, rec.completion_tokens || 0, rec.cost_usd || 0, rec.latency_ms || 0, rec.ok ? 200 : 500, rec.ok ? null : String(rec.response || "").slice(0, 300), rec.streamed ? 1 : 0, String(rec.prompt || "").length, rec.source || "deepchat", rec.upstream_model || null).run();
   } catch (e2) {
   }
   if (rec && !rec.ok) {
