@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.19-survival";
+var VERSION = "1.7.20-survival-weighted";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2802,7 +2802,7 @@ async function redHtml(env) {
   // 9. SURVIVAL METERS (metric_registry + leading->lagging survival model; WS-SURVIVAL 2026-09-26)
   let mr = [];
   try {
-    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band FROM metric_registry ORDER BY kind DESC, layer, metric");
+    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value FROM metric_registry ORDER BY kind DESC, layer, metric");
   } catch (e) {
   }
   let subsTotal = null;
@@ -2813,16 +2813,28 @@ async function redHtml(env) {
   }
   const wc = (st.fleet && st.fleet.workers) || null;
   const c01 = function(x) { return Math.max(0, Math.min(1, x)); };
+  const regVal = function(name) {
+    const mm = (mr || []).filter(function(x) { return x.metric === name; })[0];
+    if (!mm || mm.last_value == null) return null;
+    const n = Number(String(mm.last_value).replace(/[^0-9.]/g, ""));
+    return isNaN(n) ? null : n;
+  };
+  const waiCost = regVal("workers_ai_cost_30d_usd");
+  const costUsd = regVal("cost_usd_30d");
   const gateRows = [
     { m: "impressions_growth_30d", live: (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a"), head: growth != null ? c01(growth / 30) : null },
     { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
     { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
     { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
-    { m: "workers_ai_cost_30d_usd", live: (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a"), head: aiN != null ? c01((1500000 - aiN) / 800000) : null },
+    { m: "workers_ai_cost_30d_usd", live: (waiCost != null ? "$" + waiCost.toFixed(2) + "/30d" : (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a")), head: waiCost != null ? c01((15.03 - waiCost) / (15.03 - 7.5)) : (aiN != null ? c01((1500000 - aiN) / 800000) : null) },
     { m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }
   ];
-  const hs = gateRows.map(function(x) { return x.head; }).filter(function(x) { return typeof x === "number"; });
-  const surv = hs.length ? hs.reduce(function(a, b) { return a + b; }, 0) / hs.length : null;
+  const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.20, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.10, worker_count: 0.05, drift_total: 0.05 };
+  let wnum = 0, wsum = 0;
+  gateRows.forEach(function(x) { if (typeof x.head === "number") { const w = gateW[x.m] != null ? gateW[x.m] : 0.1; wnum += w * x.head; wsum += w; } });
+  const surv = wsum > 0 ? wnum / wsum : null;
+  const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
+  const extImpact = surv != null ? surv * costEff : null;
   H.push('<div class="panel"><h2>9 &middot; SURVIVAL METERS &mdash; registry + leading&rarr;lagging model</h2>');
   H.push('<div class="sub">' + mr.length + ' registry metrics (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
   H.push('<table><tr><th>kind</th><th>metric</th><th>layer</th><th>live</th><th>headroom</th><th>target</th><th>warn / kill</th><th>owner</th></tr>');
@@ -2831,9 +2843,9 @@ async function redHtml(env) {
     H.push('<tr><td>' + esc(mm.kind || "") + '</td><td>' + esc(gg.m) + '</td><td class="sub">' + esc(mm.layer || "") + '</td><td>' + esc(gg.live) + '</td><td>' + (gg.head == null ? "?" : Math.round(gg.head * 100) + "%") + '</td><td class="sub">' + esc(String(mm.target || "").slice(0, 44)) + '</td><td class="sub">' + esc(String(mm.warning_band || "") + " / " + String(mm.kill_band || "")).slice(0, 40) + '</td><td class="sub">' + esc(mm.owner || "") + '</td></tr>');
   }
   H.push("</table>");
-  H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; feeds the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
+  H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + " (weighted, x cost-eff " + (costEff != null ? Math.round(costEff * 100) + "%" : "n/a") + " = SAI external_impact " + (extImpact != null ? extImpact.toFixed(3) : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; drives the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
   try {
-    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, surv, JSON.stringify(gateRows), "mean gate progress (redHtml refresh)").run();
+    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2)").run();
   } catch (e) {
   }
   H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
