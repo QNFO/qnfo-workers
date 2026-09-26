@@ -54,3 +54,6 @@ environment = "production"
 [[durable_objects.bindings]]
 name = "PERSONAL_TWIN_AGENT"
 class_name = "PersonalTwinAgent"
+
+[triggers]
+crons = ["5 5 * * *"]
