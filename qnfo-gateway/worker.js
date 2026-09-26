@@ -1,4 +1,4 @@
-var VERSION="3.7.5-indexnow-budget";
+var VERSION="3.7.6-indexnow-fanout";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -987,21 +987,30 @@ __name(collectPaperUrls, "collectPaperUrls");
 async function indexNowSubmit(urls) {
   const out = [];
   const CHUNK = 100;
+  // R1/FM2 (2026-09-26): api.indexnow.org answers 429 to the Cloudflare EGRESS IP even for a few
+  // URLs (an operator submit from a different IP returned 200/202 for the same key + keyLocation).
+  // Fan out to the engine-specific endpoints as well - Bing and Yandex keep their own rate budgets,
+  // so a 429 from the shared relay does not imply a 429 from the engines. First endpoint that
+  // ACCEPTS a chunk wins; the exhausted case records the last status for diagnosis.
+  const _EPS = ["https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow", "https://yandex.com/indexnow"];
   for (let i = 0; i < urls.length; i += CHUNK) {
     const chunk = urls.slice(i, i + CHUNK);
-    let status = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const r = await fetch("https://api.indexnow.org/indexnow", { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body: JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk }) });
-        status = r.status;
-        if (r.status !== 429) break;
-      } catch (e) {
-        status = "err:" + String(e).slice(0, 60);
+    const body = JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk });
+    let hit = null, last = null;
+    for (let e = 0; e < _EPS.length && !hit; e++) {
+      for (let attempt = 0; attempt < 2 && !hit; attempt++) {
+        try {
+          const r = await fetch(_EPS[e], { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body });
+          last = _EPS[e] + ":" + r.status;
+          if (r.status < 400) hit = { ep: _EPS[e], status: r.status };
+        } catch (err) {
+          last = _EPS[e] + ":err";
+        }
+        if (!hit) await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
       }
-      await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
     }
-    out.push({ chunk: chunk.length, status });
-    if (i + CHUNK < urls.length) await new Promise((res) => setTimeout(res, 1200));
+    out.push(hit ? { chunk: chunk.length, ep: hit.ep, status: hit.status } : { chunk: chunk.length, status: 429, note: "no endpoint accepted", last });
+    if (i + CHUNK < urls.length) await new Promise((res) => setTimeout(res, 1000));
   }
   return out;
 }
