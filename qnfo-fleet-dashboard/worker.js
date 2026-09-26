@@ -7,7 +7,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.12"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var VERSION = "1.7.13"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2562,7 +2562,7 @@ async function redHtml(env) {
   if (!issues.length) H.push('<div class="ok">no active conditions</div>');
   else {
     H.push("<table><tr><th>sev</th><th>category</th><th>resource</th><th>condition</th><th>owner</th><th>remediation</th></tr>");
-    for (const i of issues) H.push('<tr><td class="' + (i.sev === "err" ? "bad" : "warn") + '">' + esc(i.sev) + '</td><td>' + esc(i.category || "") + "</td><td>" + esc(i.resource || "") + "</td><td>" + esc(String(i.title || i.detail || "").slice(0, 140)) + "</td><td>" + esc(i.owner || "") + "</td><td class=\"sub\">" + esc(String(i.remediation || "").slice(0, 100)) + "</td></tr>");
+    for (const i of issues) H.push('<tr><td class="' + (i.sev === "err" ? "bad" : "warn") + '">' + esc(i.sev) + '</td><td>' + esc(i.category || "") + "</td><td>" + esc(i.resource || "") + "</td><td>" + esc(String(i.title || i.detail || "").slice(0, 140)) + "</td><td>" + esc(i.owner || "") + "</td><td class=\"sub\">" + esc(String(typeof i.remediation === "string" ? i.remediation : i.remediation ? JSON.stringify(i.remediation) : "").slice(0, 120)) + "</td></tr>");
     H.push("</table>");
   }
   const ig = st.integration || {};
@@ -2579,7 +2579,7 @@ async function redHtml(env) {
   });
   let auditMismatch = [];
   try {
-    auditMismatch = await d1all(env.AUDIT, "SELECT worker, live_version, registry_before FROM worker_live_audit WHERE match=0 LIMIT 30") || [];
+    auditMismatch = await d1all(env.AUDIT, "SELECT worker, live_version, registry_before, probed_at FROM worker_live_audit WHERE match=0 LIMIT 30") || [];
   } catch (e) {
   }
   H.push('<div class="sub" style="margin-top:6px">drift: ghost ' + (ig.drift && ig.drift.ghost || 0) + " &middot; unregistered " + (ig.drift && ig.drift.unregistered || 0) + " &middot; unversioned " + (ig.drift && ig.drift.unversioned || 0) + " &middot; islands " + (ig.islands || []).length + " &middot; sched NO-RUN " + noRun.length + " &middot; sched ERR " + schedErr.length + " &middot; failed probes " + badProbes.length + " &middot; live-vs-registry version mismatches " + auditMismatch.length + "</div>");
@@ -2590,8 +2590,8 @@ async function redHtml(env) {
     return x.name + "(" + x.status + ")";
   }).join(", ")) + "</div>");
   if (auditMismatch.length) {
-    H.push('<table style="margin-top:6px"><tr><th>worker</th><th>live</th><th>registry</th></tr>');
-    for (const m of auditMismatch) H.push("<tr><td>" + esc(m.worker) + "</td><td>" + esc(m.live_version || "") + "</td><td>" + esc(m.registry_before || "") + "</td></tr>");
+    H.push('<table style="margin-top:6px"><tr><th>worker</th><th>live</th><th>registry</th><th>probed</th></tr>');
+    for (const m of auditMismatch) H.push("<tr><td>" + esc(m.worker) + "</td><td>" + esc(m.live_version || "") + "</td><td>" + esc(m.registry_before || "") + '</td><td class="sub">' + esc(String(m.probed_at || "").slice(0, 10)) + "</td></tr>");
     H.push("</table>");
   }
   H.push("</div>");
