@@ -1,4 +1,5 @@
-var VERSION="3.6.2-mathbalance";
+var VERSION="3.7.0-indexnow";
+var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -970,6 +971,32 @@ __name2(renderAboutHTML, "renderAboutHTML");
 __name22(renderAboutHTML, "renderAboutHTML");
 __name222(renderAboutHTML, "renderAboutHTML");
 __name2222(renderAboutHTML, "renderAboutHTML");
+async function collectPaperUrls(env) {
+  const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
+  const base = "https://papers.qnfo.org";
+  return [base + "/", base + "/papers", "https://qnfo.org/about"].concat(res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug)));
+}
+__name(collectPaperUrls, "collectPaperUrls");
+async function indexNowSubmit(urls) {
+  const out = [];
+  for (let i = 0; i < urls.length; i += 10000) {
+    const chunk = urls.slice(i, i + 10000);
+    try {
+      const r = await fetch("https://api.indexnow.org/indexnow", { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body: JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk }) });
+      out.push({ chunk: chunk.length, status: r.status });
+    } catch (e) {
+      out.push({ chunk: chunk.length, error: String(e).slice(0, 120) });
+    }
+  }
+  return out;
+}
+__name(indexNowSubmit, "indexNowSubmit");
+async function handleIndexNow(env) {
+  const urls = await collectPaperUrls(env);
+  const res = await indexNowSubmit(urls);
+  return new Response(JSON.stringify({ ok: true, submitted: urls.length, indexnow: res }), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
+}
+__name(handleIndexNow, "handleIndexNow");
 async function handleSitemap(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
@@ -1535,6 +1562,8 @@ var gateway_worker_default = {
       if (p === "/sitemap.xml") return handleSitemap(env);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
+      if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+      if (p === "/api/indexnow" && (method === "GET" || method === "POST")) return handleIndexNow(env);
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
@@ -1602,6 +1631,12 @@ var gateway_worker_default = {
     if (method === "GET" && p === "/edges") return handleEdges(u, env);
     if (method === "GET" && p.startsWith("/impact/")) return handleImpact(p.replace("/impact/", ""), env);
     return json({ error: "Not found", path: p }, 404);
+  },
+  async scheduled(event, env, ctx) {
+    try {
+      await indexNowSubmit(await collectPaperUrls(env));
+    } catch (e) {
+    }
   }
 };
 export {
