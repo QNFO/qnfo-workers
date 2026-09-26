@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.1";
+var VERSION = "0.4.2";
 var NAME = "qnfo-goal-author";
 var MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 var ADOPT_CAP = 3;
@@ -518,14 +518,29 @@ async function authorLoop(env) {
   return summary;
 }
 __name(authorLoop, "authorLoop");
+async function pendingDigest(env) {
+  try {
+    const p = await env.AUDIT.prepare("SELECT id, statement, created_at FROM goals WHERE goal_type='objective-revision' AND status='proposed' AND owner='human-ratify' ORDER BY id").all();
+    const rows = p.results || [];
+    if (!rows.length) return { ok: true, pending: 0 };
+    const lines = rows.map((r) => "- [" + r.id + "] " + String(r.statement || "").slice(0, 110) + " (since " + String(r.created_at || "").slice(0, 10) + ")").join("\n");
+    await env.AUDIT.prepare("INSERT INTO kaizen_reports (id, session_id, report_date, findings, improvements_applied, created_at, _version, wbs_code) VALUES (?,?,?,?,?,?,?,?)").bind("vrev-pending-" + nowIso().slice(0, 10), "qnfo-goal-author", nowIso().slice(0, 10), "PENDING OBJECTIVE REVISIONS awaiting human ratification:\n" + lines, JSON.stringify({ pending: rows.length, source: "qnfo-goal-author value-review surfacing" }), nowIso(), 2, "GOV-VREV").run();
+    return { ok: true, pending: rows.length };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(pendingDigest, "pendingDigest");
 var worker_default = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     if (cron === "0 3 * * 1") {
       ctx.waitUntil(reviewValues(env).catch((e) => console.error("goal-author value-review error:", e && e.message || e)));
+      ctx.waitUntil(pendingDigest(env).catch(() => {}));
       return;
     }
     ctx.waitUntil(authorLoop(env).catch((e) => console.error("goal-author cron error:", e && e.message || e)));
+    ctx.waitUntil(pendingDigest(env).catch(() => {}));
   },
   async fetch(request, env) {
     const url = new URL(request.url);

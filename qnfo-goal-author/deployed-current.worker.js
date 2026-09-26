@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.0";
+var VERSION = "0.4.2";
 var NAME = "qnfo-goal-author";
 var MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 var ADOPT_CAP = 3;
@@ -438,6 +438,61 @@ async function reviewValues(env) {
   return { ok: true, proposed, revisions: revs.map((r) => String(r.change || "").slice(0, 120)) };
 }
 __name(reviewValues, "reviewValues");
+async function drainCheck(env) {
+  await ensureSchema(env);
+  let closed = 0, cancelled = 0, completedGoals = 0;
+  const open = await env.AUDIT.prepare(
+    "SELECT source_row_id, title, evidence_pointer, due FROM task_dod_register WHERE source_table='self_authored_goal' AND status='open'"
+  ).all().catch(() => ({ results: [] }));
+  const today = nowIso().slice(0, 10);
+  for (const r of (open.results || [])) {
+    const gk = String(r.source_row_id || String(r.evidence_pointer || "").replace(/^goal:/, "") || "");
+    if (!gk) continue;
+    let goalStatus = null;
+    try {
+      const g = await env.AUDIT.prepare("SELECT status FROM goals WHERE goal_key=?1").bind(gk).first();
+      if (g) goalStatus = g.status;
+    } catch (e) { }
+    let published = false;
+    try {
+      const rq = await env.AUDIT.prepare("SELECT id FROM research_queue WHERE source='goal-author' AND source_id=?1 AND status='published'").bind(gk).first();
+      published = !!rq;
+    } catch (e) { }
+    let improved = false;
+    try {
+      const fi = await env.AUDIT.prepare("SELECT id FROM fleet_improvements WHERE source='goal-author' AND title=?1 AND status IN ('done','shipped','complete','resolved','completed')").bind(r.title).first();
+      improved = !!fi;
+    } catch (e) { }
+    const overdue = !!r.due && String(r.due) <= today;
+    if (published || improved || goalStatus === "superseded") {
+      const via = published ? "research-published" : improved ? "improvement-shipped" : "superseded";
+      try {
+        await env.AUDIT.prepare(
+          "UPDATE task_dod_register SET status='done', evidence_pointer=?1, updated_at=datetime('now') WHERE source_table='self_authored_goal' AND source_row_id=?2 AND status='open'"
+        ).bind(via + ":" + gk, gk).run();
+        closed++;
+      } catch (e) { }
+      if (published || improved) {
+        try {
+          await env.AUDIT.prepare(
+            "UPDATE goals SET status='completed', completed_at=?1, updated_at=?1 WHERE goal_key=?2 AND status IN ('adopted','active')"
+          ).bind(nowIso(), gk).run();
+          completedGoals++;
+        } catch (e) { }
+      }
+    } else if (goalStatus === "retired" || overdue) {
+      const via = goalStatus === "retired" ? "retired" : "overdue";
+      try {
+        await env.AUDIT.prepare(
+          "UPDATE task_dod_register SET status='cancelled', evidence_pointer=?1, updated_at=datetime('now') WHERE source_table='self_authored_goal' AND source_row_id=?2 AND status='open'"
+        ).bind(via + "-escalated:" + gk, gk).run();
+        cancelled++;
+      } catch (e) { }
+    }
+  }
+  return { drainClosed: closed, drainCancelled: cancelled, completedGoals };
+}
+__name(drainCheck, "drainCheck");
 async function authorLoop(env) {
   await ensureSchema(env);
   const objectives = await loadObjectives(env);
@@ -446,6 +501,7 @@ async function authorLoop(env) {
   const candidates = synth.goals || [];
   const adoption = await adoptGoals(env, objectives, candidates);
   const reprio = await rePrioritize(env);
+  const drain = await drainCheck(env);
   const summary = {
     ok: true,
     version: VERSION,
@@ -455,25 +511,41 @@ async function authorLoop(env) {
     model_text_len: synth.rawLen || 0,
     ...adoption,
     ...reprio,
+    ...drain,
     at: nowIso()
   };
   await receipts(env, summary);
   return summary;
 }
 __name(authorLoop, "authorLoop");
+async function pendingDigest(env) {
+  try {
+    const p = await env.AUDIT.prepare("SELECT id, statement, created_at FROM goals WHERE goal_type='objective-revision' AND status='proposed' AND owner='human-ratify' ORDER BY id").all();
+    const rows = p.results || [];
+    if (!rows.length) return { ok: true, pending: 0 };
+    const lines = rows.map((r) => "- [" + r.id + "] " + String(r.statement || "").slice(0, 110) + " (since " + String(r.created_at || "").slice(0, 10) + ")").join("\n");
+    await env.AUDIT.prepare("INSERT INTO kaizen_reports (id, session_id, report_date, findings, improvements_applied, created_at, _version, wbs_code) VALUES (?,?,?,?,?,?,?,?)").bind("vrev-pending-" + nowIso().slice(0, 10), "qnfo-goal-author", nowIso().slice(0, 10), "PENDING OBJECTIVE REVISIONS awaiting human ratification:\n" + lines, JSON.stringify({ pending: rows.length, source: "qnfo-goal-author value-review surfacing" }), nowIso(), 2, "GOV-VREV").run();
+    return { ok: true, pending: rows.length };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+__name(pendingDigest, "pendingDigest");
 var worker_default = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     if (cron === "0 3 * * 1") {
       ctx.waitUntil(reviewValues(env).catch((e) => console.error("goal-author value-review error:", e && e.message || e)));
+      ctx.waitUntil(pendingDigest(env).catch(() => {}));
       return;
     }
     ctx.waitUntil(authorLoop(env).catch((e) => console.error("goal-author cron error:", e && e.message || e)));
+    ctx.waitUntil(pendingDigest(env).catch(() => {}));
   },
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const mutate = path === "/author" || path === "/reprioritize" || path === "/review-values";
+    const mutate = path === "/author" || path === "/reprioritize" || path === "/review-values" || path === "/drain";
     try {
       if (mutate && !authorized(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
       if (path === "/health") {
@@ -496,6 +568,7 @@ var worker_default = {
       if (path === "/author" && request.method === "POST") return json(await authorLoop(env));
       if (path === "/reprioritize" && request.method === "POST") return json({ ok: true, ...await rePrioritize(env) });
       if (path === "/review-values" && request.method === "POST") return json(await reviewValues(env));
+      if (path === "/drain" && request.method === "POST") return json({ ok: true, ...await drainCheck(env) });
       if (path === "/objectives") {
         const r = await env.AUDIT.prepare("SELECT * FROM objectives ORDER BY id").all();
         return json({ ok: true, count: r.results.length, objectives: r.results });
@@ -504,7 +577,7 @@ var worker_default = {
         const r = await env.AUDIT.prepare("SELECT * FROM goals ORDER BY priority, score DESC LIMIT 100").all();
         return json({ ok: true, count: r.results.length, goals: r.results });
       }
-      return json({ ok: true, name: NAME, version: VERSION, endpoints: ["/health", "/author", "/reprioritize", "/review-values", "/objectives", "/goals"] });
+      return json({ ok: true, name: NAME, version: VERSION, endpoints: ["/health", "/author", "/reprioritize", "/review-values", "/drain", "/objectives", "/goals"] });
     } catch (err) {
       return json({ ok: false, error: String(err && err.stack || err.message || err) }, 500);
     }
