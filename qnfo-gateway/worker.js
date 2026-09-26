@@ -1,4 +1,4 @@
-var VERSION="3.7.2-indexnow";
+var VERSION="3.7.3-sitemap";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1005,14 +1005,29 @@ async function handleIndexNow(env) {
   return new Response(JSON.stringify({ ok: true, submitted: urls.length, indexnow: res }), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 __name(handleIndexNow, "handleIndexNow");
-async function handleSitemap(env) {
+async function handleSitemap(env, sitemapHost) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
-    const base = "https://papers.qnfo.org";
-    const all = [
-      { loc: base + "/", priority: "1.0" },
-      { loc: base + "/papers", priority: "0.9" }
-    ].concat(res.results.map((p) => ({
+    const isSite = sitemapHost === "qnfo.org" || sitemapHost === "www.qnfo.org";
+    const base = isSite ? "https://qnfo.org" : "https://papers.qnfo.org";
+    const ALL = isSite
+      ? [
+        { loc: "https://qnfo.org/", priority: "1.0" },
+        { loc: "https://qnfo.org/papers", priority: "0.9" },
+        { loc: "https://qnfo.org/about", priority: "0.8" },
+        { loc: "https://qnfo.org/graph", priority: "0.7" },
+        { loc: "https://ideas.qnfo.org", priority: "0.6" },
+        { loc: "https://qwav.org", priority: "0.6" }
+      ].concat(res.results.map((p) => ({
+        loc: "https://papers.qnfo.org/papers/" + encodeURIComponent(p.slug),
+        lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
+        priority: "0.8"
+      })))
+      : [
+        { loc: base + "/", priority: "1.0" },
+        { loc: base + "/papers", priority: "0.9" }
+      ];
+    const all = ALL.concat(isSite ? [] : res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
       lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
       priority: "0.8"
@@ -1566,7 +1581,7 @@ var gateway_worker_default = {
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
-      if (p === "/sitemap.xml") return handleSitemap(env);
+      if (p === "/sitemap.xml") return handleSitemap(env, host);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
       if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
@@ -1602,7 +1617,7 @@ var gateway_worker_default = {
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
-      if (p === "/sitemap.xml") return handleSitemap(env);
+      if (p === "/sitemap.xml") return handleSitemap(env, host);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
@@ -1625,7 +1640,7 @@ var gateway_worker_default = {
     if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
     if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
-    if (p === "/sitemap.xml") return handleSitemap(env);
+    if (p === "/sitemap.xml") return handleSitemap(env, host);
     if (p === "/robots.txt") return handlePapersRobots();
     if (p === "/llms.txt") return handleLlmsTxt(env);
     if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
