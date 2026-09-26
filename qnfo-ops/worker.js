@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.5-fm7gate-latent";
+var VERSION = "2.37.6-fm7gate-multiline";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2068,14 +2068,11 @@ async function cfWorkerDeploy(env, args) {
     if (_vcAll.length === 1) {
       const _vv = (_vcAll[0].match(/["']([^"']+)["']/) || [])[1];
       const _bad = [];
-      const _lines = content.split("\n");
-      for (let _li = 0; _li < _lines.length; _li++) {
-        const _ln = _lines[_li];
-        if ((_ln.indexOf("/health") >= 0 || _ln.indexOf('status: "ok"') >= 0 || _ln.indexOf("status:\"ok\"") >= 0 || _ln.indexOf("ok: true") >= 0) && _ln.indexOf("version:") >= 0 && _ln.indexOf("version: VERSION") < 0) {
-          const _m = _ln.match(/version:\s*["']([^"']+)["']/);
-          if (_m) _bad.push(_m[1]);
-        }
-      }
+      // whole-content, multiline-aware: a health/status object carrying a LITERAL version
+      // (not `version: VERSION`) that differs from the single VERSION const = a divergent /health.
+      const _hrx = /(?:ok:\s*true|status:\s*["']ok["'])[^}]{0,800}?version:\s*["']([^"']+)["']/g;
+      let _hm;
+      while ((_hm = _hrx.exec(content)) !== null) { if (_hm[1] !== _vv) _bad.push(_hm[1]); }
       if (_bad.length) return { ok: false, rejected: true, error: "FM7-HEALTH-VERSION-PARITY-1: source /health returns a hardcoded version literal " + JSON.stringify(_bad) + " instead of the VERSION ident (const=" + JSON.stringify(_vv) + "). A literal is a LATENT violation: it diverges the moment VERSION is bumped (canonical: qnfo-gateway). Use `version: VERSION` (Worker Contract v1). Refusing deploy." };
     }
     const resp = await fetch(
