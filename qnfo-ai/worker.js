@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.7-oaitokens";
+var VERSION = "5.28.8-rag";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -1490,7 +1490,12 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   let ragSources = null;
   const ragForce = body.rag === true || body.rag === "true";
   const ragOff = body.rag === false || body.rag === "false";
-  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && (ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(lastUserText(messages).slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(lastUserText(messages).slice(0, 300)))) {
+  const _ragLastQ = lastUserText(messages).trim();
+  const _ragIsQuestion = /[?]$/.test(_ragLastQ) || /^(what|when|where|who|whom|whose|why|how|which|tell me|explain|describe|summarize|list|compare|contrast|analyze|evaluate|does|do|is|are|can|could|would|should|was|were|has|have|did|define|derive|show)\b/i.test(_ragLastQ);
+  const _ragIsGreeting = /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|bye|good morning|good afternoon|good evening)\b/i.test(_ragLastQ);
+  const _ragIsCode = cls.domain === "code";
+  const _shouldRag = ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(_ragLastQ.slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(_ragLastQ.slice(0, 300)) || (_ragIsQuestion && !_ragIsGreeting && !_ragIsCode);
+  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && _shouldRag) {
     const rq = lastUserText(messages).slice(0, 300);
     if (rq) {
       try {
