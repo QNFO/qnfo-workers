@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""deploy-drift-guard.py - repo<->live VERSION drift (DRIFT-ZERO).
+"""deploy-drift-guard.py - repo<->live VERSION drift + version-gap monitor.
 
-Closes the gap left by the other guards:
-  - scripts/mirror-guard.py   : repo-INTERNAL (worker.js vs deployed-current.worker.js)
-  - scripts/cron_rate_guard.py: cron cadence
-  - THIS                      : repo(canonical) VERSION vs LIVE /health
+ROOT CAUSE (why this exists):
+  1. The canonical deploy (qnfo-ops POST /ops/deploy + the qnfo-fleet-control redeploy)
+     fetches <dir>/deployed-current.worker.js -- NOT <dir>/worker.js (see mirror-guard.py).
+     A monitor that reads worker.js measures the wrong artifact and false-reports.
+  2. A worker with NO version constant is INVISIBLE to any version-based drift check
+     (silent skip) -> the drift can never be seen or reconciled. Silent skips are the
+     defect this tool refuses to allow.
 
-CANONICAL ARTIFACT: the server-side deploy (qnfo-ops POST /ops/deploy) and the
-qnfo-fleet-control redeploy fetch <dir>/deployed-current.worker.js, NOT <dir>/worker.js
-(see mirror-guard.py). So this monitor reads the canonical artifact first, falling back
-to worker.js, and accepts VERSION or QNFO_VERSION.
+CLASSES (no class is ever silently dropped):
+  DRIFT            repo VERSION != live /health version  (reconcile required)
+  NO_REPO_VERSION  worker is live but the repo has no version constant (source gap)
+  NO_LIVE_VERSION  worker answers /health but omits a version field (live gap)
+  NOT_DEPLOYED     HTTP 404 (retired/never-deployed) -- reported, not drift
+  SYNC             repo == live
 
-Default scope = the narrative-generation surfaces we own. `--all` scans every repo
-worker that is LIVE (HTTP 404 = not deployed = skipped, NOT drift).
-
-Canonical case 2026-09-26: a concurrent session deployed a worker live and committed
-locally without pushing (origin/main lagged live) until reconciled.
-
-Exit: 0 in sync | 1 drift found (repo VERSION != live VERSION for a live worker)
+Default scope = the narrative-generation surfaces we own. `--all` = all workers.
+Exit: 0 clean (scoped: SYNC only) | 1 any DRIFT / NO_*_VERSION
 """
 import json
 import os
@@ -47,17 +47,17 @@ def repo_version(d):
     return None
 
 
-def live_version(worker):
+def live_result(worker):
     url = "https://" + worker + ".q08.workers.dev/health"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "qnfo-deploy-drift-guard"})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            j = json.load(r)
-        return j.get("version") or j.get("VERSION")
+            data = json.load(r)
+        return True, (data.get("version") or data.get("VERSION"))
     except urllib.error.HTTPError as e:
-        return None if e.code == 404 else "ERR:" + str(e)[:50]
+        return (False, None) if e.code == 404 else (False, "ERR:" + str(e)[:50])
     except Exception as e:
-        return "ERR:" + str(e)[:50]
+        return (False, "ERR:" + str(e)[:50])
 
 
 def main():
@@ -65,30 +65,45 @@ def main():
     wanted = set(a for a in sys.argv[1:] if not a.startswith("-"))
     if not wanted and not scan_all:
         wanted = set(NARRATIVE)
-    drift, notlive, checked = [], 0, 0
+    drift, no_repo_ver, no_live_ver, not_deployed, sync, live_err = [], [], [], 0, 0, []
     for d in sorted(os.listdir(ROOT)):
         if wanted and d not in wanted:
             continue
         if not os.path.isdir(os.path.join(ROOT, d)):
             continue
+        # ROOT-CAUSE FIX: .git/.github/.wrangler/_shared are infra dirs, not workers --
+        # probing them produced bogus LIVE_ERR (invalid worker hostnames).
+        if d.startswith(".") or d.startswith("_"):
+            continue
         rv = repo_version(d)
-        if not rv:
+        live, lv = live_result(d)
+        if not live and lv is None:
+            not_deployed += 1
             continue
-        lv = live_version(d)
-        if lv is None:
-            notlive += 1
+        if not live:  # ERR (not 404)
+            live_err.append((d, lv))
             continue
-        checked += 1
-        if lv != rv:
+        if rv is None:
+            no_repo_ver.append((d, lv))
+        elif not lv:
+            no_live_ver.append((d, rv))
+        elif lv != rv:
             drift.append((d, rv, lv))
+        else:
+            sync += 1
     for d, rv, lv in drift:
         print(f"DRIFT {d}: repo={rv} live={lv}")
-    tag = "all-live" if scan_all else "narrative"
-    if drift:
-        print(f"deploy-drift-guard[{tag}]: {len(drift)}/{checked} drifted ({notlive} not-deployed skipped)")
-        return 1
-    print(f"deploy-drift-guard[{tag}]: {checked}/{checked} in sync ({notlive} not-deployed skipped)")
-    return 0
+    for d, lv in no_repo_ver:
+        print(f"NO_REPO_VERSION {d}: live={lv}")
+    for d, rv in no_live_ver:
+        print(f"NO_LIVE_VERSION {d}: repo={rv}")
+    for d, e in live_err:
+        print(f"LIVE_ERR {d}: {e}")
+    tag = "all" if scan_all else "narrative"
+    problems = len(drift) + len(no_repo_ver) + len(no_live_ver) + len(live_err)
+    print(f"deploy-drift-guard[{tag}]: sync={sync} drift={len(drift)} no_repo_version={len(no_repo_ver)} "
+          f"no_live_version={len(no_live_ver)} live_err={len(live_err)} not_deployed_notdrift={not_deployed}")
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":
