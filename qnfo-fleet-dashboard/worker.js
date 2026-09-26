@@ -7,7 +7,7 @@ var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
 var __name222 = /* @__PURE__ */ __name22((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.17-pubevents"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
+var VERSION = "1.7.18-impressions"; // RED-INVENTORY-1 (2026-09-26): root = failures-only inventory (shutdown manifest, gates vs measured, cents-audited cost truth, complete open-issue inventory, unremediated registers, money math); /roi + /ops preserved
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2430,6 +2430,14 @@ async function redHtml(env) {
     growth = rumTotal != null ? Math.round(1e4 * (rumTotal - 5610) / 5610) / 100 : null;
   } catch (e) {
   }
+  let rumPrior = null, trueMoM = null;
+  try {
+    const dp = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 1440 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now - 720 * 36e5).toISOString() + '" }) { count } } } }');
+    const rp = (((dp || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
+    rumPrior = rp.reduce(function(s, x) { return s + x.count; }, 0);
+    trueMoM = rumPrior > 0 ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
+  } catch (e) {
+  }
   try {
     const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day')");
     rep30 = r && r.length ? r[0].n : null;
@@ -2450,7 +2458,7 @@ async function redHtml(env) {
     const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
     H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
   }
-  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &rarr; growth vs frozen baseline (2026-08-27..09-25): " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " &middot; MoM (snapshots): " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + " &middot; gate is +30% MoM " + (snapMoM != null && snapMoM < 30 ? '&mdash; <b class="bad">GATE FAILING</b>' : '&mdash; MoM n/a (needs 2 snapshots)') + "</div></div>");
+  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + ' (gate &ge;2 &rarr; ' + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; vs frozen baseline 5,610 (target 7,293 = +30% by 2026-10-25) = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " " + (growth != null && growth < 30 ? '&mdash; <b class="bad">NOT MET</b>' : '&mdash; <span class="ok">MET</span>') + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
 
   // 3. COST TRUTH (live billing, cents-audited)
   let inv = null, bal = null, tup = null, aiN = null;
