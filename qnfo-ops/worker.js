@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.9-guard-ledger-sync";
+var VERSION = "2.37.10-guard-ledger-retry";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4972,7 +4972,7 @@ async function opsDeploy(env, args) {
         log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
       }
       const content = atob(b64);
-      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
+      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) {
         result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer };
@@ -4997,8 +4997,15 @@ async function opsDeploy(env, args) {
       // current_version lags by one, and EVERY subsequent deploy is refused with
       // version-mismatch until an operator manually reconciles the ledger.
       try {
-        const gl = await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, to: live || toVer || srcVer || null, actor: "qnfo-ops/ops-deploy", ok: !!(dep && dep.ok), note: "auto-advance deploy-guard registry after deploy" }) });
-        log.push({ step: "guard-ledger", http: gl.status });
+        const _glVer = live || toVer || srcVer || null;
+        for (let _gi = 0; _gi < 4; _gi++) {
+          const gl = await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, to: _glVer, actor: "qnfo-ops/ops-deploy", ok: !!(dep && dep.ok), note: "auto-advance deploy-guard registry after deploy" }) });
+          let gj = {};
+          try { gj = await gl.json(); } catch (_ge) {}
+          log.push({ step: "guard-ledger", attempt: _gi, http: gl.status, registry_version: gj && gj.registry_version || null });
+          if (gj && gj.registry_version && (!_glVer || String(gj.registry_version) === String(_glVer))) break;
+          if (_gi < 3) await new Promise(function (r) { setTimeout(r, 4000); });
+        }
       } catch (e3) {
         log.push({ step: "guard-ledger", error: String(e3 && e3.message || e3).slice(0, 140) });
       }
