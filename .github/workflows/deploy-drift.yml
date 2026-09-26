@@ -1,0 +1,24 @@
+name: deploy-drift
+
+# DRIFT-ZERO repo<->live monitor. mirror-guard covers repo-internal parity; this
+# covers repo(worker.js) VERSION vs LIVE /health for the narrative-generation
+# surfaces we own. Scheduled (not on push) so a just-pushed, not-yet-redeployed
+# source is not a false red. A red run = a real repo<->live mismatch to reconcile.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: repo <-> live VERSION drift (narrative surfaces)
+        run: python scripts/deploy-drift-guard.py
+      - name: repo <-> live VERSION drift (all live workers, report only)
+        continue-on-error: true
+        run: python scripts/deploy-drift-guard.py --all

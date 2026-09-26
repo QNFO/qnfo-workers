@@ -20,7 +20,7 @@ binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
 [triggers]
-crons = ["0 6 * * *"]
+crons = ["0 4 * * *", "5 6 * * *"]
 
 # d1 binding (AUDIT-REMEDIATE-1 2026-09-22; verified vs live CF bindings)
 [[d1_databases]]

@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.9-toolmode";
+var VERSION = "4.1.14-singlemodel";
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):
@@ -579,7 +579,7 @@ __name22(calHeaders, "calHeaders");
 async function calList(env, from, to, limit) {
   if (!env.CAL_API) return { ok: false, error: "calendar service unavailable" };
   const toBound = String(to || "").length === 10 ? to + "T23:59:59" : to;
-  const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(toBound), { headers: calHeaders(env) });
+  const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(toBound), { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
   if (!r.ok) return { ok: false, error: "calendar service HTTP " + r.status };
   const j = await r.json();
   const evs = (j.events || []).filter((x) => x.status !== "cancelled");
@@ -595,7 +595,7 @@ async function calAdd(env, args) {
   if (!title || !dtstart) return { ok: false, error: "title and dtstart are required (dtstart = ISO date YYYY-MM-DD or datetime)" };
   const day = String(dtstart).slice(0, 10);
   try {
-    const ex = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + day + "&to=" + day + "T23:59:59", { headers: calHeaders(env) });
+    const ex = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + day + "&to=" + day + "T23:59:59", { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
     if (ex.ok) {
       const ej = await ex.json();
       if ((ej.events || []).some((e) => (e.title || "") === title && String(e.dtstart || "").slice(0, 10) === day))
@@ -609,7 +609,7 @@ async function calAdd(env, args) {
   if (args && args.description) body.description = String(args.description).slice(0, 1e3);
   if (args && args.all_day) body.all_day = true;
   try {
-    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal", { method: "POST", headers: calHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify(body) });
+    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal", { method: "POST", headers: calHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { ok: false, error: "calendar create failed HTTP " + r.status };
     const j = await r.json();
     return { ok: true, created: true, id: j.id, uid: j.uid, title, dtstart };
@@ -626,7 +626,7 @@ async function calDelete(env, args) {
   if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "a valid numeric event id is required (from calendar_today/calendar_list)" };
   if (String(args && args.confirm || "") !== "yes") return { ok: false, error: "deleting needs explicit confirmation: pass confirm:'yes'" };
   try {
-    const r = await env.CAL_API.fetch("https://calendar-api/events/" + id, { method: "DELETE", headers: calHeaders(env) });
+    const r = await env.CAL_API.fetch("https://calendar-api/events/" + id, { method: "DELETE", headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { ok: false, error: "calendar delete failed HTTP " + r.status };
     const j = await r.json();
     return { ok: true, deleted: j.deleted || id };
@@ -1005,6 +1005,12 @@ function fakeStream(text, id) {
 __name(fakeStream, "fakeStream");
 __name2(fakeStream, "fakeStream");
 __name22(fakeStream, "fakeStream");
+function sseText(text, id) {
+  const _mk = (delta, finish) => "data: " + JSON.stringify({ id: id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, delta: delta, finish_reason: finish }] }) + String.fromCharCode(10, 10);
+  return new Response(_mk({ role: "assistant", content: String(text || "") }, null) + _mk({}, "stop") + "data: [DONE]" + String.fromCharCode(10, 10), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+}
+__name2(sseText, "sseText");
+
 async function buildBrief(env, withSummary) {
   const date = isoDateNow();
   const tomorrow = isoDatePlus(1);
@@ -1477,7 +1483,7 @@ __name2(parseDdg, "parseDdg");
 __name22(parseDdg, "parseDdg");
 function isCurrentEvents(q) {
   const t = " " + String(q || "").toLowerCase() + " ";
-  const words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "schedule", "hours", "open now", "happening", "happened", "going on", "whats on", "what's on", "events", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
+  const words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "hours", "open now", "happening", "happened", "going on", "whats on", "what's on", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
   for (const w of words) {
     if (t.indexOf(" " + w + " ") !== -1) return true;
   }
@@ -1883,14 +1889,22 @@ var api_default = {
       return stub.fetch(request);
     }
     if (path === "/v1/models") {
-      if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
-      return json({ object: "list", data: [
-        { id: "personal-twin-chat", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "vision"], contextWindow: 1048576, context_length: 1048576, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1048576, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1048576, temperature: 0.7, top_p: 0.9, vision: true, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "deepseek-v4-pro-0813" } },
-        { id: "personal-twin-pro", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 1310720, context_length: 1310720, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1310720, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1310720, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "glm-5.3" } },
-        { id: "personal-twin-reason", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning"], contextWindow: 128e3, context_length: 128e3, maxOutput: 32768, max_output_tokens: 32768, limit: { context: 128e3, output: 32768 }, tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "personal", reasoning: true, ctx: 128e3, temperature: 0.6, top_p: 0.9, vision: false, tools: true, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "gpt-oss-120b" } },
-        { id: "personal-twin-flash", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "vision"], contextWindow: 1310720, context_length: 1310720, maxOutput: 32768, max_output_tokens: 32768, limit: { context: 1310720, output: 32768 }, tool_call: false, temperature: true, default_tool_mode: "minimal", _router: { tier: 0, family: "personal", reasoning: true, ctx: 1310720, temperature: 0.6, top_p: 0.9, vision: true, tools: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok", upstream: "glm-5.3-flash", note: "Cost-optimized: $0.10/M input, fast responses" } },
-        { id: "bge-base-en-v1.5", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["embeddings"], contextWindow: 512, context_length: 512, maxOutput: 0, max_output_tokens: 0, limit: { context: 512, output: 0 }, tool_call: false, temperature: true, _router: { tier: 0, family: "embedding", reasoning: false, ctx: 512, temperature: 0, top_p: 1, vision: false, tools: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always", health_status: "ok" } }
-      ] });
+      // MODEL-DISCOVERY-PUBLIC-1 (2026-09-26): serve the model list without auth so every
+      // OpenAI-compatible client (LiteLLM, LM Studio, llama.cpp, ChatBox, OpenWebUI, etc.) can
+      // probe /v1/models on "test connection" without a key and discover models. Model ids are
+      // not sensitive; chat/embeddings/data routes remain gated by API_KEY.
+      const _data = [
+        { id: "personal", object: "model", created: 1787241600, owned_by: "quni", capabilities: ["chat", "streaming", "agent", "tool_use", "reasoning", "vision"], contextWindow: 1310720, context_length: 1310720, maxOutput: 2e5, max_output_tokens: 2e5, limit: { context: 1310720, output: 2e5 }, tool_call: true, temperature: true, default_tool_mode: "agent" }
+      ];
+      // MODEL-FIELDS-PARITY-1: mirror qnfo-ai/qnfo-ops superset so LiteLLM/LM Studio/llama.cpp
+      // read the same sizing fields from every QNFO endpoint.
+      for (const _m of _data) {
+        if (_m.max_tokens == null) _m.max_tokens = _m.maxOutput != null ? _m.maxOutput : _m.max_output_tokens;
+        if (_m.max_input_tokens == null) _m.max_input_tokens = _m.contextWindow != null ? _m.contextWindow : (_m.limit && _m.limit.context);
+        if (_m.context_window == null) _m.context_window = _m.contextWindow;
+        if (_m.max_output == null) _m.max_output = _m.maxOutput != null ? _m.maxOutput : _m.max_output_tokens;
+      }
+      return json({ object: "list", data: _data });
     }
     if (path === "/v1/chat/completions" && request.method === "POST") {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
@@ -1975,7 +1989,7 @@ var api_default = {
         if (env.CAL_API) {
           const tFrom = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
           const tTo = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
-          const r2 = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + tFrom + "&to=" + tTo + "T23:59:59", { headers: calHeaders(env) });
+          const r2 = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + tFrom + "&to=" + tTo + "T23:59:59", { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
           if (r2.ok) {
             const j2 = await r2.json();
             const evs2 = (j2.events || []).filter((x) => x.status !== "cancelled").slice(0, 12);
@@ -2121,100 +2135,16 @@ var api_default = {
         if (loopFinal && !toolsUsed && loopUp) {
           const streamId = "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24);
           ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, body && body.model || loopUp.model, loopUp && loopUp.body && loopUp.body.usage, Date.now() - t0));
-          return new Response(fakeStream(loopFinal, streamId), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+          return sseText(loopFinal, streamId);
         }
-        const msgs = [{ role: "system", content: finalSystem }].concat(finalMsgs);
-        let upStream = null;
-        const streamErrors = [];
-        const _hasImgP = messages.some((m) => m && Array.isArray(m.content) && m.content.some((p) => p && typeof p === "object" && (p.type === "image_url" || p.type === "input_image" || p.type === "image")));
-        const _visM = /* @__PURE__ */ __name2((m) => m.indexOf("glm-5.3-flash") >= 0 || m.indexOf("glm-5.3") >= 0 || m.indexOf("kimi") >= 0, "_visM");
-        let modelList = String(body && body.model || "") === "personal-twin-pro" ? ["@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-pro-0813"] : String(body && body.model || "") === "personal-twin-reason" ? [REASON_MODEL, "@cf/deepseek-ai/deepseek-v4-pro-0813"] : String(body && body.model || "") === "personal-twin-flash" ? ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.6"] : CHAT_MODELS;
-        if (_hasImgP) {
-          const vf2 = modelList.filter(_visM);
-          if (vf2.length) modelList = vf2;
-        }
-        const isReason = isReasonL;
-        const outTokens = clampMaxTokens(body && body.max_tokens, isReason);
-        for (const model of modelList) {
-          try {
-            const s = await env.AI.run(model, { messages: msgs, temperature, max_tokens: outTokens, stream: true }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
-            upStream = s;
-            break;
-          } catch (e) {
-            streamErrors.push(model + ":" + (e && e.message || e));
-          }
-        }
-        if (!upStream) {
-          console.log("personal-api upstream stream error:", streamErrors.join(" | "));
-          if (loopFinal) {
-            const choice2 = { message: { role: "assistant", content: loopFinal }, finish_reason: "stop" };
-            ctx.waitUntil(logChat(env, q, loopFinal, thread, ua, loopUp ? loopUp.model : "personal-twin-chat"));
-            return json({ id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, message: choice2.message, finish_reason: "stop" }], usage: {}, _meta: { elapsedMs: Date.now() - t0, retrieved: items.length, degraded, toolsUsed: toolRounds.length, streamFallback: true }, ...webSources ? { _web: { query: q.slice(0, 300), sources: webSources } } : {} });
-          }
-          return json({ error: { message: "upstream error", type: "upstream_error" } }, 502);
-        }
-        const enc8 = new TextEncoder();
-        const nlnl = String.fromCharCode(10, 10);
-        const makeChunk = /* @__PURE__ */ __name22((delta, finish) => enc8.encode("data: " + JSON.stringify({ id: "chatcmpl-" + Date.now(), object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: "personal-twin-chat", choices: [{ index: 0, delta, finish_reason: finish }] }) + nlnl), "makeChunk");
-        let acc = "";
-        let markDone;
-        const doneP = new Promise((res) => {
-          markDone = res;
-        });
-        const stream = new ReadableStream({
-          async start(controller) {
-            try {
-              const processFrame = /* @__PURE__ */ __name22((frame) => {
-                let t = String(frame).trim();
-                if (!t) return;
-                if (t.indexOf("data:") === 0) t = t.slice(5).trim();
-                if (!t || t === "[DONE]") return;
-                let p;
-                try {
-                  p = JSON.parse(t);
-                } catch (e4) {
-                  return;
-                }
-                let d = "";
-                if (p.response !== void 0) d = p.response;
-                else if (p.choices && p.choices[0] && p.choices[0].delta) {
-                  const dl = p.choices[0].delta;
-                  if (dl.content !== void 0 && dl.content !== null) d = dl.content;
-                }
-                if (typeof d === "string" && d.length > 0) {
-                  acc += d;
-                  controller.enqueue(makeChunk({ content: d }, null));
-                }
-              }, "processFrame");
-              const reader = upStream.getReader();
-              let buf2 = "";
-              const nl1 = String.fromCharCode(10);
-              while (true) {
-                const x = await reader.read();
-                if (x.done) break;
-                buf2 += new TextDecoder().decode(x.value);
-                let pos;
-                while ((pos = buf2.indexOf(nl1)) !== -1) {
-                  const line = buf2.slice(0, pos);
-                  buf2 = buf2.slice(pos + 1);
-                  processFrame(line);
-                }
-              }
-              if (buf2) processFrame(buf2);
-              controller.enqueue(makeChunk({}, "stop"));
-              controller.enqueue(enc8.encode("data: [DONE]" + nlnl));
-              controller.close();
-              markDone();
-            } catch (e3) {
-              markDone();
-              controller.error(e3);
-            }
-          }
-        });
-        ctx.waitUntil(doneP.then(function() {
-          return logChat(env, q, acc, thread, request.headers.get("User-Agent") || "", "personal-twin-chat");
-        }));
-        return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+        let _sText = "";
+        try {
+          const upS = await upstreamChat(env, finalSystem, finalMsgs, temperature, clampMaxTokens(body && body.max_tokens, isReasonL), isReasonL);
+          if (upS && upS.ok) _sText = upS.body.choices && upS.body.choices[0] && upS.body.choices[0].message && upS.body.choices[0].message.content || "";
+        } catch (e) { _sText = ""; }
+        if (!_sText) _sText = "I could not generate a response right now. Please try again.";
+        ctx.waitUntil(logChat(env, q, _sText, thread, ua, "personal-twin-chat"));
+        return sseText(_sText, "chatcmpl-" + Date.now());
       }
       let up = loopUp || null;
       if (!up) {
@@ -2498,7 +2428,7 @@ var api_default = {
       return json({ ok: true, worker: "personal-api", version: VERSION });
     }
     if (path === "/" && request.method === "GET") {
-      return new Response(PLAYGROUND_HTML.replace("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "tokens/personal-api").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "your personal API key (Bearer)").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
     }
     if (path === "/v1/web/search" && request.method === "GET") {
       if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);

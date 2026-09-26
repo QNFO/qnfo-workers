@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.5 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy)
+// qnfo-deploy-guard v1.3.10 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.7";
+var VERSION = "1.3.14-verifyadvance";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -33,7 +33,7 @@ function getJson(urls, tout) {
 // whose reads are eventually consistent: a release followed by an immediate acquire could still observe
 // the stale lock and refuse (live-reproduced: acquire -> release(released:true) -> acquire REFUSED).
 async function sha256hex(s) { var b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s))); var a = new Uint8Array(b), o = ""; for (var i = 0; i < a.length; i++) o += ("0" + a[i].toString(16)).slice(-2); return o; }
-async function readLock(env, w) { var rows = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE worker=?1 AND expires_at > ?2 LIMIT 1", [w, Date.now()]); return (rows && rows.length) ? rows[0] : null; }
+async function readLock(env, w) { var rows = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE worker=?1 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?2 LIMIT 1", [w, Date.now()]); return (rows && rows.length) ? rows[0] : null; }
 async function auditRun(env, sql, params) { try { var st = env.AUDIT.prepare(sql); return await st.bind.apply(st, params || []).run(); } catch (e) { return { ok: false, error: String(e && e.message || e) }; } }
 async function auditAll(env, sql, params) { try { var st = env.AUDIT.prepare(sql); var b = params && params.length ? st.bind.apply(st, params) : st; var r = await b.all(); return (r && r.results) || []; } catch (e) { return []; } }
 async function fileIssue(env, title, desc, priority) {
@@ -70,16 +70,26 @@ async function ensureRegistry(env, fleet) {
 // value and refused valid redeploys with a false "version-mismatch".
 async function refreshRegistryVersion(env, w, explicitVer) {
   try {
-    var ver = explicitVer ? String(explicitVer) : "";
-    if (!ver) {
-      // Best-effort only. A Worker cannot reliably subrequest another account Worker's
-      // *.workers.dev /health (canonical: qnfo-ops /fleet.version is empty fleet-wide for the
-      // same reason), so the deployer-supplied version is the PRIMARY source.
+    // FM6 VERIFY-BEFORE-ADVANCE (2026-09-26): always read the LIVE /health first. The old form
+    // let explicitVer (the deployer's CLAIMED version) win unconditionally, so a FAILED deploy
+    // that still POSTed /ledger with to=<claim> advanced service_registry.version and wedged
+    // every later deploy (registry-as-truth, deploy-guard expected_version). Now the claim is
+    // recorded ONLY when the live worker agrees; a claim the live worker does not report is
+    // REFUSED (no registry write), so a failed deploy can never wedge the guard.
+    var liveVer = "";
+    try {
       var url = "https://" + w + ".q08.workers.dev/health";
       var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
       var r = await fetch(url, { signal: c.signal, headers: { accept: "application/json" } });
       clearTimeout(t);
-      if (r.ok) { var j = await r.json(); if (j && j.version) ver = String(j.version); }
+      if (r.ok) { var j = await r.json(); if (j && j.version) liveVer = String(j.version); }
+    } catch (e) {}
+    var ver = "";
+    if (explicitVer && String(explicitVer)) {
+      if (liveVer && liveVer !== String(explicitVer)) return null;
+      ver = String(explicitVer);
+    } else if (liveVer) {
+      ver = liveVer;
     }
     if (!ver) return null;
     await auditRun(env, "UPDATE service_registry SET version=?1, updated_at=?2 WHERE service=?3", [ver, nowIso(), w]);
@@ -98,11 +108,11 @@ async function scan(env) {
     var month = (ca.j.last_30d && ca.j.last_30d.cost) || 0;
     cost = { day_usd: day, month_usd: month, cap_per_utc_day: ca.j.cap_per_utc_day, thresholds: thr };
   }
-  var ledger = await auditAll(env, "SELECT worker, to_sha, ts FROM fleet_deploys ORDER BY id", []);
+  var ledger = await auditAll(env, "SELECT worker, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
   var lastLedger = {}; for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; }
   var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
   var active = {};
-  try { var al = await auditAll(env, "SELECT worker, owner, since, expires_at FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); for (var j = 0; j < al.length; j++) active[al[j].worker] = al[j]; } catch (e) {}
+  try { var al = await auditAll(env, "SELECT worker, owner, since, expires_at FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > ?1", [Date.now()]); for (var j = 0; j < al.length; j++) active[al[j].worker] = al[j]; } catch (e) {}
   var denials = [];
   try { var dn = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var d = 0; d < dn.keys.length; d++) { var dv = await env.FLEET_CONFIG.get(dn.keys[d].name); if (dv) { try { denials.push(JSON.parse(dv)); } catch (e) {} } } } catch (e) {}
   var fleet = (fp.ok && fp.j && fp.j.fleet) ? fp.j.fleet : [];
@@ -115,7 +125,12 @@ async function scan(env) {
     var was = prev[ww.name];
     if (was && was.mo && mo && String(was.mo) !== String(mo)) {
       var lg = lastLedger[ww.name] || null;
-      var logged = !!(lg && lg.ok !== 0 && ms(lg.ts) >= ms(mo) - 180000);
+      // FAILED-LEDGER-ROW-1 (v1.3.11): a FAILED latest ledger row (ok=0) is STILL a logged mutation.
+      // Reading ok=0 as "no row" misclassified a failed deploy as an unlogged-mutation (high) -- the
+      // canonical false-positive (qnfo-artifacts 2026-09-24: 08:26 deploy WAS ledgered at 08:26:54 but
+      // ok=0). The failure itself is still surfaced by the non-canonical-deploy pass below
+      // (nlr.ok === 0), so no signal is lost.
+      var logged = !!(lg && ms(lg.ts) >= ms(mo) - 180000);
       var rec = { type: logged ? "deploy-observed" : "unlogged-mutation", worker: ww.name, from_mod: was.mo, to_mod: mo, ledger_to: lg ? lg.to_sha : null, ledger_ts: lg ? lg.ts : null, lock_owner: active[ww.name] ? active[ww.name].owner : null, lock_held: !!active[ww.name] };
       changed.push(rec);
       if (!logged) anomalies.push(rec);
@@ -124,6 +139,26 @@ async function scan(env) {
   }
   if (denials.length) anomalies.push({ type: "lock-contention", worker: "fleet", count: denials.length, sample: denials.slice(-3) });
   if (cost && (cost.day_usd > cost.thresholds.day_usd || cost.month_usd > cost.thresholds.month_usd)) anomalies.push({ type: "cost-threshold", worker: "qnfo-ops", day_usd: cost.day_usd, month_usd: cost.month_usd, thresholds: cost.thresholds });
+  // NON-CANONICAL-DEPLOY-1 (v1.3.8): flag workers whose most recent ledgered deploy did NOT use the
+  // canonical route (POST /ops/deploy -> note "server-side deploy (opsDeploy route)"). with-lock /
+  // redeploy-script paths POST /ledger (so they pass the unlogged-mutation rule) yet bypass the
+  // canonical sequence (uncached GitHub-source fetch + binding preservation). Aggregated to one anomaly.
+  var liveNames = {}; for (var lw = 0; lw < fleet.length; lw++) liveNames[fleet[lw].name] = 1;
+  var haveLive = fleet.length > 0;
+  var nonCanon = [];
+  for (var ncw in lastLedger) {
+    if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
+    // FLEET-GHOST-LEDGER-1 (v1.3.12): a retired/ghost worker (present only in the ledger, absent from the
+    // live fleet) is not a deploy target -- its stale row must not permanently drive the aggregate (canonical
+    // offender: qnfo-fleet-advisor, retired, last ledger row 2026-09-09). Guarded by haveLive so a failed
+    // fleet probe cannot silently disable the non-canonical check.
+    if (haveLive && !liveNames[ncw]) continue;
+    var nlr = lastLedger[ncw] || {};
+    var nnote = String(nlr.note || "");
+    if (/self-test|deliberately/i.test(nnote)) continue; // deliberate detector self-tests (e.g. ops-gateway)
+    if (nnote.indexOf("opsDeploy route") < 0 || nlr.ok === 0) nonCanon.push(ncw); // non-canonical path OR a FAILED canonical attempt (ok:0 carries the canonical note)
+  }
+  if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
   var seen = {}; var uniq = []; for (var m = 0; m < anomalies.length; m++) { var key = anomalies[m].type + "|" + anomalies[m].worker; if (!seen[key]) { seen[key] = 1; uniq.push(anomalies[m]); } }
   var filed = [];
   for (var n = 0; n < uniq.length; n++) {
@@ -167,7 +202,7 @@ export default {
       }
       var actor4 = String(b.actor || b.owner || "unknown");
       var sid4 = b.session_id ? String(b.session_id) : null;
-      await auditRun(env, "DELETE FROM deploy_locks WHERE expires_at <= ?1", [now4]);
+      await auditRun(env, "DELETE FROM deploy_locks WHERE (typeof(expires_at) IN ('integer','real') AND expires_at <= ?1) OR (typeof(expires_at)='text' AND datetime(expires_at) < datetime('now'))", [now4]);
       var raw4 = tok(); var th4 = await sha256hex(raw4);
       var ins4 = await auditRun(env, "INSERT INTO deploy_locks (worker, token_hash, owner, actor, session_id, since, expires_at, expected_version) SELECT ?1,?2,?3,?4,?5,?6,?7,?8 WHERE NOT EXISTS (SELECT 1 FROM deploy_locks WHERE worker=?1 AND expires_at > ?6)", [w4, th4, String(b.owner || "unknown"), actor4, sid4, now4, now4 + ttl * 1000, b.expected_version || null]);
       if (ins4 && ins4.ok === false) return json({ error: "lock_db_unavailable", detail: ins4.error }, 500);

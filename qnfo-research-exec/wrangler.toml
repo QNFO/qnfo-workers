@@ -37,7 +37,7 @@ service = "qnfo-pdf"
 
 # Cron: research pipeline drain (10-min cadence, matches prior API schedule)
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["0 * * * *"]
 
 [observability]
 enabled = true

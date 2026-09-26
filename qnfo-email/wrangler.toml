@@ -13,10 +13,6 @@ send_email = [
   { name = "SEND_EMAIL" }
 ]
 
-[[services]]
-binding = "EVENTS"
-service = "qnfo-calendar-intake"
-environment = "production"
 
 [[d1_databases]]
 binding = "AUDIT_DB"

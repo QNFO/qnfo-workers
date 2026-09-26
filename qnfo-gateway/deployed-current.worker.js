@@ -1,9 +1,7 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.6.1"; // Worker Contract v1: VERSION constant == /health version (line-1045 health handler)
-
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// qnfo-gateway.deployed.worker.js
+// worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
@@ -22,6 +20,8 @@ var __defProp22222222 = Object.defineProperty;
 var __name22222222 = /* @__PURE__ */ __name2222222((target, value) => __defProp22222222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222222 = Object.defineProperty;
 var __name222222222 = /* @__PURE__ */ __name22222222((target, value) => __defProp222222222(target, "name", { value, configurable: true }), "__name");
+var __defProp2222222222 = Object.defineProperty;
+var __name2222222222 = /* @__PURE__ */ __name222222222((target, value) => __defProp2222222222(target, "name", { value, configurable: true }), "__name");
 var COMMON_CSS = `:root{--paper:#faf7f2;--surface:#f2eee6;--ink:#1b1915;--muted:#8a8376;--border:#e2dcd0;--accent:#24315e;--accent-soft:#eceef6;--live:#2f6d4f;--blue:var(--accent);--blue-dark:#1a2547;--blue-light:#d8dcef;--blue-subtle:var(--accent-soft);--text:var(--ink);--text-muted:var(--muted);--bg:var(--paper);--radius:10px;--radius-lg:14px}
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box}
@@ -121,6 +121,7 @@ __name222222(stripFrontmatter, "stripFrontmatter");
 __name2222222(stripFrontmatter, "stripFrontmatter");
 __name22222222(stripFrontmatter, "stripFrontmatter");
 __name222222222(stripFrontmatter, "stripFrontmatter");
+__name2222222222(stripFrontmatter, "stripFrontmatter");
 function esc(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -135,6 +136,7 @@ __name222222(esc, "esc");
 __name2222222(esc, "esc");
 __name22222222(esc, "esc");
 __name222222222(esc, "esc");
+__name2222222222(esc, "esc");
 function escAttr(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -149,6 +151,7 @@ __name222222(escAttr, "escAttr");
 __name2222222(escAttr, "escAttr");
 __name22222222(escAttr, "escAttr");
 __name222222222(escAttr, "escAttr");
+__name2222222222(escAttr, "escAttr");
 function displayTitle(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -178,6 +181,7 @@ __name(displayTitle, "displayTitle");
 __name2(displayTitle, "displayTitle");
 __name22(displayTitle, "displayTitle");
 __name222(displayTitle, "displayTitle");
+__name2222(displayTitle, "displayTitle");
 function looksLikeTeX(x) {
   return /\\[a-zA-Z]+/.test(x) || /[\\^{}_]/.test(x);
 }
@@ -185,6 +189,7 @@ __name(looksLikeTeX, "looksLikeTeX");
 __name2(looksLikeTeX, "looksLikeTeX");
 __name22(looksLikeTeX, "looksLikeTeX");
 __name222(looksLikeTeX, "looksLikeTeX");
+__name2222(looksLikeTeX, "looksLikeTeX");
 function titleHTML(t) {
   if (!t) return "";
   var s = String(t).replace(/\*\*/g, "").replace(/\[\[|\]\]/g, "").replace(/~~/g, "").trim();
@@ -200,6 +205,7 @@ __name(titleHTML, "titleHTML");
 __name2(titleHTML, "titleHTML");
 __name22(titleHTML, "titleHTML");
 __name222(titleHTML, "titleHTML");
+__name2222(titleHTML, "titleHTML");
 function xmlEscape(t) {
   if (!t) return "";
   return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -214,6 +220,7 @@ __name222222(xmlEscape, "xmlEscape");
 __name2222222(xmlEscape, "xmlEscape");
 __name22222222(xmlEscape, "xmlEscape");
 __name222222222(xmlEscape, "xmlEscape");
+__name2222222222(xmlEscape, "xmlEscape");
 function detectCategory(title, abstract) {
   const t = ((title || "") + " " + (abstract || "")).toLowerCase();
   if (t.includes("error correction") || t.includes("stabilizer") || t.includes("fault-tolerant") || t.includes("qec") || t.includes("ldpc") || t.includes("surface code")) return "qec";
@@ -232,6 +239,7 @@ __name222222(detectCategory, "detectCategory");
 __name2222222(detectCategory, "detectCategory");
 __name22222222(detectCategory, "detectCategory");
 __name222222222(detectCategory, "detectCategory");
+__name2222222222(detectCategory, "detectCategory");
 var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number Theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
 function texSafe(s) {
   if (!s) return "";
@@ -252,6 +260,7 @@ __name(texSafe, "texSafe");
 __name2(texSafe, "texSafe");
 __name22(texSafe, "texSafe");
 __name222(texSafe, "texSafe");
+__name2222(texSafe, "texSafe");
 function cleanPunct(s) {
   return String(s || "").replace(/[ \t]+([,.!?;:])/g, "$1");
 }
@@ -259,6 +268,7 @@ __name(cleanPunct, "cleanPunct");
 __name2(cleanPunct, "cleanPunct");
 __name22(cleanPunct, "cleanPunct");
 __name222(cleanPunct, "cleanPunct");
+__name2222(cleanPunct, "cleanPunct");
 function _mdInline(t) {
   t = String(t || "");
   var _math = [];
@@ -270,6 +280,7 @@ function _mdInline(t) {
   __name2(saveMath, "saveMath");
   __name22(saveMath, "saveMath");
   __name222(saveMath, "saveMath");
+  __name2222(saveMath, "saveMath");
   t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) {
     return saveMath(c, true);
   });
@@ -300,6 +311,7 @@ __name(_mdInline, "_mdInline");
 __name2(_mdInline, "_mdInline");
 __name22(_mdInline, "_mdInline");
 __name222(_mdInline, "_mdInline");
+__name2222(_mdInline, "_mdInline");
 function fixMojibake(s) {
   if (!s) return "";
   const map = [
@@ -352,6 +364,7 @@ __name2222(fixMojibake, "fixMojibake");
 __name22222(fixMojibake, "fixMojibake");
 __name222222(fixMojibake, "fixMojibake");
 __name2222222(fixMojibake, "fixMojibake");
+__name22222222(fixMojibake, "fixMojibake");
 function renderMarkdown(md) {
   if (!md) return "";
   var m = String(md).replace(/\r\n?/g, "\n");
@@ -391,6 +404,7 @@ function renderMarkdown(md) {
   __name2(isTableSep, "isTableSep");
   __name22(isTableSep, "isTableSep");
   __name222(isTableSep, "isTableSep");
+  __name2222(isTableSep, "isTableSep");
   function emitBlockText(text) {
     var parts = text.split(/(\u0001B\d+\u0001)/g), h = "", cur = "", k;
     for (k = 0; k < parts.length; k++) {
@@ -410,6 +424,7 @@ function renderMarkdown(md) {
   __name2(emitBlockText, "emitBlockText");
   __name22(emitBlockText, "emitBlockText");
   __name222(emitBlockText, "emitBlockText");
+  __name2222(emitBlockText, "emitBlockText");
   function isListStart(s) {
     return /^[-*+]\s/.test(s) || /^\d+[.)]\s/.test(s);
   }
@@ -417,6 +432,7 @@ function renderMarkdown(md) {
   __name2(isListStart, "isListStart");
   __name22(isListStart, "isListStart");
   __name222(isListStart, "isListStart");
+  __name2222(isListStart, "isListStart");
   function isContinuation(s) {
     return /^[ \t]+\S/.test(s);
   }
@@ -424,6 +440,7 @@ function renderMarkdown(md) {
   __name2(isContinuation, "isContinuation");
   __name22(isContinuation, "isContinuation");
   __name222(isContinuation, "isContinuation");
+  __name2222(isContinuation, "isContinuation");
   L = m.split("\n");
   i = 0;
   while (i < L.length) {
@@ -589,6 +606,7 @@ __name(renderMarkdown, "renderMarkdown");
 __name2(renderMarkdown, "renderMarkdown");
 __name22(renderMarkdown, "renderMarkdown");
 __name222(renderMarkdown, "renderMarkdown");
+__name2222(renderMarkdown, "renderMarkdown");
 var LD_CSS = `
 .ld-top{display:flex;align-items:center;gap:1.2rem;max-width:920px;margin:0 auto;padding:1rem 1.6rem;border-bottom:1px solid var(--border)}
 .ld-brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:1.18rem;color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;gap:.5rem}
@@ -667,10 +685,13 @@ __name222222(renderHubHTML, "renderHubHTML");
 __name2222222(renderHubHTML, "renderHubHTML");
 __name22222222(renderHubHTML, "renderHubHTML");
 __name222222222(renderHubHTML, "renderHubHTML");
+__name2222222222(renderHubHTML, "renderHubHTML");
 function renderPaperRow(p) {
   const cat = detectCategory(p.title, p.abstract);
   const cl = CATEGORY_LABELS[cat] || "";
-  const ab = (p.abstract || "").slice(0, 280);
+  const _abRaw = (p.abstract || "").slice(0, 280);
+  let ab = _abRaw;
+  { const _dq = _abRaw.split("$").length - 1; if (_dq % 2 === 1) { const _lq = _abRaw.lastIndexOf("$"); if (_lq > 0) ab = _abRaw.slice(0, _lq) + "..."; } }
   return '<li class="paper-item"><a class="paper-title" href="/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><div class="paper-meta"><span>' + esc((p.created_at || "").slice(0, 10)) + "</span>" + (p.doi ? '<span>\xB7 DOI: <a href="https://doi.org/' + escAttr(p.doi) + '">' + esc(p.doi) + "</a></span>" : "") + (cl ? '<span class="paper-category">' + cl + "</span>" : "") + "</div>" + (ab ? '<div class="paper-abstract">' + esc(ab) + "</div>" : "") + "</li>";
 }
 __name(renderPaperRow, "renderPaperRow");
@@ -678,6 +699,7 @@ __name2(renderPaperRow, "renderPaperRow");
 __name22(renderPaperRow, "renderPaperRow");
 __name222(renderPaperRow, "renderPaperRow");
 __name2222(renderPaperRow, "renderPaperRow");
+__name22222(renderPaperRow, "renderPaperRow");
 function renderIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery) {
   const fb = ["all", "qec", "number-theory", "physics", "computer-science", "other"].map((cat) => {
     const label = cat === "all" ? "All" : CATEGORY_LABELS[cat] || cat;
@@ -701,6 +723,7 @@ __name222222(renderIndexHTML, "renderIndexHTML");
 __name2222222(renderIndexHTML, "renderIndexHTML");
 __name22222222(renderIndexHTML, "renderIndexHTML");
 __name222222222(renderIndexHTML, "renderIndexHTML");
+__name2222222222(renderIndexHTML, "renderIndexHTML");
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
@@ -739,6 +762,7 @@ __name2(buildPaperJsonLd, "buildPaperJsonLd");
 __name22(buildPaperJsonLd, "buildPaperJsonLd");
 __name222(buildPaperJsonLd, "buildPaperJsonLd");
 __name2222(buildPaperJsonLd, "buildPaperJsonLd");
+__name22222(buildPaperJsonLd, "buildPaperJsonLd");
 function citationAuthorsMeta(paper) {
   const rawAuth = paper.authors || "";
   let authors = [];
@@ -756,8 +780,10 @@ __name22(citationAuthorsMeta, "citationAuthorsMeta");
 __name222(citationAuthorsMeta, "citationAuthorsMeta");
 __name2222(citationAuthorsMeta, "citationAuthorsMeta");
 __name22222(citationAuthorsMeta, "citationAuthorsMeta");
+__name222222(citationAuthorsMeta, "citationAuthorsMeta");
 function renderPaperHTML(paper) {
-  const cleanMd = fixMojibake(stripFrontmatter(paper.body_md || ""));
+  const rawBody = paper.body_md || "";
+  const cleanMd = rawBody.length >= 5e3 ? fixMojibake(stripFrontmatter(rawBody)) : "";
   const md = cleanMd;
   const abstract = (paper.abstract || "").slice(0, 300);
   const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "Unknown";
@@ -773,6 +799,7 @@ __name222222(renderPaperHTML, "renderPaperHTML");
 __name2222222(renderPaperHTML, "renderPaperHTML");
 __name22222222(renderPaperHTML, "renderPaperHTML");
 __name222222222(renderPaperHTML, "renderPaperHTML");
+__name2222222222(renderPaperHTML, "renderPaperHTML");
 function json(data, status) {
   status = status || 200;
   return new Response(JSON.stringify(data, null, 2), {
@@ -790,6 +817,7 @@ __name222222(json, "json");
 __name2222222(json, "json");
 __name22222222(json, "json");
 __name222222222(json, "json");
+__name2222222222(json, "json");
 async function handlePapers(request, env) {
   try {
     const u = new URL(request.url);
@@ -837,6 +865,7 @@ __name222222(handlePapers, "handlePapers");
 __name2222222(handlePapers, "handlePapers");
 __name22222222(handlePapers, "handlePapers");
 __name222222222(handlePapers, "handlePapers");
+__name2222222222(handlePapers, "handlePapers");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
@@ -866,6 +895,7 @@ __name222222(handlePaperDetail, "handlePaperDetail");
 __name2222222(handlePaperDetail, "handlePaperDetail");
 __name22222222(handlePaperDetail, "handlePaperDetail");
 __name222222222(handlePaperDetail, "handlePaperDetail");
+__name2222222222(handlePaperDetail, "handlePaperDetail");
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
@@ -894,6 +924,7 @@ __name222222(handleHub, "handleHub");
 __name2222222(handleHub, "handleHub");
 __name22222222(handleHub, "handleHub");
 __name222222222(handleHub, "handleHub");
+__name2222222222(handleHub, "handleHub");
 async function handleAbout(env) {
   try {
     const [pc, nc, ec] = await Promise.all([
@@ -914,6 +945,7 @@ __name(handleAbout, "handleAbout");
 __name2(handleAbout, "handleAbout");
 __name22(handleAbout, "handleAbout");
 __name222(handleAbout, "handleAbout");
+__name2222(handleAbout, "handleAbout");
 function renderAboutHTML(stats) {
   const pageCSS = COMMON_CSS + `
 .about-page{max-width:760px;margin:0 auto;padding:1.4rem 1.6rem 0}
@@ -936,6 +968,7 @@ __name(renderAboutHTML, "renderAboutHTML");
 __name2(renderAboutHTML, "renderAboutHTML");
 __name22(renderAboutHTML, "renderAboutHTML");
 __name222(renderAboutHTML, "renderAboutHTML");
+__name2222(renderAboutHTML, "renderAboutHTML");
 async function handleSitemap(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
@@ -968,6 +1001,7 @@ __name222222(handleSitemap, "handleSitemap");
 __name2222222(handleSitemap, "handleSitemap");
 __name22222222(handleSitemap, "handleSitemap");
 __name222222222(handleSitemap, "handleSitemap");
+__name2222222222(handleSitemap, "handleSitemap");
 function handlePapersRobots() {
   return new Response(
     "User-agent: *\nAllow: /\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
@@ -984,6 +1018,7 @@ __name222222(handlePapersRobots, "handlePapersRobots");
 __name2222222(handlePapersRobots, "handlePapersRobots");
 __name22222222(handlePapersRobots, "handlePapersRobots");
 __name222222222(handlePapersRobots, "handlePapersRobots");
+__name2222222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
@@ -1008,6 +1043,7 @@ __name222222(handleLlmsTxt, "handleLlmsTxt");
 __name2222222(handleLlmsTxt, "handleLlmsTxt");
 __name22222222(handleLlmsTxt, "handleLlmsTxt");
 __name222222222(handleLlmsTxt, "handleLlmsTxt");
+__name2222222222(handleLlmsTxt, "handleLlmsTxt");
 async function handleRss(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 50").all();
@@ -1041,8 +1077,9 @@ __name222222(handleRss, "handleRss");
 __name2222222(handleRss, "handleRss");
 __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
+__name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.1" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.2-mathbalance" });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1054,6 +1091,7 @@ __name222222(health, "health");
 __name2222222(health, "health");
 __name22222222(health, "health");
 __name222222222(health, "health");
+__name2222222222(health, "health");
 async function handleLegal(path, env) {
   try {
     const body = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "QNFO Unified License Agreement v2.0\nFull text at https://legal.qnfo.org");
@@ -1078,6 +1116,7 @@ __name222222(handleLegal, "handleLegal");
 __name2222222(handleLegal, "handleLegal");
 __name22222222(handleLegal, "handleLegal");
 __name222222222(handleLegal, "handleLegal");
+__name2222222222(handleLegal, "handleLegal");
 async function handleAskAI(request, env) {
   if (!env.AI) return json({ error: "AI binding not configured" }, 503);
   const body = await request.json().catch(() => ({}));
@@ -1114,6 +1153,7 @@ __name222222(handleAskAI, "handleAskAI");
 __name2222222(handleAskAI, "handleAskAI");
 __name22222222(handleAskAI, "handleAskAI");
 __name222222222(handleAskAI, "handleAskAI");
+__name2222222222(handleAskAI, "handleAskAI");
 async function handleStats(env) {
   try {
     const [nc, ec, nl, et] = await Promise.all([
@@ -1142,6 +1182,7 @@ __name222222(handleStats, "handleStats");
 __name2222222(handleStats, "handleStats");
 __name22222222(handleStats, "handleStats");
 __name222222222(handleStats, "handleStats");
+__name2222222222(handleStats, "handleStats");
 function sjp(str) {
   if (!str) return {};
   try {
@@ -1160,6 +1201,7 @@ __name222222(sjp, "sjp");
 __name2222222(sjp, "sjp");
 __name22222222(sjp, "sjp");
 __name222222222(sjp, "sjp");
+__name2222222222(sjp, "sjp");
 async function handleNodesList(url, env) {
   const label = url.searchParams.get("label");
   const search = url.searchParams.get("search");
@@ -1193,6 +1235,7 @@ __name222222(handleNodesList, "handleNodesList");
 __name2222222(handleNodesList, "handleNodesList");
 __name22222222(handleNodesList, "handleNodesList");
 __name222222222(handleNodesList, "handleNodesList");
+__name2222222222(handleNodesList, "handleNodesList");
 async function handleNodeGet(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label,properties FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1217,6 +1260,7 @@ __name222222(handleNodeGet, "handleNodeGet");
 __name2222222(handleNodeGet, "handleNodeGet");
 __name22222222(handleNodeGet, "handleNodeGet");
 __name222222222(handleNodeGet, "handleNodeGet");
+__name2222222222(handleNodeGet, "handleNodeGet");
 async function handleNeighbors(id, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(id, id).first();
   if (!node) return json({ error: "Node not found: " + id }, 404);
@@ -1239,6 +1283,7 @@ __name222222(handleNeighbors, "handleNeighbors");
 __name2222222(handleNeighbors, "handleNeighbors");
 __name22222222(handleNeighbors, "handleNeighbors");
 __name222222222(handleNeighbors, "handleNeighbors");
+__name2222222222(handleNeighbors, "handleNeighbors");
 async function handleEdges(url, env) {
   const type = url.searchParams.get("type");
   const source = url.searchParams.get("source");
@@ -1277,6 +1322,7 @@ __name222222(handleEdges, "handleEdges");
 __name2222222(handleEdges, "handleEdges");
 __name22222222(handleEdges, "handleEdges");
 __name222222222(handleEdges, "handleEdges");
+__name2222222222(handleEdges, "handleEdges");
 async function handleImpact(name, env) {
   const node = await env.DB.prepare("SELECT id,name,label FROM nodes WHERE id = ? OR name = ?").bind(name, name).first();
   if (!node) return json({ error: "Node not found: " + name }, 404);
@@ -1313,6 +1359,7 @@ __name222222(handleImpact, "handleImpact");
 __name2222222(handleImpact, "handleImpact");
 __name22222222(handleImpact, "handleImpact");
 __name222222222(handleImpact, "handleImpact");
+__name2222222222(handleImpact, "handleImpact");
 async function handleQuery(request, env) {
   const body = await request.json().catch(() => ({}));
   const { query, params: qParams } = body;
@@ -1336,6 +1383,7 @@ __name222222(handleQuery, "handleQuery");
 __name2222222(handleQuery, "handleQuery");
 __name22222222(handleQuery, "handleQuery");
 __name222222222(handleQuery, "handleQuery");
+__name2222222222(handleQuery, "handleQuery");
 async function handleSync(request, env) {
   if (request.headers.get("X-Sync-Token") !== env.SYNC_TOKEN) {
     return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
@@ -1378,6 +1426,7 @@ __name222222(handleSync, "handleSync");
 __name2222222(handleSync, "handleSync");
 __name22222222(handleSync, "handleSync");
 __name222222222(handleSync, "handleSync");
+__name2222222222(handleSync, "handleSync");
 var SUBSCRIBERS_ENDPOINT = "https://qnfo-subscribers.q08.workers.dev";
 async function handleConfirmProxy(request, env) {
   const u = new URL(request.url);
@@ -1398,6 +1447,7 @@ async function handleConfirmProxy(request, env) {
   }
 }
 __name(handleConfirmProxy, "handleConfirmProxy");
+__name2(handleConfirmProxy, "handleConfirmProxy");
 async function handleSubscribeProxy(request, env) {
   let payload = {};
   try {
@@ -1436,6 +1486,7 @@ async function handleSubscribeProxy(request, env) {
   }
 }
 __name(handleSubscribeProxy, "handleSubscribeProxy");
+__name2(handleSubscribeProxy, "handleSubscribeProxy");
 async function handleUnsubscribeProxy(request, env) {
   const u = new URL(request.url);
   const token = u.searchParams.get("token") || "";
@@ -1455,6 +1506,7 @@ async function handleUnsubscribeProxy(request, env) {
   }
 }
 __name(handleUnsubscribeProxy, "handleUnsubscribeProxy");
+__name2(handleUnsubscribeProxy, "handleUnsubscribeProxy");
 var gateway_worker_default = {
   async fetch(request, env) {
     const u = new URL(request.url);
@@ -1554,4 +1606,4 @@ var gateway_worker_default = {
 export {
   gateway_worker_default as default
 };
-//# sourceMappingURL=qnfo-gateway.deployed.worker.js.map
+//# sourceMappingURL=worker.js.map

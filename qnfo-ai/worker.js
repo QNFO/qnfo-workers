@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.28.4-toolmode";
+var VERSION = "5.29.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -28,13 +28,13 @@ async function loadModelHealth(env) {
 __name(loadModelHealth, "loadModelHealth");
 __name2(loadModelHealth, "loadModelHealth");
 var MODELS = {
-  // Workers AI free — original three
-  // Workers AI free — directive substitutes (small coder/validator/reviewer class)
+  // Workers AI free â original three
+  // Workers AI free â directive substitutes (small coder/validator/reviewer class)
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
-  // capable models for lowest cost — paid OK if best value". All postpaid; $/M input noted.
-  // $0.06/M — cheap general default (131k ctx, reasoning)
+  // capable models for lowest cost â paid OK if best value". All postpaid; $/M input noted.
+  // $0.06/M â cheap general default (131k ctx, reasoning)
   // $0.10/M
   "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
@@ -48,22 +48,22 @@ var MODELS = {
   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
   "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.40/M 1M-ctx agentic coding
-  // v5.0.0: vision (image-to-text + OCR) — free tier-0. Routed automatically when any
+  // v5.0.0: vision (image-to-text + OCR) â free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
-  // this model behind a one-time Community License "agree" — ACCEPTED 2026-08-28 on the
+  // this model behind a one-time Community License "agree" â ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
   "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.4, topP: 0.9, tools: true, vision: false }
-  // v4.3.7: tier-3 AI Gateway models REMOVED — the compat endpoint returns 400
+  // v4.3.7: tier-3 AI Gateway models REMOVED â the compat endpoint returns 400
   // "Chat completion bad format" (2019) for every one of them, surfacing as router
   // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
   // is worse than not advertising them. Explicit requests for unknown models fall
   // back to deepseek-v4-flash (existing behavior).
 };
 var MAX_OUT = {
-  // Workers AI (tier-0) — output token caps, keyed by Workers AI model id.
+  // Workers AI (tier-0) â output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
   "@cf/moonshotai/kimi-k2.6": 32768,
@@ -78,7 +78,7 @@ var MAX_OUT = {
   "@cf/zai-org/glm-5.3": 32768
 };
 var DEFAULT_MAX_OUT = 32768;
-var DEFAULT_SYSTEM_PROMPT = "QUNIVERSE FLEET CONTEXT (for QNFO-internal questions)\nThis endpoint (qnfo-ai) is the research gateway on the Cloudflare Quniverse fleet (~54 workers). QNFO is not an acronym.\n- qnfo-ops (qnfo-ops.q08.workers.dev) \u2014 ops endpoint; fleet probes, D1/R2/KV/Vectorize, self-heal.\n- personal-api (personal-api.q08.workers.dev) \u2014 personal twin; NEVER cross-pollinate into research (PERSONAL-QNFO-SEPARATION-1).\n- ideas.qnfo.org \u2014 idea intake hub; /api/sessions, /rss.xml, /sitemap.xml all live.\n- qnfo.org \u2014 landing + email-capture; qnfo-subscribers double opt-in pipeline.\n- qnfo-signal-loop \u2014 signal-organism L8 re-entry; emits signals from living-paper open-question sections.\n- qnfo-paper-reviser \u2014 adversarial revision loop; all publications target >=2 Zenodo versions.\n- qnfo-outreach \u2014 autonomous outreach agent; ACTIVATION_AT 2026-09-15.\n- NO-JOURNALS-1: never suggest traditional journal submissions. Zenodo is the canonical venue.\n\nAnswer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN THE PROGRAM: when a question touches research, name the owning program/WBS thread (e.g. QNFO.SLB.001, QNFO.PBO, JPCUB, UMP) and the relation (primary home / adjacent / restatement) with a fit table.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: definition commitments with intended meaning, a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, give concrete predictions, each with its falsification condition, and label which predictions are independent tests vs consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on 'CONTINUE' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.";
+var DEFAULT_SYSTEM_PROMPT = "QUNIVERSE FLEET CONTEXT (for QNFO-internal questions)\nThis endpoint (qnfo-ai) is the research gateway on the Cloudflare Quniverse fleet (~54 workers). QNFO is not an acronym.\n- qnfo-ops (qnfo-ops.q08.workers.dev) \u2014 ops endpoint; fleet probes, D1/R2/KV/Vectorize, self-heal.\n- personal-api (personal-api.q08.workers.dev) \u2014 personal twin; NEVER cross-pollinate into research (PERSONAL-QNFO-SEPARATION-1).\n- ideas.qnfo.org \u2014 idea intake hub; /api/sessions, /rss.xml, /sitemap.xml all live.\n- qnfo.org \u2014 landing + email-capture; qnfo-subscribers double opt-in pipeline.\n- qnfo-signal-loop \u2014 signal-organism L8 re-entry; emits signals from living-paper open-question sections.\n- qnfo-paper-reviser \u2014 adversarial revision loop; all publications target >=2 Zenodo versions.\n- qnfo-outreach \u2014 autonomous outreach agent; ACTIVATION_AT 2026-09-15.\n- NO-JOURNALS-1: never suggest traditional journal submissions. Zenodo is the canonical venue.\n\nAnswer directly, substantively, and COMPLETELY. Match the depth and scope of the question: a technical or research question expects a technical, well-organized answer, not a generic summary. Structure your answer with Markdown when it improves clarity: use headings (## / ###) for sections, bullet or numbered lists for enumerations, and a table for comparisons, options, or parameter lists. Lead with the direct answer, then the reasoning and supporting detail. Cover: definition/mechanism, the key facts or quantities, caveats and limits of validity, and the bottom line. Prefer primary sources; cite by slug or DOI when known; never fabricate citations, DOIs, or references. Verify quantitative claims computationally where possible; flag uncertainty explicitly and state what is proven vs conjectured when that distinction matters. For code, write correct, runnable code with brief usage notes. Never return a placeholder, an empty refusal, or boilerplate when a real answer exists; never truncate a substantive answer mid-thought to be shorter - completeness beats brevity. Plain scholarly prose - no filler, no self-praise, no meta-commentary about your own process. Never adopt a persona or role-playing title (e.g. senior researcher); remain neutral, objective, and factual. When asked about QNFO-internal research terms - JPCUB (the in-house joules-per-compute benchmark at github.com/rwnq8/joules-per-compute-benchmark, measuring energy efficiency as joules per correct computation or solution, P0 protocol DOI 10.5281/zenodo.21637028), QWAV (quantum-computing research platform), PaQit (system-level energy metric), or the QNFO open-science research program - answer from that internal context using primary sources from the program (Zenodo DOIs); these are your own research, never unrecognized or lacking primary sources.\n\nRESPONSE DEPTH PROTOCOL (standing standard, distilled from the Dist-Phys exemplar):\n1. GROUND IN THE CORPUS FIRST: run an exact-phrase / retrieval check against QNFO notes, papers, and history before answering a claim- or research-type question; report explicitly what matched, what did not, and how the corpus check was done. Never imply a corpus result you did not verify.\n2. PLACE THE ANSWER IN CONTEXT: cite primary sources by slug or DOI; reference the QNFO program/WBS structure only when the question is explicitly about QNFO internals or a specific program, not when the question is general.\n3. BUILD FORMAL SCAFFOLDING WHERE THE TOPIC IS FORMAL: a formal model with real mathematics, and an explicit statement of what is proven vs conjectured vs open. Correct the premise if it is wrong (e.g. state precisely which quantity a bound applies to) instead of repeating it.\n4. MAKE IT FALSIFIABLE: when advancing or restating a thesis, state what evidence would count against the claim, and note which checks are independent tests rather than consistency checks.\n5. SHOW ALTERNATIVE FRAMINGS AND TENSIONS: name the neighboring positions, the main formal tension of the proposal, and what would have to change to resolve it. Do not hide the weak point.\n6. BE COMPLETE AND STRUCTURED: tables/lists for enumerations and comparisons; full numbers and quantities; markdown headings; math in $$...$$ or $...$ delimiters that the renderer typesets. Completeness beats brevity; never truncate a substantive answer mid-thought.\n7. HONEST UNCERTAINTY: if a fact is missing, say exactly what is missing and how to obtain it; never fabricate citations, DOIs, URLs, numbers, or research results.\n8. CONTINUATION BEHAVIOR: on 'CONTINUE' with context, state where the work stands and take the next concrete step. With no context, report the real QNFO state and concrete next actions, using tools to pull actual current/corpus data. Never emit menus, canned pleasantries, or generic filler.\n9. SELF-CORRECT EXPLICITLY: when an earlier statement in the thread is corrected, name the correction and its reason.\n10. STATE ASSUMPTIONS: if under-specified, state the assumption explicitly and answer under it; ask only when the answer would materially change the result.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; actively seek disconfirming evidence and state the strongest argument against your own answer; expose at least one concrete failure mode (limitation, missing evidence, edge case, or falsifying observation) in every substantive response; label uncertainty, never inflate confidence.";
 var _calCtxCache = { at: 0, text: null };
 async function getCalendarContext(env) {
   if (_calCtxCache.at && Date.now() - _calCtxCache.at < 9e5) return _calCtxCache.text;
@@ -471,7 +471,7 @@ var ENSEMBLE = {
   validator: { wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", ctx: 65536 },
   // fast flash judgment (~0.3s small-prompt; proven fallback model)
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
-  // 1M-ctx reasoning refinement ($1.32/M) — LAZY: runs only on validator FAIL
+  // 1M-ctx reasoning refinement ($1.32/M) â LAZY: runs only on validator FAIL
 };
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
@@ -1047,9 +1047,18 @@ function extractWAContent(result, depth = 0) {
 __name(extractWAContent, "extractWAContent");
 __name2(extractWAContent, "extractWAContent");
 __name22(extractWAContent, "extractWAContent");
+function isOAIUpstream(m) {
+  // OAI-MAXTOKENS-1 (2026-09-24): OpenAI-family upstreams reject `max_tokens` ("Use
+  // max_completion_tokens instead"). Detect the whole family -- a plain indexOf("gpt-5")
+  // check misses o4-mini and gpt-4*. Root cause of gateway 400s for gpt-5-mini routed here.
+  const t = String(m || "");
+  return /^openai\//i.test(t) || /^dynamic\//i.test(t) || /gpt[-_.]/i.test(t) || /^o[1-9](?:[-\/]|$)/i.test(t) || /-codex/i.test(t);
+}
+__name(isOAIUpstream, "isOAIUpstream");
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
   const { temperature, top_p, tool_choice } = opts;
-  const body = { model: apiModel, messages, max_tokens: clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT), stream: stream || false };
+  const _mt2 = clampTokens(maxTokens, MAX_OUT[apiModel] || DEFAULT_MAX_OUT);
+  const body = isOAIUpstream(apiModel) ? { model: apiModel, messages, max_completion_tokens: _mt2, stream: stream || false } : { model: apiModel, messages, max_tokens: _mt2, stream: stream || false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = tool_choice || "auto";
@@ -1068,11 +1077,24 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, o
 __name(callDeepSeek, "callDeepSeek");
 __name2(callDeepSeek, "callDeepSeek");
 __name22(callDeepSeek, "callDeepSeek");
+async function qnfoAiFreeFallback(env, messages, maxTokens) {
+  const _cands = ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.7-code", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/deepseek-ai/deepseek-v4-flash-0731"];
+  for (let _i = 0; _i < _cands.length; _i++) {
+    try {
+      if (!env.AI) return null;
+      const _r = await env.AI.run(_cands[_i], { messages: messages, max_tokens: Math.min(Math.max(maxTokens || 2048, 512), 8192) });
+      const _t = _r && (_r.response != null ? _r.response : (_r.choices && _r.choices[0] && _r.choices[0].message && _r.choices[0].message.content)) || "";
+      if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); return String(_t); }
+    } catch (e) { }
+  }
+  return null;
+}
+__name(qnfoAiFreeFallback, "qnfoAiFreeFallback");
 async function callGateway(env, model, messages, maxTokens, stream) {
   const resp = await fetch(GW_COMPAT, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.CF_API_TOKEN}` },
-    body: JSON.stringify({ model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
+    body: JSON.stringify(isOAIUpstream(model) ? { model, messages, max_completion_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false } : { model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
   });
   if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   if (stream) return resp;
@@ -1105,6 +1127,14 @@ __name(stripToolMarkup, "stripToolMarkup");
 __name2(stripToolMarkup, "stripToolMarkup");
 async function runEnsemble(env, messages, maxTokens, domain) {
   const t0 = Date.now();
+  // ENSEMBLE-BUDGET-1 (2026-09-26): bound the whole ensemble. Previously the worst case was
+  // primary(40s)+fallback(40s)+retry(25s)+validator(15s)+reviewer(35s) = ~155s, which read as
+  // "unresponsive" on model=auto for science/high-complexity queries. Each stage now takes at
+  // most min(stageCap, remaining); stages are skipped once the budget is spent, falling back to
+  // whatever text we already have.
+  const ENSEMBLE_BUDGET_MS = 45e3;
+  const _deadline = t0 + ENSEMBLE_BUDGET_MS;
+  const _remaining = () => Math.max(0, _deadline - Date.now());
   let primaryText = "";
   const useCoderPrimary = domain === "code";
   const _key = (function() {
@@ -1120,14 +1150,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
-    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), 4e4, "ensemble-primary");
+    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-primary");
     primaryText = extractWAContent(primary);
   } catch (e) {
     primaryText = "";
   }
   if (!primaryText) {
     try {
-      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), 4e4, "ensemble-fallback");
+      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
     } catch (e2) {
@@ -1138,7 +1168,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (!primaryText) {
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), 25e3, "ensemble-primary-retry");
+      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), Math.min(25e3, _remaining()), "ensemble-primary-retry");
       const rt = extractWAContent(retry);
       if (rt && String(rt).trim()) {
         primaryText = rt;
@@ -1168,14 +1198,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), 15e3, "ensemble-validator");
+      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), Math.min(15e3, _remaining()), "ensemble-validator");
       const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
       if (pass) {
         agreementRate = 1;
       } else {
         try {
-          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), 35e3, "ensemble-reviewer");
+          const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), Math.min(35e3, _remaining()), "ensemble-reviewer");
           const rText = rOut ? extractWAContent(rOut) : "";
           if (rText.trim()) {
             finalText = rText;
@@ -1481,7 +1511,12 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   let ragSources = null;
   const ragForce = body.rag === true || body.rag === "true";
   const ragOff = body.rag === false || body.rag === "false";
-  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && (ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(lastUserText(messages).slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(lastUserText(messages).slice(0, 300)))) {
+  const _ragLastQ = lastUserText(messages).trim();
+  const _ragIsQuestion = /[?]$/.test(_ragLastQ) || /^(what|when|where|who|whom|whose|why|how|which|tell me|explain|describe|summarize|list|compare|contrast|analyze|evaluate|does|do|is|are|can|could|would|should|was|were|has|have|did|define|derive|show)\b/i.test(_ragLastQ);
+  const _ragIsGreeting = /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|bye|good morning|good afternoon|good evening)\b/i.test(_ragLastQ);
+  const _ragIsCode = cls.domain === "code";
+  const _shouldRag = ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(_ragLastQ.slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(_ragLastQ.slice(0, 300)) || (_ragIsQuestion && !_ragIsGreeting && !_ragIsCode);
+  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && _shouldRag) {
     const rq = lastUserText(messages).slice(0, 300);
     if (rq) {
       try {
@@ -1538,8 +1573,22 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     ...extra
   }), "mkRouter");
   const reqModel = body.model;
-  const isAuto = reqModel === "auto";
+  const isAuto = reqModel === "auto" || reqModel === "qnfo";
   const isEnsemble = reqModel === "ensemble";
+  // COST-ROUTING-STACK-1 L1 SEMANTIC CACHE: serve above-threshold past answers for the single-model
+  // path (no tools, no images, fresh single turn, same routed model, cosine >= 0.95, 30d freshness).
+  if (!isAuto && !isEnsemble && !(tools && tools.length) && !wantsCode && !hasImage && !isStream && messages.length <= 2) {
+    try {
+      const _sc = await semanticCacheLookup(env, lastUserText(messages), reqModel);
+      if (_sc && _sc.text) {
+        const _screc = { ...mkLogRec(), model: reqModel, streamed: 0, response: String(_sc.text).slice(0, 2e5), prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), cost_usd: 0, latency_ms: Date.now() - t0, _cache_hit: 1 };
+        if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, _screc));
+        return json({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: reqModel, choices: [{ index: 0, message: { role: "assistant", content: _sc.text }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: estimateOutputTokens(_sc.text), total_tokens: estimateOutputTokens(_sc.text) }, _router: { cache: "semantic", score: _sc.score, source_model: _sc.model, tier: 0, cost_usd: 0 } });
+      }
+    } catch (e) {
+      console.log("semantic cache serve failed:", e && e.message || e);
+    }
+  }
   let estInputTokens = estimateInputTokens(messages);
   const autoHealth = isAuto ? await loadModelHealth(env) : null;
   let target = isAuto ? contextAwareTarget(cls, autoRoute(cls, lastUserText(messages), autoHealth), estInputTokens, max_tokens) : reqModel;
@@ -1731,6 +1780,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       }
       return json({ error: "no stream path for model" }, 400);
     } catch (e) {
+      try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) {}
+      try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) { const _enc = new TextEncoder(); const _nl3 = String.fromCharCode(10, 10); const _st = new ReadableStream({ start: function(ctrl) { ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: _ft }, finish_reason: null }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: [DONE]" + _nl3)); ctrl.close(); } }); return streamWithLog(new Response(_st, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec()); } } catch (_fbErr) {}
       return json({ error: "stream failed: " + e.message }, 502);
     }
   }
@@ -1812,6 +1863,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
+    try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) return json({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, message: { role: "assistant", content: _ft }, finish_reason: "stop" }], usage: {}, _router: mkRouter(routedModel, "free-fallback") }); } catch (_fbErr) {}
+    try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) {}
     return json({ error: e.message }, 502);
   }
 }
@@ -1833,6 +1886,37 @@ function lastUserText(messages) {
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");
 __name22(lastUserText, "lastUserText");
+// COST-ROUTING-STACK-1 L1 SEMANTIC CACHE: LOG_VZ stores every response vector (kind:"response",
+// metadata.text=response[:800], metadata.model). A query within cosine 0.95 of a past query whose
+// response came from the SAME routed model is served from cache (full answer joined from ai_queries).
+async function semanticCacheLookup(env, q, model) {
+  try {
+    if (!env.LOG_VZ || !env.AI) return null;
+    const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
+    const vec = embed && embed.data && embed.data[0] || (Array.isArray(embed) ? embed[0] : null);
+    if (!vec) return null;
+    const hits = await env.LOG_VZ.query(vec, { topK: 3, returnMetadata: "all" });
+    for (const m of hits.matches || []) {
+      if (m.score < 0.95) break;
+      const md = m.metadata || {};
+      if (md.kind === "response" && md.text && md.text.length >= 40 && (!model || md.model === model)) {
+        let text = md.text;
+        if (env.QNFO_AUDIT && m.id && m.id.indexOf("r:") === 0) {
+          try {
+            const row = await env.QNFO_AUDIT.prepare("SELECT response FROM ai_queries WHERE id = ?1 AND ts >= ?2").bind(m.id.slice(2), new Date(Date.now() - 30 * 864e5).toISOString()).first();
+            if (row && row.response && String(row.response).length >= 40) text = row.response;
+          } catch (e) { }
+        }
+        return { text: String(text).slice(0, 8000), score: m.score, model: md.model || null };
+      }
+    }
+  } catch (e) {
+    console.log("semantic cache lookup failed:", e && e.message || e);
+  }
+  return null;
+}
+__name(semanticCacheLookup, "semanticCacheLookup");
+__name2(semanticCacheLookup, "semanticCacheLookup");
 async function logQuery(env, record) {
   const _probePrompt = /^(CANARY PROBE|auto-express pipeline verification probe)/i.test(String(record.prompt || ""));
   const _probeThread = /^(canary-|probe-|verification-)/i.test(String(record.thread_id || ""));
@@ -1846,6 +1930,15 @@ async function logQuery(env, record) {
     }
   } catch (e) {
     console.log("ai_queries insert failed:", e && e.message || e);
+  }
+  // COST-ROUTING-STACK-1 MEA: one row per completed research task (cost-per-task-class, cache hit rate).
+  try {
+    if (env.QNFO_AUDIT && !_internalProbe) {
+      await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS cost_router_metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), worker TEXT, task_class TEXT, tier INTEGER, model TEXT, in_tokens INTEGER DEFAULT 0, out_tokens INTEGER DEFAULT 0, cost_usd REAL DEFAULT 0, latency_ms INTEGER DEFAULT 0, cache_hit INTEGER DEFAULT 0, escalations INTEGER DEFAULT 0, tool_calls INTEGER DEFAULT 0, tool_calls_ok INTEGER DEFAULT 0, success INTEGER DEFAULT 1)").run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO cost_router_metrics (ts, worker, task_class, tier, model, in_tokens, out_tokens, cost_usd, latency_ms, cache_hit, escalations, tool_calls, tool_calls_ok, success) VALUES (?1,'qnfo-ai',?2,0,?3,?4,?5,?6,?7,?8,0,0,0,1)").bind(record.ts, String(record.domain || record.complexity || "chat"), String(record.model || "").slice(0, 80), record.prompt_tokens || 0, record.completion_tokens || 0, record.cost_usd || 0, record.latency_ms || 0, record._cache_hit ? 1 : 0).run();
+    }
+  } catch (e) {
+    console.log("cost_router_metrics (qnfo-ai) insert failed:", e && e.message || e);
   }
   try {
     if (env.QNFO_AUDIT && record.thread_id && !_internalProbe) {
@@ -2298,6 +2391,14 @@ var worker_default = {
           // + OpenAI-standard tool/limit facts. Read by DeepChat's model-catalog parser and re-synced
           // into every client's provider_models on the next model refresh.
           limit: { context: ctx2 ?? null, output: m.maxOut ?? null },
+          contextWindow: ctx2 ?? null,
+          context_length: ctx2 ?? null,
+          context_window: ctx2 ?? null,
+          maxOutput: m.maxOut ?? null,
+          max_output_tokens: m.maxOut ?? null,
+          max_output: m.maxOut ?? null,
+          max_tokens: m.maxOut ?? null,
+          max_input_tokens: ctx2 ?? null,
           temperature: true,
           tool_call: !!m.tools,
           default_tool_mode: /code/i.test(id) ? "code" : /flash/i.test(id) ? "minimal" : "agent",
@@ -2318,15 +2419,12 @@ var worker_default = {
           }
         };
       });
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      return json({ object: "list", data });
+      // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
+      return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {
-      const id = path.split("/").pop();
-      const m = MODELS[id];
-      if (!m) return json({ error: "model not found" }, 404);
-      return json({ id, object: "model", created: 171e7, owned_by: m.tier === 0 ? "workers-ai" : m.family });
+      // QNFO-SINGLE-MODEL-1: any id resolves to the single public model (never 404 on model).
+      return json({ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, limit: { context: 1310720, output: 32768 }, capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], tool_call: true, temperature: true, default_tool_mode: "agent" });
     }
     if ((path === "/v1/chat/completions" || path === "/chat/completions") && method === "POST") {
       let body;
@@ -2500,7 +2598,7 @@ var worker_default = {
       }
     }
     if (path === "/" && method === "GET") {
-      return new Response(PLAYGROUND_HTML.replace("__TITLE__", "QNFO Notes - research chat (qnfo-ai router)").replace("__KEY_HINT__", "tokens/qnfo-ai").replace("__DEFAULT_MODEL__", "auto").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+      return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "QNFO Notes - research chat (qnfo-ai router)").replace("__KEY_HINT__", "your router key (Bearer)").replace("__DEFAULT_MODEL__", "auto").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
     }
     if (path === "/v1/web/search" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
