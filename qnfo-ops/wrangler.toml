@@ -192,6 +192,16 @@ bucket_name = "qnfo-skills"
 binding = "EQCACHE_KV"
 id = "2fbbb9fa2d774a6e80d3a3d2547f8b5f"
 
+# COST-ROUTING-STACK-1 L1: exact-match chat cache (1h TTL)
+[[kv_namespaces]]
+binding = "OPS_CACHE_KV"
+id = "a277c879f01a48198304ab8f24a212d2"
+
+# COST-ROUTING-STACK-1 L1: semantic chat cache (bge-base-en-v1.5 768-dim cosine)
+[[vectorize]]
+binding = "SEMCACHE_VZ"
+index_name = "qnfo-ops-semcache"
+
 # Service binding: intent orchestrator (research_feed expresses RESEARCH ideas only)
 [[services]]
 binding = "QNFO_INTENT"
