@@ -1,4 +1,4 @@
-var VERSION="3.7.11-blank-paper-gate";
+var VERSION="3.7.12-blank-gate-allhosts";
 var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1697,6 +1697,7 @@ var gateway_worker_default = {
     if (p === "/health") return health();
     if (p === "/legal" || p === "/license") return handleLegal(p, env);
     if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+    if (p === "/_audit/blank-papers") return handleBlankPapers(env);
     if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
     if (p === "/sitemap.xml") return handleSitemap(env, host);
