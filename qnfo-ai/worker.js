@@ -2307,6 +2307,14 @@ var worker_default = {
           // + OpenAI-standard tool/limit facts. Read by DeepChat's model-catalog parser and re-synced
           // into every client's provider_models on the next model refresh.
           limit: { context: ctx2 ?? null, output: m.maxOut ?? null },
+          contextWindow: ctx2 ?? null,
+          context_length: ctx2 ?? null,
+          context_window: ctx2 ?? null,
+          maxOutput: m.maxOut ?? null,
+          max_output_tokens: m.maxOut ?? null,
+          max_output: m.maxOut ?? null,
+          max_tokens: m.maxOut ?? null,
+          max_input_tokens: ctx2 ?? null,
           temperature: true,
           tool_call: !!m.tools,
           default_tool_mode: /code/i.test(id) ? "code" : /flash/i.test(id) ? "minimal" : "agent",
@@ -2327,8 +2335,8 @@ var worker_default = {
           }
         };
       });
-      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
-      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "auto", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
+      data.push({ id: "ensemble", object: "model", created: 171e7, owned_by: "qnfo", limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, capabilities: ["chat", "agent", "code", "reasoning", "streaming"], tool_call: true, temperature: true, default_tool_mode: "agent", _router: { tier: 0, family: "?", reasoning: false, costPer1MInput: 0, costPer1MOutput: 0, availability: "always" } });
       return json({ object: "list", data });
     }
     if (path.startsWith("/v1/models/") && method === "GET") {

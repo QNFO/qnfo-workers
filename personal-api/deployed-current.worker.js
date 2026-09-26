@@ -579,7 +579,7 @@ __name22(calHeaders, "calHeaders");
 async function calList(env, from, to, limit) {
   if (!env.CAL_API) return { ok: false, error: "calendar service unavailable" };
   const toBound = String(to || "").length === 10 ? to + "T23:59:59" : to;
-  const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(toBound), { headers: calHeaders(env) });
+  const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(toBound), { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
   if (!r.ok) return { ok: false, error: "calendar service HTTP " + r.status };
   const j = await r.json();
   const evs = (j.events || []).filter((x) => x.status !== "cancelled");
@@ -595,7 +595,7 @@ async function calAdd(env, args) {
   if (!title || !dtstart) return { ok: false, error: "title and dtstart are required (dtstart = ISO date YYYY-MM-DD or datetime)" };
   const day = String(dtstart).slice(0, 10);
   try {
-    const ex = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + day + "&to=" + day + "T23:59:59", { headers: calHeaders(env) });
+    const ex = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + day + "&to=" + day + "T23:59:59", { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
     if (ex.ok) {
       const ej = await ex.json();
       if ((ej.events || []).some((e) => (e.title || "") === title && String(e.dtstart || "").slice(0, 10) === day))
@@ -609,7 +609,7 @@ async function calAdd(env, args) {
   if (args && args.description) body.description = String(args.description).slice(0, 1e3);
   if (args && args.all_day) body.all_day = true;
   try {
-    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal", { method: "POST", headers: calHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify(body) });
+    const r = await env.CAL_API.fetch("https://calendar-api/events?plane=personal", { method: "POST", headers: calHeaders(env, { "Content-Type": "application/json" }), body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { ok: false, error: "calendar create failed HTTP " + r.status };
     const j = await r.json();
     return { ok: true, created: true, id: j.id, uid: j.uid, title, dtstart };
@@ -626,7 +626,7 @@ async function calDelete(env, args) {
   if (!Number.isFinite(id) || id <= 0) return { ok: false, error: "a valid numeric event id is required (from calendar_today/calendar_list)" };
   if (String(args && args.confirm || "") !== "yes") return { ok: false, error: "deleting needs explicit confirmation: pass confirm:'yes'" };
   try {
-    const r = await env.CAL_API.fetch("https://calendar-api/events/" + id, { method: "DELETE", headers: calHeaders(env) });
+    const r = await env.CAL_API.fetch("https://calendar-api/events/" + id, { method: "DELETE", headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { ok: false, error: "calendar delete failed HTTP " + r.status };
     const j = await r.json();
     return { ok: true, deleted: j.deleted || id };
@@ -1477,7 +1477,7 @@ __name2(parseDdg, "parseDdg");
 __name22(parseDdg, "parseDdg");
 function isCurrentEvents(q) {
   const t = " " + String(q || "").toLowerCase() + " ";
-  const words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "schedule", "hours", "open now", "happening", "happened", "going on", "whats on", "what's on", "events", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
+  const words = ["today", "tonight", "now", "latest", "recent", "news", "breaking", "current", "live", "right now", "this week", "this month", "this year", "upcoming", "forecast", "weather", "stock", "price", "score", "rate", "hours", "open now", "happening", "happened", "going on", "whats on", "what's on", "election", "announced", "announcement", "release", "update", "since", "when did", "how much is", "cost of", "next week", "next month"];
   for (const w of words) {
     if (t.indexOf(" " + w + " ") !== -1) return true;
   }
@@ -1975,7 +1975,7 @@ var api_default = {
         if (env.CAL_API) {
           const tFrom = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
           const tTo = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
-          const r2 = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + tFrom + "&to=" + tTo + "T23:59:59", { headers: calHeaders(env) });
+          const r2 = await env.CAL_API.fetch("https://calendar-api/events?plane=personal&from=" + tFrom + "&to=" + tTo + "T23:59:59", { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
           if (r2.ok) {
             const j2 = await r2.json();
             const evs2 = (j2.events || []).filter((x) => x.status !== "cancelled").slice(0, 12);
