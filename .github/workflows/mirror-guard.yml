@@ -1,0 +1,30 @@
+name: mirror-guard
+
+# MIRROR-GUARD-AT-COMMIT-1 / MIRROR-STALENESS-DEPLOY-FAIL-1
+#
+# Canonical deploy artifacts and source VERSION constants must not diverge silently.
+# This workflow evaluates the final pushed tree, which catches rebase-created mirror lag
+# that a pre-push/pre-deploy check can miss.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  mirror-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: VERSION-pair mirror guard
+        run: |
+          if [ -f scripts/mirror-guard.py ]; then
+            python scripts/mirror-guard.py
+          else
+            echo "scripts/mirror-guard.py missing; workflow restored but script still absent"
+            exit 1
+          fi
