@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.36.61";
+var VERSION = "2.36.62";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -4642,6 +4642,29 @@ async function opsDeploy(env, args) {
       } catch (e) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
       }
+      try {
+        var wtPath = (file.slice(-11) === "/worker.js") ? file.slice(0, -11) + "/wrangler.toml" : file;
+        if (wtPath !== file) {
+          var wr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + wtPath + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
+          if (wr.ok) {
+            var wj = await wr.json();
+            var wt = atob(String(wj.content || "").replace(/[^A-Za-z0-9+/=]/g, ""));
+            var ci = wt.indexOf("crons");
+            var arrStart = ci >= 0 ? wt.indexOf("[", ci) : -1;
+            var arrEnd = arrStart >= 0 ? wt.indexOf("]", arrStart) : -1;
+            var crons = [];
+            if (arrStart >= 0 && arrEnd > arrStart) {
+              var seg = wt.slice(arrStart + 1, arrEnd);
+              var qparts = seg.split(String.fromCharCode(34));
+              for (var qi = 1; qi < qparts.length; qi += 2) { if (qparts[qi]) crons.push(qparts[qi]); }
+            }
+            if (crons.length) {
+              var sr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/schedules", { method: "PUT", headers: { "Authorization": "Bearer " + (env.CF_API_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(crons.map(function(c3) { return { cron: c3 }; })) });
+              log.push({ step: "crons", http: sr.status, count: crons.length, crons });
+            } else { log.push({ step: "crons", note: "wrangler.toml declares no crons" }); }
+          } else { log.push({ step: "crons", note: "no wrangler.toml (" + wr.status + ")" }); }
+        }
+      } catch (eCrons) { log.push({ step: "crons", error: String(eCrons && eCrons.message || eCrons).slice(0, 140) }); }
       ok = !toVer || live === toVer;
       result = { ok, worker, from: fromVer, to: toVer, live, version_id: dep.result && dep.result.id || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0 };
       return Object.assign({ log }, result);
