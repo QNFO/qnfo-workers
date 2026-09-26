@@ -339,7 +339,7 @@ async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
     title,
     upload_type: "publication",
     publication_type: "preprint",
-    description: (abstract || title).slice(0, 3e3),
+    description: (abstract || title).slice(0, 3e3) + (slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + slug + '/">papers.qnfo.org/papers/' + slug + '/</a></p>' : ''),
     creators: [{ name: AUTHOR, orcid: ORCID }],
     access_right: "open",
     license: "cc-by",
@@ -1105,7 +1105,7 @@ async function publishV2(env, row) {
   delete metaClean.related_identifiers;
   if (row.related_repo) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Source: " + row.related_repo;
   var ab = String(row.corrected_md || "").match(/##\s*Abstract\s*\r?\n([\s\S]*?)(?=\r?\n##\s|\r?\n#\s|$)/i);
-  if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim();
+  if (ab && ab[1]) metaClean.description = ab[1].replace(/\s+/g, " ").trim() + (row.slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + row.slug + '/">papers.qnfo.org/papers/' + row.slug + '/</a></p>' : '');
   var mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
   if (mput && mput._status && mput._status >= 400) {
     await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
