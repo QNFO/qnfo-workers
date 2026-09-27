@@ -88,5 +88,3 @@ bucket_name = "qnfo-media"
 [[worker_loaders]]
 binding = "LOADER"
 
-[triggers]
-crons = ["23 3 * * *"]
