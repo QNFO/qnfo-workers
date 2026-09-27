@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.30-canonical-origin"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.31-urlsafe"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -893,7 +893,12 @@ async function pingIndexNow(env, url) {
 async function queueForDistribution(env, title, slug) {
   if (!env.AUDIT) return { ok: false, skip: "no audit binding" };
   try {
-    var text = (title + " \u2014 https://q08.org/p/" + slug).slice(0, 280);
+    // NO-TRUNCATED-LINK-1 (2026-09-27): never slice the URL. A long title used to
+    // truncate the permalink (e.g. ".../p/2026-09-18-...-the-lar") -> 404 -> link-dead.
+    var _u = "https://q08.org/p/" + slug;
+    var _s = " — ";
+    var _t = String(title || "");
+    var text = (_t.length + _s.length + _u.length <= 280) ? (_t + _s + _u) : (_t.slice(0, Math.max(0, 280 - _u.length - _s.length)) + _s + _u);
     var id = "q08-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     await env.AUDIT.prepare("INSERT OR IGNORE INTO social_threads (slug, title, posts, status) VALUES (?,?,?, 'queued')").bind(id, String(title || "").slice(0, 300), JSON.stringify([text])).run();
     return { ok: true, queued: id };
