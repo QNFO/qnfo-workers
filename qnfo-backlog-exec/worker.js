@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.6.4-run-gate";
+var VERSION = "1.7.0-run-gate-internal";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -429,8 +429,21 @@ var worker_default = {
     if (url.pathname === "/run" && request.method === "POST") {
       const runTok = env.RUN_TOKEN;
       const authH = request.headers.get("Authorization") || "";
-      if (!runTok) return json({ error: "run endpoint disabled: RUN_TOKEN unset" }, 503);
-      if (authH !== "Bearer " + runTok) return json({ error: "unauthorized" }, 401);
+      // INTERNAL-SERVICE-BINDING-AUTH-1 (2026-09-27): qnfo-ops calls this endpoint over the
+      // BACKLOG service binding as https://backlog.internal/run and holds no RUN_TOKEN
+      // binding, so the Bearer-only gate returned 401 on every drain attempt. Internal
+      // service-binding calls never leave Cloudflare and never carry CF-Connecting-IP;
+      // client-originated calls always do. Bearer remains supported and preferred.
+      const internalCall = url.hostname === "backlog.internal" && !request.headers.get("CF-Connecting-IP");
+      if (runTok && authH === "Bearer " + runTok) {
+        // authorized: shared run token
+      } else if (internalCall) {
+        // authorized: internal service-binding caller
+      } else if (!runTok) {
+        return json({ error: "run endpoint disabled: RUN_TOKEN unset" }, 503);
+      } else {
+        return json({ error: "unauthorized" }, 401);
+      }
       const out = await run(env);
       return json({ ok: true, worker: WORKER, version: VERSION, out });
     }
