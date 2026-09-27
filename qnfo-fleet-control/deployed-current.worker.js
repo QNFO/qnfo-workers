@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.34-landfix4";
+var VERSION = "0.4.32-landfix2";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1049,15 +1049,6 @@ function versionOf(code) {
   var cands = [];
   var i = code.indexOf("VERSION");
   while (i >= 0 && i < code.length && cands.length < 24) {
-    // VERSION-WORD-BOUNDARY-1 (2026-09-27): a "VERSION" that is a prefix of a longer
-    // identifier (VERSION2, VERSION_INFO, ...) is NOT the version constant. Without this,
-    // a merged worker (advisor VERSION2="0.3.3" before the real VERSION) parsed to 0.3.3 and
-    // became DRIFT-BLIND to its own deploy version -- the root cause of "no job lands fixes".
-    var nx = code.charAt(i + 7);
-    if (nx && /[A-Za-z0-9_]/.test(nx)) {
-      i = code.indexOf("VERSION", i + 1);
-      continue;
-    }
     var j = code.indexOf("=", i);
     if (j < 0 || j - i > 15) {
       i = code.indexOf("VERSION", i + 1);
@@ -1646,11 +1637,6 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
   if (!depV) return { ok: false, status: 422, note: "deployed code has no VERSION marker - refused" };
   var raw = extractModuleCode(depCode);
   if (!raw || raw.length < 40) return { ok: false, status: 422, note: "deployed code unreadable after multipart extract" };
-  // SOURCE-ONLY guard (2026-09-27, replaces scan's over-broad !usedHealth gate): land only
-  // real JS source carrying a VERSION marker. A bundled/minified artifact (no marker) is
-  // refused rather than committed, so a health-sourced deployed version can still be landed
-  // safely -- the guard that previously blocked the fleet's only real case (idea-hub).
-  if (versionOf(raw) === null) return { ok: false, status: 422, note: "extracted source has no VERSION marker - refused (bundled/minified?)" };
   // Derive repo + dir from the canonical source path (e.g. "qnfo-workers/main/<name>/worker.js").
   var repo = "qnfo-workers";
   var dir = worker;
@@ -1664,7 +1650,7 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
   var paths = [dir + "/worker.js", dir + "/deployed-current.worker.js"];
   if (srcPath && srcPath.indexOf("/deployed-current.worker.js") >= 0) paths = [dir + "/deployed-current.worker.js", dir + "/worker.js"];
   var ghHeaders = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/landFix", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
-  var commitMsg = "chore(" + worker + "): land deployed " + depV + " to main (LAND-CODE-FIX-1: repo was " + canV + ")";
+  var commitMsg = "chore(" + worker + "): land deployed " + depV + " (LAND-CODE-FIX-1: deployed-ahead -> " + canV + " committed to main)";
   var landed = [];
   var errors = [];
   for (var i = 0; i < paths.length; i++) {
@@ -1692,21 +1678,11 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
         landed.push(p + ":no-op");
         continue;
       }
-      var pu = null;
-      for (var att = 0; att < 3; att++) {
-        var body = { message: commitMsg, content: b64encode(raw), branch: "main" };
-        if (sha) body.sha = sha;
-        pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify(body) }, 12e3);
-        if (pu.status === 200 || pu.status === 201) break;
-        if (pu.status === 409) {
-          // concurrent writer advanced the file; re-read sha and retry (mirror-sync parity)
-          var g3 = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc + "?ref=main", { headers: ghHeaders }, 8e3);
-          if (g3.status === 200) { var gj3 = await g3.json().catch(function() { return null; }); if (gj3 && gj3.sha) { sha = gj3.sha; continue; } }
-        }
-        break;
-      }
-      if (pu && (pu.status === 200 || pu.status === 201)) landed.push(p);
-      else errors.push(p + ":HTTP " + (pu ? pu.status : "?"));
+      var body = { message: commitMsg, content: b64encode(raw), branch: "main" };
+      if (sha) body.sha = sha;
+      var pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify(body) }, 12e3);
+      if (pu.status === 200 || pu.status === 201) landed.push(p);
+      else errors.push(p + ":HTTP " + pu.status);
     } catch (e) {
       errors.push(p + ":" + String(e && e.message || e).slice(0, 80));
     }
@@ -1722,39 +1698,6 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
 __name(landFix, "landFix");
 __name2(landFix, "landFix");
 __name22(landFix, "landFix");
-// GIT-SELFTEST-1 (2026-09-27): the CMD RED TEAM rated LAND-CODE-FIX-1 FAIL because its
-// in-worker GitHub WRITE leg had never been exercised. This commits a fixed probe to a
-// THROWAWAY branch (zero main-branch impact) and returns the commit sha, proving the exact
-// runtime path landFix uses (b64encode + timedFetch + GitHub Contents PUT + sha + auth).
-// Reusable as a live DoD-9 re-probe; delete the branch afterwards.
-async function gitSelftest(env) {
-  if (!env.GITHUB_TOKEN) return { ok: false, error: "no GITHUB_TOKEN" };
-  var repo = "qnfo-workers", branch = "_landfix-selftest", probe = "_selftest/landfix-probe.json";
-  var gh = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/selftest", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
-  var base = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/ref/heads/main", { headers: gh }, 8e3);
-  if (base.status !== 200) return { ok: false, error: "base ref HTTP " + base.status };
-  var bj = await base.json().catch(function() { return null; });
-  var baseSha = bj && bj.object && bj.object.sha;
-  var chk = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/ref/heads/" + branch, { headers: gh }, 8e3);
-  if (chk.status === 404) {
-    var cr = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/refs", { method: "POST", headers: Object.assign({}, gh, { "Content-Type": "application/json" }), body: JSON.stringify({ ref: "refs/heads/" + branch, sha: baseSha }) }, 8e3);
-    if (cr.status !== 201) return { ok: false, error: "branch create HTTP " + cr.status };
-  }
-  var cur = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + probe + "?ref=" + branch, { headers: gh }, 8e3);
-  var fileSha = null;
-  if (cur.status === 200) { var cj = await cur.json().catch(function() { return null; }); fileSha = cj && cj.sha; }
-  var content = JSON.stringify({ probe: "LAND-CODE-FIX-1-write-path", worker: "qnfo-fleet-control", version: VERSION, ts: new Date().toISOString() });
-  var putBody = { message: "chore(selftest): LAND-CODE-FIX-1 in-worker write-path probe", content: b64encode(content), branch: branch };
-  if (fileSha) putBody.sha = fileSha;
-  var pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + probe, { method: "PUT", headers: Object.assign({}, gh, { "Content-Type": "application/json" }), body: JSON.stringify(putBody) }, 12e3);
-  var pj = null;
-  try { pj = await pu.json(); } catch (e) {}
-  var ok = pu.status === 200 || pu.status === 201;
-  return { ok, status: pu.status, branch: branch, commit: ok && pj && pj.commit ? pj.commit.sha : null, content_sha: ok && pj && pj.content ? pj.content.sha : null, note: ok ? "in-worker GitHub write path verified end-to-end" : String(pj && pj.message || "").slice(0, 160) };
-}
-__name(gitSelftest, "gitSelftest");
-__name2(gitSelftest, "gitSelftest");
-__name22(gitSelftest, "gitSelftest");
 function tomlCrons(t) {
   var LF = String.fromCharCode(10);
   var body = t.split(LF).filter(function(l) {
@@ -2013,10 +1956,10 @@ async function scan(env, heal) {
         out.ahead++;
         out.details.push(n + ":ahead " + depV + ">" + canV);
         await clearScanErr(env, n);
-        if (heal) {
+        if (heal && !usedHealth) {
           var lf = await landFix(env, n, dep, depV, canV, c.path);
           if (lf.ok) out.landed++;
-          await report(env, n, depV, canV, c.path, lf.ok ? "deployed-ahead:landed " + lf.note : "deployed-ahead:skip " + String(lf && lf.note || "").slice(0, 120));
+          await report(env, n, depV, canV, c.path, lf.ok ? "deployed-ahead:landed " + lf.note : "deployed-ahead");
         } else {
           await report(env, n, depV, canV, c.path, "deployed-ahead");
         }
@@ -2288,9 +2231,6 @@ var worker_default = {
       await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " landed=" + res2.landed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
       var rw2 = await registerWatch(env, 7);
       return json({ ok: true, scan: res2, register: rw2 });
-    }
-    if (p === "/git-selftest" && request.method === "POST" && admin) {
-      return json(await gitSelftest(env));
     }
     return json({ error: "not found" }, 404);
   },
