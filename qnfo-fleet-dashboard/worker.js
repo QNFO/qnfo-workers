@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.25-failclosed-reportcard";
+var VERSION = "1.7.26-escalate-nohandler";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1017,7 +1017,7 @@ function execTargetFor(category, resource, env) {
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: false, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "observability worker retired (wave-A consolidation) - fail-closed to manual disposition" };
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
-    return { safe: false, noAction: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
+    return { safe: false, noAction: true, escalate: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
   }
   if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
   if (category === "probe") return { safe: false, noAction: true, note: "probe is re-verified automatically next cycle; no action" };
@@ -1025,7 +1025,7 @@ function execTargetFor(category, resource, env) {
   if (category === "model-health") return { safe: false, noAction: true, note: "degraded ids reconciled by ai-health-prober (hourly) + calibration guard; no human gate" };
   if (category === "worker-errors") return { safe: false, noAction: true, note: "24h error window rolls; fleet-control scan re-probes each cycle; no human gate" };
   if (category === "analytics") return { safe: false, noAction: true, note: "analytics scope checked by qnfo-cloud-ops weekly; no human gate" };
-  return { safe: false, noAction: true, note: "unmapped category recorded for the fleet loop; no human gate (NEVER-HUMAN-1)" };
+  return { safe: false, noAction: true, escalate: true, note: "unmapped category recorded for the fleet loop; no human gate (NEVER-HUMAN-1)" };
 }
 __name(execTargetFor, "execTargetFor");
 __name2(execTargetFor, "execTargetFor");
@@ -1043,8 +1043,23 @@ async function execOne(env, row, prevState) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const prior = prevState || null;
   if (!spec || !spec.safe) {
-    const state2 = "no-action";
+    const escalate = !!(spec && spec.escalate);
+    const state2 = escalate ? "needs-human" : "no-action";
     await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, spec && spec.note || "no safe auto-action", row.fingerprint).run();
+    // ESCALATE-NO-HANDLER-1 (2026-09-27): an unmapped/no-safe-producer category MUST escalate to an
+    // OWNED disposition (reorg_work_queue) instead of silently closing as terminal 'no-action'. The old
+    // detect-not-fix behavior dropped 82/93 issues as no-handler-superseded/closed-no-action with no
+    // owner, no due, no actor. Now every no-handler dispatch files one OWNED OPEN queue item (deduped).
+    if (escalate) {
+      try {
+        const qitem = "issue-no-handler:" + row.fingerprint;
+        const ex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(qitem).first();
+        if (!ex) {
+          await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'qnfo-fleet-control',date('now','+7 day'),'OPEN',datetime('now'))").bind(qitem, "category=" + row.category + " resource=" + String(payload.resource || payload.title || "").slice(0, 120) + " :: " + (spec && spec.note || "")).run();
+        }
+      } catch (e) {
+      }
+    }
     if (state2 !== prior) {
       try {
         await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + (spec && spec.note || ""), now, state2, now).run();
