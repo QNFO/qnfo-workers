@@ -39,6 +39,13 @@ name: mirror-sync
 on:
   push:
     branches: [main]
+  # Invocable by ci-watchdog: when mirror-guard goes red the watchdog
+  # dispatches this repair actor. Without a workflow_dispatch trigger that
+  # call returns 422, the finding stays unactionable, and the monitor can
+  # never clear -- observed in production as
+  #   OPEN mirror-lag mirror-guard -> dispatched mirror-sync -> http-422
+  # A repair actor that cannot be invoked is not a repair actor.
+  workflow_dispatch:
 
 permissions:
   contents: write
