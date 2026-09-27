@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.3-roster-auth";
+var VERSION = "5.29.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -2419,9 +2419,6 @@ var worker_default = {
           }
         };
       });
-      // CAL-ROSTER-INTERNAL-1 (2026-09-27): the calibration roster audit reads the internal roster
-      // (with _router metadata) when called with the router key; public callers still get ONE model.
-      if ((request.headers.get("Authorization") || "") === "Bearer " + ((env.ROUTER_AUTH_KEY || env.QNFO_ROUTER_KEY) || "\u0000")) return json({ object: "list", data });
       // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
       return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }

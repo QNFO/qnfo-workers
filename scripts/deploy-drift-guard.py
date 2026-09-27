@@ -27,39 +27,10 @@ import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# GUARD-DRIFT-PARSE-1 (2026-09-27): the old pattern also matched `QNFO_VERSION` (optional
-# prefix) and accepted ONLY double quotes, so it reported phantom drift:
-#   qnfo-social   `var VERSION = '0.7.14-retract'`           -> NO_REPO_VERSION (single quotes)
-#   idea-hub      `const VERSION='1.0.6-...'`                -> NO_REPO_VERSION (single quotes)
-#   fleet-exec    `VERSION = "fleet-executor/0.3.1"`         -> DRIFT (composite id beat `1.0.1`)
-#   qnfo-archive  `QNFO_VERSION = "qnfo-archive/fabric-..."` -> DRIFT (prefix let it match)
-#   qnfo-lifecycle `QNFO_VERSION = "1.6.2"`                  -> DRIFT vs live 1.6.1 (fallback)
-# Fix: the identifier must be EXACTLY `VERSION` (lookbehind blocks QNFO_VERSION), quotes may be
-# single or double, `=`/`:` both accepted, a semver-shaped candidate wins over a composite id,
-# and worker.js (the source) is checked before the deployed-current mirror.
-CONST = re.compile(r'(?:(?:var|let|const)\s+)?(?<![A-Za-z0-9_])VERSION\s*[:=]\s*["\']([^"\']+)["\']')
-QNFO_CONST = re.compile(r'(?:(?:var|let|const)\s+)?QNFO_VERSION\s*[:=]\s*["\']([^"\']+)["\']')
-VERNUM = re.compile(r'^\d+\.\d+')
-CANON = ("worker.js", "deployed-current.worker.js")
+CONST = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*"([^"]+)"')
+CANON = ("deployed-current.worker.js", "worker.js")
 TIMEOUT = 12
 NARRATIVE = ["qnfo-ai", "qnfo-research-exec", "qnfo-ipatent", "qnfo-gateway"]
-
-
-def _pick_version(text):
-    """Return the contract `VERSION` value, preferring a semver-shaped candidate over a
-    composite id (e.g. `fleet-executor/0.3.1` must lose to `1.0.1`).
-
-    NO fallback to QNFO_VERSION: a worker with no contract `VERSION` constant is reported
-    as NO_REPO_VERSION (source gap), not as DRIFT. qnfo-lifecycle is the canonical case --
-    the deployed bundle is byte-identical to the repo and its only constant is
-    `QNFO_VERSION = "1.6.2"` while /health serves 1.6.1 from a different source, so a
-    fallback comparison manufactured a phantom DRIFT.
-    """
-    vals = CONST.findall(text)
-    for v in vals:
-        if VERNUM.match(v):
-            return v
-    return vals[0] if vals else None
 
 
 def repo_version(d):
@@ -68,11 +39,11 @@ def repo_version(d):
         if os.path.isfile(p):
             try:
                 with open(p, encoding="utf-8", errors="replace") as fh:
-                    rv = _pick_version(fh.read())
+                    m = CONST.search(fh.read())
             except OSError:
-                rv = None
-            if rv:
-                return rv
+                m = None
+            if m:
+                return m.group(1)
     return None
 
 

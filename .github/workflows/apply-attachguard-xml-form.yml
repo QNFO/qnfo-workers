@@ -1,0 +1,81 @@
+name: apply-attachguard-xml-form
+
+# ATTACHGUARD-XML-FORM (2026-09-27).
+#
+# Applies scripts/attachguard-xml-form-patch.py to qnfo-ops/worker.js and its
+# deployed-current mirror, then commits the result to the branch that triggered the run.
+# Modelled on mirror-sync.yml, the repo's sanctioned commit-capable repair actor.
+#
+# NOTE the commit message is passed as single-line -m flags and never as an inline
+# multi-line string: a multi-line `git commit -m "..."` inside a `run: |` block scalar
+# puts its continuation lines at column 1, terminates the scalar, and makes the whole
+# workflow file invalid YAML -- the documented defect that made the earlier
+# apply-ops-patch.yml create runs with zero jobs (see the note in mirror-sync.yml).
+
+on:
+  push:
+    paths:
+      - 'scripts/attachguard-xml-form-patch.py'
+      - '.github/workflows/apply-attachguard-xml-form.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-attachguard-xml-form
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/attachguard-xml-form-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: Verify the deployed-current mirror stays in sync
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 scripts/mirror-guard.py
+
+      - name: Commit and push to the triggering branch
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-attachguard-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-ops 2.37.13-attachguard-xml-form): attachment guard must read the XML wrapper form"
+          BODY="ATTACHGUARD-XML-FORM: attachmentGuard() probed the legacy FILE_CONTENT= key=value form, but the Chatbox client sends an XML FILE_CONTENT element inside ATTACHMENT_FILE, so indexOf returned -1 and the missing-bytes warning never reached the model (34/34 attachment prompts in ops_ai_log). Adds attachmentGuardXml() for the XML form; also fixes telemetry_report passing the whole args object as hours."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          git push origin "HEAD:${{ github.ref_name }}"

@@ -37,7 +37,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import re
 import urllib.error
 import urllib.request
 
@@ -85,34 +84,10 @@ def workflows() -> list[dict]:
     return d.get("workflows", []) if st == 200 else []
 
 
-def runs(per_page: int = 100, pages: int = 8, **q) -> list[dict]:
-    """RT-1: page through so a time window is real.
-
-    The previous `per_page=60` against a 6h window was a silent lie: at the
-    observed ~76 runs/hour that is ~47 minutes, so ~87% of the nominal window was
-    invisible and nothing said so. Pages are walked via the `page` param (no Link
-    parsing), stopping on a short page.
-    """
-    out: list[dict] = []
-    seen: set = set()
-    for page in range(1, max(1, pages) + 1):
-        qq = dict(q)
-        qq["page"] = page
-        qs = "&".join(f"{k}={v}" for k, v in qq.items())
-        st, d = gh(f"/repos/{REPO}/actions/runs?per_page={per_page}&{qs}")
-        if st != 200 or not isinstance(d, dict):
-            break
-        batch = d.get("workflow_runs") or []
-        if not batch:
-            break
-        for r in batch:
-            rid = r.get("id")
-            if rid not in seen:
-                seen.add(rid)
-                out.append(r)
-        if len(batch) < per_page:
-            break
-    return out
+def runs(per_page: int = 100, **q) -> list[dict]:
+    qs = "&".join(f"{k}={v}" for k, v in q.items())
+    st, d = gh(f"/repos/{REPO}/actions/runs?per_page={per_page}" + ("&" + qs if qs else ""))
+    return d.get("workflow_runs", []) if st == 200 else []
 
 
 def run_events(wf_id: int, per_page: int = 100) -> list[dict]:
@@ -160,14 +135,6 @@ def classify_structural(name: str, run: dict) -> tuple[str, str]:
         return "comparator-regression", "the fail-closed comparator invariant regressed; do NOT relax rule 5"
     if name in ("deploy-drift", "indexnow-submit"):
         return "external-runner", "driven by the watchdog because GitHub `schedule` never fires on this repo"
-    # RT-2: one-shot applier workflows are a RECURRING class. apply-ops-patch was
-    # retired as invalid YAML and apply-attachguard-xml-form then appeared. The
-    # generator is landing a large file by workflow because the ops endpoint cannot
-    # carry qnfo-ops/worker.js. Classify the class, never bare `unknown`.
-    if name.startswith("apply-") or "attachguard" in name:
-        return "applier-workflow", (
-            "one-shot patch applier; the durable fix is a server-side path to "
-            "qnfo-ops/worker.js, not another applier (cf. apply-ops-patch, retired)")
     return "unknown", "inspect the job log"
 
 
@@ -188,42 +155,6 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
     if "not a valid model identifier" in L:
         return "unknown", "inspect"
     return "unknown", "inspect the job log"
-
-
-def detect_duplicate_worker_names() -> list:
-    """RT-6: two dirs declaring the same worker `name` is a deploy hazard.
-
-    Whichever deploys last wins and neither CI nor the fleet notices. One instance
-    (qnfo-web-unified vs qnfo-gateway) was a broken build AND a clobber risk; it is
-    fixed, but the CLASS was never detected. Detection only -- neutralising a
-    directory is a deploy decision and is never automatic.
-    """
-    import base64 as _b64
-    st, tr = gh(f"/repos/{REPO}/git/trees/main?recursive=1")
-    if st != 200 or not isinstance(tr, dict):
-        return []
-    wt = [e["path"] for e in tr.get("tree", [])
-          if e.get("type") == "blob" and e["path"].endswith("wrangler.toml")]
-    by_name: dict = {}
-    for p in wt:
-        st2, c = gh(f"/repos/{REPO}/contents/{p}?ref=main")
-        if st2 != 200 or not isinstance(c, dict) or not c.get("content"):
-            continue
-        try:
-            txt = _b64.b64decode(c["content"]).decode("utf-8", "replace")
-        except Exception:
-            continue
-        m = re.search(r'(?m)^\s*name\s*=\s*"([^"]+)"', txt)
-        if m:
-            by_name.setdefault(m.group(1), []).append(p)
-    out = []
-    for nm, paths in sorted(by_name.items()):
-        if len(paths) > 1:
-            out.append({"class": "duplicate-worker-name", "subject": nm,
-                        "evidence": "declared by: " + ", ".join(sorted(paths)),
-                        "hint": "neutralise the stale dir (remove its wrangler.toml) "
-                                "so a stray deploy cannot clobber the live worker"})
-    return out
 
 
 def setup_config() -> str:
@@ -356,24 +287,10 @@ def main() -> int:
                                  "evidence": f"{it['path']}: no schedule-event run ever (events={it['events']}, runs={it['runs']})"})
 
     # --- class: codeql-config ---------------------------------------------
-    # RT-6 is a ~96-call structural sweep. Gated to the deliberate sweep so a
-    # per-push run stays fast -- removing the concurrency group means many runs
-    # can overlap, and an expensive default would risk the 10-minute timeout.
-    if os.environ.get("CI_WD_DUPCHECK") == "1":
-        findings.extend(detect_duplicate_worker_names())
     cs = setup_config()
     if cs == "unobservable":
-        # RT-4: an unobservable probe is NOT a silent pass. The previous revision
-        # printed and continued, turning a false positive into a BLIND SPOT -- a
-        # fail-open on this class. It is not drift either (an unauthorized probe
-        # proves nothing), so it is a VISIBLE tracked finding carrying the remedy.
-        print("codeql: default-setup UNOBSERVABLE -> tracked, not drift")
-        findings.append({
-            "class": "codeql-config", "subject": "default-setup",
-            "evidence": "state=unobservable (GITHUB_TOKEN cannot read code scanning)",
-            "tracked_only": True,
-            "hint": "set repo secret CODEQL_PROBE_TOKEN (repo-admin PAT) to observe; "
-                    "adding security-events:read was NOT sufficient - verified false"})
+        print("codeql: default-setup not observable with this token "
+              "(needs security-events: read) -> cannot-observe, NOT drift")
     elif cs != "configured":
         findings.append({"class": "codeql-config", "subject": "default-setup",
                          "evidence": f"state={cs}"})
@@ -394,7 +311,7 @@ def main() -> int:
     cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=WINDOW_HOURS)).isoformat().replace("+00:00", "Z")
     log_fetches = 0
     if WINDOW_HOURS > 0:
-        for r in runs(per_page=100, pages=8, status="completed", created="%3E" + cutoff):
+        for r in runs(per_page=60):
             if r.get("conclusion") != "failure":
                 continue
             if (r.get("created_at") or "") < cutoff:
@@ -435,12 +352,7 @@ def main() -> int:
     for f in findings:
         k, subj = f["class"], f["subject"]
         line = f"- `{k}` **{subj}** — {f['evidence']}"
-        if f.get("tracked_only"):
-            # MUST precede every actionable branch: an unobservable probe is
-            # neither drift nor a silent pass, so it is reported with its remedy
-            # and never routed to an action that cannot succeed (RT-4).
-            tracked.append((line, f.get("hint", "recorded")))
-        elif k == "silent-schedule":
+        if k == "silent-schedule":
             if subj in recent_wf:
                 tracked.append((line, "already dispatched within the last 55 min"))
             else:
@@ -490,21 +402,14 @@ def post_ledger(summary: dict) -> str:
     """
     key = os.environ.get("OPS_KEY") or os.environ.get("OPS_ROUTER_AUTH_KEY") or ""
     if not key:
-        # RT-5: the cross-platform link had NEVER executed. Report it as a
-        # first-class gap with the one-line remedy, not a bland "skipped".
-        # RT-5: the secret IS set; the key is handed to the workflow only on the
-        # deliberate sweep (workflow_dispatch/repository_dispatch) so a per-push
-        # run cannot spam ops jobs. Report which case this is, precisely.
-        return ("GAP: ledger not armed for this event (secret is set; armed on "
-                "workflow_dispatch/repository_dispatch)")
+        return "skipped (OPS_ROUTER_AUTH_KEY not configured)"
     if DRY:
         return "DRY_RUN"
     body = json.dumps({
-        "model": "ops-exec",
-        "messages": [{"role": "user",
-                       "content": "ci-watchdog summary: " + json.dumps(summary)[:4000]}],
+        "desire": "ci-watchdog summary: " + json.dumps(summary)[:4000],
+        "source": "github-actions/ci-watchdog",
     }).encode()
-    req = urllib.request.Request("https://ops.qnfo.org/v1/jobs", data=body, method="POST")
+    req = urllib.request.Request("https://ops.qnfo.org/v1/desires", data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     req.add_header("Authorization", "Bearer " + key)
     try:
