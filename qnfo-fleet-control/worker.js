@@ -136,7 +136,7 @@ var advisorMod = (function() {
   async function runAudit(env) {
     const ts = nowIso();
     const findings = [];
-    const PROBES = (env.PROBE_WORKERS || "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-cloud-ops,qnfo-infra,qnfo-auditor").split(",").map((s) => s.trim()).filter(Boolean);
+    const PROBES = (env.PROBE_WORKERS || "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-cloud-ops,qnfo-infra,qnfo-observability").split(",").map((s) => s.trim()).filter(Boolean);
     const workerNames = await workerNameSet(env);
     const results = await Promise.all(PROBES.map((n) => probeHealth(n, workerNames)));
     const down = [];
