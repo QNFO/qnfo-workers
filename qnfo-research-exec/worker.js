@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.17-reclaimfix";
+var VERSION = "0.9.18-revdissem";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1184,6 +1184,15 @@ async function publishV2(env, row) {
   var newDoi = pub.doi;
   var newTitle = extractTitle(row.corrected_md || "", row.title);
   await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, updated_at=datetime('now') WHERE slug=?").bind(newTitle, row.corrected_md || "", row.version_to || "2.0.0", newDoi, newDoi, slug).run();
+  try {
+    // REV-DISSEMINATION-1 (2026-09-27): a revision (newversion) path wrote NO dissemination row, so
+    // pipeline revisions never auto-posted (canonical: 'Operating the Quniverse Fleet' v1.3,
+    // 10.5281/zenodo.23001088, had to be posted by hand). Mirror publishStage / FIRST-DEPOSIT-1 so
+    // qnfo-social's drainDissemination (cron 30 */2) posts the revision. A deterministic id
+    // 'rev-<slug>' + INSERT OR IGNORE makes it idempotent per paper, so a re-drain cannot double-post.
+    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("rev-" + slug, slug, newDoi, newTitle, "bluesky", "queued", "auto", 0, (String(newDoi).indexOf("http") === 0 ? newDoi : "https://doi.org/" + newDoi), "https://papers.qnfo.org/papers/" + slug + "/").run();
+  } catch (eRevDiss) {
+  }
   if (env.GRAPH_DB) {
     try {
       var node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("zenodo-10-5281-zenodo-" + recId).first();
