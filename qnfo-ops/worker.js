@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.14-callglm-reasoning";
+var VERSION = "2.37.15-promptfix";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3323,11 +3323,29 @@ function attachmentGuard(text) {
 }
 __name(attachmentGuard, "attachmentGuard");
 __name2(attachmentGuard, "attachmentGuard");
+function contentToText(c) {
+  if (c == null) return "";
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    var out = [];
+    for (var i = 0; i < c.length; i++) {
+      var p = c[i];
+      if (typeof p === "string") out.push(p);
+      else if (p && typeof p === "object") out.push(typeof p.text === "string" ? p.text : JSON.stringify(p));
+      else out.push(String(p));
+    }
+    return out.join("
+");
+  }
+  if (typeof c === "object") return typeof c.text === "string" ? c.text : JSON.stringify(c);
+  return String(c);
+}
+__name(contentToText, "contentToText");
 function lastUserText(messages) {
   const arr = messages || [];
   for (let i = arr.length - 1; i >= 0; i--) {
     if (arr[i] && arr[i].role === "user") {
-      const _c = String(arr[i].content || "");
+      const _c = contentToText(arr[i].content);
       const _g = attachmentGuard(_c);
       if (_g) {
         const _nc = _c + "\n\n[" + _g + "]";
