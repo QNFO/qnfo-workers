@@ -3334,8 +3334,7 @@ function contentToText(c) {
       else if (p && typeof p === "object") out.push(typeof p.text === "string" ? p.text : JSON.stringify(p));
       else out.push(String(p));
     }
-    return out.join("
-");
+    return out.join("\n");
   }
   if (typeof c === "object") return typeof c.text === "string" ? c.text : JSON.stringify(c);
   return String(c);
