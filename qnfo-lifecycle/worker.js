@@ -47,13 +47,20 @@ var worker_default = {
     console.log("[qnfo-lifecycle] cron triggered:", cron);
      try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?, ?, ?, 1)").bind("qnfo-lifecycle", "fabric-20260910", new Date().toISOString()).run(); } catch (e) {}
     try {
-      if (cron === "0 3 * * *") await runLifecycle(env);
+      // CRON-CONSOLIDATE-1 (2026-09-27 fleet reorg): the four lightweight daily D1 audit/
+      // maintenance tasks (lifecycle, memory-maintain, ula-check, drift-audit) now share ONE
+      // daily fire at 03:00 instead of four separate crons. This also FIXES a latent bug: the
+      // drift-audit branch keyed on "0 6 * * *" while the trigger was registered as
+      // "9 6 * * *" -> runDriftAudit never ran. Backup stays on its own cron (heavy).
+      if (cron === "0 3 * * *") {
+        await runLifecycle(env);
+        await runMemoryMaintain(env, { commit: true });
+        await runUlaCheck(env);
+        await runDriftAudit(env);
+      }
       else if (cron === "0 0 1 * *") await runGraphSeed(env);
       else if (cron === "0 5 * * *") await runBackup(env);
-      else if (cron === "0 6 * * *") await runDriftAudit(env);
-      else if (cron === "0 7 * * *") await runUlaCheck(env);
       else if (cron === "0 8 * * 1") await runSecretsAudit(env);
-      else if (cron === "0 4 * * *") await runMemoryMaintain(env, { commit: true });
       else if (cron === "0 * * * *") await runSync(env);
       else if (cron === "*/30 * * * *") await runPing(env);
     } catch (e) {
@@ -66,8 +73,8 @@ function health(env, origin) {
   return new Response(JSON.stringify({
     status: "ok",
     worker: "qnfo-lifecycle",
-    version: "1.6.1",
-    cronSchedules: 9,
+    version: "1.6.2-cronconsolidate",
+    cronSchedules: 5,
     features: ["lifecycle-scan", "graph-seed", "backup", "drift-audit-enhanced", "secrets-audit-enhanced", "registry-sync", "infra-ping", "ula-check", "memory-maintain"],
     bindings: { d1: ["qnfo-audit", "qnfo-graph", "portfolio-state", "living-paper", "ipatent-db"], r2: ["qnfo", "qnfo-audit", "qnfo-backups"] }
   }), { headers: h });
