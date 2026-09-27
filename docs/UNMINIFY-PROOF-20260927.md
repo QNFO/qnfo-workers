@@ -17,9 +17,17 @@ normalising source formatting only:
 Both are semantics-preserving: `+` binds tighter than `||`, so the grouping is implied by JS
 operator precedence.
 
-**Proof used.** The two files were each passed through the **same deterministic minifier**
-(`esbuild --minify --format=esm`). If the sources were semantically different, minified output would
-differ. Result recorded in the cycle ledger.
+**Proof used (RESULT: PASS).** The two files were each passed through the **same deterministic
+minifier** (`npx esbuild@0.24.0 --minify --format=esm`). Identical minified output means the two
+sources are semantically equivalent:
+
+```
+qnfo-email         esbuild-minified identical -> TRUE
+qnfo-backlog-exec  esbuild-minified identical -> TRUE
+```
+
+This is the load-bearing proof: prettier's edits (quote style + redundant-parenthesis removal) are
+therefore confirmed semantics-preserving, not merely asserted.
 
 **Independent checks.** `node --check` rc=0 for both; the `cfWorkerRead` / `mirror-guard` VERSION
 regexes parse `2.1.0` and `1.5.0`; `deploy-drift-guard` reads both workers SYNC.
