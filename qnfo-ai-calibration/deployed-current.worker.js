@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.4-digestfix";
+var VERSION = "1.2.5-degradereconcile";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -483,6 +483,22 @@ async function gatewayFailureSweep(env, t0) {
         if (!recent || Number(recent.c || 0) === 0) await closeIssue(env, ttl, "no non-transient failures for 24h");
       } catch (e) {
       }
+    }
+  } catch (e) {
+  }
+  // v1.2.5 AMH-STALE-DEGRADE-RECONCILE (fixes MODEL-DEGRADED recurrence #1256):
+  // a row set degraded by a gateway-failure sweep cannot clear via the per-bucket path,
+  // because a CLEAN sweep produces no bucket for that model. Clear any degraded row that
+  // carries zero consecutive_failures AND has no non-transient gateway failure in 24h.
+  try {
+    var degRows = await env.QNFO_AUDIT.prepare("SELECT model_id, consecutive_failures FROM ai_model_health WHERE status = 'degraded'").all();
+    var degList = (degRows && degRows.results) || [];
+    for (var di = 0; di < degList.length; di++) {
+      var dmid = degList[di].model_id;
+      if (Number(degList[di].consecutive_failures || 0) !== 0) continue;
+      var drec = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND error_class != 'rate-capacity' AND ts > ?2").bind(internalId(dmid), t0 - 24 * 60 * 60 * 1000).first();
+      if (drec && Number(drec.c || 0) > 0) continue;
+      await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status = 'ok', updated_at = ?1 WHERE model_id = ?2").bind((/* @__PURE__ */ new Date()).toISOString(), dmid).run();
     }
   } catch (e) {
   }
