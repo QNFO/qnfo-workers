@@ -52,3 +52,23 @@ qwav.org + mirrors, ask.qwav.tech, qwav-demo-bt-qec — reverted to their origin
 Pages deploys: upload-token -> check-missing -> upload (base64 JSON) -> upsert-hashes ->
 create deployment (manifest = MD5 hashes, keys "/index.html" for files, "_worker.js" without
 slash for Functions). Worker deploys: script-only PUT /content (preserves bindings).
+
+---
+
+## Deploy model (do not re-add a wrangler.toml here)
+
+This directory is an **asset / Pages staging** directory, not a worker deploy unit.
+
+- The runnable worker is `../qnfo-gateway/` (`name = "qnfo-gateway"`, `main = "worker.js"`).
+  That directory owns the worker name and the `0 6 * * *` cron.
+- `qnfo-gateway.deployed.worker.js`, referenced in the table above, is produced by the
+  worker deploy pipeline (script-only `PUT /content`, bindings preserved). It is **not**
+  a repo file, so a `wrangler.toml` here whose `main` points at it can never build.
+- Pages surfaces deploy via upload-token -> check-missing -> upload -> upsert-hashes ->
+  create deployment (see "Conversion recipe" above). No wrangler step.
+
+A `wrangler.toml` was removed from this directory on 2026-09-27. It was a stale duplicate:
+it declared `name = "qnfo-gateway"` (colliding with `../qnfo-gateway/`) while its
+`main = "qnfo-gateway.deployed.worker.js"` did not exist. That made `WORKER-BUILD-GATE-1`
+(`npx wrangler deploy --dry-run`) fail for every change under this directory -- and, had a
+deploy ever run from here, it would have overwritten the live `qnfo-gateway` worker.

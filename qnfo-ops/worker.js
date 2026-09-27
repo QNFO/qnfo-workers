@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.11-fm-empty-relay-402";
+var VERSION = "2.37.12-fm-stream-reasoning";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3204,7 +3204,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   if (!resp || !resp.ok || !resp.body) { const _fb = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb) { console.log("OPS_PAID_FAIL_FREE_FALLBACK callDeepSeekStream"); return _fb; } throw new Error(_dsLastErr || "deepseek stream upstream unavailable after 3 attempts"); }
   const reader = resp.body.getReader();
   const dec = new TextDecoder();
-  let buf = "", content = "", finish = "stop", usage = null;
+  let buf = "", content = "", reasoning = "", finish = "stop", usage = null;
   const tcs = [];
   while (true) {
     const r = await reader.read();
@@ -3238,6 +3238,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
           }
         }
       }
+      if (d.reasoning_content) reasoning += d.reasoning_content;
       if (Array.isArray(d.tool_calls)) {
         for (const tc of d.tool_calls) {
           const ti = tc.index != null ? tc.index : 0;
@@ -3255,6 +3256,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     if (!t.id) t.id = "call_" + i;
     return t;
   });
+  if (!String(content || "").trim() && reasoning) content = reasoning;
   const message = { role: "assistant", content };
   if (tool_calls.length) message.tool_calls = tool_calls;
   return { resp: { choices: [{ index: 0, message, finish_reason: finish }], usage: usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }, servedBy: o.upstreamModel ? modelToUse : modelToUse };
@@ -3873,7 +3875,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       }
       const reader = up.body.getReader();
       const dec = new TextDecoder();
-      let buf = "";
+      let buf = "", reasoning = "";
       while (true) {
         if (Date.now() - t0 > envInt(env, "OPS_FINAL_DEADLINE_MS", 9e4)) {
           try {
@@ -3899,6 +3901,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
               const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
               if (delta) {
                 if (delta.content) content += delta.content;
+                if (delta.reasoning_content) reasoning += delta.reasoning_content;
                 if (firstFrameIdx(content) < 0) emitChunk(delta, null);
               }
             } catch (e) {
@@ -3907,6 +3910,11 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         }
       }
       if (!content) content = fallback;
+      if (!String(content || "").trim() && reasoning) content = reasoning;
+      if (!String(content || "").trim() && toolLog.length) {
+        const _okN = toolLog.filter(function(t) { return t && t.ok; }).length;
+        content = "The agent completed " + _okN + " tool action(s) but the model returned no final narrative. Tool results are recorded; re-send your request for a concise summary.";
+      }
       streamedTokens = true;
       finishReason = "stop";
     } catch (e) {
