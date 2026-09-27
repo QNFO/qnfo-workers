@@ -41,6 +41,10 @@ on:
       - deploy-drift
       - indexnow-submit
     types: [completed]
+  # New workflows first appear on feature branches. Pushes to main are already
+  # covered via workflow_run, so main is ignored to avoid double-firing.
+  push:
+    branches-ignore: [main]
   workflow_dispatch:
   repository_dispatch:
     types: [ci-watchdog]
@@ -53,10 +57,6 @@ permissions:
   # Without it the watchdog reported an authz error as drift and could
   # never pass: an unauthorized probe is not evidence.
   security-events: read
-
-concurrency:
-  group: ci-watchdog-${{ github.event.workflow_run.head_branch || 'main' }}
-  cancel-in-progress: false
 
 jobs:
   watch:
