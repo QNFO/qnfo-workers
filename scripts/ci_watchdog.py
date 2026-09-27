@@ -491,8 +491,9 @@ def post_ledger(summary: dict) -> str:
     if DRY:
         return "DRY_RUN"
     body = json.dumps({
-        "model": "ops-exec", "task": "ci-watchdog summary: " + json.dumps(summary)[:4000],
-        "source": "github-actions/ci-watchdog",
+        "model": "ops-exec",
+        "messages": [{"role": "user",
+                       "content": "ci-watchdog summary: " + json.dumps(summary)[:4000]}],
     }).encode()
     req = urllib.request.Request("https://ops.qnfo.org/v1/jobs", data=body, method="POST")
     req.add_header("Content-Type", "application/json")
