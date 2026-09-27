@@ -41,7 +41,7 @@ const HELP = [
 "Self-ingestion is quarantined (issue 951). COMMAND_TOKEN (if set) gates actions."
 ].join("\n");
 const OPS_BASE = "https://ops.qnfo.org";
-function sha16(s) {
+async function sha16(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
   return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2, "0"); }).join("");
 }
