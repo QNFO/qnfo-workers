@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.26-escalate-nohandler";
+var VERSION = "1.7.27-impressions-mom-ratified";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2850,10 +2850,10 @@ async function redHtml(env) {
   H.push("<tr><td>Pageviews MoM (snapshots)</td><td>" + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("</table>");
   let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (growth != null && growth >= 30 && rep30 != null && rep30 >= 2) {
+  if (trueMoM != null && trueMoM >= 30 && rep30 != null && rep30 >= 2) {
     verdict = "GATES ON TRACK";
     vcls = "ok";
-  } else if (growth != null && growth > 0 || rep30 >= 1) {
+  } else if (trueMoM != null && trueMoM > 0 || rep30 >= 1) {
     verdict = "PARTIAL \u2014 WATCH (impressions gate failing)";
     vcls = "warn";
   }
@@ -2886,7 +2886,7 @@ async function redHtml(env) {
   const waiCost = regVal("workers_ai_cost_30d_usd");
   const costUsd = regVal("cost_usd_30d");
   const gateRows = [
-    { m: "impressions_growth_30d", live: (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a"), head: growth != null ? c01(growth / 30) : null },
+    { m: "impressions_growth_30d", live: (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a"), head: trueMoM != null ? c01(trueMoM / 30) : null },
     { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
     { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
     { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
