@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.4.0";
+var VERSION = "1.5.0";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -50,12 +50,26 @@ function workerTarget(text) {
   return m[0];
 }
 __name(workerTarget, "workerTarget");
-async function probeHealthyViaLog(env, name) {
+var TRUSTED_TRANSPORTS = ["external", "curl", "container", "dns", "edge-ext"];
+function transportTrusted(tr) {
+  const t = String(tr || "").toLowerCase();
+  if (!t) return false;
+  return TRUSTED_TRANSPORTS.some(function(x) { return t.indexOf(x) >= 0; });
+}
+function healthOptIn(title, description) {
+  const t = String(title || "") + " " + String(description || "");
+  const m = t.match(/probe_target\s*=\s*([A-Za-z0-9_.-]+)/i);
+  if (!m) return null;
+  const c = t.match(/probe_class\s*=\s*([a-z0-9_-]+)/i);
+  return { target: m[1], cls: (c ? c[1] : "").toLowerCase() };
+}
+async function probeHealthyViaLog(env, name, maxAgeMin) {
+  const win = Number(maxAgeMin) > 0 ? Number(maxAgeMin) : 15;
   try {
-    const row = await env.AUDIT.prepare("SELECT ok, status, ts FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
+    const row = await env.AUDIT.prepare("SELECT ok, status, ts, transport, source FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
     if (row && Number(row.ok) === 1) {
       const age = Date.now() - new Date(row.ts).getTime();
-      if (age < 24 * 3600 * 1e3) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status };
+      if (age < win * 6e4) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status, transport: row.transport, source: row.source };
     }
   } catch (e) {
   }
@@ -70,11 +84,11 @@ async function probeHealth(name) {
       const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT);
       const r = await fetch("https://" + h + "/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-backlog-exec)" }, signal: ctl.signal });
       clearTimeout(timer);
-      if (r.ok) return { ok: true, host: h, status: r.status };
+      if (r.ok) return { ok: true, host: h, status: r.status, transport: "worker-same-zone" };
     } catch (e) {
     }
   }
-  return { ok: false, host: null, status: 0 };
+  return { ok: false, host: null, status: 0, transport: "worker-same-zone" };
 }
 __name(probeHealth, "probeHealth");
 async function sweepAdvisorNoise(env) {
@@ -152,6 +166,8 @@ async function sweepOpsJobs(env) {
 }
 __name(sweepOpsJobs, "sweepOpsJobs");
 async function run(env) {
+  const MIN_AGE_MS = (Number(env.MIN_CLOSE_AGE_MIN) > 0 ? Number(env.MIN_CLOSE_AGE_MIN) : 30) * 6e4;
+  const PROBE_WIN_MIN = Number(env.PROBE_LOG_MAX_AGE_MIN) > 0 ? Number(env.PROBE_LOG_MAX_AGE_MIN) : 15;
   const noiseClosed = await sweepAdvisorNoise(env);
   const ledgerResolved = await sweepIssueLedger(env);
   const jobsReaped = await sweepOpsJobs(env);
@@ -163,27 +179,32 @@ async function run(env) {
   for (const row of items) {
     const title = String(row.title || "");
     const name = workerTarget(title + " " + String(row.description || ""));
-    const isHealthAvailability = /health|heartbeat|availability|endpoint down|is down|reachable/i.test(title) && /health|availability|reachable|down/i.test(title);
-    if (name && isHealthAvailability) {
-      const pLog = await probeHealthyViaLog(env, name);
-      const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts } : await probeHealth(name);
-      if (p.ok) {
-        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
-        closed++;
-        detail.push({ id: row.id, target: name, action: "closed", note: "health availability re-probe PASS via " + p.host });
-        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): " + p.host, { id: row.id, target: name, action: "closed", reason: "health-availability predicate passed" }, WORKER, "ok");
-        continue;
-      } else {
-        if (/orphan|bogus|does not exist/i.test(title)) {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
-          closed++;
-          detail.push({ id: row.id, target: name, action: "closed", note: "orphan probe target (no such host) - closed on first failed probe" });
-          continue;
-        }
-        escalated++;
-        detail.push({ id: row.id, target: name, action: "escalate", note: "health probe still failing" });
+    const isHealthAvailability = /\b(health|heartbeat|availability|unreachable|endpoint down|is down|down)\b/i.test(title);
+    const optIn = healthOptIn(title, row.description);
+    if (isHealthAvailability && !optIn) {
+      rechecked++;
+      detail.push({ id: row.id, action: "recheck", note: "legacy-unmarked health ticket (v1.5.0): no probe_target= opt-in marker, auto-close disabled" });
+      continue;
+    }
+    if (optIn && optIn.cls === "worker-process") {
+      const ageMs = createdAgeMs(row.created_at, now);
+      if (ageMs < MIN_AGE_MS) {
+        rechecked++;
+        detail.push({ id: row.id, target: optIn.target, action: "recheck", note: "too fresh to auto-close: age " + Math.round(ageMs / 6e4) + "m < " + Math.round(MIN_AGE_MS / 6e4) + "m" });
         continue;
       }
+      const pLog = await probeHealthyViaLog(env, optIn.target, PROBE_WIN_MIN);
+      const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts, transport: pLog.transport } : await probeHealth(optIn.target);
+      if (p.ok && transportTrusted(p.transport)) {
+        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+        closed++;
+        detail.push({ id: row.id, target: optIn.target, action: "closed", note: "health re-probe PASS " + p.host + " transport=" + p.transport + " (fresh<=" + PROBE_WIN_MIN + "m, age>" + Math.round(MIN_AGE_MS / 6e4) + "m)" });
+        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + optIn.target + "): " + p.host + " transport=" + p.transport, { id: row.id, target: optIn.target, action: "closed", reason: "health predicate v1.5.0: opt-in + fresh + trusted transport", transport: p.transport }, WORKER, "ok");
+        continue;
+      }
+      escalated++;
+      detail.push({ id: row.id, target: optIn.target, action: "escalate", note: "no close-authorizing evidence (ok=" + p.ok + ", transport=" + (p.transport || "none") + "): same-zone/binding evidence cannot authorize a close" });
+      continue;
     }
     const isExceptionClass = !isHealthAvailability && name && /alert-storm|exception|error-burst|worker-exception|recurring fail/i.test(title);
     if (isExceptionClass && name) {
