@@ -80,6 +80,7 @@ jobs:
           # fleet ledger when the ops key is present, and no-ops when it is not,
           # so the watchdog still gates on its own exit code either way.
           OPS_KEY: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && secrets.OPS_ROUTER_AUTH_KEY || '' }}
+          CI_WD_DUPCHECK: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && '1' || '0' }}
         run: |
           set +e
           python scripts/ci_watchdog.py | tee /tmp/wd.log
