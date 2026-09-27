@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.4.0";
+var VERSION = "1.6.2-canonical";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -50,12 +50,58 @@ function workerTarget(text) {
   return m[0];
 }
 __name(workerTarget, "workerTarget");
-async function probeHealthyViaLog(env, name) {
+var TRUSTED_TRANSPORTS = new Set(["http", "external", "curl", "container", "dns", "edge-ext", "external-curl", "external-http", "external-https"]);
+function transportTrusted(tr) {
+  const t = String(tr || "").toLowerCase().trim();
+  if (!t) return false;
+  if (TRUSTED_TRANSPORTS.has(t)) return true;
+  return TRUSTED_TRANSPORTS.has(t.split(":")[0].trim());
+}
+async function closeIssue(env, id, now, target) {
+  const stamp = new Date().toISOString();
+  const ev = "backlog-exec v1.6.1 evidence-first auto-close " + stamp + (target ? " | target=" + target : "");
+  await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence, triaged_at) VALUES (?1,'RC-03','closed','qnfo-backlog-exec',datetime('now'),'auto-close by qnfo-backlog-exec v1.6.0 drain',?2,datetime('now')) ON CONFLICT(issue_id) DO UPDATE SET triage_state='closed', close_evidence=?2, triaged_at=datetime('now')").bind(id, ev).run();
+  return env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, id).run();
+}
+async function recheckRecentCloses(env) {
+  let reopened = 0;
+  const now = nowEpoch();
   try {
-    const row = await env.AUDIT.prepare("SELECT ok, status, ts FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
+    const rows = await env.AUDIT.prepare("SELECT issue_id, close_evidence FROM issue_triage WHERE owner='qnfo-backlog-exec' AND triage_state='closed' AND triaged_at >= datetime('now','-7 days') AND close_evidence LIKE '%target=%' LIMIT 40").all();
+    for (const r of rows.results || []) {
+      const m = String(r.close_evidence || "").match(/target=([a-z0-9-]+)/i);
+      if (!m) continue;
+      const tgt = m[1];
+      const last = await env.AUDIT.prepare("SELECT ok, ts FROM fleet_probe_log WHERE name=?1 ORDER BY id DESC LIMIT 1").bind(tgt).first();
+      if (!last) continue;
+      const age = Date.now() - new Date(last.ts).getTime();
+      if (age <= 240 * 6e4 && Number(last.ok) === 0) {
+        await env.AUDIT.prepare("UPDATE agent_issues SET status='open', updated_at=?1 WHERE id=?2 AND status='closed'").bind(now, r.issue_id).run();
+        await env.AUDIT.prepare("UPDATE issue_triage SET triage_state='triaged', reopened_count = reopened_count + 1 WHERE issue_id=?1").bind(r.issue_id).run();
+        reopened++;
+        await recordEvent(env, "job-run", "backlog-exec REOPENED issue " + r.issue_id + " (" + tgt + "): fresh probe regression " + last.ts, { id: r.issue_id, target: tgt, action: "reopened" }, WORKER, "ok");
+      }
+    }
+  } catch (e) {}
+  return reopened;
+}
+function healthOptIn(title, description) {
+  const t = String(title || "") + " " + String(description || "");
+  const m = t.match(/probe_target\s*=\s*([A-Za-z0-9_.-]+)/i);
+  const c2 = t.match(/probe_class\s*=\s*([a-z0-9_-]+)/i);
+  if (!m && !c2) return null;
+  if (!m) return { partial: true, missing: "probe_target" };
+  if (!c2) return { partial: true, missing: "probe_class" };
+  const c = t.match(/probe_class\s*=\s*([a-z0-9_-]+)/i);
+  return { target: m[1], cls: (c ? c[1] : "").toLowerCase(), complete: true, partial: false };
+}
+async function probeHealthyViaLog(env, name, maxAgeMin) {
+  const win = Number(maxAgeMin) > 0 ? Number(maxAgeMin) : 15;
+  try {
+    const row = await env.AUDIT.prepare("SELECT ok, status, ts, transport, source FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 1").bind(name).first();
     if (row && Number(row.ok) === 1) {
       const age = Date.now() - new Date(row.ts).getTime();
-      if (age < 24 * 3600 * 1e3) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status };
+      if (age < win * 6e4) return { ok: true, via: "fleet_probe_log", ts: row.ts, status: row.status, transport: row.transport, source: row.source };
     }
   } catch (e) {
   }
@@ -70,11 +116,11 @@ async function probeHealth(name) {
       const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT);
       const r = await fetch("https://" + h + "/health", { headers: { "User-Agent": "Mozilla/5.0 (qnfo-backlog-exec)" }, signal: ctl.signal });
       clearTimeout(timer);
-      if (r.ok) return { ok: true, host: h, status: r.status };
+      if (r.ok) return { ok: true, host: h, status: r.status, transport: "worker-same-zone" };
     } catch (e) {
     }
   }
-  return { ok: false, host: null, status: 0 };
+  return { ok: false, host: null, status: 0, transport: "worker-same-zone" };
 }
 __name(probeHealth, "probeHealth");
 async function sweepAdvisorNoise(env) {
@@ -86,7 +132,7 @@ async function sweepAdvisorNoise(env) {
     for (const r of rows) {
       const ageMs = createdAgeMs(r.created_at, now);
       if (ageMs > 3 * 3600 * 1e3) {
-        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, r.id).run();
+        await closeIssue(env, r.id, now);
         closed++;
         await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0, 40) + "): superseded, age>3h", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.6" }, WORKER, "ok");
       }
@@ -152,6 +198,9 @@ async function sweepOpsJobs(env) {
 }
 __name(sweepOpsJobs, "sweepOpsJobs");
 async function run(env) {
+  const MIN_AGE_MS = (Number(env.MIN_CLOSE_AGE_MIN) > 0 ? Number(env.MIN_CLOSE_AGE_MIN) : 30) * 6e4;
+  const PROBE_WIN_MIN = Number(env.PROBE_LOG_MAX_AGE_MIN) > 0 ? Number(env.PROBE_LOG_MAX_AGE_MIN) : 15;
+  const reopenedOnRegression = await recheckRecentCloses(env);
   const noiseClosed = await sweepAdvisorNoise(env);
   const ledgerResolved = await sweepIssueLedger(env);
   const jobsReaped = await sweepOpsJobs(env);
@@ -163,27 +212,42 @@ async function run(env) {
   for (const row of items) {
     const title = String(row.title || "");
     const name = workerTarget(title + " " + String(row.description || ""));
-    const isHealthAvailability = /health|heartbeat|availability|endpoint down|is down|reachable/i.test(title) && /health|availability|reachable|down/i.test(title);
-    if (name && isHealthAvailability) {
-      const pLog = await probeHealthyViaLog(env, name);
-      const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts } : await probeHealth(name);
-      if (p.ok) {
-        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
-        closed++;
-        detail.push({ id: row.id, target: name, action: "closed", note: "health availability re-probe PASS via " + p.host });
-        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): " + p.host, { id: row.id, target: name, action: "closed", reason: "health-availability predicate passed" }, WORKER, "ok");
-        continue;
-      } else {
-        if (/orphan|bogus|does not exist/i.test(title)) {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
-          closed++;
-          detail.push({ id: row.id, target: name, action: "closed", note: "orphan probe target (no such host) - closed on first failed probe" });
-          continue;
-        }
-        escalated++;
-        detail.push({ id: row.id, target: name, action: "escalate", note: "health probe still failing" });
+    const isHealthAvailability = /\b(health|heartbeat|availability|unreachable|endpoint down|is down|down)\b/i.test(title);
+    const optIn = healthOptIn(title, row.description);
+    if (isHealthAvailability && !optIn) {
+      rechecked++;
+      detail.push({ id: row.id, action: "recheck", note: "legacy-unmarked health ticket (v1.5.0): no probe_target= opt-in marker, auto-close disabled" });
+      continue;
+    }
+    if (optIn && optIn.partial) {
+      escalated++;
+      detail.push({ id: row.id, action: "escalate-partial-marker", note: "partial opt-in marker (missing " + optIn.missing + "); fail-closed" });
+      continue;
+    }
+    if (optIn && !isHealthAvailability) {
+      escalated++;
+      detail.push({ id: row.id, action: "escalate-marker-non-health", note: "opt-in marker on a non-health ticket; auto-close refused" });
+      continue;
+    }
+    if (optIn && isHealthAvailability && optIn.cls === "worker-process") {
+      const ageMs = createdAgeMs(row.created_at, now);
+      if (ageMs < MIN_AGE_MS) {
+        rechecked++;
+        detail.push({ id: row.id, target: optIn.target, action: "recheck", note: "too fresh to auto-close: age " + Math.round(ageMs / 6e4) + "m < " + Math.round(MIN_AGE_MS / 6e4) + "m" });
         continue;
       }
+      const pLog = await probeHealthyViaLog(env, optIn.target, PROBE_WIN_MIN);
+      const p = pLog ? { ok: true, host: pLog.via + " " + pLog.ts, transport: pLog.transport } : await probeHealth(optIn.target);
+      if (p.ok && transportTrusted(p.transport)) {
+        await closeIssue(env, row.id, now, optIn.target);
+        closed++;
+        detail.push({ id: row.id, target: optIn.target, action: "closed", note: "health re-probe PASS " + p.host + " transport=" + p.transport + " (fresh<=" + PROBE_WIN_MIN + "m, age>" + Math.round(MIN_AGE_MS / 6e4) + "m)" });
+        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + optIn.target + "): " + p.host + " transport=" + p.transport, { id: row.id, target: optIn.target, action: "closed", reason: "health predicate v1.5.0: opt-in + fresh + trusted transport", transport: p.transport }, WORKER, "ok");
+        continue;
+      }
+      escalated++;
+      detail.push({ id: row.id, target: optIn.target, action: "escalate", note: "no close-authorizing evidence (ok=" + p.ok + ", transport=" + (p.transport || "none") + "): same-zone/binding evidence cannot authorize a close" });
+      continue;
     }
     const isExceptionClass = !isHealthAvailability && name && /alert-storm|exception|error-burst|worker-exception|recurring fail/i.test(title);
     if (isExceptionClass && name) {
@@ -197,7 +261,7 @@ async function run(env) {
         }
         if (rec === 0) {
           const ev = await probeHealthyViaLog(env, name) || await probeHealth(name);
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, target: name, action: "closed", note: "exception-class recovered: no error-selfheal recurrence 24h, age>24h" + (ev && ev.ok ? ", health ev " + ev.host : "") });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): exception-class recovered", { id: row.id, target: name, action: "closed", reason: "no error-selfheal recurrence in 24h" }, WORKER, "ok");
@@ -213,7 +277,7 @@ async function run(env) {
         const named = title.replace(/^MODEL-DEGRADED\s*/i, "").split(",").map((s) => s.trim()).filter(Boolean);
         const still = named.filter((m) => degraded.has(m));
         if (degraded.size === 0 || still.length === 0) {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, action: "closed", note: "model-health stale: none of [" + named.slice(0, 4).join(",") + "] degraded now (degraded rows=" + degraded.size + ")" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (model-health): no named model degraded now", { id: row.id, action: "closed", reason: "model-health predicate cleared v1.2.7" }, WORKER, "ok");
@@ -231,7 +295,7 @@ async function run(env) {
         const model = probeFail[1];
         const h = await env.AUDIT.prepare("SELECT status FROM ai_model_health WHERE model_id=?1").bind(model).first();
         if (!h || String(h.status) !== "degraded") {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, target: model, action: "closed", note: "ai-cal probe-failing stale: ai_model_health status=" + (h ? h.status : "absent") });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (ai-cal " + model + "): health no longer degraded", { id: row.id, target: model, action: "closed", reason: "ai-cal probe predicate cleared v1.2.7" }, WORKER, "ok");
@@ -250,7 +314,7 @@ async function run(env) {
         const rec = await env.AUDIT.prepare("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE model=?1 AND ts >= ((strftime('%s','now') - 86400) * 1000)").bind(model).first();
         const n = rec ? Number(rec.n || 0) : 0;
         if (n === 0) {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, target: model, action: "closed", note: "gw-fail stale: 0 failures for " + model + " in 24h" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (gw-fail " + model + "): no recurrence in 24h", { id: row.id, target: model, action: "closed", reason: "gateway-failure predicate cleared v1.2.7" }, WORKER, "ok");
@@ -267,7 +331,7 @@ async function run(env) {
       try {
         const q = await env.AUDIT.prepare("SELECT status, version_to, updated_at FROM version_queue WHERE id=?1").bind(Number(vq[1])).first();
         if (!q || String(q.status).toLowerCase() !== "error") {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, target: "version_queue#" + vq[1], action: "closed", note: q ? "version_queue status=" + q.status + " (not error) - condition cleared" : "version_queue row absent - ticket orphaned" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (VQ " + vq[1] + "): " + (q ? "status=" + q.status : "row absent"), { id: row.id, action: "closed", reason: "zenodo-publish predicate cleared v1.2.9" }, WORKER, "ok");
@@ -284,7 +348,7 @@ async function run(env) {
         const t = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM research_queue WHERE status='failed' AND recover_count>=2").first();
         const still = t ? Number(t.c || 0) : 0;
         if (still === 0) {
-          await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
+          await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, action: "closed", note: "research terminal condition cleared: 0 rows with status='failed' AND recover_count>=2" });
           await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (research): no terminal-failed queue rows remain", { id: row.id, action: "closed", reason: "research-pipeline predicate cleared v1.2.9" }, WORKER, "ok");
