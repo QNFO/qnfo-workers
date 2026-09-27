@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.5';
+var VERSION = '0.7.15-no-retire-on-redirect';
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -468,6 +468,127 @@ var DRAIN_DAILY_CAP = 30;   // hard ceiling on posts per UTC day
 var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
 
 // Drain the share queue oldest-first under a daily ceiling.
+// WS-A3 (2026-09-26): consume the orphaned dissemination_tracker queue. 19 papers sat at
+// action='queued'/channel='bluesky' since 2026-09-03 because nothing drained it (social_threads
+// only carries the q08 essay threads). Post each queued paper to Bluesky, then mark it posted.
+// LINK-RESOLUTION-GATE-1 (2026-09-26) + NEVER-RETIRE-ON-REDIRECT-1 (2026-09-27):
+// A redirect (301/302/303/307/308) is a ROUTING change, NEVER a death. Destructive action -
+// deleting published content or retiring a host - requires a HARD 404/410. A redirect that lands
+// on a bare homepage is 'misrouted': a config bug to FIX, not content to delete. Root cause: a
+// transient q08.org->qnfo.org 301 was misread as 'retirement' and 71 live posts were deleted on it.
+async function probeLink(url, marker) {
+  try {
+    const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-probe)" } });
+    const st = r.status;
+    if (st === 200) {
+      if (marker) {
+        // LINK-RESOLUTION-GATE R4: a bare 200 is not enough - a catch-all (e.g. a list page)
+        // also returns 200. Require the marker (the paper slug) to appear in the fetched body.
+        const body = await r.text();
+        if (body.indexOf(marker) < 0) return { verdict: "misrouted", status: st };
+      }
+      return { verdict: "live", status: st };
+    }
+    if (st === 301 || st === 302 || st === 303 || st === 307 || st === 308) {
+      return { verdict: "misrouted", status: st, final: r.headers.get("location") || "" };
+    }
+    if (st === 404 || st === 410) return { verdict: "gone", status: st };
+    return { verdict: "transient", status: st };
+  } catch (e) {
+    return { verdict: "transient", status: 0, err: String(e).slice(0, 60) };
+  }
+}
+async function urlResolves(url, marker) {
+  return (await probeLink(url, marker)).verdict === "live";
+}
+async function httpStatus(url) {
+  try {
+    const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-gate)" } });
+    return r.status;
+  } catch (e) {
+    return 0;
+  }
+}
+async function drainDissemination(env) {
+  await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
+  await env.DB.prepare("UPDATE dissemination_tracker SET action='queued', retry_count=COALESCE(retry_count,0)+1, updated_at=datetime('now') WHERE action='failed' AND COALESCE(retry_count,0) < 3 AND updated_at < datetime('now','-30 minutes')").run();
+  const cap = await env.DB.prepare("SELECT COUNT(*) n FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','start of day')").first();
+  const postedToday = (cap && cap.n) || 0;
+  if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
+  let posted = 0, failed = 0;
+  for (let i = 0; i < DRAIN_PER_RUN; i++) {
+    const row = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 1").first();
+    if (!row) break;
+    try {
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='posting', updated_at=datetime('now') WHERE id=? AND action='queued'").bind(row.id).run();
+      const link = row.pages_url || ("https://papers.qnfo.org/papers/" + String(row.paper_slug) + "/");
+      const p = await probeLink(link, String(row.paper_slug || "").slice(0, 40));
+      if (p.verdict !== "live") {
+        // SUPPRESS-NON-PUBLISHED-1 + NEVER-RETIRE-ON-REDIRECT-1: 404/410 = genuinely gone ->
+        // suppress. A REDIRECT is a routing change -> NEVER suppress/delete; hold as 'misrouted'.
+        let act, note;
+        if (p.verdict === "gone") { act = "suppressed"; note = "SUPPRESSED: target paper gone (404/410): "; }
+        else if (p.verdict === "misrouted") { act = "misrouted"; note = "MISROUTED (redirect " + p.status + " -> " + String(p.final || "") + ") - NOT deleted: "; }
+        else { act = "queued"; note = "TRANSIENT probe failure - retry: "; }
+        if (act !== "queued") await env.DB.prepare("UPDATE dissemination_tracker SET action=?, post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(act, note + link, row.id).run();
+        console.log("LINK_GATE dissemination " + row.id + " " + act + " " + link);
+        continue;
+      }
+      const text = truncateSafe(String(row.paper_title || row.paper_slug) + " \u2014 " + link, 290);
+      const s = await session(env);
+      const r = await postText(s, text, { embed: { title: String(row.paper_title || 'QNFO'), desc: 'QNFO research \u2014 open access' } });
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, updated_at=datetime('now') WHERE id=?").bind(r.uri, r.uri, row.id).run();
+      posted++;
+    } catch (e) {
+      failed++;
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(String(e).slice(0, 180), row.id).run();
+    }
+  }
+  return { posted, failed };
+}
+// RETRACT-DEAD-LINKS-1 (2026-09-26): the post-side gate stops POSTING bad links, but a paper can be
+// published -> disseminated -> posted, then LATER reclassified (quarantined/duplicate/kg-backfill) by
+// an out-of-band sweep, leaving a stale live post. Re-verify every posted paper link each cron and
+// retract (delete the Bluesky post + flag) so the account can never carry a dead link.
+async function retractDeadLinks(env) {
+  const rows = await env.DB.prepare("SELECT id, post_id, pages_url FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id IS NOT NULL AND pages_url IS NOT NULL").all();
+  let retracted = 0, misrouted = 0;
+  for (const row of (rows.results || [])) {
+    const p = await probeLink(row.pages_url);
+    if (p.verdict === "live") continue;
+    if (p.verdict === "gone") {
+      // NEVER-RETIRE-ON-REDIRECT-1: ONLY a hard 404/410 justifies deleting published content.
+      try { const s = await session(env); await deleteRecord(s, String(row.post_id)); retracted++; }
+      catch (e) { console.log("RETRACT del fail " + row.id + " " + String(e && e.message || e).slice(0, 80)); }
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='link-dead', post_text_snippet='RETRACTED: 404/410 gone', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+    } else if (p.verdict === "misrouted") {
+      // A redirect is NOT a death - flag for repair, never delete.
+      misrouted++;
+      await env.DB.prepare("UPDATE dissemination_tracker SET post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind("MISROUTED (redirect " + p.status + " -> " + String(p.final || "") + ") - NOT deleted; fix the route", row.id).run();
+    }
+    // transient -> leave alone, retry next cron
+  }
+  if (retracted) console.log("RETRACTED " + retracted + " genuinely-gone paper posts");
+  return { retracted, misrouted };
+}
+// RESTORE-MISDELETED-1 (2026-09-27, ADD-VALUE): if a thread was flagged link-dead/misrouted but its
+// link NOW resolves 200 (e.g. a route was fixed), re-queue it automatically. Self-healing recovery
+// from the exact failure that deleted 71 q08 essays on a transient redirect.
+async function restoreMisdeleted(env) {
+  const rows = await env.DB.prepare("SELECT id, slug, posts FROM social_threads WHERE status IN ('link-dead','misrouted')").all();
+  let restored = 0;
+  for (const row of (rows.results || [])) {
+    let link = null;
+    try { const arr = JSON.parse(row.posts || "[]"); for (const t of arr) { const u = extractUrls(String(t)); if (u.length) { link = u[0]; break; } } } catch (e) {}
+    if (!link) continue;
+    if (await urlResolves(link)) {
+      await env.DB.prepare("UPDATE social_threads SET status='queued', error=NULL, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+      restored++;
+    }
+  }
+  if (restored) console.log("RESTORED " + restored + " mis-deleted threads (link now resolves)");
+  return { restored };
+}
 async function drainQueue(env) {
   await env.DB.prepare(
     "UPDATE social_threads SET status = CASE WHEN retry_count < ? THEN 'queued' ELSE 'failed' END, retry_count = retry_count + 1 WHERE status = 'posting'"
@@ -491,6 +612,21 @@ async function drainQueue(env) {
       const s = await session(env);
       let threadLink = null;
       for (const pt of posts) { const u = extractUrls(String(pt)); if (u.length) { threadLink = u[0]; break; } }
+      if (threadLink) {
+        const p = await probeLink(threadLink);
+        if (p.verdict === "gone") {
+          await env.DB.prepare("UPDATE social_threads SET status='link-dead', error=?, updated_at=datetime('now') WHERE id=?").bind("LINK-GONE (404/410): " + threadLink, row.id).run();
+          console.log("LINK_GONE thread " + row.id + " " + threadLink);
+          continue;
+        }
+        if (p.verdict === "misrouted") {
+          // NEVER-RETIRE-ON-REDIRECT-1: hold + flag (fix the route, then reset to queued). Do NOT delete.
+          await env.DB.prepare("UPDATE social_threads SET status='misrouted', error=?, updated_at=datetime('now') WHERE id=?").bind("MISROUTED (redirect " + p.status + " -> " + String(p.final || "") + ") - NOT deleted", row.id).run();
+          console.log("LINK_MISROUTED thread " + row.id + " " + threadLink);
+          continue;
+        }
+        if (p.verdict === "transient") { continue; }
+      }
       const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined });
       // Buffer (Mastodon/LinkedIn/X) posts plain text with no facet/embed support - the
       // link MUST be applied to the text itself here, mirroring what postThread() does
@@ -519,6 +655,9 @@ export default {
     if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
     await recheckDrafts(env);
     await drainQueue(env);
+    await drainDissemination(env);
+    await retractDeadLinks(env);
+    await restoreMisdeleted(env);
   },
 
   async fetch(request, env) {
@@ -529,6 +668,10 @@ export default {
     if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     if (!auth(request, env)) return new Response('unauthorized', { status: 401, headers: cors });
     try {
+      if (p === '/drain-dissemination') {
+        const r = await drainDissemination(env);
+        return new Response(JSON.stringify({ ok: true, ...r }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
       if (p === '/post' && m === 'POST') {
         const b = await request.json();
         const s = await session(env);
