@@ -1,3 +1,5 @@
+var VERSION="3.7.14-soft404-categoryfix";
+var INDEXNOW_KEY="9c4e7a1f38b2d6504e7c9a1b38f2d650";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -224,7 +226,7 @@ __name2222222222(xmlEscape, "xmlEscape");
 function detectCategory(title, abstract) {
   const t = ((title || "") + " " + (abstract || "")).toLowerCase();
   if (t.includes("error correction") || t.includes("stabilizer") || t.includes("fault-tolerant") || t.includes("qec") || t.includes("ldpc") || t.includes("surface code")) return "qec";
-  if (t.includes("number theory") || t.includes("p-adic") || t.includes("adelic") || t.includes("ostrowski") || t.includes("tate") || t.includes("gamma function") || t.includes("morita") || t.includes("langlands")) return "number-theory";
+  if (t.includes("number theory") || t.includes("p-adic") || t.includes("adelic") || t.includes("ostrowski") || t.includes("gamma function") || t.includes("morita") || t.includes("langlands")) return "number-theory";
   if (t.includes("physics") || t.includes("quantum field") || t.includes("quantum gravity") || t.includes("wheeler-dewitt") || t.includes("zbw") || t.includes("zitterbewegung") || t.includes("topological") || t.includes("majorana") || t.includes("holograph")) return "physics";
   if (t.includes("algorithm") || t.includes("machine learning") || t.includes("cryptograph") || t.includes("benchmark") || t.includes("verification") || t.includes("lwe") || t.includes("neural network") || t.includes("computation")) return "computer-science";
   return "other";
@@ -711,7 +713,7 @@ function renderIndexHTML(papers, total, offset, hasMore, activeCategory, searchQ
   const rows = papers.map(renderPaperRow).join("");
   const loadMoreHtml = hasMore ? '<div style="text-align:center;margin:1.4rem 0"><button id="load-more" class="filter-btn" onclick="loadMore()">Load more</button></div><script>var OFFSET=' + offset + ';var LIMIT=50;function loadMore(){var btn=document.getElementById("load-more");if(btn){btn.disabled=true;btn.textContent="Loading...";}var params="format=json&limit="+LIMIT+"&offset="+OFFSET;var q=new URLSearchParams(window.location.search);var cat=q.get("category");var s=q.get("search");if(cat){params+="&category="+encodeURIComponent(cat);}if(s){params+="&search="+encodeURIComponent(s);}fetch("/papers?"+params).then(function(r){return r.json();}).then(function(d){if(d&&d.rows&&d.rows.length){var ul=document.querySelector(".paper-list");ul.insertAdjacentHTML("beforeend",d.rows.join(""));if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}OFFSET=d.offset+d.rows.length;var cnt=document.getElementById("paper-count");if(cnt){cnt.textContent=d.total+" papers";}var btn2=document.getElementById("load-more");if(btn2){btn2.disabled=false;btn2.textContent="Load more";if(!d.hasMore){btn2.style.display="none";}}}else{var btn3=document.getElementById("load-more");if(btn3){btn3.disabled=false;btn3.style.display="none";}}}).catch(function(){var btn4=document.getElementById("load-more");if(btn4){btn4.disabled=false;btn4.textContent="Load more";}});}<\/script>' : "";
   const title = searchQuery ? 'Search: "' + esc(searchQuery) + '" \u2014 QNFO Papers' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers \u2014 QNFO" : "QNFO Papers";
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>' + title + '</title><meta name="description" content="QNFO research papers \u2014 open-science publications with Zenodo DOIs"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement("script");s.src="https://unpkg.com/mathjax@3/es5/tex-svg-full.js";document.head.appendChild(s);"><\/script><style>' + COMMON_CSS + '</style><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a><a href="https://archive.qnfo.org">Archive</a><a href="https://legal.qnfo.org">License</a></nav><div class="container"><h1>' + (searchQuery ? 'Search: "' + esc(searchQuery) + '"' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers" : "QNFO Papers") + '</h1><div class="filter-bar">' + fb + '</div><form method="get" action="/papers"><input type="text" name="search" class="search-box" placeholder="Search papers..." value="' + sv + '"></form><h2 id="paper-count">' + total + ' papers</h2><ul class="paper-list">' + rows + "</ul>" + loadMoreHtml + '</div><footer class="site-footer"><p>QNFO Papers \xB7 <a href="/rss.xml">RSS</a> \xB7 <a href="/sitemap.xml">Sitemap</a><br>Licensed under <a href="https://legal.qnfo.org">QNFO-ULA v2.0</a></p></footer></body></html>';
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>' + title + '</title><meta name="description" content="QNFO research papers \u2014 open-science publications with Zenodo DOIs"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement("script");s.src="https://unpkg.com/mathjax@3/es5/tex-svg-full.js";document.head.appendChild(s);"><\/script><style>' + COMMON_CSS + '</style><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a><a href="https://archive.qnfo.org">Archive</a><a href="https://legal.qnfo.org">License</a></nav><div class="container"><h1>' + (searchQuery ? 'Search: "' + esc(searchQuery) + '"' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers" : "QNFO Papers") + '</h1><div class="filter-bar">' + fb + '</div><form method="get" action="/papers"><input type="text" name="search" class="search-box" placeholder="Search papers..." value="' + sv + '"></form><h2 id="paper-count">' + total + ' papers</h2><ul class="paper-list">' + rows + "</ul>" + loadMoreHtml + subscribeBlock("papers") + '</div><footer class="site-footer"><p>QNFO Papers \xB7 <a href="/rss.xml">RSS</a> \xB7 <a href="/sitemap.xml">Sitemap</a><br>Licensed under <a href="https://legal.qnfo.org">QNFO-ULA v2.0</a></p></footer></body></html>';
 }
 __name(renderIndexHTML, "renderIndexHTML");
 __name2(renderIndexHTML, "renderIndexHTML");
@@ -781,13 +783,38 @@ __name222(citationAuthorsMeta, "citationAuthorsMeta");
 __name2222(citationAuthorsMeta, "citationAuthorsMeta");
 __name22222(citationAuthorsMeta, "citationAuthorsMeta");
 __name222222(citationAuthorsMeta, "citationAuthorsMeta");
+
+function subscribeBlock(source) {
+  var form = '<section style="max-width:720px;margin:36px auto 10px;padding:18px 20px;border:1px solid #e2dcd0;border-radius:12px;background:#f4f1ea">'
+    + '<h2 style="margin:0 0 6px;font-size:17px;color:#1b1915">Get new papers by email</h2>'
+    + '<p style="margin:0 0 12px;color:#6b665b;font-size:13.5px">One short weekly digest &mdash; titles, links and DOIs. No tracking; unsubscribe anytime.</p>'
+    + '<form id="ld-sub-form" novalidate style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<label for="ld-email" style="position:absolute;left:-9999px">Email address</label>'
+    + '<input id="ld-email" type="email" name="email" placeholder="you@example.com" required style="flex:1;min-width:220px;padding:9px 11px;border:1px solid #cfc7b8;border-radius:8px;font-size:14px">'
+    + '<input id="ld-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
+    + '<button type="submit" id="ld-btn" style="padding:9px 16px;border:0;border-radius:8px;background:#24315e;color:#fff;font-size:14px;cursor:pointer">Subscribe</button>'
+    + '</form><p id="ld-msg" role="status" aria-live="polite" style="min-height:18px;margin:8px 0 0;font-size:13px"></p></section>';
+  var js = "<script>(function(){var f=document.getElementById('ld-sub-form');if(!f)return;var msg=document.getElementById('ld-msg');var btn=document.getElementById('ld-btn');f.addEventListener('submit',function(e){e.preventDefault();var email=(document.getElementById('ld-email').value||'').trim();var hp=(document.getElementById('ld-hp')||{}).value||'';if(!email||email.indexOf('@')<1){msg.textContent='Please enter a valid email address.';return;}btn.disabled=true;msg.textContent='Subscribing...';fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,hp:hp,source:'" + source + "'})}).then(function(r){return r.json().catch(function(){return {};});}).then(function(j){if(j&&j.ok){msg.textContent='Thanks - check your inbox to confirm your subscription.';f.reset();}else{msg.textContent=(j&&j.error)||'Something went wrong. Please try again.';}}).catch(function(){msg.textContent='Network error. Please try again.';}).then(function(){btn.disabled=false;});});})();<\/script>";
+  return form + js;
+}
+__name(subscribeBlock, "subscribeBlock");
+
 function renderPaperHTML(paper) {
   const rawBody = paper.body_md || "";
-  const cleanMd = rawBody.length >= 5e3 ? fixMojibake(stripFrontmatter(rawBody)) : "";
-  const md = cleanMd;
+  // NO-BLANK-PAPER-1 (2026-09-26): a legacy `body_md.length >= 5000` gate
+  // blanked every short paper (canonical: the 3792-char poster
+  // statements-to-questions-ai-epistemic-repair rendered an empty body).
+  // Render the full body whenever real content exists; otherwise fall back to
+  // the abstract so the page can never render blank.
+  const _stripped = stripFrontmatter(rawBody).trim();
+  let md = _stripped ? fixMojibake(_stripped) : "";
+  if (md.trim().length < 40) {
+    const _abs = (paper && paper.abstract ? String(paper.abstract) : "").trim();
+    md = _abs ? "## Abstract\n\n" + _abs : "## Abstract\n\nFull text is being prepared and will appear here shortly.";
+  }
   const abstract = (paper.abstract || "").slice(0, 300);
   const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "Unknown";
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' + buildPaperJsonLd(paper) + "<title>" + esc(displayTitle(paper.title)) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(displayTitle(paper.title)) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '"><meta name="citation_publisher" content="QNFO Research Foundation"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + titleHTML(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article></div></body></html>";
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' + buildPaperJsonLd(paper) + "<title>" + esc(displayTitle(paper.title)) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(displayTitle(paper.title)) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '"><meta name="citation_publisher" content="QNFO Research Foundation"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + titleHTML(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article>" + subscribeBlock("papers") + "</div></body></html>";
 }
 __name(renderPaperHTML, "renderPaperHTML");
 __name2(renderPaperHTML, "renderPaperHTML");
@@ -866,6 +893,20 @@ __name2222222(handlePapers, "handlePapers");
 __name22222222(handlePapers, "handlePapers");
 __name222222222(handlePapers, "handlePapers");
 __name2222222222(handlePapers, "handlePapers");
+// NO-BLANK-PAPER-1 gate: live invariant over the paper surface. A published,
+// renderable paper must have either a body (>=40 chars) or an abstract; if both
+// are absent the detail page would render blank. Must report blank_count = 0.
+async function handleBlankPapers(env) {
+  try {
+    const r = await env.LIVING_PAPER.prepare("SELECT slug,title,status,paper_type,length(COALESCE(body_md,'')) AS body_len,length(COALESCE(abstract,'')) AS abstract_len FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND length(trim(COALESCE(body_md,''))) < 40 AND length(trim(COALESCE(abstract,''))) < 1 ORDER BY status, slug").all();
+    const rows = (r && r.results) || [];
+    const published = rows.filter(function (x) { return x.status === "published"; });
+    return json({ ok: published.length === 0, invariant: "NO-BLANK-PAPER-1", published_no_content: published.length, other_no_content: rows.length - published.length, note: "Renderer emits an abstract/placeholder fallback so no page renders blank; this flags papers with no content at all.", items: rows });
+  } catch (e) {
+    return json({ ok: false, error: e.message }, 500);
+  }
+}
+__name(handleBlankPapers, "handleBlankPapers");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
@@ -969,15 +1010,82 @@ __name2(renderAboutHTML, "renderAboutHTML");
 __name22(renderAboutHTML, "renderAboutHTML");
 __name222(renderAboutHTML, "renderAboutHTML");
 __name2222(renderAboutHTML, "renderAboutHTML");
-async function handleSitemap(env) {
+async function collectPaperUrls(env, recentDays) {
+  // WS-A1 (2026-09-26): the scheduled cron submits ONLY recently-changed papers. A full 460-URL
+  // submit (ok on the first, operator-side run) exceeds the IndexNow per-key rate budget when
+  // repeated daily and returns 429 from the Cloudflare egress IP (FM2). The full set remains
+  // available via /api/indexnow?full=1; the cron stays inside the budget.
+  var sql = "SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')";
+  if (recentDays) sql += " AND created_at >= datetime('now','-" + Number(recentDays) + " days')";
+  sql += " ORDER BY created_at DESC";
+  const res = await env.LIVING_PAPER.prepare(sql).all();
+  const base = "https://papers.qnfo.org";
+  return [base + "/", base + "/papers"].concat(res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug)));
+}
+__name(collectPaperUrls, "collectPaperUrls");
+async function indexNowSubmit(urls) {
+  const out = [];
+  const CHUNK = 100;
+  // R1/FM2 (2026-09-26): api.indexnow.org answers 429 to the Cloudflare EGRESS IP even for a few
+  // URLs (an operator submit from a different IP returned 200/202 for the same key + keyLocation).
+  // Fan out to the engine-specific endpoints as well - Bing and Yandex keep their own rate budgets,
+  // so a 429 from the shared relay does not imply a 429 from the engines. First endpoint that
+  // ACCEPTS a chunk wins; the exhausted case records the last status for diagnosis.
+  // R1: ordered by empirically-observed acceptance from the Cloudflare egress. yandex.com is the
+  // proven-accepting endpoint (202) and goes FIRST; the shared relay + Bing 429 the CF egress IP;
+  // Seznam + Naver are additional IndexNow participants kept as further redundancy.
+  const _EPS = ["https://yandex.com/indexnow", "https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow", "https://search.seznam.cz/indexnow", "https://searchadvisor.naver.com/indexnow"];
+  for (let i = 0; i < urls.length; i += CHUNK) {
+    const chunk = urls.slice(i, i + CHUNK);
+    const body = JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk });
+    let hit = null, last = null;
+    for (let e = 0; e < _EPS.length && !hit; e++) {
+      for (let attempt = 0; attempt < 2 && !hit; attempt++) {
+        try {
+          const r = await fetch(_EPS[e], { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body });
+          last = _EPS[e] + ":" + r.status;
+          if (r.status < 400) hit = { ep: _EPS[e], status: r.status };
+        } catch (err) {
+          last = _EPS[e] + ":err";
+        }
+        if (!hit) await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
+      }
+    }
+    out.push(hit ? { chunk: chunk.length, ep: hit.ep, status: hit.status } : { chunk: chunk.length, status: 429, note: "no endpoint accepted", last });
+    if (i + CHUNK < urls.length) await new Promise((res) => setTimeout(res, 1000));
+  }
+  return out;
+}
+__name(indexNowSubmit, "indexNowSubmit");
+async function handleIndexNow(env, full) {
+  const urls = await collectPaperUrls(env, full ? null : 7);
+  const res = await indexNowSubmit(urls);
+  return new Response(JSON.stringify({ ok: true, submitted: urls.length, indexnow: res }), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
+}
+__name(handleIndexNow, "handleIndexNow");
+async function handleSitemap(env, sitemapHost) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
-    const base = "https://papers.qnfo.org";
-    const all = [
-      { loc: base + "/", priority: "1.0" },
-      { loc: base + "/papers", priority: "0.9" },
-      { loc: "https://qnfo.org/about", priority: "0.8" }
-    ].concat(res.results.map((p) => ({
+    const isSite = sitemapHost === "qnfo.org" || sitemapHost === "www.qnfo.org";
+    const base = isSite ? "https://qnfo.org" : "https://papers.qnfo.org";
+    const ALL = isSite
+      ? [
+        { loc: "https://qnfo.org/", priority: "1.0" },
+        { loc: "https://qnfo.org/papers", priority: "0.9" },
+        { loc: "https://qnfo.org/about", priority: "0.8" },
+        { loc: "https://qnfo.org/graph", priority: "0.7" },
+        { loc: "https://ideas.qnfo.org", priority: "0.6" },
+        { loc: "https://qwav.org", priority: "0.6" }
+      ].concat(res.results.map((p) => ({
+        loc: "https://papers.qnfo.org/papers/" + encodeURIComponent(p.slug),
+        lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
+        priority: "0.8"
+      })))
+      : [
+        { loc: base + "/", priority: "1.0" },
+        { loc: base + "/papers", priority: "0.9" }
+      ];
+    const all = ALL.concat(isSite ? [] : res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
       lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
       priority: "0.8"
@@ -1079,7 +1187,7 @@ __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: "3.6.2-mathbalance" });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1472,7 +1580,7 @@ async function handleSubscribeProxy(request, env) {
         "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "",
         "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300)
       },
-      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: "qnfo.org" }),
+      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: String(payload && payload.source || "qnfo.org").slice(0, 80) }),
       signal: ctrl.signal
     });
     const data = await r.json().catch(function() {
@@ -1531,14 +1639,17 @@ var gateway_worker_default = {
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
-      if (p === "/sitemap.xml") return handleSitemap(env);
+      if (p === "/sitemap.xml") return handleSitemap(env, host);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
+      if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+      if (p === "/api/indexnow" && (method === "GET" || method === "POST")) return handleIndexNow(env, u.searchParams.get("full") === "1");
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
+      if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/papers" || p === "/") return handlePapers(request, env);
-      return handlePapers(request, env);
+      return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     if (host === "graph-api.qnfo.org") {
       try {
@@ -1550,7 +1661,7 @@ var gateway_worker_default = {
         if (method === "GET" && p.startsWith("/neighbors/")) return handleNeighbors(p.replace("/neighbors/", ""), env);
         if (method === "GET" && p === "/edges") return handleEdges(u, env);
         if (method === "GET" && p.startsWith("/impact/")) return handleImpact(p.replace("/impact/", ""), env);
-        if (p === "/" || p === "/health") return json({ status: "ok", version: "3.4", database: "qnfo-graph" });
+        if (p === "/" || p === "/health") return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, database: "qnfo-graph" });
         return json({ error: "Not found", path: p }, 404);
       } catch (e) {
         return json({ error: e.message }, 500);
@@ -1563,9 +1674,10 @@ var gateway_worker_default = {
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
+      if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
-      if (p === "/sitemap.xml") return handleSitemap(env);
+      if (p === "/sitemap.xml") return handleSitemap(env, host);
       if (p === "/robots.txt") return handlePapersRobots();
       if (p === "/llms.txt") return handleLlmsTxt(env);
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
@@ -1586,9 +1698,10 @@ var gateway_worker_default = {
     if (p === "/health") return health();
     if (p === "/legal" || p === "/license") return handleLegal(p, env);
     if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+    if (p === "/_audit/blank-papers") return handleBlankPapers(env);
     if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
-    if (p === "/sitemap.xml") return handleSitemap(env);
+    if (p === "/sitemap.xml") return handleSitemap(env, host);
     if (p === "/robots.txt") return handlePapersRobots();
     if (p === "/llms.txt") return handleLlmsTxt(env);
     if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
@@ -1601,6 +1714,12 @@ var gateway_worker_default = {
     if (method === "GET" && p === "/edges") return handleEdges(u, env);
     if (method === "GET" && p.startsWith("/impact/")) return handleImpact(p.replace("/impact/", ""), env);
     return json({ error: "Not found", path: p }, 404);
+  },
+  async scheduled(event, env, ctx) {
+    try {
+      await indexNowSubmit(await collectPaperUrls(env, 7));
+    } catch (e) {
+    }
   }
 };
 export {
