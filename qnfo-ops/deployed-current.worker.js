@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.13-attachguard-xml-form";
+var VERSION = "2.37.14-callglm-reasoning";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3029,8 +3029,17 @@ async function callGLM(env, messages, maxTokens, tools, opts) {
     if (o.toolChoice) inputs.tool_choice = o.toolChoice;
   }
   const res = await env.WAI.run(UPSTREAM_GLM_MODEL, inputs);
-  if (res && Array.isArray(res.choices)) return res;
-  const txt = res && (res.response != null ? res.response : res.answer) || "";
+  if (res && Array.isArray(res.choices)) {
+    // FM-GLM-REASONING (2026-09-27): mirror budgetFallback — a reasoning-only free-model reply must
+    // never surface as empty content on this free-first reader path (OPS-STREAM-EDGE-20260927: 3 live
+    // ok=0 streamed agent-tools rows via @cf/glm-5.3-flash). Merge reasoning_content when content is empty.
+    const _g0 = res.choices[0] && res.choices[0].message;
+    if (_g0 && !String(_g0.content || "").trim() && _g0.reasoning_content && !(_g0.tool_calls && _g0.tool_calls.length)) _g0.content = String(_g0.reasoning_content);
+    return res;
+  }
+  let txt = res && (res.response != null ? res.response : res.answer) || "";
+  if (!String(txt || "").trim() && res && res.reasoning_content) txt = String(res.reasoning_content);
+  if (!String(txt || "").trim()) txt = "Upstream model returned no content; please re-send your request.";
   return { choices: [{ index: 0, message: { role: "assistant", content: String(txt) }, finish_reason: "stop" }], usage: res && res.usage || {} };
 }
 __name(callGLM, "callGLM");
