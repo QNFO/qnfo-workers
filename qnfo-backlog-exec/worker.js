@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.6.3-dodmirror";
+var VERSION = "1.6.4-run-gate";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -427,6 +427,10 @@ var worker_default = {
       return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1 });
     }
     if (url.pathname === "/run" && request.method === "POST") {
+      const runTok = env.RUN_TOKEN;
+      const authH = request.headers.get("Authorization") || "";
+      if (!runTok) return json({ error: "run endpoint disabled: RUN_TOKEN unset" }, 503);
+      if (authH !== "Bearer " + runTok) return json({ error: "unauthorized" }, 401);
       const out = await run(env);
       return json({ ok: true, worker: WORKER, version: VERSION, out });
     }
