@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.31-landfix";
+var VERSION = "0.4.32-landfix2";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1612,10 +1612,31 @@ __name22(redeploy, "redeploy");
 // This job closes drift->fetch->write->commit->close_evidence: it commits the deployed
 // artifact back to the source repo (both the durable worker.js and the deployed-current
 // mirror), then records a verified self_heal_actions row (close evidence).
+// /content/v2 returns module workers MULTIPART-wrapped; land the raw JS, not the wrapper.
+function extractModuleCode(content) {
+  content = String(content || "");
+  if (content.indexOf("Content-Disposition") < 0) return content;
+  var m = content.match(/^--([^\r\n]+)/);
+  if (!m) return content;
+  var parts = content.split("--" + m[1]);
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    if (part.indexOf('name="worker.js"') < 0) continue;
+    var sep = part.indexOf("\r\n\r\n");
+    var body = sep >= 0 ? part.slice(sep + 4) : part;
+    return body.replace(/\r?\n$/, "");
+  }
+  return content;
+}
+__name(extractModuleCode, "extractModuleCode");
+__name2(extractModuleCode, "extractModuleCode");
+__name22(extractModuleCode, "extractModuleCode");
 async function landFix(env, worker, depCode, depV, canV, srcPath) {
   if (!env.GITHUB_TOKEN) return { ok: false, status: 403, note: "GITHUB_TOKEN missing - cannot land fix" };
   if (!/^[a-zA-Z0-9-]+$/.test(worker)) return { ok: false, status: 400, note: "invalid worker name" };
   if (!depV) return { ok: false, status: 422, note: "deployed code has no VERSION marker - refused" };
+  var raw = extractModuleCode(depCode);
+  if (!raw || raw.length < 40) return { ok: false, status: 422, note: "deployed code unreadable after multipart extract" };
   // Derive repo + dir from the canonical source path (e.g. "qnfo-workers/main/<name>/worker.js").
   var repo = "qnfo-workers";
   var dir = worker;
@@ -1636,31 +1657,28 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
     var p = paths[i];
     try {
       var enc = p.split("/").map(encodeURIComponent).join("/");
-      // fetch current sha (for update); 404 means new file
+      // fetch current sha + content (for update + idempotence) in ONE parse
       var g = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc + "?ref=main", { headers: ghHeaders }, 8e3);
       var sha = null;
+      var repoContent = null;
       if (g.status === 200) {
         var gj = await g.json().catch(function() { return null; });
-        sha = gj && gj.sha ? gj.sha : null;
-      }
-      // idempotence: skip if repo already byte-identical
-      if (g.status === 200) {
-        var gtxt = await g.text().catch(function() { return ""; });
-        var repoContent = null;
-        try {
-          var gj2 = JSON.parse(gtxt);
-          if (gj2 && gj2.content) {
-            var bin = gj2.content.replace(/\s+/g, "");
-            var bytes = Uint8Array.from(atob(bin), function(c) { return c.charCodeAt(0); });
-            repoContent = new TextDecoder().decode(bytes);
+        if (gj) {
+          sha = gj.sha || null;
+          if (gj.content) {
+            try {
+              var bin = gj.content.replace(/\s+/g, "");
+              var bytes = Uint8Array.from(atob(bin), function(c) { return c.charCodeAt(0); });
+              repoContent = new TextDecoder().decode(bytes);
+            } catch (e) {}
           }
-        } catch (e) {}
-        if (repoContent !== null && repoContent === depCode) {
-          landed.push(p + ":no-op");
-          continue;
         }
       }
-      var body = { message: commitMsg, content: b64encode(depCode), branch: "main" };
+      if (repoContent !== null && repoContent === raw) {
+        landed.push(p + ":no-op");
+        continue;
+      }
+      var body = { message: commitMsg, content: b64encode(raw), branch: "main" };
       if (sha) body.sha = sha;
       var pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify(body) }, 12e3);
       if (pu.status === 200 || pu.status === 201) landed.push(p);
