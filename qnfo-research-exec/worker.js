@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.18-revdissem";
+var VERSION = "0.9.19-zenodov2-files";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1084,14 +1084,24 @@ async function publishV2(env, row) {
     return { ok: false, stage: "v2", error: "newversion failed: " + JSON.stringify(nv).slice(0, 200) };
   }
   var slug = row.slug || "paper";
+  // ZENODO-V2-DEPOSIT-CONTAMINATION FIX (C1, 2026-09-27, agent_issues 979): the POST
+  // /actions/newversion response does NOT enumerate the inherited draft files (nv.files is
+  // empty), so the old DELETE loop removed nothing and every v2 inherited the full v1 file
+  // set (54 files of which 44 were v1 fragments). Fetch the DRAFT's OWN file listing
+  // (GET /deposit/depositions/<id>/files) and DELETE each file before uploading the manifest.
   var files = nv.files || [];
+  try {
+    if ((!files || !files.length) && nv.id) {
+      var dl = await zenodo(env, "GET", "/" + nv.id + "/files");
+      if (Array.isArray(dl)) files = dl;
+    }
+  } catch (e) {
+  }
   for (var i = 0; i < files.length; i++) {
-    var fname = files[i].filename || "";
-    if (true) {
-      try {
-        await fetch(files[i].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-      } catch (e) {
-      }
+    if (!files[i] || !files[i].links || !files[i].links.self) continue;
+    try {
+      await fetch(files[i].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
+    } catch (e) {
     }
   }
   var bucket = nv.links && nv.links.bucket;
