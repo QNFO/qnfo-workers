@@ -362,7 +362,7 @@ var calibratorMod = (function() {
     { id: "qnfo-ai-health", kind: "http", url: "https://qnfo-ai.q08.workers.dev/health", binding: "SVC_QNFO_AI", expect: 200 },
     { id: "qnfo-ai-models", kind: "http", url: "https://qnfo-ai.q08.workers.dev/v1/models", binding: "SVC_QNFO_AI", expect: 200 },
     { id: "qnfo-infra-health", kind: "http", url: "https://qnfo-infra.q08.workers.dev/health", binding: "SVC_QNFO_INFRA", expect: 200 },
-    { id: "qnfo-auditor-health", kind: "http", url: "https://qnfo-auditor.q08.workers.dev/health", binding: "SVC_QNFO_AUDITOR", expect: 200 },
+    { id: "qnfo-ops-health", kind: "http", url: "https://qnfo-ops.q08.workers.dev/health", expect: 200 },
     { id: "personal-api-health", kind: "http", url: "https://personal-api.q08.workers.dev/health", binding: "SVC_PERSONAL_API", expect: 200, soft: true },
     { id: "qnfo-intent-health", kind: "http", url: "https://qnfo-intent-orchestrator.q08.workers.dev/health", binding: "SVC_QNFO_INTENT", expect: 200, soft: true },
     { id: "papers-home", kind: "http", url: "https://papers.qnfo.org/", expect: 200, soft: true },
@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.36-landfix6";
+var VERSION = "0.4.37-opsprobe";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
