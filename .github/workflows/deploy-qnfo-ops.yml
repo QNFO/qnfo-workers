@@ -1,0 +1,68 @@
+name: deploy-qnfo-ops
+
+# SERVER-SIDE-DEPLOY-1 (2026-09-27): carry qnfo-ops v2.37.13-attachguard-xml-form from main to
+# live using the repo's own binding-preserving deployer (scripts/raw_put.py -> CF API /content).
+#
+# WHY /content AND NOT wrangler: the /content endpoint updates the CODE ONLY, preserving every
+# live binding (BINDING-PRESERVATION-1). qnfo-ops has 48 live bindings; a wrangler deploy that
+# cannot reproduce them would silently drop them. raw_put.py is fail-closed: it exits 3 and
+# deploys nothing on any error, so a partial deploy cannot occur.
+#
+# The artifact is main's qnfo-ops/worker.js (== qnfo-ops/deployed-current.worker.js, byte-identical,
+# sha256 1c289c78...), which carries ATTACHGUARD-XML-FORM.
+#
+# Trigger: a push touching this file, or manual workflow_dispatch.
+
+on:
+  push:
+    paths:
+      - '.github/workflows/deploy-qnfo-ops.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-qnfo-ops
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preflight - artifact must carry the ATTACHGUARD-XML-FORM fix
+        run: |
+          set -euo pipefail
+          v=$(grep -c 'var VERSION = "2.37.13-attachguard-xml-form";' qnfo-ops/worker.js || true)
+          x=$(grep -c 'attachmentGuardXml' qnfo-ops/worker.js || true)
+          echo "version-hits=$v attachmentGuardXml-hits=$x"
+          test "$v" = "1"
+          test "$x" = "2"
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "preflight OK: source and deployed-current mirror are byte-identical and carry the fix"
+
+      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
+
+      - name: Verify live VERSION via CF API
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" -o /tmp/live.js
+          echo "live-content-bytes=$(wc -c < /tmp/live.js)"
+          hits=$(grep -c '2.37.13-attachguard-xml-form' /tmp/live.js || true)
+          echo "live-version-hits=$hits"
+          test "$hits" -ge 1
+          echo "VERIFIED: live qnfo-ops carries 2.37.13-attachguard-xml-form"
