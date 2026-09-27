@@ -356,7 +356,11 @@ def main() -> int:
                                  "evidence": f"{it['path']}: no schedule-event run ever (events={it['events']}, runs={it['runs']})"})
 
     # --- class: codeql-config ---------------------------------------------
-    findings.extend(detect_duplicate_worker_names())
+    # RT-6 is a ~96-call structural sweep. Gated to the deliberate sweep so a
+    # per-push run stays fast -- removing the concurrency group means many runs
+    # can overlap, and an expensive default would risk the 10-minute timeout.
+    if os.environ.get("CI_WD_DUPCHECK") == "1":
+        findings.extend(detect_duplicate_worker_names())
     cs = setup_config()
     if cs == "unobservable":
         # RT-4: an unobservable probe is NOT a silent pass. The previous revision
