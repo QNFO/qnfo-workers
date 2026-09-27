@@ -42,6 +42,22 @@ def is_captured(path):
     return "Content-Disposition: form-data" in head or head.startswith("--")
 
 
+def is_import_free(path):
+    """True if worker.js is a self-contained deployable artifact (no static
+    import / export-from). A file with imports is a SOURCE needing bundling; its
+    mirror is a build artifact and must never be overwritten by cp."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            src = f.read()
+    except OSError:
+        return False
+    for line in src.splitlines():
+        ls = line.lstrip()
+        if ls.startswith("import ") or (ls.startswith("export ") and " from " in ls):
+            return False
+    return True
+
+
 def versions(path):
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -87,7 +103,20 @@ def main(argv):
                 shutil.copyfile(src_p, mir_p)
                 fixed.append(name)
         else:
-            rows.append((name, "NAMESET-DIFF", str(s), str(m)))
+            src_only = set(s) - set(m)
+            # A name-set difference is a build artifact for an import-using source,
+            # but for a self-contained deployable it is genuine drift: the mirror
+            # omits a constant the source defines (e.g. worker.js gained a function
+            # and a VERSION while the mirror was never regenerated). The canonical
+            # deploy reads the mirror, so this silently reverts the source.
+            if src_only and not is_captured(mir_p) and is_import_free(src_p):
+                rows.append((name, "DEPLOYABLE-DRIFT", str(s), str(m)))
+                drift.append(name)
+                if fix:
+                    shutil.copyfile(src_p, mir_p)
+                    fixed.append(name)
+            else:
+                rows.append((name, "NAMESET-DIFF", str(s), str(m)))
 
     if rows:
         print("%-34s %-14s %-40s %s" % ("worker", "verdict", "source", "mirror"))
