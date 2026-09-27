@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.28-budgetgate";
+var VERSION = "0.4.29-budgetdischarge";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1721,6 +1721,56 @@ async function budgetAudit(env, names) {
         var recent = await env.AUDIT.prepare("SELECT COUNT(*) n FROM self_heal_actions WHERE kind='node-budget' AND ts > datetime('now','-30 minutes')").first();
         if (!recent || Number(recent.n || 0) === 0) {
           await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES ('node-budget','fleet-budget',?1,datetime('now'),'detected')").bind(out.note).run();
+        }
+      } catch (e) {
+      }
+      // BUDGET-DISCHARGE-WIRE-1 (2026-09-27, red-team F1): an over-cap class must have a DISCHARGE PATH,
+      // not detect-only. (a) file an OWNED work-queue item (CLOSED-LOOP-DISPOSITION-1); (b) file
+      // NET-ZERO delete-worker candidates for workers with an explicit retirement intent AND zero 24h
+      // traffic (disposeRetired re-checks bindings + protectedNames + output-contract before deleting).
+      try {
+        var oitem = "node-budget-overage:" + out.over.join("; ");
+        var oex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(oitem).first();
+        if (!oex) {
+          await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'deepchat-reorg',date('now','+14 day'),'OPEN',datetime('now'))").bind(oitem, out.note).run();
+        }
+        var cand = await env.AUDIT.prepare("SELECT DISTINCT worker FROM worker_consolidation WHERE action IN ('RETIRE','MERGE') AND worker NOT IN (SELECT service FROM service_registry WHERE state='deleted')").all();
+        var cr = (cand && cand.results) || [];
+        for (var ci = 0; ci < cr.length; ci++) {
+          var cn = cr[ci].worker;
+          if (!cn) continue;
+          var inv = await env.AUDIT.prepare("SELECT COUNT(*) n FROM worker_invocations WHERE worker_name=?1 AND created_at > datetime('now','-1 day')").bind(cn).first();
+          if (inv && Number(inv.n || 0) > 0) continue;
+          var di = "delete-worker:" + cn;
+          var dex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(di).first();
+          if (!dex) {
+            await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'qnfo-fleet-control',date('now','+7 day'),'OPEN',datetime('now'))").bind(di, "NET-ZERO discharge candidate: explicit retirement intent + 0 invocations/24h; disposeRetired re-checks bindings/protected/output-contract").run();
+          }
+        }
+      } catch (e) {
+      }
+      // BUDGET-DISCHARGE-WIRE-1 (2026-09-27, red-team F1): an over-cap class must have a DISCHARGE PATH,
+      // not detect-only. (a) file an OWNED work-queue item (CLOSED-LOOP-DISPOSITION-1); (b) file
+      // NET-ZERO delete-worker candidates for workers with an explicit retirement intent AND zero 24h
+      // traffic (disposeRetired re-checks bindings + protectedNames + output-contract before deleting).
+      try {
+        var oitem = "node-budget-overage:" + out.over.join("; ");
+        var oex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(oitem).first();
+        if (!oex) {
+          await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'deepchat-reorg',date('now','+14 day'),'OPEN',datetime('now'))").bind(oitem, out.note).run();
+        }
+        var cand = await env.AUDIT.prepare("SELECT DISTINCT worker FROM worker_consolidation WHERE action IN ('RETIRE','MERGE') AND worker NOT IN (SELECT service FROM service_registry WHERE state='deleted')").all();
+        var cr = (cand && cand.results) || [];
+        for (var ci = 0; ci < cr.length; ci++) {
+          var cn = cr[ci].worker;
+          if (!cn) continue;
+          var inv = await env.AUDIT.prepare("SELECT COUNT(*) n FROM worker_invocations WHERE worker_name=?1 AND created_at > datetime('now','-1 day')").bind(cn).first();
+          if (inv && Number(inv.n || 0) > 0) continue;
+          var di = "delete-worker:" + cn;
+          var dex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(di).first();
+          if (!dex) {
+            await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'qnfo-fleet-control',date('now','+7 day'),'OPEN',datetime('now'))").bind(di, "NET-ZERO discharge candidate: explicit retirement intent + 0 invocations/24h; disposeRetired re-checks bindings/protected/output-contract").run();
+          }
         }
       } catch (e) {
       }
