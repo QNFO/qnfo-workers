@@ -46,6 +46,9 @@ DRY = os.environ.get("DRY_RUN") == "1"
 API = "https://api.github.com"
 LABEL = "ci-watchdog"
 TITLE_PREFIX = "[ci-watchdog]"
+# A finding filed against the watchdog itself is an unbreakable loop: the
+# monitor goes red, flags its own red, and can never recover.
+SELF_WORKFLOWS = {"ci-watchdog"}
 
 
 def gh(path: str, method: str = "GET", body: dict | None = None):
@@ -301,7 +304,6 @@ def main() -> int:
     # 6h, not 48h: a wide window re-reported the same past failures on every
     # run, so the gate could never reach green. Old history must age out.
     WINDOW_HOURS = int(os.environ.get("CI_WD_WINDOW_HOURS", "6"))
-    SELF_WORKFLOWS = {"ci-watchdog"}
     # Log fetching is the only expensive call here. It is capped hard because the
     # watchdog runs on a 10-minute CI budget, and the cheap signals (a run with
     # ZERO jobs, and the workflow name) already classify the common cases.
