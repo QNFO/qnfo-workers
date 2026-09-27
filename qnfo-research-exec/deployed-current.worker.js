@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.16-firstdeposit";
+var VERSION = "0.9.17-reclaimfix";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1333,14 +1333,16 @@ async function drainV2(env) {
   try {
     // CLAIM-RECLAIM-1 (2026-09-27): the cron fires hourly, so a researching claim older than 4h is
     // immortal and wedges the idea queue (canonical: row claimed 14:00Z stayed researching 4h+).
-    var _cl = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0 WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < datetime('now','-4 hours')").run();
+    // claimed_at is ISO-8601 text (T separator), so the bound MUST be strftime ISO too - a space-format
+    // bound never compares less (same type-mismatch class as DEPLOY-LOCK-EPOCH-TYPE-1).
+    var _cl = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0 WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 hours')").run();
     if (_cl.meta && _cl.meta.changes) await logEvent(env, "claim-reclaim", "released " + _cl.meta.changes + " stale researching claim(s)", "ok");
   } catch (eCl) {
   }
   try {
     // FAILED-REARM-1 (2026-09-27): transient stage failures older than 6h self-heal, bounded by
-    // recover_count < 3 so a poison row cannot loop forever.
-    var _fr = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', attempt=0, error=NULL, claimed_at=NULL, recover_count=recover_count+1 WHERE status='failed' AND recover_count < 3 AND created_at < datetime('now','-6 hours')").run();
+    // recover_count < 3 so a poison row cannot loop forever. created_at is ISO-8601 text; bound in ISO.
+    var _fr = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', attempt=0, error=NULL, claimed_at=NULL, recover_count=recover_count+1 WHERE status='failed' AND recover_count < 3 AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-6 hours')").run();
     if (_fr.meta && _fr.meta.changes) await logEvent(env, "failed-rearm", "re-armed " + _fr.meta.changes + " failed research row(s)", "ok");
   } catch (eFr) {
   }
