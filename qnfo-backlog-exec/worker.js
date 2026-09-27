@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.6.2-canonical";
+var VERSION = "1.6.3-dodmirror";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -84,6 +84,16 @@ async function recheckRecentCloses(env) {
     }
   } catch (e) {}
   return reopened;
+}
+async function reconcileDodMirrors(env) {
+  let dodClosed = 0, reowned = 0;
+  try {
+    const r1 = await env.AUDIT.prepare("UPDATE task_dod_register SET status='closed', evidence_pointer = COALESCE(evidence_pointer,'') || ' | auto-closed (backlog-exec v1.6.3 mirror reconciliation): source agent_issues row is terminal', updated_at=datetime('now') WHERE status='open' AND source_table='agent_issues' AND EXISTS (SELECT 1 FROM agent_issues a WHERE CAST(a.id AS TEXT)=task_dod_register.source_row_id AND a.status IN ('closed','resolved','wontfix'))").run();
+    dodClosed = r1 && r1.meta ? Number(r1.meta.changes || 0) : 0;
+    const r2 = await env.AUDIT.prepare("UPDATE task_dod_register SET owner='agent', evidence_pointer = COALESCE(evidence_pointer,'') || ' | re-owned (backlog-exec v1.6.3): prior owner was not a live service', updated_at=datetime('now') WHERE status='open' AND owner NOT IN (SELECT service FROM service_registry WHERE state='live') AND owner <> 'agent'").run();
+    reowned = r2 && r2.meta ? Number(r2.meta.changes || 0) : 0;
+  } catch (e) {}
+  return { dodClosed, reowned };
 }
 function healthOptIn(title, description) {
   const t = String(title || "") + " " + String(description || "");
@@ -200,6 +210,7 @@ __name(sweepOpsJobs, "sweepOpsJobs");
 async function run(env) {
   const MIN_AGE_MS = (Number(env.MIN_CLOSE_AGE_MIN) > 0 ? Number(env.MIN_CLOSE_AGE_MIN) : 30) * 6e4;
   const PROBE_WIN_MIN = Number(env.PROBE_LOG_MAX_AGE_MIN) > 0 ? Number(env.PROBE_LOG_MAX_AGE_MIN) : 15;
+  const dodReconcile = await reconcileDodMirrors(env);
   const reopenedOnRegression = await recheckRecentCloses(env);
   const noiseClosed = await sweepAdvisorNoise(env);
   const ledgerResolved = await sweepIssueLedger(env);
