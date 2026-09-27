@@ -1,4 +1,9 @@
 const QNFO_VERSION = "1.6.2";
+// WORKER-CONTRACT-1 (2026-09-27): expose the contract `VERSION` constant that cfWorkerRead and
+// deploy-drift-guard parse. Before this, the worker carried only QNFO_VERSION, so the guard
+// reported NO_REPO_VERSION (a source gap) and the repo<->live comparison was blind. The value is
+// the version /health actually SERVES; the route below now reads VERSION so there is ONE source.
+var VERSION = "1.6.1";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
