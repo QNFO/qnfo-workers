@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.8-authoritative-registry";
+var VERSION = "2.37.12-fm-stream-reasoning";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3141,7 +3141,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       // COST-ROUTING-STACK-1 L3: a persistent 4xx AUTH error (401/403) means the paid path is unusable
       // but a free path exists -> degrade rather than terminate (BUDGET-CAP-FREE-FALLBACK-1). Other 4xx
       // (400 bad-format etc.) stay fatal: a fallback cannot fix a malformed request.
-      if (resp.status === 401 || resp.status === 403) {
+      if (resp.status === 401 || resp.status === 403 || resp.status === 402) {
         const _fbA = await budgetFallback(env, messages, maxTokens, tools, o);
         if (_fbA) { console.log("OPS_PAID_AUTH_FREE_FALLBACK " + resp.status); return _fbA; }
       }
@@ -3204,7 +3204,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   if (!resp || !resp.ok || !resp.body) { const _fb = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb) { console.log("OPS_PAID_FAIL_FREE_FALLBACK callDeepSeekStream"); return _fb; } throw new Error(_dsLastErr || "deepseek stream upstream unavailable after 3 attempts"); }
   const reader = resp.body.getReader();
   const dec = new TextDecoder();
-  let buf = "", content = "", finish = "stop", usage = null;
+  let buf = "", content = "", reasoning = "", finish = "stop", usage = null;
   const tcs = [];
   while (true) {
     const r = await reader.read();
@@ -3238,6 +3238,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
           }
         }
       }
+      if (d.reasoning_content) reasoning += d.reasoning_content;
       if (Array.isArray(d.tool_calls)) {
         for (const tc of d.tool_calls) {
           const ti = tc.index != null ? tc.index : 0;
@@ -3255,6 +3256,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     if (!t.id) t.id = "call_" + i;
     return t;
   });
+  if (!String(content || "").trim() && reasoning) content = reasoning;
   const message = { role: "assistant", content };
   if (tool_calls.length) message.tool_calls = tool_calls;
   return { resp: { choices: [{ index: 0, message, finish_reason: finish }], usage: usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }, servedBy: o.upstreamModel ? modelToUse : modelToUse };
@@ -3524,8 +3526,17 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
         body: JSON.stringify(upBody)
       });
       if (!resp.ok || !resp.body) {
-        await fail("upstream " + resp.status + ": " + (await resp.text()).slice(0, 300));
-        return json({ error: "upstream relay failed (" + resp.status + ")" }, 502);
+        const _rs = resp.status;
+        const _rtxt = await resp.text().catch(function() { return ""; });
+        if (_rs === 401 || _rs === 403 || _rs === 429 || _rs === 402) {
+          const _fb = await budgetFallback(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
+          const _fc = _fb && _fb.resp && _fb.resp.choices && _fb.resp.choices[0] && _fb.resp.choices[0].message;
+          const _ftxt = String(_fc && (_fc.content || _fc.reasoning_content) || "");
+          ctx.waitUntil(logOps(env, { id: randId("ops-"), ts: iso(), model: relayDisp, strategy: "relay", prompt, response: _ftxt.slice(0, 2e4), prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: estTokens(_ftxt), cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: _ftxt.trim() ? 1 : 0, upstream_model: _fb && _fb.servedBy || null }));
+          return json({ id: randId("chatcmpl-"), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: relayDisp, choices: [{ index: 0, message: { role: "assistant", content: _ftxt }, finish_reason: "stop" }], usage: {} });
+        }
+        await fail("upstream " + _rs + ": " + String(_rtxt || "").slice(0, 300));
+        return json({ error: "upstream relay failed (" + _rs + ")" }, 502);
       }
       const recId = randId("ops-");
       ctx.waitUntil(logOps(env, { id: recId, ts: iso(), model: relayDisp, strategy: "relay", prompt, response: "(streamed)", prompt_tokens: estTokens(JSON.stringify(norm)), completion_tokens: 0, cost_usd: 0, latency_ms: Date.now() - t0, tool_calls: clientTools ? "relayed" : "", source: detectSource(ua), ua: String(ua || "").slice(0, 200), streamed: 1, ok: 1 }));
@@ -3864,7 +3875,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       }
       const reader = up.body.getReader();
       const dec = new TextDecoder();
-      let buf = "";
+      let buf = "", reasoning = "";
       while (true) {
         if (Date.now() - t0 > envInt(env, "OPS_FINAL_DEADLINE_MS", 9e4)) {
           try {
@@ -3890,6 +3901,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
               const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
               if (delta) {
                 if (delta.content) content += delta.content;
+                if (delta.reasoning_content) reasoning += delta.reasoning_content;
                 if (firstFrameIdx(content) < 0) emitChunk(delta, null);
               }
             } catch (e) {
@@ -3898,6 +3910,11 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         }
       }
       if (!content) content = fallback;
+      if (!String(content || "").trim() && reasoning) content = reasoning;
+      if (!String(content || "").trim() && toolLog.length) {
+        const _okN = toolLog.filter(function(t) { return t && t.ok; }).length;
+        content = "The agent completed " + _okN + " tool action(s) but the model returned no final narrative. Tool results are recorded; re-send your request for a concise summary.";
+      }
       streamedTokens = true;
       finishReason = "stop";
     } catch (e) {
@@ -4075,6 +4092,25 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           }
           if (!content || !String(content).trim()) {
             content = "The answer was truncated by the token budget (thinking consumed the tool-round cap) and the retry returned no content. Please re-send your request.";
+            finishReason = "stop";
+          }
+        }
+        if (toolLog.length && !String(content || "").trim()) {
+          // FM-EMPTY-RESPONSE (2026-09-26): the model returned EMPTY content after successful tool rounds
+          // (finish_reason "stop" with no text). Re-run WITHOUT tools under the budget-exhausted directive so
+          // the loop produces a final summary instead of logging an empty ok=0 response (seen live 3x today).
+          try {
+            work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+            const { resp: r4, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+            if (_sb3) servedBy = _sb3;
+            const c4 = r4 && r4.choices && r4.choices[0];
+            content = String(c4 && c4.message && c4.message.content || "");
+            finishReason = c4 && c4.finish_reason || "stop";
+            upstreamUsage = r4 && r4.usage || upstreamUsage;
+          } catch (e4) {
+          }
+          if (!String(content || "").trim()) {
+            content = "The tool loop completed its operations but the model returned no final summary. Please re-send your request for a concise answer.";
             finishReason = "stop";
           }
         }
@@ -4972,7 +5008,7 @@ async function opsDeploy(env, args) {
         log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
       }
       const content = atob(b64);
-      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
+      const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) {
         result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer };
@@ -4991,6 +5027,23 @@ async function opsDeploy(env, args) {
         log.push({ step: "verify", live_version: live });
       } catch (e) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
+      }
+      // DEPLOY-GUARD-LEDGER-SYNC-1 (2026-09-26): advance the deploy-guard registry
+      // version to the newly-live version in the SAME deploy. Without this the guard's
+      // current_version lags by one, and EVERY subsequent deploy is refused with
+      // version-mismatch until an operator manually reconciles the ledger.
+      try {
+        const _glVer = live || toVer || srcVer || null;
+        for (let _gi = 0; _gi < 4; _gi++) {
+          const gl = await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, to: _glVer, actor: "qnfo-ops/ops-deploy", ok: !!(dep && dep.ok), note: "auto-advance deploy-guard registry after deploy" }) });
+          let gj = {};
+          try { gj = await gl.json(); } catch (_ge) {}
+          log.push({ step: "guard-ledger", attempt: _gi, http: gl.status, registry_version: gj && gj.registry_version || null });
+          if (gj && gj.registry_version && (!_glVer || String(gj.registry_version) === String(_glVer))) break;
+          if (_gi < 3) await new Promise(function (r) { setTimeout(r, 4000); });
+        }
+      } catch (e3) {
+        log.push({ step: "guard-ledger", error: String(e3 && e3.message || e3).slice(0, 140) });
       }
       try {
         var wtPath = (file.slice(-11) === "/worker.js") ? file.slice(0, -11) + "/wrangler.toml" : file;
