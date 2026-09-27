@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.15-noblankpublish";
+var VERSION = "0.9.16-firstdeposit";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -921,8 +921,55 @@ async function publishV2(env, row) {
   }
   var recId = String(row.paper_doi || "").split("zenodo.").pop() || "";
   if (!recId) {
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-    return { ok: false, stage: "v2", error: "bad doi" };
+    // FIRST-DEPOSIT-1 (2026-09-27): a revision queued for a paper with no existing Zenodo record
+    // (empty paper_doi) previously errored with "bad doi", so first-time deposits had no automated
+    // path. Now they deposit through publishToZenodo, honoring the living-paper floor: status='published'
+    // requires >= 20000 chars (MIN-PAPER-LENGTH-3), enforced here before the D1 trigger fires.
+    var fdBody = String(row.corrected_md || "");
+    if (fdBody.length < 20000) {
+      await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'first-deposit', 'BLOCK', ?, 'MIN-PAPER-LENGTH-3', 'qnfo-research-exec', 'P1')").bind(("first deposit requires >= 20000 chars; " + fdBody.length + " provided").slice(0, 300)).run();
+      } catch (eG2) {
+      }
+      return { ok: false, stage: "gate", error: "first deposit requires >= 20000 chars; " + fdBody.length + " provided" };
+    }
+    var fdTitle = extractTitle(fdBody, row.title);
+    var fdAbstract = "";
+    var fdAbsM = fdBody.match(/abstract:\s*\|\r?\n((?:\s{1,4}.*\r?\n?)+)/);
+    if (fdAbsM) fdAbstract = fdAbsM[1].replace(/^\s{1,4}/gm, "").replace(/\s+/g, " ").trim();
+    if (!fdAbstract) {
+      var fdAbsM2 = fdBody.match(/abstract:\s*["']?([^"'\n]{40,600})["']?/i);
+      if (fdAbsM2) fdAbstract = String(fdAbsM2[1]).trim();
+    }
+    if (!fdAbstract) fdAbstract = String(row.title || "QNFO research paper");
+    var fd = await publishToZenodo(env, fdTitle, fdAbstract, fdBody, String(row.slug || "paper"));
+    if (!fd.ok) {
+      await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+      return { ok: false, stage: "first-deposit", error: fd.error };
+    }
+    var fdUpd = await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, zenodo_url=?, status='published', updated_at=datetime('now') WHERE slug=?").bind(fdTitle, fdBody, row.version_to || "1.0.0", fd.doi, fd.doi, fd.record, String(row.slug || "")).run();
+    if (!fdUpd || !fdUpd.meta || !fdUpd.meta.changes) {
+      try {
+        await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, doi, version, zenodo_doi, zenodo_url, status, body_md, license, language, paper_type, slug, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'published',?,?,?,?,?,datetime('now'),datetime('now'))").bind("vq-" + row.id, fdTitle, '["Rowan Brad Quni-Gudzinas"]', fdAbstract, fd.doi, row.version_to || "1.0.0", fd.doi, fd.record, fdBody, "CC BY 4.0", "en", "preprint", String(row.slug || "")).run();
+      } catch (eIns) {
+      }
+    }
+    try {
+      await env.MIRROR.put("papers/" + String(row.slug || "paper") + ".md", fdBody);
+    } catch (eMir) {
+    }
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), String(row.slug || ""), fd.doi, fdTitle, "bluesky", "queued", "auto", 0, fd.record, "https://papers.qnfo.org/papers/" + String(row.slug || "") + "/").run();
+    } catch (eDiss) {
+    }
+    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(fd.doi, row.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare("UPDATE paper_revision_log SET status='published', new_doi=?, updated_at=datetime('now') WHERE slug=? AND status='queued'").bind(fd.doi, String(row.slug || "")).run();
+    } catch (ePrl2) {
+    }
+    await depositToGithub(env, String(row.slug || "paper"), fdTitle, fdBody, fd.doi);
+    return { ok: true, stage: "first-deposit", doi: fd.doi };
   }
   var latest = await latestRecord(env, recId);
   if (latest && latest.metadata && String(latest.metadata.version || "") === String(row.version_to || "")) {
@@ -1274,6 +1321,28 @@ async function drainV2(env) {
     await enrichGateBlocked(env);
   } catch (eEnrich) {
     await logEvent(env, "enrich-err", String(eEnrich && eEnrich.message || eEnrich).slice(0, 200));
+  }
+  try {
+    // QUEUED-PROMOTION-1 (2026-09-27): legacy rows land in status='queued' and nothing promoted them,
+    // so the revision queue silently wedged (canonical: version_queue id 59 sat queued 24h+).
+    // Promote any queued row that already carries a corrected_md so the drain can process it.
+    var _pr = await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='drafted', updated_at=datetime('now') WHERE status='queued' AND corrected_md IS NOT NULL AND LENGTH(TRIM(corrected_md)) > 100").run();
+    if (_pr.meta && _pr.meta.changes) await logEvent(env, "v2-promote", "promoted " + _pr.meta.changes + " queued row(s) to drafted", "ok");
+  } catch (ePr) {
+  }
+  try {
+    // CLAIM-RECLAIM-1 (2026-09-27): the cron fires hourly, so a researching claim older than 4h is
+    // immortal and wedges the idea queue (canonical: row claimed 14:00Z stayed researching 4h+).
+    var _cl = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0 WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < datetime('now','-4 hours')").run();
+    if (_cl.meta && _cl.meta.changes) await logEvent(env, "claim-reclaim", "released " + _cl.meta.changes + " stale researching claim(s)", "ok");
+  } catch (eCl) {
+  }
+  try {
+    // FAILED-REARM-1 (2026-09-27): transient stage failures older than 6h self-heal, bounded by
+    // recover_count < 3 so a poison row cannot loop forever.
+    var _fr = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', attempt=0, error=NULL, claimed_at=NULL, recover_count=recover_count+1 WHERE status='failed' AND recover_count < 3 AND created_at < datetime('now','-6 hours')").run();
+    if (_fr.meta && _fr.meta.changes) await logEvent(env, "failed-rearm", "re-armed " + _fr.meta.changes + " failed research row(s)", "ok");
+  } catch (eFr) {
   }
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
   var results = [];
@@ -2038,6 +2107,12 @@ __name22222(run, "run");
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
+      try {
+        // HEARTBEAT-1 (2026-09-27): research-exec had no heartbeat row, so a dead cron was invisible
+        // to the fleet heartbeat surface (issue class #973).
+        await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, ts, ok) VALUES ('qnfo-research-exec', ?, 1)").bind(nowIso()).run();
+      } catch (eHb) {
+      }
       try {
         var drained = await drainV2(env);
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");
