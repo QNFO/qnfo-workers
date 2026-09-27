@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.30-budgetdischarge2";
+var VERSION = "0.4.31-landfix";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1134,6 +1134,16 @@ async function sha256(str) {
 __name(sha256, "sha256");
 __name2(sha256, "sha256");
 __name22(sha256, "sha256");
+// UTF-8-safe base64 for the GitHub Contents API (btoa alone throws on non-Latin-1).
+function b64encode(s) {
+  var bytes = new TextEncoder().encode(String(s));
+  var bin = "";
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+__name(b64encode, "b64encode");
+__name2(b64encode, "b64encode");
+__name22(b64encode, "b64encode");
 async function stateGet(env, key, fb) {
   try {
     var r = await env.AUDIT.prepare("SELECT value FROM fleet_deploy_state WHERE key=?1").bind(key).first();
@@ -1595,6 +1605,81 @@ async function redeploy(env, worker) {
 __name(redeploy, "redeploy");
 __name2(redeploy, "redeploy");
 __name22(redeploy, "redeploy");
+// LAND-CODE-FIX-1 (2026-09-27): the fleet lacked a recurring server-side job that lands
+// code fixes. When a worker's deployed code is AHEAD of the repo (an out-of-band edit that
+// was never committed), scan() only REPORTED it -- so the next canonical redeploy silently
+// reverted the fix (REPO-IS-DEPLOY-SOURCE-1: "the ONLY durable fix is a commit to main").
+// This job closes drift->fetch->write->commit->close_evidence: it commits the deployed
+// artifact back to the source repo (both the durable worker.js and the deployed-current
+// mirror), then records a verified self_heal_actions row (close evidence).
+async function landFix(env, worker, depCode, depV, canV, srcPath) {
+  if (!env.GITHUB_TOKEN) return { ok: false, status: 403, note: "GITHUB_TOKEN missing - cannot land fix" };
+  if (!/^[a-zA-Z0-9-]+$/.test(worker)) return { ok: false, status: 400, note: "invalid worker name" };
+  if (!depV) return { ok: false, status: 422, note: "deployed code has no VERSION marker - refused" };
+  // Derive repo + dir from the canonical source path (e.g. "qnfo-workers/main/<name>/worker.js").
+  var repo = "qnfo-workers";
+  var dir = worker;
+  if (srcPath && srcPath.indexOf("/") > 0) {
+    var seg = srcPath.split("/");
+    repo = seg[0] || repo;
+    dir = seg.slice(2).slice(0, -1).join("/") || dir;
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(repo) || repo.indexOf("..") >= 0) return { ok: false, status: 400, note: "unsafe repo" };
+  if (dir.indexOf("..") >= 0) return { ok: false, status: 400, note: "unsafe path" };
+  var paths = [dir + "/worker.js", dir + "/deployed-current.worker.js"];
+  if (srcPath && srcPath.indexOf("/deployed-current.worker.js") >= 0) paths = [dir + "/deployed-current.worker.js", dir + "/worker.js"];
+  var ghHeaders = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/landFix", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  var commitMsg = "chore(" + worker + "): land deployed " + depV + " (LAND-CODE-FIX-1: deployed-ahead -> " + canV + " committed to main)";
+  var landed = [];
+  var errors = [];
+  for (var i = 0; i < paths.length; i++) {
+    var p = paths[i];
+    try {
+      var enc = p.split("/").map(encodeURIComponent).join("/");
+      // fetch current sha (for update); 404 means new file
+      var g = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc + "?ref=main", { headers: ghHeaders }, 8e3);
+      var sha = null;
+      if (g.status === 200) {
+        var gj = await g.json().catch(function() { return null; });
+        sha = gj && gj.sha ? gj.sha : null;
+      }
+      // idempotence: skip if repo already byte-identical
+      if (g.status === 200) {
+        var gtxt = await g.text().catch(function() { return ""; });
+        var repoContent = null;
+        try {
+          var gj2 = JSON.parse(gtxt);
+          if (gj2 && gj2.content) {
+            var bin = gj2.content.replace(/\s+/g, "");
+            var bytes = Uint8Array.from(atob(bin), function(c) { return c.charCodeAt(0); });
+            repoContent = new TextDecoder().decode(bytes);
+          }
+        } catch (e) {}
+        if (repoContent !== null && repoContent === depCode) {
+          landed.push(p + ":no-op");
+          continue;
+        }
+      }
+      var body = { message: commitMsg, content: b64encode(depCode), branch: "main" };
+      if (sha) body.sha = sha;
+      var pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify(body) }, 12e3);
+      if (pu.status === 200 || pu.status === 201) landed.push(p);
+      else errors.push(p + ":HTTP " + pu.status);
+    } catch (e) {
+      errors.push(p + ":" + String(e && e.message || e).slice(0, 80));
+    }
+  }
+  var ok = landed.length > 0;
+  var note = ok ? "landed " + landed.join(", ") + (errors.length ? "; partial-errors " + errors.join(";") : "") : "land-failed " + errors.join(";");
+  // close evidence: verified self-heal row (detect -> act -> verify).
+  try {
+    await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('code-fix-land','" + worker + "',?1,datetime('now'),?2,?3,?4,?5)").bind(String(note).slice(0, 400), ok ? "verified" : "failed", ok ? new Date().toISOString() : null, "LAND-CODE-FIX-1: deployed-ahead " + depV + " > repo " + canV + " committed to main", ok ? "high" : "low").run();
+  } catch (e) {}
+  return { ok, status: ok ? 200 : 502, note, landed: landed.length, errors: errors.length };
+}
+__name(landFix, "landFix");
+__name2(landFix, "landFix");
+__name22(landFix, "landFix");
 function tomlCrons(t) {
   var LF = String.fromCharCode(10);
   var body = t.split(LF).filter(function(l) {
@@ -1769,7 +1854,7 @@ async function budgetAudit(env, names) {
 }
 
 async function scan(env, heal) {
-  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
+  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, landed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
     var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 2e4);
     var lj = await lr.json();
@@ -1853,7 +1938,13 @@ async function scan(env, heal) {
         out.ahead++;
         out.details.push(n + ":ahead " + depV + ">" + canV);
         await clearScanErr(env, n);
-        await report(env, n, depV, canV, c.path, "deployed-ahead");
+        if (heal && !usedHealth) {
+          var lf = await landFix(env, n, dep, depV, canV, c.path);
+          if (lf.ok) out.landed++;
+          await report(env, n, depV, canV, c.path, lf.ok ? "deployed-ahead:landed " + lf.note : "deployed-ahead");
+        } else {
+          await report(env, n, depV, canV, c.path, "deployed-ahead");
+        }
         continue;
       }
       out.drifted++;
@@ -2113,13 +2204,13 @@ var worker_default = {
     }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
-      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds));
+      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " landed=" + res.landed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds));
       var rw = await registerWatch(env, 7);
       return json({ ok: true, scan: res, register: rw });
     }
     if (p === "/scan-heal" && request.method === "POST" && admin) {
       var res2 = await scan(env, true);
-      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
+      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " landed=" + res2.landed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
       var rw2 = await registerWatch(env, 7);
       return json({ ok: true, scan: res2, register: rw2 });
     }
@@ -2130,7 +2221,7 @@ var worker_default = {
     var res = await scan(env, heal);
     var opt = await optimizeFleet(env);
     var rw = await registerWatch(env, 7);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " landed=" + res.landed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
   }
 };
 var deployDefault = worker_default;
