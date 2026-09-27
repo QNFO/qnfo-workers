@@ -30,7 +30,7 @@ __name(routerFetch, "routerFetch");
 __name2(routerFetch, "routerFetch");
 __name22(routerFetch, "routerFetch");
 __name222(routerFetch, "routerFetch");
-var GATEWAY_MODEL = "deepseek-v4-flash";
+var GATEWAY_MODEL = "qnfo";
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
