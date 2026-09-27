@@ -46,9 +46,13 @@ on:
     types: [ci-watchdog]
 
 permissions:
-  actions: write      # dispatch a stuck workflow, re-run the healer
-  issues: write       # file/refresh the deduped finding
+  actions: write        # dispatch a stuck workflow, re-run the healer
+  issues: write         # file/refresh the deduped finding
   contents: read
+  # Required so the CodeQL default-setup probe observes instead of 403ing.
+  # Without it the watchdog reported an authz error as drift and could
+  # never pass: an unauthorized probe is not evidence.
+  security-events: read
 
 concurrency:
   group: ci-watchdog-${{ github.event.workflow_run.head_branch || 'main' }}
