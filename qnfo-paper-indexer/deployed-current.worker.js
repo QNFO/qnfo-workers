@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.3-status-filter-purge";
+var VERSION = "3.0.4-cron-window-rotate";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -253,12 +253,28 @@ async function handlePurge(env, dryRun) {
   for (const t of targets) {
     const ids = [];
     for (let idx = 0; idx < t.chunks; idx++) ids.push((await sha256hex(t.slug + ":" + idx)).slice(0, 32));
+    // #1184 VECTOR-PURGE-ID-COVERAGE-GAP-1 (2026-09-27): the canonical scheme only covers
+    // sha256(slug:idx). Legacy slug__N and paper:slug:N vectors survive. Collected here,
+    // deleted in a separate call below so a failure cannot affect the canonical deletion.
+    const legacyIds = [];
+    for (let idx = 0; idx < t.chunks; idx++) {
+      legacyIds.push(t.slug + "__" + idx);
+      legacyIds.push("paper:" + t.slug + ":" + idx);
+    }
     if (!dryRun) {
       for (let i = 0; i < ids.length; i += VZ_BATCH) {
         const slice = ids.slice(i, i + VZ_BATCH);
         try {
           await env.PAPER_VZ.deleteByIds(slice);
           vectorsDeleted += slice.length;
+        } catch (e) {
+        }
+      }
+      for (let i = 0; i < legacyIds.length; i += VZ_BATCH) {
+        const lslice = legacyIds.slice(i, i + VZ_BATCH);
+        try {
+          await env.PAPER_VZ.deleteByIds(lslice);
+          vectorsDeleted += lslice.length;
         } catch (e) {
         }
       }
@@ -326,7 +342,15 @@ var worker_default = {
       } else {
         const p = await handlePurge(env, false);
         console.log("[qnfo-paper-indexer] scheduled purge:", JSON.stringify({ records: p.records, vectors_deleted: p.vectors_deleted }));
-        const fakeUrl = new URL("https://internal/?offset=0&limit=300");
+        // #1188 PAPER-INDEXER-CRON-WINDOW-STARVATION-1 (2026-09-27): the window used to be
+        // hardcoded offset=0&limit=300 against a 444-paper canonical corpus, so 144 papers
+        // could never be re-indexed. Rotate the window by UTC day so the whole corpus is
+        // covered within ceil(total/limit) days.
+        const _tot = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE " + CORPUS_WHERE).first();
+        const _total = _tot ? _tot.c : 0;
+        const _windows = Math.max(1, Math.ceil(_total / DEFAULT_INDEX_LIMIT));
+        const _off = (Math.floor(Date.now() / 86400000) % _windows) * DEFAULT_INDEX_LIMIT;
+        const fakeUrl = new URL("https://internal/?offset=" + _off + "&limit=" + DEFAULT_INDEX_LIMIT);
         const result = await handleIndex(env, fakeUrl);
         console.log("[qnfo-paper-indexer] scheduled index:", JSON.stringify(result));
       }
