@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.12-fm-stream-reasoning";
+var VERSION = "2.37.13-attachguard-xml-form";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2860,7 +2860,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "service_discover") res = await serviceDiscover(env, args);
     else if (name === "backlog_status") res = await backlogStatus(env);
     else if (name === "cf_analytics") res = await cfAnalytics(env);
-    else if (name === "telemetry_report") res = await telemetryReport(env, args);
+    else if (name === "telemetry_report") res = await telemetryReport(env, args && args.hours);
     else if (name === "telemetry_analyze") res = await telemetryAnalyze(env, args && args.hours);
     else if (name === "email_check") res = await emailRecent(env, args);
     else if (name === "email_stats") res = await emailStats(env);
@@ -3264,10 +3264,38 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
 __name(callDeepSeekStream, "callDeepSeekStream");
 __name2(callDeepSeekStream, "callDeepSeekStream");
 __name22(callDeepSeekStream, "callDeepSeekStream");
+function attachmentGuardXml(text) {
+  var m = String(text || "");
+  var maxSize = 0, sp = 0;
+  while ((sp = m.indexOf("<FILE_SIZE>", sp)) >= 0) {
+    sp += 11;
+    var sj = sp;
+    while (sj < m.length && m.charAt(sj) !== "<") sj++;
+    var sn = parseFloat(m.slice(sp, sj));
+    if (sn > maxSize) maxSize = sn;
+  }
+  if (maxSize <= 0) return "";
+  var ws = String.fromCharCode(32, 9, 13, 10);
+  var openTag = "<FILE_CONTENT>", closeTag = "</FILE_CONTENT>";
+  var idx = 0;
+  while ((idx = m.indexOf(openTag, idx)) >= 0) {
+    var cs = idx + openTag.length;
+    var ce = m.indexOf(closeTag, cs);
+    if (ce < 0) break;
+    var inner = m.slice(cs, ce);
+    var onlyWs = true;
+    for (var w = 0; w < inner.length; w++) {
+      if (ws.indexOf(inner.charAt(w)) < 0) { onlyWs = false; break; }
+    }
+    if (onlyWs) return "OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it.";
+    idx = ce + closeTag.length;
+  }
+  return "";
+}
 function attachmentGuard(text) {
   var m = String(text || "");
   var ki = m.indexOf("FILE_CONTENT=");
-  if (ki < 0) return "";
+  if (ki < 0) return attachmentGuardXml(m);
   var maxSize = 0, p = 0;
   while ((p = m.indexOf("FILE_SIZE=", p)) >= 0) {
     p += 10;
