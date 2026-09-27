@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.34-landfix4";
+var VERSION = "0.4.36-landfix6";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1651,68 +1651,83 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
   // refused rather than committed, so a health-sourced deployed version can still be landed
   // safely -- the guard that previously blocked the fleet's only real case (idea-hub).
   if (versionOf(raw) === null) return { ok: false, status: 422, note: "extracted source has no VERSION marker - refused (bundled/minified?)" };
-  // Derive repo + dir from the canonical source path (e.g. "qnfo-workers/main/<name>/worker.js").
+  // Repo + dir: prefer the GitHub canonical path ("qnfo-workers/main/<dir>/worker.js"); when
+  // canonical() served the R2 cache the path is "r2:qnfo-canonical/<w>.js" (NOT a repo name),
+  // so fall back to probing the repo for an existing <dir>/worker.js.
+  var ghHeaders = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/landFix", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
   var repo = "qnfo-workers";
   var dir = worker;
-  if (srcPath && srcPath.indexOf("/") > 0) {
-    var seg = srcPath.split("/");
-    repo = seg[0] || repo;
-    dir = seg.slice(2).slice(0, -1).join("/") || dir;
+  var seg = srcPath ? String(srcPath).split("/") : [];
+  if (seg.length > 2 && /^[A-Za-z0-9._-]+$/.test(seg[0])) {
+    repo = seg[0];
+    var d2 = seg.slice(2).slice(0, -1).join("/");
+    if (d2) dir = d2;
+  } else {
+    var cands = [worker];
+    if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
+    for (var ci = 0; ci < cands.length; ci++) {
+      var pr = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + cands[ci] + "/worker.js?ref=main", { headers: ghHeaders }, 8e3);
+      if (pr.status === 200) { dir = cands[ci]; break; }
+    }
   }
   if (!/^[A-Za-z0-9._-]+$/.test(repo) || repo.indexOf("..") >= 0) return { ok: false, status: 400, note: "unsafe repo" };
   if (dir.indexOf("..") >= 0) return { ok: false, status: 400, note: "unsafe path" };
+  // SOURCE-FIRST + ATOMIC (2026-09-27): a two-commit landing (mirror then source) let the
+  // mirror-sync workflow regenerate the mirror from the STILL-STALE source (it checks out the
+  // commit that triggered it) and clobber the landing. Commit BOTH files in ONE Git Data API
+  // commit so no transient inconsistency exists for any concurrent actor to react to.
   var paths = [dir + "/worker.js", dir + "/deployed-current.worker.js"];
-  if (srcPath && srcPath.indexOf("/deployed-current.worker.js") >= 0) paths = [dir + "/deployed-current.worker.js", dir + "/worker.js"];
-  var ghHeaders = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/landFix", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
   var commitMsg = "chore(" + worker + "): land deployed " + depV + " to main (LAND-CODE-FIX-1: repo was " + canV + ")";
   var landed = [];
   var errors = [];
-  for (var i = 0; i < paths.length; i++) {
-    var p = paths[i];
-    try {
-      var enc = p.split("/").map(encodeURIComponent).join("/");
-      // fetch current sha + content (for update + idempotence) in ONE parse
-      var g = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc + "?ref=main", { headers: ghHeaders }, 8e3);
-      var sha = null;
-      var repoContent = null;
-      if (g.status === 200) {
-        var gj = await g.json().catch(function() { return null; });
-        if (gj) {
-          sha = gj.sha || null;
-          if (gj.content) {
-            try {
-              var bin = gj.content.replace(/\s+/g, "");
-              var bytes = Uint8Array.from(atob(bin), function(c) { return c.charCodeAt(0); });
-              repoContent = new TextDecoder().decode(bytes);
-            } catch (e) {}
+  try {
+    var refR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/ref/heads/main", { headers: ghHeaders }, 8e3);
+    var refJ = refR.status === 200 ? await refR.json().catch(function() { return null; }) : null;
+    var headSha = refJ && refJ.object && refJ.object.sha;
+    if (!headSha) { errors.push("ref:HTTP " + refR.status); }
+    else {
+      var cmR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/commits/" + headSha, { headers: ghHeaders }, 8e3);
+      var cmJ = cmR.status === 200 ? await cmR.json().catch(function() { return null; }) : null;
+      var baseTree = cmJ && cmJ.tree && cmJ.tree.sha;
+      var toWrite = [];
+      for (var pi = 0; pi < paths.length; pi++) {
+        var encI = paths[pi].split("/").map(encodeURIComponent).join("/");
+        var gI = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + encI + "?ref=main", { headers: ghHeaders }, 8e3);
+        var same = false;
+        if (gI.status === 200) {
+          var gjI = await gI.json().catch(function() { return null; });
+          if (gjI && gjI.content) {
+            try { var dec = new TextDecoder().decode(Uint8Array.from(atob(gjI.content.replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); if (dec === raw) same = true; } catch (e) {}
           }
         }
+        if (same) landed.push(paths[pi] + ":no-op"); else toWrite.push(paths[pi]);
       }
-      if (repoContent !== null && repoContent === raw) {
-        landed.push(p + ":no-op");
-        continue;
-      }
-      var pu = null;
-      for (var att = 0; att < 3; att++) {
-        var body = { message: commitMsg, content: b64encode(raw), branch: "main" };
-        if (sha) body.sha = sha;
-        pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify(body) }, 12e3);
-        if (pu.status === 200 || pu.status === 201) break;
-        if (pu.status === 409) {
-          // concurrent writer advanced the file; re-read sha and retry (mirror-sync parity)
-          var g3 = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + enc + "?ref=main", { headers: ghHeaders }, 8e3);
-          if (g3.status === 200) { var gj3 = await g3.json().catch(function() { return null; }); if (gj3 && gj3.sha) { sha = gj3.sha; continue; } }
+      if (toWrite.length && baseTree) {
+        var entries = [];
+        for (var w = 0; w < toWrite.length; w++) {
+          var blR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/blobs", { method: "POST", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ content: b64encode(raw), encoding: "base64" }) }, 12e3);
+          var blJ = blR.status === 201 ? await blR.json().catch(function() { return null; }) : null;
+          if (!blJ || !blJ.sha) { errors.push(toWrite[w] + ":blob HTTP " + blR.status); continue; }
+          entries.push({ path: toWrite[w], mode: "100644", type: "blob", sha: blJ.sha });
         }
-        break;
+        if (entries.length === toWrite.length) {
+          var trR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/trees", { method: "POST", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ base_tree: baseTree, tree: entries }) }, 12e3);
+          var trJ = trR.status === 201 ? await trR.json().catch(function() { return null; }) : null;
+          if (trJ && trJ.sha) {
+            var coR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/commits", { method: "POST", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ message: commitMsg, tree: trJ.sha, parents: [headSha] }) }, 12e3);
+            var coJ = coR.status === 201 ? await coR.json().catch(function() { return null; }) : null;
+            if (coJ && coJ.sha) {
+              var upR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/refs/heads/main", { method: "PATCH", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ sha: coJ.sha, force: false }) }, 12e3);
+              if (upR.status === 200) { for (var w2 = 0; w2 < toWrite.length; w2++) landed.push(toWrite[w2]); }
+              else errors.push("ref-update HTTP " + upR.status);
+            } else errors.push("commit HTTP " + coR.status);
+          } else errors.push("tree HTTP " + trR.status);
+        }
       }
-      if (pu && (pu.status === 200 || pu.status === 201)) landed.push(p);
-      else errors.push(p + ":HTTP " + (pu ? pu.status : "?"));
-    } catch (e) {
-      errors.push(p + ":" + String(e && e.message || e).slice(0, 80));
     }
-  }
-  var ok = landed.length > 0;
-  var note = ok ? "landed " + landed.join(", ") + (errors.length ? "; partial-errors " + errors.join(";") : "") : "land-failed " + errors.join(";");
+  } catch (e) { errors.push("atomic:" + String(e && e.message || e).slice(0, 80)); }
+  var ok = landed.length > 0 && errors.length === 0;
+  var note = ok ? "landed " + landed.join(", ") : "land-failed " + errors.join(";");
   // close evidence: verified self-heal row (detect -> act -> verify).
   try {
     await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('code-fix-land','" + worker + "',?1,datetime('now'),?2,?3,?4,?5)").bind(String(note).slice(0, 400), ok ? "verified" : "failed", ok ? new Date().toISOString() : null, "LAND-CODE-FIX-1: deployed-ahead " + depV + " > repo " + canV + " committed to main", ok ? "high" : "low").run();
@@ -2291,6 +2306,19 @@ var worker_default = {
     }
     if (p === "/git-selftest" && request.method === "POST" && admin) {
       return json(await gitSelftest(env));
+    }
+    if (p === "/landfix" && request.method === "POST" && admin) {
+      var lb = {};
+      try { lb = await request.json(); } catch (e) {}
+      var wn = String(lb.worker || "");
+      if (!wn) return json({ error: "worker required" }, 400);
+      var cc = await canonical(env, wn);
+      var dd = await deployedContent(env, wn);
+      var dv = dd ? versionOf(dd) : null;
+      var cv = cc ? versionOf(cc.code) : null;
+      var lfr = await landFix(env, wn, dd, dv, cv, cc ? cc.path : "");
+      await report(env, wn, dv, cv, cc ? cc.path : "", lfr.ok ? "manual-landfix:landed " + lfr.note : "manual-landfix:" + lfr.note);
+      return json({ ok: lfr.ok, worker: wn, deployed: dv, canonical: cv, path: cc ? cc.path : null, result: lfr });
     }
     return json({ error: "not found" }, 404);
   },
