@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.1-noskip";
+var VERSION = "1.2.2-sweepwindow";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -395,12 +395,13 @@ async function gatewayFailureSweep(env, t0) {
   var limit = 3;
   try {
     for (var page = 1; page <= limit; page++) {
-      var r = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs?per_page=50&page=" + page + "&success=false&start_time=" + encodeURIComponent(startIso), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 25e3);
+      var r = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs?per_page=50&page=" + page + "&success=false&start_date=" + encodeURIComponent(startIso), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 25e3);
       if (r.status !== 200 || !r.data || !Array.isArray(r.data.result)) { fetchFail = true; out.ok = false; out.summary = "gw-log fetch HTTP " + r.status + " - sweep window NOT advanced"; break; }
       var arr = r.data.result;
       if (!arr.length) break;
       for (var i = 0; i < arr.length; i++) {
         var row = arr[i];
+        if (Number(new Date(row.created_at).getTime()) < lastTs) continue;
         var st = row.status_code || 0;
         var mdl = row.model || "unknown";
         var key = st + "|" + mdl;
