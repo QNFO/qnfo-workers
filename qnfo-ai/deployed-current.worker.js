@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.3-roster-auth";
+var VERSION = "5.29.1";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -28,13 +28,13 @@ async function loadModelHealth(env) {
 __name(loadModelHealth, "loadModelHealth");
 __name2(loadModelHealth, "loadModelHealth");
 var MODELS = {
-  // Workers AI free Ã¢ÂÂ original three
-  // Workers AI free Ã¢ÂÂ directive substitutes (small coder/validator/reviewer class)
+  // Workers AI free â original three
+  // Workers AI free â directive substitutes (small coder/validator/reviewer class)
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
-  // capable models for lowest cost Ã¢ÂÂ paid OK if best value". All postpaid; $/M input noted.
-  // $0.06/M Ã¢ÂÂ cheap general default (131k ctx, reasoning)
+  // capable models for lowest cost â paid OK if best value". All postpaid; $/M input noted.
+  // $0.06/M â cheap general default (131k ctx, reasoning)
   // $0.10/M
   "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
@@ -48,22 +48,22 @@ var MODELS = {
   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
   "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.40/M 1M-ctx agentic coding
-  // v5.0.0: vision (image-to-text + OCR) Ã¢ÂÂ free tier-0. Routed automatically when any
+  // v5.0.0: vision (image-to-text + OCR) â free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
-  // this model behind a one-time Community License "agree" Ã¢ÂÂ ACCEPTED 2026-08-28 on the
+  // this model behind a one-time Community License "agree" â ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
   "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.4, topP: 0.9, tools: true, vision: false }
-  // v4.3.7: tier-3 AI Gateway models REMOVED Ã¢ÂÂ the compat endpoint returns 400
+  // v4.3.7: tier-3 AI Gateway models REMOVED â the compat endpoint returns 400
   // "Chat completion bad format" (2019) for every one of them, surfacing as router
   // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
   // is worse than not advertising them. Explicit requests for unknown models fall
   // back to deepseek-v4-flash (existing behavior).
 };
 var MAX_OUT = {
-  // Workers AI (tier-0) Ã¢ÂÂ output token caps, keyed by Workers AI model id.
+  // Workers AI (tier-0) â output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
   "@cf/moonshotai/kimi-k2.6": 32768,
@@ -471,7 +471,7 @@ var ENSEMBLE = {
   validator: { wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", ctx: 65536 },
   // fast flash judgment (~0.3s small-prompt; proven fallback model)
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
-  // 1M-ctx reasoning refinement ($1.32/M) Ã¢ÂÂ LAZY: runs only on validator FAIL
+  // 1M-ctx reasoning refinement ($1.32/M) â LAZY: runs only on validator FAIL
 };
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
@@ -2419,9 +2419,6 @@ var worker_default = {
           }
         };
       });
-      // CAL-ROSTER-INTERNAL-1 (2026-09-27): the calibration roster audit reads the internal roster
-      // (with _router metadata) when called with the router key; public callers still get ONE model.
-      if ((request.headers.get("Authorization") || "") === "Bearer " + ((env.ROUTER_AUTH_KEY || env.QNFO_ROUTER_KEY) || "\u0000")) return json({ object: "list", data });
       // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
       return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }

@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.25-failclosed-reportcard";
+var VERSION = "1.7.24-gate-aware";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2377,16 +2377,6 @@ async function persistWeeklyReportCard(env, st) {
     } catch (e) {
     }
     const sai = computeSai(st, bench, await loadSaiConfig(env), await liveSaiInputs(env));
-    // REPORT-CARD-FAIL-CLOSED-1 (2026-09-27, red-team F4): never persist a NULL SAI as if it were a
-    // measurement. A missing weight (config_missing) or a null decision must FAIL CLOSED: emit a
-    // visible warning event and skip the history row, so the latest report card is never a fake null.
-    if (sai.sai == null) {
-      try {
-        await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'report-card-weekly', ?3, ?4, 'qnfo-fleet-dashboard', 'warn')").bind("rc-weekly-SKIP-" + iso, now.toISOString(), "SKIPPED: SAI null (config_missing=" + JSON.stringify(sai.config_missing) + ", decision=" + sai.decision_source + ")", JSON.stringify(sai)).run();
-      } catch (e) {
-      }
-      return { weekly: false, skipped: true, sai_null: true, config_missing: sai.config_missing };
-    }
     const grade = sai.sai >= 85 ? "A" : sai.sai >= 75 ? "B" : sai.sai >= 65 ? "C" : sai.sai >= 55 ? "D" : "F";
     await env.AUDIT.prepare("INSERT INTO report_card_history (ts, sai, grade, scores_json, signals_json) VALUES (?1, ?2, ?3, ?4, ?5)").bind(now.toISOString(), sai.sai, grade, JSON.stringify(sai.scores), JSON.stringify(sai.signals)).run();
     try {
