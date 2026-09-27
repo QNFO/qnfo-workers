@@ -109,6 +109,38 @@ def job_logs(run_id: int) -> str:
 # --------------------------------------------------------------------------
 # CLASSIFY
 # --------------------------------------------------------------------------
+def classify_structural(name: str, run: dict) -> tuple[str, str]:
+    """Classify WITHOUT downloading a job log.
+
+    The job-log endpoint 302-redirects to signed blob storage, and the
+    redirected request carries the Authorization header it will not accept,
+    so in CI the log fetch yielded nothing and every finding degraded to
+    `unknown` (19 of 22 observed). Workflow identity and file presence are
+    structured, always available, and need no download.
+    """
+    if name in SELF_WORKFLOWS:
+        return "self", "the watchdog never files against itself"
+    if name == "mirror-guard":
+        return "mirror-lag", "dispatch mirror-sync.yml (mirror-guard.py --fix actor)"
+    if name == "deploy-gate":
+        return "build-gate", "WORKER-BUILD-GATE-1: a wrangler.toml `main` does not resolve in a changed dir"
+    if name == "version-compare":
+        if _absent("qnfo-fleet-control/version-compare.mjs", run) or _absent(
+            "qnfo-fleet-control/version-compare.test.mjs", run
+        ):
+            return "missing-module", "the workflow runs a module/suite that is not committed; land it or retire the workflow"
+        return "comparator-regression", "the fail-closed comparator invariant regressed; do NOT relax rule 5"
+    if name in ("deploy-drift", "indexnow-submit"):
+        return "external-runner", "driven by the watchdog because GitHub `schedule` never fires on this repo"
+    return "unknown", "inspect the job log"
+
+
+def _absent(path: str, run: dict) -> bool:
+    ref = run.get("head_branch") or "main"
+    st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={ref}")
+    return st == 404
+
+
 def classify(log: str, wf_name: str) -> tuple[str, str]:
     L = log or ""
     if "DRIFT GATE FAILED" in L or "mirror-guard" in wf_name and "LAG" in L:
@@ -123,8 +155,19 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
 
 
 def setup_config() -> str:
+    """Code-scanning default-setup state.
+
+    An authz-limited probe is NOT drift. The CI GITHUB_TOKEN commonly
+    answers 403 here (reading code scanning needs `security-events: read`),
+    and reporting that as `state=http-403` manufactured a permanent false
+    finding whose remediation also 403d -- an unbreakable red. An
+    unauthorized probe proves nothing, so return "unobservable" and let the
+    caller skip. Same discipline as AUTHED-PROBE-HEADER-1.
+    """
     st, d = gh(f"/repos/{REPO}/code-scanning/default-setup")
-    return d.get("state", "unknown") if st == 200 else f"http-{st}"
+    if st == 200:
+        return d.get("state", "unknown")
+    return "unobservable"
 
 
 # --------------------------------------------------------------------------
@@ -168,6 +211,17 @@ def file_or_refresh(klass: str, subject: str, body: str) -> str:
                 existing = it
                 break
     if existing:
+        # Cooldown: without this the same known class is re-commented on every
+        # watchdog run (one run added six comments to the same issue).
+        upd = existing.get("updated_at") or ""
+        try:
+            import datetime as _d2
+            ut = _d2.datetime.fromisoformat(upd.replace("Z", "+00:00"))
+            age_h = (_d2.datetime.now(_d2.timezone.utc) - ut).total_seconds() / 3600.0
+            if age_h < 6:
+                return f"already reported #{existing['number']} ({age_h:.1f}h ago)"
+        except Exception:
+            pass
         gh(f"/repos/{REPO}/issues/{existing['number']}/comments", "POST", {"body": body})
         return f"refreshed #{existing['number']}"
     st, d = gh(f"/repos/{REPO}/issues", "POST",
@@ -202,6 +256,19 @@ def main() -> int:
         })
         print(f"  {state:7s} {w['name']:18s} runs={len(rs):3d} last={last} events={sorted(e for e in events if e)}")
 
+    import datetime as _dtdt
+    _now = _dtdt.datetime.now(_dtdt.timezone.utc)
+    recent_wf = set()
+    for _it in inventory:
+        if _it["last"] == "-":
+            continue
+        try:
+            _t = _dtdt.datetime.fromisoformat(_it["last"]).replace(tzinfo=_dtdt.timezone.utc)
+            if (_now - _t).total_seconds() < 55 * 60:
+                recent_wf.add(_it["name"])
+        except Exception:
+            pass
+
     # --- class: silent-schedule -------------------------------------------
     for it in inventory:
         if it["runs"] > 0 and not it["ever_scheduled"] and it["events"]:
@@ -218,7 +285,10 @@ def main() -> int:
 
     # --- class: codeql-config ---------------------------------------------
     cs = setup_config()
-    if cs != "configured":
+    if cs == "unobservable":
+        print("codeql: default-setup not observable with this token "
+              "(needs security-events: read) -> cannot-observe, NOT drift")
+    elif cs != "configured":
         findings.append({"class": "codeql-config", "subject": "default-setup",
                          "evidence": f"state={cs}"})
 
@@ -228,7 +298,10 @@ def main() -> int:
     # log fetches are capped, and a retired workflow (file gone from the ref) is
     # recorded without spending a log fetch on it.
     import datetime as _dt
-    WINDOW_HOURS = int(os.environ.get("CI_WD_WINDOW_HOURS", "48"))
+    # 6h, not 48h: a wide window re-reported the same past failures on every
+    # run, so the gate could never reach green. Old history must age out.
+    WINDOW_HOURS = int(os.environ.get("CI_WD_WINDOW_HOURS", "6"))
+    SELF_WORKFLOWS = {"ci-watchdog"}
     # Log fetching is the only expensive call here. It is capped hard because the
     # watchdog runs on a 10-minute CI budget, and the cheap signals (a run with
     # ZERO jobs, and the workflow name) already classify the common cases.
@@ -242,11 +315,15 @@ def main() -> int:
             if (r.get("created_at") or "") < cutoff:
                 continue
             name = r.get("name") or ""
+            if name in SELF_WORKFLOWS:
+                continue
             path = (r.get("path") or "")
             st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={r.get('head_branch') or 'main'}")
             retired = st == 404
-            kl, hint = "unknown", "inspect the job log"
-            if not retired and log_fetches < MAX_LOG_FETCHES:
+            # Structural first: needs no log download, and log downloading
+            # is exactly what silently failed in CI.
+            kl, hint = classify_structural(name, r)
+            if kl == "unknown" and not retired and log_fetches < MAX_LOG_FETCHES:
                 stj, jd = gh(f"/repos/{REPO}/actions/runs/{r['id']}/jobs")
                 if stj == 200 and not jd.get("jobs"):
                     kl, hint = "invalid-workflow", "the workflow YAML is invalid; GitHub created the run with zero jobs"
@@ -274,8 +351,11 @@ def main() -> int:
         k, subj = f["class"], f["subject"]
         line = f"- `{k}` **{subj}** — {f['evidence']}"
         if k == "silent-schedule":
-            ok, how = dispatch(_wf_file(inventory, subj))
-            (acted if ok else unactionable).append((line, f"dispatched -> {how}"))
+            if subj in recent_wf:
+                tracked.append((line, "already dispatched within the last 55 min"))
+            else:
+                ok, how = dispatch(_wf_file(inventory, subj))
+                (acted if ok else unactionable).append((line, f"dispatched -> {how}"))
         elif k == "codeql-config":
             ok, how = configure_codeql()
             (acted if ok else unactionable).append((line, f"configured -> {how}"))
