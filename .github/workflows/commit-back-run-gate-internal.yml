@@ -4,13 +4,18 @@ name: commit-back-run-gate-internal
 #
 # Defect: apply-run-gate-internal.yml patches the working tree and deploys that artifact
 # via the CF API, but declares `permissions: contents: read` and never commits. Result:
-# the live worker carries VERSION 1.7.0-run-gate-internal while
-# qnfo-backlog-exec/worker.js on main still carries 1.6.4-run-gate (25,740 B vs the
+# the live worker carried VERSION 1.7.0-run-gate-internal while
+# qnfo-backlog-exec/worker.js on main still carried 1.6.4-run-gate (25,740 B vs the
 # deployed 26,488 B). Any canonical redeploy from main would silently REVERT
 # INTERNAL-SERVICE-BINDING-AUTH-1 and re-sever the drain handoff.
 #
-# This job closes the loop: apply the same idempotent patcher and commit the result back
-# to main, so repo source == deployed artifact. Safe to run repeatedly.
+# This job closes the loop: apply the same idempotent patcher, sync the byte-true
+# deployed-current mirror, and commit both back to main, so repo source == mirror ==
+# deployed artifact. Safe to run repeatedly (the patcher reports "already applied" and
+# the commit step exits 0 when nothing drifted).
+#
+# Observed working: commit 3058563d by qnfo-commit-back-bot committed worker.js back to
+# 1.7.0-run-gate-internal on 2026-09-27T19:10:02Z.
 
 on:
   push:
@@ -46,27 +51,33 @@ jobs:
       - name: Apply INTERNAL-SERVICE-BINDING-AUTH-1 patch (idempotent)
         run: python3 scripts/run-gate-internal-patch.py
 
+      - name: Sync deployed-current mirror to the deployed bytes
+        run: cp qnfo-backlog-exec/worker.js qnfo-backlog-exec/deployed-current.worker.js
+
       - name: Preflight - patched artifact must carry the fix and parse
         run: |
           set -euo pipefail
           v=$(grep -c 'var VERSION = "1.7.0-run-gate-internal";' qnfo-backlog-exec/worker.js || true)
           x=$(grep -c 'internalCall' qnfo-backlog-exec/worker.js || true)
-          echo "version-hits=$v internalCall-hits=$x bytes=$(wc -c < qnfo-backlog-exec/worker.js)"
+          m=$(grep -c 'var VERSION = "1.7.0-run-gate-internal";' qnfo-backlog-exec/deployed-current.worker.js || true)
+          echo "version-hits=$v internalCall-hits=$x mirror-version-hits=$m bytes=$(wc -c < qnfo-backlog-exec/worker.js)"
           test "$v" = "1"
           test "$x" = "2"
+          test "$m" = "1"
           node --check qnfo-backlog-exec/worker.js
-          echo "preflight OK"
+          diff -q qnfo-backlog-exec/worker.js qnfo-backlog-exec/deployed-current.worker.js
+          echo "preflight OK: source, mirror and deployed bytes agree"
 
       - name: Commit back if drifted
         run: |
           set -euo pipefail
-          if git diff --quiet -- qnfo-backlog-exec/worker.js; then
-            echo "NO-DRIFT: repo source already matches the deployed artifact"
+          if git diff --quiet -- qnfo-backlog-exec/worker.js qnfo-backlog-exec/deployed-current.worker.js; then
+            echo "NO-DRIFT: repo source and mirror already match the deployed artifact"
             exit 0
           fi
           git config user.name "qnfo-commit-back-bot"
           git config user.email "commit-back-bot@qnfo.org"
-          git add qnfo-backlog-exec/worker.js
-          git commit -m "chore(backlog-exec): commit back INTERNAL-SERVICE-BINDING-AUTH-1 (REPO-LIVE-DRIFT-1: canonical source now matches deployed 1.7.0-run-gate-internal)"
+          git add qnfo-backlog-exec/worker.js qnfo-backlog-exec/deployed-current.worker.js
+          git commit -m "chore(backlog-exec): commit back INTERNAL-SERVICE-BINDING-AUTH-1 (REPO-LIVE-DRIFT-1: source+mirror now match deployed 1.7.0-run-gate-internal)"
           git push origin HEAD:main
-          echo "COMMITTED: repo source now matches live"
+          echo "COMMITTED: repo source and mirror now match live"
