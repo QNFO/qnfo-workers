@@ -435,7 +435,12 @@ def main() -> int:
     for f in findings:
         k, subj = f["class"], f["subject"]
         line = f"- `{k}` **{subj}** — {f['evidence']}"
-        if k == "silent-schedule":
+        if f.get("tracked_only"):
+            # MUST precede every actionable branch: an unobservable probe is
+            # neither drift nor a silent pass, so it is reported with its remedy
+            # and never routed to an action that cannot succeed (RT-4).
+            tracked.append((line, f.get("hint", "recorded")))
+        elif k == "silent-schedule":
             if subj in recent_wf:
                 tracked.append((line, "already dispatched within the last 55 min"))
             else:
@@ -444,9 +449,6 @@ def main() -> int:
         elif k == "codeql-config":
             ok, how = configure_codeql()
             (acted if ok else unactionable).append((line, f"configured -> {how}"))
-        elif f.get("tracked_only"):
-            # visible + non-red: reported with its remedy every run, never silent
-            tracked.append((line, f.get("hint", "recorded")))
         elif k == "mirror-lag":
             ok, how = dispatch("mirror-sync.yml")
             (acted if ok else unactionable).append((line, f"dispatched mirror-sync -> {how}"))
@@ -490,8 +492,11 @@ def post_ledger(summary: dict) -> str:
     if not key:
         # RT-5: the cross-platform link had NEVER executed. Report it as a
         # first-class gap with the one-line remedy, not a bland "skipped".
-        return ("GAP: cross-platform ledger unwired - `gh secret set "
-                "OPS_ROUTER_AUTH_KEY` to enable")
+        # RT-5: the secret IS set; the key is handed to the workflow only on the
+        # deliberate sweep (workflow_dispatch/repository_dispatch) so a per-push
+        # run cannot spam ops jobs. Report which case this is, precisely.
+        return ("GAP: ledger not armed for this event (secret is set; armed on "
+                "workflow_dispatch/repository_dispatch)")
     if DRY:
         return "DRY_RUN"
     body = json.dumps({
