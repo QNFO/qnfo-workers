@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.2-sweepwindow";
+var VERSION = "1.2.3-closefix";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -555,6 +555,12 @@ async function calibration(env, trigger) {
           await clearOverrides(env, m0);
           await closeIssue(env, "[ai-cal] roster drift: " + m0, "drift resolved in live roster");
         }
+      }
+      var odr = await env.QNFO_AUDIT.prepare("SELECT title FROM issue_ledger WHERE status='open' AND source='qnfo-ai-calibration' AND title LIKE '[ai-cal] roster drift: %'").all();
+      for (var k2 = 0; k2 < (odr.results || []).length; k2++) {
+        var t2 = String(odr.results[k2].title || "");
+        var mid2 = t2.slice(t2.indexOf(": ") + 2);
+        if (mid2 && !driftByModel[mid2]) await closeIssue(env, t2, "roster audit clean: model no longer drifting");
       }
     } catch (e) {
     }
