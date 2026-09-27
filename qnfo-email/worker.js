@@ -64,7 +64,6 @@ function decodeSubject(s) {
   }).replace(/\s+/g, " ").trim();
 }
 
-async 
 function normalizeAddress(a) {
   let s = String(a || "").trim();
   const lt = s.indexOf("<");
