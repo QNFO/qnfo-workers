@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.15-promptfix";
+var VERSION = "2.37.16-negation-veto-fix";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -970,7 +970,11 @@ __name22222(recentOpsLog, "recentOpsLog");
 __name222222(recentOpsLog, "recentOpsLog");
 function userSaysAffirm(t) {
   const s = String(t || "");
-  if (/\b(do not|dont|don.t|never|hold off|without sending|no thanks|not send|not reply)\b/i.test(s)) return false;
+  // EMAIL-RESPOND-NEGATION-VETO-1 (#1248): anchor the negation veto to the SEND/
+  // REPLY action itself. A bare "never"/"do not" elsewhere in the message (e.g.
+  // "YOU SHALL NEVER REQUIRE me to open a browser") must NOT veto a valid
+  // "send it!" affirmation. Only veto when the negation targets send/reply.
+  if (/\b(do not|dont|don\.?t|never|hold off|without|no thanks|not)\s+(send\w*|repl\w*|respond\w*|email\w*|draft\w*|compos\w*|post\w*)\b/i.test(s)) return false;
   return /\b(yes|yep|yeah|please|go ahead|confirm|do it|send it|send the|send a reply|reply to|respond to)\b/i.test(s);
 }
 __name(userSaysAffirm, "userSaysAffirm");
@@ -3334,8 +3338,7 @@ function contentToText(c) {
       else if (p && typeof p === "object") out.push(typeof p.text === "string" ? p.text : JSON.stringify(p));
       else out.push(String(p));
     }
-    return out.join("
-");
+    return out.join("\n");
   }
   if (typeof c === "object") return typeof c.text === "string" ? c.text : JSON.stringify(c);
   return String(c);
