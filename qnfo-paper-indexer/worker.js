@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.4-cron-window-rotate";
+var VERSION = "3.0.5-purge-orphan-sweep";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -239,15 +239,29 @@ async function handleIndex(env, url) {
 
 // Remediation half of #1153: remove vectors already embedded from non-canonical records.
 async function handlePurge(env, dryRun) {
+  // #1272 PURGE-TARGET-SOURCE-GAP-1 (2026-09-28): v3.0.4 enumerated purge targets from
+  // index_state ONLY. Residue exists precisely for slugs whose index_state row is ABSENT,
+  // because earlier pipelines embedded non-canonical records without writing index_state.
+  // Live probe 2026-09-28: vectorize_query returned id "1-from-self-to-society__0"
+  // (papers.status=quarantined, index_state rows=0) -> unreachable by both v3.0.4 arms, so
+  // the 06:05Z self-heal could never clean it. Enumerate papers directly as well.
+  const bySlug = /* @__PURE__ */ new Map();
   const bad = await env.LIVING_PAPER.prepare(
     "SELECT i.slug AS slug, i.chunks AS chunks, p.status AS status FROM index_state i JOIN papers p ON p.slug = i.slug WHERE p.status NOT IN " + CORPUS_IN
   ).all();
+  for (const r of bad.results || []) bySlug.set(r.slug, { slug: r.slug, chunks: r.chunks || 0, reason: "status=" + r.status });
   const stale = await env.LIVING_PAPER.prepare(
     "SELECT i.slug AS slug, i.chunks AS chunks FROM index_state i LEFT JOIN papers p ON p.slug = i.slug WHERE p.slug IS NULL"
   ).all();
-  const targets = [];
-  for (const r of bad.results || []) targets.push({ slug: r.slug, chunks: r.chunks || 0, reason: "status=" + r.status });
-  for (const r of stale.results || []) targets.push({ slug: r.slug, chunks: r.chunks || 0, reason: "no_papers_row" });
+  for (const r of stale.results || []) bySlug.set(r.slug, { slug: r.slug, chunks: r.chunks || 0, reason: "no_papers_row" });
+  const orphan = await env.LIVING_PAPER.prepare(
+    "SELECT p.slug AS slug, p.status AS status, p.body_md AS body_md FROM papers p WHERE p.body_md IS NOT NULL AND p.body_md != '' AND p.status NOT IN " + CORPUS_IN
+  ).all();
+  for (const r of orphan.results || []) {
+    if (bySlug.has(r.slug)) continue;
+    bySlug.set(r.slug, { slug: r.slug, chunks: chunkText(r.body_md).length, reason: "status_orphan=" + r.status });
+  }
+  const targets = Array.from(bySlug.values());
   let vectorsDeleted = 0;
   const detail = [];
   for (const t of targets) {
@@ -307,13 +321,14 @@ var worker_default = {
     try {
       switch (path) {
         case "/health":
-          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "cron-self-heal"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
+          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "purge-orphan-sweep", "cron-self-heal"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
         case "/count": {
           const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state").first();
           const g = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE " + CORPUS_WHERE).first();
           const b = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state i JOIN papers p ON p.slug = i.slug WHERE p.status NOT IN " + CORPUS_IN).first();
           const s = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state i LEFT JOIN papers p ON p.slug = i.slug WHERE p.slug IS NULL").first();
-          return json({ count: c ? c.c : 0, corpus_total: g ? g.c : 0, contaminated: b ? b.c : 0, stale: s ? s.c : 0, worker: "qnfo-paper-indexer", version: VERSION });
+          const o = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers p WHERE p.body_md IS NOT NULL AND p.body_md != '' AND p.status NOT IN " + CORPUS_IN).first();
+          return json({ count: c ? c.c : 0, corpus_total: g ? g.c : 0, contaminated: b ? b.c : 0, stale: s ? s.c : 0, orphan_contaminated: o ? o.c : 0, worker: "qnfo-paper-indexer", version: VERSION });
         }
         case "/purge": return json(await handlePurge(env, url.searchParams.get("commit") !== "1"));
         case "/webhook": return await handleWebhook(env, slug);
