@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.28-research-queue-enum";
+var VERSION = "1.7.29-open-inventory-total";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2678,7 +2678,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    dodByOwner = await d1all(env.AUDIT, "SELECT owner, COUNT(*) AS n FROM task_dod_register WHERE status NOT IN ('done','cancelled','cancelled-with-monitor') GROUP BY owner ORDER BY n DESC") || [];
+    dodByOwner = await d1all(env.AUDIT, "SELECT owner, COUNT(*) AS n FROM task_dod_register WHERE status NOT IN ('done','closed','resolved','cancelled','cancelled-with-monitor') GROUP BY owner ORDER BY n DESC") || [];
   } catch (e) {
   }
   try {
@@ -2686,7 +2686,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    dispatch = await d1all(env.AUDIT, "SELECT exec_state, COUNT(*) AS n FROM fleet_issue_dispatch WHERE state='queued' GROUP BY exec_state ORDER BY n DESC") || [];
+    dispatch = await d1all(env.AUDIT, "SELECT exec_state, COUNT(*) AS n FROM fleet_issue_dispatch WHERE state='queued' AND COALESCE(exec_state,'') NOT IN ('executed','verified-done','closed-failed','closed-no-action','no-action','dedupe-superseded','no-handler-superseded') GROUP BY exec_state ORDER BY n DESC") || [];
   } catch (e) {
   }
   try {
@@ -2716,6 +2716,8 @@ async function redHtml(env) {
     return (x.exec_state || "undispatched") + ":" + x.n;
   }).join(", ")) + "</td></tr>");
   H.push("<tr><td>issue_ledger (open)</td><td>" + (ilOpen != null ? ilOpen : "?") + "</td><td>fingerprinted signals not yet resolved</td></tr>");
+  const invTotal = (ghTotal != null ? ghTotal : 0) + dodOpen + (gtdOpen != null ? gtdOpen : 0) + agOpen.length + dispOpen + (ilOpen != null ? ilOpen : 0);
+  H.push('<tr><td><b>TOTAL open-issue inventory</b></td><td class="' + (invTotal > 0 ? "bad" : "ok") + '"><b>' + invTotal + "</b></td><td>union of all six registers; each lane has a disposition actor (agent_issues -> backlog-exec drain; task_dod_register/fleet_issue_dispatch -> backlog-exec register reconcile; issue_ledger -> ledger sweep; GitHub -> mirror)</td></tr>");
   H.push("</table>");
   if (ghIssues && ghIssues.length) {
     H.push('<div style="margin-top:8px"><b>GitHub open issues:</b></div><table style="margin-top:4px"><tr><th>repo</th><th>#</th><th>title</th></tr>');

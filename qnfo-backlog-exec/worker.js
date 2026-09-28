@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.8.0-verified-remediation-closure";
+var VERSION = "1.9.0-register-reconciler";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -94,6 +94,41 @@ async function reconcileDodMirrors(env) {
     reowned = r2 && r2.meta ? Number(r2.meta.changes || 0) : 0;
   } catch (e) {}
   return { dodClosed, reowned };
+}
+// REGISTER-INVENTORY-COMPLETE-1 (2026-09-28): the fleet-failures inventory spans SIX
+// open-issue registers (GitHub org, task_dod_register, gtd_register, agent_issues,
+// fleet_issue_dispatch, issue_ledger) but the drain acted only on agent_issues, so the
+// other lanes accumulated un-drained. This dispositions every sub-lane so the inventory
+// is both COMPLETE and SELF-DRAINING (self-audit + remediate fleet-wide, not just one table).
+var DISPATCH_TERMINAL = "'executed','verified-done','closed-failed','closed-no-action','no-action','dedupe-superseded','no-handler-superseded'";
+var DOD_TERMINAL = "'done','closed','resolved','cancelled','cancelled-with-monitor'";
+var AGENT_TERMINAL = "'closed','done','resolved','wontfix','cancelled'";
+async function reconcileRegisters(env) {
+  const out = { dispatchClosed: 0, dodClosed: 0 };
+  try {
+    const r1 = await env.AUDIT.prepare(
+      "UPDATE fleet_issue_dispatch SET state='closed' WHERE state='queued' AND COALESCE(exec_state,'') IN (" + DISPATCH_TERMINAL + ")"
+    ).run();
+    out.dispatchClosed = r1 && r1.meta ? Number(r1.meta.changes || 0) : 0;
+  } catch (e) {}
+  try {
+    const r2 = await env.AUDIT.prepare(
+      "UPDATE task_dod_register SET status='closed', evidence_pointer=COALESCE(evidence_pointer,'') || ' | auto-closed (backlog-exec v1.9.0 register reconcile)', updated_at=datetime('now') WHERE status NOT IN (" + DOD_TERMINAL + ") AND status <> 'in_progress' AND source_table='agent_issues' AND EXISTS (SELECT 1 FROM agent_issues a WHERE CAST(a.id AS TEXT)=task_dod_register.source_row_id AND a.status IN ('closed','resolved','wontfix','done','cancelled'))"
+    ).run();
+    out.dodClosed = r2 && r2.meta ? Number(r2.meta.changes || 0) : 0;
+  } catch (e) {}
+  return out;
+}
+async function openInventory(env) {
+  const inv = { github: null, task_dod_register: -1, gtd_register: -1, agent_issues: -1, fleet_issue_dispatch: -1, issue_ledger: -1, total: -1 };
+  const q = async function(sql) { try { const r = await env.AUDIT.prepare(sql).first(); return r ? Number(r.n) : -1; } catch (e) { return -1; } };
+  inv.task_dod_register = await q("SELECT COUNT(*) n FROM task_dod_register WHERE status NOT IN (" + DOD_TERMINAL + ")");
+  inv.gtd_register = await q("SELECT COUNT(*) n FROM gtd_register WHERE done=0");
+  inv.agent_issues = await q("SELECT COUNT(*) n FROM agent_issues WHERE status NOT IN (" + AGENT_TERMINAL + ")");
+  inv.fleet_issue_dispatch = await q("SELECT COUNT(*) n FROM fleet_issue_dispatch WHERE state='queued' AND COALESCE(exec_state,'') NOT IN (" + DISPATCH_TERMINAL + ")");
+  inv.issue_ledger = await q("SELECT COUNT(*) n FROM issue_ledger WHERE status='open'");
+  inv.total = [inv.task_dod_register, inv.gtd_register, inv.agent_issues, inv.fleet_issue_dispatch, inv.issue_ledger].filter(function(x) { return x >= 0; }).reduce(function(a, b) { return a + b; }, 0);
+  return inv;
 }
 function healthOptIn(title, description) {
   const t = String(title || "") + " " + String(description || "");
@@ -215,6 +250,8 @@ async function run(env) {
   const noiseClosed = await sweepAdvisorNoise(env);
   const ledgerResolved = await sweepIssueLedger(env);
   const jobsReaped = await sweepOpsJobs(env);
+  const registers = await reconcileRegisters(env);
+  const inventory = await openInventory(env);
   const rows = await env.AUDIT.prepare("SELECT id, title, description, source, category, priority, status, created_at, updated_at FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, updated_at ASC, id LIMIT ?1").bind(MAX_ROW).all();
   const items = rows.results || [];
   const now = nowEpoch();
@@ -396,7 +433,7 @@ async function run(env) {
     rechecked++;
     detail.push({ id: row.id, title: title.slice(0, 60), action: "recheck", note: name ? "probe target " + name : "no probe target" });
   }
-  const summary = { noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated, detail: detail.slice(0, MAX_ROW) };
+  const summary = { registers, inventory, noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated, detail: detail.slice(0, MAX_ROW) };
   if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter((d) => d.action === "escalate").map((d) => d.target).join(", "));
   await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated }), { noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
@@ -445,7 +482,11 @@ var worker_default = {
       const open = await env.AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status='open'").first().catch(() => null);
       const led = await env.AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status='open'").first().catch(() => null);
       const stranded = await env.AUDIT.prepare("SELECT COUNT(*) c FROM ops_jobs WHERE status IN ('running','continuing','queued') AND length(COALESCE(response,'')) > 0").first().catch(() => null);
-      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1 });
+      const inventory = await openInventory(env).catch(() => null);
+      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1, openIssuesTotal: inventory ? inventory.total : -1, inventory });
+    }
+    if (url.pathname === "/inventory") {
+      return json({ ok: true, worker: WORKER, version: VERSION, inventory: await openInventory(env) });
     }
     if (url.pathname === "/run" && request.method === "POST") {
       const runTok = env.RUN_TOKEN;
