@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.29-open-inventory-total";
+var VERSION = "1.7.30-full-register-coverage";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2716,8 +2716,35 @@ async function redHtml(env) {
     return (x.exec_state || "undispatched") + ":" + x.n;
   }).join(", ")) + "</td></tr>");
   H.push("<tr><td>issue_ledger (open)</td><td>" + (ilOpen != null ? ilOpen : "?") + "</td><td>fingerprinted signals not yet resolved</td></tr>");
-  const invTotal = (ghTotal != null ? ghTotal : 0) + dodOpen + (gtdOpen != null ? gtdOpen : 0) + agOpen.length + dispOpen + (ilOpen != null ? ilOpen : 0);
-  H.push('<tr><td><b>TOTAL open-issue inventory</b></td><td class="' + (invTotal > 0 ? "bad" : "ok") + '"><b>' + invTotal + "</b></td><td>union of all six registers; each lane has a disposition actor (agent_issues -> backlog-exec drain; task_dod_register/fleet_issue_dispatch -> backlog-exec register reconcile; issue_ledger -> ledger sweep; GitHub -> mirror)</td></tr>");
+  // REGISTER-INVENTORY-COMPLETE-2 (2026-09-28): panel 4 must COVER every register panel 6
+  // surfaces, so the operational lanes are listed here too -- ONE complete inventory.
+  const _n = async (sql, db) => { try { const r = await d1all(db || env.AUDIT, sql); return (r && r.length) ? Number(r[0].n != null ? r[0].n : 0) : 0; } catch (e) { return null; } };
+  const _elq = await _n("SELECT COUNT(*) AS n FROM email_loop_quarantine WHERE status NOT IN ('processed','archived','spam')");
+  const _agf = await _n("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE ts >= ((strftime('%s','now')-86400)*1000)");
+  const _vq = await _n("SELECT COUNT(*) AS n FROM version_queue WHERE status NOT IN ('published','wontfix')");
+  const _dl = await _n("SELECT COUNT(*) AS n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)");
+  const _epf = await _n("SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
+  const _esv = await _n("SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
+  const _dln = await _n("SELECT COUNT(*) AS n FROM dead_links WHERE resolved_at IS NULL");
+  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','rejected')", env.OUTREACH);
+  const _opsRows = [
+    ["email_loop_quarantine", _elq, "quarantine", "qnfo-email loop classifier"],
+    ["ai_gateway_failures (24h)", _agf, "event-plane", "qnfo-ai-calibration (not drainable)"],
+    ["version_queue", _vq, "pipeline", "qnfo-paper-reviser / zenodo depositor"],
+    ["deploy_locks (active)", _dl, "lock", "qnfo-deploy-guard reap"],
+    ["email_parse_failures", _epf, "issue", "qnfo-email parse-failure resolver"],
+    ["email_send_violations", _esv, "issue", "qnfo-email send policy"],
+    ["dead_links", _dln, "issue", "link checker"],
+    ["outreach_queue", _oq2, "queue", "qnfo-outreach drain"]
+  ];
+  let _opsOpen = 0;
+  for (const row of _opsRows) {
+    const bad = row[1] != null && row[1] > 0 && row[2] !== "event-plane" && row[2] !== "lock";
+    H.push("<tr><td>" + esc(row[0]) + '</td><td class="' + (bad ? "bad" : "ok") + '">' + (row[1] != null ? row[1] : "?") + "</td><td>" + esc(row[2] + " \u00b7 " + row[3]) + "</td></tr>");
+    if (bad) _opsOpen += row[1];
+  }
+  const invTotal = (ghTotal != null ? ghTotal : 0) + dodOpen + (gtdOpen != null ? gtdOpen : 0) + agOpen.length + dispOpen + (ilOpen != null ? ilOpen : 0) + _opsOpen;
+  H.push('<tr><td><b>TOTAL open-issue inventory</b></td><td class="' + (invTotal > 0 ? "bad" : "ok") + '"><b>' + invTotal + "</b></td><td>union of ALL 14 registers the failures inventory surfaces (panel 4 issue lanes + panel 6 operational lanes); every lane names a disposition actor</td></tr>");
   H.push("</table>");
   if (ghIssues && ghIssues.length) {
     H.push('<div style="margin-top:8px"><b>GitHub open issues:</b></div><table style="margin-top:4px"><tr><th>repo</th><th>#</th><th>title</th></tr>');
