@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.7.0-run-gate-internal";
+var VERSION = "1.8.0-verified-remediation-closure";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -369,6 +369,27 @@ async function run(env) {
         detail.push({ id: row.id, action: "recheck", note: "research terminal condition STILL present: " + still + " queue row(s) status='failed' AND recover_count>=2" });
         continue;
       } catch (e) {
+      }
+    }
+    // VERIFIED-REMEDIATION-CLOSURE-1 (issue #1281 DRAIN-CLOSURE-PREDICATE-TYPE-ERROR):
+    // every predicate above is a liveness/heartbeat predicate, so semantic
+    // defects (correctness/security/email/dissemination/publication/procedure)
+    // could never close. The "defect absence" predicate is a fresh
+    // remediation_verifications row with pass=1: a re-probe that verified the
+    // fix. Close those here (RE-FALSIFICATION-CLOSED-GATE-1).
+    {
+      let vr = null;
+      try {
+        vr = await env.AUDIT.prepare(
+          "SELECT probe_url, transport, observed FROM remediation_verifications WHERE issue_id=?1 AND pass=1 AND verified_at >= datetime('now','-7 days') ORDER BY id DESC LIMIT 1"
+        ).bind(row.id).first();
+      } catch (e) {}
+      if (vr) {
+        await closeIssue(env, row.id, now);
+        closed++;
+        detail.push({ id: row.id, action: "closed", note: "verified-remediation closure (re-probe pass): " + (vr.probe_url || "probe") + " via " + (vr.transport || "?") });
+        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (verified remediation pass=1)", { id: row.id, action: "closed", reason: "verified-remediation-closure v1.8.0", probe: vr.probe_url, transport: vr.transport }, WORKER, "ok");
+        continue;
       }
     }
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
