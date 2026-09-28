@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.16-negation-veto-fix";
+var VERSION = "2.37.17-d1-schema-hint";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -891,7 +891,26 @@ async function d1Query(env, args) {
     const rows = (res.results || []).slice(0, 100);
     return { ok: true, db: bind, rowCount: rows.length, rows };
   } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : String(e) };
+    const msg = e && e.message ? e.message : String(e);
+    const out = { ok: false, db: bind, error: msg };
+    // D1-SCHEMA-HINT-1 (issue #1162 OPS-D1-QUERY-SCHEMA-GUESSING): on "no such
+    // column/table", return the ACTUAL columns from d1_schema_index so agents stop
+    // guessing. 75/223 tool failures were ops_d1_query errors from guessed columns.
+    try {
+      if (/no such (column|table)/i.test(msg) && env.QNFO_AUDIT) {
+        const tm = sqlEff.match(/\bfrom\s+([A-Za-z0-9_]+)/i);
+        const want = tm ? tm[1].toLowerCase() : null;
+        const dbName = String(args && args.db || "audit");
+        const sr = await env.QNFO_AUDIT.prepare("SELECT tbl, group_concat(col, ', ') AS cols FROM d1_schema_index WHERE lower(db)=lower(?1) GROUP BY tbl").bind(dbName).all();
+        const rows2 = sr.results || [];
+        if (want) {
+          const hit = rows2.find(function(r) { return String(r.tbl || "").toLowerCase() === want; });
+          if (hit) { out.available_columns = hit.cols; out.hint = "use a column from available_columns for table " + hit.tbl; }
+        }
+        if (!out.available_columns) out.schema_tables = rows2.map(function(r) { return r.tbl; }).slice(0, 80);
+      }
+    } catch (e2) {}
+    return out;
   }
 }
 __name(d1Query, "d1Query");
