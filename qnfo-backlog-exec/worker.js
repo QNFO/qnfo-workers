@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.9.0-register-reconciler";
+var VERSION = "2.0.0-full-register-inventory";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -119,16 +119,39 @@ async function reconcileRegisters(env) {
   } catch (e) {}
   return out;
 }
+// REGISTER-INVENTORY-COMPLETE-2 (2026-09-28): the fleet-failures dashboard surfaces
+// FOURTEEN registers across panel 4 (complete open-issue inventory) and panel 6
+// (unremediated registers). v1.9.0 covered panel 4's six only. This enumerates ALL of
+// them with an open count, a kind, and the disposition actor, so no register the
+// failures inventory shows is invisible to the drain. kind=event-plane|lock lanes are
+// reported but excluded from the open total (they are not drainable backlogs).
+var INVENTORY_LANES = [
+  ["agent_issues", "SELECT COUNT(*) n FROM agent_issues WHERE status NOT IN (" + AGENT_TERMINAL + ")", "issue", "backlog-exec drain + verified-remediation closure"],
+  ["task_dod_register", "SELECT COUNT(*) n FROM task_dod_register WHERE status NOT IN (" + DOD_TERMINAL + ")", "issue", "backlog-exec register reconcile"],
+  ["gtd_register", "SELECT COUNT(*) n FROM gtd_register WHERE done=0", "issue", "gtd register owner"],
+  ["fleet_issue_dispatch", "SELECT COUNT(*) n FROM fleet_issue_dispatch WHERE state='queued' AND COALESCE(exec_state,'') NOT IN (" + DISPATCH_TERMINAL + ")", "issue", "backlog-exec register reconcile"],
+  ["issue_ledger", "SELECT COUNT(*) n FROM issue_ledger WHERE status='open'", "issue", "backlog-exec ledger sweep"],
+  ["email_parse_failures", "SELECT COUNT(*) n FROM email_parse_failures WHERE status IN ('open','handoff')", "issue", "qnfo-email parse-failure resolver"],
+  ["email_send_violations", "SELECT COUNT(*) n FROM email_send_violations WHERE COALESCE(resolved,0)=0", "issue", "qnfo-email send policy"],
+  ["dead_links", "SELECT COUNT(*) n FROM dead_links WHERE resolved_at IS NULL", "issue", "link checker"],
+  ["email_loop_quarantine", "SELECT COUNT(*) n FROM email_loop_quarantine WHERE status NOT IN ('processed','archived','spam')", "quarantine", "qnfo-email loop classifier"],
+  ["version_queue", "SELECT COUNT(*) n FROM version_queue WHERE status NOT IN ('published','wontfix')", "pipeline", "qnfo-paper-reviser / zenodo depositor"],
+  ["outreach_queue", "SELECT COUNT(*) n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','rejected')", "queue", "qnfo-outreach drain"],
+  ["deploy_locks", "SELECT COUNT(*) n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)", "lock", "qnfo-deploy-guard reap"],
+  ["ai_gateway_failures", "SELECT COALESCE(SUM(count),0) n FROM ai_gateway_failures WHERE ts >= ((strftime('%s','now')-86400)*1000)", "event-plane", "qnfo-ai-calibration / gateway-health"]
+];
 async function openInventory(env) {
-  const inv = { github: null, task_dod_register: -1, gtd_register: -1, agent_issues: -1, fleet_issue_dispatch: -1, issue_ledger: -1, total: -1 };
-  const q = async function(sql) { try { const r = await env.AUDIT.prepare(sql).first(); return r ? Number(r.n) : -1; } catch (e) { return -1; } };
-  inv.task_dod_register = await q("SELECT COUNT(*) n FROM task_dod_register WHERE status NOT IN (" + DOD_TERMINAL + ")");
-  inv.gtd_register = await q("SELECT COUNT(*) n FROM gtd_register WHERE done=0");
-  inv.agent_issues = await q("SELECT COUNT(*) n FROM agent_issues WHERE status NOT IN (" + AGENT_TERMINAL + ")");
-  inv.fleet_issue_dispatch = await q("SELECT COUNT(*) n FROM fleet_issue_dispatch WHERE state='queued' AND COALESCE(exec_state,'') NOT IN (" + DISPATCH_TERMINAL + ")");
-  inv.issue_ledger = await q("SELECT COUNT(*) n FROM issue_ledger WHERE status='open'");
-  inv.total = [inv.task_dod_register, inv.gtd_register, inv.agent_issues, inv.fleet_issue_dispatch, inv.issue_ledger].filter(function(x) { return x >= 0; }).reduce(function(a, b) { return a + b; }, 0);
-  return inv;
+  const registers = {};
+  let total = 0;
+  for (let i = 0; i < INVENTORY_LANES.length; i++) {
+    const lane = INVENTORY_LANES[i];
+    let open = -1;
+    try { const r = await env.AUDIT.prepare(lane[1]).first(); open = r ? Number(r.n) : -1; } catch (e) { open = -1; }
+    registers[lane[0]] = { open: open, kind: lane[2], disposition: lane[3] };
+    if (open > 0 && lane[2] !== "event-plane" && lane[2] !== "lock") total += open;
+  }
+  registers["github"] = { open: null, kind: "external", disposition: "GitHub mirror (dashboard GITHUB_TOKEN)" };
+  return { laneCount: INVENTORY_LANES.length + 1, total: total, registers: registers };
 }
 function healthOptIn(title, description) {
   const t = String(title || "") + " " + String(description || "");
