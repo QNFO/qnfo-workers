@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.30-full-register-coverage";
+var VERSION = "1.7.31-outreach-binding-fix";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2726,7 +2726,7 @@ async function redHtml(env) {
   const _epf = await _n("SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
   const _esv = await _n("SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
   const _dln = await _n("SELECT COUNT(*) AS n FROM dead_links WHERE resolved_at IS NULL");
-  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','rejected')", env.OUTREACH);
+  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','cancelled','rejected')");
   const _opsRows = [
     ["email_loop_quarantine", _elq, "quarantine", "qnfo-email loop classifier"],
     ["ai_gateway_failures (24h)", _agf, "event-plane", "qnfo-ai-calibration (not drainable)"],
@@ -2841,7 +2841,7 @@ async function redHtml(env) {
   H.push("<tr><td>dead_links (open)</td><td>" + (er != null ? er : "?") + "</td><td>checked links still failing</td></tr>");
   let oq = null;
   try {
-    const r = await d1all(env.OUTREACH, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled')");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled','rejected')");
     oq = r && r.length ? r[0].n : null;
   } catch (e) {
   }
