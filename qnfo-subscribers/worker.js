@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.1";
+var VERSION = "1.1.2-suppression-gate";
 var SITE = "https://qnfo.org";
 var FROM = { email: "qnfo@qnfo.org", name: "QNFO" };
 var MAX_RECIPIENTS = 1e3;
@@ -111,6 +111,13 @@ async function handleSubscribe(request, env) {
   const hp = String(body && (body.hp || body.website) || "");
   if (hp) return json({ ok: true, pending: true });
   if (!validEmail(email)) return json({ ok: false, error: "Please enter a valid email address." }, 400);
+  // SUPPRESSION-BYPASS-AT-SUBSCRIBE-1 (#1276): honor email_suppression at sign-up
+  // so an owner-suppressed address cannot silently re-enter the list. Return a
+  // soft success (do not reveal suppression) and skip the INSERT + confirmation.
+  try {
+    const sup = await env.AUDIT.prepare("SELECT 1 AS x FROM email_suppression WHERE lower(email) = ?1").bind(email).first();
+    if (sup) return json({ ok: true, pending: false, confirmation_sent: false, suppressed: true });
+  } catch (e) {}
   const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "";
   const ua = String(request.headers.get("User-Agent") || "").slice(0, 300);
   const ipHash = ip ? await sha256Hex(ip) : "";
