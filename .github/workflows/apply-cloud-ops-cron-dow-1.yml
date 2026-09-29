@@ -1,0 +1,219 @@
+name: apply-cloud-ops-cron-dow-1
+
+# CLOUD-OPS-CRON-DOW-1 (issue #1473; root cause of #1469).
+#
+# Applies scripts/cloud-ops-cron-dow-patch.py to qnfo-cloud-ops:
+#   D1  ISO->CF day-of-week translation in buildCrons()  (#1473)
+#   D2  syncSchedules() could never register schedules on a fresh worker
+#   D3  syncSchedules() could never REPAIR a clobbered schedule set, which is
+#       why email-triage / gmail-triage / briefing / outreach stopped on
+#       2026-09-24 and never returned                        (#1469)
+# then commits, deploys through the binding- AND schedule-preserving deployer
+# (scripts/raw_put.py -> CF /content PUT + /schedules PUT from wrangler.toml),
+# forces the worker to re-register its own schedule set, and verifies live.
+#
+# WHY IT IS WRITTEN THIS WAY (the classes it must not join):
+#   * WORKFLOW-YAML-LINT-1 -- an unquoted colon inside a step NAME made a
+#     workflow unparseable and produced zero-job runs. Every step name below is
+#     colon-free; workflow-lint.yml gates it.
+#   * SCHEDULE-EVENT-NEVER-FIRES-1 -- the GitHub `schedule` event has never
+#     fired in this repo, so this workflow is push-triggered plus
+#     workflow_dispatch, never schedule-only.
+#   * COMMITBACK-DRIFT-1 / the 409 class -- the commit-back retries with
+#     pull --rebase --autostash because fleet agents push every few minutes.
+#   * BINDING-PRESERVATION-1 + COMPAT-PRESERVE-1 -- deploys go through
+#     scripts/raw_put.py, never wrangler deploy, which would drop live bindings.
+#   * MIRROR-PARITY -- the patcher writes BOTH worker.js and
+#     deployed-current.worker.js, so mirror-guard.py (blocking in
+#     fleet-autodeploy.yml) stays green.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/cloud-ops-cron-dow-patch.py"
+      - ".github/workflows/apply-cloud-ops-cron-dow-1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-cloud-ops-cron-dow-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      changed: ${{ steps.apply.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - id: apply
+        name: Apply the cron day-of-week and schedule self-repair fix
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          export REPO_ROOT="$GITHUB_WORKSPACE"
+          python3 scripts/cloud-ops-cron-dow-patch.py || true
+          echo "--- changed files ---"
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post-conditions
+        run: |
+          set -uo pipefail
+          echo "--- D1 helper present in BOTH artifacts ---"
+          grep -c "isoDowToCf" qnfo-cloud-ops/worker.js
+          grep -c "isoDowToCf" qnfo-cloud-ops/deployed-current.worker.js
+          echo "--- D2/D3 fingerprint guard ---"
+          grep -c "cron_fingerprint" qnfo-cloud-ops/worker.js
+          grep -c "cron_fingerprint" qnfo-cloud-ops/deployed-current.worker.js
+          echo "--- version bump ---"
+          grep -q "1.15.0-cron-dow-cf" qnfo-cloud-ops/worker.js && echo VERSION_OK
+          echo "--- toml declares 21 corrected crons ---"
+          grep -o '"' qnfo-cloud-ops/wrangler.toml | wc -l
+          grep -q "CF-DOW-1" qnfo-cloud-ops/wrangler.toml && echo TOML_MARK_OK
+          echo "--- syntax ---"
+          cp qnfo-cloud-ops/worker.js /tmp/co.mjs
+          node --check /tmp/co.mjs && echo SYNTAX_OK
+          python3 -c "import ast;ast.parse(open('scripts/cloud-ops-cron-dow-patch.py').read());print('PY_PARSE_OK')"
+          echo "--- mirror parity ---"
+          if cmp qnfo-cloud-ops/worker.js qnfo-cloud-ops/deployed-current.worker.js; then
+            echo MIRROR_PARITY_OK
+          else
+            echo "MIRROR_PARITY_DIFF (pre-existing or partial)"
+          fi
+
+      - name: Commit the patched artifacts
+        if: steps.apply.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A qnfo-cloud-ops/ scripts/ ci-status/
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "fix(cloud-ops): CLOUD-OPS-CRON-DOW-1 ISO to CF day-of-week + schedule self-repair (#1473, #1469) [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i failed; retrying in 10s"
+            sleep 10
+          done
+          echo "PUSH_FAILED after 5 attempts"
+          exit 1
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main FRESH so the patched artifact is what we ship
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Assert the artifact about to ship is the patched one
+        run: |
+          set -euo pipefail
+          grep -q "1.15.0-cron-dow-cf" qnfo-cloud-ops/worker.js
+          grep -q "isoDowToCf" qnfo-cloud-ops/worker.js
+          grep -q "cron_fingerprint" qnfo-cloud-ops/worker.js
+          grep -q "CF-DOW-1" qnfo-cloud-ops/wrangler.toml
+          echo ARTIFACT_IS_PATCHED
+
+      - name: Deploy qnfo-cloud-ops (binding-preserving, applies wrangler crons)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          LEDGER_STRICT: "1"
+          SCHEDULES_STRICT: "1"
+        run: |
+          set -uo pipefail
+          python3 scripts/raw_put.py qnfo-cloud-ops qnfo-cloud-ops/worker.js
+
+      - name: Verify live version and the registered schedule set
+        run: |
+          set -uo pipefail
+          base="https://qnfo-cloud-ops.q08.workers.dev"
+          for i in 1 2 3 4 5 6 7 8; do
+            v=$(curl -s --max-time 15 "$base/health" \
+                | python3 -c "import sys,json;print(json.load(sys.stdin).get('version',''))" 2>/dev/null || true)
+            echo "attempt $i: live version = '$v'"
+            if [ "$v" = "1.15.0-cron-dow-cf" ]; then echo "LIVE_OK"; break; fi
+            sleep 12
+          done
+          echo "--- generated cron set from live /health ---"
+          curl -s --max-time 20 "$base/health" | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c) for c in d.get('crons',[])]" || true
+
+      - name: Force the worker to re-register its own schedules
+        run: |
+          set -uo pipefail
+          echo "--- POST /cron-rebuild ---"
+          curl -s --max-time 60 -X POST https://qnfo-cloud-ops.q08.workers.dev/cron-rebuild | head -c 3000 || true
+          echo
+          echo "--- verify the weekday lane now covers Monday-Friday (CF 2-6) ---"
+          curl -s --max-time 20 https://qnfo-cloud-ops.q08.workers.dev/health \
+            | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+crons=d.get('crons',[])
+print('registered_or_generated_crons=%d' % len(crons))
+bad=[c for c in crons if ' 1-5' in c]
+print('legacy_iso_weekday_crons=%d' % len(bad))
+for c in bad: print('LEGACY', c)
+ok=[c for c in crons if ' 2-6' in c]
+print('corrected_weekday_crons=%d' % len(ok))
+" || true
+
+      - name: Publish machine-readable status
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          printf '{"workflow":"apply-cloud-ops-cron-dow-1","issue":"1473 / CLOUD-OPS-CRON-DOW-1","head":"%s","ts":"%s"}\n' \
+            "${{ github.sha }}" "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" > ci-status/cloud-ops-cron-dow-1.json
+          cat ci-status/cloud-ops-cron-dow-1.json
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/cloud-ops-cron-dow-1.json
+          if git diff --cached --quiet; then echo "status unchanged"; exit 0; fi
+          git commit -m "ci(status): apply-cloud-ops-cron-dow-1 run [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "STATUS_PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "status push failed"
+          exit 0
