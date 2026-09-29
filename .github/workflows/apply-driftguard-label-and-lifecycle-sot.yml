@@ -28,10 +28,19 @@ name: apply-driftguard-label-and-lifecycle-sot
 # an applier, and an applier with no invocation path is the ORPHANED-APPLIER-1 failure
 # mode documented in apply-d1guard-literal-fn-aware.yml. This is its execution path.
 #
-# DEPLOY is gated by the guard's own machine-readable contract: the worker is redeployed
-# only when the repo artifact is STRICTLY AHEAD of live (--ahead direction). If repo and
-# live already agree, the deploy is skipped, so re-running is idempotent and can never
-# push an older artifact onto a newer live worker.
+# DEPLOY-STALE-CHECKOUT-1 (fixed 2026-09-29, this revision). The `deploy` job originally
+# did a bare `actions/checkout@v4`, which resolves to the SHA that TRIGGERED the run --
+# not the commit the `apply` job had just pushed. It therefore read the UNPATCHED
+# qnfo-lifecycle artifact (repo 1.6.2 vs live 1.6.2-cronconsolidate -> LABEL_MISMATCH,
+# never `ahead`), decided need=false, and took the "Report skipped deploy" branch. The
+# job could not deploy the patch it had just committed, in ANY run, by construction.
+# Evidence: qnfo-audit.deployment_history has ZERO rows for qnfo-lifecycle while
+# `scripts/raw_put.py` deploys for qnfo-ops land normally (id 116, 2026-09-29T16:03:38Z).
+# The deploy job now hard-syncs to origin/main before deciding.
+#
+# NO-SILENT-SKIP-1 (this revision). The skip branch previously just echoed. A skip is now
+# only allowed when the guard genuinely reports the worker in SYNC; otherwise the job
+# FAILS. A deploy job that quietly does nothing is indistinguishable from one that works.
 #
 # NOTE commit messages are single-line -m flags, never inline multi-line strings: a
 # multi-line git commit -m inside a run: | block puts continuation lines at column 1,
@@ -116,6 +125,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # DEPLOY-STALE-CHECKOUT-1: without this, `actions/checkout` resolves to the SHA
+      # that triggered the run, i.e. the PRE-patch tree. The apply job's commit is a
+      # descendant of it, so the deploy job would read the old artifact and always skip.
+      - name: Sync to the latest main (the apply job's commit)
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          echo "deploy job tree is now at $(git rev-parse --short HEAD)"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -145,6 +164,12 @@ jobs:
           python3 scripts/deploy-drift-guard.py qnfo-lifecycle --json | tee /tmp/drift-post.json
           python3 -c "import json;d=json.load(open('/tmp/drift-post.json'));assert d['sync']==1, d;assert d.get('label_mismatch_count')==0, d;print('SYNC confirmed for qnfo-lifecycle; label_mismatch=0')"
 
-      - name: Report skipped deploy (repo and live already agree)
+      # NO-SILENT-SKIP-1: skipping is only legitimate when the guard says SYNC. If the
+      # repo artifact still differs from live and we did not deploy, the job must FAIL --
+      # otherwise a permanently broken deploy path looks identical to a healthy no-op.
+      - name: Report skipped deploy - and refuse to skip silently
         if: steps.decide.outputs.need != 'true'
-        run: echo "repo artifact is not ahead of live; no deploy performed"
+        run: |
+          set -euo pipefail
+          python3 -c "import json;d=json.load(open('/tmp/ahead.json'));print('skip: sync=%s drift=%s label_mismatch=%s ahead=%s not_deployed=%s' % (d['sync'], len(d['drift']), d.get('label_mismatch_count'), len(d['ahead']), len(d.get('not_deployed_workers') or [])));assert d['sync']==1, 'NO-SILENT-SKIP-1: repo artifact is not ahead of live but the worker is NOT in sync either -- the deploy path is broken: %s' % d"
+          echo "repo artifact is in sync with live; no deploy performed"
