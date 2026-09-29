@@ -1,0 +1,10 @@
+{
+  "workflow": "deploy-containers-pilot",
+  "issue": 1485,
+  "wrangler_outcome": "failure",
+  "nomig_outcome": "failure",
+  "verify_outcome": "success",
+  "health_http": "200",
+  "head": "139b2dce444409623d7a3739bfa80e23bf50ac19",
+  "ts": "2026-09-29T19:37:34Z"
+}
