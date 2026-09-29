@@ -7,8 +7,12 @@ DESIGN CONTRACT (learned the hard way this session):
     two -- five earlier appliers of mine aborted wholesale because one anchor drifted.
   * Every anchor must match an EXACT expected count before anything is written. No
     partial edits, ever.
-  * Re-running on an already-patched file is a no-op, not an error (idempotent).
-  * Exit 1 if ANY section FAILED. Sections that were already applied count as OK.
+  * IDEMPOTENT BY MARKER, not by anchor absence. v1 checked "did the old text survive?",
+    but a PREPEND-style edit (insert before an anchor) leaves the anchor intact, so a
+    second run re-inserted the block: verified in-container, 35,174 -> 39,999 bytes. Each
+    edit now first tests for its own MARKER and is skipped when already present, and a
+    post-condition asserts each marker occurs EXACTLY ONCE so a duplicate can never ship.
+  * Exit 1 if ANY section FAILED. Sections already applied count as OK.
 
 S1  METRIC-FRESHNESS-WRITER-1 (issue #1301)
     qnfo-audit.metric_registry declares 24 metrics with refresh_cadence values as tight as
@@ -63,7 +67,22 @@ LIFECYCLE = [
 RAWPUT = os.path.join(ROOT, "scripts", "raw_put.py")
 GUARD = os.path.join(ROOT, "scripts", "deploy-drift-guard.py")
 
+OLD_VERSION = "1.6.3-version-sot"
 NEW_VERSION = "1.6.4-metric-freshness"
+
+ROUTE_ANCHOR = '    if (p === "/run/memory-maintain") return handleMemoryMaintain(request, env, origin);'
+ROUTE_ADD = '    if (p === "/run/metrics-refresh") return handleMetricsRefresh(env, origin);'
+CRON_ANCHOR = '      else if (cron === "0 * * * *") await runSync(env);'
+CRON_NEW = '      else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); }'
+FN_ANCHOR = 'async function runLifecycle(env) {'
+FEATURE_ANCHOR = '"memory-maintain"],'
+FEATURE_NEW = '"memory-maintain", "metric-freshness"],'
+
+# markers that prove each edit already landed
+M_ROUTE = '"/run/metrics-refresh"'
+M_CRON = "await runMetricFreshness(env); }"
+M_FN = "async function runMetricFreshness"
+M_FEATURE = 'metric-freshness"],'
 
 METRIC_JS = '''// METRIC-FRESHNESS-WRITER-1 (issue #1301, 2026-09-29): qnfo-audit.metric_registry
 // declared 24 metrics with cadences as tight as */15 and NO writer existed anywhere in the
@@ -166,17 +185,13 @@ async function handleMetricsRefresh(env, origin) {
 def edit(text, old, new, expect=1):
     """Exact-count anchored replacement. Raises on any surprise."""
     n = text.count(old)
-    if n == 0:
-        if new in text:
-            return text, False
-        raise SystemExit("anchor not found (%d occurrences):\n%s" % (n, old[:200]))
     if n != expect:
         raise SystemExit("anchor occurs %d times, expected %d:\n%s" % (n, expect, old[:200]))
     return text.replace(old, new), True
 
 
 def s1_lifecycle():
-    """METRIC-FRESHNESS-WRITER-1."""
+    """METRIC-FRESHNESS-WRITER-1. Idempotent by MARKER, verified exactly-once afterwards."""
     changed_any = False
     for path in LIFECYCLE:
         if not os.path.isfile(path):
@@ -184,24 +199,29 @@ def s1_lifecycle():
         with open(path, encoding="utf-8") as fh:
             t = fh.read()
         changed = False
-        t, c = edit(t, 'const QNFO_VERSION = "1.6.3-version-sot";',
-                    'const QNFO_VERSION = "%s";' % NEW_VERSION)
-        changed = changed or c
-        t, c = edit(
-            t,
-            '    if (p === "/run/memory-maintain") return handleMemoryMaintain(request, env, origin);',
-            '    if (p === "/run/memory-maintain") return handleMemoryMaintain(request, env, origin);\n'
-            '    if (p === "/run/metrics-refresh") return handleMetricsRefresh(env, origin);')
-        changed = changed or c
-        t, c = edit(
-            t,
-            '      else if (cron === "0 * * * *") await runSync(env);',
-            '      else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); }')
-        changed = changed or c
-        t, c = edit(t, 'async function runLifecycle(env) {', METRIC_JS + 'async function runLifecycle(env) {')
-        changed = changed or c
-        t, c = edit(t, '"memory-maintain"],', '"memory-maintain", "metric-freshness"],')
-        changed = changed or c
+        if NEW_VERSION not in t:
+            t, c = edit(t, 'const QNFO_VERSION = "%s";' % OLD_VERSION,
+                        'const QNFO_VERSION = "%s";' % NEW_VERSION)
+            changed = changed or c
+        if M_ROUTE not in t:
+            t, c = edit(t, ROUTE_ANCHOR, ROUTE_ANCHOR + "\n" + ROUTE_ADD)
+            changed = changed or c
+        if M_CRON not in t:
+            t, c = edit(t, CRON_ANCHOR, CRON_NEW)
+            changed = changed or c
+        if M_FN not in t:
+            t, c = edit(t, FN_ANCHOR, METRIC_JS + FN_ANCHOR)
+            changed = changed or c
+        if M_FEATURE not in t:
+            t, c = edit(t, FEATURE_ANCHOR, FEATURE_NEW)
+            changed = changed or c
+        # exact-once post-conditions: a duplicate can never ship
+        for marker, want in ((M_FN, 1), (M_ROUTE, 1), (M_CRON, 1), (M_FEATURE, 1),
+                             ('const QNFO_VERSION = "%s";' % NEW_VERSION, 1)):
+            got = t.count(marker)
+            if got != want:
+                raise SystemExit("FAIL-CLOSED S1: marker %r occurs %d times in %s (want %d)"
+                                 % (marker, got, path, want))
         if changed:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(t)
@@ -232,13 +252,15 @@ def s2_rawput():
            "# const QNFO_VERSION = \"1.6.3-version-sot\". Same alternation as\n"
            "# scripts/deploy-drift-guard.py CONST, so the two tools cannot disagree.\n"
            "VERSION_RE = re.compile(r'(?:var|let|const)\\s+(?:QNFO_)?VERSION\\s*=\\s*\"([^\"]+)\"')\n")
-    t2, c = edit(t, 'VERSION_RE = re.compile(r\'var VERSION = "([^"]+)"\')\n', new)
-    if c:
-        with open(RAWPUT, "w", encoding="utf-8") as fh:
-            fh.write(t2)
-        print("S2 patched " + RAWPUT)
-    else:
+    if "LEDGER-VERSION-EXTRACT-1" in t:
         print("S2 already applied " + RAWPUT)
+        return False
+    t2, c = edit(t, 'VERSION_RE = re.compile(r\'var VERSION = "([^"]+)"\')\n', new)
+    if t2.count("VERSION_RE = re.compile") != 1:
+        raise SystemExit("FAIL-CLOSED S2: VERSION_RE no longer unique")
+    with open(RAWPUT, "w", encoding="utf-8") as fh:
+        fh.write(t2)
+    print("S2 patched " + RAWPUT)
     return c
 
 
@@ -270,8 +292,8 @@ def s3_driftguard():
     )
     t = t[:hits[0].start()] + ins + t[hits[0].start():]
     t, c = edit(t, "    not_a_worker = []\n", "    not_a_worker = []\n    label_mismatch = []\n")
-    if not c:
-        raise SystemExit("FAIL-CLOSED S3: could not initialise label_mismatch")
+    if t.count("label_mismatch = []") != 1:
+        raise SystemExit("FAIL-CLOSED S3: label_mismatch init not exactly once")
     with open(GUARD, "w", encoding="utf-8") as fh:
         fh.write(t)
     print("S3 patched " + GUARD)
