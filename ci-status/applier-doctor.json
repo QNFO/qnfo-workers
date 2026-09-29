@@ -1,16 +1,17 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "1174396fab85740f94b06385afb8be801ae3d65b",
+  "head": "96a5f3c442219d916584d094e2090a0556dfa3c4",
   "total": 49,
   "summary": {
     "already-applied": 29,
-    "stale-anchor": 17,
-    "landed": 2,
+    "stale-anchor": 16,
+    "landed": 3,
     "error": 1
   },
   "landed": [
     "cf-urllib-ua-1010-patch.py",
+    "dashboard-gate-failopen-patch.py",
     "deploy-guard-ms-failclosed-patch.py"
   ],
   "results": [
@@ -19,7 +20,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
     },
     {
@@ -35,7 +36,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "FAIL(3): anchor count != 1 -> {ci-status key tuple: 0} for ci-status key tuple"
     },
     {
@@ -43,7 +44,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: pre-patch VERSION 'var VERSION = \"2.37.12-fm-stream-reasoning\";' not found in qnfo-ops/worker.js"
     },
     {
@@ -51,7 +52,7 @@
       "rc": 0,
       "verdict": "landed",
       "changed": true,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "APPLIED: scripts/raw_put.py now 19338 bytes, 4 User-Agent insertions, AST OK"
     },
     {
@@ -59,7 +60,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "OK applied=0"
     },
     {
@@ -75,7 +76,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: anchor 'constructor' matched 0 times (expected exactly 1)"
     },
     {
@@ -83,16 +84,16 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ABORT: pre-patch VERSION anchor occurs 0 times in qnfo-ops/worker.js"
     },
     {
       "script": "dashboard-gate-failopen-patch.py",
-      "rc": 1,
-      "verdict": "stale-anchor",
+      "rc": 0,
+      "verdict": "landed",
       "changed": true,
-      "seconds": 0.03,
-      "tail": "FAIL-CLOSED: post-conditions failed: no coalescing drift read left"
+      "seconds": 0.02,
+      "tail": "MIRROR_PARITY_OK"
     },
     {
       "script": "deploy-guard-ms-failclosed-patch.py",
@@ -107,7 +108,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "ALREADY APPLIED (DEPLOY-GUARD-WRAP-2) - nothing to do"
     },
     {
@@ -115,7 +116,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: anchor 'imports' matched 0 times (expected 1) - nothing written"
     },
     {
@@ -131,7 +132,7 @@
       "rc": 1,
       "verdict": "stale-anchor",
       "changed": true,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "regex: ^const QNFO_VERSION = \"1\\.6\\.2\";\\s*$"
     },
     {
@@ -163,7 +164,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "::error::anchor drift on scripts/fleet-autoaudit.py: expected (def,site_a,site_b,msg)=(1,1,1,1), got (1, 0, 0, 0)"
     },
     {
@@ -179,7 +180,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.12,
+      "seconds": 0.14,
       "tail": "CHANGED=0"
     },
     {
@@ -203,7 +204,7 @@
       "rc": 1,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: the short-circuiting `if (!curSha) break;` survived in qnfo-ops/worker.js"
     },
     {
@@ -227,7 +228,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "  deployed-current.worker.js bytes=370010 marker=1"
     },
     {
@@ -235,7 +236,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.05,
+      "seconds": 0.06,
       "tail": "OK"
     },
     {
@@ -251,7 +252,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "no-op: every target already carries the fix"
     },
     {
@@ -259,7 +260,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "RESULT: applied=0 already=2 (nothing to do)"
     },
     {
@@ -267,7 +268,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "DONE: 0 file(s) patched, marker=GITHUB-READ-404-HINT-1"
     },
     {
@@ -283,7 +284,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED: VERSION-PRECEDENCE-2 present; idempotent no-op"
     },
     {
@@ -299,7 +300,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL(3): anchor count != 1 -> {'A_TAIL': 0} (concurrent writer? re-anchor before retrying)"
     },
     {
@@ -307,7 +308,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.01,
+      "seconds": 0.02,
       "tail": ""
     },
     {
@@ -315,7 +316,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.14,
+      "seconds": 0.08,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
@@ -323,7 +324,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already-patched: qnfo-research-exec/deployed-current.worker.js"
     },
     {
@@ -347,7 +348,7 @@
       "rc": 3,
       "verdict": "error",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL: pre-patch VERSION not found: var VERSION = \"1.6.4-run-gate\";"
     },
     {
@@ -407,5 +408,5 @@
       "tail": "NameError: name 'Path' is not defined"
     }
   ],
-  "ts": "2026-09-29T17:22:07Z"
+  "ts": "2026-09-29T17:24:30Z"
 }
