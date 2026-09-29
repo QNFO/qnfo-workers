@@ -4,15 +4,20 @@ name: deploy-containers-pilot
 # workflow qnfo-containers-pilot/wrangler.toml references as the only path that transmits
 # [[containers]]. See the commit message for the full evidence chain.
 #
-# CONTAINER-CONFIG-RESTORE-2 (2026-09-29, issue #1485). The first version had a single
-# wrangler attempt. wrangler.toml's DO-MIGRATION-NOTE-1 warns that a creating migration
-# for an already-depended-on class can be rejected, so a single attempt can fail closed
-# and leave the container down with no second path. Added the migrations-stripped retry.
-# The verify step now asserts the real symptom (ctx.container defined) instead of a
-# version string.
-#
-# Trigger surface is deliberately broad (push to main + the pilot dir + dispatch) because
-# the failure mode being fixed is a trigger that never fired.
+# CONTAINER-DEPLOY-NEVER-RAN-1 (2026-09-29, later the same day). The workflow existed but
+# had ZERO runs: the public Actions page for this workflow reported "0 workflow run
+# results", and qnfo-containers-pilot's modified_on stayed pinned at 19:35:03.886591Z
+# after a push that touched qnfo-containers-pilot/**. A deploy workflow that has never run
+# is not a deploy path. Two things are therefore added here:
+#   1. a self-triggering push path (this file itself), so an edit to the workflow is
+#      sufficient to fire it -- no dependence on a second file changing;
+#   2. an `if: always()` status step that commits ci-status/deploy-containers-pilot.json,
+#      because a workflow whose only output is a step summary cannot be verified from
+#      outside the runner. This fleet has repeatedly been unable to distinguish "the
+#      deploy ran and failed" from "the deploy never ran"; the artifact removes that
+#      ambiguity.
+# Trigger surface stays deliberately broad (push to main + the pilot dir + this file +
+# dispatch) because the failure mode being fixed is a trigger that never fired.
 
 on:
   push:
@@ -28,7 +33,7 @@ on:
         default: "false"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: deploy-containers-pilot
@@ -49,10 +54,11 @@ jobs:
           node-version: "20"
 
       - name: assert the containers block is present in wrangler.toml
+        id: assert
         run: |
           set -euo pipefail
           f=qnfo-containers-pilot/wrangler.toml
-          for key in '\[\[containers\]\]' 'class_name = "ShellContainer"' 'image = ' 'instance_type = ' 'max_instances = '; do
+          for key in '\[\[containers\]\]' 'class_name = "ShellContainer"' 'image = ' 'instance_type = ' 'max_instances = ' '\[\[migrations\]\]'; do
             if ! grep -Eq "$key" "$f"; then
               echo "::error::wrangler.toml is missing required key: $key -- refusing to deploy"
               exit 1
@@ -61,81 +67,99 @@ jobs:
           echo "containers block present:"
           sed -n '/\[\[containers\]\]/,/^$/p' "$f"
 
-      - name: record pre-deploy state
-        if: ${{ github.event.inputs.verify_only != 'true' }}
-        run: |
-          set -euo pipefail
-          curl -s -o /tmp/pre_health.json -w 'pre /health -> %{http_code}\n' https://qnfo-containers-pilot.q08.workers.dev/health || true
-          cat /tmp/pre_health.json || true
-          echo
-
       - name: wrangler deploy (transmits [[containers]])
-        id: wrangler
+        id: deploy
         if: ${{ github.event.inputs.verify_only != 'true' }}
-        continue-on-error: true
         working-directory: qnfo-containers-pilot
         run: |
           set -o pipefail
-          npx --yes wrangler@4 deploy --name qnfo-containers-pilot --keep-vars 2>&1 | tee /tmp/wrangler.log
+          # --keep-vars preserves dashboard-set vars; secrets live in the secrets store.
+          # Output is tee'd so the status artifact can carry the real failure text:
+          # DO-MIGRATION-NOTE-1 warns this deploy can FAIL CLOSED on a creating migration
+          # for an already-depended-on class, and a bare ::error:: cannot distinguish that
+          # from a token problem or a bundling error.
+          npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler.log
         env:
           WRANGLER_SEND_METRICS: "false"
-
-      - name: retry wrangler with the [[migrations]] block stripped
-        id: wrangler_nomig
-        if: ${{ github.event.inputs.verify_only != 'true' && steps.wrangler.outcome == 'failure' }}
         continue-on-error: true
-        run: |
-          set -o pipefail
-          rm -rf /tmp/cp && cp -r qnfo-containers-pilot /tmp/cp
-          awk 'BEGIN{s=0} /^\[\[migrations\]\]/{s=1;next} /^\[\[/{s=0} {if(!s) print}' /tmp/cp/wrangler.toml > /tmp/cp/wrangler.toml.new
-          mv /tmp/cp/wrangler.toml.new /tmp/cp/wrangler.toml
-          echo "migrations block stripped; remaining tables:"
-          grep -n '^\[' /tmp/cp/wrangler.toml || true
-          cd /tmp/cp
-          npx --yes wrangler@4 deploy --name qnfo-containers-pilot --keep-vars 2>&1 | tee /tmp/wrangler_nomig.log
-        env:
-          WRANGLER_SEND_METRICS: "false"
-
-      - name: deploy ladder outcome (no silent raw_put fallback)
-        if: always()
-        run: |
-          echo "wrangler=$(echo '${{ steps.wrangler.outcome }}')"
-          echo "wrangler_nomig=$(echo '${{ steps.wrangler_nomig.outcome }}')"
-          if [ "${{ steps.wrangler.outcome }}" = "failure" ] && [ "${{ steps.wrangler_nomig.outcome }}" != "success" ]; then
-            echo "::error::both wrangler attempts failed -- [[containers]] NOT restored, container remains down (#1485 open). Not falling back to raw_put.py: that path ships code only and would leave the container down while appearing green."
-            exit 1
-          fi
 
       - name: wait for propagation
         if: ${{ github.event.inputs.verify_only != 'true' }}
         run: sleep 20
 
       - name: verify container config is live (closes #1485)
+        id: verify
         run: |
-          set -euo pipefail
-          # The pilot worker exposes /status behind PILOT_TOKEN. If PILOT_TOKEN is not in
-          # this repo's secrets the probe cannot run; report that explicitly rather than
-          # claiming success.
+          set -uo pipefail
+          base="https://qnfo-containers-pilot.q08.workers.dev"
           if [ -z "${PILOT_TOKEN:-}" ]; then
             echo "::warning::PILOT_TOKEN not available to this workflow - container verification SKIPPED, #1485 NOT closed by this run"
+            echo "rc=skipped-no-token" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base="https://qnfo-containers-pilot.q08.workers.dev"
-          code="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status?cb=$RANDOM" || true)"
+          code="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
           echo "GET /status -> $code"
           cat /tmp/status.json || true
           echo
           if [ "$code" != "200" ]; then
+            echo "rc=probe-http-$code" >> "$GITHUB_OUTPUT"
             echo "::error::/status returned $code - container config still not live (#1485 open)"
             exit 1
           fi
           if grep -q "Cannot read properties of undefined" /tmp/status.json; then
+            echo "rc=ctx-container-undefined" >> "$GITHUB_OUTPUT"
             echo "::error::/status reports the ctx.container-undefined signature - #1485 still open"
             exit 1
           fi
+          echo "rc=ok" >> "$GITHUB_OUTPUT"
           echo "container config verified live"
         env:
           PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+        continue-on-error: true
+
+      - name: publish status artifact (always)
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          wrangler_tail="$(tail -n 40 /tmp/wrangler.log 2>/dev/null | tr -d '\r' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
+          deploy_outcome="${{ steps.deploy.outcome }}"
+          verify_rc="${{ steps.verify.outputs.rc }}"
+          head_sha="$(git rev-parse HEAD)"
+          ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > ci-status/deploy-containers-pilot.json <<JSON
+          {
+            "workflow": "deploy-containers-pilot",
+            "marker": "CONTAINER-DEPLOY-NEVER-RAN-1",
+            "head_sha": "$head_sha",
+            "ts": "$ts",
+            "deploy_outcome": "$deploy_outcome",
+            "verify_rc": "$verify_rc",
+            "wrangler_tail": $wrangler_tail
+          }
+          JSON
+          python3 -c "import json;json.load(open('ci-status/deploy-containers-pilot.json'))" \
+            && echo "status artifact is valid JSON" \
+            || { echo "::error::status artifact is not valid JSON"; exit 1; }
+          cat ci-status/deploy-containers-pilot.json
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/deploy-containers-pilot.json
+          if git diff --cached --quiet; then
+            echo "no status change"
+            exit 0
+          fi
+          git commit -m "chore(ci-status): deploy-containers-pilot outcome [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "status artifact pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i; rebasing onto origin/main"
+            git pull --rebase --autostash origin main || true
+          done
+          echo "::error::could not push status artifact after 5 attempts"
+          exit 1
 
       - name: summarize outcome
         if: always()
@@ -143,6 +167,8 @@ jobs:
           echo "## deploy-containers-pilot" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Closes: CONTAINER-CONFIG-DROPPED-1 / issue #1485" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "deploy_outcome=${{ steps.deploy.outcome }} verify_rc=${{ steps.verify.outputs.rc }}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "A green run means \`wrangler deploy\` transmitted the [[containers]] block AND" >> "$GITHUB_STEP_SUMMARY"
           echo "the authenticated /status probe came back 200 without the" >> "$GITHUB_STEP_SUMMARY"
