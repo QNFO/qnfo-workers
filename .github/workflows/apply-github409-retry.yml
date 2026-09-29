@@ -1,0 +1,181 @@
+name: apply-github409-retry
+
+# GITHUB-409-RETRY-1 execution path (issue 1372, 2026-09-29).
+#
+# WHY THIS WORKFLOW EXISTS: scripts/github409-retry-patch.py repairs a defect in
+# qnfo-ops's own github_file_write tool. A fix that lives only in the repo with no
+# execution path to production repeats ORPHANED-APPLIER-1 (the defect this session
+# already hit twice: an applier committed to main that nothing ever runs, and a
+# workflow whose version pin went stale so its deploy job silently skipped).
+#
+# DEFECT (issue 1372, HIGH)
+#   githubFileWrite() did ONE PUT and returned on any non-2xx. This repo lands ~12
+#   commits per 2 minutes from concurrent writers, so a read-sha-then-PUT sequence
+#   loses the race routinely and GitHub answers 409/422. The tool never re-read the
+#   head sha, so the failure was terminal: 17.5% of github_file_write calls fail.
+#
+# FIX
+#   On 409/422, re-GET the file for the CURRENT head sha, rewrite body.sha, retry
+#   (bounded, linear backoff). sha is re-read only when the file already exists, so a
+#   genuine create/create race still fails loudly rather than becoming an overwrite.
+#
+# VERSION-PIN-AGNOSTIC-1: the preflight asserts the FIXED PROPERTIES and the prior
+#   invariants, never a frozen version literal. A stale pin (2.37.18 vs 2.37.19) is
+#   what silently blocked two real fixes earlier today (issue 1355).
+#
+# PUSH-RACE-RETRY-1: the commit-back rebases onto the live branch and retries, because
+#   a bare `git push` in this repo is the exception that loses, not the norm.
+#
+# DEPLOY: scripts/raw_put.py PUTs the CF API /content endpoint (code only, live
+#   bindings preserved, fail-closed, and it appends a deployment_history row). The
+#   applier writes worker.js AND its deployed-current mirror in one commit so
+#   mirror-guard stays green.
+#
+# NOTE the commit message is passed as single-line -m flags, never as an inline
+# multi-line string: a multi-line commit message inside a `run: |` scalar puts
+# continuation lines at column 1, terminates the scalar, and invalidates the YAML.
+
+on:
+  push:
+    paths:
+      - 'scripts/github409-retry-patch.py'
+      - '.github/workflows/apply-github409-retry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-github409-retry
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/github409-retry-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced (already applied)"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: ESM syntax gate (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cp qnfo-ops/worker.js /tmp/gh409-check.mjs
+          node --check /tmp/gh409-check.mjs
+          echo "ESM parse OK"
+
+      - name: Mirror parity for the patched pair (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "qnfo-ops source and mirror are byte-identical"
+
+      - name: Commit and push (PUSH-RACE-RETRY-1)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-selfheal-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-ops): #1372 github_file_write re-reads head sha and retries on 409/422"
+          BODY="githubFileWrite() performed one PUT and returned on any non-2xx. This repo lands roughly a dozen commits per two minutes from concurrent writers, so a read-sha-then-PUT sequence loses the race routinely and GitHub answers 409/422; the tool never re-read the head sha, so the failure was terminal. Measured: 17.5% of github_file_write calls fail (issue 1372). The fix re-GETs the file for the current head sha, rewrites body.sha and retries, bounded to 3 additional attempts with linear backoff, reporting attempts and sha_retried. The sha is re-read only when the file already exists, so a genuine create/create race still fails loudly instead of being silently converted into an overwrite. Both worker.js and its deployed-current mirror are written so the fleet redeploy cron cannot revert the fix."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          BRANCH="${{ github.ref_name }}"
+          for i in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase --autostash "origin/$BRANCH" || git rebase --abort || true
+            if git push origin "HEAD:$BRANCH"; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i (concurrent writer); retrying"
+            sleep 5
+          done
+          echo "::error::push failed after 5 attempts - fix NOT applied"
+          exit 1
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preflight - artifact must carry the 409-retry fix (version-pin-agnostic)
+        id: pre
+        run: |
+          set -euo pipefail
+          VER="$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/^var VERSION = "//; s/";$//')"
+          echo "artifact_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "artifact VERSION=$VER"
+          test "$(grep -cF 'GITHUB-409-RETRY-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'res.status === 409 || res.status === 422' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'sha_retried' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'conflict_status' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'apiPath' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'attempts++' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'const res = await githubApi(env, "PUT"' qnfo-ops/worker.js || true)" -eq 0
+          test "$(grep -cF "FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'" qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF '_errs >= 25' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'd1StripLiterals' qnfo-ops/worker.js || true)" -ge 1
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "preflight OK: 409-retry present, old single-PUT form gone, prior self-heal + D1 guard invariants intact, mirrors byte-identical"
+
+      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
+
+      - name: Verify LIVE bundle carries the 409-retry fix
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECT_VER: ${{ steps.pre.outputs.artifact_version }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
+            -o /tmp/live-gh409.js
+          echo "live-bytes=$(wc -c < /tmp/live-gh409.js)"
+          echo "expected-version=$EXPECT_VER"
+          test "$(grep -cF "$EXPECT_VER" /tmp/live-gh409.js || true)" -ge 1
+          test "$(grep -cF 'GITHUB-409-RETRY-1' /tmp/live-gh409.js || true)" -ge 1
+          test "$(grep -cF 'sha_retried' /tmp/live-gh409.js || true)" -ge 1
+          echo "VERIFIED: live qnfo-ops carries the github_file_write 409 retry"
