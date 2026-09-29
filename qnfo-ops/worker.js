@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.24-404hint-list";
+var VERSION = "2.37.25-github-read-404-hint";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1699,7 +1699,32 @@ async function githubRepoRead(env, args) {
   if (!repo || repo.indexOf("/") <= 0) return { ok: false, error: "repo must be owner/name" };
   const qp = ref ? "?ref=" + encodeURIComponent(ref) : "";
   const res = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/contents/" + encPath(path) + qp);
-  if (res.status === 404) return { ok: false, error: "path not found: " + path };
+  if (res.status === 404) {
+    /* GITHUB-READ-404-HINT-1: on a miss, enumerate what actually exists so an
+       agent that guessed a path gets the real names back (issue #1391). */
+    var _p = String(path || "").split("/").filter(Boolean);
+    var _base = _p.length ? _p[_p.length - 1] : "";
+    var _parent = _p.slice(0, -1).join("/");
+    var _hint = "";
+    try {
+      var _pr = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/contents/" + encPath(_parent) + qp);
+      if (_pr && _pr.status === 200 && Array.isArray(_pr.json)) {
+        var _names = _pr.json.map(function (e) {
+          return e.name;
+        }).slice(0, 40);
+        var _lb = _base.toLowerCase();
+        var _near = _names.filter(function (n) {
+          var _ln = String(n).toLowerCase();
+          return _lb && (_ln.indexOf(_lb) >= 0 || _lb.indexOf(_ln) >= 0);
+        }).slice(0, 8);
+        _hint = " - " + (_parent ? "dir '" + _parent + "' contains: " : "repo root contains: ") + _names.join(", ");
+        if (_near.length) _hint += " (nearest match: " + _near.join(", ") + ")";
+      } else if (_pr && _pr.status === 404) {
+        _hint = " - parent dir '" + _parent + "' also not found; repo root may be the right starting point";
+      }
+    } catch (_e) {}
+    return { ok: false, error: "path not found: " + path + _hint };
+  }
   if (res.status === 403 && !env.GITHUB_TOKEN) return { ok: false, error: "GitHub rate-limited (unauthenticated); set GITHUB_TOKEN secret" };
   if (res.status !== 200) return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300) };
   if (Array.isArray(res.json)) return { ok: true, repo, path, type: "dir", entries: res.json.map(function(e) {
