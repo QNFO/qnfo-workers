@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.25-ops-deploy-ledger";
+var VERSION = "2.37.24-404hint-list";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2038,9 +2038,10 @@ async function cfWorkerRead(env, args) {
               var m = String(n).toLowerCase();
               return m.indexOf(_wl) >= 0 || _wl.indexOf(m) >= 0;
             }).slice(0, 8);
+            // CF-WORKER-READ-404-HINT-LIST-1: always emit real names, never promise a list we do not send
             _wrh = " - not a deployed worker. " + _names.length + " workers exist" +
-              (_near.length ? "; similar: " + _near.join(", ") : "") +
-              ". Use an exact name from that list.";
+              (_near.length ? "; similar: " + _near.join(", ") : "; e.g. " + _names.slice(0, 10).join(", ")) +
+              ". Pass an exact name from this list.";
           }
         } catch (_wrhE) { _wrh = ""; }
       }
