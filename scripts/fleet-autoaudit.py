@@ -99,6 +99,16 @@ def run_guard():
     except json.JSONDecodeError as e:
         die(f"deploy-drift-guard JSON parse failed: {e}")
     data["_guard_rc"] = p.returncode
+    # DEAD-STATE-FILE-1 (2026-09-29): apply_ahead() reads STATE and NOTHING in this
+    # repository ever wrote it, so `--apply` always reached die() and exited rc=3.
+    # Measured: every fleet-autodeploy run failed at the apply step, so the automatic
+    # worker-update path had never executed once. run_guard() is the single point both
+    # --audit and --apply pass through, so persist here.
+    try:
+        with open(STATE, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+    except OSError as e:
+        print(f"::warning::could not persist audit state to {STATE}: {e}")
     return data
 
 
@@ -335,10 +345,15 @@ def probe_version(worker):
         return "ERR:" + str(e)[:60]
 
 
-def apply_ahead():
-    if not os.path.isfile(STATE):
-        die("no audit state; run --audit first")
-    d = json.load(open(STATE))
+def apply_ahead(d=None):
+    # DEAD-STATE-FILE-1 (2026-09-29): prefer the caller-supplied payload; the on-disk
+    # file is now only a fallback for an out-of-process caller. Previously this read was
+    # the ONLY path and no writer existed anywhere, so the function could do nothing but
+    # die() - which is why step 8 of fleet-autodeploy.yml failed on every run.
+    if d is None:
+        if not os.path.isfile(STATE):
+            die("no audit state; run --audit first")
+        d = json.load(open(STATE))
     ahead = d.get("ahead", [])
     print(f"auto-deploy candidates (repo strictly ahead): {len(ahead)}")
     applied, failed = [], []
@@ -392,7 +407,7 @@ def main():
 
     rc = 1 if (failed or purge_err) else 0
     if mode == "--apply":
-        rc = 1 if apply_ahead() else rc
+        rc = 1 if apply_ahead(d) else rc
     sys.exit(rc)
 
 
