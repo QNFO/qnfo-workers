@@ -17,6 +17,15 @@ name: apply-github-write-409-retry
 # already-repaired artifact. Both marker checks below therefore accept EITHER marker: an
 # exact-marker grep under `set -e` returns 0 matches -> exit 1 -> a false red run.
 #
+# FAILURE-ARTIFACT-LOSS-1 (2026-09-29, issue 1381): this workflow used to pair an
+# `if: always()` publish step with a commit-back that early-exits whenever
+# job.status != success. The result was that the status artifact of a FAILED run -- the
+# one run whose outcome most needs reading, because ci-status/*.json is the only outcome
+# channel reachable without the GitHub Actions API -- was written inside the runner and
+# then discarded with it. The commit-back is now SPLIT: the artifact is persisted on
+# every run (always), while the source+mirror commit-back stays green-only so the repo
+# can never run ahead of live. scripts/workflow-lint.py now gates both properties.
+#
 # This workflow mirrors the repository's established apply-* convention:
 #   1. patch the artifact (idempotent, fail-closed, equivalence-aware)
 #   2. verify it still parses as an ES module and that the repo/mirror pair is byte-identical
@@ -27,8 +36,7 @@ name: apply-github-write-409-retry
 #      CF /content is eventually consistent, DEPLOY-VERIFY-RACE-1)
 #   5. publish a machine-readable status artifact so the outcome is verifiable through the
 #      GitHub contents API without the Actions API
-#   6. commit back race-safely -- and ONLY when the job is green, so a failed deploy can
-#      never leave the repo running ahead of live
+#   6. commit back race-safely -- artifact always, source only when green
 #
 # YAML SAFETY: every step name containing a colon is quoted. An unquoted colon-space inside a
 # plain scalar is a parse error that makes GitHub create zero-job runs (WORKFLOW-YAML-LINT-1,
@@ -145,19 +153,41 @@ jobs:
           EOF
           cat ci-status/github-write-409-retry.json
 
-      - name: "Commit back (race-safe, green-only)"
+      - name: "Persist status artifact (always - a FAILED run's outcome must be readable)"
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/github-write-409-retry.json
+          if git diff --cached --quiet; then
+            echo "no status artifact change to commit"
+            exit 0
+          fi
+          git commit -m "chore(ci-status): apply-github-write-409-retry outcome=${{ job.status }} [skip ci]"
+          for i in 1 2 3 4 5; do
+            echo "artifact commit attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "status artifact persisted on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::ARTIFACT-COMMIT-FAILED after 5 attempts (FAILURE-ARTIFACT-LOSS-1 would recur)"
+          exit 1
+
+      - name: "Commit back source+mirror (green-only - the repo must never run ahead of live)"
         if: always()
         run: |
           set -uo pipefail
           if [ "${{ job.status }}" != "success" ]; then
-            echo "job status is '${{ job.status }}'; refusing commit-back so the repo cannot run ahead of live"
+            echo "job status is '${{ job.status }}'; refusing source commit-back so the repo cannot run ahead of live"
             exit 0
           fi
           git config user.name  "qnfo-fleet-bot"
           git config user.email "fleet-bot@qnfo.org"
           git add qnfo-ops/worker.js \
-                  qnfo-ops/deployed-current.worker.js \
-                  ci-status/github-write-409-retry.json
+                  qnfo-ops/deployed-current.worker.js
           if git diff --cached --quiet; then
             echo "nothing to commit (patch was a no-op)"
             exit 0
