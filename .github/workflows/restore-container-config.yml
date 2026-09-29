@@ -1,21 +1,31 @@
 name: restore-container-config
 
-# CONTAINER-CONFIG-RESTORE-5 (issues #1485 / #1487), 2026-09-29.
+# CONTAINER-CONFIG-RESTORE-6 (issues #1485 / #1487), 2026-09-29 — qnfo-ops session.
+# RESTORE-5 added this workflow but no run has published
+# ci-status/restore-container-config.json yet (dir listing at 19:4xZ shows the file absent).
+# This commit re-fires the trigger on the workflow's own path, so the run's outcome artifact
+# is published either way (the artifact step is `if: always()`), which makes the blocker
+# readable from the repo even when the restore itself fails closed.
+#
+# ROOT CAUSE ALREADY PINNED AT SOURCE (qnfo-ops, this session): cfWorkerDeploy reads live
+# /settings for compatibility_date + compatibility_flags ONLY and never carries `containers`
+# into the upload metadata, so no /content deploy from qnfo-ops can restore the block — it can
+# only preserve it. That is why this workflow (which PUTs `containers` explicitly) is the sole
+# restore path. Verified by reading qnfo-ops/worker.js@main cfWorkerDeploy: the metadataPart
+# Object.assign is _mp + bindings + compatibility_date + compatibility_flags + exports. No
+# containers key exists in it.
 #
 # GAP THIS CLOSES (measured, not inferred)
 #   scripts/restore_container_config.py (CONTAINER-CONFIG-RESTORE-3) is the only path that
 #   can ADD [[containers]] back: it PUTs /content with `containers` present in the upload
 #   metadata and deliberately OMITS `bindings` and `[[migrations]]`, so it cannot strip
-#   bindings and cannot trip DO-MIGRATION-NOTE-1. But nothing ever INVOKED it -- there is no
-#   workflow that references it, so it has never run. The other candidate path,
-#   deploy-containers-pilot.yml (wrangler), recorded wrangler_outcome=failure
-#   nomig_outcome=failure in ci-status/deploy-containers-pilot.json at 19:37:34Z.
+#   bindings and cannot trip DO-MIGRATION-NOTE-1.
 #
 # SOURCE SAFETY (removes the rollback hazard)
 #   qnfo-containers-pilot/worker.js and qnfo-containers-pilot/deployed-current.worker.js are
 #   byte identical (sha e0f9e043a9f5a879a01914c982f708af471815b2, VERSION
 #   1.0.3-clone-egress-timeout-fallback), so uploading the repo source does NOT revert the
-#   CLONE-EGRESS-TIMEOUT-FALLBACK-1 fix. The #1488 mirror-drift hazard is already closed.
+#   CLONE-EGRESS-TIMEOUT-FALLBACK-1 fix.
 #
 # FAIL-CLOSED
 #   The script exits 3 without mutating the script if CLOUDFLARE_API_TOKEN is absent, if
@@ -59,6 +69,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: credential presence check (fail loud, never silent)
+        id: creds
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "rc=no-token" >> "$GITHUB_OUTPUT"
+            echo "::error::CLOUDFLARE_API_TOKEN is EMPTY in this workflow - the restore cannot run and #1485 stays open. The CI credential gap (APPLIER-CI-CREDENTIAL-GAP-1, issue #1486) is the blocker."
+          else
+            echo "rc=present" >> "$GITHUB_OUTPUT"
+            echo "CLOUDFLARE_API_TOKEN present (len ${#CLOUDFLARE_API_TOKEN}), account=${CLOUDFLARE_ACCOUNT_ID:-unset}"
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::CLOUDFLARE_ACCOUNT_ID is empty - the script falls back to its hardcoded account id"
+          fi
 
       - name: pre-state (live /settings)
         continue-on-error: true
@@ -121,6 +147,7 @@ jobs:
             "workflow": "restore-container-config",
             "issues": ["1485", "1487"],
             "worker": "${WORKER}",
+            "creds_rc": "${{ steps.creds.outputs.rc }}",
             "restore_rc": "${{ steps.restore.outputs.rc }}",
             "post_outcome": "${{ steps.post.outcome }}",
             "head": "$GITHUB_SHA",
