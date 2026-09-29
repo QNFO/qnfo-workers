@@ -212,10 +212,17 @@ def _repo_version(text):
     """
     hits = CONST.findall(text)
     if hits:
-        for prefix, val in hits:
-            if not prefix:
-                return val
-        return hits[0][1]
+        # VERSION-PRECEDENCE-2-MULTI-DECLARATION-1 (2026-09-29, issue #1388): a
+        # concatenated bundle can declare the SAME constant twice in different scopes
+        # (fleet-exec: line 7 "fleet-executor/0.3.2" inside the wrapped exec module,
+        # line 186 "1.0.2" = the value /health actually serves). Returning the FIRST
+        # match produced a permanent false DRIFT on a canonical deploy target. In a
+        # concatenated artifact the LATER binding is the effective one, so the LAST
+        # plain VERSION wins; QNFO_VERSION remains the fallback.
+        plain = [val for prefix, val in hits if not prefix]
+        if plain:
+            return plain[-1]
+        return hits[-1][1]
     # VERSION-QUOTE-1: explicit SERVER_VERSION fallback, never a wildcard prefix.
     # PROTOCOL_VERSION precedes SERVER_VERSION in qnfo-memory-mcp and is not the
     # value the worker serves on /health.
@@ -225,6 +232,7 @@ def _repo_version(text):
 
 def repo_artifact(d):
     """Return (version, path, text) for the canonical repo artifact, or (None, None, None)."""
+    first = None
     for fn in CANON:
         p = os.path.join(ROOT, d, fn)
         if os.path.isfile(p):
@@ -236,8 +244,13 @@ def repo_artifact(d):
             v = _repo_version(text)
             if v:
                 return v, p, text
-            return None, p, text
-    return None, None, None
+            # VERSION-PRECEDENCE-2: do NOT give up on the first candidate. Returning
+            # None here reported NO_REPO_VERSION without ever consulting the second
+            # canonical artifact -- a false source-gap whenever only the mirror lacks
+            # the constant.
+            if first is None:
+                first = (None, p, text)
+    return first if first is not None else (None, None, None)
 
 
 def live_result(worker):
