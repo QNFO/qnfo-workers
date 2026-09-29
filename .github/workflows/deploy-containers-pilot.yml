@@ -1,0 +1,135 @@
+name: deploy-containers-pilot
+
+# CONTAINER-CONFIG-DROPPED-1 (2026-09-29). Issue filed by the qnfo-ops session.
+#
+# WHY THIS WORKFLOW EXISTS
+#   GET /accounts/<acct>/workers/scripts/<name>/bindings returns BINDINGS ONLY.
+#   The [[containers]] block is NOT a binding, so it is invisible to every
+#   API-driven redeploy that rebuilds metadata from /bindings:
+#     * scripts/raw_put.py  -> PUT /content with metadata built from
+#                              compatibility_date + compatibility_flags + bindings
+#     * cf_worker_deploy    -> BINDING-PRESERVE-1 redeclares only what /bindings
+#                              returned
+#   Both therefore DROP the container config. The worker keeps answering /health
+#   because worker.js handles /health in the TOP-LEVEL fetch (line 296) and never
+#   touches ctx.container. Every DurableObject route then throws
+#       Cannot read properties of undefined (reading 'running')
+#   from the unguarded reads at worker.js lines 69, 77, 89 and 280, and the catch
+#   at line 283 turns that into HTTP 500. Blast radius: shell_exec, exec_python,
+#   exec_node, container_install, git_clone_exec, container_workspace_exec,
+#   shell_pipeline - everything that reaches env.CONTAINERS_PILOT.
+#
+#   wrangler deploy is the ONLY path that transmits [[containers]], because
+#   wrangler builds the complete script metadata from wrangler.toml.
+#   qnfo-containers-pilot/wrangler.toml documents this class verbatim.
+#
+# WHAT IT DOES
+#   Deploys qnfo-containers-pilot with wrangler (full metadata, containers
+#   included), then VERIFIES the fix by polling /status for containerRunning.
+#   /health is deliberately NOT used as the verification signal, because
+#   /health is exactly the false-green that hid this outage.
+#
+# STYLE CONSTRAINTS
+#   * WORKFLOW-YAML-LINT-1: every step name below is colon-free.
+#   * No heredocs and no inline python inside run blocks.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-containers-pilot/wrangler.toml"
+      - "qnfo-containers-pilot/worker.js"
+      - ".github/workflows/deploy-containers-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-containers-pilot
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Preflight auth secrets
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CF_API_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not configured - refusing to no-op"
+            exit 1
+          fi
+          if [ -z "${CF_ACCOUNT_ID:-}" ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is not configured - refusing to no-op"
+            exit 1
+          fi
+          echo "preflight ok"
+
+      - name: Record the pre-deploy status
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          code=$(curl -s -o /tmp/pre.json -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/status || true)
+          echo "pre http=$code"
+          head -c 300 /tmp/pre.json 2>/dev/null || true
+          echo
+
+      - name: Deploy with wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          cd qnfo-containers-pilot
+          npx --yes wrangler@latest deploy 2>&1 | tail -40
+          rc=${PIPESTATUS[0]}
+          echo "wrangler_exit=$rc"
+          exit $rc
+
+      - name: Verify the container config is back
+        run: |
+          set -uo pipefail
+          i=1
+          while [ $i -le 6 ]; do
+            code=$(curl -s -o /tmp/post.json -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/status || true)
+            body=$(head -c 200 /tmp/post.json 2>/dev/null || true)
+            echo "attempt $i http=$code body=$body"
+            if [ "$code" = "200" ] && grep -q containerRunning /tmp/post.json; then
+              echo "VERIFIED container config present"
+              exit 0
+            fi
+            i=$((i + 1))
+            sleep 10
+          done
+          echo "::error::container config still missing after wrangler deploy"
+          exit 1
+
+      - name: Write the ci-status artifact
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          printf '{"workflow":"deploy-containers-pilot","issue":"CONTAINER-CONFIG-DROPPED-1","head":"%s","ts":"%s"}\n' \
+            "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/deploy-containers-pilot.json
+          cat ci-status/deploy-containers-pilot.json
+
+      - name: Upload the ci-status artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-containers-pilot-status
+          path: ci-status/deploy-containers-pilot.json
+          if-no-files-found: ignore
+          retention-days: 30
