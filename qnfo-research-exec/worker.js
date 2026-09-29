@@ -24,11 +24,17 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
 // absent the old code fell straight through to a public workers.dev fetch, which does not
 // work from Worker context. Try the custom domain first, then workers.dev, and keep the
 // response contract identical (return the last Response when none is ok).
+// ROUTER-HOST-ORDER-1 (2026-09-29): Worker-context probes show ai.qnfo.org returns
+// 522 (same-zone custom-domain subrequest) while qnfo-ai.q08.workers.dev returns
+// 200/401 from Worker context. Try the proven-reachable host FIRST so every call
+// does not burn a guaranteed-failing hop.
 var ROUTER_HOSTS = [
-  "https://ai.qnfo.org",
-  "https://qnfo-ai.q08.workers.dev"
+  "https://qnfo-ai.q08.workers.dev",
+  "https://ai.qnfo.org"
 ];
 var _routerBindingWarned = false;
+// GW-FALLBACK-BODY-1: record which router host produced the response we return.
+var _lastRouterHost = "";
 async function routerFetch(env, url, opts) {
   if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
     return env.QNFO_AI.fetch(url, opts);
@@ -48,6 +54,7 @@ async function routerFetch(env, url, opts) {
   for (var i = 0; i < ROUTER_HOSTS.length; i++) {
     try {
       var r = await fetch(ROUTER_HOSTS[i] + path, opts);
+      _lastRouterHost = ROUTER_HOSTS[i];
       if (r && r.ok) return r;
       last = r;
     } catch (e) {
@@ -1474,7 +1481,13 @@ async function gwCall(env, prompt, maxTokens) {
     const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) {
-      await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + "; falling back to Workers AI", "warn");
+      var _eb = "";
+      try {
+        _eb = String(await r.text()).slice(0, 300);
+      } catch (e) {
+        _eb = "(body unreadable)";
+      }
+      await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + " host=" + _lastRouterHost + " body=" + _eb + "; falling back to Workers AI", "warn");
       return await aiText(env, MODELS[0], prompt, maxTokens);
     }
     const j = await r.json();
