@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.29-affirm-veto-clause";
+var VERSION = "2.37.30-container-deploy-guard";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2325,6 +2325,25 @@ async function cfWorkerDeploy(env, args) {
   const versionNote = String(args && args.version || "").trim();
   if (!worker) return { ok: false, error: "worker name required" };
   if (!content) return { ok: false, error: "content (JS source) required" };
+  // CONTAINER-CONFIG-DROPPED-1 (2026-09-29, issue #1485): refuse to deploy a worker
+  // that declares [[containers]]. Cloudflare stores that block as script-level config,
+  // NOT as a binding, so it never appears in GET /bindings -- and BINDING-PRESERVE-1
+  // rebuilds the script from exactly that list, which therefore DROPS it. Measured:
+  // deployment_history id 172 (19:30:35.100Z) and id 175 (19:34:11.789Z) each dropped
+  // qnfo-containers-pilot's container config; the first container.error row landed at
+  // 19:30:43.591Z, 8s after id 172. Use wrangler deploy instead
+  // (.github/workflows/deploy-containers-pilot.yml).
+  // ADVERSARIAL: this is a name list, not detection -- a NEW container worker added
+  // without extending it is still exposed. Detection would require reading the
+  // worker's wrangler.toml, which this endpoint has no binding for.
+  const _CONTAINER_WORKERS = ["qnfo-containers-pilot"];
+  if (_CONTAINER_WORKERS.indexOf(worker) !== -1 && !(args && args.allow_container_config_drop)) {
+    return {
+      ok: false,
+      rejected: true,
+      error: "CONTAINER-CONFIG-DROPPED-1: " + worker + " declares [[containers]]; cf_worker_deploy PUTs /content and rebuilds bindings from GET /bindings, and [[containers]] is not a binding, so this deploy would destroy the container config and take the whole container tool family down. Deploy with wrangler deploy (.github/workflows/deploy-containers-pilot.yml). Pass allow_container_config_drop:true only for a deliberate container teardown."
+    };
+  }
   // FM8-VERSION-DOWNGRADE (2026-09-26): refuse a SEMVER DOWNGRADE by default. A stale
   // WORKTREE-GRAFT-PUSH-1 reverts the repo to OLD versions (canonical: qnfo-gateway 3.7.4 to
   // 3.6.1, qnfo-ops 2.37.6 to 2.36.47) and, because GitHub main is the deploy source, the
