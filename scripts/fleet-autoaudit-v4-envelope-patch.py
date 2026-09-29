@@ -31,8 +31,14 @@ WHAT IT CHANGES (one helper + two call sites + one message):
     failure can no longer be logged as the string "None".
 
 FAIL-CLOSED: every anchor must match exactly once; the patched source must compile and must
-contain _v4_ok exactly 3 times (1 def + 2 call sites) with the bare literal `res.get("ok")`
-surviving only inside the helper. Any violation exits 3 BEFORE the file is written.
+contain _v4_ok exactly 3 times (1 def + 2 call sites); both ORIGINAL call-site forms must be
+gone; and the two `res.get("ok")` literals must both sit inside the helper (its docstring and
+its body) -- 2 occurrences, not 1. Any violation exits 3 BEFORE the file is written.
+
+  Self-defect history, recorded because it is instructive: the first revision of this script
+  asserted `count('res.get("ok")') == 1`, which is UNSATISFIABLE because the helper itself
+  contains that literal twice. It failed closed (RC=3) in the container against the real
+  file and left the blob byte-identical, which is exactly what the guard is for.
 
 IDEMPOTENT: a second run detects the helper and exits 0 without touching the file, so this
 script is safe to leave wired to a push-triggered workflow.
@@ -80,6 +86,9 @@ NEW_MSG = '            failed.append((w, str(res.get("error") or res.get("errors
 
 HELPER_DEF = "def _v4_ok(res):"
 CALL = "_v4_ok(res)"
+# 2 = the helper's own docstring + its body. The call sites are asserted separately so a
+# future edit cannot silently satisfy a bare count.
+OK_LITERAL_IN_HELPER = 2
 
 
 def die(msg, code=3):
@@ -95,12 +104,13 @@ def main():
     if HELPER_DEF in src:
         n = src.count(CALL)
         bare = src.count('res.get("ok")')
-        if n == 3 and bare == 1:
-            print("already patched (idempotent no-op): %s sites=%d bare_ok_literal=%d"
+        if n == 3 and bare == OK_LITERAL_IN_HELPER and OLD_A not in src and OLD_B not in src:
+            print("already patched (idempotent no-op): %s sites=%d ok_literal=%d"
                   % (TARGET, n, bare))
             return 0
-        die("partial patch detected: helper=%d sites=%d bare_ok_literal=%d"
-            % (src.count(HELPER_DEF), n, bare))
+        die("partial patch detected: helper=%d sites=%d ok_literal=%d old_a=%d old_b=%d"
+            % (src.count(HELPER_DEF), n, bare,
+               src.count(OLD_A), src.count(OLD_B)))
 
     counts = (src.count(ANCHOR_DEF), src.count(OLD_A), src.count(OLD_B), src.count(OLD_MSG))
     if counts != (1, 1, 1, 1):
@@ -112,12 +122,21 @@ def main():
     out = out.replace(OLD_B, NEW_B, 1)
     out = out.replace(OLD_MSG, NEW_MSG, 1)
 
-    if out.count('res.get("ok")') != 1:
-        die("post-check failed: bare ok-literal must survive only inside the helper")
+    if out.count(OLD_A) != 0:
+        die("post-check failed: original write_audit_rows guard still present")
+    if out.count(OLD_B) != 0:
+        die("post-check failed: original purge_stale guard still present")
+    if out.count(OLD_MSG) != 0:
+        die("post-check failed: original write-failure message still present")
+    if out.count('res.get("ok")') != OK_LITERAL_IN_HELPER:
+        die("post-check failed: ok-literal count %d != %d (both must be inside the helper)"
+            % (out.count('res.get("ok")'), OK_LITERAL_IN_HELPER))
     if out.count(HELPER_DEF) != 1:
         die("post-check failed: helper definition count != 1")
     if out.count(CALL) != 3:
         die("post-check failed: _v4_ok occurrences != 3 (1 def + 2 call sites)")
+    if out.count(NEW_A) != 1 or out.count(NEW_B) != 1:
+        die("post-check failed: new guard forms not both present exactly once")
     try:
         compile(out, TARGET, "exec")
     except SyntaxError as e:
