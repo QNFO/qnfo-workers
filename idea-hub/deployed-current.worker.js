@@ -10,7 +10,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-const VERSION='1.0.6-quarantine-wired-20260926';
+const VERSION='1.0.7-rss-pipeline-stamp-gate';
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -23,7 +23,18 @@ function reEsc(s){return String(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 const _wordRe=new Map();
 function wordHit(t,p){let re=_wordRe.get(p);if(!re){re=new RegExp('(?<![a-z0-9])'+reEsc(p)+'(?![a-z0-9])','i');_wordRe.set(p,re)}return re.test(t)}
 function has(s,a){const t=String(s||'').toLowerCase();return a.some(function(x){const p=String(x).toLowerCase();if(/^[a-z0-9]+$/.test(p))return wordHit(t,p);return t.includes(p)})}
-function publicTitle(s){const t=clean(s,1000);return t.length>=12&&!has(t,INTERNAL)&&!has(t,OPS)&&!has(t,JUNK)&&has(t,RESEARCH)}
+// F10-RSS-PIPELINE-STAMP-GATE-1 (issue #1412, 2026-09-29): publicTitle() previously
+// required only a RESEARCH token, so an orchestrator retry stamp prefixed to the idea
+// summary passed verbatim into the public RSS title. Live reproduction (external curl,
+// 2026-09-29T17:11:22Z) item 2 of https://ideas.qnfo.org/rss.xml read
+//   "RETRY (prior submission was dropped by an expressed-step abort). Notation-commissioning
+//    audit: ... physics and quantum mechanics."
+// It passed because "physics"/"quantum" are RESEARCH tokens and the stamp matches no
+// INTERNAL/OPS/JUNK entry. Detected here, before the lists; deliberately NOT in INTERNAL,
+// which also feeds blocked() and would quarantine whole threads on a phrase like
+// "before execution". Fail-closed: a stamped summary is never a public title.
+const STAMP=/(prior submission was dropped|expressed-step abort|dropped by an expressed|notation-commissioning|cross-link to qnf-|cross-link to dlf-|before execution|retry\s*\()/i;
+function publicTitle(s){const t=clean(s,1000);if(STAMP.test(t))return false;return t.length>=12&&!has(t,INTERNAL)&&!has(t,OPS)&&!has(t,JUNK)&&has(t,RESEARCH)}
 function ts(v){if(!v)return null;if(typeof v==='number')return new Date(v).toISOString();let s=String(v).replace(' ','T');if(!/Z$|[+-]\d\d:\d\d$/.test(s))s+='Z';const d=new Date(s);return Number.isNaN(d.getTime())?String(v):d.toISOString()}
 let _qSet=null,_qAt=0;
 async function quarantined(env){const n=Date.now();if(_qSet&&n-_qAt<60000)return _qSet;const r=(await env.QNFO_AUDIT.prepare('SELECT DISTINCT thread FROM chat_feed_quarantine_20260926 WHERE thread IS NOT NULL LIMIT 5000').all()).results||[];_qSet=new Set(r.map(function(x){return String(x.thread)}));_qAt=n;return _qSet}
