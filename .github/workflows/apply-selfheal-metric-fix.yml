@@ -1,0 +1,163 @@
+name: apply-selfheal-metric-fix
+
+# SELFHEAL-METRIC-TABLE-FIX-1 (issues 1370, 1165, 1353, 2026-09-29).
+#
+# WHY THIS WORKFLOW EXISTS: scripts/selfheal-metric-patch.py repairs two defects in the
+# qnfo-ops self-audit surface. A fix in the repo with no execution path to production
+# repeats ORPHANED-APPLIER-1. This workflow IS that execution path.
+#
+# DEFECT 1 (issue 1370, HIGH) -- telemetry_report() counted open self-heal tickets with
+#   `FROM agent_issues WHERE status='open' AND category='telemetry-self-heal'`, but
+#   telemetry_analyze() INSERTs into issue_ledger. Verified live 2026-09-29 15:38Z:
+#   agent_issues -> 0 rows, issue_ledger -> 8 open rows. The report advertised
+#   open_self_heal_issues=0 against 8 genuinely open tickets.
+#
+# DEFECT 2 (issues 1165, 1353) -- the failure census summed every status='error' row.
+#   Verified live: all 8 distinct recent ops_d1_query errors carry a REAL D1 error such as
+#   {"error":"D1_ERROR: no such column: worker at offset 7"} in meta.resultOk=false, i.e.
+#   malformed SQL authored by the CALLING AGENT while probing an unknown schema, not a
+#   malfunction of ops_d1_query. The census now excludes that class and gains an ABSOLUTE
+#   error gate (_errs >= 25) beside the rate gate, which is the blind spot issue 1165 named.
+#
+# VERSION-PIN-AGNOSTIC-1 (issue 1355): this preflight asserts the FIXED PROPERTIES, never a
+# frozen version literal. A stale version pin silently blocked two real fixes on 2026-09-29.
+#
+# DEPLOY: scripts/raw_put.py PUTs the CF API /content endpoint, which updates CODE ONLY and
+# preserves live bindings (BINDING-PRESERVATION-1); it is fail-closed. The applier writes
+# worker.js AND its deployed-current mirror in one commit so mirror-guard stays green and
+# the qnfo-fleet-control */20 redeploy cron cannot revert the fix.
+#
+# NOTE the commit message is passed as single-line -m flags, never as an inline multi-line
+# string: a multi-line git commit -m inside a `run: |` scalar puts continuation lines at
+# column 1, terminates the scalar, and makes the whole workflow invalid YAML.
+
+on:
+  push:
+    paths:
+      - 'scripts/selfheal-metric-patch.py'
+      - '.github/workflows/apply-selfheal-metric-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-selfheal-metric-fix
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/selfheal-metric-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced (already applied)"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: ESM syntax gate (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cp qnfo-ops/worker.js /tmp/metric-check.mjs
+          node --check /tmp/metric-check.mjs
+          echo "ESM parse OK"
+
+      - name: Mirror parity for the patched pair (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "qnfo-ops source and mirror are byte-identical"
+
+      - name: Commit and push to the triggering branch
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-selfheal-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-ops): #1370 self-heal metric reads issue_ledger; #1165 census precision"
+          BODY="Issue 1370: telemetry_report() counted open self-heal tickets with FROM agent_issues WHERE category='telemetry-self-heal', but telemetry_analyze() INSERTs into issue_ledger. Verified live 2026-09-29 15:38Z: agent_issues returned 0 while issue_ledger held 8 open rows, so the report advertised open_self_heal_issues=0 against 8 genuinely open tickets. The counter now reads issue_ledger. Issue 1165/1353: the failure census summed every status='error' row; all 8 distinct recent ops_d1_query errors were verified to carry a real D1 error in meta.resultOk=false (no such column: worker) i.e. malformed SQL authored by the calling agent while probing an unknown schema, not a malfunction of the tool. The census now excludes that class and adds an absolute error gate (_errs >= 25) beside the rate gate, which is the high-volume low-rate blind spot issue 1165 named. The applier writes both worker.js and its deployed-current mirror so the fleet redeploy cron cannot revert the fix."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preflight - artifact must carry the metric fix (version-pin-agnostic)
+        id: pre
+        run: |
+          set -euo pipefail
+          VER="$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/^var VERSION = "//; s/";$//')"
+          echo "artifact_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "artifact VERSION=$VER"
+          test "$(grep -cF "FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'" qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF "NOT LIKE '%no such column%'" qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF "_errs >= 25" qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'SELFHEAL-EXTRACTOR-BARE-NAME-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'SELFHEAL-RATE-NOT-ABSENCE-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'SELFHEAL-FINGERPRINT-MISMATCH-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'out.rates' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'd1StripLiterals' qnfo-ops/worker.js || true)" -ge 1
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "preflight OK: issue_ledger counter, census exclusion, absolute gate, and all prior self-heal + D1 guard properties present; mirrors byte-identical"
+
+      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
+
+      - name: Verify LIVE bundle carries the metric fix
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECT_VER: ${{ steps.pre.outputs.artifact_version }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
+            -o /tmp/live-metric.js
+          echo "live-bytes=$(wc -c < /tmp/live-metric.js)"
+          echo "expected-version=$EXPECT_VER"
+          test "$(grep -cF "$EXPECT_VER" /tmp/live-metric.js || true)" -ge 1
+          test "$(grep -cF "FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'" /tmp/live-metric.js || true)" -ge 1
+          test "$(grep -cF "_errs >= 25" /tmp/live-metric.js || true)" -ge 1
+          echo "VERIFIED: live qnfo-ops carries the repaired self-heal metric + census"
