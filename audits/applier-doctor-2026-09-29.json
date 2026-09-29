@@ -1,13 +1,14 @@
 {
  "counts": {
-  "already-applied": 33,
-  "error": 1,
+  "already-applied": 37,
+  "error": 2,
   "stale-anchor": 3,
-  "superseded": 12,
+  "superseded": 10,
   "undetermined": 7
  },
  "errored": [
-  "scripts/dashboard-gate-failopen-patch.py"
+  "scripts/dashboard-gate-failopen-patch.py",
+  "scripts/patch-cron-only-class.py"
  ],
  "marker": "APPLIER-DOCTOR-2",
  "never_landed": [],
@@ -29,23 +30,20 @@
    "rc": 3,
    "script": "scripts/applier-classify-signature-and-retire-patch.py",
    "tail": [
-    "FAIL-CLOSED: anchor 'json' occurs 0 times (expected exactly 1) - nothing written"
+    "FAIL-CLOSED: anchor 'classify' occurs 0 times (expected exactly 1) - nothing written"
    ],
    "verdict": "superseded"
   },
   {
    "changed_files": [],
-   "outcome_present_in": [
-    "scripts/version-anchor-normalize-patch.py :: normalize_version_anchors",
-    "scripts/version-anchor-normalize-patch.py :: VERSION-ANCHOR-DRIFT-1"
-   ],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/applier-classify-unmasked-patch.py",
    "tail": [
-    "FAIL (fail-closed): anchor occurrence != 1 in scripts/version-anchor-normalize-patch.py",
-    "  count=0  import os"
+    "already applied: scripts/apply-pending-patches.py carries 'APPLIER-CLASSIFY-UNMASKED-1'",
+    "already applied: scripts/version-anchor-normalize-patch.py carries 'from pathlib import Path'",
+    "APPLIER-CLASSIFY-UNMASKED-1: nothing to do (all edits already applied)"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -71,11 +69,10 @@
   {
    "changed_files": [
     " M ci-status/applier-doctor.json",
-    " M qnfo-deploy-guard/deployed-current.worker.js",
-    " M qnfo-deploy-guard/worker.js",
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js",
-    " M scripts/raw_put.py"
+    " M qnfo-ai/deployed-current.worker.js",
+    " M qnfo-ai/worker.js",
+    " M qnfo-research-exec/deployed-current.worker.js",
+    " M qnfo-research-exec/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -88,8 +85,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, self-fetch-guard-patch.py",
-    "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
+    "LANDED(1): patch-ensemble-budget-2.py",
+    "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: dashboard-drift-failclosed-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -108,20 +105,13 @@
    "verdict": "superseded"
   },
   {
-   "changed_files": [
-    " M scripts/raw_put.py"
-   ],
-   "outcome_present_in": [
-    "scripts/raw_put.py :: CF-URLLIB-UA-1010-1",
-    "scripts/raw_put.py :: URLLIB-UA-1010-1",
-    "scripts/raw_put.py :: User-Agent"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/cf-urllib-ua-1010-patch.py",
    "tail": [
-    "APPLIED: scripts/raw_put.py now 19338 bytes, 4 User-Agent insertions, AST OK"
+    "ALREADY APPLIED - no change"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -167,6 +157,25 @@
    "verdict": "stale-anchor"
   },
   {
+   "changed_files": [
+    " M qnfo-fleet-dashboard/worker.js"
+   ],
+   "outcome_present_in": [
+    "qnfo-fleet-dashboard/worker.js :: DRIFT-FAILCLOSED-1",
+    "qnfo-fleet-dashboard/worker.js :: GATE-EVAL-METRIC-STALENESS-FAILOPEN-1",
+    "qnfo-fleet-dashboard/worker.js :: STALE-GATE-FAILCLOSED-1",
+    "qnfo-fleet-dashboard/deployed-current.worker.js :: STALE-GATE-FAILCLOSED-1"
+   ],
+   "rc": 1,
+   "script": "scripts/dashboard-drift-failclosed-patch.py",
+   "tail": [
+    " marker present                         OK",
+    " version bumped                         OK",
+    "FAIL-CLOSED: post-conditions failed: null gate counted as 0"
+   ],
+   "verdict": "superseded"
+  },
+  {
    "changed_files": [],
    "rc": 1,
    "script": "scripts/dashboard-gate-failopen-patch.py",
@@ -178,28 +187,13 @@
    "verdict": "error"
   },
   {
-   "changed_files": [
-    " M qnfo-deploy-guard/deployed-current.worker.js",
-    " M qnfo-deploy-guard/worker.js"
-   ],
-   "outcome_present_in": [
-    "qnfo-deploy-guard/worker.js :: isFinite(ms(mo))",
-    "qnfo-deploy-guard/worker.js :: return isNaN(v) ? NaN : v; }",
-    "qnfo-deploy-guard/worker.js :: isFinite(ms(lg.ts)) && isFinite(ms(mo))",
-    "qnfo-deploy-guard/worker.js :: ms(mo) - 180000",
-    "qnfo-deploy-guard/deployed-current.worker.js :: isFinite(ms(mo))",
-    "qnfo-deploy-guard/deployed-current.worker.js :: return isNaN(v) ? NaN : v; }",
-    "qnfo-deploy-guard/deployed-current.worker.js :: isFinite(ms(lg.ts)) && isFinite(ms(mo))",
-    "qnfo-deploy-guard/deployed-current.worker.js :: ms(mo) - 180000"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/deploy-guard-ms-failclosed-patch.py",
    "tail": [
-    "  ok   nullLedgerTs = false",
-    "BEHAVIOUR_FAILURES=0",
-    "OK - DEPLOY-GUARD-MS-FAILCLOSED-1 applied, guard is fail-closed"
+    "ALREADY APPLIED - nothing to do"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -336,7 +330,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 372362 (unchanged)",
+    "bytes: 373715 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -398,8 +392,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=372364 marker=1",
-    "  deployed-current.worker.js bytes=372364 marker=1"
+    "  worker.js bytes=373717 marker=1",
+    "  deployed-current.worker.js bytes=373717 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -437,6 +431,15 @@
   },
   {
    "changed_files": [],
+   "rc": 1,
+   "script": "scripts/patch-cron-only-class.py",
+   "tail": [
+    "FAIL-CLOSED ANCHOR-INVALID edit 1: expected exactly 1 match, found 0 for anchor 'LIVE_ERR /health unreachable or non-404 error'"
+   ],
+   "verdict": "error"
+  },
+  {
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-enospc-cache-1.py",
    "tail": [
@@ -445,6 +448,26 @@
     "RESULT: applied=0 already=2 (nothing to do)"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-ai/deployed-current.worker.js",
+    " M qnfo-ai/worker.js",
+    " M qnfo-research-exec/deployed-current.worker.js",
+    " M qnfo-research-exec/worker.js"
+   ],
+   "declared_signals": [
+    "ENSEMBLE-BUDGET-2",
+    "CANNED-DETECT-1"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-ensemble-budget-2.py",
+   "tail": [
+    "B patched         qnfo-research-exec/worker.js",
+    "B patched         qnfo-research-exec/deployed-current.worker.js",
+    "changed=4"
+   ],
+   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -582,21 +605,15 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
-   ],
-   "declared_signals": [
-    "SELF-FETCH-GUARD-1",
-    "SAME-ZONE-FETCH-FALLBACK-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/self-fetch-guard-patch.py",
    "tail": [
-    "PATCHED qnfo-ops/worker.js  (372362 -> 373715 bytes)  var VERSION = \"2.37.26-samezone-fetch-fallback\"; -> var VERSION = \"2.37.27-self-fetch-guard\";",
-    "PATCHED qnfo-ops/deployed-current.worker.js  (372362 -> 373715 bytes)  var VERSION = \"2.37.26-samezone-fetch-fallback\"; -> var VERSION = \"2.37.27-self-fetch-guard\";"
+    "OK (already patched): qnfo-ops/worker.js",
+    "OK (already patched): qnfo-ops/deployed-current.worker.js",
+    "nothing to do"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -689,11 +706,9 @@
  ],
  "superseded": [
   "scripts/applier-classify-signature-and-retire-patch.py",
-  "scripts/applier-classify-unmasked-patch.py",
   "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/attachguard-xml-form-patch.py",
-  "scripts/cf-urllib-ua-1010-patch.py",
-  "scripts/deploy-guard-ms-failclosed-patch.py",
+  "scripts/dashboard-drift-failclosed-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py",
@@ -701,14 +716,14 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 56,
- "ts": "2026-09-29T19:11:41.815Z",
+ "total": 59,
+ "ts": "2026-09-29T19:16:33.680Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
-  "scripts/self-fetch-guard-patch.py",
+  "scripts/patch-ensemble-budget-2.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
