@@ -1,10 +1,10 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "c6b4594b411aca700adedf4e806eb32f43623ffe",
-  "total": 51,
+  "head": "c41ad5a112584c4471c5e6f322cc1d07f6dbe254",
+  "total": 52,
   "summary": {
-    "already-applied": 31,
+    "already-applied": 32,
     "stale-anchor": 16,
     "landed": 3,
     "error": 1
@@ -12,7 +12,7 @@
   "landed": [
     "cf-urllib-ua-1010-patch.py",
     "deploy-guard-ms-failclosed-patch.py",
-    "driftguard-multi-version-ahead-exclusion-patch.py"
+    "research-exec-terminal-rescue-patch.py"
   ],
   "results": [
     {
@@ -36,7 +36,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.13,
+      "seconds": 0.12,
       "tail": "FAIL(3): anchor count != 1 -> {ci-status key tuple: 0} for ci-status key tuple"
     },
     {
@@ -52,7 +52,7 @@
       "rc": 0,
       "verdict": "landed",
       "changed": true,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "APPLIED: scripts/raw_put.py now 19338 bytes, 4 User-Agent insertions, AST OK"
     },
     {
@@ -60,7 +60,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "OK applied=0"
     },
     {
@@ -138,10 +138,10 @@
     {
       "script": "driftguard-multi-version-ahead-exclusion-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "seconds": 0.02,
-      "tail": "patched /home/runner/work/qnfo-workers/qnfo-workers/scripts/deploy-drift-guard.py"
+      "tail": "already applied: /home/runner/work/qnfo-workers/qnfo-workers/scripts/deploy-drift-guard.py"
     },
     {
       "script": "driftguard-server-version-patch.py",
@@ -276,7 +276,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "DONE: 0 file(s) patched, marker=GITHUB-READ-404-HINT-1"
     },
     {
@@ -328,6 +328,14 @@
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
+      "script": "research-exec-terminal-rescue-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "seconds": 0.09,
+      "tail": "changed_files: 2"
+    },
+    {
       "script": "router-transport-failover-patch.py",
       "rc": 0,
       "verdict": "already-applied",
@@ -341,7 +349,7 @@
       "verdict": "already-applied",
       "changed": false,
       "seconds": 0.03,
-      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=b6c47c63b04025e5"
+      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=248013c9e642aed3"
     },
     {
       "script": "routerfetch-host-order-correction-patch.py",
@@ -349,7 +357,7 @@
       "verdict": "already-applied",
       "changed": false,
       "seconds": 0.03,
-      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b6c47c63b04025e5"
+      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=248013c9e642aed3"
     },
     {
       "script": "run-gate-internal-patch.py",
@@ -364,7 +372,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -424,5 +432,5 @@
       "tail": "NameError: name 'Path' is not defined"
     }
   ],
-  "ts": "2026-09-29T19:01:45Z"
+  "ts": "2026-09-29T19:05:55Z"
 }

@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.21-gw-host-order-and-body";
+var VERSION = "0.9.22-terminal-rescue";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -219,6 +219,12 @@ async function markError(env, row, msg) {
       "UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=recover_count+1, attempt=0, claimed_at=NULL WHERE id=?"
     ).bind(String(msg).slice(0, 300), row.id).run();
   } else {
+    var _trArm = Number(row.terminal_rearms || 0);
+    if (_trArm < 2) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=0, attempt=0, terminal_rearms=terminal_rearms+1, claimed_at=NULL WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
+      try { await logEvent(env, "terminal-rearm", "TERMINAL-RESCUE-1 re-armed terminal row " + String(row.id).slice(0, 8) + " terminal_rearms=" + (_trArm + 1), "ok"); } catch (eTR) {}
+      return;
+    }
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
     try {
       var _rid = String(row.id).slice(0, 8);
@@ -1784,7 +1790,12 @@ async function stageReconcile(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
-  const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
+  let reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
+  if (!reconciled || reconciled.length < 1e4) {
+    // RECONCILE-RETRY-1 (2026-09-29): one bounded retry before the best-leg degrade.
+    let _rc2 = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n") + "\n\nIMPORTANT: output the COMPLETE reconciled paper in full. Do not summarize and do not truncate.", 3e4);
+    if (_rc2 && _rc2.length > (reconciled ? reconciled.length : 0)) reconciled = _rc2;
+  }
   if (!reconciled || reconciled.length < 1e4) {
     let best = parts[0];
     for (let _i = 1; _i < parts.length; _i++) if (parts[_i].length > best.length) best = parts[_i];
@@ -1854,9 +1865,16 @@ async function stageRevise(env, row) {
     ctx = JSON.parse(row.context || "{}");
   } catch (e) {
   }
-  const revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
+  let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
   if (!revised || revised.length < 1e4) {
-    await markError(env, row, "revise: output too short");
+    // REVISE-RETRY-1 (2026-09-29): one bounded retry before terminal escalation.
+    // The prior code escalated on the first short output: an absolute 1e4 floor with no
+    // retry permanently wedged the row (RESEARCH-TERMINAL cluster).
+    let _r2 = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3) + "\n\nIMPORTANT: output the COMPLETE revised paper, start to finish. Do not summarize and do not truncate.", 3e4);
+    if (_r2 && _r2.length > (revised ? revised.length : 0)) revised = _r2;
+  }
+  if (!revised || revised.length < 1e4) {
+    await markError(env, row, "revise: output too short (" + (revised ? revised.length : 0) + " chars after retry)");
     return { ok: false, stage: "revise" };
   }
   await r2Put(env, String(row.id) + "/reconciled.md", revised);
