@@ -1,0 +1,156 @@
+name: apply-backlog-health-cheap
+
+# HEALTH-PROBE-BUDGET-1 (2026-09-29). See scripts/patch-backlog-health-cheap.py
+# for the full defect record.
+#
+# SUMMARY: qnfo-backlog-exec's /health handler ran the full 14-lane
+# openInventory() scan (14 registers / 109 rows) on every probe. On a cold
+# isolate that exceeded the hard 5s AbortController budget in qnfo-ops
+# probeService(), so the service-binding fetch aborted and the ops endpoint
+# reported qnfo-backlog-exec as UNHEALTHY ("timeout") while a plain internet
+# client got http=200 in 1.6s from the very same worker. The false negative
+# auto-filed agent_issues 1368 and hid the open-backlog count from
+# backlog_status. The full inventory is already served by the separate
+# /inventory route, so /health does not need it.
+#
+# This workflow mirrors the repository's established apply-* convention:
+#   1. patch the artifact (idempotent, fail-closed)
+#   2. verify it still parses as an ES module and that the repo/mirror pair is
+#      byte-identical
+#   3. deploy with the canonical binding-preserving deployer
+#      (scripts/raw_put.py -> CF API /content PUT, BINDING-PRESERVATION-1 +
+#      COMPAT-PRESERVE-1; a wrangler deploy would drop live bindings)
+#   4. verify the live bundle actually carries the new VERSION (bounded retry -
+#      CF /content is eventually consistent, DEPLOY-VERIFY-RACE-1)
+#   5. commit back race-safely (pull --rebase --autostash + bounded retry;
+#      COMMITBACK-PUSH-RACE-1 - other fleet agents push every few minutes)
+#   6. publish a machine-readable status artifact so the outcome is verifiable
+#      through the GitHub contents API without the Actions API
+#
+# NOTE ON SCHEDULES: SCHEDULE-EVENT-NEVER-FIRES-1 - the GitHub `schedule`
+# event has never fired on this repository, so this workflow deliberately
+# declares NO cron. It fires on push (to itself or its patch script) and on
+# manual dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/patch-backlog-health-cheap.py"
+      - ".github/workflows/apply-backlog-health-cheap.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-backlog-health-cheap
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  patch-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Patch /health (fail-closed, idempotent)
+        id: guard
+        run: python3 scripts/patch-backlog-health-cheap.py
+
+      - name: Verify artifact parses as an ES module
+        run: |
+          set -euo pipefail
+          cp qnfo-backlog-exec/worker.js /tmp/be.mjs
+          node --check /tmp/be.mjs
+          echo "syntax OK"
+          grep -cF "HEALTH-PROBE-BUDGET-1" qnfo-backlog-exec/worker.js
+
+      - name: Verify source/mirror parity (blocking)
+        run: |
+          set -euo pipefail
+          cmp qnfo-backlog-exec/worker.js qnfo-backlog-exec/deployed-current.worker.js
+          echo "source and deployed-current mirror are byte-identical"
+
+      - name: Deploy qnfo-backlog-exec (binding-preserving CF API /content PUT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-backlog-exec qnfo-backlog-exec/worker.js
+
+      - name: Verify live VERSION (bounded retry - /content is eventually consistent)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          V=$(grep -o 'var VERSION = "[^"]*";' qnfo-backlog-exec/worker.js | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "expect=$V"
+          ok=0
+          for i in $(seq 1 12); do
+            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-backlog-exec/content" \
+              -o /tmp/live.js || true
+            bytes=$(wc -c < /tmp/live.js 2>/dev/null || echo 0)
+            has_v=$(grep -cF "$V" /tmp/live.js 2>/dev/null || true)
+            has_marker=$(grep -cF "HEALTH-PROBE-BUDGET-1" /tmp/live.js 2>/dev/null || true)
+            echo "attempt=$i bytes=$bytes expect=$V has_version=$has_v has_marker=$has_marker"
+            if [ "$has_v" -ge 1 ] && [ "$has_marker" -ge 1 ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::VERIFY-FAILED: live qnfo-backlog-exec did not converge to $V within 12 attempts (~3 min)"
+            exit 1
+          fi
+
+      - name: Publish machine-readable status
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/backlog-health-cheap.json <<EOF
+          {
+            "workflow": "apply-backlog-health-cheap",
+            "issue": "1368 / HEALTH-PROBE-BUDGET-1",
+            "guard_exit": "${{ steps.guard.outcome }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/backlog-health-cheap.json
+
+      - name: Commit back (race-safe: pull --rebase + bounded retry)
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add qnfo-backlog-exec/worker.js \
+                  qnfo-backlog-exec/deployed-current.worker.js \
+                  ci-status/backlog-health-cheap.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit (patch was a no-op)"
+            exit 0
+          fi
+          git commit -m "fix(backlog-exec): HEALTH-PROBE-BUDGET-1 /health no longer runs the 14-lane inventory scan (#1368) [skip ci]"
+          for i in 1 2 3 4 5; do
+            echo "commit-back attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "commit-back OK on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::COMMITBACK-PUSH-RACE-1: could not land the repair after 5 attempts"
+          exit 1
