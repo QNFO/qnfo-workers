@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """CLOUD-OPS-HEALTH-AUTH-1 -- issue #1471.
 
+REFIRE 2026-09-29T19:4xZ -- re-touched to fire apply-pending-patches.yml
+(paths: scripts/*patch*.py). Verified 2026-09-29 19:40Z that main still carries
+the unpatched body: qnfo-cloud-ops/worker.js len=123351, marker absent,
+"        ok: true,\n        worker: WORKER_NAME,\n        version: VERSION,\n
+        jobs: Object.keys(JOBS)," still present. The applier's last run
+(ci-status/apply-pending.json) was 19:39:21Z @ head 70a87d33, which predates
+this file's first push (commit 60603b0b). No logic change in this revision.
+
 qnfo-cloud-ops serves /health UNAUTHENTICATED and returns, to any anonymous
 caller:
   * a binding-presence map (audit/portfolio/living/outreach/graph/email/
