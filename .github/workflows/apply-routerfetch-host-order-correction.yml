@@ -21,6 +21,19 @@ name: apply-routerfetch-host-order-correction
 #    defeats version-based deploy verification and the deploy-drift guard and is
 #    what produced #1443 DEPLOY-UNCOORDINATED-DEPLOY: qnfo-research-exec.
 #
+# VERIFY-STEP BUG FIXED (2026-09-29, run 36601169475)
+# ---------------------------------------------------
+# The first revision of this verify step searched for
+#   '"https://qnfo-ai.q08.workers.dev",'   (WITH a trailing comma)
+# but that hostname is the LAST element of the ROUTER_HOSTS array and therefore
+# has no comma. find() returned -1, so the check failed even though the patch had
+# applied correctly (run 36601169475: step 4 success, step 5 failure, step 6
+# skipped). The check is now BLOCK-SCOPED: it extracts the ROUTER_HOSTS array
+# literal and compares hostname positions within that block only. Scoping is
+# required because the bare hostname also appears earlier in the file inside the
+# ROUTER constant ("https://qnfo-ai.q08.workers.dev/v1/chat/completions"), so an
+# unscoped find would match the wrong location.
+#
 # The patch is idempotent (marker check) and fail-closed (every anchor must match
 # exactly once), so this workflow can never half-apply.
 
@@ -58,7 +71,7 @@ jobs:
       - name: Verify effect present
         run: |
           python3 - <<'PY'
-          import pathlib, sys
+          import pathlib, re, sys
           src = pathlib.Path("qnfo-research-exec/worker.js").read_text(encoding="utf-8")
           checks = [
               ("correction marker", "ROUTER-HOST-ORDER-CORRECTION-1"),
@@ -67,11 +80,16 @@ jobs:
           bad = [n for n, s in checks if s not in src]
           if bad:
               print("FAIL: effect missing: " + ", ".join(bad)); sys.exit(1)
-          i_ai = src.find('"https://ai.qnfo.org",')
-          i_wd = src.find('"https://qnfo-ai.q08.workers.dev",')
+          m = re.search(r"var ROUTER_HOSTS = \[(.*?)\];", src, re.S)
+          if not m:
+              print("FAIL: ROUTER_HOSTS declaration not found"); sys.exit(1)
+          block = m.group(1)
+          i_ai = block.find("https://ai.qnfo.org")
+          i_wd = block.find("https://qnfo-ai.q08.workers.dev")
           if not (0 <= i_ai < i_wd):
-              print("FAIL: ai.qnfo.org is not first in ROUTER_HOSTS"); sys.exit(1)
-          print("OK: correction applied, ai.qnfo.org first, VERSION bumped")
+              print(f"FAIL: ai.qnfo.org is not first in ROUTER_HOSTS (idx_ai={i_ai}, idx_wd={i_wd})")
+              sys.exit(1)
+          print(f"OK: correction applied, ai.qnfo.org first (idx_ai={i_ai} < idx_wd={i_wd}), VERSION bumped")
           PY
 
       - name: Commit and push
