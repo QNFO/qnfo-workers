@@ -51,6 +51,7 @@ FAIL-CLOSED / IDEMPOTENT
 """
 import os
 import sys
+from pathlib import Path
 
 MARKER = "normalize_version_anchors"
 TARGETS = ("scripts/apply-pending-patches.py",)
