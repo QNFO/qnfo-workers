@@ -1,0 +1,62 @@
+name: apply-rawput-version-regex-quote
+# LEDGER-VERSION-QUOTE-1 (issue 1451): raw_put.py only extracted double-quoted
+# version literals, so single-quoted workers (idea-hub) deployed as version_id=unknown.
+# Live contrast proof: deployment_history id 129 qnfo-lifecycle "1.6.4-metric-freshness"
+# (double-quoted) vs id 141 idea-hub "unknown" (const VERSION='1.0.7-rss-pipeline-stamp-gate').
+# Applies scripts/rawput-version-regex-quote-patch.py, asserts post-conditions, commits back
+# with the proven rebase+bounded-retry push (COMMITBACK-DRIFT-1).
+
+on:
+  push:
+    paths:
+      - 'scripts/rawput-version-regex-quote-patch.py'
+      - '.github/workflows/apply-rawput-version-regex-quote.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-rawput-version-regex-quote
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch (fail-closed)
+        run: python3 scripts/rawput-version-regex-quote-patch.py
+
+      - name: Assert post-conditions
+        run: |
+          set -euo pipefail
+          grep -q 'x27' scripts/raw_put.py || { echo "FAIL: single-quote class missing"; exit 1; }
+          python3 - <<'PY'
+          src = open('scripts/raw_put.py', encoding='utf-8').read()
+          ns = {}
+          exec(compile(src, 'raw_put.py', 'exec'), ns)
+          rx = ns['VERSION_RE']
+          assert rx.search('var VERSION = "a";').group(1) == 'a'
+          assert rx.search("const VERSION='b';").group(1) == 'b'
+          print('POST-CONDITIONS OK')
+          PY
+
+      - name: Commit
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-selfheal-bot"
+          git config user.email "selfheal@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "fix(raw_put): LEDGER-VERSION-QUOTE-1 accept single-quoted version literals [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "pushed on attempt $i"; exit 0
+            fi
+            echo "push attempt $i failed; retrying in 20s"; sleep 20
+          done
+          echo "FAIL: push exhausted retries"; exit 1
