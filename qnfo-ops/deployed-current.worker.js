@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.17-d1-schema-hint";
+var VERSION = "2.37.18-d1-guard-literal-aware";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -873,12 +873,67 @@ __name222(triggerBacklog, "triggerBacklog");
 __name2222(triggerBacklog, "triggerBacklog");
 __name22222(triggerBacklog, "triggerBacklog");
 __name222222(triggerBacklog, "triggerBacklog");
+// D1-GUARD-LITERAL-AWARE-1 (2026-09-29). See scripts/d1guard-literal-aware-patch.py.
+// The pre-2.37.18 guard scanned the RAW statement, so a mutation keyword inside a
+// string literal was refused (e.g. WHERE title LIKE '%delete%'). The scan now runs on
+// a literal/comment-STRIPPED copy; the original text is what gets prepared. Rejections
+// name the offending token and carry a hint.
+var D1_READONLY_PRAGMAS = { table_info: 1, table_xinfo: 1, table_list: 1, index_list: 1, index_info: 1, index_xinfo: 1, foreign_key_list: 1, foreign_key_check: 1, database_list: 1, collation_list: 1, function_list: 1, module_list: 1, pragma_list: 1, compile_options: 1, freelist_count: 1, page_count: 1, page_size: 1, encoding: 1, user_version: 1, application_id: 1, integrity_check: 1, quick_check: 1, stats: 1 };
+
+function d1StripLiterals(s) {
+  var out = "";
+  var i = 0;
+  var n = s.length;
+  while (i < n) {
+    var c = s.charAt(i);
+    var d = s.charAt(i + 1);
+    if (c === "'" || c === '"' || c === "`") {
+      i++;
+      while (i < n) {
+        if (s.charAt(i) === c) {
+          if (s.charAt(i + 1) === c) { i += 2; continue; }
+          i++;
+          break;
+        }
+        i++;
+      }
+      out += " ";
+      continue;
+    }
+    if (c === "-" && d === "-") { while (i < n && s.charAt(i) !== "\n") i++; continue; }
+    if (c === "/" && d === "*") { i += 2; while (i < n && !(s.charAt(i) === "*" && s.charAt(i + 1) === "/")) i++; i += 2; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+function d1ReadOnlyGuard(sql) {
+  var stripped = d1StripLiterals(sql);
+  if (!/^\s*(select|with)\b/i.test(stripped)) {
+    var pm = /^\s*pragma\s+([A-Za-z0-9_]+)/i.exec(sql);
+    if (pm) {
+      var pn = pm[1].toLowerCase();
+      if (D1_READONLY_PRAGMAS[pn]) {
+        var argm = /^\s*pragma\s+[A-Za-z0-9_]+\s*\(\s*['"]?([A-Za-z0-9_]+)['"]?\s*\)/i.exec(sql);
+        return { ok: true, sql: "SELECT * FROM pragma_" + pn + (argm ? "('" + argm[1] + "')" : "") + " LIMIT 100" };
+      }
+      return { ok: false, rejected: true, error: "PRAGMA " + pn + " is not on the read-only allowlist (it can change connection state). Use SELECT * FROM pragma_<name>(...) instead.", hint: "read-only PRAGMAs: " + Object.keys(D1_READONLY_PRAGMAS).join(", ") };
+    }
+    return { ok: false, rejected: true, error: "read-only SELECT/WITH only - this tool can never write. First token seen: " + (stripped.trim().split(/\s+/)[0] || "(empty)").slice(0, 24), hint: "start the statement with SELECT or WITH; use ops_d1_write for mutations" };
+  }
+  if (stripped.indexOf(";") >= 0) return { ok: false, rejected: true, error: "single read statement only - an interior ';' was found outside string literals", hint: "send exactly one SELECT/WITH statement" };
+  var mm = /\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.exec(stripped);
+  if (mm) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keyword '" + mm[1].toLowerCase() + "' appears as SQL, not inside a string literal", hint: "a keyword inside a quoted literal is now allowed; this rejection means it was real SQL" };
+  return { ok: true, sql: sql };
+}
+
 async function d1Query(env, args) {
   const raw = String(args && args.sql || "").trim();
-  const sql = raw.replace(/;\s*$/, "");
-  if (!/^(select|with)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only" };
-  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, rejected: true, error: "single read statement only" };
-  if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
+  let sql = raw.replace(/;\s*$/, "");
+  const _g = d1ReadOnlyGuard(sql);
+  if (!_g.ok) return _g;
+  sql = _g.sql;
   let sqlEff = sql;
   var _lo = sqlEff.toLowerCase();
   var _agg = _lo.indexOf("count(") >= 0 || _lo.indexOf("sum(") >= 0 || _lo.indexOf("avg(") >= 0 || _lo.indexOf("min(") >= 0 || _lo.indexOf("max(") >= 0 || _lo.indexOf("group_concat(") >= 0 || _lo.indexOf("group by") >= 0;
