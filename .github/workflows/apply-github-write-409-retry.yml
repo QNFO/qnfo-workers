@@ -10,13 +10,20 @@ name: apply-github-write-409-retry
 # multiple fleet agents push to this repo every few minutes and the caller's blob sha is
 # stale by the time the PUT lands (HTTP 409).
 #
+# EQUIVALENCE-AWARE (v2, 2026-09-29): the repair is already live, landed by a concurrent
+# fleet agent under a DIFFERENT marker (GITHUB-409-RETRY-1) and version (2.37.22-github409-retry).
+# The guard script now detects the defect class (any known marker, or the behavioural
+# bounded-attempts/409-422 signature inside githubFileWrite) and NO-OPS with exit 0 on an
+# already-repaired artifact. Both marker checks below therefore accept EITHER marker: an
+# exact-marker grep under `set -e` returns 0 matches -> exit 1 -> a false red run.
+#
 # This workflow mirrors the repository's established apply-* convention:
-#   1. patch the artifact (idempotent, fail-closed)
+#   1. patch the artifact (idempotent, fail-closed, equivalence-aware)
 #   2. verify it still parses as an ES module and that the repo/mirror pair is byte-identical
 #   3. deploy with the canonical binding-preserving deployer (scripts/raw_put.py ->
 #      CF API /content PUT; BINDING-PRESERVATION-1 + COMPAT-PRESERVE-1 -- a wrangler deploy
 #      would drop qnfo-ops's 49 live bindings)
-#   4. verify the live bundle carries the new VERSION and the defect marker (bounded retry;
+#   4. verify the live bundle carries the expected VERSION and a retry marker (bounded retry;
 #      CF /content is eventually consistent, DEPLOY-VERIFY-RACE-1)
 #   5. publish a machine-readable status artifact so the outcome is verifiable through the
 #      GitHub contents API without the Actions API
@@ -62,7 +69,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Patch githubFileWrite retry (fail-closed, idempotent)
+      - name: Patch githubFileWrite retry (fail-closed, idempotent, equivalence-aware)
         id: guard
         run: python3 scripts/github-write-409-retry-patch.py
 
@@ -72,7 +79,14 @@ jobs:
           cp qnfo-ops/worker.js /tmp/ops.mjs
           node --check /tmp/ops.mjs
           echo "syntax OK"
-          grep -cF "GITHUB-FILE-WRITE-409-NO-RETRY-1" qnfo-ops/worker.js
+          ok=0
+          for M in GITHUB-409-RETRY-1 GITHUB-FILE-WRITE-409-NO-RETRY-1; do
+            if grep -qF "$M" qnfo-ops/worker.js; then echo "retry marker present: $M"; ok=1; fi
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::RETRY-MARKER-ABSENT no known 409-retry marker found in qnfo-ops/worker.js"
+            exit 1
+          fi
 
       - name: Verify source/mirror parity (blocking)
         run: |
@@ -86,7 +100,7 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
 
-      - name: "Verify live VERSION and defect marker (bounded retry - /content is eventually consistent)"
+      - name: "Verify live VERSION and retry marker (bounded retry - /content is eventually consistent)"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -101,13 +115,16 @@ jobs:
               -o /tmp/live.js || true
             bytes=$(wc -c < /tmp/live.js 2>/dev/null || echo 0)
             has_v=$(grep -cF "$V" /tmp/live.js 2>/dev/null || true)
-            has_m=$(grep -cF "GITHUB-FILE-WRITE-409-NO-RETRY-1" /tmp/live.js 2>/dev/null || true)
+            has_m=0
+            for M in GITHUB-409-RETRY-1 GITHUB-FILE-WRITE-409-NO-RETRY-1; do
+              if grep -qF "$M" /tmp/live.js 2>/dev/null; then has_m=1; fi
+            done
             echo "attempt=$i bytes=$bytes expect=$V has_version=$has_v has_marker=$has_m"
-            if [ "$has_v" -ge 1 ] && [ "$has_m" -ge 1 ]; then ok=1; break; fi
+            if [ "${has_v:-0}" -ge 1 ] && [ "$has_m" = "1" ]; then ok=1; break; fi
             sleep 15
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::VERIFY-FAILED live qnfo-ops did not converge to $V within 12 attempts (~3 min)"
+            echo "::error::VERIFY-FAILED live qnfo-ops did not converge to $V with a retry marker within 12 attempts (~3 min)"
             exit 1
           fi
 
