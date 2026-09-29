@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.25-github-read-404-hint";
+var VERSION = "2.37.26-samezone-fetch-fallback";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1620,6 +1620,45 @@ __name222(githubApi, "githubApi");
 __name2222(githubApi, "githubApi");
 __name22222(githubApi, "githubApi");
 __name222222(githubApi, "githubApi");
+// SAME-ZONE-FETCH-FALLBACK-1 (2026-09-29): a Worker fetching a same-zone custom
+// domain that is fronted by another Worker gets HTTP 522 (there is no origin server
+// to reach). Resolve the fleet hostname back to its *.q08.workers.dev origin, which
+// IS reachable from Worker context, and retry there.
+function fleetWorkerNamesForHost(host) {
+  const out = [];
+  const h = String(host || "").toLowerCase();
+  if (!h) return out;
+  try {
+    for (const k in CANON_BASE) {
+      const raw = String(CANON_BASE[k] || "");
+      let hh = raw;
+      const i = hh.indexOf("://");
+      if (i >= 0) hh = hh.slice(i + 3);
+      const j = hh.indexOf("/");
+      if (j >= 0) hh = hh.slice(0, j);
+      hh = hh.toLowerCase();
+      if (hh === h && out.indexOf(k) < 0) out.push(k);
+    }
+  } catch (e) {}
+  return out;
+}
+
+function fleetWorkersDevFallback(u) {
+  try {
+    const host = String(u && u.hostname || "").toLowerCase();
+    if (!host || host.endsWith(".workers.dev")) return null;
+    const names = fleetWorkerNamesForHost(host);
+    if (!names.length) return null;
+    const alt = new URL(String(u && u.href || ""));
+    alt.protocol = "https:";
+    alt.hostname = names[0] + ".q08.workers.dev";
+    alt.port = "";
+    return alt.href;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function webFetchTool(env, args) {
   const url = String(args && args.url || "").trim();
   if (!url) return { ok: false, error: "url required" };
@@ -1632,17 +1671,40 @@ async function webFetchTool(env, args) {
   if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "only http/https supported" };
   if (isPrivateHost(u.hostname)) return { ok: false, error: "blocked host (private/internal): " + u.hostname };
   const max = Math.max(500, Math.min(parseInt(args && args.maxChars, 10) || 8e3, 3e4));
-  try {
-    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-ops/2.4)" }, redirect: "follow" });
-    const ct = String(r.headers.get("Content-Type") || "");
-    if (!r.ok) return { ok: false, error: "HTTP " + r.status };
-    const text = await r.text();
-    const isHtml = ct.indexOf("html") >= 0 || text.slice(0, 200).toLowerCase().indexOf("<html") >= 0 || text.indexOf("<") >= 0 && text.indexOf(">") >= 0;
-    const out = isHtml ? stripHtml(text) : text;
-    return { ok: true, url, status: r.status, text: out.slice(0, max) };
-  } catch (e) {
-    return { ok: false, error: "fetch failed: " + (e && e.message || String(e)) };
+  // SAME-ZONE-FETCH-FALLBACK-1: a same-zone custom domain fronted by another Worker
+  // returns 522 from Worker context. Retry the identical request against the target's
+  // *.q08.workers.dev origin, which is reachable from Worker context.
+  const _fb = fleetWorkersDevFallback(u);
+  const _attempts = _fb && _fb !== url ? [url, _fb] : [url];
+  let _primaryErr = null;
+  let _lastErr = null;
+  for (let _i = 0; _i < _attempts.length; _i++) {
+    try {
+      const r = await fetch(_attempts[_i], { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-ops/2.4)" }, redirect: "follow" });
+      const ct = String(r.headers.get("Content-Type") || "");
+      if (!r.ok) {
+        _lastErr = "HTTP " + r.status;
+        if (_i === 0) _primaryErr = _lastErr;
+        if (_i + 1 < _attempts.length && r.status >= 500) continue;
+        return { ok: false, error: _primaryErr || _lastErr, url, tried: _attempts };
+      }
+      const text = await r.text();
+      const isHtml = ct.indexOf("html") >= 0 || text.slice(0, 200).toLowerCase().indexOf("<html") >= 0 || text.indexOf("<") >= 0 && text.indexOf(">") >= 0;
+      const out = isHtml ? stripHtml(text) : text;
+      const res = { ok: true, url, status: r.status, text: out.slice(0, max) };
+      if (_i > 0) {
+        res.served_via = "workers.dev-fallback";
+        res.primary_error = _primaryErr;
+      }
+      return res;
+    } catch (e) {
+      _lastErr = "fetch failed: " + (e && e.message || String(e));
+      if (_i === 0) _primaryErr = _lastErr;
+      if (_i + 1 < _attempts.length) continue;
+      return { ok: false, error: _primaryErr || _lastErr, url, tried: _attempts };
+    }
   }
+  return { ok: false, error: _primaryErr || _lastErr || "fetch failed", url, tried: _attempts };
 }
 __name(webFetchTool, "webFetchTool");
 __name2(webFetchTool, "webFetchTool");

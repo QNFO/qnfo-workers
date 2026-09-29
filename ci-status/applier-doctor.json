@@ -1,18 +1,20 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "96a5f3c442219d916584d094e2090a0556dfa3c4",
-  "total": 49,
+  "head": "a74969159d8b2815108e3e6bb8e3a54d087a7599",
+  "total": 50,
   "summary": {
     "already-applied": 29,
-    "stale-anchor": 16,
-    "landed": 3,
+    "stale-anchor": 15,
+    "landed": 5,
     "error": 1
   },
   "landed": [
     "cf-urllib-ua-1010-patch.py",
     "dashboard-gate-failopen-patch.py",
-    "deploy-guard-ms-failclosed-patch.py"
+    "deploy-guard-ms-failclosed-patch.py",
+    "samezone-fetch-fallback-patch.py",
+    "stale-gate-failclosed-patch.py"
   ],
   "results": [
     {
@@ -28,7 +30,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: anchor DOC matched 0 times (expected 1) - nothing written"
     },
     {
@@ -92,7 +94,7 @@
       "rc": 0,
       "verdict": "landed",
       "changed": true,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "MIRROR_PARITY_OK"
     },
     {
@@ -100,7 +102,7 @@
       "rc": 0,
       "verdict": "landed",
       "changed": true,
-      "seconds": 0.08,
+      "seconds": 0.1,
       "tail": "OK - DEPLOY-GUARD-MS-FAILCLOSED-1 applied, guard is fail-closed"
     },
     {
@@ -140,7 +142,7 @@
       "rc": 2,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)"
     },
     {
@@ -148,7 +150,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)"
     },
     {
@@ -156,7 +158,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)"
     },
     {
@@ -180,7 +182,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.14,
+      "seconds": 0.15,
       "tail": "CHANGED=0"
     },
     {
@@ -188,7 +190,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "parity: source==mirror"
     },
     {
@@ -196,7 +198,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "changed=false"
     },
     {
@@ -236,7 +238,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.06,
+      "seconds": 0.07,
       "tail": "OK"
     },
     {
@@ -284,7 +286,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "ALREADY APPLIED: VERSION-PRECEDENCE-2 present; idempotent no-op"
     },
     {
@@ -292,7 +294,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "VERSION-QUOTE-1 already applied - no-op"
     },
     {
@@ -332,7 +334,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=b6c47c63b04025e5"
     },
     {
@@ -340,7 +342,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b6c47c63b04025e5"
     },
     {
@@ -353,11 +355,11 @@
     },
     {
       "script": "samezone-fetch-fallback-patch.py",
-      "rc": 1,
-      "verdict": "stale-anchor",
-      "changed": false,
-      "seconds": 0.02,
-      "tail": "  count=0  var VERSION = \"2.37.24-404hint-list\";"
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "seconds": 0.07,
+      "tail": "PATCHED qnfo-ops/deployed-current.worker.js  (370008 -> 372362 bytes)  var VERSION = \"2.37.25-github-read-404-hint\"; -> var VERSION = \"2.37.26-samezone-fetch-fallback\";"
     },
     {
       "script": "selfheal-analyzer-patch.py",
@@ -392,6 +394,14 @@
       "tail": "FAIL-CLOSED [A/rate-gate-volfloor]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written."
     },
     {
+      "script": "stale-gate-failclosed-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "seconds": 0.13,
+      "tail": "{\"ok\": true, \"already_patched\": false, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"version\": \"1.7.32-stale-gate-failclosed\", \"bytes\": 182520, \"delta_bytes\": 1370}"
+    },
+    {
       "script": "telemetry-truth-patch.py",
       "rc": 1,
       "verdict": "stale-anchor",
@@ -404,9 +414,9 @@
       "rc": 1,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.09,
       "tail": "NameError: name 'Path' is not defined"
     }
   ],
-  "ts": "2026-09-29T17:24:30Z"
+  "ts": "2026-09-29T17:27:02Z"
 }

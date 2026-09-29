@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.31-outreach-binding-fix";
+var VERSION = "1.7.32-stale-gate-failclosed";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2895,7 +2895,7 @@ async function redHtml(env) {
   // 9. SURVIVAL METERS (metric_registry + leading->lagging survival model; WS-SURVIVAL 2026-09-26)
   let mr = [];
   try {
-    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value FROM metric_registry ORDER BY kind DESC, layer, metric");
+    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value, last_refreshed, refresh_cadence FROM metric_registry ORDER BY kind DESC, layer, metric");
   } catch (e) {
   }
   let subsTotal = null;
@@ -2906,9 +2906,34 @@ async function redHtml(env) {
   }
   const wc = (st.fleet && st.fleet.workers) || null;
   const c01 = function(x) { return Math.max(0, Math.min(1, x)); };
+  // STALE-GATE-FAILCLOSED-1 (#1301, mitigates #1411): a metric whose last_refreshed
+  // exceeds its declared refresh_cadence is UNKNOWN, not passing. Unknown is scored
+  // worst-case below, never silently dropped.
+  const cadenceMs = function(c) {
+    const s = String(c == null ? "" : c).trim().toLowerCase();
+    if (!s) return null;
+    if (s === "daily") return 24 * 60 * 60 * 1e3;
+    if (s === "hourly") return 60 * 60 * 1e3;
+    if (s === "weekly") return 7 * 24 * 60 * 60 * 1e3;
+    const every = s.match(/^\*\/(\d+)/);
+    if (every) return Math.max(1, parseInt(every[1], 10)) * 60 * 1e3;
+    if (/^\d+ \* \* \* \*$/.test(s)) return parseInt(s, 10) * 60 * 60 * 1e3;
+    return null;
+  };
+  const staleOf = function(mm) {
+    if (!mm) return true;
+    if (mm.last_refreshed == null) return true;
+    const base = cadenceMs(mm.refresh_cadence);
+    if (base == null) return true;
+    const t = Date.parse(String(mm.last_refreshed).replace(" ", "T"));
+    if (isNaN(t)) return true;
+    return Date.now() - t > 2 * base + 5 * 60 * 1e3;
+  };
+  const staleN = (mr || []).filter(function(x) { return staleOf(x); }).length;
   const regVal = function(name) {
     const mm = (mr || []).filter(function(x) { return x.metric === name; })[0];
     if (!mm || mm.last_value == null) return null;
+    if (staleOf(mm)) return null;
     const n = Number(String(mm.last_value).replace(/[^0-9.]/g, ""));
     return isNaN(n) ? null : n;
   };
@@ -2924,12 +2949,17 @@ async function redHtml(env) {
   ];
   const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.20, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.10, worker_count: 0.05, drift_total: 0.05 };
   let wnum = 0, wsum = 0;
-  gateRows.forEach(function(x) { if (typeof x.head === "number") { const w = gateW[x.m] != null ? gateW[x.m] : 0.1; wnum += w * x.head; wsum += w; } });
+  gateRows.forEach(function(x) {
+    const w = gateW[x.m] != null ? gateW[x.m] : 0.1;
+    const rmm = (mr || []).filter(function(y) { return y.metric === x.m; })[0];
+    if (staleOf(rmm)) { wsum += w; return; }
+    if (typeof x.head === "number") { wnum += w * x.head; wsum += w; }
+  });
   const surv = wsum > 0 ? wnum / wsum : null;
   const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
   const extImpact = surv != null ? surv * costEff : null;
   H.push('<div class="panel"><h2>9 &middot; SURVIVAL METERS &mdash; registry + leading&rarr;lagging model</h2>');
-  H.push('<div class="sub">' + mr.length + ' registry metrics (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
+  H.push('<div class="sub">' + mr.length + ' registry metrics (' + staleN + ' STALE beyond cadence) (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
   H.push('<table><tr><th>kind</th><th>metric</th><th>layer</th><th>live</th><th>headroom</th><th>target</th><th>warn / kill</th><th>owner</th></tr>');
   for (const gg of gateRows) {
     const mm = mr.filter(function(x) { return x.metric === gg.m; })[0] || {};
