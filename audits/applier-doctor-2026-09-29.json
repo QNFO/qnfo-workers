@@ -1,9 +1,9 @@
 {
  "counts": {
-  "already-applied": 24,
+  "already-applied": 25,
   "stale-anchor": 3,
-  "superseded": 11,
-  "undetermined": 4
+  "superseded": 10,
+  "undetermined": 5
  },
  "errored": [],
  "marker": "APPLIER-DOCTOR-2",
@@ -41,7 +41,9 @@
   },
   {
    "changed_files": [
-    " M ci-status/applier-doctor.json"
+    " M ci-status/applier-doctor.json",
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -53,8 +55,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=41 {'already-applied': 24, 'stale-anchor': 14, 'landed': 2, 'error': 1}",
-    "LANDED(2): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py",
+    "SUMMARY total=42 {'already-applied': 25, 'stale-anchor': 13, 'landed': 3, 'error': 1}",
+    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, patch-binding-install-gate-1.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -355,6 +357,27 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
+   ],
+   "declared_signals": [
+    "BINDING-INSTALL-MERGE-1",
+    "if (bindingsOut.length === 0) {",
+    "_seen.has(_k)",
+    "const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];",
+    "bindingsInstalled = _decl.length;"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-binding-install-gate-1.py",
+   "tail": [
+    "marker=BINDING-INSTALL-MERGE-1",
+    "  PATCHED  qnfo-ops/worker.js",
+    "  PATCHED  qnfo-ops/deployed-current.worker.js"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-version-precedence-1.py",
@@ -418,23 +441,18 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=61dd02c9b84ebc7c"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=b6c47c63b04025e5"
    ],
    "verdict": "already-applied"
   },
   {
    "changed_files": [],
-   "outcome_present_in": [
-    "qnfo-research-exec/worker.js :: ROUTER-HOST-ORDER-1"
-   ],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "anchor 1: applied",
-    "anchor 2: applied",
-    "FAIL: ai.qnfo.org is not first in ROUTER_HOSTS"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b6c47c63b04025e5"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -522,17 +540,17 @@
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py",
-  "scripts/routerfetch-host-order-correction-patch.py",
   "scripts/run-gate-internal-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 42,
- "ts": "2026-09-29T16:51:23.799Z",
+ "total": 43,
+ "ts": "2026-09-29T16:58:07.274Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
+  "scripts/patch-binding-install-gate-1.py",
   "scripts/selfheal-rate-aware-patch.py"
  ]
 }
