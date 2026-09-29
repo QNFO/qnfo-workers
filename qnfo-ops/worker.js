@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.22-github409-retry";
+var VERSION = "2.37.23-analyzer-excl-table";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1421,7 +1421,7 @@ async function telemetryAnalyze(env, hours) {
         // {"error":"D1_ERROR: no such column: worker at offset 7"} -- malformed SQL authored
         // by the CALLING AGENT while probing an unknown schema, not a malfunction of the tool.
         // Those are excluded so the loop measures tool health, not agent mistakes.
-        const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2 AND (meta IS NULL OR (meta NOT LIKE '%no such column%' AND meta NOT LIKE '%no such table%'))").bind(since, toolKey).first();
+        const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2 /* SELFHEAL-EXCLUSION-TABLE-1 */ AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(meta,''), x.pattern) > 0 OR instr(COALESCE(text,''), x.pattern) > 0)").bind(since, toolKey).first();
         _errs = (okRow && okRow.e) || r.n || 0;
         _oks = (okRow && okRow.s) || 0;
         _rate = _errs / Math.max(1, _errs + _oks);
