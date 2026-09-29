@@ -1,0 +1,95 @@
+name: apply-routerfetch-host-order-correction
+
+# ROUTER-HOST-ORDER-CORRECTION-1 (2026-09-29)
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# scripts/routerfetch-host-order-correction-patch.py was committed to main with no
+# applier workflow, so the correction never reached qnfo-research-exec/worker.js.
+# That is the orphaned-applier class (#1413 APPLIER-ROT-NO-CONSUMER-1 / #1446
+# APPLIER-ROT-STALE-ANCHOR): a patch script that no consumer ever runs.
+#
+# WHAT THE PATCH DOES
+# -------------------
+# 1. Restores the empirically-correct router host order: ai.qnfo.org FIRST,
+#    qnfo-ai.q08.workers.dev second. The earlier body patch put the workers.dev
+#    host first on the strength of a synthetic run_code_net probe; the incident
+#    history contradicts it (workers.dev was the only host during the window that
+#    produced 101 gw-fallback "gateway HTTP 404" events in one day).
+# 2. Bumps VERSION to 0.9.21-gw-host-order-and-body. The prior applier landed a
+#    behaviour change while leaving VERSION at 0.9.20-router-host-failover, which
+#    defeats version-based deploy verification and the deploy-drift guard and is
+#    what produced #1443 DEPLOY-UNCOORDINATED-DEPLOY: qnfo-research-exec.
+#
+# The patch is idempotent (marker check) and fail-closed (every anchor must match
+# exactly once), so this workflow can never half-apply.
+
+on:
+  push:
+    paths:
+      - "scripts/routerfetch-host-order-correction-patch.py"
+      - ".github/workflows/apply-routerfetch-host-order-correction.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-routerfetch-host-order-correction
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Apply correction patch
+        run: python3 scripts/routerfetch-host-order-correction-patch.py
+
+      - name: Verify effect present
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          src = pathlib.Path("qnfo-research-exec/worker.js").read_text(encoding="utf-8")
+          checks = [
+              ("correction marker", "ROUTER-HOST-ORDER-CORRECTION-1"),
+              ("version bump", 'var VERSION = "0.9.21-gw-host-order-and-body";'),
+          ]
+          bad = [n for n, s in checks if s not in src]
+          if bad:
+              print("FAIL: effect missing: " + ", ".join(bad)); sys.exit(1)
+          i_ai = src.find('"https://ai.qnfo.org",')
+          i_wd = src.find('"https://qnfo-ai.q08.workers.dev",')
+          if not (0 <= i_ai < i_wd):
+              print("FAIL: ai.qnfo.org is not first in ROUTER_HOSTS"); sys.exit(1)
+          print("OK: correction applied, ai.qnfo.org first, VERSION bumped")
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "qnfo-applier-bot"
+          git config user.email "applier@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(research-exec): ROUTER-HOST-ORDER-CORRECTION-1 - ai.qnfo.org first + VERSION 0.9.21"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt ${i}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FAIL: push rejected after 5 attempts"
+          exit 1
