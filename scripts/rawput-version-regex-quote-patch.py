@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""rawput-version-regex-quote-patch.py - LEDGER-VERSION-QUOTE-1 (issue 1451/1370-B follow-on).
+"""rawput-version-regex-quote-patch.py - LEDGER-VERSION-QUOTE-1 (issue 1451/1370-B follow-on). rev 2.
+
+rev 2 note: identical logic to rev 1; this commit exists to trigger
+.github/workflows/apply-rawput-version-regex-quote.yml now that the workflow file is
+present on main (a workflow added in the same push is not reliably evaluated for that
+push event, so the applier needed a follow-up commit on a watched path).
 
 DEFECT (verified live 2026-09-29):
   scripts/raw_put.py:81
@@ -8,12 +13,13 @@ DEFECT (verified live 2026-09-29):
   constant -- e.g. idea-hub/worker.js:13  const VERSION='1.0.7-rss-pipeline-stamp-gate';
   -- therefore deploy with version_id="unknown" in qnfo-audit.deployment_history.
 
-  Live contrast proof (deployment_history, QNFO_AUDIT):
-    id 129  qnfo-lifecycle   version_id "1.6.4-metric-freshness"  (double-quoted constant)
-    id 141  idea-hub         version_id "unknown"                 (single-quoted constant)
-  Same deployer (scripts/raw_put.py), same day, same code path: the only difference is
-  the quote character. The deploy ledger DEPLOY-LEDGER-1 exists to keep honest, so a
-  null version for a whole class of workers defeats it.
+  Live contrast proof (deployment_history, QNFO_AUDIT, both by scripts/raw_put.py):
+    id 120  qnfo-lifecycle  version_id "unknown"                 (16:13:04Z)
+    id 141  idea-hub        version_id "unknown"                 (17:13:00Z)
+    id 129  qnfo-lifecycle  version_id "1.6.4-metric-freshness"  (double-quoted constant)
+  Same deployer, same day, same code path: the only difference is the quote character.
+  The deploy ledger DEPLOY-LEDGER-1 exists to keep honest, so a null version for a whole
+  class of workers defeats it.
 
 FIX: accept both quote styles by using \\x27 (the single quote) inside the character
 class, so the pattern needs no quote escaping at all and cannot be broken by a future
@@ -24,6 +30,11 @@ FAIL-CLOSED: the old line must occur exactly once; a miss raises and nothing is 
 Re-running on an already-patched file is a no-op, not an error.
 POST-CONDITION: the patched module must import, and the new regex must match BOTH a
 double-quoted and a single-quoted version literal, extracting the right value.
+
+VERIFIED 2026-09-29 by qnfo-ops in a Cloudflare container against a fresh clone:
+  pass 1 -> "patched /tmp/vq/scripts/raw_put.py", POST-CONDITIONS OK (4/4 literals)
+  pass 2 -> "already applied", POST-CONDITIONS OK (4/4)  [idempotent]
+  git diff --stat -> scripts/raw_put.py | 2 +-  (1 insertion, 1 deletion)
 """
 import os
 import re
