@@ -8,7 +8,7 @@ written to apply have landed by other routes, and it is kept (and kept GREEN) so
 workflow that runs it, .github/workflows/apply-drift-guard-notdeployed-fix.yml, becomes a
 regression guard instead of a permanently failing job.
 
-WHY IT HAD TO CHANGE (measured 2026-09-29, issue #1382)
+WHY IT HAD TO CHANGE (measured 2026-09-29, issue #1383)
   The previous revision anchored on two exact strings in scripts/deploy-drift-guard.py:
       A1  '            else:\\n                not_deployed.append(d)\\n'
       A2  '        worker = wrangler_name(d) or d\\n        if wanted and d not in wanted ...'
@@ -23,18 +23,23 @@ WHY IT HAD TO CHANGE (measured 2026-09-29, issue #1382)
   overtaken by other writers is not "safe"; it is a permanently red job that trains people
   to ignore CI. That is the defect this revision closes.
 
+  NOTE ON ISSUE NUMBERS: an earlier revision of this docstring cited #1382 for this defect.
+  That was wrong -- #1382 is CF-WORKER-READ-404-NO-VALID-NAME-HINT-1. The filed issue for
+  this defect is #1383. Corrected here.
+
 WHAT IT ASSERTS NOW (exit 0 = both invariants hold, exit 3 = a regression)
   I1  scripts/deploy-drift-guard.py emits the RESOLVED worker for the NOT_DEPLOYED class:
       'not_deployed.append((d, worker))' present and the bare 'not_deployed.append(d)'
       absent.
   I2  scripts/fleet-autoaudit.py de-duplicates a repeated class note (NOTE-APPEND-IDEMPOTENT-1):
       the guard can legitimately emit one resolved worker twice, because two repo
-      directories declare the same wrangler name -- verified on main:
+      directories declare the same wrangler name -- verified on main (issue #1384):
           memory-mcp/wrangler.toml      -> name = "qnfo-memory-mcp"
           qnfo-memory-mcp/wrangler.toml -> name = "qnfo-memory-mcp"
       Without I2 the consumer concatenated the class into the malformed value
       'NO_REPO_VERSION+NO_REPO_VERSION' (measured in worker_live_audit on the 2026-09-29
-      16:00:58Z FLEET-AUTOAUDIT-1 run).
+      16:00:58Z FLEET-AUTOAUDIT-1 run). Replayed in isolation: legacy path yields
+      'NO_REPO_VERSION+NO_REPO_VERSION', the shipped consumer path yields 'NO_REPO_VERSION'.
 
 ADVERSARIAL
   * A green run proves two string invariants in two files. It proves NOTHING about whether
@@ -45,6 +50,7 @@ ADVERSARIAL
     directory yields exactly one class. The fix belongs in the consumer, where it is.
   * I1 is a substring assertion. A rewrite that preserves the substring while changing
     behaviour would pass. That is the accepted cost of not pinning a whole file.
+  * I2 only proves the dedupe branch exists, not that every class path routes through it.
 """
 import os
 import sys
