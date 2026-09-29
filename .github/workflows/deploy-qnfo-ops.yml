@@ -36,6 +36,12 @@ name: deploy-qnfo-ops
 # that same version. A future release therefore cannot be blocked by a stale pin -- the
 # pin-drift failure mode is structurally removed, not re-pinned.
 #
+# DEPLOY-VERIFY-RACE-1 (2026-09-29): the verify step issued a SINGLE GET against the
+# eventually-consistent CF /content endpoint and hard-failed on a stale read, so successful
+# deploys were reported red (runs 36568465877 / 36568539865 / 36568596207: step 8 success,
+# step 9 failure, live VERSION correct ~40s later). The verify step now polls with a bounded
+# retry budget and still fails closed if the live bundle never converges.
+#
 # This workflow now also owns the deploy for any change to qnfo-ops/worker.js: the
 # push.paths below include the artifact, so a worker change has a real path to live
 # instead of relying on the qnfo-fleet-control redeploy cron.
@@ -96,19 +102,28 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
 
-      - name: Verify live VERSION equals the artifact VERSION
+      - name: Verify live VERSION equals the artifact VERSION (retry: CF /content is eventually consistent)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           V="${{ steps.ver.outputs.version }}"
-          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
-            -o /tmp/live.js
-          echo "live-content-bytes=$(wc -c < /tmp/live.js)"
-          echo "expect-version=$V"
-          test "$(grep -cF "$V" /tmp/live.js || true)" -ge 1
-          test "$(grep -cF 'd1ReadOnlyGuard' /tmp/live.js || true)" -ge 2
-          test "$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js || true)" = "0"
+          ok=0
+          for i in $(seq 1 12); do
+            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
+              -o /tmp/live.js || true
+            bytes=$(wc -c < /tmp/live.js 2>/dev/null || echo 0)
+            has_v=$(grep -cF "$V" /tmp/live.js 2>/dev/null || true)
+            has_g=$(grep -cF 'd1ReadOnlyGuard' /tmp/live.js 2>/dev/null || true)
+            has_old=$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js 2>/dev/null || true)
+            echo "attempt=$i bytes=$bytes expect=$V has_version=$has_v has_guard=$has_g has_legacy_msg=$has_old"
+            if [ "$has_v" -ge 1 ] && [ "$has_g" -ge 2 ] && [ "$has_old" = "0" ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::VERIFY-FAILED: live qnfo-ops did not converge to $V within 12 attempts (~3 min)"
+            exit 1
+          fi
           echo "VERIFIED: live qnfo-ops carries $V"
