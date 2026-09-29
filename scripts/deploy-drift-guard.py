@@ -61,6 +61,14 @@ emits only the workers where the repo artifact is STRICTLY AHEAD of live by nume
 version comparison -- the only direction where redeploying the repo is safe. Anything
 else is reported, never auto-applied. This is the machine-readable contract used by
 .github/workflows/fleet-autodeploy.yml.
+MULTI-VERSION-AHEAD-EXCLUSION-1 (issue 1457): an artifact that declares MORE THAN
+ONE distinct plain VERSION cannot be direction-trusted at all -- `_repo_version()`
+picks the last declaration (#1388), which is a heuristic about which binding
+/health serves. Such a worker is reported as MULTI_VERSION and is NEVER emitted in
+`--ahead`, so an ambiguous artifact can never drive an autodeploy downgrade.
+MULTI_VERSION is reported but not counted in the exit code, on the same precedent
+as NO_HEALTH_ROUTE and NOT_A_WORKER: it is an ambiguity in the monitor's input, not
+a repo<->live divergence.
 
 CONTENT MODE (--content): fetches the live bundle from the CF API /content endpoint and
 compares a normalised sha256 against the repo canonical artifact. This closes the gap
@@ -253,6 +261,28 @@ def repo_artifact(d):
     return first if first is not None else (None, None, None)
 
 
+def _plain_versions(text):
+    """Distinct plain (non-QNFO_) VERSION declarations in one artifact.
+
+    MULTI-VERSION-AHEAD-EXCLUSION-1 (issue 1457): a concatenated bundle may declare the
+    plain constant several times in different scopes. `_repo_version()` resolves WHICH
+    value to report (last-wins, #1388), but the NUMBER of distinct values is what
+    decides whether the direction is trustworthy enough to auto-deploy on.
+    """
+    return sorted(set(val for prefix, val in CONST.findall(text) if not prefix))
+
+
+def multi_version_reason(text):
+    """Return the distinct plain versions when an artifact is ambiguous, else None.
+
+    More than one distinct plain VERSION declaration means /health could be served from
+    either binding and the repo<->live direction cannot be established from a heuristic.
+    Such a worker is excluded from --ahead; the caller reports it as MULTI_VERSION.
+    """
+    vs = _plain_versions(text)
+    return vs if len(vs) > 1 else None
+
+
 def live_result(worker):
     url = "https://" + worker + ".q08.workers.dev/health"
     try:
@@ -297,6 +327,7 @@ def main():
 
     drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []
     not_deployed, sync_workers, live_err, no_health = [], [], [], []
+    multi_version = []
     not_a_worker = []
     label_mismatch = []
 
@@ -347,7 +378,21 @@ def main():
         elif lv != rv:
             drift.append((d, worker, rv, lv))
             if cmp_ver(rv, lv) == 1:
-                ahead.append((d, worker, rv, lv, rpath))
+                # MULTI-VERSION-AHEAD-EXCLUSION-1 (issue 1457): the repo artifact
+                # declares more than one distinct plain VERSION, so which value
+                # /health serves is a heuristic (see _repo_version, #1388). The
+                # DIRECTION is therefore not trustworthy and this worker must never
+                # reach --ahead, or fleet-autodeploy could DOWNGRADE live. Reported
+                # loudly instead -- never a silent skip.
+                mv = multi_version_reason(rtext or "")
+                if mv:
+                    multi_version.append((d, worker, rv, lv, rpath, ",".join(mv)))
+                    sys.stderr.write(
+                        "MULTI_VERSION %s (dir %s): repo=%s live=%s declarations=%s "
+                        "(excluded from --ahead: direction ambiguous)\n"
+                        % (worker, d, rv, lv, ",".join(mv)))
+                else:
+                    ahead.append((d, worker, rv, lv, rpath))
         else:
             sync_workers.append(worker)
         if want_content and content_ok and rtext is not None:
@@ -365,6 +410,10 @@ def main():
                               for d, w, a, b, p in content_drift],
             "ahead": [{"worker": w, "dir": d, "repo": r, "live": l, "artifact": p}
                       for d, w, r, l, p in ahead],
+            "multi_version": [{"worker": w, "dir": d, "repo": r, "live": l,
+                               "artifact": p, "declarations": dec}
+                              for d, w, r, l, p, dec in multi_version],
+            "multi_version_count": len(multi_version),
             "no_repo_version": [{"worker": w, "dir": d, "live": l} for d, w, l in no_repo_ver],
             "no_live_version": [{"worker": w, "dir": d, "repo": r} for d, w, r in no_live_ver],
             "live_err": [{"worker": w, "dir": d, "err": e} for d, w, e in live_err],
@@ -398,6 +447,7 @@ def main():
         tag = "all" if scan_all else "narrative"
         print(f"deploy-drift-guard[{tag}]: sync={len(sync_workers)} drift={len(drift)} "
               f"content_drift={len(content_drift)} ahead={len(ahead)} "
+              f"multi_version={len(multi_version)} "
               f"no_repo_version={len(no_repo_ver)} no_live_version={len(no_live_ver)} "
               f"no_health_route={len(no_health)} live_err={len(live_err)} "
               f"not_deployed_notdrift={len(not_deployed)} "
