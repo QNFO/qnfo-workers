@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """CLOUD-OPS-CRON-DOW-1 (issue #1473, and the root cause of #1469).
 
+REFIRE 2026-09-29T19:4xZ -- re-touched to fire apply-pending-patches.yml
+(paths: scripts/*patch*.py) and apply-cloud-ops-cron-dow-1.yml, neither of
+which had produced a run since 19:23:26Z although the anchors below all match
+main. No logic change in this revision.
+
 Fixes three coupled defects in qnfo-cloud-ops, all measured on 2026-09-29:
 
   D1  ISO/CF DAY-OF-WEEK MISMATCH.
