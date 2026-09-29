@@ -4,7 +4,7 @@ var execMod = (function(){
 // v0.3.0: every /run completion emits a kind=event envelope validated BEFORE canonical-store write
 // (blocking reject on invalid, QNFO.CODEPARSE.SCOPE.v1 server_enforcement); /run responses are wrapped
 // in the universal envelope (kind=message). Mini-validator mirrors schemas/envelope.json + event.json.
-const VERSION = "fleet-executor/0.3.1";
+const VERSION = "fleet-executor/0.3.2";
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
@@ -183,7 +183,7 @@ return execDefault;
 
 // fleet-scheduler v0.1.0 - dynamic cron dispatcher
 // Per-minute tick reads fleet_crons from qnfo-audit D1, dispatches due jobs to fleet-executor.
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });

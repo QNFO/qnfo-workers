@@ -53,4 +53,4 @@ database_name = "portfolio-state"
 database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/10 * * * *"]
