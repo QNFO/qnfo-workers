@@ -24,18 +24,33 @@ across the fleet. Now:
   * after the PUT the settings are re-read and the date/flags are asserted to have survived;
     a cleared date is a hard failure, not a silent regression.
 
+DEPLOY-LEDGER-1 (2026-09-29, issues 1352 / 1363): after the deploy is verified this script now
+records the mutation in qnfo-audit.deployment_history through the D1 REST API, using the same
+CLOUDFLARE_API_TOKEN it already needs. Root cause of the class: this deployer changed live code
+and wrote NO ledger row, so the ledger drifted (the newest qnfo-ops row was 2.37.14 while live
+had advanced to 2.37.17, then 2.37.19, then 2.37.20) and every drift check built on the ledger
+returned a false verdict -- including one that reported "no drift" on a worker that had moved
+three versions. The row carries the artifact VERSION parsed out of the bundle being deployed.
+  * LEDGER_STRICT=1 makes a failed ledger write fatal (exit 3).
+  * Default is non-fatal but LOUD: it prints "DEPLOY-LEDGER: FAILED" and still exits 0, because
+    a token-scope problem must not block every fleet deploy. CI should grep for that marker.
+
 Usage:  CLOUDFLARE_API_TOKEN=... python scripts/raw_put.py <worker> <path/to/worker.js>
 Exit:   0 ok | 3 fail-closed (nothing is deployed on error)
 """
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 
 ACCT = os.environ.get("CF_ACCOUNT_ID", "edb167b78c9fb901ea5bca3ce58ccc4b")
 DATE_FLOOR = "2026-08-01"
+AUDIT_DB = os.environ.get("CF_AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
+VERSION_RE = re.compile(r'var VERSION = "([^"]+)"')
 
 
 def token():
@@ -70,11 +85,54 @@ def _api(url, tok, data=None, ctype=None):
         return 0, "ERR " + str(e)
 
 
+def _post_json(url, tok, payload):
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=90) as r:
+            return r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+    except Exception as e:
+        return 0, "ERR " + str(e)
+
+
 def _settings(worker, tok):
     st, body = _api(f"https://api.cloudflare.com/client/v4/accounts/{ACCT}/workers/scripts/{worker}/settings", tok)
     if st == 200 and isinstance(body, dict) and body.get("success"):
         return st, (body.get("result") or {})
     return st, None
+
+
+def artifact_version(code):
+    m = VERSION_RE.search(code)
+    return m.group(1) if m else "unknown"
+
+
+def ledger_write(worker, version, tok, notes):
+    """DEPLOY-LEDGER-1: record the mutation so the ledger can never silently lag live again."""
+    sql = (
+        "INSERT INTO deployment_history "
+        "(resource_type, resource_name, action, version_id, deployed_by, deployed_at, status, notes) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    params = ["worker", worker, "deploy", version, "scripts/raw_put.py", stamp, "success", notes]
+    url = f"https://api.cloudflare.com/client/v4/accounts/{ACCT}/d1/database/{AUDIT_DB}/query"
+    st, body = _post_json(url, tok, {"sql": sql, "params": params})
+    ok = False
+    try:
+        parsed = json.loads(body)
+        ok = st == 200 and bool(parsed.get("success"))
+    except ValueError:
+        ok = False
+    print(f"DEPLOY-LEDGER: HTTP {st} {'OK' if ok else 'FAILED'} {str(body)[:200]}")
+    return ok
 
 
 def main(argv):
@@ -134,7 +192,17 @@ def main(argv):
     if got_flags != compat_flags:
         print(f"FAIL: compatibility_flags changed across the deploy ({compat_flags} -> {got_flags}) - COMPAT-PRESERVE-1 violated")
         return 3
-    print(f"OK: {worker} deployed with compatibility_date={got_date} and {len(got_flags)} flag(s) preserved")
+
+    ver = artifact_version(code)
+    notes = f"raw_put.py /content deploy; compatibility_date={got_date}; flags={len(got_flags)}; DEPLOY-LEDGER-1"
+    if not ledger_write(worker, ver, tok, notes):
+        if os.environ.get("LEDGER_STRICT") == "1":
+            print("FAIL: ledger row not written and LEDGER_STRICT=1 - DEPLOY-LEDGER-1")
+            return 3
+        print("WARNING: deploy succeeded but the ledger row was not written (DEPLOY-LEDGER-1). "
+              "Set LEDGER_STRICT=1 to make this fatal.")
+
+    print(f"OK: {worker} {ver} deployed with compatibility_date={got_date} and {len(got_flags)} flag(s) preserved")
     return 0
 
 
