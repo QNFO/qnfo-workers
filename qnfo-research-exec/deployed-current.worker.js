@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.20-router-host-failover";
+var VERSION = "0.9.21-gw-host-order-and-body";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -24,13 +24,15 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
 // absent the old code fell straight through to a public workers.dev fetch, which does not
 // work from Worker context. Try the custom domain first, then workers.dev, and keep the
 // response contract identical (return the last Response when none is ok).
-// ROUTER-HOST-ORDER-1 (2026-09-29): Worker-context probes show ai.qnfo.org returns
-// 522 (same-zone custom-domain subrequest) while qnfo-ai.q08.workers.dev returns
-// 200/401 from Worker context. Try the proven-reachable host FIRST so every call
-// does not burn a guaranteed-failing hop.
+// ROUTER-HOST-ORDER-CORRECTION-1 (2026-09-29): an earlier patch today put
+// qnfo-ai.q08.workers.dev first on the strength of a synthetic probe. The incident
+// history contradicts it: BEFORE 16:36:06Z the workers.dev host was the ONLY host
+// and produced 101 gw-fallback "gateway HTTP 404" events in one day; AFTER the
+// failover deploy added ai.qnfo.org first, those events stopped (last 16:32:28Z).
+// workers.dev is therefore the failing host. Keep ai.qnfo.org first.
 var ROUTER_HOSTS = [
-  "https://qnfo-ai.q08.workers.dev",
-  "https://ai.qnfo.org"
+  "https://ai.qnfo.org",
+  "https://qnfo-ai.q08.workers.dev"
 ];
 var _routerBindingWarned = false;
 // GW-FALLBACK-BODY-1: record which router host produced the response we return.
