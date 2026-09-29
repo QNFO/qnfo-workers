@@ -1,0 +1,8 @@
+{
+  "workflow": "apply-pending-patches",
+  "marker": "APPLY-PENDING-1",
+  "apply_rc": "0",
+  "job_status": "success",
+  "head": "921c3be1565d3894579ea4708d3baef84d9e518f",
+  "ts": "2026-09-29T16:31:10.410Z"
+}
