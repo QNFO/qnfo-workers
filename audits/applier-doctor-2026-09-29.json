@@ -2,7 +2,7 @@
  "counts": {
   "already-applied": 24,
   "stale-anchor": 3,
-  "superseded": 10,
+  "superseded": 11,
   "undetermined": 4
  },
  "errored": [],
@@ -53,8 +53,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=40 {'already-applied': 24, 'stale-anchor': 14, 'landed': 1, 'error': 1}",
-    "LANDED(1): deploy-guard-ms-failclosed-patch.py",
+    "SUMMARY total=41 {'already-applied': 24, 'stale-anchor': 14, 'landed': 2, 'error': 1}",
+    "LANDED(2): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -69,6 +69,22 @@
    "script": "scripts/attachguard-xml-form-patch.py",
    "tail": [
     "FAIL-CLOSED: pre-patch VERSION 'var VERSION = \"2.37.12-fm-stream-reasoning\";' not found in qnfo-ops/worker.js"
+   ],
+   "verdict": "superseded"
+  },
+  {
+   "changed_files": [
+    " M scripts/raw_put.py"
+   ],
+   "outcome_present_in": [
+    "scripts/raw_put.py :: CF-URLLIB-UA-1010-1",
+    "scripts/raw_put.py :: URLLIB-UA-1010-1",
+    "scripts/raw_put.py :: User-Agent"
+   ],
+   "rc": 0,
+   "script": "scripts/cf-urllib-ua-1010-patch.py",
+   "tail": [
+    "APPLIED: scripts/raw_put.py now 19322 bytes, 4 User-Agent insertions, AST OK"
    ],
    "verdict": "superseded"
   },
@@ -501,6 +517,7 @@
  "superseded": [
   "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/attachguard-xml-form-patch.py",
+  "scripts/cf-urllib-ua-1010-patch.py",
   "scripts/deploy-guard-ms-failclosed-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
@@ -510,8 +527,8 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 41,
- "ts": "2026-09-29T16:50:06.280Z",
+ "total": 42,
+ "ts": "2026-09-29T16:51:23.799Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/driftguard-server-version-patch.py",
