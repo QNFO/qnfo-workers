@@ -1,0 +1,224 @@
+name: apply-container-binding-guard-1
+
+# CONTAINER-BINDING-GUARD-1 (2026-09-29, LIVE INCIDENT).
+#
+# WHAT BROKE
+#   qnfo-containers-pilot lost its [[containers]] config at 2026-09-29T19:30:35Z when
+#   qnfo-ops:cf_worker_deploy PUT /content with metadata
+#   {main_module, bindings, compatibility_date, compatibility_flags} -- no `containers`.
+#   First container.error was 19:30:43.591Z, 8s later:
+#     "Cannot read properties of undefined (reading 'running')"
+#   ctx.container is undefined, so every container route 500s, and shell_exec,
+#   exec_python, exec_node, git_clone_exec, shell_pipeline and container_workspace_exec
+#   (which all route through this worker) are down fleet-wide.
+#
+# WHY wrangler AND NOT raw_put.py
+#   scripts/raw_put.py sends metadata of {main_module} + compatibility fields and NO
+#   `bindings`, which is why its 17:06:43Z / 17:10:18Z deploys of this worker were
+#   harmless. But a /content PUT that omits `containers` PRESERVES whatever is already
+#   there -- it cannot ADD the container config back. Only `wrangler deploy` of this
+#   directory, which reads [[containers]] from wrangler.toml, can restore it.
+#
+# FAILURE HANDLING
+#   wrangler is tried first (primary). If wrangler fails closed on the DO migration
+#   (wrangler.toml itself warns this may happen for an already-depended-on class), the
+#   workflow retries with the [[migrations]] block stripped, then falls back to
+#   raw_put.py so at least the code (and the new guard) ships -- loudly marked, because
+#   that fallback does NOT restore the container.
+#
+# ADVERSARIAL
+#   A green run proves /health advertises the new VERSION and that wrangler exited 0.
+#   It does NOT by itself prove ctx.container is defined again -- /status is behind
+#   PILOT_TOKEN auth, so this workflow cannot assert containerBindingPresent unless a
+#   PILOT_TOKEN secret is configured. When it is not, the binding restoration must be
+#   confirmed out-of-band (ops container_status / shell_exec).
+on:
+  push:
+    paths:
+      - scripts/patch-container-binding-guard-1.py
+      - .github/workflows/apply-container-binding-guard-1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-container-binding-guard-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: record pre-deploy state
+        run: |
+          curl -sf https://qnfo-containers-pilot.q08.workers.dev/health > /tmp/pre_health.json || echo '{}' > /tmp/pre_health.json
+          cat /tmp/pre_health.json
+          cp qnfo-containers-pilot/worker.js /tmp/rollback.worker.js
+          echo "rollback snapshot bytes: $(wc -c < /tmp/rollback.worker.js)"
+
+      - name: apply CONTAINER-BINDING-GUARD-1 patch
+        run: python3 scripts/patch-container-binding-guard-1.py
+
+      - name: guard - patched source parses and carries the guard
+        run: |
+          set -e
+          node --check qnfo-containers-pilot/worker.js
+          grep -qF 'CONTAINER-BINDING-MISSING' qnfo-containers-pilot/worker.js
+          grep -qF 'containerBindingPresent' qnfo-containers-pilot/worker.js
+          grep -qF '1.0.3-container-guard' qnfo-containers-pilot/worker.js
+          echo "GUARD OK"
+
+      - name: commit patched source (rebase + retry)
+        run: |
+          set -e
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add qnfo-containers-pilot/worker.js
+          if git diff --cached --quiet; then
+            echo "no source change to commit (already applied)"
+          else
+            git commit -m "fix(containers-pilot): CONTAINER-BINDING-GUARD-1 ctx.container guard + /status binding probe [skip ci]"
+            ok=0
+            for i in 1 2 3 4 5; do
+              git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+              if git push origin HEAD:main; then ok=1; echo "commit-back push OK on attempt $i"; break; fi
+              echo "push attempt $i rejected; retrying"; sleep 6
+            done
+            if [ "$ok" != "1" ]; then echo "::error::COMMIT-BACK FAILED after 5 attempts"; exit 1; fi
+          fi
+
+      # PRIMARY: wrangler carries [[containers]] in the upload metadata. This is the
+      # documented path and the only one that can RESTORE the container config.
+      - name: deploy with wrangler (restores [[containers]])
+        id: wrangler
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          cd qnfo-containers-pilot
+          npx --yes wrangler@4 deploy --name qnfo-containers-pilot 2>&1 | tee /tmp/wrangler.log
+
+      # RETRY: wrangler.toml's own note warns a creating migration for an already
+      # depended-on class can be rejected. Retry from a temp copy with the
+      # [[migrations]] block removed (the class already exists, so no migration is needed).
+      - name: retry wrangler without the DO migration block
+        id: wrangler_nomig
+        if: steps.wrangler.outcome == 'failure'
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          rm -rf /tmp/cp && cp -r qnfo-containers-pilot /tmp/cp
+          python3 - <<'PY'
+          import pathlib, re
+          p = pathlib.Path('/tmp/cp/wrangler.toml')
+          t = p.read_text()
+          t = re.sub(r'\[\[migrations\]\][\s\S]*?(?=\n\[\[|\Z)', '', t)
+          p.write_text(t)
+          print('migrations block stripped')
+          PY
+          cd /tmp/cp
+          npx --yes wrangler@4 deploy --name qnfo-containers-pilot 2>&1 | tee /tmp/wrangler_nomig.log
+
+      # LAST RESORT: ship the code (and the new guard) with raw_put.py. Loudly marked:
+      # this path does NOT restore the container config.
+      - name: fallback deploy via raw_put.py
+        if: steps.wrangler.outcome == 'failure' && steps.wrangler_nomig.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "::warning::wrangler failed twice - raw_put.py fallback ships CODE ONLY; [[containers]] remains absent and the container stays down"
+          python3 scripts/raw_put.py qnfo-containers-pilot qnfo-containers-pilot/worker.js
+
+      - name: verify live version advanced
+        id: verify
+        run: |
+          set -e
+          sleep 15
+          for i in 1 2 3 4 5 6; do
+            curl -sf "https://qnfo-containers-pilot.q08.workers.dev/health?cb=$RANDOM" > /tmp/post_health.json && break
+            echo "attempt $i: health not ready"; sleep 8
+          done
+          cat /tmp/post_health.json
+          grep -qF '1.0.3-container-guard' /tmp/post_health.json
+          echo "VERIFY OK: live version is 1.0.3-container-guard"
+
+      - name: probe container binding (only when PILOT_TOKEN is configured)
+        if: always()
+        env:
+          PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+        run: |
+          if [ -z "$PILOT_TOKEN" ]; then
+            echo "::warning::no PILOT_TOKEN secret in this repo - cannot assert containerBindingPresent from CI; confirm out-of-band via ops container_status"
+            echo '{"skipped":true}' > /tmp/post_status.json
+            exit 0
+          fi
+          curl -s -H "Authorization: Bearer $PILOT_TOKEN" \
+            "https://qnfo-containers-pilot.q08.workers.dev/status?cb=$RANDOM" > /tmp/post_status.json || true
+          cat /tmp/post_status.json
+          python3 - <<'PY'
+          import json, sys
+          try:
+              d = json.load(open('/tmp/post_status.json'))
+          except Exception as e:
+              print("::error::unparseable /status: %s" % e); sys.exit(1)
+          print("containerBindingPresent=", d.get("containerBindingPresent"))
+          if not d.get("containerBindingPresent"):
+              print("::error::[[containers]] STILL MISSING - container remains down")
+              sys.exit(1)
+          PY
+
+      - name: rollback on failed verification
+        if: failure()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "verification failed - restoring pre-patch snapshot via raw_put.py"
+          python3 scripts/raw_put.py qnfo-containers-pilot /tmp/rollback.worker.js || true
+          curl -s https://qnfo-containers-pilot.q08.workers.dev/health || true
+
+      - name: publish outcome artifact
+        if: always()
+        run: |
+          set -e
+          mkdir -p ci-status
+          PRE=$(grep -oE '"version" *: *"[^"]*"' /tmp/pre_health.json 2>/dev/null | head -1 | sed -E 's/.*"([^"]*)"$/\1/' || true)
+          POST=$(grep -oE '"version" *: *"[^"]*"' /tmp/post_health.json 2>/dev/null | head -1 | sed -E 's/.*"([^"]*)"$/\1/' || true)
+          HEAD=$(git rev-parse HEAD)
+          TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          printf '{\n  "workflow": "apply-container-binding-guard-1",\n  "marker": "CONTAINER-BINDING-GUARD-1",\n  "pre_version": "%s",\n  "post_version": "%s",\n  "wrangler_outcome": "%s",\n  "wrangler_nomig_outcome": "%s",\n  "head": "%s",\n  "ts": "%s"\n}\n' \
+            "$PRE" "$POST" "${{ steps.wrangler.outcome }}" "${{ steps.wrangler_nomig.outcome }}" "$HEAD" "$TS" \
+            > ci-status/container-binding-guard-1.json
+          cat ci-status/container-binding-guard-1.json
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "selfheal@qnfo.org"
+          git add ci-status/container-binding-guard-1.json
+          if git diff --cached --quiet; then echo "artifact unchanged"; exit 0; fi
+          git commit -m "chore(ci): CONTAINER-BINDING-GUARD-1 outcome [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then echo "artifact pushed attempt $i"; exit 0; fi
+            sleep 5
+          done
+          echo "::warning::artifact push failed after 3 attempts"
