@@ -16,6 +16,11 @@ name: version-bump-guard
 # ADVERSARIAL - a green run proves only that a VERSION string changed with the bytes. It does
 # NOT prove the change is correct, that the bump went in the right direction, or that the worker
 # deployed. Version parity is not behaviour parity.
+#
+# CI-DEP-MISSING-1 (2026-09-29, fix): the lint step below calls scripts/workflow-lint.py, which
+# hard-depends on PyYAML. setup-python@v5 does NOT provide it, so the lint exited 2 and the two
+# substantive steps were skipped - the guard was red for a missing dependency, not for a version
+# violation, and never evaluated a diff. The install step is REQUIRED, not cosmetic.
 
 on:
   push:
@@ -49,6 +54,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      # REQUIRED: workflow-lint.py imports yaml and fails closed when it is absent.
+      - name: Install lint dependency (PyYAML)
+        run: python -m pip install --quiet pyyaml
 
       - name: Lint the workflow YAML class repo-wide
         run: |
