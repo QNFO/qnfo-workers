@@ -14,9 +14,26 @@ CLASSES (no class is ever silently dropped):
   CONTENT_DRIFT    repo artifact sha256 != live /content sha256 (after normalisation)
   NO_REPO_VERSION  worker is live but the repo has no version constant (source gap)
   NO_LIVE_VERSION  worker answers /health but omits a version field (live gap)
-  NOT_DEPLOYED     HTTP 404 (retired/never-deployed) -- reported, not drift
+  NOT_DEPLOYED     genuinely absent: HTTP 404 AND not in the CF account script list
+  NO_HEALTH_ROUTE  IS deployed, but https://<name>.q08.workers.dev/health 404s
+                   (workers.dev route disabled, or no /health route) -- NOT "not deployed"
   LIVE_ERR         /health unreachable or non-404 error
   SYNC             repo == live
+
+NAME-RESOLUTION-1 (2026-09-29, FLEET-AUTOAUDIT false negatives):
+  The repo DIRECTORY is not the worker name. `agent-orchestrator/wrangler.toml` declares
+  `name = "qnfo-agent-orchestrator"`, which IS deployed and answers /health v1.1.0 -- while
+  `agent-orchestrator.q08.workers.dev` is a host that never existed. Probing the directory
+  name returned 404, and the worker was written as NOT_DEPLOYED. Measured on the first
+  FLEET-AUTOAUDIT-1 run (2026-09-29 15:44:42Z): 112 rows, 76 NOT_DEPLOYED -- a 68%
+  false-negative rate on the class that is supposed to mean "retired/never-deployed".
+  The guard now resolves the probe target from wrangler.toml `name` (json/jsonc fallback,
+  directory name as last resort) and cross-checks the CF API script list so that
+  NO_HEALTH_ROUTE is never conflated with NOT_DEPLOYED. When the CF script list is
+  unavailable (no token / API error) the guard degrades to the previous NOT_DEPLOYED
+  reading and reports `cf_script_list: false` rather than guessing.
+  Every directory still yields exactly one class -- the fix removes a false negative,
+  it does not introduce a silent skip.
 
 DIRECTION (2026-09-29, issue #1229): a version mismatch is not automatically "the repo
 is right". The live bundle can be AHEAD of the repo (DEPLOY-UNLOGGED-MUTATION, issues
@@ -36,10 +53,15 @@ because a mirror capture can legitimately differ in formatting from a fresh buil
 JSON MODE (--json): emits ONE line of JSON carrying the full membership of every class,
 including `sync_workers` and `not_deployed_workers`. Counts alone are not auditable: a
 consumer (scripts/fleet-autoaudit.py) must be able to write a row per worker, so every
-class carries its worker names.
+class carries its worker names. Entries carry BOTH `worker` (the resolved CF script name,
+the value that is actually probed) and `dir` (the repo directory), so a consumer cannot
+confuse the two again.
 
 Default scope = the narrative-generation surfaces we own. `--all` = all workers.
 Exit: 0 clean (scoped: SYNC only) | 1 any DRIFT / CONTENT_DRIFT / NO_*_VERSION / LIVE_ERR
+NO_HEALTH_ROUTE is reported but deliberately NOT counted in the exit code: a private
+worker with a disabled workers.dev route is not a repo<->live divergence, and making it
+blocking would turn a monitoring gap into a fleet-wide CI outage.
 """
 import hashlib
 import json
@@ -56,6 +78,10 @@ TIMEOUT = 20
 NARRATIVE = ["qnfo-ai", "qnfo-research-exec", "qnfo-ipatent", "qnfo-gateway"]
 API_CONTENT = ("https://api.cloudflare.com/client/v4/accounts/{acct}"
                "/workers/scripts/{worker}/content")
+API_SCRIPTS = ("https://api.cloudflare.com/client/v4/accounts/{acct}"
+               "/workers/scripts")
+WRANGLER_NAME = re.compile(r'^\s*name\s*=\s*"([^"]+)"', re.M)
+WRANGLER_JSON = ("wrangler.json", "wrangler.jsonc")
 
 
 def _norm(text):
@@ -87,6 +113,66 @@ def cmp_ver(repo_v, live_v):
     a = a + (0,) * (n - len(a))
     b = b + (0,) * (n - len(b))
     return (a > b) - (a < b)
+
+
+def wrangler_name(d):
+    """NAME-RESOLUTION-1: resolve the DEPLOYED worker name for a repo directory.
+
+    The directory name is not the worker name (`agent-orchestrator` deploys as
+    `qnfo-agent-orchestrator`). Probing the directory produced 404 -> NOT_DEPLOYED on a
+    healthy worker. Prefer the wrangler.toml `name`; fall back to wrangler.json/jsonc;
+    return None when nothing is declared so the caller can use the directory name.
+    """
+    p = os.path.join(ROOT, d, "wrangler.toml")
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                m = WRANGLER_NAME.search(fh.read())
+        except OSError:
+            m = None
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+    for fn in WRANGLER_JSON:
+        p = os.path.join(ROOT, d, fn)
+        if os.path.isfile(p):
+            try:
+                with open(p, encoding="utf-8", errors="replace") as fh:
+                    data = json.load(fh)
+            except Exception:
+                continue
+            n = data.get("name")
+            if isinstance(n, str) and n.strip():
+                return n.strip()
+    return None
+
+
+def deployed_workers(acct, token):
+    """The authoritative deployed-script set from the CF API.
+
+    None when unavailable (no credentials / API error). Callers MUST NOT read None as
+    "nothing is deployed" -- that would re-introduce the false negative this closes.
+    """
+    if not (acct and token):
+        return None
+    out, page = set(), 1
+    try:
+        while True:
+            url = API_SCRIPTS.format(acct=acct) + f"?per_page=100&page={page}"
+            req = urllib.request.Request(url, headers={
+                "Authorization": "Bearer " + token,
+                "User-Agent": "qnfo-deploy-drift-guard"})
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                body = json.load(r)
+            for it in body.get("result", []):
+                if it.get("id"):
+                    out.add(it["id"])
+            info = body.get("result_info") or {}
+            if page >= int(info.get("total_pages") or 1):
+                break
+            page += 1
+    except Exception:
+        return None
+    return out
 
 
 def repo_artifact(d):
@@ -146,76 +232,92 @@ def main():
     acct = os.environ.get("CF_ACCOUNT_ID", "")
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
     content_ok = bool(acct and token)
+    deployed = deployed_workers(acct, token)
 
     drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []
-    not_deployed, sync_workers, live_err = [], [], []
+    not_deployed, sync_workers, live_err, no_health = [], [], [], []
 
     for d in sorted(os.listdir(ROOT)):
-        if wanted and d not in wanted:
-            continue
         if not os.path.isdir(os.path.join(ROOT, d)):
             continue
         # ROOT-CAUSE FIX: .git/.github/.wrangler/_shared are infra dirs, not workers --
         # probing them produced bogus LIVE_ERR (invalid worker hostnames).
         if d.startswith(".") or d.startswith("_"):
             continue
+        # NAME-RESOLUTION-1: the directory is not the worker name. Probe what is deployed.
+        worker = wrangler_name(d) or d
+        if wanted and d not in wanted and worker not in wanted:
+            continue
         rv, rpath, rtext = repo_artifact(d)
-        live, lv = live_result(d)
+        live, lv = live_result(worker)
         if not live and lv is None:
-            not_deployed.append(d)
+            # 404. Only NOT_DEPLOYED when the worker is genuinely absent from the account:
+            # a deployed worker with a disabled workers.dev route also 404s here, and
+            # calling that NOT_DEPLOYED is the false negative NAME-RESOLUTION-1 closes.
+            if deployed is None or worker in deployed:
+                no_health.append((d, worker))
+            else:
+                not_deployed.append(d)
             continue
         if not live:  # ERR (not 404)
-            live_err.append((d, lv))
+            live_err.append((d, worker, lv))
             continue
         if rv is None:
-            no_repo_ver.append((d, lv))
+            no_repo_ver.append((d, worker, lv))
         elif not lv:
-            no_live_ver.append((d, rv))
+            no_live_ver.append((d, worker, rv))
         elif lv != rv:
-            drift.append((d, rv, lv))
+            drift.append((d, worker, rv, lv))
             if cmp_ver(rv, lv) == 1:
-                ahead.append((d, rv, lv, rpath))
+                ahead.append((d, worker, rv, lv, rpath))
         else:
-            sync_workers.append(d)
+            sync_workers.append(worker)
         if want_content and content_ok and rtext is not None:
-            live_text = live_content(d, acct, token)
+            live_text = live_content(worker, acct, token)
             if live_text is not None and _sha(live_text) != _sha(rtext):
-                content_drift.append((d, _sha(rtext)[:12], _sha(live_text)[:12], rpath))
+                content_drift.append((d, worker, _sha(rtext)[:12], _sha(live_text)[:12], rpath))
 
     if want_json:
         print(json.dumps({
             "sync": len(sync_workers),
             "sync_workers": sync_workers,
-            "drift": [{"worker": d, "repo": r, "live": l} for d, r, l in drift],
-            "content_drift": [{"worker": d, "repo_sha": a, "live_sha": b, "artifact": p}
-                              for d, a, b, p in content_drift],
-            "ahead": [{"worker": d, "repo": r, "live": l, "artifact": p}
-                      for d, r, l, p in ahead],
-            "no_repo_version": [{"worker": d, "live": l} for d, l in no_repo_ver],
-            "no_live_version": [{"worker": d, "repo": r} for d, r in no_live_ver],
-            "live_err": [{"worker": d, "err": e} for d, e in live_err],
+            "drift": [{"worker": w, "dir": d, "repo": r, "live": l} for d, w, r, l in drift],
+            "content_drift": [{"worker": w, "dir": d, "repo_sha": a, "live_sha": b, "artifact": p}
+                              for d, w, a, b, p in content_drift],
+            "ahead": [{"worker": w, "dir": d, "repo": r, "live": l, "artifact": p}
+                      for d, w, r, l, p in ahead],
+            "no_repo_version": [{"worker": w, "dir": d, "live": l} for d, w, l in no_repo_ver],
+            "no_live_version": [{"worker": w, "dir": d, "repo": r} for d, w, r in no_live_ver],
+            "live_err": [{"worker": w, "dir": d, "err": e} for d, w, e in live_err],
+            "no_health_route": [{"worker": w, "dir": d} for d, w in no_health],
             "not_deployed_workers": not_deployed,
             "not_deployed_notdrift": len(not_deployed),
+            "name_resolution": True,
+            "cf_script_list": deployed is not None,
             "content_checked": bool(want_content and content_ok),
         }, sort_keys=True))
     else:
-        for d, rv_, lv_ in drift:
-            print(f"DRIFT {d}: repo={rv_} live={lv_}")
-        for d, a, b, p in content_drift:
-            print(f"CONTENT_DRIFT {d}: repo_sha={a} live_sha={b} artifact={p}")
-        for d, rv_, lv_, p in ahead:
-            print(f"AHEAD {d}: repo={rv_} live={lv_} artifact={p}")
-        for d, lv_ in no_repo_ver:
-            print(f"NO_REPO_VERSION {d}: live={lv_}")
-        for d, rv_ in no_live_ver:
-            print(f"NO_LIVE_VERSION {d}: repo={rv_}")
-        for d, e in live_err:
-            print(f"LIVE_ERR {d}: {e}")
+        for d, w, rv_, lv_ in drift:
+            print(f"DRIFT {w} (dir {d}): repo={rv_} live={lv_}")
+        for d, w, a, b, p in content_drift:
+            print(f"CONTENT_DRIFT {w} (dir {d}): repo_sha={a} live_sha={b} artifact={p}")
+        for d, w, rv_, lv_, p in ahead:
+            print(f"AHEAD {w} (dir {d}): repo={rv_} live={lv_} artifact={p}")
+        for d, w, lv_ in no_repo_ver:
+            print(f"NO_REPO_VERSION {w} (dir {d}): live={lv_}")
+        for d, w, rv_ in no_live_ver:
+            print(f"NO_LIVE_VERSION {w} (dir {d}): repo={rv_}")
+        for d, w in no_health:
+            print(f"NO_HEALTH_ROUTE {w} (dir {d})")
+        for d, w, e in live_err:
+            print(f"LIVE_ERR {w} (dir {d}): {e}")
         tag = "all" if scan_all else "narrative"
         print(f"deploy-drift-guard[{tag}]: sync={len(sync_workers)} drift={len(drift)} "
               f"content_drift={len(content_drift)} ahead={len(ahead)} "
               f"no_repo_version={len(no_repo_ver)} no_live_version={len(no_live_ver)} "
-              f"live_err={len(live_err)} not_deployed_notdrift={len(not_deployed)} "
+              f"no_health_route={len(no_health)} live_err={len(live_err)} "
+              f"not_deployed_notdrift={len(not_deployed)} "
+              f"cf_script_list={deployed is not None} "
               f"content_checked={bool(want_content and content_ok)}")
 
     if want_ahead:
