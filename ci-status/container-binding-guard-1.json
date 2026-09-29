@@ -3,8 +3,8 @@
   "marker": "CONTAINER-BINDING-GUARD-1",
   "pre_version": "1.0.3-clone-egress-timeout-fallback",
   "post_version": "",
-  "wrangler_outcome": "skipped",
+  "wrangler_outcome": "failure",
   "wrangler_nomig_outcome": "skipped",
-  "head": "cd734829157e2b93ed2f32d06a8c33eb1f5008b7",
-  "ts": "2026-09-29T19:35:06.000Z"
+  "head": "7b97a506d394b104cfb00812ad538b6fb3316d25",
+  "ts": "2026-09-29T19:37:39.000Z"
 }
