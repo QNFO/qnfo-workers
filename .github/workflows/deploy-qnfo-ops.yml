@@ -1,6 +1,6 @@
 name: deploy-qnfo-ops
 
-# SERVER-SIDE-DEPLOY-1 (2026-09-27). Re-pinned 2026-09-29.
+# SERVER-SIDE-DEPLOY-1 (2026-09-27). Re-pinned 2026-09-29. Version-agnostic since 2026-09-29.
 #
 # Carries qnfo-ops from qnfo-workers main to LIVE using the repo's own
 # binding-preserving deployer (scripts/raw_put.py -> CF API /content).
@@ -11,19 +11,34 @@ name: deploy-qnfo-ops
 # raw_put.py is fail-closed: it exits 3 and deploys nothing on any error, so a
 # partial deploy cannot occur.
 #
-# STALE-PREFLIGHT-1 (fixed 2026-09-29): this workflow previously hard-pinned VERSION
-# 2.37.13-attachguard-xml-form while the artifact had already moved to
-# 2.37.17-d1-schema-hint. It could therefore ONLY ever fail -- and because its
-# push.paths listed only its own file, a change to qnfo-ops/worker.js had NO path to
-# live at all. That is the DEPLOY-NON-CANONICAL / deploy-drift root cause for the ops
-# endpoint itself. The preflight is now SKIP-SAFE: if the artifact is not at the
-# expected version this workflow exits 0 and names the workflow that owns the deploy,
-# instead of failing red and teaching operators to ignore it.
+# STALE-PREFLIGHT-1 (first fixed 2026-09-29, RECURRED same day, fixed properly here):
+# this workflow previously hard-pinned a literal VERSION string in its preflight. It was
+# first pinned to 2.37.13-attachguard-xml-form while the artifact had moved to
+# 2.37.17-d1-schema-hint, and after the re-pin it was pinned to
+# 2.37.18-d1-guard-literal-fn-aware -- a version that NEVER EXISTED (the literal-aware
+# release was 2.37.18-d1-guard-literal-aware and the function-aware release is
+# 2.37.19-d1-guard-literal-fn-aware). Net effect: the fix for issue #1349 was committed
+# to main at 2.37.19 while live stayed at 2.37.17, and BOTH deploy paths were pinned to a
+# version that could never match. That is the DEPLOY-NON-CANONICAL / deploy-drift root
+# cause for the ops endpoint itself.
+#
+# PERMANENT REMEDIATION: the preflight no longer compares against any hard-coded version.
+# It reads VERSION out of the artifact under test and verifies that the LIVE bundle carries
+# that same version. A future release therefore cannot be blocked by a stale pin -- the
+# pin-drift failure mode is structurally removed, not re-pinned.
+#
+# This workflow now also owns the deploy for any change to qnfo-ops/worker.js: the
+# push.paths below include the artifact, so a worker change has a real path to live
+# instead of relying on the qnfo-fleet-control redeploy cron.
 
 on:
   push:
     paths:
       - '.github/workflows/deploy-qnfo-ops.yml'
+      - 'qnfo-ops/worker.js'
+      - 'qnfo-ops/deployed-current.worker.js'
+      - 'scripts/raw_put.py'
+      - 'scripts/d1guard-battery.mjs'
   workflow_dispatch:
 
 permissions:
@@ -40,46 +55,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Preflight - decide whether there is anything to deploy
-        id: pre
+      - name: Read artifact VERSION (no hard-coded pin)
+        id: ver
         run: |
           set -euo pipefail
-          EXPECT='var VERSION = "2.37.18-d1-guard-literal-fn-aware";'
-          if grep -qF "$EXPECT" qnfo-ops/worker.js; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "artifact at the expected version; proceeding"
-            cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
-            echo "source and deployed-current mirror are byte-identical"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "artifact is NOT at the expected version; nothing to deploy."
-            echo "The apply-d1guard-literal-fn-aware workflow owns this deploy."
-            grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 || true
-          fi
+          V=$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          test -n "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "artifact VERSION=$V"
+
+      - name: Mirror parity (blocking)
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "source and deployed-current mirror are byte-identical"
+
+      - name: D1-GUARD-BATTERY-1 self-audit (blocking)
+        run: node scripts/d1guard-battery.mjs
 
       - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
-        if: steps.pre.outputs.ready == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
 
-      - name: Verify live VERSION via CF API
-        if: steps.pre.outputs.ready == 'true'
+      - name: Verify live VERSION equals the artifact VERSION
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
+          V="${{ steps.ver.outputs.version }}"
           curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
             -o /tmp/live.js
           echo "live-content-bytes=$(wc -c < /tmp/live.js)"
-          hits=$(grep -c '2.37.18-d1-guard-literal-fn-aware' /tmp/live.js || true)
-          echo "live-version-hits=$hits"
-          test "$hits" -ge 1
-          echo "VERIFIED: live qnfo-ops carries 2.37.18-d1-guard-literal-fn-aware"
+          echo "expect-version=$V"
+          test "$(grep -cF "$V" /tmp/live.js || true)" -ge 1
+          test "$(grep -cF 'd1ReadOnlyGuard' /tmp/live.js || true)" -ge 2
+          test "$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js || true)" = "0"
+          echo "VERIFIED: live qnfo-ops carries $V"
