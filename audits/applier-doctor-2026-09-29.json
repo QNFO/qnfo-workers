@@ -1,6 +1,7 @@
 {
  "counts": {
   "already-applied": 42,
+  "applied-now": 1,
   "error": 1,
   "stale-anchor": 3,
   "superseded": 10,
@@ -10,7 +11,9 @@
   "scripts/patch-cron-only-class.py"
  ],
  "marker": "APPLIER-DOCTOR-2",
- "never_landed": [],
+ "never_landed": [
+  "scripts/cloud-ops-cron-dow-patch.py"
+ ],
  "results": [
   {
    "changed_files": [],
@@ -111,6 +114,9 @@
   {
    "changed_files": [
     " M ci-status/applier-doctor.json",
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js",
+    " M qnfo-cloud-ops/wrangler.toml",
     " M qnfo-ops/deployed-current.worker.js",
     " M qnfo-ops/worker.js"
    ],
@@ -125,7 +131,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): affirm-veto-clause-targets-patch.py",
+    "LANDED(2): affirm-veto-clause-targets-patch.py, cloud-ops-cron-dow-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -182,6 +188,21 @@
     "CLASSIFY-FAILCLOSED-DEFAULT-1: nothing to do (all edits already applied)"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js",
+    " M qnfo-cloud-ops/wrangler.toml"
+   ],
+   "rc": 0,
+   "script": "scripts/cloud-ops-cron-dow-patch.py",
+   "tail": [
+    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.0-cron-dow-cf",
+    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.0-cron-dow-cf",
+    "TOTAL_EDITS 13"
+   ],
+   "verdict": "applied-now"
   },
   {
    "changed_files": [],
@@ -764,8 +785,8 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 64,
- "ts": "2026-09-29T19:27:52.270Z",
+ "total": 65,
+ "ts": "2026-09-29T19:30:11.568Z",
  "undetermined": [
   "scripts/affirm-veto-clause-targets-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
