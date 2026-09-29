@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.19-zenodov2-files";
+var VERSION = "0.9.20-router-host-failover";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -20,11 +20,42 @@ var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
 var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
-function routerFetch(env, url, opts) {
+// ROUTER-TRANSPORT-FAILOVER-1: env.QNFO_AI is preferred, but when that service binding is
+// absent the old code fell straight through to a public workers.dev fetch, which does not
+// work from Worker context. Try the custom domain first, then workers.dev, and keep the
+// response contract identical (return the last Response when none is ok).
+var ROUTER_HOSTS = [
+  "https://ai.qnfo.org",
+  "https://qnfo-ai.q08.workers.dev"
+];
+var _routerBindingWarned = false;
+async function routerFetch(env, url, opts) {
   if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
     return env.QNFO_AI.fetch(url, opts);
   }
-  return fetch(url, opts);
+  if (!_routerBindingWarned) {
+    _routerBindingWarned = true;
+    if (typeof logEvent === "function") {
+      try {
+        await logEvent(env, "gw-transport", "QNFO_AI service binding absent; routerFetch is using public host failover over " + ROUTER_HOSTS.join(", "), "warn");
+      } catch (e) {
+      }
+    }
+  }
+  var path = String(url).replace(/^https?:\/\/[^/]+/, "");
+  var last = null;
+  var lastErr = null;
+  for (var i = 0; i < ROUTER_HOSTS.length; i++) {
+    try {
+      var r = await fetch(ROUTER_HOSTS[i] + path, opts);
+      if (r && r.ok) return r;
+      last = r;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (last) return last;
+  throw lastErr || new Error("routerFetch: no router host reachable");
 }
 __name(routerFetch, "routerFetch");
 __name2(routerFetch, "routerFetch");
