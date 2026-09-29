@@ -16,12 +16,24 @@ every version constant from each file and compare. Same constant NAMES but diffe
 VALUES = a genuine lag (safe to regenerate with cp). Different NAME SETS = a
 structural difference (probably a build artifact) = report only, never auto-copy.
 
-CONTENT LAYER (2026-09-29, issue 1229): comparing version constants alone reported
-lagging=0 while 20 workers were VERSION-identical and content-divergent by ~3720
-lines. A VERSION-equal pair is now ALSO compared by content hash:
+CONTENT LAYER (2026-09-29, issue 1229): comparing version constants alone is a blind
+spot -- a VERSION-equal pair can still differ in content, and because the canonical
+deploy reads the MIRROR, a stale mirror silently ships code that no version bump
+reveals. A VERSION-equal pair is therefore ALSO compared by content hash:
   CONTENT-DRIFT        source import-free, mirror not a capture -> auto-fixable (cp)
   CONTENT-DIFF-REVIEW  source uses imports (build artifact)    -> report only
 Detection is always on; only --fix mutates.
+
+RETRACTION (2026-09-29, same day, after review): the FIRST revision of this content
+layer claimed "lagging=0 while 20 workers were VERSION-identical and content-divergent
+by ~3720 lines". THAT FIGURE IS WITHDRAWN -- it came from a scan of a local container
+clone, and it measured checkout/EOL state rather than repository content. Direct
+GitHub blob-sha comparison of five pairs found FOUR byte-identical
+(qnfo-lifecycle d3b76f91, personal-api 4865eed7, qnfo-auditor b09949a9,
+events-radar aacdf94e) and ONE differing by CRLF line endings only
+(qnfo-ai-calibration). The content-hash check BELOW IS KEPT regardless: it is strictly
+stronger than VERSION-only comparison and needs no incident to justify it. Only the
+supporting figure is withdrawn. Do not cite the 20-worker/3720-line number again.
 
 Usage:
   python scripts/mirror-guard.py          # report; exit 1 if any drift
@@ -106,10 +118,11 @@ def main(argv):
             continue
         if s == m:
             # MIRROR-CONTENT-DRIFT-1 (issue 1229): equal version constants do NOT
-            # imply parity. On 2026-09-29 this guard reported lagging=0 while 20
-            # workers were VERSION-identical and content-divergent by ~3.7k lines.
-            # The canonical deploy reads the MIRROR, so such a pair silently
-            # ships stale code. Compare bytes, not just the constants.
+            # imply parity, and the canonical deploy reads the MIRROR, so a stale
+            # mirror silently ships code no version bump reveals. Compare bytes, not
+            # just the constants. (The "20 workers / ~3.7k lines" figure from the
+            # first revision of this layer is WITHDRAWN -- see the docstring
+            # retraction. The check stays; the figure does not.)
             hs, hm = sha256(src_p), sha256(mir_p)
             if hs == hm:
                 continue
