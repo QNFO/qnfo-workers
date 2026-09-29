@@ -64,6 +64,8 @@ name = "SEND_EMAIL"
 binding = "VAULT"
 bucket_name = "d-drive"
 
-# AMS_SCHEDULE-derived cron triggers (offset +2 CEST; re-sync with offset +1 CET before 2026-10-25)
+# AMS_SCHEDULE-derived cron triggers. CF-DOW-1: ISO->CF day-of-week corrected
+# (Cloudflare cron DOW is 1=Sunday..7=Saturday, NOT ISO 1=Monday). 21 jobs.
+# Re-sync offsets at the 2026-10-25 CET flip (+2 CEST -> +1 CET).
 [triggers]
-crons = ["30 5 * * 1"]  # scorecard only (2026-09-26 remediation: social/deprecated jobs retired with the consolidation; P7 scorecard restored)
+crons = ["15 4 * * *", "0 6,12 * * 2-6", "30 6 * * 2-6", "0 7,13 * * 2-6", "0 8 * * 2-6", "0 15 * * 6", "0 4 * * 1", "0 6 * * 2", "0 7 * * 1", "0 6 * * 7", "0 9 * * 2-6", "0 9 3 9 *", "5 3,15 * * *", "0 4 1 * *", "0 5 * * 2", "30 5 * * 2", "15 5 * * 2", "30 7 * * 2-6", "30 3 * * 2", "20 4 * * *", "10 3 * * *"]
