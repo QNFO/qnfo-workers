@@ -1,14 +1,15 @@
 {
  "counts": {
-  "already-applied": 52,
-  "error": 7,
+  "already-applied": 53,
+  "error": 8,
   "stale-anchor": 11,
-  "superseded": 6,
+  "superseded": 5,
   "undetermined": 8
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
+  "scripts/github-write-409-retry-patch.py",
   "scripts/patch-container-binding-repair-1.py",
   "scripts/patch-container-exports-map-1.py",
   "scripts/patch-cron-only-class.py",
@@ -131,9 +132,7 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json",
-    " M qnfo-ops/worker.js",
-    " M scripts/raw_put.py"
+    " M ci-status/apply-pending-report.json"
    ],
    "declared_signals": [
     ".",
@@ -142,7 +141,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(2): patch-ops-metadata-preserve-and-schema-hint.py, rawput-container-declared-sot-patch.py",
+    "LANDED(0): nothing to apply - main is current",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -175,7 +174,7 @@
    "rc": 3,
    "script": "scripts/cf-worker-deploy-preserve-meta-patch.py",
    "tail": [
-    "FAIL (fail-closed): delimiter delta changed [0, 9, -1] -> [0, 10, -1]"
+    "FAIL (fail-closed): anchor A3 metadata rebuild + fail-closed guard matched 0 times, expected exactly 1"
    ],
    "verdict": "stale-anchor"
   },
@@ -184,7 +183,7 @@
    "rc": 0,
    "script": "scripts/cf-worker-read-404-hint-patch.py",
    "tail": [
-    "MIRROR_IDENTICAL=yes",
+    "MIRROR_IDENTICAL=no",
     "MARKER_COUNT=1",
     "OK applied=0"
    ],
@@ -462,14 +461,12 @@
   },
   {
    "changed_files": [],
-   "rc": 0,
+   "rc": 1,
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
-    "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 378402 (unchanged)",
-    "parity: source==mirror"
+    "FAIL-CLOSED: already repaired (marker(s) GITHUB-409-RETRY-1) but source/mirror diverge"
    ],
-   "verdict": "already-applied"
+   "verdict": "error"
   },
   {
    "changed_files": [],
@@ -539,7 +536,7 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=378404 marker=1",
+    "  worker.js bytes=380292 marker=1",
     "  deployed-current.worker.js bytes=378404 marker=1"
    ],
    "verdict": "already-applied"
@@ -562,12 +559,25 @@
   },
   {
    "changed_files": [],
-   "rc": 0,
+   "outcome_present_in": [
+    "qnfo-ops/worker.js :: CF-WORKER-READ-404-HINT-LIST-1",
+    "qnfo-ops/deployed-current.worker.js :: CF-WORKER-READ-404-HINT-LIST-1"
+   ],
+   "rc": 3,
    "script": "scripts/patch-404hint-list-1.py",
    "tail": [
-    "MIRROR_IDENTICAL=yes",
-    "MARKER_COUNT=1",
-    "OK"
+    "ALREADY APPLIED (mirror)",
+    "MIRROR_IDENTICAL=no",
+    "FAIL(3): mirror parity broken after patch"
+   ],
+   "verdict": "superseded"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/patch-apply-trigger-1490.py",
+   "tail": [
+    "APPLY-TRIGGER-1490-1: benign no-op. The applier will land scripts/*patch*.py (notably patch-ops-metadata-preserve-and-schema-hint.py -> #1490/#1487/#1485) in this same run."
    ],
    "verdict": "already-applied"
   },
@@ -676,20 +686,13 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/worker.js"
-   ],
-   "outcome_present_in": [
-    "qnfo-ops/worker.js :: OPS-D1-SCHEMA-HINT-FULL-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-ops-metadata-preserve-and-schema-hint.py",
    "tail": [
-    "applied R6 guard: evaluate after read (#1485)",
-    "WROTE /home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/worker.js  378402 -> 380290 bytes (+1888)",
-    "OK: OPS-D1-SCHEMA-HINT-FULL-1 landed (issues #1490, #1487, #1485)"
+    "ALREADY APPLIED: OPS-D1-SCHEMA-HINT-FULL-1 present; nothing to do"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -731,18 +734,13 @@
    "verdict": "stale-anchor"
   },
   {
-   "changed_files": [
-    " M scripts/raw_put.py"
-   ],
-   "outcome_present_in": [
-    "scripts/raw_put.py :: CONTAINER-DECLARED-INERT-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/rawput-container-declared-sot-patch.py",
    "tail": [
-    "PATCHED scripts/raw_put.py (23328 -> 24433 bytes) CONTAINER-DECLARED-INERT-1"
+    "OK (already patched): scripts/raw_put.py"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -940,12 +938,11 @@
   "scripts/attachguard-xml-form-patch.py",
   "scripts/container-restore5-repair-bindings-patch.py",
   "scripts/dashboard-gate-failopen-patch.py",
-  "scripts/patch-cron-only-class-2.py",
-  "scripts/patch-ops-metadata-preserve-and-schema-hint.py",
-  "scripts/rawput-container-declared-sot-patch.py"
+  "scripts/patch-404hint-list-1.py",
+  "scripts/patch-cron-only-class-2.py"
  ],
- "total": 84,
- "ts": "2026-09-29T20:35:52.711Z",
+ "total": 85,
+ "ts": "2026-09-29T20:38:00.501Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
