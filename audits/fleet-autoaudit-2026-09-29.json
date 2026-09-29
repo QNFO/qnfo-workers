@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 19:04:02",
+  "audited_at": "2026-09-29 19:14:07",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -10,13 +10,21 @@
     "content_drift": [],
     "drift": [
       {
-        "dir": "idea-hub",
-        "live": "1.0.9-toolinv-shape-v2",
-        "repo": "1.0.8-toolinv-gate",
-        "worker": "idea-hub"
+        "dir": "qnfo-deploy-guard",
+        "live": "1.3.15-ms-failclosed",
+        "repo": "1.3.14-verifyadvance",
+        "worker": "qnfo-deploy-guard"
+      },
+      {
+        "dir": "qnfo-ops",
+        "live": "2.37.27-self-fetch-guard",
+        "repo": "2.37.26-samezone-fetch-fallback",
+        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
+    "multi_version": [],
+    "multi_version_count": 0,
     "name_resolution": true,
     "no_health_route": [
       {
@@ -400,10 +408,11 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 34,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
+      "idea-hub",
       "personal-api",
       "personal-companion",
       "q08-signal-engine",
@@ -415,7 +424,6 @@
       "qnfo-backlog-exec",
       "qnfo-cloud-ops",
       "qnfo-containers-pilot",
-      "qnfo-deploy-guard",
       "qnfo-email",
       "qnfo-fleet-control",
       "qnfo-fleet-dashboard",
@@ -427,7 +435,6 @@
       "qnfo-lifecycle",
       "qnfo-memory-mcp",
       "qnfo-observability",
-      "qnfo-ops",
       "qnfo-outreach",
       "qnfo-paper-indexer",
       "qnfo-paper-reviser",
@@ -530,11 +537,11 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.0.8-toolinv-gate",
+      "before": null,
       "http": 200,
-      "live": "1.0.9-toolinv-shape-v2",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "idea-hub"
     },
     "jnl-pipeline": {
@@ -890,11 +897,11 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": null,
+      "before": "1.3.14-verifyadvance",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.3.15-ms-failclosed",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
@@ -1114,11 +1121,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": null,
+      "before": "2.37.26-samezone-fetch-fallback",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.37.27-self-fetch-guard",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
