@@ -1,8 +1,8 @@
 {
  "counts": {
-  "already-applied": 26,
+  "already-applied": 27,
   "stale-anchor": 3,
-  "superseded": 10,
+  "superseded": 11,
   "undetermined": 5
  },
  "errored": [],
@@ -42,8 +42,7 @@
   {
    "changed_files": [
     " M ci-status/applier-doctor.json",
-    " M qnfo-containers-pilot/deployed-current.worker.js",
-    " M qnfo-containers-pilot/worker.js"
+    " M scripts/raw_put.py"
    ],
    "declared_signals": [
     ".",
@@ -55,8 +54,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=43 {'already-applied': 26, 'stale-anchor': 13, 'landed': 3, 'error': 1}",
-    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, patch-enospc-cache-1.py",
+    "SUMMARY total=45 {'already-applied': 27, 'stale-anchor': 14, 'landed': 3, 'error': 1}",
+    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, rawput-version-regex-quote-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -112,12 +111,17 @@
   },
   {
    "changed_files": [],
-   "rc": 0,
+   "declared_signals": [
+    "START-RACE-1",
+    "1.0.1-start-race-lock",
+    "_doStart"
+   ],
+   "rc": 3,
    "script": "scripts/container-start-race-patch.py",
    "tail": [
-    "ALREADY APPLIED: /home/runner/work/qnfo-workers/qnfo-workers/qnfo-containers-pilot/worker.js"
+    "FAIL-CLOSED: anchor 'constructor' matched 0 times (expected exactly 1)"
    ],
-   "verdict": "already-applied"
+   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -316,6 +320,16 @@
   {
    "changed_files": [],
    "rc": 0,
+   "script": "scripts/idea-hub-rss-stamp-gate-patch.py",
+   "tail": [
+    "already applied: /home/runner/work/qnfo-workers/qnfo-workers/idea-hub/worker.js",
+    "already applied: /home/runner/work/qnfo-workers/qnfo-workers/idea-hub/deployed-current.worker.js"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
    "script": "scripts/notdeployed-existence-probe-patch.py",
    "tail": [
     "  class UNPROBED_NO_CF_LIST was unhandled by fleet-autoaudit.py classify()",
@@ -368,23 +382,15 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-containers-pilot/deployed-current.worker.js",
-    " M qnfo-containers-pilot/worker.js"
-   ],
-   "declared_signals": [
-    "..",
-    "ENOSPC-CACHE-1",
-    "// ENOSPC-CACHE-1: apt cache + .deb archives reclaimed on cold start (issue #1445)\\n"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-enospc-cache-1.py",
    "tail": [
-    "PATCHED: qnfo-containers-pilot/worker.js (version -> 1.0.2-apt-clean-enospc)",
-    "PATCHED: qnfo-containers-pilot/deployed-current.worker.js (version -> 1.0.2-apt-clean-enospc)",
-    "RESULT: applied=2 already=0"
+    "ALREADY APPLIED: qnfo-containers-pilot/worker.js",
+    "ALREADY APPLIED: qnfo-containers-pilot/deployed-current.worker.js",
+    "RESULT: applied=0 already=2 (nothing to do)"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -434,6 +440,22 @@
    "script": "scripts/rawput-version-extract-patch.py",
    "tail": [],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M scripts/raw_put.py"
+   ],
+   "outcome_present_in": [
+    "scripts/raw_put.py :: DEPLOY-LEDGER-1"
+   ],
+   "rc": 0,
+   "script": "scripts/rawput-version-regex-quote-patch.py",
+   "tail": [
+    "  ok const QNFO_VERSION = \"1.6.4-mixed\";        -> 1.6.4-mixed",
+    "  ok let VERSION = '2.0.0-let';                 -> 2.0.0-let",
+    "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
+   ],
+   "verdict": "superseded"
   },
   {
    "changed_files": [],
@@ -549,17 +571,18 @@
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py",
+  "scripts/rawput-version-regex-quote-patch.py",
   "scripts/run-gate-internal-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 44,
- "ts": "2026-09-29T17:06:31.994Z",
+ "total": 46,
+ "ts": "2026-09-29T17:14:37.489Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
+  "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
-  "scripts/patch-enospc-cache-1.py",
   "scripts/selfheal-rate-aware-patch.py"
  ]
 }
