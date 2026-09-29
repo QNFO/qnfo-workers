@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.21-selfheal-metric-table-fix";
+var VERSION = "2.37.22-github409-retry";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1737,9 +1737,28 @@ async function githubFileWrite(env, args) {
   const body = { message, content: b64encode(content) };
   if (branch) body.branch = branch;
   if (sha) body.sha = sha;
-  const res = await githubApi(env, "PUT", "/repos/" + encPath(repo) + "/contents/" + encPath(path), body);
-  if (res.status === 201 || res.status === 200) return { ok: true, repo, path, commit: res.json && res.json.commit && res.json.commit.sha, url: res.json && res.json.content && res.json.content.html_url };
-  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300) };
+  const apiPath = "/repos/" + encPath(repo) + "/contents/" + encPath(path);
+  // GITHUB-409-RETRY-1 (issue 1372, 2026-09-29): a bare PUT returns 409/422 the moment a
+  // concurrent writer advances the branch, and this tool used to surface that as a hard
+  // failure (measured 17.5% of github_file_write calls fleet-wide). Re-read the head sha
+  // and retry, bounded, before giving up. The sha is only re-read when the file already
+  // exists, so a genuine create/create race still fails loudly instead of being silently
+  // converted into an overwrite.
+  let res = await githubApi(env, "PUT", apiPath, body);
+  let attempts = 1;
+  let conflictStatus = null;
+  while (attempts < 4 && res && (res.status === 409 || res.status === 422)) {
+    conflictStatus = res.status;
+    const cur = await githubApi(env, "GET", apiPath + "?ref=" + encodeURIComponent(branch || "main"), void 0);
+    const curSha = cur && cur.json && cur.json.sha ? String(cur.json.sha) : null;
+    if (!curSha) break;
+    body.sha = curSha;
+    await new Promise(function (r) { return setTimeout(r, 250 * attempts); });
+    res = await githubApi(env, "PUT", apiPath, body);
+    attempts++;
+  }
+  if (res.status === 201 || res.status === 200) return { ok: true, repo, path, commit: res.json && res.json.commit && res.json.commit.sha, url: res.json && res.json.content && res.json.content.html_url, attempts, sha_retried: attempts > 1 };
+  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300), attempts, conflict_status: conflictStatus };
 }
 __name(githubFileWrite, "githubFileWrite");
 __name2(githubFileWrite, "githubFileWrite");
