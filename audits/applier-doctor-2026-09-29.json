@@ -2,7 +2,7 @@
  "counts": {
   "already-applied": 29,
   "stale-anchor": 3,
-  "superseded": 10,
+  "superseded": 11,
   "undetermined": 6
  },
  "errored": [],
@@ -53,7 +53,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=47 {'already-applied': 29, 'stale-anchor': 15, 'landed': 2, 'error': 1}",
+    "SUMMARY total=48 {'already-applied': 29, 'stale-anchor': 16, 'landed': 2, 'error': 1}",
     "LANDED(2): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -130,6 +130,22 @@
     "ABORT: pre-patch VERSION anchor occurs 0 times in qnfo-ops/worker.js"
    ],
    "verdict": "stale-anchor"
+  },
+  {
+   "changed_files": [
+    " M qnfo-fleet-dashboard/worker.js"
+   ],
+   "outcome_present_in": [
+    "qnfo-fleet-dashboard/worker.js :: GATE-EVAL-METRIC-STALENESS-FAILOPEN-1"
+   ],
+   "rc": 1,
+   "script": "scripts/dashboard-gate-failopen-patch.py",
+   "tail": [
+    "  no coalescing drift read left        FAIL",
+    "  marker present                       OK",
+    "FAIL-CLOSED: post-conditions failed: no coalescing drift read left"
+   ],
+   "verdict": "superseded"
   },
   {
    "changed_files": [
@@ -585,6 +601,7 @@
   "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/attachguard-xml-form-patch.py",
   "scripts/cf-urllib-ua-1010-patch.py",
+  "scripts/dashboard-gate-failopen-patch.py",
   "scripts/deploy-guard-ms-failclosed-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
@@ -593,8 +610,8 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 48,
- "ts": "2026-09-29T17:18:45.010Z",
+ "total": 49,
+ "ts": "2026-09-29T17:20:40.501Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
