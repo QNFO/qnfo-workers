@@ -78,7 +78,7 @@ AUDIT_DB = os.environ.get("CF_AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e
 # 2026-09-29T16:13:04Z, while the bundle it shipped declares
 # const QNFO_VERSION = "1.6.3-version-sot". Same alternation as
 # scripts/deploy-drift-guard.py CONST, so the two tools cannot disagree.
-VERSION_RE = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*"([^"]+)"')
+VERSION_RE = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*["\x27]([^"\x27]+)["\x27]')
 
 
 def token():
