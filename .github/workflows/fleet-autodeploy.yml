@@ -14,6 +14,24 @@ name: fleet-autodeploy
 #   * Repo-ahead workers now have an automatic, verified path to live via the repo's own
 #     binding-preserving deployer (scripts/raw_put.py -> CF /content PUT).
 #
+# TRIGGER-DEAD-1 (2026-09-29) — WHY `schedule` ALONE WAS NOT A WRITER.
+#   This workflow's ONLY trigger was `schedule: cron "43 */2 * * *"`. The GitHub
+#   `schedule` event has never fired on this repository (SCHEDULE-EVENT-NEVER-FIRES-1,
+#   already documented in apply-backlog-health-cheap.yml, which is why that workflow
+#   deliberately declares no cron). Measured consequence after FLEET-AUTOAUDIT-1 landed:
+#   worker_live_audit still held 36 rows, ALL stamped `2026-09-27 17:23:22` (MIN = MAX,
+#   0 rows after 2026-09-28), and audits/ contained no fleet-autoaudit-<date>.json.
+#   A writer that is only reachable from an event that never fires is not a writer.
+#   The audit is therefore now ALSO driven by events that provably fire on this repo:
+#     * `push` — the mechanism deploy-qnfo-ops.yml and the whole apply-*.yml family
+#       already depend on, narrowed to the audit's own inputs so it cannot loop;
+#     * `workflow_run` — chained off mirror-sync (on: push, i.e. every push to main),
+#       deploy-qnfo-ops and apply-backlog-health-cheap, giving a continuous audit cadence
+#       without depending on any cron.
+#   The cron is kept: if GitHub schedules ever start firing here it simply adds a run.
+#   The `[skip ci]` on the audit-artifact commit means that commit cannot re-trigger this
+#   workflow, so the push/workflow_run chain is acyclic.
+#
 # SAFETY (deliberate, read before enabling FLEET_AUTODEPLOY)
 #   Auto-deploy is gated behind BOTH a repository variable `FLEET_AUTODEPLOY == 'true'`
 #   and the dispatch input `mode=apply`. Default is audit-only. Only workers whose repo
@@ -21,14 +39,27 @@ name: fleet-autodeploy
 #   Repo-BEHIND (live-ahead) workers, content-drift-only workers, and workers with no
 #   version constant are NEVER overwritten -- mirror-autosync.yml documents the regression
 #   class where an unattended copy reverted a live fix (qnfo-lifecycle 1.6.2-cronconsolidate).
+#   TRIGGER-DEAD-1 does NOT loosen this gate: every added trigger still runs in
+#   audit-only mode unless the repository variable is set.
 #
 # ADVERSARIAL: a green run proves version parity (and, in --content mode, bundle-hash
 # parity). It does NOT prove the fleet works: a worker can answer /health and still 500 on
-# its real routes, and content hashing masks formatting-only differences.
+# its real routes, and content hashing masks formatting-only differences. It also cannot
+# see a worker whose live artifact is a DIFFERENT FILE from the repo artifact but carries
+# the same VERSION string — version parity is not content parity.
 
 on:
   schedule:
     - cron: "43 */2 * * *"
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fleet-autodeploy.yml'
+      - 'scripts/fleet-autoaudit.py'
+      - 'scripts/deploy-drift-guard.py'
+  workflow_run:
+    workflows: ["mirror-sync", "deploy-qnfo-ops", "apply-backlog-health-cheap"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       mode:
