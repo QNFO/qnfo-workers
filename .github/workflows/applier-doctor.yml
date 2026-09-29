@@ -1,0 +1,96 @@
+name: applier-doctor
+
+# APPLIER-DOCTOR-1 (issues #1395 CI-APPLIER-NEVER-APPLIES-1 and #1383
+# ANCHOR-INVALIDATION-RED-JOB-1).
+#
+# Runs scripts/applier-doctor.py, which executes every scripts/*patch*.py against
+# a clean tree and classifies each as already-applied / applied-now / stale-anchor
+# / error. This makes the two previously-invisible applier failure modes
+# measurable on every push that touches a patch script.
+#
+# WHY THIS WORKFLOW IS WRITTEN THIS WAY (the class it must not join):
+#   * WORKFLOW-YAML-LINT-1 -- an unquoted colon inside a step NAME made
+#     deploy-qnfo-ops.yml unparseable, so GitHub created runs with ZERO jobs and
+#     no log. Every step name below is colon-free; workflow-lint.yml gates it.
+#   * FAILURE-ARTIFACT-LOSS-1 / #1381 -- appliers that only commit on success
+#     leave no trace when they fail. The doctor step is continue-on-error and the
+#     ci-status artifact is written with if always, so a run that finds nothing
+#     is still visible in ci-status/applier-doctor.json.
+#   * COMMITBACK-DRIFT-1 / the 409 class -- the commit-back retries with
+#     pull --rebase --autostash so a concurrent writer cannot strand it.
+#   * The GitHub `schedule` event has never fired in this repo, so this workflow
+#     is push-triggered plus workflow_dispatch -- never schedule-only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/applier-doctor.py"
+      - "scripts/*patch*.py"
+      - ".github/workflows/applier-doctor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: applier-doctor
+  cancel-in-progress: false
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run the applier doctor
+        id: doctor
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          export REPO_ROOT="$GITHUB_WORKSPACE"
+          export APPLIER_DOCTOR_TIMEOUT=30
+          rc=0
+          python3 scripts/applier-doctor.py || rc=$?
+          echo "doctor_rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit the doctor report
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/applier-doctor.json audits/ || true
+          if git diff --cached --quiet; then
+            echo "NO_CHANGES report unchanged"
+            exit 0
+          fi
+          git commit -m "ci(status): applier-doctor report [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "PUSH_FAILED after 5 attempts"
+          exit 1
+
+      - name: Surface the verdict
+        if: always()
+        run: |
+          set -uo pipefail
+          echo "doctor_rc=${{ steps.doctor.outputs.doctor_rc }}"
+          if [ -f ci-status/applier-doctor.json ]; then
+            cat ci-status/applier-doctor.json
+          else
+            echo "MISSING ci-status/applier-doctor.json - the doctor did not complete"
+          fi
