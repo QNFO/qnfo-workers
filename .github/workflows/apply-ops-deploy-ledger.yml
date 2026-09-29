@@ -1,0 +1,160 @@
+name: apply-ops-deploy-ledger
+
+# OPS-DEPLOY-LEDGER-1 (2026-09-29) -- issues #1373 and #1371.
+# See scripts/ops-deploy-ledger-patch.py for the full defect record.
+#
+# SUMMARY: qnfo-ops.cfWorkerDeploy() is the implementation behind this
+# endpoint's OWN `cf_worker_deploy` tool. It performed the CF API PUT and
+# returned without writing anything to qnfo-audit.deployment_history (verified
+# 2026-09-29T15:41Z: ZERO occurrences of the string "deployment_history" in the
+# 361,253-byte source at main). The fleet's own deploy ledger therefore could
+# not see deploys made through the ops endpoint, and such a deploy could not be
+# correlated or rolled back by version_id.
+#
+# This workflow mirrors the repository's established apply-* convention:
+#   1. patch the artifact (idempotent, fail-closed)
+#   2. verify it still parses as an ES module and carries the new marker
+#   3. verify the repo/mirror pair is byte-identical
+#   4. deploy with the canonical binding-preserving deployer
+#      (scripts/raw_put.py -> CF API /content PUT, BINDING-PRESERVATION-1 +
+#      COMPAT-PRESERVE-1; a wrangler deploy would drop live bindings)
+#   5. verify the live bundle actually carries the new VERSION (bounded retry -
+#      CF /content is eventually consistent, DEPLOY-VERIFY-RACE-1)
+#   6. commit back race-safely (pull --rebase --autostash + bounded retry;
+#      COMMITBACK-PUSH-RACE-1 - other fleet agents push every few minutes)
+#   7. publish a machine-readable status artifact so the outcome is verifiable
+#      through the GitHub contents API without the Actions API
+#
+# NOTE ON SCHEDULES: SCHEDULE-EVENT-NEVER-FIRES-1 - the GitHub `schedule`
+# event has never fired on this repository, so this workflow deliberately
+# declares NO cron. It fires on push (to itself or its patch script) and on
+# manual dispatch.
+#
+# NOTE ON STEP NAMES: WORKFLOW-YAML-LINT-1 - an unquoted `: ` inside a step
+# name is a YAML parse error and produces a zero-job run (conclusion=failure,
+# no job log, watchdog classifies it as `unknown`). Every step name below that
+# contains a colon is quoted.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/ops-deploy-ledger-patch.py"
+      - ".github/workflows/apply-ops-deploy-ledger.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-ops-deploy-ledger
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  patch-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "Patch cfWorkerDeploy (fail-closed, idempotent)"
+        id: guard
+        run: python3 scripts/ops-deploy-ledger-patch.py
+
+      - name: Verify artifact parses as an ES module
+        run: |
+          set -euo pipefail
+          cp qnfo-ops/worker.js /tmp/ops.mjs
+          node --check /tmp/ops.mjs
+          echo "syntax OK"
+          grep -cF "OPS-DEPLOY-LEDGER-1" qnfo-ops/worker.js
+          grep -cF "INSERT INTO deployment_history" qnfo-ops/worker.js
+
+      - name: Verify source/mirror parity (blocking)
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "source and deployed-current mirror are byte-identical"
+
+      - name: "Deploy qnfo-ops (binding-preserving CF API /content PUT)"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
+
+      - name: Verify live VERSION (bounded retry - /content is eventually consistent)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          V=$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "expect=$V"
+          ok=0
+          for i in $(seq 1 12); do
+            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
+              -o /tmp/live.js || true
+            bytes=$(wc -c < /tmp/live.js 2>/dev/null || echo 0)
+            has_v=$(grep -cF "$V" /tmp/live.js 2>/dev/null || true)
+            has_marker=$(grep -cF "OPS-DEPLOY-LEDGER-1" /tmp/live.js 2>/dev/null || true)
+            echo "attempt=$i bytes=$bytes expect=$V has_version=$has_v has_marker=$has_marker"
+            if [ "$has_v" -ge 1 ] && [ "$has_marker" -ge 1 ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::VERIFY-FAILED: live qnfo-ops did not converge to $V within 12 attempts (~3 min)"
+            exit 1
+          fi
+
+      - name: Publish machine-readable status
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/ops-deploy-ledger.json <<EOF
+          {
+            "workflow": "apply-ops-deploy-ledger",
+            "issue": "1373 / OPS-DEPLOY-LEDGER-1",
+            "guard_exit": "${{ steps.guard.outcome }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/ops-deploy-ledger.json
+
+      - name: "Commit back (race-safe: pull --rebase + bounded retry)"
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add qnfo-ops/worker.js \
+                  qnfo-ops/deployed-current.worker.js \
+                  ci-status/ops-deploy-ledger.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit (patch was a no-op)"
+            exit 0
+          fi
+          git commit -m "fix(qnfo-ops): OPS-DEPLOY-LEDGER-1 cf_worker_deploy writes deployment_history (#1373) [skip ci]"
+          for i in 1 2 3 4 5; do
+            echo "commit-back attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "commit-back OK on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::COMMITBACK-PUSH-RACE-1: could not land the repair after 5 attempts"
+          exit 1
