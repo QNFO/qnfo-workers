@@ -1,0 +1,98 @@
+name: apply-router-transport-failover
+
+# ROUTER-TRANSPORT-FAILOVER-1 (2026-09-29).
+#
+# Applies scripts/router-transport-failover-patch.py to qnfo-research-exec/worker.js and its
+# deployed-current mirror, then commits the result to the branch that triggered the run.
+# Modelled on apply-d1guard-literal-aware.yml, the repo's sanctioned commit-capable repair
+# actor.
+#
+# WHY THIS FILE EXISTS: scripts/router-transport-failover-patch.py is a repair with no actor
+# unless a workflow runs it. The repo has already paid for that mistake twice - a patch script
+# committed without an applier left 2.37.17-d1-schema-hint live, and the applier-doctor
+# workflow exists specifically to detect stale-anchor and never-landed appliers.
+#
+# NOTE the commit message is passed as single-line -m flags and never as an inline multi-line
+# string: a multi-line `git commit -m "..."` inside a `run: |` block scalar puts its
+# continuation lines at column 1, terminates the scalar, and makes the whole workflow file
+# invalid YAML - the documented defect that made an earlier applier create runs with zero jobs,
+# and that also killed deploy-qnfo-ops.yml on 2026-09-29 through an unquoted colon inside a
+# step name. Step names below therefore contain no colons.
+
+on:
+  push:
+    paths:
+      - 'scripts/router-transport-failover-patch.py'
+      - '.github/workflows/apply-router-transport-failover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-router-transport-failover
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch, fail-closed and node-check gated
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/router-transport-failover-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: Verify the deployed-current mirror stays in sync
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 scripts/mirror-guard.py
+
+      - name: Commit and push to the triggering branch
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-routerbot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-research-exec 0.9.20-router-host-failover): routerFetch must not depend on a blocked workers.dev subrequest"
+          BODY="ROUTER-TRANSPORT-FAILOVER-1: routerFetch() used env.QNFO_AI when that service binding was present and otherwise a plain public fetch to https://qnfo-ai.q08.workers.dev. qnfo-research-exec never had the QNFO_AI binding, so every gwCall and the corpus-search helper took the public path. The router cannot itself emit a 404 on POST /v1/chat/completions - its only 404 sites are the two R2 object routes and the catch-all, line 2429 states the model id never 404s, and handleChat has no 404 return path - so the 404 the caller logs as gateway HTTP 404 originates at the Worker-to-Worker transport. Evidence: cloud_ops_events kind=gw-fallback n=608, first 2026-09-16T10:41:55Z, last 2026-09-29T16:17:23Z, job=qnfo-research-exec. The fix adds an ordered host failover (custom domain first, workers.dev second) that keeps the Response contract intact, logs a one-time gw-transport diagnostic when the binding is absent, and rethrows only when every host throws. Non-regressive: the failure path is unchanged and the success path now uses the intended router model instead of the Workers AI fallback. Refs agent_issues 1406, 1222."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          for i in 1 2 3 4 5; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            echo "push attempt $i rejected; rebasing onto origin/${GITHUB_REF_NAME}"
+            git fetch origin "${GITHUB_REF_NAME}" || true
+            git rebase "origin/${GITHUB_REF_NAME}" || git rebase --abort || true
+            sleep $((i * 5))
+          done
+          echo "push failed after 5 attempts"
+          exit 1
