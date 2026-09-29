@@ -3,7 +3,7 @@
   "already-applied": 33,
   "error": 1,
   "stale-anchor": 3,
-  "superseded": 11,
+  "superseded": 12,
   "undetermined": 7
  },
  "errored": [
@@ -35,6 +35,25 @@
    "tail": [
     "OK patched scripts/apply-pending-patches.py (9517 bytes)",
     "APPLIER-CLASSIFY-SIGNATURE-1 + APPLIER-RETIRE-1 applied"
+   ],
+   "verdict": "superseded"
+  },
+  {
+   "changed_files": [
+    " M scripts/apply-pending-patches.py",
+    " M scripts/version-anchor-normalize-patch.py"
+   ],
+   "outcome_present_in": [
+    "scripts/apply-pending-patches.py :: APPLIER-CLASSIFY-UNMASKED-1",
+    "scripts/version-anchor-normalize-patch.py :: normalize_version_anchors",
+    "scripts/version-anchor-normalize-patch.py :: VERSION-ANCHOR-DRIFT-1"
+   ],
+   "rc": 0,
+   "script": "scripts/applier-classify-unmasked-patch.py",
+   "tail": [
+    "OK patched scripts/apply-pending-patches.py (6974 bytes)",
+    "OK patched scripts/version-anchor-normalize-patch.py (9308 bytes)",
+    "APPLIER-CLASSIFY-UNMASKED-1 applied to 2 file(s)"
    ],
    "verdict": "superseded"
   },
@@ -75,7 +94,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=54 {'already-applied': 33, 'landed': 4, 'stale-anchor': 16, 'error': 1}",
+    "SUMMARY total=55 {'already-applied': 33, 'landed': 4, 'stale-anchor': 17, 'error': 1}",
     "LANDED(4): applier-classify-signature-and-retire-patch.py, cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, self-fetch-guard-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -677,6 +696,7 @@
  ],
  "superseded": [
   "scripts/applier-classify-signature-and-retire-patch.py",
+  "scripts/applier-classify-unmasked-patch.py",
   "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/attachguard-xml-form-patch.py",
   "scripts/cf-urllib-ua-1010-patch.py",
@@ -688,8 +708,8 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 55,
- "ts": "2026-09-29T19:07:38.697Z",
+ "total": 56,
+ "ts": "2026-09-29T19:11:01.342Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
