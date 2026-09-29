@@ -18,20 +18,30 @@ name: deploy-pages-qnfo-publications
 #     domains        = qnfo-publications.pages.dev, archive.qnfo.org
 #   The project holds EXACTLY ONE asset. A `wrangler pages deploy dist/` full
 #   replace therefore swaps /index.html for /index.html and can delete nothing.
-#   The prior manual-only gate existed solely because that fact was unproven.
-#   It is now proven, so the push trigger below is safe.
+#
+# FROZEN-LITERAL-GATE-1 (fixed 2026-09-29T17:20Z)
+#   The gates below previously hard-pinned the literal '446 QNFO papers'.
+#   Commit 5c3e3262 (#1111 PUBLIC-COUNTS-COVERAGE-DRIFT-1) deliberately removed
+#   that drifting literal -- so Gate A began failing and the deploy aborted on
+#   every subsequent push, leaving production stale. The same class of defect as
+#   the version-literal pins that blocked other deploys today.
+#   The gates are now PROPERTY-BASED. They assert invariants that must hold for
+#   any correct version of the page, so a future count correction cannot break
+#   the deployer again.
 #
 # TRIGGERS
 #   1. push to main touching the source page (or this workflow) -> autonomous deploy.
 #   2. workflow_dispatch with confirm=DEPLOY -> deliberate manual re-publish.
-#      (dispatch does NOT require the confirm token when the input is left blank
-#       only if the event is a push; a dispatch always requires DEPLOY.)
 #
-# FAIL-CLOSED GATES (unchanged):
-#   A. Content gate on the staged asset: repaired markers present, corruption
-#      markers absent, else exit 1 before any network write.
-#   B. Post-deploy live verification against https://archive.qnfo.org/.
-#   C. If the staged file is missing or the project name is empty -> exit 1.
+# FAIL-CLOSED GATES:
+#   A. Content gate on the staged asset:
+#        - structural repair present   : <style> tag
+#        - provenance present          : 'count basis (#1111)'
+#        - #1111 invariant respected   : NO '<n> QNFO papers' drifting literal
+#        - corruption markers absent   : '658+', '2,500+', trailing grid-template-column
+#   B. Post-deploy live verification against https://archive.qnfo.org/ using the
+#      same provenance marker, which only exists in the corrected bytes.
+#   C. If the staged file is missing or implausibly small -> exit 1.
 
 on:
   workflow_dispatch:
@@ -94,15 +104,29 @@ jobs:
           bytes=$(wc -c < dist/index.html)
           echo "staged bytes: $bytes"
           [ "$bytes" -gt 5000 ] || { echo "::error::staged page implausibly small ($bytes)"; exit 1; }
-          # repaired markers MUST be present
+
+          # --- structural repair MUST be present ---
           grep -q '<style>' dist/index.html || { echo "::error::style tag not repaired"; exit 1; }
-          grep -q '8,349 nodes' dist/index.html || { echo "::error::graph counts not repaired"; exit 1; }
-          grep -q '446 QNFO papers' dist/index.html || { echo "::error::paper count not repaired"; exit 1; }
-          # corruption markers MUST be absent
+
+          # --- count provenance MUST be present (FROZEN-LITERAL-GATE-1) ---
+          # This comment records the measured basis for the counts and is the
+          # freshness marker Gate B also uses. It must survive any future edit.
+          grep -q 'count basis (#1111)' dist/index.html || { echo "::error::count provenance comment (#1111) missing"; exit 1; }
+
+          # --- #1111 INVARIANT: no drifting paper-count literal may be published ---
+          # The page must NOT hardcode a '<number> QNFO papers' figure, because
+          # the underlying corpus count is disputed across surfaces and drifts.
+          if grep -qE '[0-9][0-9,]* QNFO papers' dist/index.html; then
+            echo "::error::drifting hardcoded paper-count literal present (violates #1111)"
+            grep -nE '[0-9][0-9,]* QNFO papers' dist/index.html || true
+            exit 1
+          fi
+
+          # --- corruption markers MUST be absent ---
           if grep -qE 'grid-template-column$' dist/index.html; then echo "::error::truncated grid rule still present"; exit 1; fi
           if grep -q '658+' dist/index.html; then echo "::error::stale 658+ count still present"; exit 1; fi
           if grep -q '2,500+' dist/index.html; then echo "::error::stale 2,500+ count still present"; exit 1; fi
-          echo "content gate passed"
+          echo "content gate passed (property-based)"
 
       - name: Upload staged artifact
         uses: actions/upload-artifact@v4
@@ -125,10 +149,14 @@ jobs:
           for i in 1 2 3 4 5; do
             code=$(curl -sS --max-time 25 -o /tmp/live.html -w '%{http_code}' https://archive.qnfo.org/ || echo 000)
             echo "attempt $i http=$code bytes=$(wc -c < /tmp/live.html 2>/dev/null || echo 0)"
-            if [ "$code" = "200" ] && grep -q '8,349 nodes' /tmp/live.html && grep -q '446 QNFO papers' /tmp/live.html; then
+            if [ "$code" = "200" ] && grep -q 'count basis (#1111)' /tmp/live.html; then
               grep -q '<style>' /tmp/live.html || { echo "::error::live style tag still malformed"; exit 1; }
               if grep -q '658+' /tmp/live.html; then echo "::error::live still serves stale 658+"; exit 1; fi
-              echo "VERIFY_OK archive.qnfo.org now serves the repaired page"
+              if grep -qE '[0-9][0-9,]* QNFO papers' /tmp/live.html; then
+                echo "::error::live still publishes a drifting paper-count literal (violates #1111)"
+                exit 1
+              fi
+              echo "VERIFY_OK archive.qnfo.org now serves the corrected page"
               exit 0
             fi
             sleep 15
