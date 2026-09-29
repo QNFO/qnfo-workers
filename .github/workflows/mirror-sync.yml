@@ -20,12 +20,19 @@ name: mirror-sync
 # those. This closes the gap between the push that bumps a version and the push that
 # syncs the mirror, so a mirror is never left behind.
 #
+# MIRROR-MISSING-REPAIR-1 (2026-09-29): the staging step used `git add -u`, which
+# stages only MODIFIED TRACKED files. A MISSING mirror is by definition an UNTRACKED
+# NEW file, so even after mirror-guard.py --fix learned to regenerate one, this
+# workflow could never commit it -- the repair was invisible. `git add -u` is
+# therefore replaced by an explicit pathspec that includes new files. Both halves of
+# the defect (guard never created it; workflow could never stage it) are now fixed.
+#
 # This is deliberately a SEPARATE workflow from mirror-guard.yml: the guard stays a
 # gate (it can still fail on CAPTURED / unresolvable drift), while this workflow is
 # the repair actor. detect -> act -> verify.
 #
 # Invariants:
-#   - rewrites only already-tracked */deployed-current.worker.js files
+#   - rewrites only */deployed-current.worker.js files
 #   - commits only when mirror-guard.py --fix actually changed a file
 #   - re-verifies with a plain `mirror-guard.py` before committing
 #   - never leaves the workflow red on a lost push race: the next push re-triggers
@@ -72,13 +79,14 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/mirror-guard.py --fix
-          if git diff --quiet; then
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard -- '*/deployed-current.worker.js')" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "no lagging mirrors on this push"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "--- mirrors regenerated ---"
             git diff --stat
+            git ls-files --others --exclude-standard -- '*/deployed-current.worker.js'
           fi
 
       - name: Verify the regenerated mirrors leave the guard green
@@ -94,14 +102,17 @@ jobs:
           set -euo pipefail
           git config user.name  "qnfo-mirror-bot"
           git config user.email "ops@qnfo.org"
-          git add -u
+          # MIRROR-MISSING-REPAIR-1: `git add -u` cannot stage a newly created
+          # mirror. Stage the mirror paths explicitly so both regenerated (modified)
+          # and newly created (untracked) mirrors are included.
+          git add -A -- '*/deployed-current.worker.js'
           if git diff --cached --quiet; then
             echo "nothing staged after add; exiting"
             exit 0
           fi
           git diff --cached --stat
           SUBJECT="chore(mirror-guard): auto-sync lagging deployed-current mirrors"
-          BODY="MIRROR-STALENESS-DEPLOY-FAIL-1: the canonical deploy reads <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the mirror in the same commit leaves the deploy route verifying a stale version and failing closed with an opaque ok=0. Regenerated from source by scripts/mirror-guard.py --fix; only LAG mirrors (same constant names, different values) are touched. Verified green with a plain mirror-guard.py run before committing."
+          BODY="MIRROR-STALENESS-DEPLOY-FAIL-1: the canonical deploy reads <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the mirror in the same commit leaves the deploy route verifying a stale version and failing closed with an opaque ok=0. Regenerated from source by scripts/mirror-guard.py --fix; only LAG mirrors (same constant names, different values) and MISSING mirrors with an import-free, non-empty source are touched. Verified green with a plain mirror-guard.py run before committing."
           FOOT="Co-authored-by: qnfo-mirror-bot <ops@qnfo.org>"
           git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
           for i in 1 2 3; do
