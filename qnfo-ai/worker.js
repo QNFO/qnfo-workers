@@ -1132,7 +1132,10 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   // "unresponsive" on model=auto for science/high-complexity queries. Each stage now takes at
   // most min(stageCap, remaining); stages are skipped once the budget is spent, falling back to
   // whatever text we already have.
-  const ENSEMBLE_BUDGET_MS = 45e3;
+  // ENSEMBLE-BUDGET-3 (2026-09-29): the 45e3 total deadline was smaller than the real leg
+  // latencies (measured 31 s - 145 s per leg), so every stage was cut off and the ensemble
+  // always returned FALLBACK_TEXT. 120e3 fits inside the caller's 24e4 ms abort.
+  const ENSEMBLE_BUDGET_MS = 120e3;
   // ENSEMBLE-BUDGET-2 (2026-09-29): stage-share caps. Previously every stage took
   // Math.min(<cap>, _remaining()) with the primary capped at 4e4 inside a 45e3 budget, so a
   // slow primary left ~0 ms for each fallback and the ensemble was guaranteed to return
@@ -1156,14 +1159,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
-    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), _stageCap(0.5, 8e3), "ensemble-primary");
+    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), _stageCap(0.5, 2e4), "ensemble-primary");
     primaryText = extractWAContent(primary);
   } catch (e) {
     primaryText = "";
   }
   if (!primaryText) {
     try {
-      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), _stageCap(0.3, 6e3), "ensemble-fallback");
+      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), _stageCap(0.3, 1.5e4), "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
     } catch (e2) {
@@ -1174,7 +1177,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (!primaryText) {
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), _stageCap(0.15, 5e3), "ensemble-primary-retry");
+      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), _stageCap(0.15, 8e3), "ensemble-primary-retry");
       const rt = extractWAContent(retry);
       if (rt && String(rt).trim()) {
         primaryText = rt;
