@@ -22,6 +22,16 @@ name: apply-selfheal-metric-fix
 # VERSION-PIN-AGNOSTIC-1 (issue 1355): this preflight asserts the FIXED PROPERTIES, never a
 # frozen version literal. A stale version pin silently blocked two real fixes on 2026-09-29.
 #
+# PUSH-RACE-RETRY-1 (issue 1373, 2026-09-29): the commit-back step used to run a bare
+#   `git push origin HEAD:main`. This repository lands ~12 commits per 2 minutes from
+#   concurrent writers (qnfo-ci + agent sessions), so a non-fast-forward rejection was the
+#   normal case, not the exception: the applier ran, the push was refused, and the fix was
+#   dropped on the floor with only a red run to show for it. Reproduced on main today:
+#   scripts/selfheal-metric-patch.py and this workflow were both present on main from
+#   15:39Z, yet qnfo-ops/worker.js still read 2.37.20 with none of the TELEMETRY-TRUTH-1
+#   markers. The push now rebases onto the live branch and retries, so a concurrent writer
+#   costs a retry instead of the fix.
+#
 # DEPLOY: scripts/raw_put.py PUTs the CF API /content endpoint, which updates CODE ONLY and
 # preserves live bindings (BINDING-PRESERVATION-1); it is fail-closed. The applier writes
 # worker.js AND its deployed-current mirror in one commit so mirror-guard stays green and
@@ -90,7 +100,7 @@ jobs:
           cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
           echo "qnfo-ops source and mirror are byte-identical"
 
-      - name: Commit and push to the triggering branch
+      - name: Commit and push (PUSH-RACE-RETRY-1)
         if: steps.apply.outputs.changed == 'true'
         run: |
           set -euo pipefail
@@ -106,7 +116,19 @@ jobs:
           BODY="Issue 1370: telemetry_report() counted open self-heal tickets with FROM agent_issues WHERE category='telemetry-self-heal', but telemetry_analyze() INSERTs into issue_ledger. Verified live 2026-09-29 15:38Z: agent_issues returned 0 while issue_ledger held 8 open rows, so the report advertised open_self_heal_issues=0 against 8 genuinely open tickets. The counter now reads issue_ledger. Issue 1165/1353: the failure census summed every status='error' row; all 8 distinct recent ops_d1_query errors were verified to carry a real D1 error in meta.resultOk=false (no such column: worker) i.e. malformed SQL authored by the calling agent while probing an unknown schema, not a malfunction of the tool. The census now excludes that class and adds an absolute error gate (_errs >= 25) beside the rate gate, which is the high-volume low-rate blind spot issue 1165 named. The applier writes both worker.js and its deployed-current mirror so the fleet redeploy cron cannot revert the fix."
           FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
           git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
-          git push origin "HEAD:${{ github.ref_name }}"
+          BRANCH="${{ github.ref_name }}"
+          for i in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase --autostash "origin/$BRANCH" || git rebase --abort || true
+            if git push origin "HEAD:$BRANCH"; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i (concurrent writer); retrying"
+            sleep 5
+          done
+          echo "::error::push failed after 5 attempts - fix NOT applied"
+          exit 1
 
   deploy:
     needs: apply
