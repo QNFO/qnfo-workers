@@ -1,11 +1,14 @@
 {
  "counts": {
-  "already-applied": 29,
+  "already-applied": 33,
+  "error": 1,
   "stale-anchor": 3,
   "superseded": 11,
-  "undetermined": 6
+  "undetermined": 7
  },
- "errored": [],
+ "errored": [
+  "scripts/dashboard-gate-failopen-patch.py"
+ ],
  "marker": "APPLIER-DOCTOR-2",
  "never_landed": [],
  "results": [
@@ -17,6 +20,23 @@
     "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M scripts/apply-pending-patches.py"
+   ],
+   "outcome_present_in": [
+    "scripts/apply-pending-patches.py :: APPLIER-CLASSIFY-SIGNATURE-1",
+    "scripts/apply-pending-patches.py :: APPLIER-RETIRE-1",
+    "scripts/apply-pending-patches.py :: if \"already applied\" in low and \"patched\" not in low:"
+   ],
+   "rc": 0,
+   "script": "scripts/applier-classify-signature-and-retire-patch.py",
+   "tail": [
+    "OK patched scripts/apply-pending-patches.py (9517 bytes)",
+    "APPLIER-CLASSIFY-SIGNATURE-1 + APPLIER-RETIRE-1 applied"
+   ],
+   "verdict": "superseded"
   },
   {
    "changed_files": [],
@@ -41,7 +61,9 @@
   },
   {
    "changed_files": [
-    " M ci-status/applier-doctor.json"
+    " M ci-status/applier-doctor.json",
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -53,8 +75,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=48 {'already-applied': 29, 'stale-anchor': 16, 'landed': 2, 'error': 1}",
-    "LANDED(2): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py",
+    "SUMMARY total=54 {'already-applied': 33, 'landed': 4, 'stale-anchor': 16, 'error': 1}",
+    "LANDED(4): applier-classify-signature-and-retire-patch.py, cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, self-fetch-guard-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -132,20 +154,15 @@
    "verdict": "stale-anchor"
   },
   {
-   "changed_files": [
-    " M qnfo-fleet-dashboard/worker.js"
-   ],
-   "outcome_present_in": [
-    "qnfo-fleet-dashboard/worker.js :: GATE-EVAL-METRIC-STALENESS-FAILOPEN-1"
-   ],
+   "changed_files": [],
    "rc": 1,
    "script": "scripts/dashboard-gate-failopen-patch.py",
    "tail": [
-    "  no coalescing drift read left        FAIL",
-    "  marker present                       OK",
-    "FAIL-CLOSED: post-conditions failed: no coalescing drift read left"
+    "=== GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 rev2 ===",
+    "  already applied: select-freshness",
+    "FAIL-CLOSED: anchor 'freshness-gate' matched 0 times in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-dashboard/worker.js"
    ],
-   "verdict": "superseded"
+   "verdict": "error"
   },
   {
    "changed_files": [
@@ -225,6 +242,15 @@
   },
   {
    "changed_files": [],
+   "rc": 0,
+   "script": "scripts/driftguard-multi-version-ahead-exclusion-patch.py",
+   "tail": [
+    "already applied: /home/runner/work/qnfo-workers/qnfo-workers/scripts/deploy-drift-guard.py"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
    "declared_signals": [
     "DRIFT-GUARD-SERVER-VERSION-1",
     "DUP-WORKER-NAME-DIR-1",
@@ -297,7 +323,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 370008 (unchanged)",
+    "bytes: 372362 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -359,8 +385,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=370010 marker=1",
-    "  deployed-current.worker.js bytes=370010 marker=1"
+    "  worker.js bytes=372364 marker=1",
+    "  deployed-current.worker.js bytes=372364 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -481,6 +507,17 @@
   {
    "changed_files": [],
    "rc": 0,
+   "script": "scripts/research-exec-terminal-rescue-patch.py",
+   "tail": [
+    "markers: TERMINAL-RESCUE-1=1 REVISE-RETRY-1=1 RECONCILE-RETRY-1=1",
+    "version: 0.9.22-terminal-rescue",
+    "changed_files: 0"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
    "script": "scripts/router-transport-failover-patch.py",
    "tail": [
     "already-patched: qnfo-research-exec/worker.js",
@@ -493,7 +530,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=b6c47c63b04025e5"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=248013c9e642aed3"
    ],
    "verdict": "already-applied"
   },
@@ -502,7 +539,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b6c47c63b04025e5"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=248013c9e642aed3"
    ],
    "verdict": "already-applied"
   },
@@ -522,14 +559,29 @@
   },
   {
    "changed_files": [],
-   "declared_signals": [
-    "SAME-ZONE-FETCH-FALLBACK-1"
-   ],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/samezone-fetch-fallback-patch.py",
    "tail": [
-    "FAIL (fail-closed): anchor occurrence != 1 in qnfo-ops/worker.js",
-    "  count=0  var VERSION = \"2.37.24-404hint-list\";"
+    "OK (already patched): qnfo-ops/worker.js",
+    "OK (already patched): qnfo-ops/deployed-current.worker.js",
+    "nothing to do"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
+   ],
+   "declared_signals": [
+    "SELF-FETCH-GUARD-1",
+    "SAME-ZONE-FETCH-FALLBACK-1"
+   ],
+   "rc": 0,
+   "script": "scripts/self-fetch-guard-patch.py",
+   "tail": [
+    "PATCHED qnfo-ops/worker.js  (372362 -> 373715 bytes)  var VERSION = \"2.37.26-samezone-fetch-fallback\"; -> var VERSION = \"2.37.27-self-fetch-guard\";",
+    "PATCHED qnfo-ops/deployed-current.worker.js  (372362 -> 373715 bytes)  var VERSION = \"2.37.26-samezone-fetch-fallback\"; -> var VERSION = \"2.37.27-self-fetch-guard\";"
    ],
    "verdict": "undetermined"
   },
@@ -580,6 +632,15 @@
   },
   {
    "changed_files": [],
+   "rc": 0,
+   "script": "scripts/stale-gate-failclosed-patch.py",
+   "tail": [
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 182520}"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
    "outcome_present_in": [
     "qnfo-ops/worker.js :: issue_ledger",
     "qnfo-ops/deployed-current.worker.js :: issue_ledger"
@@ -590,6 +651,23 @@
     "FAIL-CLOSED [A/openIssues-store]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written."
    ],
    "verdict": "superseded"
+  },
+  {
+   "changed_files": [],
+   "declared_signals": [
+    "REPO_ROOT/.",
+    "normalize_version_anchors",
+    "VERSION-ANCHOR-DRIFT-1",
+    "SAME-ZONE-FETCH-FALLBACK-1"
+   ],
+   "rc": 1,
+   "script": "scripts/version-anchor-normalize-patch.py",
+   "tail": [
+    "    root = Path(os.environ.get(\"REPO_ROOT\") or \".\").resolve()",
+    "           ^^^^",
+    "NameError: name 'Path' is not defined"
+   ],
+   "verdict": "undetermined"
   }
  ],
  "stale_anchor": [
@@ -598,10 +676,10 @@
   "scripts/deploy-guard-wrap-patch.py"
  ],
  "superseded": [
+  "scripts/applier-classify-signature-and-retire-patch.py",
   "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/attachguard-xml-form-patch.py",
   "scripts/cf-urllib-ua-1010-patch.py",
-  "scripts/dashboard-gate-failopen-patch.py",
   "scripts/deploy-guard-ms-failclosed-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
@@ -610,14 +688,15 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 49,
- "ts": "2026-09-29T17:20:40.501Z",
+ "total": 55,
+ "ts": "2026-09-29T19:07:38.697Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
-  "scripts/samezone-fetch-fallback-patch.py",
-  "scripts/selfheal-rate-aware-patch.py"
+  "scripts/self-fetch-guard-patch.py",
+  "scripts/selfheal-rate-aware-patch.py",
+  "scripts/version-anchor-normalize-patch.py"
  ]
 }
