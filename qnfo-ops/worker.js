@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.23-analyzer-excl-table";
+var VERSION = "2.37.24-cfread-404-hint";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2020,7 +2020,32 @@ async function cfWorkerRead(env, args) {
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/content/v2",
       { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Accept": "application/javascript" } }
     );
-    if (!srcR.ok) return { ok: false, error: "CF API " + srcR.status + " reading " + worker };
+    if (!srcR.ok) {
+      // CF-WORKER-READ-404-HINT-1: a bare 404 is unactionable - callers guess
+      // worker names and burn calls. Return the real names instead.
+      var _wrh = "";
+      if (srcR.status === 404) {
+        try {
+          var _wlr = await fetch(
+            "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts?per_page=200",
+            { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
+          );
+          if (_wlr.ok) {
+            var _wlj = await _wlr.json();
+            var _names = (((_wlj || {}).result) || []).map(function (x) { return x && x.id; }).filter(Boolean);
+            var _wl = worker.toLowerCase();
+            var _near = _names.filter(function (n) {
+              var m = String(n).toLowerCase();
+              return m.indexOf(_wl) >= 0 || _wl.indexOf(m) >= 0;
+            }).slice(0, 8);
+            _wrh = " - not a deployed worker. " + _names.length + " workers exist" +
+              (_near.length ? "; similar: " + _near.join(", ") : "") +
+              ". Use an exact name from that list.";
+          }
+        } catch (_wrhE) { _wrh = ""; }
+      }
+      return { ok: false, error: "CF API " + srcR.status + " reading " + worker + _wrh };
+    }
     const ct = srcR.headers.get("Content-Type") || "";
     let src = "";
     if (ct.indexOf("multipart") >= 0) {
