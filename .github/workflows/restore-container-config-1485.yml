@@ -24,6 +24,18 @@ name: restore-container-config-1485
 #   The authoritative assertion is GET /settings `containers` non-empty, read back
 #   independently of whatever the deploy steps claim. A red run mutates nothing that was
 #   not already absent.
+#
+# CONTAINER-CONFIG-RESTORE-5 (this revision, qnfo-ops 2026-09-29)
+#   The previous revision of THIS file could never report failure: the authoritative
+#   read-back step ended with `raise SystemExit(0)` on the absent path -- exit code 0,
+#   i.e. SUCCESS -- and the step also carries continue-on-error:true. A run in which
+#   [[containers]] was STILL ABSENT therefore produced a green job with only a buried
+#   ::error:: annotation (same class as CI-CLASS / WRANGLER-NOT-SKIPPABLE-1: a guard that
+#   cannot fail). Fixed to SystemExit(1), and a new FINAL GATE step (no continue-on-error)
+#   now decides the run: it exits 1 when the /settings read-back shows containers absent.
+#   A green run therefore means exactly one thing -- containers non-empty.
+#   `schedule` is still deliberately absent (SCHEDULE-EVENT-NEVER-FIRES-1: the schedule
+#   event has never fired on this repo); this revision relies on its own path push.
 
 on:
   push:
@@ -139,7 +151,7 @@ jobs:
           open("/tmp/post_settings.json", "w").write(json.dumps(out, indent=2))
           if not out.get("containers"):
               print("::error::[[containers]] STILL ABSENT - #1485 remains open; see the artifact for both failure texts")
-              raise SystemExit(0)
+              raise SystemExit(1)
           print("CONTAINERS RESTORED: " + json.dumps(out["containers"]))
           PY
 
@@ -165,7 +177,7 @@ jobs:
 
           art = {
               "workflow": "restore-container-config-1485",
-              "marker": "CONTAINER-CONFIG-RESTORE-4",
+              "marker": "CONTAINER-CONFIG-RESTORE-5",
               "issues": [1485, 1487],
               "head": sh("git rev-parse HEAD"),
               "ts": sh("date -u +%Y-%m-%dT%H:%M:%SZ"),
@@ -203,7 +215,17 @@ jobs:
             echo ""
             echo "Closes: #1485 (CONTAINER-CONFIG-DROPPED-1) / #1487 (PRESERVE-WORKER-METADATA-1)"
             echo ""
-            echo "attempt1 wrangler=${{ steps.wrangler.outcome }} attempt2 content-metadata=${{ steps.restore.outcome }}"
+            echo "attempt1 wrangler=${{ steps.wrangler.outcome }} attempt2 content-metadata=${{ steps.restore.outcome }} readback=${{ steps.verify.outcome }}"
             echo ""
             echo "Authoritative assertion: GET /settings \`containers\` non-empty."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: gate - FAIL the run if containers is absent (CONTAINER-CONFIG-RESTORE-5)
+        if: always()
+        run: |
+          if [ ! -f /tmp/post_settings.json ]; then
+            echo "::error::/tmp/post_settings.json missing - the authoritative read-back never ran; treating as FAILURE (fail-closed)"
+            exit 1
+          fi
+          python3 -c "import json,sys; d=json.load(open('/tmp/post_settings.json')); c=d.get('containers'); print('containers read-back:', json.dumps(c)); sys.exit(0 if c else 1)"
+          echo "GATE PASS: [[containers]] present in GET /settings read-back - #1485 closable"
