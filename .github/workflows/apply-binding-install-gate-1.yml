@@ -1,0 +1,138 @@
+name: apply-binding-install-gate-1
+
+# BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448). See
+# scripts/patch-binding-install-gate-1.py for the full defect record.
+#
+# DEFECT: qnfo-ops cf_worker_deploy ran the declared-binding installer only when the target
+# worker had ZERO non-secret bindings, so any worker that already carried one could never
+# gain a newly declared binding. qnfo-research-exec has run without its declared QNFO_AI
+# service binding since before 2026-09-16: 609 gw-fallback 404s, revise stage terminalising
+# on short fallback output (agent_issues 1291/1304/1306/1345/1366 + siblings).
+#
+# SCOPE: this workflow patches BOTH the source artifact and its deployed-current mirror,
+# because deploy-qnfo-ops.yml asserts byte parity between them as a BLOCKING step.
+#
+# WHY THE EXPLICIT DISPATCH: a commit-back pushed with GITHUB_TOKEN does NOT trigger other
+# workflows -- GitHub suppresses workflow events authored by GITHUB_TOKEN. deploy-qnfo-ops.yml
+# listens for pushes to qnfo-ops/worker.js, but that push is made by THIS workflow's token, so
+# the deploy is dispatched explicitly. deploy-qnfo-ops.yml declares workflow_dispatch and this
+# workflow holds actions: write.
+#
+# DOWNSTREAM EFFECT ONCE LIVE: with the gate removed, the next cf_worker_deploy of
+# qnfo-research-exec installs QNFO_AI and the gw-fallback degradation ends. Installing the
+# binding on research-exec is a separate deploy of that worker; this workflow only makes the
+# capability exist.
+#
+# NOTE ON SCHEDULES: SCHEDULE-EVENT-NEVER-FIRES-1 -- the GitHub `schedule` event has never
+# fired on this repository, so this workflow declares NO cron. It fires on push to itself or
+# to its patch script, and on manual dispatch.
+#
+# WORKFLOW-YAML-LINT-1: no step name in this file contains an unquoted colon-space.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/patch-binding-install-gate-1.py"
+      - ".github/workflows/apply-binding-install-gate-1.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-binding-install-gate-1
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  patch-verify-commit-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Apply BINDING-INSTALL-MERGE-1 to both artifacts (fail-closed, idempotent)
+        id: patch
+        run: python3 scripts/patch-binding-install-gate-1.py
+
+      - name: Verify markers, legacy-gate removal, and JS syntax on both artifacts
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/patch-binding-install-gate-1.py
+          echo "py_compile OK"
+          for f in qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js; do
+            n=$(grep -cF "BINDING-INSTALL-MERGE-1" "$f")
+            test "$n" -eq 1
+            legacy=$(grep -cF 'if (bindingsOut.length === 0) {' "$f")
+            test "$legacy" -eq 0
+            dedup=$(grep -cF '_seen.has(_k)' "$f")
+            test "$dedup" -eq 1
+            cp "$f" /tmp/check.mjs
+            node --check /tmp/check.mjs
+            echo "$f OK marker=$n legacy=$legacy dedup=$dedup syntax=valid"
+          done
+
+      - name: Assert source and mirror are still byte-identical
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "parity OK"
+
+      - name: Publish machine-readable status
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/binding-install-gate-1.json <<EOF
+          {
+            "workflow": "apply-binding-install-gate-1",
+            "defects": ["BINDING-INSTALL-MERGE-1"],
+            "issue": 1448,
+            "patch_step": "${{ steps.patch.outcome }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/binding-install-gate-1.json
+
+      - name: "Commit back (race-safe: pull --rebase + bounded retry)"
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js ci-status/binding-install-gate-1.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit (patch was a no-op)"
+            exit 0
+          fi
+          git commit -m "fix(qnfo-ops): BINDING-INSTALL-MERGE-1 - install declared bindings unconditionally and union them (issue #1448)"
+          for i in 1 2 3 4 5; do
+            echo "commit-back attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "commit-back OK on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::commit-back failed after 5 attempts"
+          exit 1
+
+      - name: Dispatch the canonical qnfo-ops deploy
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-qnfo-ops.yml || echo "dispatch skipped"
