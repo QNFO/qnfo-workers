@@ -45,6 +45,20 @@ answers openIssuesTotal from the already-computed cheap COUNT(*) of open issues.
 
 Idempotent and fail-closed: if the /health block does not contain the expected
 anchors the script exits non-zero and patches nothing.
+
+SELF-FIX 2026-09-29 (why the first run of this script never applied)
+-------------------------------------------------------------------
+The post-condition guard originally tested `if "openInventory" in new_block`.
+The explanatory COMMENT inserted into that very block contains the words
+"inventory scan", so the guard matched its own comment and aborted:
+
+    ::error file=qnfo-backlog-exec/worker.js::HEALTH-PROBE-BUDGET-1
+    openInventory still referenced in /health after patch; aborting
+
+Guard exit 1 -> workflow red at the patch step -> deploy step never ran ->
+live worker untouched -> #1368 unfixed, while the workflow looked like a
+correct fail-closed refusal. The guard now matches the CALL
+(`await openInventory(env)`) rather than the bare word.
 """
 import pathlib
 import re
@@ -59,7 +73,7 @@ NEW_VERSION = "2.0.1-health-probe-budget"
 
 COMMENT = (
     "      // HEALTH-PROBE-BUDGET-1 (2026-09-29): /health MUST stay cheap. This handler used to\n"
-    "      // run the full 14-lane openInventory() scan, which on a cold isolate exceeded the\n"
+    "      // run the full 14-lane inventory scan, which on a cold isolate exceeded the\n"
     "      // 5s AbortController budget in qnfo-ops probeService() -> AbortError -> backlog_status\n"
     "      // and fleet_status both reported this worker as \"timeout\" while it was in fact\n"
     "      // healthy (curl http=200 in 1.6s). That false negative auto-filed agent_issues 1368.\n"
@@ -71,6 +85,7 @@ INV_OPEN = 'if (url.pathname === "/inventory") {'
 DROP_INVENTORY = re.compile(
     r"[ \t]*const inventory = await openInventory\(env\)\.catch\(\(\) => null\);\n"
 )
+CALL_RE = re.compile(r"await\s+openInventory\s*\(\s*env\s*\)")
 OLD_TAIL = "openIssuesTotal: inventory ? inventory.total : -1, inventory }"
 NEW_TAIL = "openIssuesTotal: open ? open.c : -1 }"
 VERSION_RE = re.compile(r'var VERSION = "[^"]*";')
@@ -95,7 +110,7 @@ def patch_one(path: str) -> bool:
         return False
 
     block = s[start:end]
-    if "openInventory(env)" not in block:
+    if not CALL_RE.search(block):
         print(f"::error file={path}::HEALTH-PROBE-BUDGET-1 /health block has no openInventory() call; refusing to patch", file=sys.stderr)
         return False
     if OLD_TAIL not in block:
@@ -110,8 +125,10 @@ def patch_one(path: str) -> bool:
         1,
     )
 
-    if "openInventory" in new_block:
-        print(f"::error file={path}::HEALTH-PROBE-BUDGET-1 openInventory still referenced in /health after patch; aborting", file=sys.stderr)
+    # Match the CALL, not the word: the COMMENT above legitimately mentions the
+    # inventory scan by name, and the old bare-word test aborted on it.
+    if CALL_RE.search(new_block):
+        print(f"::error file={path}::HEALTH-PROBE-BUDGET-1 /health still awaits openInventory() after patch; aborting", file=sys.stderr)
         return False
     if NEW_TAIL not in new_block:
         print(f"::error file={path}::HEALTH-PROBE-BUDGET-1 new return tail missing after patch; aborting", file=sys.stderr)
