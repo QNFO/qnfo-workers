@@ -7,8 +7,8 @@ name: deploy-qnfo-ops
 #
 # WHY /content AND NOT wrangler: the /content endpoint updates the CODE ONLY,
 # preserving every live binding (BINDING-PRESERVATION-1). qnfo-ops has 49 live
-# bindings; a wrangler deploy that cannot reproduce them would silently drop them.
-# raw_put.py is fail-closed: it exits 3 and deploys nothing on any error, so a
+# bindings; a wrangler deploy that cannot reproduce them would silently drop
+# them. raw_put.py is fail-closed: it exits 3 and deploys nothing on any error, so a
 # partial deploy cannot occur.
 #
 # COMPAT-PRESERVE-1 (2026-09-29, issue 1358): raw_put.py now reads the live /settings and
@@ -41,6 +41,14 @@ name: deploy-qnfo-ops
 # deploys were reported red (runs 36568465877 / 36568539865 / 36568596207: step 8 success,
 # step 9 failure, live VERSION correct ~40s later). The verify step now polls with a bounded
 # retry budget and still fails closed if the live bundle never converges.
+#
+# WORKFLOW-YAML-LINT-1 (2026-09-29): the DEPLOY-VERIFY-RACE-1 edit pushed at 12:35:49Z
+# introduced an unquoted colon inside a step NAME -- "... (retry: CF /content ...)".
+# A colon followed by a space inside a plain YAML scalar is a parse error, so GitHub
+# created every subsequent deploy-qnfo-ops run with ZERO jobs and conclusion=failure:
+# the canonical deploy path for this worker was dead AND produced no job log for
+# anyone to read, which is why the watchdog could only report it as `unknown`. The
+# name is now quoted, and scripts/workflow-lint.py gates the whole class repo-wide.
 #
 # This workflow now also owns the deploy for any change to qnfo-ops/worker.js: the
 # push.paths below include the artifact, so a worker change has a real path to live
@@ -102,7 +110,7 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
 
-      - name: Verify live VERSION equals the artifact VERSION (retry: CF /content is eventually consistent)
+      - name: "Verify live VERSION equals the artifact VERSION (retry: CF /content is eventually consistent)"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
