@@ -17,6 +17,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # MIRROR-CONTENT-DRIFT-1 (issue #1229): repo-internal parity is deterministic
+      # and self-fixable, so it FAILS CLOSED. A red step here means the canonical
+      # deploy would ship a stale mirror; remediate with:
+      #   python scripts/mirror-guard.py --fix && git commit -am 'mirror-sync'
+      # (mirror-autosync.yml performs exactly that repair on a 6-hourly schedule).
+      - name: repo-internal mirror parity (fail-closed)
+        run: python scripts/mirror-guard.py
       - name: repo <-> live VERSION drift (narrative surfaces)
         run: python scripts/deploy-drift-guard.py
       - name: repo <-> live VERSION drift (all live workers, report only)
