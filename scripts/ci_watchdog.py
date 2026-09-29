@@ -76,6 +76,54 @@ def gh(path: str, method: str = "GET", body: dict | None = None):
         return 0, {"err": str(e)}
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not auto-follow: the job-log 302 target must not receive our headers."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _raw_log(job_id: int, cap: int = 200000) -> str:
+    """Fetch one job log, following the 302 to signed blob storage WITHOUT auth.
+
+    CI-WATCHDOG-LOGFETCH-1. The logs endpoint 302-redirects to a pre-signed
+    object-store URL that rejects any request carrying an Authorization header,
+    and urllib's default handler replays the original headers on the follow-up --
+    so the follow-up 403s and every fetch in CI returned nothing, which degraded
+    unclassifiable findings to `unknown`. Doing the two-step by hand, with a
+    header-free second request, is the fix. The signed URL is the credential.
+    """
+    url = f"{API}/repos/{REPO}/actions/jobs/{job_id}/logs"
+    opener = urllib.request.build_opener(_NoRedirect)
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("X-GitHub-Api-Version", "2022-11-28")
+    req.add_header("User-Agent", "qnfo-ci-watchdog")
+    if TOKEN:
+        req.add_header("Authorization", "Bearer " + TOKEN)
+    loc = ""
+    try:
+        with opener.open(req, timeout=30) as r:
+            return r.read(cap).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        if e.code in (301, 302, 303, 307, 308):
+            loc = e.headers.get("Location") or ""
+        else:
+            return ""
+    except Exception:
+        return ""
+    if not loc:
+        return ""
+    # Hop 2: NO Authorization header. The pre-signed URL is the credential.
+    req2 = urllib.request.Request(loc, method="GET")
+    req2.add_header("User-Agent", "qnfo-ci-watchdog")
+    try:
+        with urllib.request.urlopen(req2, timeout=60) as r:
+            return r.read(cap).decode("utf-8", "replace")
+    except Exception:
+        return ""
+
+
 # --------------------------------------------------------------------------
 # COLLECT
 # --------------------------------------------------------------------------
@@ -101,11 +149,9 @@ def job_logs(run_id: int) -> str:
         return ""
     out = []
     for j in d.get("jobs", []):
-        st2, raw = gh(f"/repos/{REPO}/actions/jobs/{j['id']}/logs")
-        if st2 == 200 and isinstance(raw, dict) and "raw" in raw:
-            out.append(raw["raw"])
-        elif st2 == 200 and isinstance(raw, str):
-            out.append(raw)
+        txt = _raw_log(j["id"])
+        if txt:
+            out.append(txt)
     return "\n".join(out)
 
 
@@ -123,6 +169,16 @@ def classify_structural(name: str, run: dict) -> tuple[str, str]:
     """
     if name in SELF_WORKFLOWS:
         return "self", "the watchdog never files against itself"
+    # A run whose display NAME is the workflow FILE PATH is a workflow GitHub could
+    # not parse: the `name:` key was never read, so the path was used instead. Such
+    # a run is created with ZERO jobs, so there is no job log to inspect -- it can
+    # only be named structurally. This is the WORKFLOW-YAML-LINT-1 class
+    # (deploy-qnfo-ops.yml, 2026-09-29), which silently killed a deploy path.
+    if name.endswith((".yml", ".yaml")):
+        return "invalid-workflow", (
+            "the workflow file is unparseable (run name is the file path); "
+            "run scripts/workflow-lint.py"
+        )
     if name == "mirror-guard":
         return "mirror-lag", "dispatch mirror-sync.yml (mirror-guard.py --fix actor)"
     if name == "deploy-gate":
@@ -331,9 +387,8 @@ def main() -> int:
                     kl, hint = "invalid-workflow", "the workflow YAML is invalid; GitHub created the run with zero jobs"
                 elif stj == 200:
                     for j in jd.get("jobs", []):
-                        stl, raw = gh(f"/repos/{REPO}/actions/jobs/{j['id']}/logs")
+                        txt = _raw_log(j["id"])
                         log_fetches += 1
-                        txt = raw.get("raw", "") if isinstance(raw, dict) else str(raw)
                         k2, h2 = classify(txt, name)
                         if k2 != "unknown":
                             kl, hint = k2, h2
