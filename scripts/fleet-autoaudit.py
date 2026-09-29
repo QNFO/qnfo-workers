@@ -191,22 +191,40 @@ def classify(d):
     return rows
 
 
-def _v4_ok(res):
-    """D1-REST-ENVELOPE-OK-1 (#1403): a Cloudflare v4 envelope carries success/errors.
+def d1_ok(res):
+    """D1-REST-ENVELOPE-OK-1: true success test for a D1 REST reply.
 
-    The v4 REST envelope is {"success": bool, "errors": [...], "result": ...}. It never
-    carries an "ok" key, so every probe that tested res.get("ok") scored a SUCCEEDED write
-    as a failure. Measured consequence: d1_writes_ok=0 while worker_live_audit
-    simultaneously held 110 rows stamped 16:18:54, the write-failure list carried the
-    literal string "None", the audit step exited rc=1, and the auto-deploy step was
-    therefore SKIPPED -- so the automatic worker-update half of FLEET-AUTODEPLOY-1 could
-    never run on any trigger.
-    A transport-level failure ({"ok": False, ...} from d1()'s own error branches) is still
-    honoured, so this is strictly more permissive only where the v4 API actually replied.
+    d1() returns the raw Cloudflare envelope on success -- the shape carrying the keys
+    success, errors, messages and result -- and only sets its own "ok" key on a transport
+    exception. A truthiness test on that key is therefore None (falsy) for EVERY successful
+    call, which is what made every successful write look like a failure.
     """
     if res.get("ok") is False:
         return False
-    return res.get("success") is True and not res.get("errors")
+    if res.get("ok") is True:
+        return True
+    if res.get("success") is not True:
+        return False
+    blocks = res.get("result") or []
+    if blocks and isinstance(blocks[0], dict) and blocks[0].get("success") is False:
+        return False
+    return True
+
+
+def d1_err(res):
+    """Human-readable failure reason for a d1() reply (never the string None)."""
+    if res.get("error") is not None:
+        return str(res.get("error"))
+    errs = res.get("errors") or []
+    if errs:
+        return json.dumps(errs)[:200]
+    blocks = res.get("result") or []
+    if blocks and isinstance(blocks[0], dict):
+        blk = blocks[0]
+        if blk.get("results") and isinstance(blk["results"], dict):
+            return json.dumps(blk["results"])[:200]
+        return json.dumps(blk)[:200]
+    return "unknown D1 failure (no error, no errors, no result block)"
 
 
 def write_audit_rows(rows):
@@ -215,10 +233,10 @@ def write_audit_rows(rows):
     for w in sorted(rows):
         r = rows[w]
         res = d1(UPSERT, [w, r["http"], r["live"], r["before"], r["match"], r["note"], now])
-        if _v4_ok(res):
+        if d1_ok(res):
             ok += 1
         else:
-            failed.append((w, str(res.get("error") or res.get("errors"))[:120]))
+            failed.append((w, d1_err(res)[:120]))
     return ok, failed, now
 
 
@@ -229,8 +247,8 @@ def purge_stale(now):
     the scan and purging them would silently shrink the audit surface.
     """
     res = d1(PURGE, [now])
-    if not _v4_ok(res):
-        return None, str(res.get("error"))[:160]
+    if not d1_ok(res):
+        return None, d1_err(res)[:160]
     return d1_changes(res), None
 
 
