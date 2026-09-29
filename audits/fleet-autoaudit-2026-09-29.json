@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 17:14:35",
+  "audited_at": "2026-09-29 17:25:28",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -8,14 +8,7 @@
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
-    "drift": [
-      {
-        "dir": "idea-hub",
-        "live": "1.0.7-rss-pipeline-stamp-gate",
-        "repo": "1.0.6-quarantine-wired-20260926",
-        "worker": "idea-hub"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "name_resolution": true,
     "no_health_route": [
@@ -400,10 +393,11 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
+      "idea-hub",
       "personal-api",
       "personal-companion",
       "q08-signal-engine",
@@ -530,11 +524,11 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.0.6-quarantine-wired-20260926",
+      "before": null,
       "http": 200,
-      "live": "1.0.7-rss-pipeline-stamp-gate",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "idea-hub"
     },
     "jnl-pipeline": {
