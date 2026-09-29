@@ -117,7 +117,11 @@ a{color:var(--blue)}
   <div class="archive-grid">
     <a href="https://papers.qnfo.org/papers" class="archive-card">
       <h3>All Papers</h3>
-      <p>Complete listing of 446 QNFO papers across quantum error correction, number theory, physics, and computer science.</p>
+      <!-- count basis (#1111), measured 2026-09-29T17:13Z — surfaces disagree, so no literal is published here:
+           qnfo-paper-indexer corpus_total=444 | living-paper D1 status='published'=439 | sitemap <loc>=448
+           | living-paper D1 total rows=906 (439 published + 187 kg-backfill + 156 duplicate + 117 quarantined
+             + 3 external_preprint + 2 distributed + 2 superseded). Authoritative count: papers.qnfo.org. -->
+      <p>Complete listing of all QNFO papers across quantum error correction, number theory, physics, and computer science.</p>
     </a>
     <a href="https://papers.qnfo.org/papers?category=qec" class="archive-card">
       <h3>Quantum Error Correction</h3>
@@ -145,7 +149,8 @@ a{color:var(--blue)}
   <div class="archive-grid">
     <a href="https://qwav.org" class="archive-card">
       <h3>QWAV Deep Feed</h3>
-      <p>AI-powered research feed with semantic search via Vectorize. Browse 79+ indexed papers with intelligent filtering.</p>
+      <!-- Vectorize index count removed (#1111): the former "79+ indexed papers" literal was unverified and drifts. -->
+      <p>AI-powered research feed with semantic search via Vectorize and intelligent filtering.</p>
     </a>
     <a href="https://ask-qwav.pages.dev" class="archive-card">
       <h3>Ask QWAV (AI Assistant)</h3>
