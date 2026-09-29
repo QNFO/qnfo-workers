@@ -33,6 +33,11 @@ fleet-wide check is continue-on-error). Requires CLOUDFLARE_API_TOKEN + CF_ACCOU
 Content drift is REPORT-ONLY: it is never used to justify an auto-deploy on its own,
 because a mirror capture can legitimately differ in formatting from a fresh build.
 
+JSON MODE (--json): emits ONE line of JSON carrying the full membership of every class,
+including `sync_workers` and `not_deployed_workers`. Counts alone are not auditable: a
+consumer (scripts/fleet-autoaudit.py) must be able to write a row per worker, so every
+class carries its worker names.
+
 Default scope = the narrative-generation surfaces we own. `--all` = all workers.
 Exit: 0 clean (scoped: SYNC only) | 1 any DRIFT / CONTENT_DRIFT / NO_*_VERSION / LIVE_ERR
 """
@@ -143,7 +148,7 @@ def main():
     content_ok = bool(acct and token)
 
     drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []
-    not_deployed, sync, live_err = 0, 0, []
+    not_deployed, sync_workers, live_err = [], [], []
 
     for d in sorted(os.listdir(ROOT)):
         if wanted and d not in wanted:
@@ -157,7 +162,7 @@ def main():
         rv, rpath, rtext = repo_artifact(d)
         live, lv = live_result(d)
         if not live and lv is None:
-            not_deployed += 1
+            not_deployed.append(d)
             continue
         if not live:  # ERR (not 404)
             live_err.append((d, lv))
@@ -171,7 +176,7 @@ def main():
             if cmp_ver(rv, lv) == 1:
                 ahead.append((d, rv, lv, rpath))
         else:
-            sync += 1
+            sync_workers.append(d)
         if want_content and content_ok and rtext is not None:
             live_text = live_content(d, acct, token)
             if live_text is not None and _sha(live_text) != _sha(rtext):
@@ -179,7 +184,8 @@ def main():
 
     if want_json:
         print(json.dumps({
-            "sync": sync,
+            "sync": len(sync_workers),
+            "sync_workers": sync_workers,
             "drift": [{"worker": d, "repo": r, "live": l} for d, r, l in drift],
             "content_drift": [{"worker": d, "repo_sha": a, "live_sha": b, "artifact": p}
                               for d, a, b, p in content_drift],
@@ -188,7 +194,8 @@ def main():
             "no_repo_version": [{"worker": d, "live": l} for d, l in no_repo_ver],
             "no_live_version": [{"worker": d, "repo": r} for d, r in no_live_ver],
             "live_err": [{"worker": d, "err": e} for d, e in live_err],
-            "not_deployed_notdrift": not_deployed,
+            "not_deployed_workers": not_deployed,
+            "not_deployed_notdrift": len(not_deployed),
             "content_checked": bool(want_content and content_ok),
         }, sort_keys=True))
     else:
@@ -205,10 +212,10 @@ def main():
         for d, e in live_err:
             print(f"LIVE_ERR {d}: {e}")
         tag = "all" if scan_all else "narrative"
-        print(f"deploy-drift-guard[{tag}]: sync={sync} drift={len(drift)} "
+        print(f"deploy-drift-guard[{tag}]: sync={len(sync_workers)} drift={len(drift)} "
               f"content_drift={len(content_drift)} ahead={len(ahead)} "
               f"no_repo_version={len(no_repo_ver)} no_live_version={len(no_live_ver)} "
-              f"live_err={len(live_err)} not_deployed_notdrift={not_deployed} "
+              f"live_err={len(live_err)} not_deployed_notdrift={len(not_deployed)} "
               f"content_checked={bool(want_content and content_ok)}")
 
     if want_ahead:
