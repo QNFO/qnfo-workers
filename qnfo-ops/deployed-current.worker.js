@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.20-selfheal-analyzer-live";
+var VERSION = "2.37.21-selfheal-metric-table-fix";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1415,14 +1415,24 @@ async function telemetryAnalyze(env, hours) {
         // SELFHEAL-RATE-NOT-ABSENCE-1 (issue 1165): the previous gate treated ONE success
         // after the last error as full recovery, so a tool failing hundreds of times a day
         // alongside thousands of successes could never file. File on a FAILURE RATE.
-        const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2").bind(since, toolKey).first();
+        // SELFHEAL-CENSUS-COUNTS-AGENT-MISTAKES-1 (issues 1165, 1353): the census summed every
+        // status='error' row. Verified live 2026-09-29: all 8 distinct recent ops_d1_query
+        // errors are meta.resultOk=false with a REAL D1 error such as
+        // {"error":"D1_ERROR: no such column: worker at offset 7"} -- malformed SQL authored
+        // by the CALLING AGENT while probing an unknown schema, not a malfunction of the tool.
+        // Those are excluded so the loop measures tool health, not agent mistakes.
+        const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2 AND (meta IS NULL OR (meta NOT LIKE '%no such column%' AND meta NOT LIKE '%no such table%'))").bind(since, toolKey).first();
         _errs = (okRow && okRow.e) || r.n || 0;
         _oks = (okRow && okRow.s) || 0;
         _rate = _errs / Math.max(1, _errs + _oks);
         _fresh = String(r.last_ts || "") >= new Date(Date.now() - h * 1800 * 1e3).toISOString();
         out.rates = out.rates || {};
         out.rates[toolKey] = { errors: _errs, successes: _oks, failureRate: Number(_rate.toFixed(4)), recent: _fresh };
-        if (!(_rate >= 0.15 && _fresh)) {
+        // SELFHEAL-RATE-OR-ABSOLUTE-1 (issue 1165): a rate-only gate is blind to a high-volume
+        // tool whose large success denominator keeps the rate low. File on rate OR on an
+        // absolute error count in the window. Symmetric: the same predicate drives
+        // auto-resolve below, so a tool cannot be filed and un-resolvable at once.
+        if (!((_rate >= 0.15 || _errs >= 25) && _fresh)) {
           out.recovered++;
           try {
             // SELFHEAL-FINGERPRINT-MISMATCH-1: this used String(r.text).slice(0,60) while
@@ -1478,7 +1488,11 @@ async function telemetryReport(env, hours) {
     const fails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool'").bind(since).first();
     const chats = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1").bind(since).first();
     const chatFails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1 AND ok = 0").bind(since).first();
-    const openIssues = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status = 'open' AND category = 'telemetry-self-heal'").first();
+    // SELFHEAL-METRIC-TABLE-MISMATCH-1 (issue 1370): telemetry_analyze() INSERTs into
+    // issue_ledger, but this counter read agent_issues -- verified live 2026-09-29:
+    // agent_issues/telemetry-self-heal = 0 while issue_ledger/telemetry-self-heal = 8 open.
+    // The report advertised open_self_heal_issues=0 against 8 genuinely open tickets.
+    const openIssues = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'").first();
     const top = await env.QNFO_AUDIT.prepare("SELECT text, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' GROUP BY text ORDER BY n DESC LIMIT 5").bind(since).all();
     out.tool_calls = calls && calls.c || 0;
     out.tool_failures = fails && fails.c || 0;
