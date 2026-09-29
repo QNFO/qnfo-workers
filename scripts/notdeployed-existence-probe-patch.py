@@ -30,7 +30,7 @@ WHY IT IS RETIRED (three independent reasons, all verified)
 WHAT THIS FILE DOES NOW
   Nothing. It makes no edits, and it deliberately does NOT fail closed, because a retired
   script that exits non-zero inside any workflow is the permanently-red-job defect that
-  scripts/drift-guard-notdeployed-worker-patch.py was just rewritten to close (#1382).
+  scripts/drift-guard-notdeployed-worker-patch.py was just rewritten to close (#1383).
 
   The invariants this file cared about are asserted by that rewritten script, which is
   wired to .github/workflows/apply-drift-guard-notdeployed-fix.yml. Delete this file when a
@@ -46,7 +46,7 @@ def main():
     print("  issue refs corrected: #1376 -> #1377 (closed); keying work tracked by #1379/#1380")
     print("  class UNPROBED_NO_CF_LIST was unhandled by fleet-autoaudit.py classify()")
     print("  anchor collision with scripts/drift-guard-notdeployed-worker-patch.py removed")
-    print("  invariant coverage lives in scripts/drift-guard-notdeployed-worker-patch.py")
+    print("  invariant coverage lives in scripts/drift-guard-notdeployed-worker-patch.py (#1383)")
     return 0
 
 
