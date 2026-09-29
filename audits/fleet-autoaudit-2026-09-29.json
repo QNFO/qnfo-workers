@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 19:25:44",
+  "audited_at": "2026-09-29 19:38:56",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -10,15 +10,15 @@
     "content_drift": [],
     "drift": [
       {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.7.33-drift-failclosed",
-        "repo": "1.7.32-stale-gate-failclosed",
-        "worker": "qnfo-fleet-dashboard"
+        "dir": "qnfo-cloud-ops",
+        "live": "1.15.0-cron-dow-cf",
+        "repo": "1.14.4",
+        "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-ops",
-        "live": "2.37.28-affirm-veto",
-        "repo": "2.37.27-self-fetch-guard",
+        "live": "2.37.30-container-deploy-guard",
+        "repo": "2.37.28-affirm-veto",
         "worker": "qnfo-ops"
       }
     ],
@@ -422,11 +422,11 @@
       "qnfo-ai-search",
       "qnfo-archive",
       "qnfo-backlog-exec",
-      "qnfo-cloud-ops",
       "qnfo-containers-pilot",
       "qnfo-deploy-guard",
       "qnfo-email",
       "qnfo-fleet-control",
+      "qnfo-fleet-dashboard",
       "qnfo-gateway",
       "qnfo-infra",
       "qnfo-intent-orchestrator",
@@ -857,11 +857,11 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": null,
+      "before": "1.14.4",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.15.0-cron-dow-cf",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-cloud-ops"
     },
     "qnfo-code-agent": {
@@ -993,11 +993,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.32-stale-gate-failclosed",
+      "before": null,
       "http": 200,
-      "live": "1.7.33-drift-failclosed",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1121,9 +1121,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.37.27-self-fetch-guard",
+      "before": "2.37.28-affirm-veto",
       "http": 200,
-      "live": "2.37.28-affirm-veto",
+      "live": "2.37.30-container-deploy-guard",
       "match": 0,
       "note": "DRIFT",
       "worker": "qnfo-ops"
