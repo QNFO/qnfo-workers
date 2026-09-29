@@ -1,0 +1,141 @@
+name: apply-enospc-cache-1
+
+# ENOSPC-CACHE-1 (issue #1445) applier.
+# Fires on push of its own patcher/workflow (the repo's apply-*.yml convention),
+# so pushing this file triggers the run. Also dispatchable by hand.
+on:
+  push:
+    paths:
+      - scripts/patch-enospc-cache-1.py
+      - .github/workflows/apply-enospc-cache-1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-enospc-cache-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: record pre-deploy live version (rollback reference)
+        run: |
+          curl -sf https://qnfo-containers-pilot.q08.workers.dev/health > /tmp/pre.json || echo '{}' > /tmp/pre.json
+          cat /tmp/pre.json
+
+      - name: apply ENOSPC-CACHE-1 patch
+        id: patch
+        run: |
+          set +e
+          python3 scripts/patch-enospc-cache-1.py
+          rc=$?
+          echo "patch_rc=$rc"
+          echo "patch_rc=$rc" >> "$GITHUB_OUTPUT"
+          # rc 0 = applied or already-applied (both fine); rc 3/4 = fail-closed abort
+          exit $rc
+
+      - name: guard - patched source parses, carries marker and the reclaim
+        run: |
+          set -e
+          node --check qnfo-containers-pilot/worker.js
+          grep -qF 'ENOSPC-CACHE-1' qnfo-containers-pilot/worker.js
+          grep -qF 'apt-get clean' qnfo-containers-pilot/worker.js
+          grep -qF 'rm -rf /var/cache/apt/archives/*.deb' qnfo-containers-pilot/worker.js
+          echo "GUARD OK"
+
+      - name: commit patched source + mirror
+        run: |
+          set -e
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add qnfo-containers-pilot/worker.js
+          if [ -f qnfo-containers-pilot/deployed-current.worker.js ]; then
+            git add qnfo-containers-pilot/deployed-current.worker.js
+          fi
+          if git diff --cached --quiet; then
+            echo "no source change to commit (already applied)"
+          else
+            git commit -m "fix(containers-pilot): ENOSPC-CACHE-1 reclaim apt cache on cold start (issue #1445)"
+            git push
+          fi
+
+      # Binding- and settings-preserving module deploy (raw_put.py reads live
+      # /settings first and fails closed rather than clearing compatibility_date).
+      # Deliberately NOT `wrangler deploy`: wrangler.toml cannot reproduce the
+      # live bindings and the DO/container migration note warns it fails closed.
+      - name: deploy qnfo-containers-pilot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python3 scripts/raw_put.py qnfo-containers-pilot qnfo-containers-pilot/worker.js
+
+      - name: verify live version advanced (expected version read from source)
+        id: verify
+        run: |
+          set -e
+          EXPECTED=$(grep -oE 'var VERSION *= *"[^"]+"' qnfo-containers-pilot/worker.js | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "EXPECTED_VERSION=$EXPECTED"
+          sleep 10
+          for i in 1 2 3 4 5 6; do
+            curl -sf "https://qnfo-containers-pilot.q08.workers.dev/health?cb=$RANDOM" > /tmp/post.json && break
+            echo "attempt $i: health not ready"; sleep 6
+          done
+          cat /tmp/post.json
+          grep -qF "$EXPECTED" /tmp/post.json
+          echo "VERIFY OK: live version is $EXPECTED"
+
+      # Fail-closed recovery: restore the previously recorded live artifact.
+      - name: rollback on failed verification
+        if: failure()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "verification failed - rolling back to qnfo-containers-pilot/deployed-current.worker.js"
+          python3 scripts/raw_put.py qnfo-containers-pilot qnfo-containers-pilot/deployed-current.worker.js || true
+          curl -s https://qnfo-containers-pilot.q08.workers.dev/health || true
+
+      # Always publish an outcome artifact so a zero-effect run can never be silent
+      # (FAILURE-ARTIFACT-LOSS-1 / CI-APPLIER-NEVER-APPLIES-1).
+      - name: publish outcome artifact
+        if: always()
+        run: |
+          mkdir -p ci-status
+          PRE=$(grep -oE '"version"[^,]*' /tmp/pre.json 2>/dev/null | head -1 | sed -E 's/.*"version" *: *"([^"]*)".*/\1/' || true)
+          POST=$(grep -oE '"version"[^,]*' /tmp/post.json 2>/dev/null | head -1 | sed -E 's/.*"version" *: *"([^"]*)".*/\1/' || true)
+          cat > ci-status/enospc-cache-1.json <<JSON
+          {
+            "workflow": "apply-enospc-cache-1",
+            "issue": "1445 / ENOSPC-CACHE-1",
+            "marker": "ENOSPC-CACHE-1",
+            "pre_version": "${PRE}",
+            "post_version": "${POST}",
+            "head": "$(git rev-parse HEAD)",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          JSON
+          cat ci-status/enospc-cache-1.json
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "selfheal@qnfo.org"
+          git add ci-status/enospc-cache-1.json
+          if git diff --cached --quiet; then
+            echo "artifact unchanged"
+          else
+            git commit -m "ci(status): enospc-cache-1 report [skip ci]"
+            git push || echo "artifact push failed (non-fatal)"
+          fi
+
+      - name: summary
+        if: always()
+        run: |
+          echo "pre : $(cat /tmp/pre.json 2>/dev/null)"
+          echo "post: $(cat /tmp/post.json 2>/dev/null)"
