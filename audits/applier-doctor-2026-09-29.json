@@ -2,7 +2,7 @@
  "counts": {
   "already-applied": 24,
   "stale-anchor": 3,
-  "superseded": 9,
+  "superseded": 10,
   "undetermined": 4
  },
  "errored": [],
@@ -53,7 +53,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=39 {'already-applied': 24, 'stale-anchor': 13, 'landed': 1, 'error': 1}",
+    "SUMMARY total=40 {'already-applied': 24, 'stale-anchor': 14, 'landed': 1, 'error': 1}",
     "LANDED(1): deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -409,6 +409,20 @@
   {
    "changed_files": [],
    "outcome_present_in": [
+    "qnfo-research-exec/worker.js :: ROUTER-HOST-ORDER-1"
+   ],
+   "rc": 1,
+   "script": "scripts/routerfetch-host-order-correction-patch.py",
+   "tail": [
+    "anchor 1: applied",
+    "anchor 2: applied",
+    "FAIL: ai.qnfo.org is not first in ROUTER_HOSTS"
+   ],
+   "verdict": "superseded"
+  },
+  {
+   "changed_files": [],
+   "outcome_present_in": [
     "qnfo-backlog-exec/worker.js :: INTERNAL-SERVICE-BINDING-AUTH-1",
     "qnfo-backlog-exec/worker.js :: internalCall",
     "qnfo-backlog-exec/worker.js :: CF-Connecting-IP"
@@ -491,12 +505,13 @@
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py",
+  "scripts/routerfetch-host-order-correction-patch.py",
   "scripts/run-gate-internal-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 40,
- "ts": "2026-09-29T16:49:41.533Z",
+ "total": 41,
+ "ts": "2026-09-29T16:50:06.280Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/driftguard-server-version-patch.py",
