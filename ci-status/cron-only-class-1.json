@@ -1,0 +1,11 @@
+{
+  "workflow": "apply-cron-only-class-1",
+  "issue": "1402 / CRON_ONLY-1",
+  "marker": "CRON_ONLY-1",
+  "pre_marker_count": "0",
+  "post_marker_count": "9",
+  "positive_classified": "",
+  "negative_still": "",
+  "head": "96a8083c06ac7d52f6d345a62eb1308dec64842e",
+  "ts": "2026-09-29T19:30:58.000Z"
+}
