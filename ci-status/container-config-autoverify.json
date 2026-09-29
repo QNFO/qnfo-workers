@@ -1,0 +1,22 @@
+{
+  "workflow": "container-config-autoverify",
+  "marker": "CONTAINER-CONFIG-AUTOVERIFY-1",
+  "issue": 1485,
+  "worker": "qnfo-containers-pilot",
+  "pre_containers": null,
+  "pre_error": null,
+  "restore": {
+    "attempted": true,
+    "rc": 3,
+    "tail": "declared containers: [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]\nlive compatibility_date=2026-08-01 flags=['nodejs_compat']\nlive bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\nPUT /content -> HTTP 400\n  body: {'result': None, 'success': False, 'errors': [{'code': 100402, 'message': 'Durable Object exports reconciliation failed:\\n- [provisioned_class_missing_from_config] class \\'ShellContainer\\': class \\'ShellContainer\\' has a provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is not declared in `exports`. Every provisioned class must be declared in `exports` (live or tombstone); silent drift is not permitted. (add \\'ShellContainer\\' back to `exports` as `{\"type\": \"durable-object\", \"storage\": \"sqlite\"}` (or `\"legacy-kv\"`), or replace the entry with a `deleted` / `renamed` / \nFAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)\n"
+  },
+  "post_containers": null,
+  "post_bindings": [
+    "AUDIT",
+    "PILOT_TOKEN",
+    "SHELL_CONTAINER"
+  ],
+  "closed": false,
+  "head": "f808ac7ab783a1aebade6bd77c1c89e10621f7e5",
+  "ts": "2026-09-29T19:48:52Z"
+}
