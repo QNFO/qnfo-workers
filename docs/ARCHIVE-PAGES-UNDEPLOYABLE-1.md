@@ -1,7 +1,7 @@
 # ARCHIVE-PAGES-UNDEPLOYABLE-1
 
 Filed: 2026-09-29 (agent_issues id 1393) · priority high · category deploy
-Owner: qnfo-ops (deploy path) · related: #1111 (PUBLIC-COUNTS-COVERAGE-DRIFT-1), #1371 (VERSION-BUMP-GUARD-MISSING-1)
+Owner: qnfo-ops (deploy path) · related: #1111 (PUBLIC-COUNTS-COVERAGE-DRIFT-1), #1371 (VERSION-BUMP-GUARD-MISSING-1), #1396 (GITHUB-409-VARIANT-RETRY-GAP-1)
 
 ## Symptom
 
@@ -50,13 +50,36 @@ to Pages assets instead of Worker bundles.
 2. content gate on the staged asset (repaired markers present, corruption markers absent);
 3. post-deploy live verification against `https://archive.qnfo.org/`.
 
-## Open blocker (not closed)
+## Pre-deploy inventory path (shipped 2026-09-29 ~16:2xZ)
+
+The open blocker below is "list the project before you replace it". That listing
+is now executable server-side without Actions log access:
+
+- `scripts/pages_project_audit.py` — strictly **read-only** against Pages. GETs
+  `/accounts/{acct}/pages/projects/qnfo-publications`, its `deployments`, and the
+  newest deployment's file map, then persists the inventory to qnfo-audit D1
+  table `pages_project_audit`. Never creates, deletes or deploys anything.
+  Exit 0 = inventory captured; exit 3 = API failure (fail-closed, so the gate
+  cannot be silently skipped).
+- `.github/workflows/pages-project-audit.yml` — runs the above on push to its own
+  two paths or on `workflow_dispatch`. Contains no deploy step.
+
+Consequence: the "what else does this project hold?" question now has a
+machine-readable answer (deployment count, newest deployment id/branch/env, and
+the file keys of the newest deployment), readable from ops tooling via
+`ops_d1_query` on `pages_project_audit`.
+
+## Open blocker (partially closed)
 
 `wrangler pages deploy` **replaces the project's file set**. The repo cannot prove
 what else `qnfo-publications` currently holds, so a first run could delete
-co-hosted assets. The workflow is therefore manual and deliberately gated. Closing
-this issue requires listing the project's current deployment (CF API
-`/accounts/{id}/pages/projects/{name}/deployments`) before the first run.
+co-hosted assets.
+
+Status as of this writing: the **listing mechanism** is shipped (above); the
+**listing itself** must be read from `pages_project_audit` and judged before the
+first deploy. The deploy workflow remains manual and deliberately gated on
+`confirm == DEPLOY`. This issue stays open until an inventory row exists and is
+consistent with a single-asset project.
 
 ## Adversarial note
 
@@ -68,7 +91,10 @@ Two hypotheses remain undistinguished by available tooling:
 
 Both are consistent with the evidence. H2 would additionally require fixing the
 Pages build configuration; the workflow above is correct under H1 and harmless
-under H2 (a manual run republishes the same content).
+under H2 (a manual run republishes the same content). **The inventory row is the
+discriminator**: under H2 the project will show many deployments with recent
+`created_on` values and no matching repo commits; under H1 it will show few or
+none.
 
 ## Correction to an earlier in-session claim
 
@@ -77,11 +103,20 @@ grep. That count is a **false positive**: `s:1fr}` is the tail of the legitimate
 `grid-template-columns:1fr}`. The real defect is the *truncation* of that rule at
 line 61 plus the displaced block at line 74, not the string `s:1fr}` itself.
 
-## Secondary finding (deploy tooling)
+## Secondary finding (deploy tooling) — now filed
 
 `github_file_write` returned a 409 of the form
 `GitHub 409: is at <head> but expected <sha>` with `attempts:1, sha_retried:false`
 while writing this file — i.e. the GITHUB-409-RETRY-1 path (#1372) did **not**
 engage for this error shape. The retry is proven to engage for GitHub's native
 stale-blob 409 (`attempts:2`, verified 2026-09-29) but not for this variant.
-Filed as a follow-up: the retry matcher must cover both 409 payload shapes.
+
+**Filed as #1396 GITHUB-409-VARIANT-RETRY-GAP-1** (agent_issues, 2026-09-29).
+
+Second reproduction, same session: writing
+`.github/workflows/pages-project-audit.yml` failed with
+`GitHub 409: is at b1c84ea5… but expected 671971b9…`, `attempts:1`,
+`sha_retried:false` — immediately after a sibling write in the same batch
+advanced the branch head to `b1c84ea5`. Two independent reproductions establish
+the variant is not a one-off; the retry predicate must treat any 409/422 whose
+body indicates a head/sha mismatch as retryable.
