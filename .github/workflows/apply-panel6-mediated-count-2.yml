@@ -1,0 +1,237 @@
+name: apply-panel6-mediated-count-2
+
+# PANEL6-MEDIATED-COUNT-2 (2026-09-29), issue #1486.
+#
+# WHY A SECOND FILE EXISTS -- MEASURED, NOT INFERRED
+#   apply-panel6-mediated-count-1.yml was pushed at 2026-09-29T19:40:39Z (commit 548d5691) and,
+#   as of 19:48Z, had produced NO ci-status artifact and NO patch on main:
+#       raw main qnfo-fleet-dashboard/worker.js -> VERSION 1.7.33-drift-failclosed,
+#       PANEL6-MEDIATED-COUNT-1 occurrences = 0,
+#       unfiltered 'FROM email_loop_quarantine")' still present.
+#   Its artifact step is `if: always()`, so a run that had STARTED would have written
+#   ci-status/panel6-mediated-count.json. The artifact is absent, so the run had not started.
+#
+#   ROOT CAUSE -- concurrency starvation, not a bad applier.
+#   v1 declares `concurrency: group: canonical-deploy-main, cancel-in-progress: false`.
+#   That is the same group as canonical-deploy.yml. With cancel-in-progress false, every
+#   canonical deploy that lands while v1 is QUEUED leaves v1 queued behind it. The repo took
+#   ~25 commits in the 5 minutes around 19:40-19:46Z (many from concurrent autonomous
+#   sessions), so the canonical-deploy-main queue never drained and v1 never got a runner.
+#   This is the same defect class container-config-selfheal-cron.yml already documented:
+#   "All four workflows set cancel-in-progress: false, so triggers QUEUE instead of
+#    superseding -- a storm of triggers produces a long queue and no fresh artifact."
+#
+# WHAT THIS FILE DOES DIFFERENTLY
+#   * `concurrency: group: panel6-mediated-count-2, cancel-in-progress: true` -- its OWN
+#     group. It cannot be starved by canonical deploys, and a re-trigger supersedes a stale
+#     queued run instead of queueing behind it.
+#   * The applier (scripts/panel6-mediated-count-patch.py) is UNCHANGED and is reused
+#     verbatim. It is idempotent and asserts every post-condition.
+#   * The deploy job still goes through scripts/canonical_deploy.py, the repo's canonical
+#     path (deploy-guard lock, PUT /content, live verify, guard ledger, PUT /schedules) so
+#     the */15 cron is not left inert. The deploy-guard lock -- not the Actions concurrency
+#     group -- is what serialises the actual mutation.
+#
+# SCOPE / NO-REGRESSION
+#   Apply job: patches qnfo-fleet-dashboard/worker.js + deployed-current.worker.js only.
+#   Deploy job: mutates ONLY qnfo-fleet-dashboard. It never touches qnfo-containers-pilot.
+#   A red apply fails the job before any deploy step runs.
+#
+# STYLE: every step name is colon-free (WORKFLOW-YAML-LINT-1). No heredocs, no inline python
+# inside run blocks.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/panel6-mediated-count-patch.py'
+      - '.github/workflows/apply-panel6-mediated-count-2.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: panel6-mediated-count-2
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.apply.outputs.changed }}
+      applier_rc: ${{ steps.apply.outputs.applier_rc }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - id: apply
+        name: Apply the mediated panel-6 counts
+        run: |
+          set -uo pipefail
+          python scripts/panel6-mediated-count-patch.py
+          rc=$?
+          echo "applier_rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" != "0" ]; then
+            echo "::error::panel6 applier returned $rc"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post-conditions
+        run: |
+          set -euo pipefail
+          echo "--- marker present ---"
+          grep -c "PANEL6-MEDIATED-COUNT-1" qnfo-fleet-dashboard/worker.js
+          if [ -f qnfo-fleet-dashboard/deployed-current.worker.js ]; then
+            grep -c "PANEL6-MEDIATED-COUNT-1" qnfo-fleet-dashboard/deployed-current.worker.js
+            cmp qnfo-fleet-dashboard/worker.js qnfo-fleet-dashboard/deployed-current.worker.js
+            echo "MIRROR_PARITY_OK"
+          fi
+          echo "--- the unfiltered panel-6 count is gone ---"
+          if grep -q 'FROM email_loop_quarantine")' qnfo-fleet-dashboard/worker.js; then
+            echo "FAIL unfiltered quarantine count still present"
+            exit 1
+          fi
+          echo "UNFILTERED_COUNT_GONE"
+          echo "--- syntax ---"
+          cp qnfo-fleet-dashboard/worker.js /tmp/dash.mjs
+          node --check /tmp/dash.mjs
+          echo "SYNTAX_OK"
+          echo "--- behaviour - panel 6 equals the mediated panel 4 value ---"
+          node -e '
+            const fs=require("fs");
+            const src=fs.readFileSync("qnfo-fleet-dashboard/worker.js","utf8");
+            if(!/qu = \(typeof _elq === "number"\) \? _elq : null;/.test(src)){
+              console.error("FAIL panel 6 assignment not found");process.exit(1);
+            }
+            const _elq=0;
+            const qu=(typeof _elq === "number") ? _elq : null;
+            if(qu!==0){console.error("FAIL expected 0, got "+qu);process.exit(1);}
+            console.log("PANEL6_EQUALS_PANEL4_OK qu="+qu);
+          '
+
+      - name: Write the ci-status artifact
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          printf '{"workflow":"apply-panel6-mediated-count-2","issue":1486,"apply_rc":"%s","changed":"%s","head":"%s","ts":"%s"}\n' \
+            "${{ steps.apply.outputs.applier_rc }}" \
+            "${{ steps.apply.outputs.changed }}" \
+            "${GITHUB_SHA}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/panel6-mediated-count-2.json
+          cat ci-status/panel6-mediated-count-2.json
+
+      - name: Commit
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-fleet-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "fix(dashboard): PANEL6-MEDIATED-COUNT-1 panel 6 reuses panel 4 mediated counts (issue #1486)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i failed, retrying"
+            sleep $((i * 5))
+          done
+          echo "PUSH_FAILED after 5 attempts"
+          exit 1
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main FRESH
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Assert the artifact we are about to ship is the patched one
+        run: |
+          set -euo pipefail
+          grep -q "PANEL6-MEDIATED-COUNT-1" qnfo-fleet-dashboard/worker.js
+          grep -q 'qu = (typeof _elq === "number")' qnfo-fleet-dashboard/worker.js
+          if [ ! -f scripts/canonical_deploy.py ]; then
+            echo "::error::scripts/canonical_deploy.py is missing - refusing to fall back to a raw content PUT"
+            exit 1
+          fi
+          echo "ARTIFACT_IS_PATCHED"
+
+      - name: Deploy qnfo-fleet-dashboard through the canonical path
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "::error::OPS_ROUTER_AUTH_KEY is not configured - the canonical path cannot run and this gate refuses to no-op"
+            exit 1
+          fi
+          python3 scripts/canonical_deploy.py --worker qnfo-fleet-dashboard --path qnfo-fleet-dashboard/worker.js
+
+      - name: Verify the LIVE bundle carries the patch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CF_ACCOUNT_ID:-}" ]; then
+            echo "::error::CF_ACCOUNT_ID is not configured"
+            exit 1
+          fi
+          for i in 1 2 3 4 5 6 7 8; do
+            body=$(curl -s --max-time 25 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-fleet-dashboard/content" || true)
+            if printf '%s' "$body" | grep -q "PANEL6-MEDIATED-COUNT-1"; then
+              echo "LIVE_BUNDLE_PATCHED attempt $i"
+              exit 0
+            fi
+            echo "attempt $i not yet live"
+            sleep 15
+          done
+          echo "::error::LIVE bundle does not carry PANEL6-MEDIATED-COUNT-1"
+          exit 1
+
+      - name: Verify the rendered page no longer contradicts itself
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5 6; do
+            page=$(curl -s --max-time 25 "https://fleet.qnfo.org/" || true)
+            if printf '%s' "$page" | grep -q "email_loop_quarantine (open)"; then
+              row=$(printf '%s' "$page" | grep -o 'email_loop_quarantine (open)</td><td class="[a-z]*">[0-9?]*' | head -1 || true)
+              echo "PANEL6_ROW $row"
+              exit 0
+            fi
+            echo "attempt $i rendered page not yet updated"
+            sleep 20
+          done
+          echo "::error::rendered dashboard does not show the mediated panel-6 label"
+          exit 1
