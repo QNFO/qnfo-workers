@@ -1,49 +1,51 @@
 #!/usr/bin/env python3
-"""dashboard-gate-failopen-patch.py - GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301).
+"""dashboard-gate-failopen-patch.py - GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301), rev 2.
 
-FIVE verified defects, all in qnfo-fleet-dashboard/worker.js. The affected code is the /red
-SURVIVAL METERS panel, which WRITES qnfo-audit.survival_state and therefore the SAI
-external_impact term -- so these defects do not merely mis-render a page, they mis-record the
-system's own survival score.
+SIX verified defects, all in qnfo-fleet-dashboard/worker.js, all inside the /red SURVIVAL METERS
+panel, which WRITES qnfo-audit.survival_state and therefore the SAI external_impact term -- so
+these defects do not merely mis-render a page, they mis-record the system's own survival score.
 
-1. The metric_registry SELECT fetched `last_value` but NOT `last_refreshed` or
-   `refresh_cadence`. The renderer was structurally incapable of noticing staleness. Live
-   evidence: rows last_refreshed 2026-09-27T17:28:59Z against a declared `daily` cadence
-   (full_reports_live_30d) rendered as live on 2026-09-29 -- ~48h stale.
+1. The metric_registry SELECT fetched `last_value` but NOT `last_refreshed` or `refresh_cadence`,
+   so the renderer was structurally incapable of noticing staleness.
 2. `regVal()` applied no freshness check at all.
-3. `const driftBad = (ig.drift && ig.drift.ghost || 0) + ...` -- a FAILED drift read coalesces
-   to 0, i.e. a broken read reports "no drift".
-4. `head: c01(1 - (driftBad || 0))` -- the coalesced 0 yields head = 1, i.e. a failed read
-   reports 100% headroom.
-5. `gateRows.forEach(... if (typeof x.head === "number") ...)` -- a null gate was SKIPPED and
-   its weight dropped from `wsum`, so the weighted mean was computed over the surviving
-   subset. Missing data therefore RAISED the reported headroom.
+3. `const driftBad = (ig.drift && ig.drift.ghost || 0) + ...` -- a FAILED drift read coalesces to 0.
+4. `head: c01(1 - (driftBad || 0))` -- the coalesced 0 yields head = 1, i.e. 100% headroom.
+5. `gateRows.forEach(... if (typeof x.head === "number") ...)` -- a null gate was SKIPPED and its
+   weight dropped from `wsum`, so MISSING DATA RAISED the reported headroom.
+6. (rev 2) The COLLAPSED GREENS line rendered `(driftBad || 0)` raw -- the same fail-open in a
+   second place. rev 1 left this occurrence behind, which is why rev 1's own post-condition
+   `"(driftBad || 0)" not in t` could never pass.
 
-FAIL-CLOSED FIX: a registry value that is stale against its declared cadence (2x grace) or
-whose timestamp is unparseable resolves to null; a drift read that failed stays null instead
-of 0; every gate contributes its full weight and a null head contributes 0; the stale set and
-the null-gate count are rendered on the panel and written into the survival_state note. After
-this patch a failed or stale read can only LOWER the score, never raise it.
+rev 2 also fixes a rev-1 IDEMPOTENCY defect: rev 1 tested `new in text` ONLY when the anchor
+matched zero times. Edit 6's replacement text CONTAINS its own anchor, so on a second run the
+anchor still matched once and the panel line was appended AGAIN (observed: the panel line
+duplicated on pass 2). rev 2 tests `new in text` FIRST, for every edit.
 
-IDEMPOTENT: re-running on an already-patched file is a no-op (each edit is skipped when its
-replacement text is already present).
+rev 2 additionally uses LITERAL anchors only (rev 1's edit 5 used a regex, which is the class of
+escaping bug that has repeatedly broken this family of appliers).
+
 FAIL-CLOSED: every edit must match EXACTLY ONCE; anything else raises and nothing is written.
+IDEMPOTENT: re-running on an already-patched file is a no-op.
 """
 import os
-import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKER = os.path.join(ROOT, "qnfo-fleet-dashboard", "worker.js")
 MIRROR = os.path.join(ROOT, "qnfo-fleet-dashboard", "deployed-current.worker.js")
 MARK = "GATE-EVAL-METRIC-STALENESS-FAILOPEN-1"
+Q = chr(39)
+DQ = chr(34)
 
-# ---------------------------------------------------------------- edit 1: fetch freshness
+
+def j(s):
+    return s.replace("~", Q)
+
+
 E1_OLD = 'last_value FROM metric_registry ORDER BY kind DESC, layer, metric"'
 E1_NEW = ('last_value, last_refreshed, refresh_cadence FROM metric_registry '
           'ORDER BY kind DESC, layer, metric"')
 
-# ---------------------------------------------------------------- edit 2: freshness gate
 E2_OLD = """  const regVal = function(name) {
     const mm = (mr || []).filter(function(x) { return x.metric === name; })[0];
     if (!mm || mm.last_value == null) return null;
@@ -62,14 +64,22 @@ E2_NEW = """  // GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301): a registry
     if (s === "hourly") return 60;
     if (s === "daily") return 1440;
     if (s === "30m") return 30;
-    const m = s.match(/^\\*\\/(\\d+)\\s*(h?)/);
-    if (!m) return null;
-    return Number(m[1]) * (m[2] === "h" ? 60 : 1);
+    if (s.indexOf("*/") !== 0) return null;
+    const body = s.slice(2);
+    let i = 0;
+    while (i < body.length && body.charAt(i) >= "0" && body.charAt(i) <= "9") i++;
+    if (i === 0) return null;
+    const n = Number(body.slice(0, i));
+    const unit = body.slice(i);
+    if (unit === "h") return n * 60;
+    if (unit === "") return n;
+    return null;
   };
   const gateTsMs = function(v) {
     if (!v) return null;
     let s = String(v).trim().replace(" ", "T");
-    if (!/[Zz]$/.test(s) && !/[+-]\\d\\d:?\\d\\d$/.test(s)) s += "Z";
+    const last = s.slice(-1);
+    if (last !== "Z" && last !== "z" && s.indexOf("+", 10) < 0) s += "Z";
     const t = Date.parse(s);
     return isNaN(t) ? null : t;
   };
@@ -92,51 +102,54 @@ E2_NEW = """  // GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301): a registry
     return isNaN(n) ? null : n;
   };"""
 
-# ---------------------------------------------------------------- edit 3: drift read null
-E3_OLD = ('const driftBad = (ig.drift && ig.drift.ghost || 0) + '
+E3_OLD = ('  const driftBad = (ig.drift && ig.drift.ghost || 0) + '
           '(ig.drift && ig.drift.unregistered || 0) + '
           '(ig.drift && ig.drift.unversioned || 0);')
-E3_NEW = ('const driftBad = ig.drift ? ((ig.drift.ghost || 0) + (ig.drift.unregistered || 0) + '
+E3_NEW = ('  const driftBad = ig.drift ? ((ig.drift.ghost || 0) + (ig.drift.unregistered || 0) + '
           '(ig.drift.unversioned || 0)) : null; '
           '// FAIL-CLOSED #1301: a failed drift read is null, never 0')
 
-# ---------------------------------------------------------------- edit 4: drift gate head
-E4_OLD = '{ m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }'
-E4_NEW = ('{ m: "drift_total", live: (driftBad == null ? "n/a (drift read failed)" : '
-          'String(driftBad)), head: driftBad == null ? 0 : c01(1 - driftBad) } '
-          '// FAIL-CLOSED #1301')
+E4_OLD = '    { m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }'
+E4_NEW = ('    { m: "drift_total", live: (driftBad == null ? "n/a (drift read failed)" : '
+          'String(driftBad)), head: driftBad == null ? 0 : c01(1 - driftBad) } // FAIL-CLOSED #1301')
 
-# ---------------------------------------------------------------- edit 5: null gate = 0
-E5_OLD = ('let wnum = 0, wsum = 0;\\s*\\n\\s*'
-          'gateRows\\.forEach\\(function\\(x\\) \\{ if \\(typeof x\\.head === "number"\\) \\{ '
-          'const w = gateW\\[x\\.m\\] != null \\? gateW\\[x\\.m\\] : 0\\.1; '
-          'wnum \\+= w \\* x\\.head; wsum \\+= w; \\} \\}\\);')
-E5_NEW = """let wnum = 0, wsum = 0, nullGates = 0;
-  // FAIL-CLOSED (issue #1301): a null head used to be SKIPPED, which dropped its weight from
-  // wsum and therefore RAISED the weighted mean -- a failed read improved the score. Every gate
-  // now contributes its full weight; a null head contributes 0.
-  gateRows.forEach(function(x) { const w = gateW[x.m] != null ? gateW[x.m] : 0.1; const h = typeof x.head === "number" ? x.head : (nullGates += 1, 0); wnum += w * h; wsum += w; });"""
+E5_OLD = ('  let wnum = 0, wsum = 0;\n'
+          '  gateRows.forEach(function(x) { if (typeof x.head === "number") { '
+          'const w = gateW[x.m] != null ? gateW[x.m] : 0.1; '
+          'wnum += w * x.head; wsum += w; } });')
+E5_NEW = ('  let wnum = 0, wsum = 0, nullGates = 0;\n'
+          '  // FAIL-CLOSED (issue #1301): a null head used to be SKIPPED, which dropped its weight\n'
+          '  // from wsum and therefore RAISED the weighted mean -- a failed read improved the score.\n'
+          '  // Every gate now contributes its full weight; a null head contributes 0.\n'
+          '  gateRows.forEach(function(x) { const w = gateW[x.m] != null ? gateW[x.m] : 0.1; '
+          'const h = typeof x.head === "number" ? x.head : (nullGates += 1, 0); '
+          'wnum += w * h; wsum += w; });')
 
-# ---------------------------------------------------------------- edit 6: panel visibility
-E6_OLD = ('Registry + causal edges in qnfo-audit (metric_registry + survival_model).'
-          '</span></div></div>\');')
-E6_NEW = """Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
-  H.push('<div class="sub" style="margin-top:4px">GATE FRESHNESS (GATE-EVAL-METRIC-STALENESS-FAILOPEN-1, issue #1301, FAIL-CLOSED): ' + (staleMetrics.length ? '<b class="bad">' + staleMetrics.length + ' stale registry metric(s) treated as FAILED</b>: ' + esc(staleMetrics.join(", ")) : 'all registry-backed gates fresh') + ' &middot; ' + nullGates + ' gate(s) with no readable value counted as head=0</div>');"""
+E6_OLD = 'Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>~);'
+E6_OLD = j(E6_OLD)
+E6_NEW = E6_OLD + '\n  H.push(' + j(
+    '~<div class="sub" style="margin-top:4px">GATE FRESHNESS (GATE-EVAL-METRIC-STALENESS-FAILOPEN-1, '
+    'issue #1301, FAIL-CLOSED): ~ + (staleMetrics.length ? '
+    '~<b class="bad">~ + staleMetrics.length + ~ stale registry metric(s) treated as FAILED</b>: ~ + '
+    'esc(staleMetrics.join(", ")) : ~all registry-backed gates fresh~) + ~ &middot; ~ + nullGates + '
+    '~ gate(s) with no readable value counted as head=0</div>~);')
 
-# ---------------------------------------------------------------- edit 7: record it
-E7_OLD = ('"weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2)")'
-          '.run();')
+E7_OLD = '"weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2)").run();'
 E7_NEW = ('"weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2); '
-          'FAIL-CLOSED #1301 null_gates=" + nullGates + " stale=" + staleMetrics.join(",")).run();')
+          'FAIL-CLOSED #1301 null_gates=" + nullGates + " stale=" + staleMetrics.join(", ")).run();')
+
+E8_OLD = j('(driftBad || 0) + ~')
+E8_NEW = '(driftBad == null ? ' + DQ + 'n/a' + DQ + ' : String(driftBad)) + ' + Q
 
 EDITS = [
-    ("select-freshness", E1_OLD, E1_NEW, 0),
-    ("freshness-gate", E2_OLD, E2_NEW, 0),
-    ("drift-null", E3_OLD, E3_NEW, 0),
-    ("drift-gate-head", E4_OLD, E4_NEW, 0),
-    ("null-gate-zero", E5_OLD, E5_NEW, re.S),
-    ("panel-visibility", E6_OLD, E6_NEW, 0),
-    ("record-stale", E7_OLD, E7_NEW, 0),
+    ("select-freshness", E1_OLD, E1_NEW),
+    ("freshness-gate", E2_OLD, E2_NEW),
+    ("drift-null", E3_OLD, E3_NEW),
+    ("drift-gate-head", E4_OLD, E4_NEW),
+    ("null-gate-zero", E5_OLD, E5_NEW),
+    ("panel-visibility", E6_OLD, E6_NEW),
+    ("record-stale", E7_OLD, E7_NEW),
+    ("collapsed-greens-drift", E8_OLD, E8_NEW),
 ]
 
 
@@ -146,18 +159,15 @@ def apply_edits(path):
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
     changed = False
-    for label, old, new, flags in EDITS:
-        pattern = old if (flags & re.S) else re.escape(old)
-        new_text, n = re.subn(pattern, lambda m: new, text, flags=flags)
-        if n == 0:
-            if new in text:
-                print("  already applied: " + label)
-                continue
-            raise SystemExit("FAIL-CLOSED: anchor '%s' not found in %s" % (label, path))
+    for label, old, new in EDITS:
+        if new in text:
+            print("  already applied: " + label)
+            continue
+        n = text.count(old)
         if n != 1:
             raise SystemExit("FAIL-CLOSED: anchor '%s' matched %d times in %s"
                              % (label, n, path))
-        text = new_text
+        text = text.replace(old, new)
         changed = True
         print("  applied: " + label)
     if changed:
@@ -174,12 +184,12 @@ def post_conditions(path):
         t = fh.read()
     checks = {
         "select fetches last_refreshed": "last_refreshed, refresh_cadence FROM metric_registry" in t,
-        "select fetches refresh_cadence": "refresh_cadence FROM metric_registry" in t,
         "freshness predicate present": "gateIsStale" in t,
         "stale collector present": "staleMetrics" in t,
         "drift read is null-safe": "ig.drift ? ((ig.drift.ghost" in t,
-        "drift gate fails closed": 'driftBad == null ? 0 : c01(1 - driftBad)' in t,
+        "drift gate fails closed": "driftBad == null ? 0 : c01(1 - driftBad)" in t,
         "null gate counted as 0": "nullGates += 1, 0" in t,
+        "collapsed-greens drift null-safe": E8_NEW in t,
         "panel renders freshness": "GATE FRESHNESS" in t,
         "survival note records staleness": "FAIL-CLOSED #1301 null_gates=" in t,
         "no coalescing drift read left": "(driftBad || 0)" not in t,
@@ -187,14 +197,14 @@ def post_conditions(path):
     }
     bad = [k for k, v in checks.items() if not v]
     for k, v in checks.items():
-        print("  %-36s %s" % (k, "OK" if v else "FAIL"))
+        print("  %-38s %s" % (k, "OK" if v else "FAIL"))
     if bad:
         raise SystemExit("FAIL-CLOSED: post-conditions failed: " + ", ".join(bad))
     print("POST_CONDITIONS_OK " + path)
 
 
 def main():
-    print("=== " + MARK + " ===")
+    print("=== " + MARK + " rev2 ===")
     apply_edits(WORKER)
     post_conditions(WORKER)
     if os.path.isfile(MIRROR):
@@ -204,8 +214,6 @@ def main():
             if a.read() != b.read():
                 raise SystemExit("FAIL-CLOSED: mirror parity violated (mirror-guard invariant)")
         print("MIRROR_PARITY_OK")
-    else:
-        print("NOTE: no deployed-current mirror for qnfo-fleet-dashboard; parity not applicable")
     return 0
 
 
