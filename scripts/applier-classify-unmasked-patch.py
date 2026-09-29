@@ -26,10 +26,23 @@ THE FIX
    `fail-closed`) instead of the bare word "anchor".
 2. Add `from pathlib import Path` to the normalize applier.
 
+IDEMPOTENCY (SELF-IDEMPOTENT-1, fixed after landing)
+----------------------------------------------------
+The first version of this applier keyed idempotency on a single MARKER string
+that is written only into TARGET_A. TARGET_B therefore had no marker, so on the
+SECOND run its anchor was already consumed -> count=0 -> exit 1 forever. That is
+exactly the permanent-false-failure class this applier exists to remove, so it
+is fixed here: every edit carries its OWN `probe` string, and an edit is skipped
+as already-applied when its probe is present even if the anchor is gone.
+
+   probe for TARGET_A : APPLIER-CLASSIFY-UNMASKED-1   (the marker it writes)
+   probe for TARGET_B : "from pathlib import Path"    (absent before, present after)
+
 FAIL-CLOSED / IDEMPOTENT
 ------------------------
-- Marker APPLIER-CLASSIFY-UNMASKED-1 present in the target -> exit 0, no write.
-- Any anchor whose occurrence count != 1 -> exit 1, no write.
+- probe present in target                -> already applied, skip (exit 0).
+- anchor absent AND probe absent         -> exit 1, no write (cannot apply safely).
+- any anchor whose occurrence count != 1 -> exit 1, no write.
 - compile() parse-check on every target before any write.
 
 ORDER-INDEPENDENT with VERSION-ANCHOR-DRIFT-1: that applier's ANCHOR_CLASSIFY
@@ -88,9 +101,10 @@ from pathlib import Path
 MARKER = "normalize_version_anchors"
 '''
 
+# (relative path, anchor, replacement, probe proving the edit is already in)
 EDITS = (
-    (TARGET_A, ANCHOR_A, NEW_A),
-    (TARGET_B, ANCHOR_B, NEW_B),
+    (TARGET_A, ANCHOR_A, NEW_A, "APPLIER-CLASSIFY-UNMASKED-1"),
+    (TARGET_B, ANCHOR_B, NEW_B, "from pathlib import Path"),
 )
 
 
@@ -98,24 +112,29 @@ def main() -> int:
     root = Path(os.environ.get("REPO_ROOT") or ".").resolve()
     plan = []
 
-    for rel, anchor, new in EDITS:
+    for rel, anchor, new, probe in EDITS:
         p = root / rel
         if not p.exists():
             print(f"FAIL: missing {rel}")
             return 1
         text = p.read_text()
-        if MARKER in text:
-            print(f"already applied: {rel} carries {MARKER}")
+
+        # SELF-IDEMPOTENT-1: per-edit probe, so an edit that is already in is
+        # skipped even though its anchor has been consumed.
+        if probe in text:
+            print(f"already applied: {rel} carries {probe!r}")
             continue
+
         count = text.count(anchor)
         if count != 1:
             print(f"FAIL (fail-closed): anchor occurrence != 1 in {rel}")
             print(f"  count={count}  {anchor.splitlines()[0][:70]}")
+            print(f"  probe {probe!r} absent too - cannot apply safely")
             return 1
         plan.append((p, text.replace(anchor, new, 1), rel))
 
     if not plan:
-        print(f"{MARKER}: nothing to do")
+        print(f"{MARKER}: nothing to do (all edits already applied)")
         return 0
 
     for _, new_text, rel in plan:
