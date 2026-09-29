@@ -1,0 +1,104 @@
+name: apply-autodeploy-dead-state
+
+# DEAD-STATE-FILE-1 (2026-09-29).
+#
+# WHY THIS EXISTS
+#   fleet-autodeploy.yml step 8 (`python scripts/fleet-autoaudit.py --apply`) fails on
+#   EVERY run, so the "automatic worker updates systemwide" path has never deployed
+#   anything. Measured on run 36599089041 (16:37:36Z -> 16:46:18Z): step 7 (audit) success,
+#   step 8 (apply) FAILURE, step 9 (commit artifact) success, with the audit half healthy
+#   in the artifact step 8 itself wrote (d1_writes_ok=110, d1_write_failures=[],
+#   purge_error=None, _guard_rc=0, ahead=[]).
+#
+#   Root cause: apply_ahead() opens with `if not os.path.isfile(STATE): die(...)` where
+#   STATE = "/tmp/fleet-audit.json", and a repo-wide grep over *.py/*.yml/*.mjs/*.js shows
+#   NOTHING EVER WRITES IT. die() is sys.exit(3), so the failure is structural, not
+#   intermittent. scripts/autodeploy-dead-state-fix.py carries the full write-up.
+#
+# WHY THIS WORKFLOW RATHER THAN A DIRECT EDIT
+#   The applier is fail-closed: it aborts (exit 3) unless all three anchors match exactly
+#   once, re-asserts the post-conditions, and compile-checks the result before writing.
+#   The workflow then RE-ASSERTS the same invariants against the file on disk, so a silent
+#   no-op cannot be reported as success. This mirrors the repo's proven apply-*.yml family
+#   (e.g. apply-fleet-autoaudit-v4-envelope.yml, which landed the #1403 fix).
+#
+# ADVERSARIAL
+#   * This is a text transform, not a semantic proof. It cannot detect that the FIX is
+#     wrong - only that the PATCH landed. The behavioural check is the next fleet-autodeploy
+#     run reaching step 8 and exiting 0.
+#   * It makes the deploy path reachable, which is the point, and raises blast radius: a
+#     higher-but-broken version string can now reach live unattended. Gate order in
+#     fleet-autodeploy.yml (mirror-guard -> d1guard-battery -> audit -> apply) is unchanged.
+#   * The paths: filter deliberately does NOT include scripts/fleet-autoaudit.py, so this
+#     workflow's own commit cannot re-trigger it (no loop).
+
+on:
+  push:
+    paths:
+      - "scripts/autodeploy-dead-state-fix.py"
+      - ".github/workflows/apply-autodeploy-dead-state.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-autodeploy-dead-state
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: apply the fix (fail-closed, idempotent)
+        run: python scripts/autodeploy-dead-state-fix.py
+
+      - name: assert the dead path is gone and the new path is present
+        run: |
+          set -euo pipefail
+          F=scripts/fleet-autoaudit.py
+          test -f "$F"
+          grep -q 'def apply_ahead(d=None):' "$F"
+          grep -q 'apply_ahead(d)' "$F"
+          grep -q 'json.dump(data, fh)' "$F"
+          grep -q 'die("no audit state; run --audit first")' "$F"
+          if grep -q 'def apply_ahead():' "$F"; then
+            echo "::error::legacy zero-arg apply_ahead() still present"; exit 1
+          fi
+          if grep -q 'apply_ahead() else rc' "$F"; then
+            echo "::error::call site still does not pass the payload"; exit 1
+          fi
+          python -m py_compile "$F"
+          echo "ASSERTIONS PASSED: apply_ahead is reachable and the STATE dead path is gone"
+
+      - name: commit and push (rebase + bounded retry)
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add scripts/fleet-autoaudit.py
+          if git diff --cached --quiet; then
+            echo "no change to commit (already applied)"
+            exit 0
+          fi
+          git commit -m "fix(fleet-autoaudit): DEAD-STATE-FILE-1 - persist/pass guard state so apply_ahead() is reachable (fleet-autodeploy step 8 exited rc=3 on every run)"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i; rebasing onto origin/main"
+            git pull --rebase --autostash origin main || true
+            sleep $((i * 3))
+          done
+          echo "::error::could not push after 5 attempts"
+          exit 1
