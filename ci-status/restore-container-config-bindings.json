@@ -1,0 +1,13 @@
+{
+  "workflow": "apply-restore-container-config-bindings",
+  "marker": "CONTAINER-CONFIG-RESTORE-5-BINDINGS",
+  "issues": [
+    1485,
+    1487
+  ],
+  "restore_rc": "3",
+  "status_signature": "probe-skipped",
+  "head": "ac6244fb64da973c172c35b39f770cec01bc54c3",
+  "ts": "2026-09-29T19:50:43Z",
+  "log_tail": "marker: CONTAINER-CONFIG-RESTORE-5-BINDINGS\ndeclared containers: [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]\ndeclared bindings:   [{\"type\": \"d1\", \"name\": \"AUDIT\", \"id\": \"35e2e573-92f3-46ac-83c6-22f6429fc5e5\"}, {\"type\": \"durable_object_namespace\", \"name\": \"SHELL_CONTAINER\", \"class_name\": \"ShellContainer\"}]\nderived exports:     {\"ShellContainer\": {\"type\": \"durable-object\", \"storage\": \"sqlite\"}}\nlive compatibility_date=2026-08-01 flags=['nodejs_compat']\nlive binding names: ['PILOT_TOKEN']\nmetadata: {\"main_module\": \"worker.js\", \"compatibility_date\": \"2026-08-01\", \"compatibility_flags\": [\"nodejs_compat\"], \"bindings\": [{\"type\": \"d1\", \"name\": \"AUDIT\", \"id\": \"35e2e573-92f3-46ac-83c6-22f6429fc5e5\"}, {\"type\": \"durable_object_namespace\", \"name\": \"SHELL_CONTAINER\", \"class_name\": \"ShellContainer\"}], \"keep_bindings\": [\"secret_text\"], \"exports\": {\"ShellContainer\": {\"type\": \"durable-object\", \"storage\": \"sqlite\"}}, \"containers\": [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]}\nPUT /content -> HTTP 200\npost-deploy binding names: ['PILOT_TOKEN']\npost-deploy containers: null\nFAIL (fail-closed): bindings missing after deploy: ['AUDIT', 'SHELL_CONTAINER']\n"
+}
