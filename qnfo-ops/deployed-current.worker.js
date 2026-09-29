@@ -2234,12 +2234,30 @@ async function cfWorkerDeploy(env, args) {
   });
   let bindingsInstalled = 0;
   let bindingInstallNote = null;
-  if (bindingsOut.length === 0) {
+  // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
+  // bindingsOut.length === 0, so a worker that already carried any non-secret binding
+  // could NEVER gain a newly declared one. Canonical victim: qnfo-research-exec never
+  // received its declared QNFO_AI service binding (609 gw-fallback 404s from 2026-09-16),
+  // the revise stage's >=10000-char gate then failed on the short fallback output, and the
+  // pipeline terminalised. Always install, then UNION the declared non-secret bindings
+  // into the live set. Live wins on (type,name): nothing existing is overwritten or
+  // removed, and the installer emits non-secret types only, so secrets are untouched.
+  {
     const _ins = await installDeclaredBindings(env, worker);
     bindingInstallNote = _ins.note || null;
-    if (_ins.bindings && _ins.bindings.length) {
-      bindingsOut = _ins.bindings;
-      bindingsInstalled = _ins.installed;
+    const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];
+    if (bindingsOut.length === 0 && _decl.length) {
+      bindingsOut = _decl;
+      bindingsInstalled = _decl.length;
+    } else if (_decl.length) {
+      const _seen = new Set(bindingsOut.map(function(b) { return b.type + ":" + b.name; }));
+      for (const _b of _decl) {
+        const _k = _b.type + ":" + _b.name;
+        if (_seen.has(_k)) continue;
+        bindingsOut.push(_b);
+        _seen.add(_k);
+        bindingsInstalled++;
+      }
     }
   }
   try {
