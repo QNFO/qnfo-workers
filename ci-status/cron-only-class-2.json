@@ -1,0 +1,11 @@
+{
+  "credential_free": true,
+  "head": "382ee82bc80fc2c28dfd9ae2c11ea330158fd7c6",
+  "issue": "1402 / CRON_ONLY-2",
+  "marker": "CRON_ONLY-2",
+  "patch_rc": "1",
+  "post_marker_count": "5",
+  "pre_marker_count": "5",
+  "ts": "2026-09-29T19:38:26Z",
+  "workflow": "apply-cron-only-class-2"
+}
