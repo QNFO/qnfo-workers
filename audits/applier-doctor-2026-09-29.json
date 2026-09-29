@@ -4,7 +4,7 @@
   "applied-now": 1,
   "error": 1,
   "stale-anchor": 3,
-  "superseded": 10,
+  "superseded": 11,
   "undetermined": 8
  },
  "errored": [
@@ -116,9 +116,9 @@
     " M ci-status/applier-doctor.json",
     " M qnfo-cloud-ops/deployed-current.worker.js",
     " M qnfo-cloud-ops/worker.js",
-    " M qnfo-cloud-ops/wrangler.toml",
     " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
+    " M qnfo-ops/worker.js",
+    " M scripts/deploy-drift-guard.py"
    ],
    "declared_signals": [
     ".",
@@ -131,7 +131,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(2): affirm-veto-clause-targets-patch.py, cloud-ops-cron-dow-patch.py",
+    "LANDED(3): affirm-veto-clause-targets-patch.py, cloud-ops-cron-dow-patch.py, patch-cron-only-class-2.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -192,15 +192,14 @@
   {
    "changed_files": [
     " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js",
-    " M qnfo-cloud-ops/wrangler.toml"
+    " M qnfo-cloud-ops/worker.js"
    ],
    "rc": 0,
    "script": "scripts/cloud-ops-cron-dow-patch.py",
    "tail": [
     "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.0-cron-dow-cf",
     "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.0-cron-dow-cf",
-    "TOTAL_EDITS 13"
+    "TOTAL_EDITS 12"
    ],
    "verdict": "applied-now"
   },
@@ -508,6 +507,22 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M scripts/deploy-drift-guard.py"
+   ],
+   "outcome_present_in": [
+    "scripts/deploy-drift-guard.py :: CRON_ONLY-2"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-cron-only-class-2.py",
+   "tail": [
+    "DIAG declared_crons(ai-health-prober) = ['*/20 * * * *']",
+    "DIAG declares_http_surface(ai-health-prober) = False",
+    "DIAG cron_only_declared(ai-health-prober) = True"
+   ],
+   "verdict": "superseded"
+  },
+  {
    "changed_files": [],
    "rc": 1,
    "script": "scripts/patch-cron-only-class.py",
@@ -780,13 +795,14 @@
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
+  "scripts/patch-cron-only-class-2.py",
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 65,
- "ts": "2026-09-29T19:33:52.531Z",
+ "total": 66,
+ "ts": "2026-09-29T19:34:43.331Z",
  "undetermined": [
   "scripts/affirm-veto-clause-targets-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
