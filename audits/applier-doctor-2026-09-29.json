@@ -4,7 +4,7 @@
   "error": 1,
   "stale-anchor": 3,
   "superseded": 10,
-  "undetermined": 7
+  "undetermined": 8
  },
  "errored": [
   "scripts/patch-cron-only-class.py"
@@ -22,6 +22,24 @@
     "nothing to do"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
+   ],
+   "declared_signals": [
+    "AFFIRM-VETO-CLAUSE-TARGETS-1",
+    "AFFIRM-VETO-SENTENCE-SCOPE-1",
+    "VERSION-ANCHOR-DRIFT-1"
+   ],
+   "rc": 0,
+   "script": "scripts/affirm-veto-clause-targets-patch.py",
+   "tail": [
+    "PATCHED [UNPATCHED] qnfo-ops/worker.js  (375567 -> 376001 bytes)  var VERSION = \"2.37.28-affirm-veto\"; -> var VERSION = \"2.37.29-affirm-veto-clause\";",
+    "PATCHED [UNPATCHED] qnfo-ops/deployed-current.worker.js  (375567 -> 376001 bytes)  var VERSION = \"2.37.28-affirm-veto\"; -> var VERSION = \"2.37.29-affirm-veto-clause\";"
+   ],
+   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -92,7 +110,9 @@
   },
   {
    "changed_files": [
-    " M ci-status/applier-doctor.json"
+    " M ci-status/applier-doctor.json",
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -105,7 +125,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(0): nothing to apply - main is current",
+    "LANDED(1): affirm-veto-clause-targets-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -744,9 +764,10 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 63,
- "ts": "2026-09-29T19:27:03.296Z",
+ "total": 64,
+ "ts": "2026-09-29T19:27:52.270Z",
  "undetermined": [
+  "scripts/affirm-veto-clause-targets-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
