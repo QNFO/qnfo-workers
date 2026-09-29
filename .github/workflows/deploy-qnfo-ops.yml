@@ -50,6 +50,20 @@ name: deploy-qnfo-ops
 # anyone to read, which is why the watchdog could only report it as `unknown`. The
 # name is now quoted, and scripts/workflow-lint.py gates the whole class repo-wide.
 #
+# SUPERSEDE-TOLERANT-VERIFY-1 (2026-09-29): run 36591685670 deployed successfully at step 8
+# and still went red at step 9. The verifier compared the LIVE version against THIS run's
+# artifact version and treated any difference as failure -- but several apply+deploy
+# pipelines now deploy qnfo-ops concurrently, so a run that started against 2.37.20 read
+# back 2.37.22 (a NEWER build of the same worker) and declared a successful deploy failed.
+# With a 0.74% tool-failure rate and live==repo at 2.37.22, the deploy path was working
+# correctly while CI reported the opposite. A verifier that cannot distinguish "my deploy
+# did not land" from "my deploy landed and was superseded" is not evidence, it is noise.
+# The verifier now parses the numeric build out of both versions: equality still passes;
+# a strictly NEWER live build passes as SUPERSEDED (the PUT landed, a later pipeline
+# advanced it); an OLDER or unparseable live build still fails closed after the retry
+# budget. It never passes on a bundle that lacks the guard or still carries the legacy
+# message, so the guard-invariant checks are unchanged and unconditional.
+#
 # This workflow now also owns the deploy for any change to qnfo-ops/worker.js: the
 # push.paths below include the artifact, so a worker change has a real path to live
 # instead of relying on the qnfo-fleet-control redeploy cron.
@@ -110,13 +124,18 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
 
-      - name: "Verify live VERSION equals the artifact VERSION (retry: CF /content is eventually consistent)"
+      - name: "Verify live VERSION equals the artifact VERSION (retry, supersede-tolerant)"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -uo pipefail
           V="${{ steps.ver.outputs.version }}"
+          build_of() {
+            printf '%s' "$1" | sed -n 's/^\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*$/\1\2\3/p'
+          }
+          VB="$(build_of "$V")"
+          echo "artifact=$V build=$VB"
           ok=0
           for i in $(seq 1 12); do
             curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -126,12 +145,21 @@ jobs:
             has_v=$(grep -cF "$V" /tmp/live.js 2>/dev/null || true)
             has_g=$(grep -cF 'd1ReadOnlyGuard' /tmp/live.js 2>/dev/null || true)
             has_old=$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js 2>/dev/null || true)
-            echo "attempt=$i bytes=$bytes expect=$V has_version=$has_v has_guard=$has_g has_legacy_msg=$has_old"
-            if [ "$has_v" -ge 1 ] && [ "$has_g" -ge 2 ] && [ "$has_old" = "0" ]; then ok=1; break; fi
+            LIVEV=$(grep -o 'var VERSION = "[^"]*";' /tmp/live.js 2>/dev/null | head -1 | sed 's/.*"\(.*\)".*/\1/')
+            LB="$(build_of "$LIVEV")"
+            echo "attempt=$i bytes=$bytes expect=$V live=$LIVEV has_version=$has_v has_guard=$has_g has_legacy_msg=$has_old"
+            # Guard invariants are unconditional: they never pass on a bad bundle.
+            if [ "$has_g" -ge 2 ] && [ "$has_old" = "0" ]; then
+              if [ "$has_v" -ge 1 ]; then ok=1; break; fi
+              if [ -n "$LB" ] && [ -n "$VB" ] && [ "$((10#$LB))" -gt "$((10#$VB))" ]; then
+                echo "SUPERSEDED: live $LIVEV (build $LB) is newer than this artifact $V (build $VB); the PUT landed and a later pipeline advanced the worker"
+                ok=1; break
+              fi
+            fi
             sleep 15
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::VERIFY-FAILED: live qnfo-ops did not converge to $V within 12 attempts (~3 min)"
+            echo "::error::VERIFY-FAILED - live qnfo-ops did not converge to $V and did not supersede it within 12 attempts (~3 min)"
             exit 1
           fi
-          echo "VERIFIED: live qnfo-ops carries $V"
+          echo "VERIFIED: live qnfo-ops carries $V or a strictly newer build, guard invariants intact"
