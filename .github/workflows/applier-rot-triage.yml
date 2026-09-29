@@ -1,0 +1,116 @@
+name: applier-rot-triage
+
+# APPLIER-ROT-TRIAGE-1 (2026-09-29).
+#
+# CLOSES THE DETECT -> FILE GAP.
+#   applier-doctor.yml (APPLIER-DOCTOR-1) MEASURES applier rot and writes
+#   ci-status/applier-doctor.json. Measured 2026-09-29T16:37:43Z: total=37,
+#   already-applied=23, applied-now=2, stale-anchor=6, error=6, never-landed=2.
+#   Nothing consumed that verdict, so 14 appliers were non-applied and untracked.
+#
+#   Root cause (verified 2026-09-29, raw fetch of qnfo-ops/worker.js, 367668 B,
+#   VERSION 2.37.24-404hint-list): the ops worker exposes ZERO issue-filing
+#   routes and performs ZERO `INSERT INTO agent_issues`. The backlog is
+#   READ-ONLY from the worker side, so a CI finding had no path into it at all.
+#
+#   This workflow supplies that path over the D1 HTTP API, deduped for free by
+#   idx_agent_issues_open_title_ci (UNIQUE on lower(trim(title)) WHERE
+#   status='open'). Each row lands `open` -> agent_issues_autotriage_ins creates
+#   its issue_triage row -> qnfo-backlog-exec drains it. Closed loop.
+#
+# WHY push AND NOT `on: schedule`
+#   On this repository the GitHub `schedule` event has NEVER fired (documented
+#   in ci-watchdog.yml: zero runs with event=schedule across the entire history).
+#   A monitor built on a cron expression here is dead on arrival. So this hangs
+#   off push (its own path) + workflow_dispatch + repository_dispatch.
+#
+# IT NEVER DEPLOYS AND NEVER PATCHES. The only write is INSERT OR IGNORE into
+# agent_issues. A failure to file exits non-zero; it never no-ops silently.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/applier-rot-triage.yml'
+      - 'scripts/applier_rot_triage.py'
+      - 'scripts/applier-doctor.py'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [applier-rot-triage]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: applier-rot-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run the doctor + file every non-applied applier into the backlog
+        id: tri
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set +e
+          python3 scripts/applier_rot_triage.py 2>&1 | tee /tmp/tri.log
+          rc=${PIPESTATUS[0]}
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### applier-rot-triage (APPLIER-ROT-TRIAGE-1)"
+            echo ""
+            echo '```'
+            tail -n 80 /tmp/tri.log 2>/dev/null || echo "no log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish machine-readable status
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/applier-rot-triage.json <<EOF
+          {
+            "workflow": "applier-rot-triage",
+            "marker": "APPLIER-ROT-TRIAGE-1",
+            "rc": "${{ steps.tri.outputs.rc }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/applier-rot-triage.json
+
+      - name: Upload the chain-of-custody payload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: applier-rot-triage
+          path: |
+            ci-status/applier-rot-triage.json
+            ci-status/applier-doctor.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Fail closed on an unfiled finding
+        if: steps.tri.outputs.rc != '0'
+        run: |
+          echo "::error::applier-rot-triage exited ${{ steps.tri.outputs.rc }}: a non-applied applier could not be filed"
+          exit 1
