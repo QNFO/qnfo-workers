@@ -71,3 +71,19 @@ database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 # Auth: wrangler secret put PILOT_TOKEN
+
+# RETRIGGER-2 (2026-09-29, qnfo-ops, issue #1485) — empirical Actions-trigger test.
+# EVIDENCE: commit a59d0b84 (2026-09-29T19:33:58Z, message contains NO skip token) touched
+# this exact file, and yet:
+#   - ci-status/deploy-containers-pilot.json does NOT exist in the repo (the workflow's
+#     artifact step is `if: always()`, so any run that started would have written it);
+#   - deployment_history ids 175/177/178/179 (19:34:11 -> 19:35:04Z) are ALL /content-only
+#     deploys ("qnfo-ops:cf_worker_deploy" bindings_preserved=2, and
+#     "scripts/raw_put.py /content deploy") - none is a wrangler deploy;
+#   - a live probe still returns status.ok=false
+#     "Cannot read properties of undefined (reading 'running')" and GET /bindings still
+#     returns 3 bindings with no containers block.
+# Therefore push-triggered Actions for this workflow appear not to execute. This commit
+# re-fires the trigger with no skip token. If ci-status/deploy-containers-pilot.json still
+# does not appear, the CI layer itself (not the wrangler command) is the root cause and the
+# container config must be restored through a Cloudflare-side path instead.
