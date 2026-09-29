@@ -37,10 +37,31 @@ WHAT THIS PATCH DOES
 It does NOT touch the gw-fallback body/host capture added by the earlier patch:
 that improvement is retained and is independent of host order.
 
+SELF-CHECK BUG FIXED (2026-09-29, ROUTER-HOST-ORDER-CORRECTION-1b)
+------------------------------------------------------------------
+The first revision of this script could NEVER apply. Its post-condition check was
+
+    idx_ai = out.find('"https://ai.qnfo.org",')
+    idx_wd = out.find('"https://qnfo-ai.q08.workers.dev",')
+
+but the SECOND element of the array is last and therefore has no trailing comma,
+so `out.find('"https://qnfo-ai.q08.workers.dev",')` always returned -1 and the
+guard aborted with "FAIL: ai.qnfo.org is not first in ROUTER_HOSTS" even after
+both anchors had applied correctly. That turned the applier workflow into a
+guaranteed red job and the correction never reached main.
+
+The check is now BLOCK-SCOPED: it extracts the ROUTER_HOSTS array literal and
+compares the positions of the two hostnames *within that block only*. Scoping
+matters because the bare string "https://qnfo-ai.q08.workers.dev" also appears
+earlier in the file inside the ROUTER constant
+("https://qnfo-ai.q08.workers.dev/v1/chat/completions"), so an unscoped find
+would match the wrong location.
+
 Idempotent (marker check) and fail-closed (every anchor must match exactly once).
 """
 import hashlib
 import pathlib
+import re
 import sys
 
 TARGET = pathlib.Path("qnfo-research-exec/worker.js")
@@ -75,6 +96,20 @@ ANCHORS = [
     ),
 ]
 
+AI_HOST = "https://ai.qnfo.org"
+WD_HOST = "https://qnfo-ai.q08.workers.dev"
+
+
+def host_order_ok(src: str) -> bool:
+    """True iff ai.qnfo.org precedes qnfo-ai.q08.workers.dev inside ROUTER_HOSTS."""
+    m = re.search(r"var ROUTER_HOSTS = \[(.*?)\];", src, re.S)
+    if not m:
+        return False
+    block = m.group(1)
+    i_ai = block.find(AI_HOST)
+    i_wd = block.find(WD_HOST)
+    return 0 <= i_ai < i_wd
+
 
 def main() -> int:
     if not TARGET.exists():
@@ -85,6 +120,13 @@ def main() -> int:
     before = hashlib.sha256(src.encode()).hexdigest()[:16]
 
     if MARKER in src:
+        if not host_order_ok(src):
+            print(
+                "FAIL: marker present but ai.qnfo.org is not first in ROUTER_HOSTS; "
+                "refusing to report success on an inconsistent tree.",
+                file=sys.stderr,
+            )
+            return 1
         print(f"already corrected (marker {MARKER!r} present); no write. sha256={before}")
         return 0
 
@@ -106,10 +148,8 @@ def main() -> int:
             return 1
 
     # Guard against the exact regression being corrected: the failing host must
-    # not be first again.
-    idx_ai = out.find('"https://ai.qnfo.org",')
-    idx_wd = out.find('"https://qnfo-ai.q08.workers.dev",')
-    if not (0 <= idx_ai < idx_wd):
+    # not be first again. Block-scoped (see docstring).
+    if not host_order_ok(out):
         print("FAIL: ai.qnfo.org is not first in ROUTER_HOSTS", file=sys.stderr)
         return 1
 
