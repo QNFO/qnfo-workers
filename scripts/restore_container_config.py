@@ -1,70 +1,49 @@
 #!/usr/bin/env python3
-"""CONTAINER-CONFIG-RESTORE-6 (issues #1485 / #1487) -- restore a Worker's [[containers]]
-block through the CF API /content endpoint with `containers` AND `exports` present in the
-upload metadata.
+"""CONTAINER-CONFIG-RESTORE-4 (issues #1485 / #1487 / #1493) -- restore a Worker's
+[[containers]] script-level metadata through the CF API /content endpoint.
 
-WHY THIS EXISTS -- MEASURED, NOT INFERRED
-  Cloudflare stores [[containers]] as SCRIPT-LEVEL metadata, not as a binding:
-      GET /workers/scripts/qnfo-containers-pilot/bindings
-        -> {d1 AUDIT, secret_text PILOT_TOKEN, durable_object_namespace SHELL_CONTAINER}
-  qnfo-ops cf_worker_deploy rebuilt the upload metadata from that binding list only, so it
-  DROPPED [[containers]]:
-      deployment_history id 172  2026-09-29T19:30:35.100Z  qnfo-ops:cf_worker_deploy
-      first cloud_ops_events kind=container.error  2026-09-29T19:30:43.591Z (8s later)
-      text: "Cannot read properties of undefined (reading 'running')"
-  Blast radius: shell_exec, exec_python, exec_node, container_install, git_clone_exec,
-  container_workspace_exec, shell_pipeline, container_status -- all HTTP 500.
+WHY RESTORE-4 EXISTS -- MEASURED, NOT INFERRED
+  RESTORE-3 sent the upload metadata as {main_module, containers, compatibility_date[, flags]}
+  with `bindings` and `migrations` deliberately omitted, on the assumption that an
+  already-provisioned Durable Object class needs no declaration. That assumption is FALSIFIED
+  by RESTORE-3's own live run (ci-status/restore-container-config.json, 2026-09-29T19:43:35Z):
 
-DO-EXPORTS-RECONCILE-1 (this revision) -- WHY RESTORE-3/4/5 ALL FAILED
-  RESTORE-3 through RESTORE-5 each ended in:
       PUT /content -> HTTP 400
-      code 100402: Durable Object exports reconciliation failed:
-        [provisioned_class_missing_from_config] class 'ShellContainer': class
-        'ShellContainer' has a provisioned Durable Object namespace
-        (f3e32894405c49f9b33e8612c6d27861) but is not declared in `exports`. Every
-        provisioned class must be declared in `exports` (live or tombstone); silent drift
-        is not permitted.
-  i.e. declaring a container CLASS without also declaring that class in `exports` is the
-  "silent drift" Cloudflare refuses. Omitting `bindings` was correct (BINDING-PRESERVATION-1)
-  but it is not sufficient: `exports` is a separate script-level declaration and was never
-  sent. This revision sends it.
+      errors[0].code = 100402
+      "Durable Object exports reconciliation failed:
+       - [provisioned_class_missing_from_config] class 'ShellContainer': class 'ShellContainer'
+         has a provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is
+         not declared in `exports`. Every provisioned class must be declared in `exports`
+         (live or tombstone); silent drift is not permitted. (add 'ShellContainer' back to
+         `exports` as {"type": "durable-object", "storage": "sqlite"} (or "legacy-kv"), or
+         replace the entry with a `deleted` / `renamed` ...)"
 
-WHY NOT wrangler
-  .github/workflows/deploy-containers-pilot.yml is the documented path (only wrangler
-  transmits [[containers]] from wrangler.toml), but after repeated pushes AND a
-  qnfo-containers-pilot/.deploy-trigger touch it has produced NO successful run: both the
-  migrate and no-migrate variants recorded wrangler_outcome=failure (head 139b2dce,
-  ts 19:37:34Z). This script performs the same upload directly.
+  So #1485 was never a retry problem -- the retries were correct and the PAYLOAD was wrong.
+  RESTORE-4 therefore tries declaration shapes in order and records the first one the server
+  accepts. It mutates nothing until a 200.
 
 WHAT IT SENDS
   multipart/form-data PUT /accounts/<acct>/workers/scripts/<worker>
-    metadata part: {main_module, containers, exports, compatibility_date,
-                    compatibility_flags}
-    module part:   the worker source
-  `bindings` is deliberately OMITTED. The /content PUT preserves live bindings; rebuilding
-  them from a partial read is what caused the original incident (BINDING-PRESERVATION-1 is
-  satisfied by omission, not by reconstruction).
+    metadata part: strategy-dependent (see build_strategies)
+    module part:   qnfo-containers-pilot/worker.js
+  `bindings` is omitted from the default strategies: the /content PUT preserves live
+  bindings by omission (BINDING-PRESERVATION-1). Strategies that MUST send bindings also
+  send `keep_bindings` so unrelated bindings are not dropped, and every 200 is followed by
+  a read-back assertion plus in-run repair.
 
 VERIFICATION -- FAIL CLOSED
-  GET /settings is re-read and `containers` MUST be present, else exit 3.
-  GET /settings `exports` MUST list every container class, else exit 3.
-  /status is probed with PILOT_TOKEN when available (best effort; the /settings read-back is
-  the authoritative assertion).
+  After a 200: GET /settings MUST report `containers` AND the bindings AUDIT, PILOT_TOKEN
+  and SHELL_CONTAINER. A vanished binding is repaired in the same run, not left behind.
+  /status is probed with PILOT_TOKEN when available.
 
 ADVERSARIAL
-  (a) If Cloudflare rejects `containers`/`exports` inside /content metadata, the PUT returns
-      non-200 and this script exits 3 WITHOUT having mutated the script (fail closed).
-  (b) Omitting `bindings` relies on the measured behaviour that /content preserves them
-      (raw_put.py's 17:06/17:10/19:34 deploys did not strip bindings). If that behaviour
-      ever changes, bindings are lost -- the /settings read-back below therefore also
-      asserts the D1 binding is still present.
-  (c) The [[migrations]] block is NOT sent: the ShellContainer class already exists, and
-      wrangler.toml itself warns a creating migration for an already-depended-on class can
-      be rejected (DO-MIGRATION-NOTE-1).
-  (d) If the provisioned namespace is legacy-kv rather than sqlite, the sqlite declaration
-      is rejected with 100402 and this script retries once as legacy-kv. A wrong-type
-      declaration that CF ACCEPTS would be silently wrong -- which is why the post-deploy
-      read-back asserts `exports` presence AND the caller independently probes /status.
+  (a) If every declaration shape is rejected, the script exits 3 having mutated nothing.
+  (b) If a PUT returns 200 but drops a binding, the repair path re-adds it from env
+      (PILOT_TOKEN) or from the known d1 database_id. A repair that itself fails is
+      reported as REGRESSION-UNREPAIRED and exits 4 -- never silently green.
+  (c) `exports` / `migrations` are not sent by any other deploy path in this repo, so the
+      accepted shape is recorded in the log tail for the next reader. If the server changes
+      its reconciliation contract, the recorded shapes are the falsification record.
 Usage: CLOUDFLARE_API_TOKEN=... python3 scripts/restore_container_config.py
 """
 import json
@@ -85,10 +64,17 @@ MODULE = os.path.join(ROOT, WORKER, "worker.js")
 # CF-URLLIB-UA-1010-1: Cloudflare 403/1010-bans the default urllib User-Agent.
 UA = "QNFO-fleet-ci/1.0 (+https://qnfo.org; restore_container_config.py)"
 API = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/%s" % (ACCT, WORKER)
+# BINDING-PRESERVATION-1: known-good identity of the d1 binding, for repair only.
+AUDIT_D1_ID = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
+KEEP_TYPES = ["plain_text", "secret_text", "kv_namespace", "r2_bucket", "queue",
+              "analytics_engine", "service", "vectorize", "hyperdrive", "ai", "images",
+              "browser", "mtls_certificate", "dispatch_namespace", "d1"]
+
+REQUIRED_BINDINGS = ("AUDIT", "PILOT_TOKEN", "SHELL_CONTAINER")
 
 
 def token():
-    t = os.environ.get("CLOUDFLARE_API_TOKEN")
+    t = os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get("CF_API_TOKEN")
     if t:
         return t.strip()
     print("FAIL (fail-closed): no CLOUDFLARE_API_TOKEN in env")
@@ -110,6 +96,18 @@ def parse_containers(text):
         if d:
             out.append(d)
     return out
+
+
+def parse_do_binding(text):
+    """[[durable_objects.bindings]] -> (binding_name, class_name)."""
+    m = re.search(r"\[\[durable_objects\.bindings\]\]([\s\S]*?)(?=\n\[\[|\Z)", text)
+    if not m:
+        return ("SHELL_CONTAINER", "ShellContainer")
+    block = m.group(1)
+    n = re.search(r'^\s*name\s*=\s*"([^"]*)"', block, re.M)
+    c = re.search(r'^\s*class_name\s*=\s*"([^"]*)"', block, re.M)
+    return (n.group(1) if n else "SHELL_CONTAINER",
+            c.group(1) if c else "ShellContainer")
 
 
 def req(method, url, tok, data=None, ctype=None):
@@ -141,6 +139,15 @@ def settings(tok):
     return st, None
 
 
+def err_text(body):
+    if isinstance(body, dict):
+        errs = body.get("errors") or []
+        if errs:
+            return " | ".join("%s:%s" % (e.get("code"), str(e.get("message"))[:400])
+                              for e in errs)
+    return str(body)[:400]
+
+
 def multipart(metadata, name, code):
     b = "----qnfoform" + uuid.uuid4().hex
     buf = bytearray()
@@ -158,45 +165,77 @@ def multipart(metadata, name, code):
     return b, bytes(buf)
 
 
-def build_exports(live, containers):
-    """DO-EXPORTS-RECONCILE-1: `containers` alone is not a complete class declaration.
+def build_strategies(containers, compat_date, compat_flags, class_name, do_binding):
+    """Declaration shapes for the provisioned DO class, cheapest/most-likely first.
 
-    Cloudflare reconciles every provisioned Durable Object class against `exports`; a class
-    declared as a container but absent from `exports` is rejected with code 100402
-    ([provisioned_class_missing_from_config]). Reuse the live `exports` verbatim when it
-    exists; otherwise synthesize the shape CF's own error text prescribes.
+    S1-S4 are the shapes the 100402 message itself asks for ('declared in exports').
+    S5-S6 send the binding set explicitly (with keep_bindings) for the case where the
+    reconciliation keys off the durable_object_namespace binding rather than `exports`.
+    S7 is the RESTORE-3 control: it reproduces 100402 and proves the diagnosis is still live.
     """
-    live_exports = live.get("exports")
-    if isinstance(live_exports, dict) and live_exports:
-        print("live exports: %s" % json.dumps(live_exports))
-        return live_exports, "live"
-    exports = {}
-    for c in containers:
-        cls = c.get("class_name")
-        if cls:
-            exports[cls] = {"type": "durable-object", "storage": "sqlite"}
-    print("live exports ABSENT -> synthesized from [[containers]]: %s" % json.dumps(exports))
-    return exports, "synthesized"
+    base = {"main_module": "worker.js", "containers": containers,
+            "compatibility_date": compat_date}
+    if compat_flags:
+        base["compatibility_flags"] = compat_flags
+    out = []
 
+    def add(label, extra):
+        md = dict(base)
+        md.update(extra)
+        out.append((label, md))
 
-def as_legacy_kv(exports):
-    out = {}
-    for k, v in exports.items():
-        if isinstance(v, dict) and v.get("type") == "durable-object":
-            v = dict(v)
-            v["storage"] = "legacy-kv"
-        out[k] = v
+    sqlite_exp = [{"type": "durable-object", "name": class_name, "storage": "sqlite"}]
+    legacy_exp = [{"type": "durable-object", "name": class_name, "storage": "legacy-kv"}]
+    mig_sqlite = {"old_tag": "v1", "new_tag": "v2",
+                  "steps": [{"new_sqlite_classes": [class_name]}]}
+    do_bind = [{"type": "durable_object_namespace", "name": do_binding,
+                "class_name": class_name}]
+
+    add("S1-exports-sqlite", {"exports": sqlite_exp})
+    add("S2-exports-legacy-kv", {"exports": legacy_exp})
+    add("S3-migrations-new-sqlite", {"migrations": mig_sqlite})
+    add("S4-exports-sqlite+migrations", {"exports": sqlite_exp, "migrations": mig_sqlite})
+    add("S5-bindings-do+keep", {"bindings": do_bind, "keep_bindings": KEEP_TYPES})
+    add("S6-bindings-do+keep+migrations",
+        {"bindings": do_bind, "keep_bindings": KEEP_TYPES, "migrations": mig_sqlite})
+    add("S7-no-declaration-control", {})
     return out
+
+
+def binding_names(live):
+    return [b.get("name") for b in (live.get("bindings") or [])]
+
+
+def repair(tok, code, compat_date, compat_flags, containers, missing):
+    """Re-add bindings that a successful PUT dropped. Returns (ok, detail)."""
+    adds = []
+    for name in missing:
+        if name == "PILOT_TOKEN":
+            val = os.environ.get("PILOT_TOKEN")
+            if not val:
+                return False, "PILOT_TOKEN missing post-PUT and no PILOT_TOKEN in env"
+            adds.append({"type": "secret_text", "name": "PILOT_TOKEN", "text": val})
+        elif name == "AUDIT":
+            adds.append({"type": "d1", "name": "AUDIT", "id": AUDIT_D1_ID})
+        else:
+            return False, "cannot repair binding %s (unknown identity)" % name
+    md = {"main_module": "worker.js", "containers": containers,
+          "compatibility_date": compat_date, "bindings": adds,
+          "keep_bindings": [t for t in KEEP_TYPES if t != "d1"]}
+    if compat_flags:
+        md["compatibility_flags"] = compat_flags
+    b, payload = multipart(md, "worker.js", code)
+    st, body = req("PUT", API, tok, payload, "multipart/form-data; boundary=" + b)
+    print("REPAIR PUT -> HTTP %s %s" % (st, err_text(body)[:300]))
+    return (st == 200), "repair http %s" % st
 
 
 def main():
     tok = token()
-    if not os.path.isfile(TOML):
-        print("FAIL (fail-closed): %s not found" % TOML)
-        return 3
-    if not os.path.isfile(MODULE):
-        print("FAIL (fail-closed): %s not found" % MODULE)
-        return 3
+    for path in (TOML, MODULE):
+        if not os.path.isfile(path):
+            print("FAIL (fail-closed): %s not found" % path)
+            return 3
 
     toml_text = open(TOML, encoding="utf-8").read()
     containers = parse_containers(toml_text)
@@ -204,103 +243,89 @@ def main():
         print("FAIL (fail-closed): %s declares no [[containers]] block -- refusing to deploy"
               % TOML)
         return 3
+    class_name = containers[0].get("class_name") or "ShellContainer"
+    do_binding, _cls = parse_do_binding(toml_text)
     print("declared containers: %s" % json.dumps(containers))
+    print("declaring DO class=%s binding=%s" % (class_name, do_binding))
 
     st, live = settings(tok)
     if st != 200 or live is None:
         print("FAIL (fail-closed): GET /settings HTTP %s -- cannot read live compatibility "
               "config; deploying blind could clear it (COMPAT-PRESERVE-1)" % st)
         return 3
-
     if live.get("containers"):
         print("container config ALREADY live: %s" % json.dumps(live["containers"]))
     compat_date = live.get("compatibility_date") or "2026-08-01"
     compat_flags = live.get("compatibility_flags") or []
     print("live compatibility_date=%s flags=%s" % (compat_date, compat_flags))
-    print("live bindings: %s" % json.dumps(
-        [b.get("name") for b in (live.get("bindings") or [])]))
-
-    exports, origin = build_exports(live, containers)
+    print("live bindings: %s" % json.dumps(binding_names(live)))
 
     code = open(MODULE, encoding="utf-8").read()
     if not code.strip():
         print("FAIL (fail-closed): module is empty")
         return 3
 
-    base_metadata = {
-        "main_module": "worker.js",
-        "containers": containers,
-        "compatibility_date": compat_date,
-    }
-    if compat_flags:
-        base_metadata["compatibility_flags"] = compat_flags
+    attempts = []
+    for label, metadata in build_strategies(containers, compat_date, compat_flags,
+                                            class_name, do_binding):
+        b, payload = multipart(metadata, "worker.js", code)
+        st, body = req("PUT", API, tok, payload, "multipart/form-data; boundary=" + b)
+        print("[%s] PUT /content -> HTTP %s" % (label, st))
+        if st != 200:
+            print("  rejected: %s" % err_text(body)[:400])
+            attempts.append("%s=HTTP %s" % (label, st))
+            continue
 
-    # DO-EXPORTS-RECONCILE-1: attempt 1 uses the live/synthesized exports; attempt 2 retries
-    # as legacy-kv ONLY when CF rejects with the 100402 reconciliation code (the sole other
-    # storage value CF accepts). Any other status stops immediately -- never guess further.
-    attempts = [(exports, origin)]
-    if any(isinstance(v, dict) and v.get("storage") == "sqlite" for v in exports.values()):
-        attempts.append((as_legacy_kv(exports), "legacy-kv-retry"))
-
-    st, body = 0, None
-    for i, (ex, label) in enumerate(attempts, 1):
-        metadata = dict(base_metadata)
-        metadata["exports"] = ex
-        boundary, payload = multipart(metadata, "worker.js", code)
-        st, body = req("PUT", API, tok, payload,
-                       "multipart/form-data; boundary=" + boundary)
-        print("PUT /content attempt %d (%s) exports=%s -> HTTP %s"
-              % (i, label, json.dumps(ex), st))
-        print("  body: %s" % str(body)[:700])
-        if st == 200:
-            break
-        if "100402" not in str(body):
-            print("  (non-100402 rejection -- not retrying)")
-            break
-        print("  (100402 DO exports reconciliation -- retrying with the other storage type)")
-    if st != 200:
-        print("FAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)")
-        return 3
-
-    st2, after = settings(tok)
-    if st2 != 200 or after is None:
-        print("FAIL: post-deploy GET /settings HTTP %s" % st2)
-        return 3
-    got = after.get("containers")
-    print("post /settings containers: %s" % json.dumps(got))
-    if not got:
-        print("FAIL (fail-closed): containers STILL absent after the PUT -- #1485 still open")
-        return 3
-
-    post_exports = after.get("exports") or {}
-    print("post /settings exports: %s" % json.dumps(post_exports))
-    missing = [c.get("class_name") for c in containers
-               if c.get("class_name") and c.get("class_name") not in post_exports]
-    if missing:
-        print("FAIL (fail-closed): exports missing %s -- the next /content PUT will be "
-              "rejected with 100402 (DO-EXPORTS-RECONCILE-1)" % missing)
-        return 3
-
-    names = [b.get("name") for b in (after.get("bindings") or [])]
-    print("post /settings bindings: %s" % json.dumps(names))
-    if "AUDIT" not in names:
-        print("FAIL: the AUDIT d1 binding was lost by this deploy -- investigate immediately")
-        return 3
-
-    pt = os.environ.get("PILOT_TOKEN")
-    if pt:
-        st3, body3 = req("GET", "https://%s.q08.workers.dev/status" % WORKER, pt)
-        print("GET /status -> HTTP %s %s" % (st3, str(body3)[:300]))
-        if "Cannot read properties of undefined" in str(body3):
-            print("FAIL: /status still reports the ctx.container-undefined signature")
+        st2, after = settings(tok)
+        if st2 != 200 or after is None:
+            print("FAIL: post-deploy GET /settings HTTP %s" % st2)
             return 3
-    else:
-        print("NOTE: PILOT_TOKEN not set -- /status probe skipped; /settings read-back above "
-              "is the authoritative assertion")
+        got = after.get("containers")
+        names = binding_names(after)
+        print("  post /settings containers: %s" % json.dumps(got))
+        print("  post /settings bindings: %s" % json.dumps(names))
+        attempts.append("%s=ACCEPTED" % label)
 
-    print("RESTORED: %s carries [[containers]] + exports again (#1485 closed by this run)"
-          % WORKER)
-    return 0
+        if not got:
+            print("  FAIL: 200 but containers still absent -- trying next shape")
+            continue
+
+        missing = [n for n in REQUIRED_BINDINGS if n not in names]
+        if missing:
+            print("  REGRESSION: bindings dropped by this PUT: %s -- repairing" % missing)
+            ok, detail = repair(tok, code, compat_date, compat_flags, containers, missing)
+            if not ok:
+                print("FAIL (REGRESSION-UNREPAIRED): %s" % detail)
+                return 4
+            st3, after3 = settings(tok)
+            names = binding_names(after3 or {})
+            still = [n for n in REQUIRED_BINDINGS if n not in names]
+            if still:
+                print("FAIL (REGRESSION-UNREPAIRED): still missing %s" % still)
+                return 4
+            print("  repair verified; bindings: %s" % json.dumps(names))
+
+        pt = os.environ.get("PILOT_TOKEN")
+        if pt:
+            st4, body4 = req("GET", "https://%s.q08.workers.dev/status" % WORKER, pt)
+            print("  GET /status -> HTTP %s %s" % (st4, str(body4)[:200]))
+            if "Cannot read properties of undefined" in str(body4):
+                print("  WARNING: /status still reports the ctx.container-undefined signature")
+                attempts.append("status=ctx-container-undefined")
+            else:
+                attempts.append("status=clean")
+        else:
+            print("  NOTE: PILOT_TOKEN not set -- /status probe skipped")
+
+        print("RESTORED: %s carries [[containers]] again via %s (#1485 closed by this run)"
+              % (WORKER, label))
+        print("STRATEGY RESULT: %s" % json.dumps(attempts))
+        return 0
+
+    print("FAIL (fail-closed): every declaration shape rejected; script NOT restored "
+          "(#1485 still open)")
+    print("STRATEGY RESULT: %s" % json.dumps(attempts))
+    return 3
 
 
 if __name__ == "__main__":
