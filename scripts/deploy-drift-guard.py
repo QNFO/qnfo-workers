@@ -92,7 +92,8 @@ import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONST = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*"([^"]+)"')
+# VERSION-PRECEDENCE-1: capture the prefix so the plain VERSION constant can win.
+CONST = re.compile(r'(?:var|let|const)\s+(QNFO_)?VERSION\s*=\s*"([^"]+)"')
 CANON = ("deployed-current.worker.js", "worker.js")
 TIMEOUT = 20
 NARRATIVE = ["qnfo-ai", "qnfo-research-exec", "qnfo-ipatent", "qnfo-gateway"]
@@ -195,6 +196,25 @@ def deployed_workers(acct, token):
     return out
 
 
+def _repo_version(text):
+    """VERSION-PRECEDENCE-1: prefer the plain `VERSION` constant over `QNFO_VERSION`.
+
+    A worker artifact can declare both. `QNFO_VERSION` is a build/fabric tag
+    (e.g. "qnfo-archive/fabric-20260910"); `VERSION` is the value the worker actually
+    serves on /health. Returning the first regex match made qnfo-archive report a fabric
+    tag as its repo version -- a permanent false DRIFT against a live /health of 1.2.0,
+    and a corrupted numeric direction comparison for --ahead. The plain constant wins;
+    QNFO_VERSION remains a fallback so no worker becomes invisible to the drift check.
+    """
+    hits = CONST.findall(text)
+    if not hits:
+        return None
+    for prefix, val in hits:
+        if not prefix:
+            return val
+    return hits[0][1]
+
+
 def repo_artifact(d):
     """Return (version, path, text) for the canonical repo artifact, or (None, None, None)."""
     for fn in CANON:
@@ -205,9 +225,9 @@ def repo_artifact(d):
                     text = fh.read()
             except OSError:
                 continue
-            m = CONST.search(text)
-            if m:
-                return m.group(1), p, text
+            v = _repo_version(text)
+            if v:
+                return v, p, text
             return None, p, text
     return None, None, None
 

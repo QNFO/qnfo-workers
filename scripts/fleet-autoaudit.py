@@ -154,7 +154,11 @@ def classify(d):
         if not worker:
             return
         if worker in rows and rows[worker]["note"] != "SYNC":
-            rows[worker]["note"] += "+" + note
+            # NOTE-APPEND-IDEMPOTENT-1 (VERSION-PRECEDENCE-1): DUP-WORKER-1 can deliver the
+            # same class twice for one resolved worker name; appending it again produced
+            # "NO_REPO_VERSION+NO_REPO_VERSION", a note no classifier or query matches.
+            if note not in rows[worker]["note"].split("+"):
+                rows[worker]["note"] += "+" + note
             rows[worker]["match"] = 0
             return
         rows[worker] = {"worker": worker, "http": http, "live": live,
