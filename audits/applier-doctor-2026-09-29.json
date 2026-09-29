@@ -1,15 +1,13 @@
 {
  "counts": {
-  "already-applied": 20,
+  "already-applied": 23,
   "applied-now": 2,
-  "error": 8,
-  "stale-anchor": 5
+  "error": 6,
+  "stale-anchor": 6
  },
  "errored": [
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/driftguard-server-version-patch.py",
-  "scripts/fleet-autoaudit-d1ok-patch-v2.py",
-  "scripts/fleet-autoaudit-d1ok-patch.py",
   "scripts/github409-variant-reread-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/selfheal-volfloor-patch.py",
@@ -37,7 +35,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=34 {'already-applied': 20, 'stale-anchor': 12, 'landed': 1, 'error': 1}",
+    "SUMMARY total=36 {'already-applied': 23, 'stale-anchor': 11, 'landed': 1, 'error': 1}",
     "LANDED(1): deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -157,25 +155,30 @@
   },
   {
    "changed_files": [],
-   "rc": 8,
+   "rc": 0,
    "script": "scripts/fleet-autoaudit-d1ok-patch-v2.py",
    "tail": [
-    "anchor 3: applied (1/1)",
-    "anchor 4: applied (1/1)",
-    "::error::post-condition failed: d1_err call sites != 2"
+    "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)"
    ],
-   "verdict": "error"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
-   "rc": 5,
+   "rc": 0,
    "script": "scripts/fleet-autoaudit-d1ok-patch.py",
    "tail": [
-    "anchor 3: applied (1/1)",
-    "anchor 4: applied (1/1)",
-    "::error::post-condition failed: 3 legacy res.get(\"ok\") call site(s) remain -- aborting WITHOUT writing."
+    "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)"
    ],
-   "verdict": "error"
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 3,
+   "script": "scripts/fleet-autoaudit-v4-envelope-patch.py",
+   "tail": [
+    "::error::anchor drift on scripts/fleet-autoaudit.py: expected (def,site_a,site_b,msg)=(1,1,1,1), got (1, 0, 0, 0)"
+   ],
+   "verdict": "stale-anchor"
   },
   {
    "changed_files": [],
@@ -321,6 +324,16 @@
   },
   {
    "changed_files": [],
+   "rc": 0,
+   "script": "scripts/router-transport-failover-patch.py",
+   "tail": [
+    "already-patched: qnfo-research-exec/worker.js",
+    "already-patched: qnfo-research-exec/deployed-current.worker.js"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
    "rc": 3,
    "script": "scripts/run-gate-internal-patch.py",
    "tail": [
@@ -378,9 +391,10 @@
   "scripts/attachguard-xml-form-patch.py",
   "scripts/d1guard-literal-aware-patch.py",
   "scripts/deploy-guard-wrap-patch.py",
+  "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "total": 35,
- "ts": "2026-09-29T16:34:26.259Z"
+ "total": 37,
+ "ts": "2026-09-29T16:37:43.639Z"
 }
