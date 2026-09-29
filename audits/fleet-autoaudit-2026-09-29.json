@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 16:26:23",
+  "audited_at": "2026-09-29 16:32:30",
   "d1_write_failures": [
     [
       "ai-health-prober",
@@ -452,6 +452,13 @@
         "live": "1.6.3-version-sot",
         "repo": "1.6.4-metric-freshness",
         "worker": "qnfo-lifecycle"
+      },
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/deployed-current.worker.js",
+        "dir": "qnfo-ops",
+        "live": "2.37.24-404hint-list",
+        "repo": "2.37.25-ops-deploy-ledger",
+        "worker": "qnfo-ops"
       }
     ],
     "cf_script_list": true,
@@ -463,6 +470,12 @@
         "live": "1.6.3-version-sot",
         "repo": "1.6.4-metric-freshness",
         "worker": "qnfo-lifecycle"
+      },
+      {
+        "dir": "qnfo-ops",
+        "live": "2.37.24-404hint-list",
+        "repo": "2.37.25-ops-deploy-ledger",
+        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
@@ -845,7 +858,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 35,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
@@ -873,7 +886,6 @@
       "qnfo-kaizen",
       "qnfo-memory-mcp",
       "qnfo-observability",
-      "qnfo-ops",
       "qnfo-outreach",
       "qnfo-paper-indexer",
       "qnfo-paper-reviser",
@@ -1544,11 +1556,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": null,
+      "before": "2.37.25-ops-deploy-ledger",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.37.24-404hint-list",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
