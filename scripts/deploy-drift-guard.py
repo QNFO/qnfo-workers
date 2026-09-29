@@ -17,6 +17,10 @@ CLASSES (no class is ever silently dropped):
   NOT_DEPLOYED     genuinely absent: HTTP 404 AND not in the CF account script list
   NO_HEALTH_ROUTE  IS deployed, but https://<name>.q08.workers.dev/health 404s
                    (workers.dev route disabled, or no /health route) -- NOT "not deployed"
+  NOT_A_WORKER     the directory declares no worker config (no wrangler.toml/json/jsonc)
+                   AND ships no worker artifact AND the name is absent from the CF script
+                   list. Repo scaffolding / non-worker directories, reported separately so
+                   they cannot inflate NOT_DEPLOYED (issue #1379).
   LIVE_ERR         /health unreachable or non-404 error
   SYNC             repo == live
 
@@ -34,6 +38,21 @@ NAME-RESOLUTION-1 (2026-09-29, FLEET-AUTOAUDIT false negatives):
   reading and reports `cf_script_list: false` rather than guessing.
   Every directory still yields exactly one class -- the fix removes a false negative,
   it does not introduce a silent skip.
+
+NOT-DEPLOYED-KEYED-BY-DIR-1 / NOT-DEPLOYED-NONWORKER-NOISE-1 (2026-09-29, issues
+#1379/#1380): two residual defects in the class above.
+  (a) KEYING: every other class emitted the RESOLVED worker name, but NOT_DEPLOYED emitted
+      the raw repo DIRECTORY, so the consumer wrote `worker_live_audit.worker` values that
+      are not worker names and cannot be joined against the CF account or the service
+      registry. `not_deployed_workers` is now a list of {"worker","dir"} objects (the legacy
+      bare-string list is still emitted as `not_deployed_dirs` so no consumer silently
+      changes meaning).
+  (b) NOISE: a directory with no worker config and no worker artifact is not a worker; the
+      old code reported it as NOT_DEPLOYED purely because its name was absent from the
+      account. Measured 2026-09-29: ~26% of the class. Such directories are now classed
+      NOT_A_WORKER, which is reported and counted but never treated as a worker.
+  `scope` is emitted in JSON ("all" | "narrative") so the consumer knows whether the run
+  covered every directory and may therefore purge stale rows (issue #1378).
 
 DIRECTION (2026-09-29, issue #1229): a version mismatch is not automatically "the repo
 is right". The live bundle can be AHEAD of the repo (DEPLOY-UNLOGGED-MUTATION, issues
@@ -59,9 +78,10 @@ confuse the two again.
 
 Default scope = the narrative-generation surfaces we own. `--all` = all workers.
 Exit: 0 clean (scoped: SYNC only) | 1 any DRIFT / CONTENT_DRIFT / NO_*_VERSION / LIVE_ERR
-NO_HEALTH_ROUTE is reported but deliberately NOT counted in the exit code: a private
-worker with a disabled workers.dev route is not a repo<->live divergence, and making it
-blocking would turn a monitoring gap into a fleet-wide CI outage.
+NO_HEALTH_ROUTE and NOT_A_WORKER are reported but deliberately NOT counted in the exit
+code: a private worker with a disabled workers.dev route is not a repo<->live divergence,
+and a non-worker directory is not a divergence at all -- making either blocking would turn
+a monitoring gap into a fleet-wide CI outage.
 """
 import hashlib
 import json
@@ -236,7 +256,7 @@ def main():
 
     drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []
     not_deployed, sync_workers, live_err, no_health = [], [], [], []
-    seen_workers = set()
+    not_a_worker = []
 
     for d in sorted(os.listdir(ROOT)):
         if not os.path.isdir(os.path.join(ROOT, d)):
@@ -246,15 +266,10 @@ def main():
         if d.startswith(".") or d.startswith("_"):
             continue
         # NAME-RESOLUTION-1: the directory is not the worker name. Probe what is deployed.
-        worker = wrangler_name(d) or d
+        declared = wrangler_name(d)
+        worker = declared or d
         if wanted and d not in wanted and worker not in wanted:
             continue
-        # DUP-WORKER-1: two directories can resolve to the SAME deployed worker.
-        # Emitting it twice produced the malformed note
-        # "NO_REPO_VERSION+NO_REPO_VERSION" and double-counted the fleet.
-        if worker in seen_workers:
-            continue
-        seen_workers.add(worker)
         rv, rpath, rtext = repo_artifact(d)
         live, lv = live_result(worker)
         if not live and lv is None:
@@ -263,11 +278,13 @@ def main():
             # calling that NOT_DEPLOYED is the false negative NAME-RESOLUTION-1 closes.
             if deployed is None or worker in deployed:
                 no_health.append((d, worker))
+            elif declared is None and rpath is None:
+                # NOT-DEPLOYED-NONWORKER-NOISE-1: no wrangler config, no worker artifact,
+                # and the name is absent from the account -- this directory is not a worker.
+                # Reporting it as NOT_DEPLOYED inflated the class with repo scaffolding.
+                not_a_worker.append((d, worker))
             else:
-                # NOT-DEPLOYED-IDENTITY-1: emit the RESOLVED worker, not the
-                # directory. Mixing the two spaces in one column made a
-                # directory name look like a worker name (issue #1377).
-                not_deployed.append(worker)
+                not_deployed.append((d, worker))
             continue
         if not live:  # ERR (not 404)
             live_err.append((d, worker, lv))
@@ -289,6 +306,7 @@ def main():
 
     if want_json:
         print(json.dumps({
+            "scope": "all" if scan_all else "narrative",
             "sync": len(sync_workers),
             "sync_workers": sync_workers,
             "drift": [{"worker": w, "dir": d, "repo": r, "live": l} for d, w, r, l in drift],
@@ -300,8 +318,11 @@ def main():
             "no_live_version": [{"worker": w, "dir": d, "repo": r} for d, w, r in no_live_ver],
             "live_err": [{"worker": w, "dir": d, "err": e} for d, w, e in live_err],
             "no_health_route": [{"worker": w, "dir": d} for d, w in no_health],
-            "not_deployed_workers": not_deployed,
+            "not_deployed_workers": [{"worker": w, "dir": d} for d, w in not_deployed],
+            "not_deployed_dirs": [d for d, w in not_deployed],
             "not_deployed_notdrift": len(not_deployed),
+            "not_a_worker": [{"worker": w, "dir": d} for d, w in not_a_worker],
+            "not_a_worker_count": len(not_a_worker),
             "name_resolution": True,
             "cf_script_list": deployed is not None,
             "content_checked": bool(want_content and content_ok),
@@ -319,6 +340,8 @@ def main():
             print(f"NO_LIVE_VERSION {w} (dir {d}): repo={rv_}")
         for d, w in no_health:
             print(f"NO_HEALTH_ROUTE {w} (dir {d})")
+        for d, w in not_a_worker:
+            print(f"NOT_A_WORKER {w} (dir {d})")
         for d, w, e in live_err:
             print(f"LIVE_ERR {w} (dir {d}): {e}")
         tag = "all" if scan_all else "narrative"
@@ -327,6 +350,7 @@ def main():
               f"no_repo_version={len(no_repo_ver)} no_live_version={len(no_live_ver)} "
               f"no_health_route={len(no_health)} live_err={len(live_err)} "
               f"not_deployed_notdrift={len(not_deployed)} "
+              f"not_a_worker={len(not_a_worker)} "
               f"cf_script_list={deployed is not None} "
               f"content_checked={bool(want_content and content_ok)}")
 
