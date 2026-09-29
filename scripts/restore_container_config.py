@@ -1,6 +1,27 @@
 #!/usr/bin/env python3
-"""CONTAINER-CONFIG-RESTORE-3 (issues #1485 / #1487) -- restore a Worker's [[containers]]
+"""CONTAINER-CONFIG-RESTORE-4 (issues #1485 / #1487) -- restore a Worker's [[containers]]
 block through the CF API /content endpoint with `containers` present in the upload metadata.
+
+RESTORE-4 CHANGE -- THE MEASURED BLOCKER THAT RESTORE-3 HIT
+  RESTORE-3 shipped and ran (ci-status/restore-container-config.json, ts 2026-09-29T19:43:35Z)
+  and FAILED at the PUT:
+
+      PUT /content -> HTTP 400
+      code 100402: Durable Object exports reconciliation failed:
+        [provisioned_class_missing_from_config] class 'ShellContainer': class 'ShellContainer'
+        has a provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is
+        not declared in `exports`. Every provisioned class must be declared in `exports`
+        (live or tombstone); silent drift is not permitted.
+        (add 'ShellContainer' back to `exports` as {"type": "durable-object",
+         "storage": "sqlite"} (or "legacy-kv"), ...)
+
+  So `containers` inside /content metadata IS accepted by Cloudflare -- the PUT died on a
+  DIFFERENT missing field. RESTORE-3 sent {main_module, containers, compatibility_date[, flags]}
+  and omitted `exports`. This is the SAME defect class as the original incident, mirrored:
+      qnfo-ops cf_worker_deploy  metadata = {main_module, bindings, ..., exports}  -> drops `containers`
+      RESTORE-3                  metadata = {main_module, containers, ...}         -> drops `exports`
+  Neither path sent both. RESTORE-4 sends BOTH, and fails closed if `exports` cannot be
+  determined, because a blind PUT would just reproduce the 100402.
 
 WHY THIS EXISTS -- MEASURED, NOT INFERRED
   Cloudflare stores [[containers]] as SCRIPT-LEVEL metadata, not as a binding:
@@ -16,18 +37,27 @@ WHY THIS EXISTS -- MEASURED, NOT INFERRED
 
 WHY NOT wrangler
   .github/workflows/deploy-containers-pilot.yml is the documented path (only wrangler
-  transmits [[containers]] from wrangler.toml), but after repeated pushes AND a
-  qnfo-containers-pilot/.deploy-trigger touch it has produced NO
-  ci-status/deploy-containers-pilot.json, i.e. it has never completed a run
-  (CONTAINER-DEPLOY-NEVER-RAN-1). This script performs the same upload directly.
+  transmits [[containers]] from wrangler.toml), but ci-status/deploy-containers-pilot.json
+  records wrangler_outcome=failure, nomig_outcome=failure -- both the migration and the
+  no-migration wrangler paths are rejected. This script performs the same upload directly.
 
 WHAT IT SENDS
   multipart/form-data PUT /accounts/<acct>/workers/scripts/<worker>
-    metadata part: {main_module, containers, compatibility_date, compatibility_flags}
+    metadata part: {main_module, containers, exports, compatibility_date, compatibility_flags}
     module part:   the worker source
   `bindings` is deliberately OMITTED. The /content PUT preserves live bindings; rebuilding
   them from a partial read is what caused the original incident (BINDING-PRESERVATION-1 is
   satisfied by omission, not by reconstruction).
+
+  `exports` is NOT omitted: unlike bindings it is subject to reconciliation against
+  provisioned Durable Object namespaces, and CF rejects the upload (100402) if a provisioned
+  class is absent from it. It is derived, in priority order:
+    1. the live `exports` map from GET /settings, when present (preserve-what-is-live);
+    2. [[migrations]] new_sqlite_classes  -> {"type": "durable-object", "storage": "sqlite"}
+       [[migrations]] new_classes         -> {"type": "durable-object", "storage": "legacy-kv"}
+    3. [[durable_objects.bindings]] class_name;
+    4. any live durable_object_namespace binding's class_name (this is the belt-and-braces
+       path -- it is the source that proved ShellContainer is provisioned).
 
 VERIFICATION -- FAIL CLOSED
   GET /settings is re-read and `containers` MUST be present, else exit 3.
@@ -44,6 +74,10 @@ ADVERSARIAL
   (c) The [[migrations]] block is NOT sent: the ShellContainer class already exists, and
       wrangler.toml itself warns a creating migration for an already-depended-on class can
       be rejected (DO-MIGRATION-NOTE-1).
+  (d) Deriving `exports` from wrangler.toml rather than from the live config could in
+      principle declare a class that is NOT provisioned. Cloudflare rejects that too, but
+      with a different code; the PUT status is printed verbatim so the two are
+      distinguishable. Step 1 (live exports) avoids the guess entirely when CF returns it.
 Usage: CLOUDFLARE_API_TOKEN=... python3 scripts/restore_container_config.py
 """
 import json
@@ -89,6 +123,45 @@ def parse_containers(text):
         if d:
             out.append(d)
     return out
+
+
+def derive_exports(toml_text, live):
+    """Build the upload metadata's `exports` map.
+
+    CF error 100402 (provisioned_class_missing_from_config) rejects any upload that omits a
+    provisioned Durable Object class from `exports`, so this MUST be non-empty for a worker
+    that owns a DO namespace (qnfo-containers-pilot owns ShellContainer).
+    """
+    exports = {}
+
+    # 1. preserve the live exports map when the API returns one.
+    live_exports = live.get("exports") if isinstance(live, dict) else None
+    if isinstance(live_exports, dict) and live_exports:
+        for k, v in live_exports.items():
+            exports[k] = v
+
+    # 2. wrangler.toml [[migrations]]
+    for block in re.findall(r"\[\[migrations\]\]([\s\S]*?)(?=\n\[\[|\Z)", toml_text):
+        for cls_list in re.findall(r"new_sqlite_classes\s*=\s*\[([^\]]*)\]", block):
+            for c in re.findall(r'"([^"]+)"', cls_list):
+                exports.setdefault(c, {"type": "durable-object", "storage": "sqlite"})
+        for cls_list in re.findall(r"new_classes\s*=\s*\[([^\]]*)\]", block):
+            for c in re.findall(r'"([^"]+)"', cls_list):
+                exports.setdefault(c, {"type": "durable-object", "storage": "legacy-kv"})
+
+    # 3. wrangler.toml [[durable_objects.bindings]]
+    for block in re.findall(r"\[\[durable_objects\.bindings\]\]([\s\S]*?)(?=\n\[\[|\Z)",
+                            toml_text):
+        m = re.search(r'class_name\s*=\s*"([^"]+)"', block)
+        if m:
+            exports.setdefault(m.group(1), {"type": "durable-object", "storage": "sqlite"})
+
+    # 4. any DO namespace already live on the script MUST also be declared (the 100402 trigger)
+    for b in ((live.get("bindings") or []) if isinstance(live, dict) else []):
+        if b.get("type") == "durable_object_namespace" and b.get("class_name"):
+            exports.setdefault(b["class_name"],
+                               {"type": "durable-object", "storage": "sqlite"})
+    return exports
 
 
 def req(method, url, tok, data=None, ctype=None):
@@ -168,6 +241,15 @@ def main():
     print("live bindings: %s" % json.dumps(
         [b.get("name") for b in (live.get("bindings") or [])]))
 
+    # RESTORE-4: `exports` is mandatory, not optional. CF 100402 otherwise.
+    exports = derive_exports(toml_text, live)
+    print("derived exports: %s" % json.dumps(exports))
+    if not exports:
+        print("FAIL (fail-closed): no Durable Object exports could be determined, but a "
+              "provisioned class must be declared in `exports` (CF 100402). Refusing to PUT "
+              "blind -- it would reproduce the RESTORE-3 failure.")
+        return 3
+
     code = open(MODULE, encoding="utf-8").read()
     if not code.strip():
         print("FAIL (fail-closed): module is empty")
@@ -176,6 +258,7 @@ def main():
     metadata = {
         "main_module": "worker.js",
         "containers": containers,
+        "exports": exports,
         "compatibility_date": compat_date,
     }
     if compat_flags:
@@ -188,6 +271,9 @@ def main():
     print("  body: %s" % str(body)[:600])
     if st != 200:
         print("FAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)")
+        if "100402" in str(body) or "provisioned_class_missing_from_config" in str(body):
+            print("  NOTE: 100402 means `exports` still does not reconcile with the provisioned "
+                  "DO namespaces; derived exports above are the thing to correct.")
         return 3
 
     st2, after = settings(tok)
