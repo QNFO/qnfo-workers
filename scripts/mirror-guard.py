@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """mirror-guard.py - MIRROR-STALENESS-DEPLOY-FAIL-1 (issue 1077, MIRROR-AUTOMATION-1).
+MIRROR-CONTENT-DRIFT-1 (issue 1229, 2026-09-29): VERSION-only parity was a blind spot.
 
 WHY: the canonical server-side deploy (qnfo-ops POST /ops/deploy) fetches the
 CANONICAL artifact from qnfo-workers main at <dir>/deployed-current.worker.js, NOT
@@ -15,15 +16,31 @@ every version constant from each file and compare. Same constant NAMES but diffe
 VALUES = a genuine lag (safe to regenerate with cp). Different NAME SETS = a
 structural difference (probably a build artifact) = report only, never auto-copy.
 
+CONTENT LAYER (2026-09-29, issue 1229): comparing version constants alone reported
+lagging=0 while 20 workers were VERSION-identical and content-divergent by ~3720
+lines. A VERSION-equal pair is now ALSO compared by content hash:
+  CONTENT-DRIFT        source import-free, mirror not a capture -> auto-fixable (cp)
+  CONTENT-DIFF-REVIEW  source uses imports (build artifact)    -> report only
+Detection is always on; only --fix mutates.
+
 Usage:
   python scripts/mirror-guard.py          # report; exit 1 if any drift
   python scripts/mirror-guard.py --fix    # regenerate lagging mirrors from source
 Exit: 0 clean | 1 drift found
 """
-import os, re, shutil, sys
+import hashlib, os, re, shutil, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONST = re.compile(r'(?:var|let|const)\s+([A-Za-z0-9_]*VERSION[A-Za-z0-9_]*)\s*=\s*"([^"]*)"')
+
+
+def sha256(path):
+    """Content hash, CRLF-normalised so line-ending churn is not read as drift."""
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest()
+    except OSError:
+        return None
 
 
 def is_captured(path):
@@ -70,6 +87,7 @@ def versions(path):
 def main(argv):
     fix = "--fix" in argv
     rows, drift, missing, fixed, captured = [], [], [], [], []
+    content_drift, review = [], []
 
     for name in sorted(os.listdir(ROOT)):
         d = os.path.join(ROOT, name)
@@ -87,6 +105,28 @@ def main(argv):
             rows.append((name, "MISSING", str(s), "-"))
             continue
         if s == m:
+            # MIRROR-CONTENT-DRIFT-1 (issue 1229): equal version constants do NOT
+            # imply parity. On 2026-09-29 this guard reported lagging=0 while 20
+            # workers were VERSION-identical and content-divergent by ~3.7k lines.
+            # The canonical deploy reads the MIRROR, so such a pair silently
+            # ships stale code. Compare bytes, not just the constants.
+            hs, hm = sha256(src_p), sha256(mir_p)
+            if hs == hm:
+                continue
+            if is_captured(mir_p):
+                captured.append(name)
+                rows.append((name, "CAPTURED", "plain source", "multipart-upload capture - NOT auto-fixable"))
+                continue
+            if is_import_free(src_p):
+                content_drift.append(name)
+                drift.append(name)
+                rows.append((name, "CONTENT-DRIFT", "sha=%s" % hs[:12], "sha=%s" % hm[:12]))
+                if fix:
+                    shutil.copyfile(src_p, mir_p)
+                    fixed.append(name)
+            else:
+                review.append(name)
+                rows.append((name, "CONTENT-DIFF-REVIEW", "import-using source - report only", "sha=%s" % hm[:12]))
             continue
         if is_captured(mir_p):
             captured.append(name)
@@ -119,14 +159,17 @@ def main(argv):
                 rows.append((name, "NAMESET-DIFF", str(s), str(m)))
 
     if rows:
-        print("%-34s %-14s %-40s %s" % ("worker", "verdict", "source", "mirror"))
+        print("%-34s %-20s %-40s %s" % ("worker", "verdict", "source", "mirror"))
         for r in rows:
-            print("%-34s %-14s %-40s %s" % r)
-    print("\nsummary: lagging=%d fixed=%d missing_mirror=%d captured=%d" % (len(drift), len(fixed), len(missing), len(captured)))
+            print("%-34s %-20s %-40s %s" % r)
+    print("\nsummary: lagging=%d content_drift=%d review=%d fixed=%d missing_mirror=%d captured=%d"
+          % (len(drift), len(content_drift), len(review), len(fixed), len(missing), len(captured)))
     if missing:
         print("missing mirror: " + ", ".join(missing))
     if captured:
         print("captured mirror: " + ", ".join(captured))
+    if review:
+        print("report-only (import-using source): " + ", ".join(review))
     if drift and not fix:
         print("\nDRIFT GATE FAILED - run with --fix to regenerate from source, then commit BOTH files")
     return 1 if (drift and not fix) else 0
