@@ -1,0 +1,7 @@
+{
+  "workflow": "sync-backlog-repo-artifact",
+  "issue": "COMMITBACK-DRIFT-1 / 1368",
+  "job_status": "failure",
+  "head": "14a0d94aa7df032f044b50f8971918464077e698",
+  "ts": "2026-09-29T15:48:01.871Z"
+}
