@@ -3095,11 +3095,23 @@ async function gitCloneExec(env, args) {
   const name = args && args.name ? String(args.name) : url2.split("/").pop().replace(/\.git$/, "");
   const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 12e4, 1e4), 3e5);
   if (!url2) return { ok: false, error: "url required" };
-  const cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name }, timeout);
-  if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result };
-  if (!cmd) return { ok: true, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ) };
-  const execJ = await containerDispatch(env, "/workspace/exec", { dir: name, cmd }, timeout);
-  return { ok: (execJ.result || {}).exitCode === 0, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ), exec_result: fmtContainer(execJ) };
+  // GITCLONE-WARM-RETRY-1 (issue #1465): warm the container, then retry once on
+  // a timeout-class failure. Without this a cold start consumes the whole budget
+  // and every clone reports "container timeout after Nms".
+  try { await containerDispatch(env, "/health", {}, 2e4); } catch (e) { }
+  let effName = name;
+  let cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
+  let warmRetried = false;
+  if (!cloneJ.ok && /timeout|timed out|ETIMEDOUT/i.test(String(cloneJ.error || "") + " " + String((cloneJ.result || {}).stderr || ""))) {
+    warmRetried = true;
+    effName = name + "-r" + Math.random().toString(36).slice(2, 6);
+    try { await containerDispatch(env, "/health", {}, 3e4); } catch (e) { }
+    cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
+  }
+  if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result, warm_retry: warmRetried };
+  if (!cmd) return { ok: true, cloned: true, path: "/workspace/" + effName, clone_result: fmtContainer(cloneJ), warm_retry: warmRetried };
+  const execJ = await containerDispatch(env, "/workspace/exec", { dir: effName, cmd }, timeout);
+  return { ok: (execJ.result || {}).exitCode === 0, cloned: true, path: "/workspace/" + effName, clone_result: fmtContainer(cloneJ), exec_result: fmtContainer(execJ), warm_retry: warmRetried };
 }
 __name(gitCloneExec, "gitCloneExec");
 __name2(gitCloneExec, "gitCloneExec");
