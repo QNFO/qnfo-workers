@@ -1,0 +1,118 @@
+name: apply-binding-merge-repair-1
+
+# BINDING-INSTALL-MERGE-1 repair driver (2026-09-29).
+#
+# ROOT CAUSE (issue #1448, filed this session): cfWorkerDeploy installed wrangler.toml
+# bindings ONLY when the target worker carried ZERO non-secret bindings. qnfo-research-exec
+# already carried 6 non-secret bindings (AI, GRAPH_DB, LIVING_PAPER, MIRROR, PDF_SVC,
+# QNFO_AUDIT), so its declared QNFO_AI service binding could never be installed. routerFetch()
+# then fell back to a PUBLIC fetch of a same-account workers.dev hostname, which is blocked
+# from Worker context -> every gateway call degraded to the Workers AI fallback model
+# (cloud_ops_events kind=gw-fallback, n=609, 2026-09-16 -> 2026-09-29). The fallback output is
+# short, stageRevise() requires >= 10000 chars, so the pipeline terminalised (the
+# RESEARCH-TERMINAL cluster).
+#
+# THE FIX is in qnfo-ops/worker.js (cfWorkerDeploy -> union declared non-secret bindings into
+# the live set, live wins on (type,name), secrets untouched). The canonical /ops/deploy route
+# calls cfWorkerDeploy, so ONE canonical deploy of qnfo-research-exec must now install
+# QNFO_AI. This workflow performs that deploy and then ASSERTS the binding is present via the
+# CF API - it fails loudly if the binding is still absent, so a non-live merge fix cannot be
+# mistaken for a successful repair.
+#
+# This workflow intentionally has NO cron (SCHEDULE-EVENT-NEVER-FIRES-1) and NO unquoted
+# colon inside a step name (WORKFLOW-YAML-LINT-1). It is idempotent: re-running re-deploys the
+# same repo artifact and re-asserts the same invariant.
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-binding-merge-repair-1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-binding-merge-repair-1
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: "Canonical deploy of qnfo-research-exec (installs declared bindings)"
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "FAIL: OPS_ROUTER_AUTH_KEY secret is not configured"
+            exit 2
+          fi
+          python3 scripts/canonical_deploy.py --worker qnfo-research-exec --path qnfo-research-exec/worker.js 2>&1 | tee /tmp/canonical-deploy.log
+          rc=${PIPESTATUS[0]}
+          echo "canonical_deploy_exit=$rc"
+          test "$rc" -eq 0 || exit "$rc"
+
+      - name: Verify QNFO_AI service binding is present on the live worker
+        id: verify
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          ok=0
+          for i in $(seq 1 6); do
+            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-research-exec/settings" \
+              -o /tmp/settings.json || true
+            if grep -q '"QNFO_AI"' /tmp/settings.json 2>/dev/null; then
+              ok=1
+              break
+            fi
+            echo "attempt $i: QNFO_AI not present yet"
+            sleep 10
+          done
+          if [ "$ok" = "1" ]; then
+            echo "binding_present=1" >> "$GITHUB_OUTPUT"
+            python3 - <<'PY'
+import json
+d = json.load(open('/tmp/settings.json'))
+names = [b.get('name') for b in d.get('result', {}).get('bindings', [])]
+print("live_binding_names=" + json.dumps(names))
+assert "QNFO_AI" in names, "QNFO_AI missing from settings"
+print("QNFO_AI binding CONFIRMED on live qnfo-research-exec")
+PY
+            exit 0
+          fi
+          echo "binding_present=0" >> "$GITHUB_OUTPUT"
+          echo "FAIL: QNFO_AI still absent after a canonical deploy - the BINDING-INSTALL-MERGE-1 fix is not live on qnfo-ops"
+          exit 1
+
+      - name: Publish machine-readable status
+        if: always()
+        run: |
+          mkdir -p ci-status
+          python3 - <<'PY'
+import json, os, time
+rec = {
+  "check": "binding-merge-repair-1",
+  "issue": 1448,
+  "worker": "qnfo-research-exec",
+  "binding": "QNFO_AI",
+  "binding_present": os.environ.get("BINDING_PRESENT", "unknown"),
+  "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+}
+os.makedirs("ci-status", exist_ok=True)
+json.dump(rec, open("ci-status/binding-merge-repair-1.json", "w"), indent=2)
+print(json.dumps(rec))
+PY
+        env:
+          BINDING_PRESENT: ${{ steps.verify.outputs.binding_present }}
