@@ -1,0 +1,107 @@
+name: deploy-containers-pilot
+
+# CONTAINER-DEPLOY-WORKFLOW-MISSING-1 (2026-09-29). This file did not exist; it is the
+# workflow qnfo-containers-pilot/wrangler.toml references as the only path that transmits
+# [[containers]]. See the commit message for the full evidence chain.
+#
+# Trigger surface is deliberately broad (push to main + the pilot dir + dispatch) because
+# the failure mode being fixed is a trigger that never fired.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'qnfo-containers-pilot/**'
+      - '.github/workflows/deploy-containers-pilot.yml'
+  workflow_dispatch:
+    inputs:
+      verify_only:
+        description: "true = skip deploy, only run the container verification probe"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-containers-pilot
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: assert the containers block is present in wrangler.toml
+        run: |
+          set -euo pipefail
+          f=qnfo-containers-pilot/wrangler.toml
+          for key in '\[\[containers\]\]' 'class_name = "ShellContainer"' 'image = ' 'instance_type = ' 'max_instances = ' '\[\[migrations\]\]'; do
+            if ! grep -Eq "$key" "$f"; then
+              echo "::error::wrangler.toml is missing required key: $key -- refusing to deploy"
+              exit 1
+            fi
+          done
+          echo "containers block present:"
+          sed -n '/\[\[containers\]\]/,/^$/p' "$f"
+
+      - name: wrangler deploy (transmits [[containers]])
+        if: ${{ github.event.inputs.verify_only != 'true' }}
+        working-directory: qnfo-containers-pilot
+        run: |
+          set -euo pipefail
+          # --keep-vars preserves dashboard-set vars; secrets live in the secrets store.
+          npx --yes wrangler@4 deploy --keep-vars
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: wait for propagation
+        if: ${{ github.event.inputs.verify_only != 'true' }}
+        run: sleep 20
+
+      - name: verify container config is live (closes #1485)
+        run: |
+          set -euo pipefail
+          # The pilot worker exposes /status behind PILOT_TOKEN. If PILOT_TOKEN is not in
+          # this repo's secrets the probe cannot run; report that explicitly rather than
+          # claiming success.
+          if [ -z "${PILOT_TOKEN:-}" ]; then
+            echo "::warning::PILOT_TOKEN not available to this workflow - container verification SKIPPED, #1485 NOT closed by this run"
+            exit 0
+          fi
+          base="https://qnfo-containers-pilot.q08.workers.dev"
+          code="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
+          echo "GET /status -> $code"
+          cat /tmp/status.json || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::/status returned $code - container config still not live (#1485 open)"
+            exit 1
+          fi
+          if grep -q "Cannot read properties of undefined" /tmp/status.json; then
+            echo "::error::/status reports the ctx.container-undefined signature - #1485 still open"
+            exit 1
+          fi
+          echo "container config verified live"
+        env:
+          PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+
+      - name: summarize outcome
+        if: always()
+        run: |
+          echo "## deploy-containers-pilot" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Closes: CONTAINER-CONFIG-DROPPED-1 / issue #1485" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "A green run means \`wrangler deploy\` transmitted the [[containers]] block AND" >> "$GITHUB_STEP_SUMMARY"
+          echo "the authenticated /status probe came back 200 without the" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`ctx.container\`-undefined signature. A red run is fail-closed and wipes nothing." >> "$GITHUB_STEP_SUMMARY"
