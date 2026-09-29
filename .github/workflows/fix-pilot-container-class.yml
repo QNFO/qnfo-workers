@@ -1,0 +1,256 @@
+name: fix-pilot-container-class
+
+# ROOT CAUSE (2026-09-29, qnfo-ops autonomous session; issues #1485 / #1487 / #1493)
+#   qnfo-containers-pilot is dead. Measured live this session:
+#     GET /bindings -> exactly ONE binding: PILOT_TOKEN. AUDIT (d1) and SHELL_CONTAINER
+#       (durable_object_namespace) are absent.
+#     GET /status   -> {"ok":false,"error":"Cannot read properties of undefined (reading 'running')"}
+#     shell_exec    -> "container: Cannot read properties of undefined (reading 'idFromName')"
+#   Blast radius: shell_exec, exec_python, exec_node, container_install, git_clone_exec,
+#   container_workspace_exec, shell_pipeline (268 shell_exec failures / 24h).
+#
+# WHY THE TWO EXISTING RESTORE PATHS CANNOT WORK (both measured, both on record)
+#   1. /content multipart PUT with an explicit `containers` metadata field:
+#      HTTP 200, but GET /settings `containers` == null AND AUDIT + SHELL_CONTAINER were
+#      dropped by the same PUT. See ci-status/restore-container-config-1485.json (19:45:06Z,
+#      "FAIL (fail-closed): containers STILL absent after the PUT"). The endpoint does not
+#      accept a `containers` field.
+#   2. `wrangler@4 deploy` -- the only path that transmits [[containers]] -- fails with:
+#        [provisioned_class_missing_from_config] class 'ShellContainer'
+#        [container_class_not_durable_object] 'ShellContainer' is not a durable-object export
+#      The module is `var ShellContainer = class { ... }` with a trailing
+#      `export { ShellContainer, worker_default as default }`. A plain class is not a
+#      Container export, so wrangler refuses to ship the container config.
+#
+# THE FIX
+#   import { Container } from "cloudflare:workers";
+#   class ShellContainer extends Container { ... }
+#   export { ShellContainer };
+#   export default worker_default;
+#   The class body already uses this.ctx.container.{running,start,exec}, which is exactly the
+#   API a Container subclass exposes, so no behaviour change is intended.
+#
+# IDEMPOTENT + FAIL-CLOSED
+#   If the patch is already applied the script exits 0 having changed nothing and makes no
+#   commit, so this workflow cannot self-trigger in a loop. Every step after the patch is
+#   continue-on-error:true with if: always(), and the final GATE has no continue-on-error and
+#   exits 1 unless GET /settings reports `containers` non-empty. A green run means exactly one
+#   thing: the container config is live again.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-pilot-container-class.yml'
+      - 'qnfo-containers-pilot/wrangler.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-pilot-container-class
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: pre-state read-back
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; fix-pilot-container-class)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          out = {}
+          try:
+              r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+              d = json.load(urllib.request.urlopen(r, timeout=60))
+              res = d.get("result") or {}
+              out = {"containers": res.get("containers"),
+                     "bindings": [b.get("name") for b in (res.get("bindings") or [])],
+                     "compatibility_date": res.get("compatibility_date"),
+                     "compatibility_flags": res.get("compatibility_flags")}
+          except Exception as e:
+              out = {"error": "%s: %s" % (type(e).__name__, e)}
+          print(json.dumps(out, indent=2))
+          open("/tmp/pre.json", "w").write(json.dumps(out, indent=2))
+          PY
+
+      - name: apply Container-subclass patch (idempotent)
+        id: patch
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("qnfo-containers-pilot/worker.js")
+          s = p.read_text(encoding="utf-8")
+          orig = s
+          already = 'extends Container' in s and 'cloudflare:workers' in s
+          if not already:
+              if 'from "cloudflare:workers"' not in s:
+                  marker = 'var VERSION = '
+                  assert marker in s, "VERSION marker not found"
+                  s = s.replace(marker,
+                                'import { Container } from "cloudflare:workers";\n\n' + marker, 1)
+              old_cls = 'var ShellContainer = class {'
+              assert old_cls in s, "class declaration not found"
+              s = s.replace(old_cls, 'class ShellContainer extends Container {', 1)
+              old_exp = 'export {\n  ShellContainer,\n  worker_default as default\n};'
+              assert old_exp in s, "export block not found"
+              s = s.replace(old_exp,
+                            'export { ShellContainer };\nexport default worker_default;', 1)
+          if s != orig:
+              p.write_text(s, encoding="utf-8")
+              print("PATCHED: worker.js rewritten to Container-subclass form")
+              open("/tmp/patched", "w").write("1")
+          else:
+              print("NO-OP: patch already applied, nothing written")
+          sys.exit(0)
+          PY
+
+      - name: commit the patch to main (no skip token)
+        id: commit
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add qnfo-containers-pilot/worker.js
+          if git diff --cached --quiet; then
+            echo "worker.js unchanged - nothing to commit"
+            echo "committed=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "fix(containers-pilot): ShellContainer extends Container so wrangler can ship [[containers]] (#1485)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then echo "PATCH PUSHED on attempt $i"; echo "committed=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+            sleep $((i * 3))
+          done
+          echo "::warning::patch commit not pushed after 5 attempts"
+          echo "committed=0" >> "$GITHUB_OUTPUT"
+
+      - name: wrangler deploy (transmits [[containers]])
+        id: wrangler
+        if: always()
+        continue-on-error: true
+        working-directory: qnfo-containers-pilot
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler.log
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: wait for propagation
+        if: always()
+        run: sleep 20
+
+      - name: authoritative read-back - GET /settings containers
+        id: verify
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; fix-pilot-container-class)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          out = {}
+          try:
+              r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+              d = json.load(urllib.request.urlopen(r, timeout=60))
+              res = d.get("result") or {}
+              out = {"containers": res.get("containers"),
+                     "bindings": [b.get("name") for b in (res.get("bindings") or [])]}
+          except Exception as e:
+              out = {"error": "%s: %s" % (type(e).__name__, e)}
+          print(json.dumps(out, indent=2))
+          open("/tmp/post.json", "w").write(json.dumps(out, indent=2))
+          PY
+          pt="${PILOT_TOKEN:-}"
+          if [ -n "$pt" ]; then
+            sc="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $pt" https://qnfo-containers-pilot.q08.workers.dev/status || true)"
+            echo "GET /status -> $sc"
+            cat /tmp/status.json 2>/dev/null || true
+            echo
+          else
+            echo "PILOT_TOKEN not available - /status probe skipped"
+          fi
+
+      - name: publish outcome artifact (always)
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, subprocess
+
+          def rd(p, n=6000):
+              try:
+                  return open(p, encoding="utf-8", errors="replace").read()[-n:]
+              except Exception as e:
+                  return "UNREADABLE: %s" % e
+
+          def sh(c):
+              try:
+                  return subprocess.run(c, shell=True, capture_output=True, text=True).stdout.strip()
+              except Exception as e:
+                  return "ERR %s" % e
+
+          art = {
+              "workflow": "fix-pilot-container-class",
+              "marker": "CONTAINER-CLASS-SUBCLASS-1",
+              "issues": [1485, 1487, 1493],
+              "head": sh("git rev-parse HEAD"),
+              "ts": sh("date -u +%Y-%m-%dT%H:%M:%SZ"),
+              "pre_settings": rd("/tmp/pre.json", 2000),
+              "post_settings": rd("/tmp/post.json", 2000),
+              "status_probe": rd("/tmp/status.json", 800),
+              "wrangler_tail": rd("/tmp/wrangler.log", 6000),
+          }
+          json.dump(art, open("ci-status/fix-pilot-container-class.json", "w"), indent=2)
+          print(json.dumps(art, indent=2)[:6000])
+          PY
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/fix-pilot-container-class.json
+          if git diff --cached --quiet; then echo "artifact unchanged"; exit 0; fi
+          git commit -m "chore(ci): fix-pilot-container-class outcome [skip ci]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then echo "artifact pushed on attempt $i"; exit 0; fi
+            sleep $((i * 3))
+          done
+          echo "::warning::artifact push failed after 5 attempts"
+
+      - name: gate - fail unless containers is live (#1485)
+        if: always()
+        run: |
+          if [ ! -f /tmp/post.json ]; then
+            echo "::error::/tmp/post.json missing - read-back never ran; treating as FAILURE (fail-closed)"
+            exit 1
+          fi
+          python3 -c "import json,sys; d=json.load(open('/tmp/post.json')); c=d.get('containers'); print('containers read-back:', json.dumps(c)); sys.exit(0 if c else 1)"
+          echo "GATE PASS: [[containers]] present in GET /settings read-back - #1485 closable"
