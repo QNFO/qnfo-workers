@@ -1,0 +1,11 @@
+{
+  "workflow": "apply-github-write-409-retry",
+  "issue": "1372 / GITHUB-FILE-WRITE-409-NO-RETRY-1",
+  "guard_exit": "success",
+  "job_status": "success",
+  "head": "8494f46b",
+  "live_version": "2.37.22-github409-retry",
+  "commit_back": "f1c9d612575dd5716fe97378a0f759316b6fceda",
+  "ts": "2026-09-29T15:51:02Z",
+  "note": "Persisted by qnfo-ops 2026-09-29T15:5xZ. The workflow wrote this artifact inside the runner but its commit-back step staged only qnfo-ops/worker.js + qnfo-ops/deployed-current.worker.js, so the artifact was never committed. Gap logged: APPLY-WORKFLOW-ARTIFACT-NOT-PERSISTED-1."
+}
