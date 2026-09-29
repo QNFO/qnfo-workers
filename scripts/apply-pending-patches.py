@@ -56,7 +56,7 @@ import sys
 import time
 from pathlib import Path
 
-MARKER = "APPLY-PENDING-1"
+MARKER = "APPLY-PENDING-1"  # APPLIER-ARTIFACT-COLLISION-1
 
 
 def repo_root() -> Path:
@@ -270,7 +270,7 @@ def main() -> int:
 
     out_dir = root / "ci-status"
     out_dir.mkdir(exist_ok=True)
-    (out_dir / "applier-doctor.json").write_text(
+    (out_dir / "apply-pending-report.json").write_text(
         json.dumps(
             {
                 "workflow": "apply-pending-patches",
@@ -287,7 +287,7 @@ def main() -> int:
         )
         + "\n"
     )
-    print("wrote ci-status/applier-doctor.json")
+    print("wrote ci-status/apply-pending-report.json")
     return 0
 
 

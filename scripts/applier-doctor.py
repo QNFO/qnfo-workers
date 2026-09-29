@@ -234,7 +234,14 @@ def declared_markers(txt):
     """The applier's own idempotency markers: MARKER = "X-1" plus marker-shaped
     tokens declared in the module docstring."""
     m = _assign_lits(txt, r"MARKERS?")
-    m += MARKER_TOKEN.findall(txt[:3000])
+    # OUTCOME-ALL-1: an ASSIGNED marker is the applier's own idempotency constant
+    # and is authoritative. The docstring scan is only a fallback for appliers
+    # that declare no such constant: a docstring that merely QUOTES a token
+    # already present in the target file made outcome_present() report the
+    # outcome as already present, so the applier was filed `superseded` and
+    # never ran.
+    if not m:
+        m = MARKER_TOKEN.findall(txt[:3000])
     return _dedup(m)
 
 
@@ -289,7 +296,11 @@ def outcome_present(script_rel):
     applier cannot manufacture a defect ticket.
     """
     targets, markers, symbols = declared_outcome(script_rel)
-    signals = _dedup(markers + symbols)
+    # OUTCOME-ALL-1: markers, when declared, are the authoritative outcome signal;
+    # the post-condition symbols are only a fallback. ALL declared signals must be
+    # present before an applier is called superseded - the old ANY-of test let a
+    # single coincidental token mark a needed, correct applier as already-done.
+    signals = _dedup(markers) or _dedup(symbols)
     hits = []
     resolved = []
     for t in targets:
@@ -300,9 +311,9 @@ def outcome_present(script_rel):
         body = _read_file(p)
         if body is None:
             continue
-        for lit in signals:
-            if lit and lit in body:
-                hits.append("%s :: %s" % (p, lit[:80]))
+        present = [lit for lit in signals if lit and lit in body]
+        if signals and len(present) == len(signals):
+            hits.extend("%s :: %s" % (p, lit[:80]) for lit in present)
     measurable = bool(resolved) and bool(signals)
     return (len(hits) > 0), hits, measurable
 

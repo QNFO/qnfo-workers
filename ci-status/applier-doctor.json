@@ -1,19 +1,17 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "9f164fbc8805d2739352204e6a1369f8b32a5290",
-  "total": 67,
+  "head": "70a87d33443547d7217c62e489562110a6bfaea9",
+  "total": 70,
   "summary": {
-    "already-applied": 40,
-    "landed": 4,
-    "error": 8,
-    "stale-anchor": 15
+    "already-applied": 43,
+    "error": 9,
+    "landed": 2,
+    "stale-anchor": 16
   },
   "landed": [
-    "affirm-veto-clause-targets-patch.py",
-    "cloud-ops-cron-dow-patch.py",
-    "container-config-drop-guard-patch.py",
-    "patch-cron-only-class-2.py"
+    "applier-artifact-collision-patch.py",
+    "applier-doctor-outcome-all-patch.py"
   ],
   "reverted": [
     {
@@ -30,17 +28,17 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
       "script": "affirm-veto-clause-targets-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "PATCHED [UNPATCHED] qnfo-ops/deployed-current.worker.js  (375567 -> 376001 bytes)  var VERSION = \"2.37.28-affirm-veto\"; -> var VERSION = \"2.37.29-affirm-veto-clause\";"
+      "tail": "nothing to do"
     },
     {
       "script": "affirm-veto-sentence-scope-patch.py",
@@ -59,6 +57,15 @@
       "reverted": [],
       "seconds": 0.04,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
+    },
+    {
+      "script": "applier-artifact-collision-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "reverted": [],
+      "seconds": 0.03,
+      "tail": "PATCHED scripts/apply-pending-patches.py (11207 -> 11251 bytes)"
     },
     {
       "script": "applier-classify-signature-and-retire-patch.py",
@@ -88,12 +95,21 @@
       "tail": "FAIL-CLOSED: anchor DOC matched 0 times (expected 1) - nothing written"
     },
     {
+      "script": "applier-doctor-outcome-all-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "reverted": [],
+      "seconds": 0.05,
+      "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
+    },
+    {
       "script": "applier-doctor-outcome-aware-patch.py",
       "rc": 3,
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.06,
+      "seconds": 0.05,
       "tail": "FAIL(3): anchor count != 1 -> {ci-status key tuple: 0} for ci-status key tuple"
     },
     {
@@ -111,8 +127,17 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED - no change"
+    },
+    {
+      "script": "cf-worker-deploy-preserve-meta-patch.py",
+      "rc": 3,
+      "verdict": "stale-anchor",
+      "changed": false,
+      "reverted": [],
+      "seconds": 0.04,
+      "tail": "FAIL (fail-closed): anchor A4 version bump matched 0 times, expected exactly 1"
     },
     {
       "script": "cf-worker-read-404-hint-patch.py",
@@ -120,7 +145,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "OK applied=0"
     },
     {
@@ -129,7 +154,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "already patched: scripts/ci_watchdog.py contains '_raw_log'; no change"
     },
     {
@@ -138,26 +163,26 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "CLASSIFY-FAILCLOSED-DEFAULT-1: nothing to do (all edits already applied)"
     },
     {
       "script": "cloud-ops-cron-dow-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "TOTAL_EDITS 12"
+      "tail": "TOTAL_EDITS 0"
     },
     {
       "script": "container-config-drop-guard-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "[done] changes: qnfo-ops/worker.js -> 2.37.30-container-deploy-guard, scripts/fleet-autoaudit.py -> container skip guard"
+      "tail": "[done] changes: none (already applied)"
     },
     {
       "script": "container-start-race-patch.py",
@@ -192,7 +217,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: anchor 'freshness-gate' matched 0 times in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-dashboard/worker.js"
     },
     {
@@ -228,7 +253,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "invariants asserted: 2/2"
     },
     {
@@ -347,7 +372,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "already applied: /home/runner/work/qnfo-workers/qnfo-workers/idea-hub/deployed-current.worker.js"
     },
     {
@@ -392,7 +417,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "no-op: every target already carries the fix"
     },
     {
@@ -406,11 +431,11 @@
     },
     {
       "script": "patch-cron-only-class-2.py",
-      "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "rc": 1,
+      "verdict": "error",
+      "changed": false,
       "reverted": [],
-      "seconds": 0.1,
+      "seconds": 0.09,
       "tail": "DIAG cron_only_declared(ai-health-prober) = True"
     },
     {
@@ -419,7 +444,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED ANCHOR-INVALID edit 1: expected exactly 1 match, found 0 for anchor 'LIVE_ERR /health unreachable or non-404 error'"
     },
     {
@@ -437,7 +462,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "changed=0"
     },
     {
@@ -630,5 +655,5 @@
       "tail": "  count=0          after = snapshot(root)"
     }
   ],
-  "ts": "2026-09-29T19:36:24Z"
+  "ts": "2026-09-29T19:39:20Z"
 }
