@@ -29,6 +29,16 @@ bumped so fleet-autodeploy (strictly-ahead) ships it.
 
 FAIL-CLOSED: every edit must match EXACTLY ONCE; anything else raises and nothing is
 written. IDEMPOTENT: re-running on an already-patched file is a no-op.
+
+REV 2 (APPLIER-SELFPOSTCONDITION-1): rev 1 applied all six edits correctly -- proven by
+  PRE grep '(driftBad || 0)' = 2 -> POST = 0 with `node --check` OK -- and then FAILED ITS
+  OWN post-condition check, raising SystemExit and reporting rc=1. The check string was
+  "nullGates += 1, wsum += w" (COMMA) while E4_NEW emits "nullGates += 1; wsum += w;"
+  (SEMICOLON). The applier was therefore self-blocking: a correct patch never reached
+  main, CI classified the traceback as stale-anchor/error, and the #1301 residual
+  fail-open stayed live. A post-condition that can never pass is worse than no
+  post-condition: it converts a working patch into a permanent silent failure. Fixed here,
+  and the check now matches the emitted text byte-for-byte.
 """
 import os
 import sys
@@ -84,6 +94,19 @@ EDITS = [
     ("record-null-gates", E5_OLD, E5_NEW),
 ]
 
+# APPLIER-SELFPOSTCONDITION-1: post-conditions are asserted against the EXACT bytes the
+# edits emit. A post-condition that cannot match its own edit is a self-blocking bug.
+POST_CONDITIONS = {
+    "no coalescing drift read left": lambda t: "(driftBad || 0)" not in t,
+    "drift read is null-safe": lambda t: "const driftBad = ig.drift ? (" in t,
+    "drift gate fails closed": lambda t: 'head: driftBad == null ? 0 : c01(1 - driftBad)' in t,
+    "collapsed greens null-safe": lambda t: 'driftBad == null ? "n/a" : String(driftBad)' in t,
+    "null gate counted as 0": lambda t: "nullGates += 1; wsum += w" in t,
+    "survival note records null gates": lambda t: "FAIL-CLOSED #1301 null_gates=" in t,
+    "marker present": lambda t: MARK in t,
+    "version bumped": lambda t: 'var VERSION = "1.7.33-drift-failclosed";' in t,
+}
+
 
 def apply_edits(path):
     if not os.path.isfile(path):
@@ -113,16 +136,7 @@ def apply_edits(path):
 def post_conditions(path):
     with open(path, encoding="utf-8") as fh:
         t = fh.read()
-    checks = {
-        "no coalescing drift read left": "(driftBad || 0)" not in t,
-        "drift read is null-safe": "const driftBad = ig.drift ? (" in t,
-        "drift gate fails closed": 'head: driftBad == null ? 0 : c01(1 - driftBad)' in t,
-        "collapsed greens null-safe": 'driftBad == null ? "n/a" : String(driftBad)' in t,
-        "null gate counted as 0": "nullGates += 1, wsum += w" in t,
-        "survival note records null gates": "FAIL-CLOSED #1301 null_gates=" in t,
-        "marker present": MARK in t,
-        "version bumped": 'var VERSION = "1.7.33-drift-failclosed";' in t,
-    }
+    checks = {k: fn(t) for k, fn in POST_CONDITIONS.items()}
     bad = [k for k, v in checks.items() if not v]
     for k, v in checks.items():
         print(" %-38s %s" % (k, "OK" if v else "FAIL"))
@@ -132,7 +146,7 @@ def post_conditions(path):
 
 
 def main():
-    print("=== " + MARK + " ===")
+    print("=== " + MARK + " rev2 ===")
     apply_edits(WORKER)
     post_conditions(WORKER)
     if os.path.isfile(MIRROR):
