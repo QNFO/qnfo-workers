@@ -1,0 +1,154 @@
+name: apply-dashboard-gate-failopen
+
+# Applies scripts/dashboard-gate-failopen-patch.py (GATE-EVAL-METRIC-STALENESS-FAILOPEN-1,
+# issue #1301), asserts the post-conditions and mirror parity, commits as a bot, deploys
+# qnfo-fleet-dashboard through the binding-preserving deployer, then verifies from an EXTERNAL
+# vantage that the LIVE bundle carries the fail-closed gate.
+#
+# Why external: issue #1190 records that worker-context web_fetch returns HTTP 522 for same-zone
+# hosts that are externally 200, so a worker-context check would produce a false outage.
+# GitHub runners are external.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/dashboard-gate-failopen-patch.py'
+      - '.github/workflows/apply-dashboard-gate-failopen.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-dashboard-gate-failopen
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.apply.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - id: apply
+        name: Apply the fail-closed gate (fail-loud)
+        run: |
+          set -uo pipefail
+          python scripts/dashboard-gate-failopen-patch.py
+          echo "applier_rc=$?"
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post-conditions
+        run: |
+          set -euo pipefail
+          echo "--- marker present in BOTH artifacts ---"
+          grep -c "GATE-EVAL-METRIC-STALENESS-FAILOPEN-1" qnfo-fleet-dashboard/worker.js
+          if [ -f qnfo-fleet-dashboard/deployed-current.worker.js ]; then
+            grep -c "GATE-EVAL-METRIC-STALENESS-FAILOPEN-1" qnfo-fleet-dashboard/deployed-current.worker.js
+            cmp qnfo-fleet-dashboard/worker.js qnfo-fleet-dashboard/deployed-current.worker.js
+            echo "MIRROR_PARITY_OK"
+          fi
+          echo "--- no duplicated panel line ---"
+          n=$(grep -c "GATE FRESHNESS" qnfo-fleet-dashboard/worker.js)
+          echo "gate_freshness_lines=$n"
+          if [ "$n" != "1" ]; then echo "FAIL: panel line duplicated"; exit 1; fi
+          echo "--- syntax ---"
+          cp qnfo-fleet-dashboard/worker.js /tmp/dash.mjs
+          node --check /tmp/dash.mjs
+          echo "SYNTAX_OK"
+          echo "--- behaviour: the null-gate weighting is fail-closed ---"
+          node -e '
+            const fs=require("fs");
+            const src=fs.readFileSync("qnfo-fleet-dashboard/worker.js","utf8");
+            const m=src.match(/gateRows\.forEach\(function\(x\) \{ const w = gateW\[x\.m\][^;]*;[^;]*;[^;]*;/);
+            if(!m){console.error("weighting line not extractable");process.exit(1)}
+            const gateW={a:0.5,b:0.5};
+            const gateRows=[{m:"a",head:1},{m:"b",head:null}];
+            let wnum=0,wsum=0,nullGates=0;
+            eval(m[0]);
+            console.log("wnum="+wnum+" wsum="+wsum+" nullGates="+nullGates);
+            if(wsum!==1){console.error("FAIL: weight was dropped for a null gate");process.exit(1)}
+            if(nullGates!==1){console.error("FAIL: null gate not counted");process.exit(1)}
+            if(wnum!==0.5){console.error("FAIL: null gate did not contribute head=0");process.exit(1)}
+            console.log("FAIL_CLOSED_WEIGHTING_OK");
+          '
+
+      - name: Commit
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-fleet-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit (already applied)"; exit 0
+          fi
+          git commit -m "fix(dashboard): GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 - fail-closed survival gate (issue #1301)"
+          # COMMITBACK-DRIFT-1: a bare `git push` loses against the concurrent fleet commit
+          # stream; use the proven rebase+retry loop.
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"; exit 0
+            fi
+            echo "push attempt $i failed; retrying in 20s"; sleep 20
+          done
+          echo "PUSH_FAILED after 3 attempts"; exit 1
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main FRESH (not the triggering SHA)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assert the artifact we are about to ship is the patched one
+        run: |
+          set -euo pipefail
+          grep -q "GATE-EVAL-METRIC-STALENESS-FAILOPEN-1" qnfo-fleet-dashboard/worker.js
+          grep -q "gateIsStale" qnfo-fleet-dashboard/worker.js
+          grep -q "nullGates += 1, 0" qnfo-fleet-dashboard/worker.js
+          echo "ARTIFACT_IS_PATCHED"
+      - name: Deploy qnfo-fleet-dashboard (binding-preserving)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          LEDGER_STRICT: '1'
+        run: |
+          python scripts/raw_put.py qnfo-fleet-dashboard qnfo-fleet-dashboard/worker.js
+      - name: Verify the LIVE deployed bundle carries the fail-closed gate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5 6 7 8; do
+            out=$(curl -s --max-time 25 \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-fleet-dashboard/content" || true)
+            if echo "$out" | grep -q "GATE-EVAL-METRIC-STALENESS-FAILOPEN-1"; then
+              echo "LIVE_BUNDLE_HAS_GATE (attempt $i)"
+              if echo "$out" | grep -q "nullGates += 1, 0"; then echo "LIVE_FAIL_CLOSED_WEIGHTING_OK"; exit 0; fi
+              echo "FAIL: gate present but weighting not fail-closed"; exit 1
+            fi
+            echo "attempt $i: live bundle not yet carrying the gate"
+            sleep 15
+          done
+          echo "LIVE_VERIFY_FAILED"; exit 1
