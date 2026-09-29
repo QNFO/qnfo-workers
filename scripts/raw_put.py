@@ -406,7 +406,22 @@ def main(argv):
     # wrangler.toml declaration so this deployer can also RESTORE it.
     _live_containers = (live or {}).get("containers") or []
     _decl_containers = declared_containers(path)
-    _want_containers = _live_containers or _decl_containers
+    # CONTAINER-DECLARED-INERT-1 (2026-09-29, issue #1456): `live or declared` made the
+    # wrangler.toml declaration INERT -- a live lite container carried itself forward on
+    # every deploy, so the declared instance_type="basic" upgrade (the #1456 rootfs-capacity
+    # fix) never took effect. MEASURED: wrangler.toml declares basic (4 GB disk) while the
+    # running container reports /dev/vdc 1.9 G (lite). Same defect class as
+    # AUTODEPLOY-SCHEDULES-NOT-APPLIED-1 (#1390), which was closed by making the sibling
+    # wrangler.toml the source of truth for the declared field. Declared wins when it is
+    # present and differs; live stays the fallback so a worker with no declaration is still
+    # protected from a config-destroying PUT.
+    if _decl_containers and _decl_containers != _live_containers:
+        _want_containers = _decl_containers
+        print("CONTAINERS: declaration differs from live -> applying wrangler.toml "
+              "(CONTAINER-DECLARED-INERT-1) live=" + json.dumps(_live_containers)
+              + " declared=" + json.dumps(_decl_containers))
+    else:
+        _want_containers = _live_containers or _decl_containers
     if _want_containers:
         meta["containers"] = _want_containers
         _csrc = "live /settings" if _live_containers else "wrangler.toml declaration"
