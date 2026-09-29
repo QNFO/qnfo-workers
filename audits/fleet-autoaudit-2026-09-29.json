@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 17:25:28",
+  "audited_at": "2026-09-29 19:04:02",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -8,7 +8,14 @@
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
-    "drift": [],
+    "drift": [
+      {
+        "dir": "idea-hub",
+        "live": "1.0.9-toolinv-shape-v2",
+        "repo": "1.0.8-toolinv-gate",
+        "worker": "idea-hub"
+      }
+    ],
     "live_err": [],
     "name_resolution": true,
     "no_health_route": [
@@ -393,11 +400,10 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 35,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
-      "idea-hub",
       "personal-api",
       "personal-companion",
       "q08-signal-engine",
@@ -524,11 +530,11 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": null,
+      "before": "1.0.8-toolinv-gate",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.0.9-toolinv-shape-v2",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "idea-hub"
     },
     "jnl-pipeline": {
