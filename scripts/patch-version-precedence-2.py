@@ -40,6 +40,14 @@ FAIL-CLOSED / IDEMPOTENT
   Re-running after success is a no-op (marker present -> exit 0), so the apply workflow
   cannot flap red merely because a previous run already landed the fix.
 
+POST-CHECK THRESHOLD BUG (found by EXECUTING this applier in-container, 2026-09-29 16:15Z)
+  The first revision asserted `_plain_versions` count >= 3. The real count is 2 (one
+  definition + one call site), so the applier exited 3 with all 8 anchors MATCHED and
+  wrote nothing -- and the companion workflow carried the same impossible `-ge 3`, which
+  would have gone red even on a successful patch. The check is now structural
+  (`def _plain_versions(` exactly once, `len(_plain_versions(` exactly once) instead of a
+  bare count threshold, so it cannot drift out of sync with the replacement text again.
+
 ADVERSARIAL
   (a) last-wins is a heuristic for an ambiguous artifact: an artifact whose SERVING
       constant is declared before a later non-serving one would now resolve wrongly. That
@@ -154,6 +162,9 @@ EDITS = [
     ("summary-line", E8, R8),
 ]
 
+DEF_ANCHOR = "def _plain_versions("
+CALL_ANCHOR = "len(_plain_versions("
+
 
 def behavioural_verify(path):
     spec = importlib.util.spec_from_file_location("ddg_patched", path)
@@ -208,8 +219,16 @@ def main():
     if out.count(MARKER) < 5:
         print("POST-CHECK FAILED: marker count=%d" % out.count(MARKER))
         return 3
-    if out.count("_plain_versions") < 3:
-        print("POST-CHECK FAILED: _plain_versions count=%d" % out.count("_plain_versions"))
+    # Structural, not a bare count threshold: the previous `>= 3` was impossible
+    # (1 definition + 1 call site = 2) and made this applier exit 3 with all anchors
+    # matched. Assert the shape instead.
+    if out.count(DEF_ANCHOR) != 1:
+        print("POST-CHECK FAILED: %r count=%d (expected 1)"
+              % (DEF_ANCHOR, out.count(DEF_ANCHOR)))
+        return 3
+    if out.count(CALL_ANCHOR) != 1:
+        print("POST-CHECK FAILED: %r count=%d (expected 1)"
+              % (CALL_ANCHOR, out.count(CALL_ANCHOR)))
         return 3
     tmp = TARGET + ".new"
     with open(tmp, "w", encoding="utf-8") as fh:
