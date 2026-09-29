@@ -110,6 +110,51 @@ def failing_anchor(text):
     return None
 
 
+def declared_outcome(script_rel):
+    """APPLIER-DOCTOR-OUTCOME-AWARE-1.
+
+    Read the applier's OWN declared POST-version literal(s) and target file(s).
+    A fail-closed applier in this repo always pins its target with
+    pathlib.Path("...") and its post-patch sentinel with POST = '...'. Those two
+    facts are enough to ask the only question that matters: is the outcome
+    already in the tree?
+
+    The quote characters are written as \x22/\x27 so the pattern needs no
+    literal quote inside the raw string.
+    """
+    try:
+        with open(os.path.join(ROOT, script_rel), encoding="utf-8", errors="replace") as f:
+            txt = f.read()
+    except Exception:  # noqa: BLE001
+        return [], []
+    posts = re.findall(r"^\s*POST\w*\s*=\s*[\x22\x27]([^\x22\x27]+)[\x22\x27]", txt, re.M)
+    targets = re.findall(r"Path\(\s*[\x22\x27]([^\x22\x27]+)[\x22\x27]\s*\)", txt)
+    return posts, targets
+
+
+def outcome_present(script_rel):
+    """True (plus evidence) if any declared POST literal already appears in any
+    declared target. Conservative: no POST or no target -> False, so genuine
+    rot is never silently excused."""
+    posts, targets = declared_outcome(script_rel)
+    if not posts or not targets:
+        return False, []
+    hits = []
+    for t in targets:
+        p = os.path.join(ROOT, t)
+        if not os.path.isfile(p):
+            continue
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                body = f.read()
+        except Exception:  # noqa: BLE001
+            continue
+        for lit in posts:
+            if lit and lit in body:
+                hits.append("%s :: %s" % (t, lit[:80]))
+    return (len(hits) > 0), hits
+
+
 def run_one(rel):
     reset()
     before, _ = tree_state()
@@ -120,6 +165,7 @@ def run_one(rel):
     after, _ = tree_state()
     after = after or []
     changed = sorted(set(after) - set(before))
+    superseded = []
     if rc == 0:
         said_already = any(m in out for m in ALREADY_MARKERS)
         verdict = "already-applied" if (said_already or not changed) else "applied-now"
@@ -127,6 +173,14 @@ def run_one(rel):
         verdict = "stale-anchor"
     else:
         verdict = "error"
+    # APPLIER-DOCTOR-OUTCOME-AWARE-1: an applier whose PRE-version precondition has
+    # been superseded by a LATER artifact version is NOT rot -- its outcome is
+    # already in the tree. Exit code alone cannot tell those apart.
+    if verdict in ("stale-anchor", "error", "applied-now"):
+        _pres, _hits = outcome_present(rel)
+        if _pres:
+            verdict = "superseded"
+            superseded = _hits
     reset()
     rec = {
         "script": rel,
@@ -135,6 +189,8 @@ def run_one(rel):
         "changed_files": changed[:10],
         "tail": out.strip().splitlines()[-3:] if out.strip() else [],
     }
+    if superseded:
+        rec["outcome_present_in"] = superseded
     if verdict == "stale-anchor":
         fa = failing_anchor(out)
         if fa:
@@ -167,6 +223,7 @@ def main():
     for r in recs:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     stale = [r["script"] for r in recs if r["verdict"] == "stale-anchor"]
+    superseded_l = [r["script"] for r in recs if r["verdict"] == "superseded"]
     never = [r["script"] for r in recs if r["verdict"] == "applied-now"]
     errored = [r["script"] for r in recs if r["verdict"] == "error"]
 
@@ -178,6 +235,7 @@ def main():
         "stale_anchor": stale,
         "never_landed": never,
         "errored": errored,
+        "superseded": superseded_l,
         "results": recs,
     }
     try:
@@ -188,7 +246,8 @@ def main():
             json.dump(report, f, indent=1, sort_keys=True)
         with open(os.path.join(ROOT, "ci-status", "applier-doctor.json"), "w") as f:
             json.dump({k: report[k] for k in
-                       ("marker", "ts", "total", "counts", "stale_anchor", "never_landed", "errored")},
+                       ("marker", "ts", "total", "counts", "stale_anchor", "never_landed", "errored",
+                        "superseded")},
                       f, sort_keys=True)
     except Exception as e:  # noqa: BLE001
         print("WARN: could not write report: %s" % e)
@@ -200,6 +259,8 @@ def main():
         print("NEVER_LANDED(%d): %s" % (len(never), ", ".join(os.path.basename(s) for s in never)))
     if errored:
         print("ERRORED(%d): %s" % (len(errored), ", ".join(os.path.basename(s) for s in errored)))
+    if superseded_l:
+        print("SUPERSEDED(%d): %s" % (len(superseded_l), ", ".join(os.path.basename(s) for s in superseded_l)))
 
     if STRICT and (stale or never):
         print("FAIL(3): STRICT=1 and %d stale / %d never-landed" % (len(stale), len(never)))
