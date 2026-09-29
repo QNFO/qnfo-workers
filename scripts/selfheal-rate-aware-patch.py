@@ -31,8 +31,18 @@ THE FIX
     with the old prefixed form kept as a fallback (no regression for callers
     that do embed 'tool=name').
   * A window failure RATE is computed per tool: fails / (fails + oks).
-  * Filing now requires fails >= 3 AND rate >= 10% -- a persistent elevated
-    error rate, which is what "persistent failure" should have meant.
+  * Filing requires fails >= 3 AND (rate >= 10% OR fails >= 20).
+
+    WHY THE ABSOLUTE FLOOR: a rate-only gate is measurably insufficient for the
+    very defect this patch exists to fix. Live 24h counts give
+      ops_d1_query 140 fails / 1277 oks = 9.88%
+    which a 10% floor MISSES, while a 20-fail floor catches it. Symmetrically,
+    the rate term catches low-volume tools that fail often (web_fetch 19/16 =
+    54%, github_file_write 9/29 = 24%). Neither term alone covers the observed
+    distribution; the disjunction does. Verified against the live table: this
+    gate files 7 tickets (ops_d1_query, shell_exec, web_fetch,
+    github_file_write, shell_pipeline, git_clone_exec, ops_issue_run) where the
+    shipped code filed 0.
   * Auto-resolve is preserved but tightened to genuine recovery: a success
     since the last error AND rate < 2%.
   * Tickets are dual-written to agent_issues (deduped on open title) so the
@@ -85,7 +95,8 @@ R2 = '''        const _win = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FRO
         if (okRow && okRow.c > 0 && _failRate < 0.02) {
           out.recovered++;'''
 
-R3 = '''      if (!(_failRate >= 0.1)) { out.belowThreshold = (out.belowThreshold || 0) + 1; continue; }
+R3 = '''      const _persistent = (_failRate >= 0.1) || ((r.n || 0) >= 20);
+      if (!_persistent) { out.belowThreshold = (out.belowThreshold || 0) + 1; continue; }
       const title = "[self-heal] tool " + toolKey + " failing x" + r.n + " (" + h + "h, rate " + (Math.round(_failRate * 1e4) / 100) + "%)";'''
 
 R4 = '''        try {
@@ -146,6 +157,7 @@ def main():
             ("let _failRate = 1", True),
             ("out.agentFiled", True),
             ("_failRate >= 0.1", True),
+            ("(r.n || 0) >= 20", True),
             ("INSERT INTO agent_issues", True),
             ("if (!toolKey) continue;", False),
             ('failing x" + r.n + " (" + h + "h no recovery)"', False),
