@@ -22,38 +22,28 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M scripts/apply-pending-patches.py"
-   ],
+   "changed_files": [],
    "outcome_present_in": [
-    "scripts/apply-pending-patches.py :: APPLIER-CLASSIFY-SIGNATURE-1",
-    "scripts/apply-pending-patches.py :: APPLIER-RETIRE-1",
     "scripts/apply-pending-patches.py :: if \"already applied\" in low and \"patched\" not in low:"
    ],
-   "rc": 0,
+   "rc": 3,
    "script": "scripts/applier-classify-signature-and-retire-patch.py",
    "tail": [
-    "OK patched scripts/apply-pending-patches.py (9517 bytes)",
-    "APPLIER-CLASSIFY-SIGNATURE-1 + APPLIER-RETIRE-1 applied"
+    "FAIL-CLOSED: anchor 'json' occurs 0 times (expected exactly 1) - nothing written"
    ],
    "verdict": "superseded"
   },
   {
-   "changed_files": [
-    " M scripts/apply-pending-patches.py",
-    " M scripts/version-anchor-normalize-patch.py"
-   ],
+   "changed_files": [],
    "outcome_present_in": [
-    "scripts/apply-pending-patches.py :: APPLIER-CLASSIFY-UNMASKED-1",
     "scripts/version-anchor-normalize-patch.py :: normalize_version_anchors",
     "scripts/version-anchor-normalize-patch.py :: VERSION-ANCHOR-DRIFT-1"
    ],
-   "rc": 0,
+   "rc": 1,
    "script": "scripts/applier-classify-unmasked-patch.py",
    "tail": [
-    "OK patched scripts/apply-pending-patches.py (6974 bytes)",
-    "OK patched scripts/version-anchor-normalize-patch.py (9308 bytes)",
-    "APPLIER-CLASSIFY-UNMASKED-1 applied to 2 file(s)"
+    "FAIL (fail-closed): anchor occurrence != 1 in scripts/version-anchor-normalize-patch.py",
+    "  count=0  import os"
    ],
    "verdict": "superseded"
   },
@@ -81,21 +71,25 @@
   {
    "changed_files": [
     " M ci-status/applier-doctor.json",
+    " M qnfo-deploy-guard/deployed-current.worker.js",
+    " M qnfo-deploy-guard/worker.js",
     " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
+    " M qnfo-ops/worker.js",
+    " M scripts/raw_put.py"
    ],
    "declared_signals": [
     ".",
     "APPLY-PENDING-1",
     "APPLIER-NEVER-APPLIES-1",
     "FAILURE-ARTIFACT-LOSS-1",
-    "PARTIAL-APPLY-1"
+    "PARTIAL-APPLY-1",
+    "REVERT-COLLATERAL-1"
    ],
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=55 {'already-applied': 33, 'landed': 4, 'stale-anchor': 17, 'error': 1}",
-    "LANDED(4): applier-classify-signature-and-retire-patch.py, cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, self-fetch-guard-patch.py",
+    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, self-fetch-guard-patch.py",
+    "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -682,9 +676,8 @@
    "rc": 1,
    "script": "scripts/version-anchor-normalize-patch.py",
    "tail": [
-    "    root = Path(os.environ.get(\"REPO_ROOT\") or \".\").resolve()",
-    "           ^^^^",
-    "NameError: name 'Path' is not defined"
+    "FAIL (fail-closed): anchor 'snapshot after run' occurrence != 1 in scripts/apply-pending-patches.py",
+    "  count=0          after = snapshot(root)"
    ],
    "verdict": "undetermined"
   }
@@ -709,7 +702,7 @@
   "scripts/telemetry-truth-patch.py"
  ],
  "total": 56,
- "ts": "2026-09-29T19:11:01.342Z",
+ "ts": "2026-09-29T19:11:41.815Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
