@@ -105,3 +105,31 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 # missing CLOUDFLARE_API_TOKEN, or wrangler auth). If it does NOT appear at all while other
 # workflows' artifacts continue to land, the per-workflow trigger is the fault and the
 # restore must go through a Cloudflare-side deploy path that carries containers metadata.
+#
+# RETRIGGER-4 (2026-09-29, qnfo-ops, issue #1485) — RETRIGGER-3's test is now RESOLVED, and
+# it resolves in favour of "CI triggers work; the wrangler command is the blocker".
+# OBSERVED: ci-status/deploy-containers-pilot.json EXISTS with
+#   {"workflow":"deploy-containers-pilot","issue":1485,"wrangler_outcome":"failure",
+#    "nomig_outcome":"failure","verify_outcome":"success","health_http":"200",
+#    "head":"139b2dce444409623d7a3739bfa80e23bf50ac19","ts":"2026-09-29T19:37:34Z"}
+# So: (a) the workflow DOES run on push - the RETRIGGER-2 "CI layer is broken" reading is
+# REFUTED; (b) BOTH wrangler attempts failed, with AND without [[migrations]], so the DO
+# migration block is NOT the sole blocker; (c) verify_outcome=success was a FALSE GREEN
+# (VERIFY-FALSE-GREEN-1): /health returns 200 without ever touching ctx.container, so a
+# green health probe coexists with a fully dead container path.
+# That artifact was produced by the PREVIOUS revision of deploy-containers-pilot.yml, which
+# published outcomes but NOT the wrangler output - so the failure reason was unrecoverable
+# from outside the runner (CI-ARTIFACT-NO-FAILURE-TEXT-1). The current revision restores the
+# wrangler log tail and replaces verify_outcome with an explicit verify_rc.
+# THIS COMMIT is the decisive re-run: it touches this path so BOTH container workflows fire
+# against their current revisions:
+#   * deploy-containers-pilot.yml  -> expected to publish wrangler_tail (the real blocker)
+#   * restore-container-config.yml -> the CF-API /content PUT carrying `containers`
+# Decisive artifacts to read afterwards:
+#   ci-status/deploy-containers-pilot.json  (wrangler_tail names the blocker)
+#   ci-status/restore-container-config.json (restore_outcome + /settings read-back)
+# A green restore artifact proves the CF API accepted `containers` in the upload metadata
+# AND that GET /settings read back a non-empty containers array. It does NOT prove the
+# container boots - only an authenticated /status probe does, and
+# GET /status returning {"ok":false,"error":"Cannot read properties of undefined
+# (reading 'running')"} is the authoritative open/closed signal for #1485.
