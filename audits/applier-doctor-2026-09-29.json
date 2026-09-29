@@ -1,7 +1,7 @@
 {
  "counts": {
   "already-applied": 19,
-  "applied-now": 2,
+  "applied-now": 3,
   "error": 6,
   "stale-anchor": 5
  },
@@ -15,6 +15,7 @@
  ],
  "marker": "APPLIER-DOCTOR-1",
  "never_landed": [
+  "scripts/apply-pending-patches.py",
   "scripts/deploy-guard-ms-failclosed-patch.py",
   "scripts/patch-404hint-list-1.py"
  ],
@@ -27,6 +28,21 @@
     "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M ci-status/applier-doctor.json",
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
+   ],
+   "rc": 0,
+   "script": "scripts/apply-pending-patches.py",
+   "tail": [
+    "SUMMARY total=32 {'already-applied': 19, 'stale-anchor': 10, 'landed': 2, 'error': 1}",
+    "LANDED(2): deploy-guard-ms-failclosed-patch.py, patch-404hint-list-1.py",
+    "wrote ci-status/applier-doctor.json"
+   ],
+   "verdict": "applied-now"
   },
   {
    "changed_files": [],
@@ -349,6 +365,6 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "total": 32,
- "ts": "2026-09-29T16:25:52.770Z"
+ "total": 33,
+ "ts": "2026-09-29T16:27:47.288Z"
 }
