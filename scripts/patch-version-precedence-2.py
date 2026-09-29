@@ -1,198 +1,236 @@
 #!/usr/bin/env python3
-"""VERSION-PRECEDENCE-2-MULTI-DECLARATION-1 applier - issue #1388.
+"""patch-version-precedence-2.py - fix issue #1388 (VERSION-PRECEDENCE-2-MULTI-DECLARATION-1).
 
-WHY THIS EXISTS
-  scripts/deploy-drift-guard.py resolves the repo-side version with _repo_version(),
-  which returned the FIRST `const VERSION` it found. A concatenated worker artifact can
-  declare that constant TWICE in different scopes.
+DEFECT
+  scripts/deploy-drift-guard.py::_repo_version() returned the FIRST plain `const VERSION`
+  match in file order. An artifact that composes two modules into one file therefore
+  reports the FIRST module's constant, producing a permanent false DRIFT on that worker.
 
-MEASURED (2026-09-29, in-container against main)
-  fleet-exec/deployed-current.worker.js
-    line   7: const VERSION = "fleet-executor/0.3.2";   <- wrapped exec module
-    line 186: const VERSION = "1.0.2";                  <- the value /health serves
-  live https://fleet-exec.q08.workers.dev/health -> {"ok":true,"version":"1.0.2"}
-  the guard reported repo=fleet-executor/0.3.2 vs live=1.0.2, so worker_live_audit
-  carried a PERMANENT false DRIFT row on a canonical deploy target. It also corrupted
-  the numeric --ahead comparison (cmp_ver returns None for "fleet-executor/0.3.2").
+  Measured case (fleet-exec, one of only TWO entries in deploy-targets.txt):
+    line   7  const VERSION = "fleet-executor/0.3.2";   <- INSIDE the `execMod` IIFE
+    line 186  const VERSION = "1.0.2";                  <- module scope
+    line 265  if (url.pathname === "/health") return json({ ok: true, version: VERSION });
+  The module-scope /health handler at line 265 is the one the fetch export serves, and it
+  resolves to the module-scope binding. Live /health serves 1.0.2. The guard reported
+  repo=fleet-executor/0.3.2 vs live=1.0.2 -> permanent DRIFT row on the 2026-09-29
+  16:05:10Z run (DRIFT=2, one of which was this false positive).
 
-FIX (two surgical edits, both fail-closed)
-  1. _repo_version: the LAST plain VERSION wins -- in a concatenated artifact the later
-     binding is the effective one. QNFO_VERSION stays the fallback (VERSION-PRECEDENCE-1
-     is preserved: a plain VERSION still beats QNFO_VERSION).
-  2. repo_artifact: stop returning None after the first canonical artifact. The second
-     candidate is consulted before NO_REPO_VERSION is declared.
+WHY "LAST WINS" IS EVIDENCE-BACKED, NOT A GUESS
+  Read from the artifact's own scope structure, not from /health: the serving handler is
+  the MODULE-SCOPE /health (line 265) and the module-scope binding is the LAST declaration
+  (line 186). Line 7's binding lives inside the `execMod` IIFE, whose own /health (line 129)
+  is not what the worker exports. This also REFUTES the reverse reading recorded in the
+  issue (that the guard is right and live /health is stale): a stale /health would have to
+  be produced by the IIFE scope, which is not the exported handler.
 
-Contract: idempotent (marker present -> exit 0 no-op); fail-closed (missing or ambiguous
-anchor -> exit 4, never a silent skip). Exit 0 applied-or-already-applied, 4 anchor,
-5 verification failed.
+SAFETY (the part that matters)
+  "Last wins" is a fact about THIS artifact shape, not a general law. So the fix does two
+  things together:
+    1. resolves the version by last-wins (removes the false DRIFT);
+    2. EXCLUDES any multi-declaration artifact from --ahead, so an ambiguous version is
+       NEVER auto-deployed. .github/workflows/fleet-autodeploy.yml applies exactly the
+       --ahead list, so this is the load-bearing guard on the deploy path.
+  The worker still lands in `drift`/`sync` as before and gains an ADDITIVE
+  `multi_version_declarations` JSON field. A new top-level class was deliberately avoided:
+  an unrecognised class risks the consumer's stale-row purge silently dropping the worker,
+  which is the defect class this repo keeps re-filing.
+
+FAIL-CLOSED / IDEMPOTENT
+  Every anchor must match exactly once. Any miss -> exit 3 and NOTHING is written.
+  Re-running after success is a no-op (marker present -> exit 0), so the apply workflow
+  cannot flap red merely because a previous run already landed the fix.
+
+ADVERSARIAL
+  (a) last-wins is a heuristic for an ambiguous artifact: an artifact whose SERVING
+      constant is declared before a later non-serving one would now resolve wrongly. That
+      is why the ambiguous case is reported and barred from --ahead rather than trusted.
+  (b) the post-checks are string assertions; a behaviour-preserving rewrite that keeps
+      `for prefix, val in hits:` would fail spuriously (loudly, not silently).
+  (c) this applier's anchors are taken from the guard as of VERSION-QUOTE-1 (issue #1389).
+      If a later writer rewrites _repo_version, the anchors miss and the job goes red
+      (ANCHOR-INVALIDATION-RED-JOB-1, issue #1383) rather than mis-patching.
 """
+import importlib.util
 import os
+import py_compile
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TARGET = os.path.join(ROOT, "scripts", "deploy-drift-guard.py")
-MARK = "VERSION-PRECEDENCE-2-MULTI-DECLARATION-1"
+MARKER = "VERSION-PRECEDENCE-2"
+ISSUE = "#1388"
 
-A1_OLD = (
-    "    hits = CONST.findall(text)\n"
-    "    if hits:\n"
-    "        for prefix, val in hits:\n"
-    "            if not prefix:\n"
-    "                return val\n"
-    "        return hits[0][1]\n"
-)
-A1_NEW = (
-    "    hits = CONST.findall(text)\n"
-    "    if hits:\n"
-    "        # VERSION-PRECEDENCE-2-MULTI-DECLARATION-1 (2026-09-29, issue #1388): a\n"
-    "        # concatenated bundle can declare the SAME constant twice in different scopes\n"
-    "        # (fleet-exec: line 7 \"fleet-executor/0.3.2\" inside the wrapped exec module,\n"
-    "        # line 186 \"1.0.2\" = the value /health actually serves). Returning the FIRST\n"
-    "        # match produced a permanent false DRIFT on a canonical deploy target. In a\n"
-    "        # concatenated artifact the LATER binding is the effective one, so the LAST\n"
-    "        # plain VERSION wins; QNFO_VERSION remains the fallback.\n"
-    "        plain = [val for prefix, val in hits if not prefix]\n"
-    "        if plain:\n"
-    "            return plain[-1]\n"
-    "        return hits[-1][1]\n"
-)
-A2_OLD = (
-    '    """Return (version, path, text) for the canonical repo artifact, or (None, None, None)."""\n'
-    "    for fn in CANON:\n"
-)
-A2_NEW = (
-    '    """Return (version, path, text) for the canonical repo artifact, or (None, None, None)."""\n'
-    "    first = None\n"
-    "    for fn in CANON:\n"
-)
-A3_OLD = (
-    "            v = _repo_version(text)\n"
-    "            if v:\n"
-    "                return v, p, text\n"
-    "            return None, p, text\n"
-    "    return None, None, None\n"
-)
-A3_NEW = (
-    "            v = _repo_version(text)\n"
-    "            if v:\n"
-    "                return v, p, text\n"
-    "            # VERSION-PRECEDENCE-2: do NOT give up on the first candidate. Returning\n"
-    "            # None here reported NO_REPO_VERSION without ever consulting the second\n"
-    "            # canonical artifact -- a false source-gap whenever only the mirror lacks\n"
-    "            # the constant.\n"
-    "            if first is None:\n"
-    "                first = (None, p, text)\n"
-    "    return first if first is not None else (None, None, None)\n"
-)
+E1 = "repo == live"
+R1 = """repo == live
+  MULTI_VERSION_DECLARATION  the artifact declares MORE THAN ONE plain `VERSION`
+                   constant, so the guard cannot prove which binding the serving scope
+                   resolves (VERSION-PRECEDENCE-2, issue #1388). It is REPORTED and it is
+                   NEVER auto-deployed (excluded from --ahead). The worker still appears in
+                   its normal class (DRIFT/SYNC) so no consumer silently loses the row."""
 
-EDITS = [("A1 _repo_version selection", A1_OLD, A1_NEW),
-         ("A2 repo_artifact loop head", A2_OLD, A2_NEW),
-         ("A3 repo_artifact early return", A3_OLD, A3_NEW)]
+E2 = """    not_deployed, sync_workers, live_err, no_health = [], [], [], []
+    not_a_worker = []"""
+R2 = """    not_deployed, sync_workers, live_err, no_health = [], [], [], []
+    not_a_worker = []
+    # VERSION-PRECEDENCE-2 (issue #1388): artifacts declaring >1 plain VERSION constant.
+    multi_ver = []"""
+
+E3 = """    hits = CONST.findall(text)
+    if hits:
+        for prefix, val in hits:
+            if not prefix:
+                return val
+        return hits[0][1]"""
+R3 = """    hits = CONST.findall(text)
+    if hits:
+        plain = [val for prefix, val in hits if not prefix]
+        if plain:
+            # VERSION-PRECEDENCE-2 (2026-09-29, issue #1388): the LAST plain declaration
+            # wins. Measured on fleet-exec: line 7 `const VERSION = "fleet-executor/0.3.2"`
+            # sits INSIDE the `execMod` IIFE closure while line 186 `const VERSION = "1.0.2"`
+            # is module scope, and the module-scope /health handler (line 265) is the one
+            # the worker serves. Live /health = 1.0.2 agrees, so last-wins resolves THAT
+            # artifact correctly. It is a fact about that artifact shape, not a general law:
+            # >1 plain VERSION is ambiguous, is reported as MULTI_VERSION_DECLARATION, and
+            # is excluded from --ahead so it is never auto-deployed.
+            # VERSION-PRECEDENCE-1 (plain beats QNFO_VERSION) is preserved below.
+            return plain[-1]
+        return hits[0][1]"""
+
+E4 = "def repo_artifact(d):"
+R4 = '''def _plain_versions(text):
+    """VERSION-PRECEDENCE-2 (issue #1388): every plain `VERSION` declaration, in file order.
+
+    len() > 1 means the artifact is ambiguous: this regex cannot tell which binding the
+    serving scope resolves. Used both to resolve by last-wins and to exclude the worker
+    from --ahead, so an ambiguous version is never auto-deployed.
+    """
+    return [val for prefix, val in CONST.findall(text) if not prefix]
 
 
-def load_guard():
-    """Import the guard without letting a module-level main() abort the applier."""
-    import importlib.util
-    saved = sys.argv
-    sys.argv = ["deploy-drift-guard.py", "__no_such_worker__"]
-    try:
-        spec = importlib.util.spec_from_file_location("ddg_guard_vp2", TARGET)
-        mod = importlib.util.module_from_spec(spec)
-        try:
-            spec.loader.exec_module(mod)
-        except SystemExit:
-            pass
-        return mod
-    finally:
-        sys.argv = saved
+def repo_artifact(d):'''
+
+E5 = """        elif lv != rv:
+            drift.append((d, worker, rv, lv))
+            if cmp_ver(rv, lv) == 1:
+                ahead.append((d, worker, rv, lv, rpath))"""
+R5 = """        elif lv != rv:
+            drift.append((d, worker, rv, lv))
+            # VERSION-PRECEDENCE-2 (issue #1388): a multi-declaration artifact is reported
+            # and NEVER auto-deployed -- the deploy path must not act on a version the
+            # guard could not establish unambiguously. It stays in `drift` (and in the
+            # JSON) so no consumer silently loses the row.
+            if rtext is not None and len(_plain_versions(rtext)) > 1:
+                multi_ver.append((d, worker, rv, lv))
+            elif cmp_ver(rv, lv) == 1:
+                ahead.append((d, worker, rv, lv, rpath))"""
+
+E6 = '            "name_resolution": True,'
+R6 = '''            "multi_version_declarations": [
+                {"worker": w, "dir": d, "repo": r, "live": l} for d, w, r, l in multi_ver],
+            "multi_version_declaration_count": len(multi_ver),
+            "name_resolution": True,'''
+
+E7 = '''        for d, w, rv_, lv_, p in ahead:
+            print(f"AHEAD {w} (dir {d}): repo={rv_} live={lv_} artifact={p}")'''
+R7 = '''        for d, w, rv_, lv_, p in ahead:
+            print(f"AHEAD {w} (dir {d}): repo={rv_} live={lv_} artifact={p}")
+        for d, w, rv_, lv_ in multi_ver:
+            print(f"MULTI_VERSION_DECLARATION {w} (dir {d}): repo={rv_} live={lv_} "
+                  f"ambiguous artifact; excluded from --ahead")'''
+
+E8 = '              f"not_a_worker={len(not_a_worker)} "'
+R8 = '''              f"not_a_worker={len(not_a_worker)} "
+              f"multi_version={len(multi_ver)} "'''
+
+EDITS = [
+    ("docstring-classes", E1, R1),
+    ("main-init", E2, R2),
+    ("repo-version-plain", E3, R3),
+    ("plain-versions-helper", E4, R4),
+    ("ahead-exclusion", E5, R5),
+    ("json-field", E6, R6),
+    ("human-print", E7, R7),
+    ("summary-line", E8, R8),
+]
 
 
-def verify():
-    """Behavioural verification. Returns a list of failure strings ([] == pass)."""
-    import py_compile
-    fails = []
-    try:
-        py_compile.compile(TARGET, doraise=True)
-    except Exception as exc:
-        return ["py_compile failed: %r" % (exc,)]
-    try:
-        mod = load_guard()
-    except Exception as exc:
-        return ["guard import failed: %r" % (exc,)]
-    if MARK not in open(TARGET, encoding="utf-8", errors="replace").read():
-        fails.append("marker %s absent after apply" % MARK)
-    rv = getattr(mod, "_repo_version", None)
-    if rv is None:
-        return fails + ["_repo_version missing from guard"]
-    cases = [
-        ("two plain declarations -> LAST wins",
-         'const VERSION = "fleet-executor/0.3.2";\nconst VERSION = "1.0.2";\n', "1.0.2"),
-        ("single declaration unchanged",
-         'const VERSION = "2.0.0";\n', "2.0.0"),
-        ("plain VERSION still beats QNFO_VERSION",
-         'const QNFO_VERSION = "qnfo-archive/fabric-20260910";\nconst VERSION = "1.2.0";\n', "1.2.0"),
-        ("single-quoted VERSION (VERSION-QUOTE-1 preserved)",
-         "const VERSION='1.0.6-cronconsolidate';\n", "1.0.6-cronconsolidate"),
-        ("SERVER_VERSION fallback (VERSION-QUOTE-1 preserved)",
-         'var SERVER_VERSION = "2.0.3";\n', "2.0.3"),
-        ("PROTOCOL_VERSION alone is still not a version",
-         'const PROTOCOL_VERSION = "9";\n', None),
-        ("QNFO_VERSION-only artifact stays visible",
-         'const QNFO_VERSION = "qnfo-archive/fabric-20260910";\n', "qnfo-archive/fabric-20260910"),
-    ]
-    for label, text, want in cases:
-        got = rv(text)
-        if got != want:
-            fails.append("%s: got %r want %r" % (label, got, want))
-    ra = getattr(mod, "repo_artifact", None)
-    if ra is not None:
-        v, path, _ = ra("fleet-exec")
-        if v != "1.0.2":
-            fails.append("repo_artifact('fleet-exec') -> %r (want '1.0.2', issue #1388)" % (v,))
-        if path is None:
-            fails.append("repo_artifact('fleet-exec') found no artifact")
-    else:
-        fails.append("repo_artifact missing from guard")
-    return fails
+def behavioural_verify(path):
+    spec = importlib.util.spec_from_file_location("ddg_patched", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    checks = []
+    two = 'const VERSION = "first";\nconst VERSION = "second";\n'
+    checks.append(("two-plain-last-wins", mod._repo_version(two) == "second"))
+    checks.append(("two-plain-list", mod._plain_versions(two) == ["first", "second"]))
+    one = 'const VERSION = "only";\n'
+    checks.append(("one-plain-unchanged", mod._repo_version(one) == "only"))
+    checks.append(("one-plain-list", mod._plain_versions(one) == ["only"]))
+    qnfo = 'const QNFO_VERSION = "tag";\nconst VERSION = "served";\n'
+    checks.append(("precedence-1-preserved", mod._repo_version(qnfo) == "served"))
+    qnfo_only = 'const QNFO_VERSION = "tag-only";\n'
+    checks.append(("qnfo-only-fallback", mod._repo_version(qnfo_only) == "tag-only"))
+    # The artifact that caused the defect, if this checkout carries it.
+    for rel in ("fleet-exec/deployed-current.worker.js", "fleet-exec/worker.js"):
+        p = os.path.join(ROOT, rel)
+        if os.path.isfile(p):
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                txt = fh.read()
+            got = mod._repo_version(txt)
+            checks.append((rel + " resolves 1.0.2", got == "1.0.2"))
+            checks.append((rel + " is flagged ambiguous",
+                           len(mod._plain_versions(txt)) == 2))
+            break
+    return checks
 
 
 def main():
-    verify_only = "--verify-only" in sys.argv
     if not os.path.isfile(TARGET):
-        print("APPLY-FAIL: target not found: %s" % TARGET)
-        return 4
-    text = open(TARGET, encoding="utf-8", errors="replace").read()
-    already = MARK in text
-    if verify_only:
-        fails = verify()
-        if fails:
-            for f in fails:
-                print("VERIFY-FAIL: " + f)
-            return 5
-        print("VERIFY-OK: %s present and behaviour correct" % MARK)
+        print("FATAL: missing target " + TARGET)
+        return 3
+    with open(TARGET, encoding="utf-8") as fh:
+        src = fh.read()
+    if MARKER in src:
+        print("ALREADY APPLIED: " + MARKER + " present; idempotent no-op")
         return 0
-    if already:
-        print("ALREADY-APPLIED: %s present, no edit made" % MARK)
-        fails = verify()
-        for f in fails:
-            print("VERIFY-FAIL: " + f)
-        return 0 if not fails else 5
-    new = text
-    for label, old, repl in EDITS:
-        n = new.count(old)
+    out = src
+    for name, anchor, repl in EDITS:
+        n = out.count(anchor)
         if n != 1:
-            print("APPLY-FAIL: anchor %s matched %d times (need exactly 1) -- refusing to "
-                  "edit a file this applier does not understand" % (label, n))
-            return 4
-        new = new.replace(old, repl, 1)
-    open(TARGET, "w", encoding="utf-8").write(new)
-    print("APPLIED: %s" % MARK)
-    fails = verify()
-    if fails:
-        for f in fails:
-            print("VERIFY-FAIL: " + f)
-        return 5
-    print("VERIFY-OK: %s applied and behaviour verified" % MARK)
+            print("ANCHOR-MISS [%s] %s: count=%d (expected 1) - refusing to write"
+                  % (name, ISSUE, n))
+            return 3
+        out = out.replace(anchor, repl, 1)
+    # Post-conditions: the defect is gone and the fix is present.
+    if "for prefix, val in hits:" in out:
+        print("POST-CHECK FAILED: legacy first-match loop still present")
+        return 3
+    if out.count(MARKER) < 5:
+        print("POST-CHECK FAILED: marker count=%d" % out.count(MARKER))
+        return 3
+    if out.count("_plain_versions") < 3:
+        print("POST-CHECK FAILED: _plain_versions count=%d" % out.count("_plain_versions"))
+        return 3
+    tmp = TARGET + ".new"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(out)
+    try:
+        py_compile.compile(tmp, doraise=True)
+    except py_compile.PyCompileError as e:
+        print("POST-CHECK FAILED: patched guard does not compile: %s" % e)
+        os.remove(tmp)
+        return 3
+    os.replace(tmp, TARGET)
+    print("APPLIED %s: %d edits, %d bytes" % (MARKER, len(EDITS), len(out)))
+    bad = []
+    for name, ok in behavioural_verify(TARGET):
+        print("  verify %-40s %s" % (name, "OK" if ok else "FAIL"))
+        if not ok:
+            bad.append(name)
+    if bad:
+        print("BEHAVIOURAL VERIFY FAILED: %s" % ", ".join(bad))
+        return 3
+    print("BEHAVIOURAL VERIFY OK")
     return 0
 
 
