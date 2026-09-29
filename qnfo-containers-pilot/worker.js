@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.0";
+var VERSION = "1.0.1-start-race-lock";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -62,13 +62,37 @@ var ShellContainer = class {
     this.ctx = ctx;
     this.env = env;
     this._initialized = false;
+    this._starting = null;
   }
   async ensureStarted() {
     if (this.ctx.container.running) return;
-    await this.ctx.container.start({
-      entrypoint: ["bash", "-c", "mkdir -p /workspace && sleep infinity"],
-      enableInternet: true
+    if (this._starting) return this._starting;
+    this._starting = this._doStart().finally(() => {
+      this._starting = null;
     });
+    return this._starting;
+  }
+  async _doStart() {
+    if (this.ctx.container.running) return;
+    let lastErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await this.ctx.container.start({
+          entrypoint: ["bash", "-c", "mkdir -p /workspace && sleep infinity"],
+          enableInternet: true
+        });
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (this.ctx.container.running) {
+          lastErr = null;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 750));
+      }
+    }
+    if (lastErr) throw lastErr;
     await this.run([
       "bash",
       "-c",
