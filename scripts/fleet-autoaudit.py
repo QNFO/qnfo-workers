@@ -32,6 +32,18 @@ guard emits that is NOT handled here would be silently dropped -- re-introducing
 the silent-skip defect the guard refuses to allow. When the guard adds a class, add it
 here in the same commit.
 
+NOT-DEPLOYED-KEYED-BY-DIR-1 / NOT-A-WORKER (2026-09-29, issues #1379/#1380): the guard
+now emits `not_deployed_workers` as {"worker","dir"} objects instead of bare directory
+strings, and routes config-less, artifact-less directories to a separate `not_a_worker`
+class. Both are consumed below; the legacy string form is still tolerated so an older
+guard cannot crash this consumer.
+
+AUDIT-STALE-ROWS-1 (2026-09-29, issue #1378): the UPSERT is per-worker with no purge, so a
+renamed or retired repo directory leaves an orphan row forever and the table can never be
+read as a snapshot of the current fleet. After a FULL audit (`scope == "all"`) every row
+whose probed_at was not advanced by this run is purged. The purge is deliberately skipped
+on a scoped run, where stale rows are expected and meaningful.
+
 ADVERSARIAL NOTE: a green run of this script is NOT proof the fleet is correct. It proves
 every worker whose /health answers reports a version equal to the repo artifact, and (in
 --content mode) that the normalised live bundle hash matches. It cannot see behavioural
@@ -59,6 +71,7 @@ UPSERT = ("INSERT INTO worker_live_audit "
           "http=excluded.http, live_version=excluded.live_version, "
           "registry_before=excluded.registry_before, match=excluded.match, "
           "note=excluded.note, probed_at=excluded.probed_at")
+PURGE = "DELETE FROM worker_live_audit WHERE probed_at <> ?"
 
 
 def die(msg, code=3):
@@ -106,7 +119,29 @@ def d1(sql, params):
         return {"ok": False, "error": str(e)[:200]}
 
 
+def d1_changes(res):
+    """Rows affected, from either the D1 REST envelope or a plain sqlite3-style reply."""
+    try:
+        blocks = res.get("result") or []
+        if isinstance(blocks, list) and blocks:
+            meta = blocks[0].get("meta") or {}
+            if "changes" in meta:
+                return int(meta["changes"])
+        if "changes" in res:
+            return int(res["changes"])
+    except Exception:
+        pass
+    return None
+
+
 # ---------------------------------------------------------------- audit
+def _w(it):
+    """Resolved worker name from a guard entry, tolerating the legacy bare-string form."""
+    if isinstance(it, dict):
+        return it.get("worker")
+    return it
+
+
 def classify(d):
     """One dict per worker: the class, live version, repo version, match flag.
 
@@ -116,6 +151,8 @@ def classify(d):
     rows = {}
 
     def put(worker, http, live, before, match, note):
+        if not worker:
+            return
         if worker in rows and rows[worker]["note"] != "SYNC":
             rows[worker]["note"] += "+" + note
             rows[worker]["match"] = 0
@@ -136,11 +173,17 @@ def classify(d):
     # NO_HEALTH_ROUTE-1: deployed per the CF script list, but workers.dev /health 404s.
     # NOT the same as NOT_DEPLOYED; conflating them hid live workers from every check.
     for it in d.get("no_health_route", []):
-        put(it["worker"], 404, None, None, 0, "NO_HEALTH_ROUTE")
+        put(_w(it), 404, None, None, 0, "NO_HEALTH_ROUTE")
     for it in d.get("live_err", []):
-        put(it["worker"], 0, None, None, 0, "LIVE_ERR")
-    for w in d.get("not_deployed_workers", []):
-        put(w, 404, None, None, 0, "NOT_DEPLOYED")
+        put(_w(it), 0, None, None, 0, "LIVE_ERR")
+    # NOT-DEPLOYED-KEYED-BY-DIR-1: keyed by the RESOLVED worker name like every other
+    # class, not by the repo directory. Legacy bare strings are still accepted.
+    for it in d.get("not_deployed_workers", []):
+        put(_w(it), 404, None, None, 0, "NOT_DEPLOYED")
+    # NOT-DEPLOYED-NONWORKER-NOISE-1: a directory with no worker config and no artifact is
+    # not a worker. Written in its own class so it cannot inflate NOT_DEPLOYED.
+    for it in d.get("not_a_worker", []):
+        put(_w(it), 404, None, None, 0, "NOT_A_WORKER")
     return rows
 
 
@@ -157,7 +200,19 @@ def write_audit_rows(rows):
     return ok, failed, now
 
 
-def summary_md(d, rows, ok, failed, now):
+def purge_stale(now):
+    """AUDIT-STALE-ROWS-1: after a FULL audit, drop rows this run did not advance.
+
+    Only safe for a full run: on a scoped run the untouched rows are legitimately outside
+    the scan and purging them would silently shrink the audit surface.
+    """
+    res = d1(PURGE, [now])
+    if not res.get("ok"):
+        return None, str(res.get("error"))[:160]
+    return d1_changes(res), None
+
+
+def summary_md(d, rows, ok, failed, now, purged=None, purge_err=None):
     counts = {}
     for r in rows.values():
         counts[r["note"]] = counts.get(r["note"], 0) + 1
@@ -167,10 +222,16 @@ def summary_md(d, rows, ok, failed, now):
         f"- content-level check: **{'ON' if d.get('content_checked') else 'OFF (no CF token)'}**",
         f"- name resolution (dir -> wrangler.toml `name`): **{'ON' if d.get('name_resolution') else 'OFF'}**",
         f"- CF account script list (separates NO_HEALTH_ROUTE from NOT_DEPLOYED): **{'ON' if d.get('cf_script_list') else 'OFF (no CF token)'}**",
+        f"- guard scope: **{d.get('scope') or 'unknown'}**",
         f"- guard rc: `{d.get('_guard_rc')}`", "", "## Class counts", "", "| class | n |", "|---|---|",
     ]
     for k in sorted(counts):
         lines.append(f"| {k} | {counts[k]} |")
+    if d.get("scope") == "all":
+        if purge_err:
+            lines.append(f"\n- stale-row purge: **FAILED** ({purge_err})")
+        else:
+            lines.append(f"\n- stale-row purge: **{purged}** rows removed (probed_at <> this run)")
     ahead = d.get("ahead", [])
     lines += ["", f"## Repo-ahead (safe to auto-deploy): {len(ahead)}", ""]
     if ahead:
@@ -186,7 +247,8 @@ def summary_md(d, rows, ok, failed, now):
               "- behavioural breakage behind a 200 /health",
               "- workers with no version constant (reported as NO_REPO_VERSION, not skipped)",
               "- content drift is hash-based on a normalised bundle, so formatting-only diffs are masked",
-              "- a worker deployed but with a disabled workers.dev route is NO_HEALTH_ROUTE, not verified"]
+              "- a worker deployed but with a disabled workers.dev route is NO_HEALTH_ROUTE, not verified",
+              "- NOT_A_WORKER rows are directories, not workers: they are recorded for provenance only"]
     return "\n".join(lines) + "\n"
 
 
@@ -269,12 +331,18 @@ def main():
     d = run_guard()
     rows = classify(d)
     ok, failed, now = write_audit_rows(rows)
-    body = summary_md(d, rows, ok, failed, now)
+    purged, purge_err = (None, None)
+    if d.get("scope") == "all":
+        purged, purge_err = purge_stale(now)
+        if purge_err:
+            print(f"::warning::stale-row purge failed: {purge_err}")
+    body = summary_md(d, rows, ok, failed, now, purged, purge_err)
     os.makedirs(os.path.join(ROOT, "audits"), exist_ok=True)
     out = os.path.join(ROOT, "audits", f"fleet-autoaudit-{now[:10]}.json")
     with open(out, "w", encoding="utf-8") as fh:
         json.dump({"audited_at": now, "guard": d, "rows": rows,
-                   "d1_writes_ok": ok, "d1_write_failures": failed}, fh, indent=2, sort_keys=True)
+                   "d1_writes_ok": ok, "d1_write_failures": failed,
+                   "stale_rows_purged": purged, "purge_error": purge_err}, fh, indent=2, sort_keys=True)
     print(body)
     action, num, err = publish_issue(body)
     if err:
@@ -282,7 +350,7 @@ def main():
     else:
         print(f"self-audit issue {action}: #{num}")
 
-    rc = 1 if failed else 0
+    rc = 1 if (failed or purge_err) else 0
     if mode == "--apply":
         rc = 1 if apply_ahead() else rc
     sys.exit(rc)
