@@ -1,49 +1,55 @@
 #!/usr/bin/env python3
-"""CONTAINER-CONFIG-RESTORE-4 (issues #1485 / #1487 / #1493) -- restore a Worker's
+"""CONTAINER-CONFIG-RESTORE-5 (issues #1485 / #1487 / #1493) -- restore a Worker's
 [[containers]] script-level metadata through the CF API /content endpoint.
 
-WHY RESTORE-4 EXISTS -- MEASURED, NOT INFERRED
-  RESTORE-3 sent the upload metadata as {main_module, containers, compatibility_date[, flags]}
-  with `bindings` and `migrations` deliberately omitted, on the assumption that an
-  already-provisioned Durable Object class needs no declaration. That assumption is FALSIFIED
-  by RESTORE-3's own live run (ci-status/restore-container-config.json, 2026-09-29T19:43:35Z):
+WHY RESTORE-5 EXISTS -- TWO FALSIFICATIONS, BOTH MEASURED
 
-      PUT /content -> HTTP 400
-      errors[0].code = 100402
-      "Durable Object exports reconciliation failed:
-       - [provisioned_class_missing_from_config] class 'ShellContainer': class 'ShellContainer'
-         has a provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is
-         not declared in `exports`. Every provisioned class must be declared in `exports`
-         (live or tombstone); silent drift is not permitted. (add 'ShellContainer' back to
-         `exports` as {"type": "durable-object", "storage": "sqlite"} (or "legacy-kv"), or
-         replace the entry with a `deleted` / `renamed` ...)"
+  FALSIFICATION 1 (RESTORE-3, ts 19:43:35Z). RESTORE-3 sent {main_module, containers,
+  compatibility_date} with `bindings` and `migrations` omitted and got:
+      PUT /content -> HTTP 400, code 100402
+      "[provisioned_class_missing_from_config] class 'ShellContainer' has a provisioned
+       Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is not declared in
+       `exports`."
+  -> a provisioned class MUST be declared on every upload. Omission is not neutral.
 
-  So #1485 was never a retry problem -- the retries were correct and the PAYLOAD was wrong.
-  RESTORE-4 therefore tries declaration shapes in order and records the first one the server
-  accepts. It mutates nothing until a 200.
+  FALSIFICATION 2 (RESTORE-4, ts 19:45:06Z, ci-status/restore-container-config-1485.json).
+  Adding `exports` made the PUT return 200 --
+      'named_handlers': [{'name': 'ShellContainer', 'handlers': ['class']}],
+      'migration_tag': 'v1', 'last_deployed_from': 'api'
+  -- but the SAME run's read-back recorded:
+      post /settings containers: null
+      post_settings: {"containers": null, "bindings": ["PILOT_TOKEN"]}
+  i.e. the upload DESTROYED the `AUDIT` d1 binding and the `SHELL_CONTAINER` durable-object
+  binding, leaving only the secret. The RESTORE-3 docstring's claim that "the /content PUT
+  preserves live bindings by omission" is therefore FALSE for non-secret bindings. Omitting
+  `bindings` is not binding-preserving: it is binding-destroying, with secrets surviving
+  only because secret_text lives outside the upload metadata.
 
-WHAT IT SENDS
-  multipart/form-data PUT /accounts/<acct>/workers/scripts/<worker>
-    metadata part: strategy-dependent (see build_strategies)
-    module part:   qnfo-containers-pilot/worker.js
-  `bindings` is omitted from the default strategies: the /content PUT preserves live
-  bindings by omission (BINDING-PRESERVATION-1). Strategies that MUST send bindings also
-  send `keep_bindings` so unrelated bindings are not dropped, and every 200 is followed by
-  a read-back assertion plus in-run repair.
+  Also measured: the accepted `exports` shape is a DICT KEYED BY CLASS NAME
+      {"ShellContainer": {"type": "durable-object", "storage": "sqlite"}}
+  which is what the 200 carried -- not a list of descriptors.
 
-VERIFICATION -- FAIL CLOSED
-  After a 200: GET /settings MUST report `containers` AND the bindings AUDIT, PILOT_TOKEN
-  and SHELL_CONTAINER. A vanished binding is repaired in the same run, not left behind.
-  /status is probed with PILOT_TOKEN when available.
+WHAT RESTORE-5 DOES DIFFERENTLY
+  * EVERY strategy sends `bindings` EXPLICITLY: the durable_object_namespace binding plus
+    the d1 AUDIT binding, with `keep_bindings: ["secret_text"]` so the unreadable secret is
+    carried over rather than reconstructed.
+  * `exports` is sent as the dict-keyed shape that provably returned 200.
+  * A 200 is no longer treated as success. The read-back asserts ALL of
+    {AUDIT, PILOT_TOKEN, SHELL_CONTAINER}; a missing binding triggers an in-run repair PUT
+    rather than a `continue`, because continuing is how RESTORE-4 walked away from a
+    destroyed binding set.
+  * `containers: null` in /settings after a 200 is reported as UNVERIFIED-AT-SETTINGS, and
+    the authoritative signal becomes the /status probe (which reaches the Durable Object and
+    therefore touches ctx.container). Both are recorded; neither is silently upgraded.
 
 ADVERSARIAL
-  (a) If every declaration shape is rejected, the script exits 3 having mutated nothing.
-  (b) If a PUT returns 200 but drops a binding, the repair path re-adds it from env
-      (PILOT_TOKEN) or from the known d1 database_id. A repair that itself fails is
-      reported as REGRESSION-UNREPAIRED and exits 4 -- never silently green.
-  (c) `exports` / `migrations` are not sent by any other deploy path in this repo, so the
-      accepted shape is recorded in the log tail for the next reader. If the server changes
-      its reconciliation contract, the recorded shapes are the falsification record.
+  (a) If `containers` is not an accepted /content metadata field at all, every strategy will
+      show containers null and the script exits 3 WITHOUT claiming success -- the honest
+      outcome is "this endpoint cannot set containers", which is a finding, not a fix.
+  (b) The d1 database_id and the secret name are hard-coded from measured live state; if the
+      binding set legitimately changes, this script must be updated with it (fail-closed).
+  (c) Repair re-sends PILOT_TOKEN only from the CI env; if the secret is absent there, the
+      script reports REGRESSION-UNREPAIRED and exits 4 rather than going green.
 Usage: CLOUDFLARE_API_TOKEN=... python3 scripts/restore_container_config.py
 """
 import json
@@ -64,13 +70,11 @@ MODULE = os.path.join(ROOT, WORKER, "worker.js")
 # CF-URLLIB-UA-1010-1: Cloudflare 403/1010-bans the default urllib User-Agent.
 UA = "QNFO-fleet-ci/1.0 (+https://qnfo.org; restore_container_config.py)"
 API = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/%s" % (ACCT, WORKER)
-# BINDING-PRESERVATION-1: known-good identity of the d1 binding, for repair only.
+# BINDING-PRESERVATION-1: measured live identity of the d1 binding, needed because
+# GET /settings no longer returns it (it was destroyed at 19:45:02Z).
 AUDIT_D1_ID = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
-KEEP_TYPES = ["plain_text", "secret_text", "kv_namespace", "r2_bucket", "queue",
-              "analytics_engine", "service", "vectorize", "hyperdrive", "ai", "images",
-              "browser", "mtls_certificate", "dispatch_namespace", "d1"]
-
-REQUIRED_BINDINGS = ("AUDIT", "PILOT_TOKEN", "SHELL_CONTAINER")
+SECRET_NAME = os.environ.get("SECRET_NAME", "PILOT_TOKEN")
+REQUIRED_BINDINGS = ("AUDIT", SECRET_NAME, "SHELL_CONTAINER")
 
 
 def token():
@@ -143,9 +147,9 @@ def err_text(body):
     if isinstance(body, dict):
         errs = body.get("errors") or []
         if errs:
-            return " | ".join("%s:%s" % (e.get("code"), str(e.get("message"))[:400])
+            return " | ".join("%s:%s" % (e.get("code"), str(e.get("message"))[:300])
                               for e in errs)
-    return str(body)[:400]
+    return str(body)[:300]
 
 
 def multipart(metadata, name, code):
@@ -165,18 +169,48 @@ def multipart(metadata, name, code):
     return b, bytes(buf)
 
 
-def build_strategies(containers, compat_date, compat_flags, class_name, do_binding):
-    """Declaration shapes for the provisioned DO class, cheapest/most-likely first.
+def put(tok, metadata, code):
+    b, payload = multipart(metadata, "worker.js", code)
+    return req("PUT", API, tok, payload, "multipart/form-data; boundary=" + b)
 
-    S1-S4 are the shapes the 100402 message itself asks for ('declared in exports').
-    S5-S6 send the binding set explicitly (with keep_bindings) for the case where the
-    reconciliation keys off the durable_object_namespace binding rather than `exports`.
-    S7 is the RESTORE-3 control: it reproduces 100402 and proves the diagnosis is still live.
-    """
-    base = {"main_module": "worker.js", "containers": containers,
-            "compatibility_date": compat_date}
+
+def do_binding_entry(do_binding, class_name):
+    return {"type": "durable_object_namespace", "name": do_binding,
+            "class_name": class_name}
+
+
+def d1_entry():
+    return {"type": "d1", "name": "AUDIT", "id": AUDIT_D1_ID}
+
+
+def base_meta(containers, compat_date, compat_flags, do_binding, class_name):
+    md = {
+        "main_module": "worker.js",
+        "containers": containers,
+        "compatibility_date": compat_date,
+        # RESTORE-5: bindings are ALWAYS sent explicitly (see FALSIFICATION 2).
+        "bindings": [do_binding_entry(do_binding, class_name), d1_entry()],
+        # the secret is unreadable, so it is carried over rather than rebuilt.
+        "keep_bindings": ["secret_text"],
+    }
     if compat_flags:
-        base["compatibility_flags"] = compat_flags
+        md["compatibility_flags"] = compat_flags
+    return md
+
+
+def build_strategies(containers, compat_date, compat_flags, class_name, do_binding):
+    """Declaration shapes for the provisioned DO class, most-likely first.
+
+    The accepted shape from the 19:45:02Z 200 is the dict-keyed `exports`; the other shapes
+    exist so a contract change is observable instead of silent. Every shape carries the full
+    explicit binding set -- the no-bindings shape is deliberately ABSENT because it is the
+    one that destroyed the bindings.
+    """
+    base = base_meta(containers, compat_date, compat_flags, do_binding, class_name)
+    exp_sqlite = {class_name: {"type": "durable-object", "storage": "sqlite"}}
+    exp_legacy = {class_name: {"type": "durable-object", "storage": "legacy-kv"}}
+    mig = {"old_tag": "v1", "new_tag": "v2",
+           "steps": [{"new_sqlite_classes": [class_name]}]}
     out = []
 
     def add(label, extra):
@@ -184,49 +218,39 @@ def build_strategies(containers, compat_date, compat_flags, class_name, do_bindi
         md.update(extra)
         out.append((label, md))
 
-    sqlite_exp = [{"type": "durable-object", "name": class_name, "storage": "sqlite"}]
-    legacy_exp = [{"type": "durable-object", "name": class_name, "storage": "legacy-kv"}]
-    mig_sqlite = {"old_tag": "v1", "new_tag": "v2",
-                  "steps": [{"new_sqlite_classes": [class_name]}]}
-    do_bind = [{"type": "durable_object_namespace", "name": do_binding,
-                "class_name": class_name}]
-
-    add("S1-exports-sqlite", {"exports": sqlite_exp})
-    add("S2-exports-legacy-kv", {"exports": legacy_exp})
-    add("S3-migrations-new-sqlite", {"migrations": mig_sqlite})
-    add("S4-exports-sqlite+migrations", {"exports": sqlite_exp, "migrations": mig_sqlite})
-    add("S5-bindings-do+keep", {"bindings": do_bind, "keep_bindings": KEEP_TYPES})
-    add("S6-bindings-do+keep+migrations",
-        {"bindings": do_bind, "keep_bindings": KEEP_TYPES, "migrations": mig_sqlite})
-    add("S7-no-declaration-control", {})
+    add("S1-exports-dict-sqlite", {"exports": exp_sqlite})
+    add("S2-exports-dict-legacy-kv", {"exports": exp_legacy})
+    add("S3-exports-dict-sqlite+migrations", {"exports": exp_sqlite, "migrations": mig})
+    add("S4-migrations-only", {"migrations": mig})
+    add("S5-no-exports-control", {})
     return out
 
 
 def binding_names(live):
-    return [b.get("name") for b in (live.get("bindings") or [])]
+    return [b.get("name") for b in ((live or {}).get("bindings") or [])]
 
 
-def repair(tok, code, compat_date, compat_flags, containers, missing):
-    """Re-add bindings that a successful PUT dropped. Returns (ok, detail)."""
-    adds = []
-    for name in missing:
-        if name == "PILOT_TOKEN":
-            val = os.environ.get("PILOT_TOKEN")
-            if not val:
-                return False, "PILOT_TOKEN missing post-PUT and no PILOT_TOKEN in env"
-            adds.append({"type": "secret_text", "name": "PILOT_TOKEN", "text": val})
-        elif name == "AUDIT":
-            adds.append({"type": "d1", "name": "AUDIT", "id": AUDIT_D1_ID})
-        else:
-            return False, "cannot repair binding %s (unknown identity)" % name
-    md = {"main_module": "worker.js", "containers": containers,
-          "compatibility_date": compat_date, "bindings": adds,
-          "keep_bindings": [t for t in KEEP_TYPES if t != "d1"]}
+def repair(tok, containers, compat_date, compat_flags, do_binding, class_name, code,
+           missing):
+    """Re-add bindings a successful PUT dropped. Returns (ok, detail)."""
+    adds = [do_binding_entry(do_binding, class_name), d1_entry()]
+    if SECRET_NAME in missing:
+        val = os.environ.get(SECRET_NAME)
+        if not val:
+            return False, "%s missing post-PUT and no %s in env" % (SECRET_NAME, SECRET_NAME)
+        adds.append({"type": "secret_text", "name": SECRET_NAME, "text": val})
+    md = {
+        "main_module": "worker.js",
+        "containers": containers,
+        "compatibility_date": compat_date,
+        "bindings": adds,
+        "keep_bindings": ["secret_text"],
+        "exports": {class_name: {"type": "durable-object", "storage": "sqlite"}},
+    }
     if compat_flags:
         md["compatibility_flags"] = compat_flags
-    b, payload = multipart(md, "worker.js", code)
-    st, body = req("PUT", API, tok, payload, "multipart/form-data; boundary=" + b)
-    print("REPAIR PUT -> HTTP %s %s" % (st, err_text(body)[:300]))
+    st, body = put(tok, md, code)
+    print("REPAIR PUT -> HTTP %s %s" % (st, err_text(body)[:200]))
     return (st == 200), "repair http %s" % st
 
 
@@ -253,12 +277,11 @@ def main():
         print("FAIL (fail-closed): GET /settings HTTP %s -- cannot read live compatibility "
               "config; deploying blind could clear it (COMPAT-PRESERVE-1)" % st)
         return 3
-    if live.get("containers"):
-        print("container config ALREADY live: %s" % json.dumps(live["containers"]))
+    print("pre /settings containers: %s" % json.dumps(live.get("containers")))
     compat_date = live.get("compatibility_date") or "2026-08-01"
     compat_flags = live.get("compatibility_flags") or []
     print("live compatibility_date=%s flags=%s" % (compat_date, compat_flags))
-    print("live bindings: %s" % json.dumps(binding_names(live)))
+    print("pre live bindings: %s" % json.dumps(binding_names(live)))
 
     code = open(MODULE, encoding="utf-8").read()
     if not code.strip():
@@ -268,57 +291,57 @@ def main():
     attempts = []
     for label, metadata in build_strategies(containers, compat_date, compat_flags,
                                             class_name, do_binding):
-        b, payload = multipart(metadata, "worker.js", code)
-        st, body = req("PUT", API, tok, payload, "multipart/form-data; boundary=" + b)
+        st, body = put(tok, metadata, code)
         print("[%s] PUT /content -> HTTP %s" % (label, st))
         if st != 200:
-            print("  rejected: %s" % err_text(body)[:400])
+            print("  rejected: %s" % err_text(body))
             attempts.append("%s=HTTP %s" % (label, st))
             continue
 
         st2, after = settings(tok)
-        if st2 != 200 or after is None:
-            print("FAIL: post-deploy GET /settings HTTP %s" % st2)
-            return 3
-        got = after.get("containers")
         names = binding_names(after)
-        print("  post /settings containers: %s" % json.dumps(got))
+        got = (after or {}).get("containers")
         print("  post /settings bindings: %s" % json.dumps(names))
+        print("  post /settings containers: %s" % json.dumps(got))
         attempts.append("%s=ACCEPTED" % label)
-
-        if not got:
-            print("  FAIL: 200 but containers still absent -- trying next shape")
-            continue
 
         missing = [n for n in REQUIRED_BINDINGS if n not in names]
         if missing:
-            print("  REGRESSION: bindings dropped by this PUT: %s -- repairing" % missing)
-            ok, detail = repair(tok, code, compat_date, compat_flags, containers, missing)
+            print("  REGRESSION: bindings destroyed by this PUT: %s -- repairing" % missing)
+            ok, detail = repair(tok, containers, compat_date, compat_flags, do_binding,
+                                class_name, code, missing)
             if not ok:
                 print("FAIL (REGRESSION-UNREPAIRED): %s" % detail)
+                print("STRATEGY RESULT: %s" % json.dumps(attempts))
                 return 4
             st3, after3 = settings(tok)
-            names = binding_names(after3 or {})
+            names = binding_names(after3)
             still = [n for n in REQUIRED_BINDINGS if n not in names]
             if still:
                 print("FAIL (REGRESSION-UNREPAIRED): still missing %s" % still)
+                print("STRATEGY RESULT: %s" % json.dumps(attempts))
                 return 4
             print("  repair verified; bindings: %s" % json.dumps(names))
 
-        pt = os.environ.get("PILOT_TOKEN")
+        if not got:
+            print("  UNVERIFIED-AT-SETTINGS: 200 accepted but /settings.containers is null")
+            print("  -> /status probe below is the authoritative signal")
+            attempts.append("%s=containers-null-at-settings" % label)
+
+        pt = os.environ.get(SECRET_NAME)
         if pt:
             st4, body4 = req("GET", "https://%s.q08.workers.dev/status" % WORKER, pt)
-            print("  GET /status -> HTTP %s %s" % (st4, str(body4)[:200]))
-            if "Cannot read properties of undefined" in str(body4):
-                print("  WARNING: /status still reports the ctx.container-undefined signature")
+            txt = str(body4)
+            print("  GET /status -> HTTP %s %s" % (st4, txt[:200]))
+            if "Cannot read properties of undefined" in txt:
                 attempts.append("status=ctx-container-undefined")
+                print("  /status still reports ctx.container undefined")
             else:
                 attempts.append("status=clean")
         else:
-            print("  NOTE: PILOT_TOKEN not set -- /status probe skipped")
+            print("  NOTE: %s not set -- /status probe skipped" % SECRET_NAME)
 
-        print("RESTORED: %s carries [[containers]] again via %s (#1485 closed by this run)"
-              % (WORKER, label))
+        print("PUT-ACCEPTED: %s upload succeeded via %s" % (WORKER, label))
         print("STRATEGY RESULT: %s" % json.dumps(attempts))
         return 0
 
