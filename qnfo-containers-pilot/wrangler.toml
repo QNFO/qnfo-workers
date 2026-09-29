@@ -3,6 +3,24 @@
 # class already exists (created via the API), so a real wrangler deploy may FAIL CLOSED
 # (Cloudflare rejects a creating migration for an already-depended-on class). It never
 # wipes. The operative deploy path remains scripts/raw_put.py (binding-preserving).
+#
+# CORRECTION 2026-09-29 (CONTAINER-CONFIG-DROPPED-1): the line above is WRONG for this
+# worker and is the exact reasoning that produced the outage. raw_put.py is NOT
+# binding-preserving here in the way that matters: it preserves *bindings* but it rebuilds
+# script metadata from /bindings, and the [[containers]] block is NOT a binding. Measured
+# causal chain, same session:
+#     deployment_history  19:30:35.100Z  qnfo-containers-pilot deploy 1.0.2-apt-clean-enospc
+#                                        "cf_worker_deploy ok ... bindings_preserved=2"
+#     cloud_ops_events    19:30:43.591Z  FIRST container.error
+#                                        "Cannot read properties of undefined (reading 'running')"
+#     39 container.error rows, all 2026-09-29, 0 before 19:30:43.591Z
+# After that deploy, GET .../bindings still returns {d1 AUDIT, secret PILOT_TOKEN,
+# durable_object_namespace SHELL_CONTAINER} - three entries, no container image config -
+# and /health still returns 200 because the top-level fetch handles /health without
+# touching ctx.container. That false-green is what hid the outage.
+# CONSEQUENCE: for THIS worker, `wrangler deploy` is the ONLY correct path, and
+# .github/workflows/deploy-containers-pilot.yml is the only workflow allowed to deploy it.
+# A raw_put.py or cf_worker_deploy of qnfo-containers-pilot is a REGRESSION, not a deploy.
 
 name = "qnfo-containers-pilot"
 main = "worker.js"
