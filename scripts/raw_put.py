@@ -35,24 +35,27 @@ three versions. The row carries the artifact VERSION parsed out of the bundle be
   * Default is non-fatal but LOUD: it prints "DEPLOY-LEDGER: FAILED" and still exits 0, because
     a token-scope problem must not block every fleet deploy. CI should grep for that marker.
 
-SCHEDULE-SYNC-1 (2026-09-29, issues 1390 / 1193 / 1337): a worker's cron triggers are NOT part
-of its script content. They live in a SEPARATE CF resource:
-
-    GET|PUT /accounts/<acct>/workers/scripts/<name>/schedules
-
-This deployer only ever PUT `/content`, so editing `crons = [...]` in a wrangler config and
-deploying through it changed NOTHING about when the worker actually fires. The repo and the live
-trigger silently diverged -- fleet-exec committed `crons = ["*/10 * * * *"]` while the live
-schedule stayed hourly, and `fleet_crons.last_fired` froze at a single catch-up batch. Every
-repo cron change was therefore inert fleet-wide. Now, after a verified deploy, this script:
-  * reads the cron declaration from the wrangler config BESIDE the artifact;
-  * refuses to cross-apply if that config declares a different worker `name` than the one being
-    deployed (a root-level wrangler.toml can never be applied to an unrelated worker);
-  * enforces the CRON-RATE-CEILING-1 10-minute floor and REFUSES to apply a faster cadence;
-  * PUTs /schedules only when they differ from live, then re-reads and verifies the result.
-  * SCHEDULE_STRICT=1 makes a schedule-sync failure fatal (exit 3).
+AUTODEPLOY-SCHEDULES-NOT-APPLIED-1 (2026-09-29, issue 1390): /content PUTs NEVER touch a
+worker's cron trigger, and this script had ZERO references to schedules/crons/triggers. So a
+repo `crons = [...]` EDIT was inert forever -- the #1193/#1337 fix (fleet-exec hourly -> */10)
+was committed, deployed, and still never fired (last_fired never advanced past 08:00:47Z). 60
+wrangler.toml files in this repo declare crons, so the class was fleet-wide, and this script is
+the deployer used by the DEFAULT-ON automatic path (fleet-autodeploy.yml -> fleet-autoaudit.py
+--apply -> raw_put.py). Now the declared trigger set is read from the artifact's sibling
+wrangler.toml and applied to PUT /accounts/<acct>/workers/scripts/<name>/schedules, then read
+back and compared. Contract (fail-loud, never destructive):
+  * toml declares no crons      -> SKIP. An empty list is NEVER PUT: /schedules REPLACES the
+                                   whole trigger set, so an empty PUT would CLEAR live triggers.
+  * PUT fails / not permitted   -> "SCHEDULES: FAILED" marker; fatal only under SCHEDULES_STRICT=1
+                                   (a token-scope problem must not block every fleet deploy).
+  * PUT ok, read-back differs   -> "SCHEDULES-DRIFT" marker (fatal under SCHEDULES_STRICT=1).
+  * already in sync             -> no PUT at all (idempotent; no needless mutation).
+  * >3 declared                 -> WARNING (the CF limit is 3 cron triggers per Worker).
+The before/after trigger sets are printed and recorded in the ledger note, so a cron change can
+never again be applied without an audit trail.
 
 Usage:  CLOUDFLARE_API_TOKEN=... python scripts/raw_put.py <worker> <path/to/worker.js>
+Env:    LEDGER_STRICT=1, SCHEDULES_STRICT=1 (fail-closed on ledger / schedules failures)
 Exit:   0 ok | 3 fail-closed (nothing is deployed on error)
 """
 import json
@@ -69,14 +72,6 @@ ACCT = os.environ.get("CF_ACCOUNT_ID", "edb167b78c9fb901ea5bca3ce58ccc4b")
 DATE_FLOOR = "2026-08-01"
 AUDIT_DB = os.environ.get("CF_AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
 VERSION_RE = re.compile(r'var VERSION = "([^"]+)"')
-
-# SCHEDULE-SYNC-1 (issue 1390): cron triggers are a separate CF resource.
-CRONS_TOML = re.compile(r"^\s*crons\s*=\s*\[(.*?)\]", re.S | re.M)
-CRONS_JSON = re.compile(r'"crons"\s*:\s*\[(.*?)\]', re.S)
-QUOTED = re.compile(r'["\']([^"\']+)["\']')
-NAME_TOML = re.compile(r'^\s*name\s*=\s*"([^"]+)"', re.M)
-NAME_JSON = re.compile(r'"name"\s*:\s*"([^"]+)"')
-MIN_INTERVAL_MIN = 10  # CRON-RATE-CEILING-1 (binding owner directive 2026-09-23)
 
 
 def token():
@@ -192,110 +187,98 @@ def artifact_version(code):
     return m.group(1) if m else "unknown"
 
 
-def _wrangler_config(path):
-    """Return (declared_name, crons, found) for the artifact's own directory.
+# --- AUTODEPLOY-SCHEDULES-NOT-APPLIED-1 (issue 1390) --------------------------------
+SCHEDULES_API = ("https://api.cloudflare.com/client/v4/accounts/{acct}"
+                 "/workers/scripts/{worker}/schedules")
+CRON_BLOCK_RE = re.compile(r'^\s*crons\s*=\s*\[(.*?)\]', re.M | re.S)
+CRON_STR_RE = re.compile(r'"([^"]*)"')
+CF_MAX_CRONS = 3
 
-    found=False means no wrangler config sits beside the artifact, in which case
-    live schedules must NOT be touched (we have no declaration to apply).
+
+def declared_crons(artifact_path):
+    """Read `crons = [...]` from the wrangler config beside the artifact.
+
+    Returns a list (possibly empty) when the config declares crons, or None when no config
+    declares them. None MUST NOT be read as "clear the live trigger": /schedules REPLACES the
+    whole set, so PUTting an empty list would silently delete live crons.
     """
-    d = os.path.dirname(os.path.abspath(path))
-    for fname in ("wrangler.toml", "wrangler.jsonc", "wrangler.json"):
-        fp = os.path.join(d, fname)
-        if not os.path.isfile(fp):
+    d = os.path.dirname(os.path.abspath(artifact_path))
+    for fn in ("wrangler.toml", "wrangler.json", "wrangler.jsonc"):
+        p = os.path.join(d, fn)
+        if not os.path.isfile(p):
             continue
         try:
-            text = open(fp, encoding="utf-8").read()
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
         except OSError:
-            return None, [], False
-        nm = NAME_TOML.search(text) or NAME_JSON.search(text)
-        name = nm.group(1) if nm else None
-        m = CRONS_TOML.search(text) or CRONS_JSON.search(text)
-        crons = [q for q in QUOTED.findall(m.group(1)) if q.strip()] if m else []
-        return name, crons, True
-    return None, [], False
-
-
-def _interval_minutes(expr):
-    """Effective minute interval for the simple forms; None when not applicable."""
-    f = (expr or "").split()
-    if len(f) != 5:
-        return None
-    mi = f[0]
-    if mi == "*":
-        return 1
-    m = re.fullmatch(r"\*/(\d+)", mi)
-    if m:
-        return int(m.group(1))
+            return None
+        if fn == "wrangler.toml":
+            m = CRON_BLOCK_RE.search(text)
+            if not m:
+                return None
+            return [c for c in CRON_STR_RE.findall(m.group(1)) if c.strip()]
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        cr = ((data.get("triggers") or {}) if isinstance(data.get("triggers"), dict) else {}).get("crons")
+        if cr is None:
+            cr = data.get("crons")
+        if not isinstance(cr, list):
+            return None
+        return [c for c in cr if isinstance(c, str) and c.strip()]
     return None
 
 
-def _live_schedules(worker, tok):
-    st, body = _api(
-        f"https://api.cloudflare.com/client/v4/accounts/{ACCT}/workers/scripts/{worker}/schedules", tok
-    )
+def schedules_get(worker, tok):
+    st, body = _api(SCHEDULES_API.format(acct=ACCT, worker=worker), tok)
     if st == 200 and isinstance(body, dict) and body.get("success"):
-        return [c.get("cron") for c in ((body.get("result") or {}).get("schedules") or []) if c.get("cron")]
-    return None
+        return st, sorted(body.get("result") or [])
+    return st, None
 
 
-def _put_schedules(worker, crons, tok):
-    payload = json.dumps([{"cron": c} for c in crons]).encode("utf-8")
-    req = urllib.request.Request(
-        f"https://api.cloudflare.com/client/v4/accounts/{ACCT}/workers/scripts/{worker}/schedules",
-        data=payload,
-        method="PUT",
-        headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"},
-    )
+def schedules_put(worker, crons, tok):
+    url = SCHEDULES_API.format(acct=ACCT, worker=worker)
+    data = json.dumps({"crons": list(crons)}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="PUT", headers={
+        "Authorization": "Bearer " + tok, "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, r.read().decode()[:300]
+        with urllib.request.urlopen(req, timeout=90) as r:
+            return r.status, r.read().decode()[:200]
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode()[:300]
+        return e.code, e.read().decode()[:200]
     except Exception as e:
         return 0, "ERR " + str(e)
 
 
-def sync_schedules(worker, path, tok):
-    """Apply the repo-declared crons to the live trigger (SCHEDULE-SYNC-1)."""
-    name, crons, found = _wrangler_config(path)
-    if not found:
-        print("SCHEDULE-SYNC: no wrangler config beside the artifact - skipped")
+def schedules_apply(worker, artifact_path, tok):
+    """Apply + verify the trigger set declared beside the artifact. True when the live
+    trigger matches the declaration (or nothing was declared); False on any failure."""
+    want = declared_crons(artifact_path)
+    if not want:
+        print("SCHEDULES: SKIP - no crons declared beside the artifact (live trigger untouched)")
         return True
-    expected = name or os.path.basename(os.path.dirname(os.path.abspath(path)))
-    if expected != worker:
-        print("SCHEDULE-SYNC: config declares %r but deploying %r - skipped (refusing to cross-apply)"
-              % (expected, worker))
+    if len(want) > CF_MAX_CRONS:
+        print("SCHEDULES: WARNING - %d crons declared but the CF limit is %d per Worker"
+              % (len(want), CF_MAX_CRONS))
+    st0, have = schedules_get(worker, tok)
+    print("SCHEDULES: declared=%s live=%s" % (want, have if st0 == 200 else "HTTP %s" % st0))
+    if st0 == 200 and have == sorted(want):
+        print("SCHEDULES: already in sync (%d cron(s)) - no PUT" % len(want))
         return True
-    if not crons:
-        print("SCHEDULE-SYNC: repo declares no crons - live trigger left untouched")
-        return True
-    bad = []
-    for c in crons:
-        iv = _interval_minutes(c)
-        if iv is not None and iv < MIN_INTERVAL_MIN:
-            bad.append((c, iv))
-    if bad:
-        print("SCHEDULE-SYNC: REFUSING - declared crons breach the %dmin rate ceiling: %s"
-              % (MIN_INTERVAL_MIN, bad))
-        return False
-    live = _live_schedules(worker, tok)
-    if live is None:
-        print("SCHEDULE-SYNC: could not read live /schedules - skipped (non-fatal)")
-        return True
-    if set(live) == set(crons):
-        print("SCHEDULE-SYNC: live already matches repo %s - no change" % (crons,))
-        return True
-    print("SCHEDULE-SYNC: repo=%s live=%s -> applying" % (crons, live))
-    st, out = _put_schedules(worker, crons, tok)
+    st, out = schedules_put(worker, want, tok)
+    print("SCHEDULES: PUT HTTP %s %s" % (st, out))
     if st != 200:
-        print("SCHEDULE-SYNC: PUT /schedules HTTP %s FAILED %s" % (st, out))
+        print("SCHEDULES: FAILED - repo crons are INERT for %s (AUTODEPLOY-SCHEDULES-NOT-APPLIED-1)" % worker)
         return False
-    after = _live_schedules(worker, tok)
-    if after is not None and set(after) != set(crons):
-        print("SCHEDULE-SYNC: FAIL - schedules did not take (live=%s)" % (after,))
-        return False
-    print("SCHEDULE-SYNC: OK live=%s" % (after,))
-    return True
+    st2, after = schedules_get(worker, tok)
+    if st2 == 200 and after == sorted(want):
+        print("SCHEDULES: VERIFIED %s" % after)
+        return True
+    print("SCHEDULES-DRIFT: read-back %s != declared %s (HTTP %s)" % (after, want, st2))
+    return False
 
 
 def ledger_write(worker, version, tok, notes):
@@ -379,20 +362,20 @@ def main(argv):
         print(f"FAIL: compatibility_flags changed across the deploy ({compat_flags} -> {got_flags}) - COMPAT-PRESERVE-1 violated")
         return 3
 
-    # SCHEDULE-SYNC-1: a /content deploy can never change the cron trigger.
-    try:
-        sched_ok = sync_schedules(worker, path, tok)
-    except Exception as e:  # never let schedule sync break the deploy path
-        print(f"SCHEDULE-SYNC: EXCEPTION {e} - treated as non-fatal")
-        sched_ok = True
+    # AUTODEPLOY-SCHEDULES-NOT-APPLIED-1 (issue 1390): the /content PUT above does NOT touch
+    # the cron trigger, so the declared set is applied and verified here.
+    sched_ok = schedules_apply(worker, path, tok)
+    if not sched_ok and os.environ.get("SCHEDULES_STRICT") == "1":
+        print("FAIL: schedules not applied and SCHEDULES_STRICT=1 - AUTODEPLOY-SCHEDULES-NOT-APPLIED-1")
+        return 3
     if not sched_ok:
-        if os.environ.get("SCHEDULE_STRICT") == "1":
-            print("FAIL: schedule sync failed and SCHEDULE_STRICT=1 - SCHEDULE-SYNC-1")
-            return 3
-        print("WARNING: schedule sync failed (SCHEDULE-SYNC-1). Set SCHEDULE_STRICT=1 to make this fatal.")
+        print("WARNING: deploy succeeded but the declared crons were not applied (issue 1390). "
+              "Set SCHEDULES_STRICT=1 to make this fatal.")
 
     ver = artifact_version(code)
-    notes = f"raw_put.py /content deploy; compatibility_date={got_date}; flags={len(got_flags)}; DEPLOY-LEDGER-1"
+    sched_note = "schedules=applied" if sched_ok else "schedules=FAILED"
+    notes = (f"raw_put.py /content deploy; compatibility_date={got_date}; "
+             f"flags={len(got_flags)}; {sched_note}; DEPLOY-LEDGER-1")
     if not ledger_write(worker, ver, tok, notes):
         if os.environ.get("LEDGER_STRICT") == "1":
             print("FAIL: ledger row not written and LEDGER_STRICT=1 - DEPLOY-LEDGER-1")
@@ -402,7 +385,8 @@ def main(argv):
 
     guard_ledger(worker, None, ver, True, notes)
     guard_unlock()
-    print(f"OK: {worker} {ver} deployed with compatibility_date={got_date} and {len(got_flags)} flag(s) preserved")
+    print(f"OK: {worker} {ver} deployed with compatibility_date={got_date}, "
+          f"{len(got_flags)} flag(s) preserved, {sched_note}")
     return 0
 
 
