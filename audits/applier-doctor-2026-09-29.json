@@ -1,9 +1,9 @@
 {
  "counts": {
-  "already-applied": 27,
+  "already-applied": 29,
   "stale-anchor": 3,
-  "superseded": 11,
-  "undetermined": 5
+  "superseded": 10,
+  "undetermined": 6
  },
  "errored": [],
  "marker": "APPLIER-DOCTOR-2",
@@ -41,8 +41,7 @@
   },
   {
    "changed_files": [
-    " M ci-status/applier-doctor.json",
-    " M scripts/raw_put.py"
+    " M ci-status/applier-doctor.json"
    ],
    "declared_signals": [
     ".",
@@ -54,8 +53,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=45 {'already-applied': 27, 'stale-anchor': 14, 'landed': 3, 'error': 1}",
-    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, rawput-version-regex-quote-patch.py",
+    "SUMMARY total=47 {'already-applied': 29, 'stale-anchor': 15, 'landed': 2, 'error': 1}",
+    "LANDED(2): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -85,7 +84,7 @@
    "rc": 0,
    "script": "scripts/cf-urllib-ua-1010-patch.py",
    "tail": [
-    "APPLIED: scripts/raw_put.py now 19322 bytes, 4 User-Agent insertions, AST OK"
+    "APPLIED: scripts/raw_put.py now 19338 bytes, 4 User-Agent insertions, AST OK"
    ],
    "verdict": "superseded"
   },
@@ -282,7 +281,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 368752 (unchanged)",
+    "bytes: 370008 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -344,8 +343,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=368754 marker=1",
-    "  deployed-current.worker.js bytes=368754 marker=1"
+    "  worker.js bytes=370010 marker=1",
+    "  deployed-current.worker.js bytes=370010 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -389,6 +388,17 @@
     "ALREADY APPLIED: qnfo-containers-pilot/worker.js",
     "ALREADY APPLIED: qnfo-containers-pilot/deployed-current.worker.js",
     "RESULT: applied=0 already=2 (nothing to do)"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/patch-github-read-404-hint-1.py",
+   "tail": [
+    "ALREADY APPLIED: qnfo-ops/worker.js",
+    "ALREADY APPLIED: qnfo-ops/deployed-current.worker.js",
+    "DONE: 0 file(s) patched, marker=GITHUB-READ-404-HINT-1"
    ],
    "verdict": "already-applied"
   },
@@ -442,12 +452,7 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M scripts/raw_put.py"
-   ],
-   "outcome_present_in": [
-    "scripts/raw_put.py :: DEPLOY-LEDGER-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/rawput-version-regex-quote-patch.py",
    "tail": [
@@ -455,7 +460,7 @@
     "  ok let VERSION = '2.0.0-let';                 -> 2.0.0-let",
     "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -498,6 +503,19 @@
     "FAIL: pre-patch VERSION not found: var VERSION = \"1.6.4-run-gate\";"
    ],
    "verdict": "superseded"
+  },
+  {
+   "changed_files": [],
+   "declared_signals": [
+    "SAME-ZONE-FETCH-FALLBACK-1"
+   ],
+   "rc": 1,
+   "script": "scripts/samezone-fetch-fallback-patch.py",
+   "tail": [
+    "FAIL (fail-closed): anchor occurrence != 1 in qnfo-ops/worker.js",
+    "  count=0  var VERSION = \"2.37.24-404hint-list\";"
+   ],
+   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -571,18 +589,18 @@
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py",
-  "scripts/rawput-version-regex-quote-patch.py",
   "scripts/run-gate-internal-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 46,
- "ts": "2026-09-29T17:14:37.489Z",
+ "total": 48,
+ "ts": "2026-09-29T17:18:45.010Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
+  "scripts/samezone-fetch-fallback-patch.py",
   "scripts/selfheal-rate-aware-patch.py"
  ]
 }
