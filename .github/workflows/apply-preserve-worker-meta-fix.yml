@@ -13,6 +13,12 @@ name: apply-preserve-worker-meta-fix
 # DEPLOY PATH IS DELIBERATE: scripts/raw_put.py uses PUT /content, which replaces
 # the module while PRESERVING settings/metadata. cf_worker_deploy is the stripper.
 # This workflow therefore deploys via raw_put.py and NEVER via cf_worker_deploy.
+#
+# GATE STYLE (fixed 2026-09-29, v2): gates are PROPERTY-based, never literal-pinned.
+# v1 pinned the exact literal "2.37.29-preserve-worker-meta", but the applier
+# derives the bump FROM SOURCE (2.37.30 -> 2.37.31), so v1 was guaranteed to fail
+# and never apply -- the STALE-PREFLIGHT-1 class, self-inflicted. Assert the
+# property (marker present + version advanced + stripper form gone), not a literal.
 
 on:
   push:
@@ -41,10 +47,13 @@ jobs:
           ref: main
 
       - name: Show pre-state
+        id: pre
         run: |
           set -euo pipefail
           echo "head=$(git rev-parse --short HEAD)"
-          echo "versions:"; grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js || true
+          grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js || true
+          PRE_VER=$(grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "pre_version=$PRE_VER" >> "$GITHUB_OUTPUT"
           echo "marker_count=$(grep -c 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js || true)"
 
       - name: Apply
@@ -61,24 +70,38 @@ jobs:
           node --check /tmp/w.mjs
           echo "ESM_OK"
 
-      - name: Content gate
+      - name: Content gate (property-based, no literal pinning)
+        env:
+          PRE_VERSION: ${{ steps.pre.outputs.pre_version }}
         run: |
           set -euo pipefail
-          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js || { echo "::error::marker missing"; exit 1; }
-          grep -q 'var VERSION = "2.37.29-preserve-worker-meta";' qnfo-ops/worker.js || { echo "::error::version not bumped"; exit 1; }
-          if grep -q 'var VERSION = "2.37.28-affirm-veto";' qnfo-ops/worker.js; then
-            echo "::error::stale version literal survived"; exit 1
+          # 1. marker present
+          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js \
+            || { echo "::error::marker missing"; exit 1; }
+          # 2. version ADVANCED past the pre-state (never pin an exact literal)
+          POST_VER=$(grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "pre=$PRE_VERSION post=$POST_VER"
+          if [ "$POST_VER" = "$PRE_VERSION" ]; then
+            echo "::error::version not bumped (still $PRE_VERSION)"; exit 1
           fi
-          grep -q '_preservedMeta' qnfo-ops/worker.js || { echo "::error::preserved-meta plumbing missing"; exit 1; }
-          grep -q 'PRESERVE-WORKER-METADATA-1: source references ctx.container' qnfo-ops/worker.js || { echo "::error::fail-closed container guard missing"; exit 1; }
-          # the stripper form must be gone: metadataPart must now spread _preservedMeta
-          grep -q '_compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _preservedMeta));' qnfo-ops/worker.js || { echo "::error::metadataPart still strips worker-level metadata"; exit 1; }
-          echo "CONTENT_GATE_OK"
+          echo "$POST_VER" | grep -Eq '^2\.37\.[0-9]+' \
+            || { echo "::error::unexpected version shape: $POST_VER"; exit 1; }
+          # 3. preserved-meta plumbing present
+          grep -q '_preservedMeta' qnfo-ops/worker.js \
+            || { echo "::error::preserved-meta plumbing missing"; exit 1; }
+          # 4. fail-closed container guard present
+          grep -q 'PRESERVE-WORKER-METADATA-1: source references ctx.container' qnfo-ops/worker.js \
+            || { echo "::error::fail-closed container guard missing"; exit 1; }
+          # 5. the stripper form must be GONE (metadataPart now spreads _preservedMeta)
+          grep -q '_exports } : {}, _preservedMeta));' qnfo-ops/worker.js \
+            || { echo "::error::metadataPart still strips worker-level metadata"; exit 1; }
+          echo "CONTENT_GATE_OK version=$POST_VER"
 
       - name: Mirror gate
         run: |
           set -euo pipefail
-          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/deployed-current.worker.js || { echo "::error::mirror not patched"; exit 1; }
+          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/deployed-current.worker.js \
+            || { echo "::error::mirror not patched"; exit 1; }
           cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js && echo "MIRROR_PARITY_OK"
 
       - name: Commit and push (race-safe)
@@ -108,6 +131,37 @@ jobs:
           echo "::error::push failed after 5 attempts"
           exit 1
 
+      - name: Record apply outcome
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-status
+          python3 - "${{ steps.pre.outputs.pre_version }}" "${{ steps.push.outputs.applied }}" "${{ steps.push.outputs.sha }}" <<'PY'
+          import json, sys, datetime
+          pre, applied, sha = (sys.argv[1], sys.argv[2], sys.argv[3])
+          json.dump({
+            "workflow": "apply-preserve-worker-meta-fix",
+            "issue": 1487,
+            "marker": "PRESERVE-WORKER-METADATA-1",
+            "gate_style": "property-based",
+            "pre_version": pre,
+            "applied": applied,
+            "applied_sha": sha,
+            "ts": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }, open("ci-status/preserve-worker-meta.json", "w"), indent=2)
+          PY
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/preserve-worker-meta.json
+          git diff --cached --quiet || {
+            git commit -m "chore(ci-status): record PRESERVE-WORKER-METADATA-1 apply outcome [skip ci]"
+            for i in 1 2 3; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+              git push origin "HEAD:${GITHUB_REF_NAME}" && break
+              sleep $((i * 3))
+            done
+          }
+
   deploy:
     needs: apply
     runs-on: ubuntu-latest
@@ -121,7 +175,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "deploying sha=${{ needs.apply.outputs.sha }}"
-          grep -q 'var VERSION = "2.37.29-preserve-worker-meta";' qnfo-ops/worker.js || { echo "::error::checked-out revision lacks the fix"; exit 1; }
+          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js \
+            || { echo "::error::checked-out revision lacks the fix"; exit 1; }
 
       - name: Deploy via SAFE path (raw_put.py -> PUT /content)
         env:
@@ -133,7 +188,7 @@ jobs:
           set -euo pipefail
           python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
 
-      - name: Live readback gate
+      - name: Live readback gate (property-based)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -143,11 +198,11 @@ jobs:
             curl -sS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/qnfo-ops/content" \
               -o /tmp/live.js
-            if grep -q '2.37.29-preserve-worker-meta' /tmp/live.js; then
-              echo "LIVE_VERIFIED version=2.37.29-preserve-worker-meta attempt=$i bytes=$(wc -c < /tmp/live.js)"
+            if grep -q 'PRESERVE-WORKER-METADATA-1' /tmp/live.js; then
+              echo "LIVE_VERIFIED marker=PRESERVE-WORKER-METADATA-1 attempt=$i bytes=$(wc -c < /tmp/live.js)"
               exit 0
             fi
             sleep 10
           done
-          echo "::error::live qnfo-ops does not serve 2.37.29-preserve-worker-meta"
+          echo "::error::live qnfo-ops does not carry PRESERVE-WORKER-METADATA-1"
           exit 1
