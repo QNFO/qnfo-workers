@@ -1,8 +1,11 @@
 {
-  "workflow": "apply-restore-container-config",
-  "marker": "CONTAINER-CONFIG-RESTORE-3-APPLIER",
-  "restore_rc": "",
-  "status_signature": "probe-skipped",
-  "log_tail": "declared containers: [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]\nlive compatibility_date=2026-08-01 flags=['nodejs_compat']\nlive bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\nPUT /content -> HTTP 400\n  body: {'result': None, 'success': False, 'errors': [{'code': 100402, 'message': 'Durable Object exports reconciliation failed:\\n- [provisioned_class_missing_from_config] class \\'ShellContainer\\': class \\'ShellContainer\\' has a provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is not declared in `exports`. Every provisioned class must be declared in `exports` (live or tombstone); silent drift is not permitted. (add \\'ShellContainer\\' back to `exports` as `{\"type\": \"durable-object\", \"storage\": \"sqlite\"}` (or `\"legacy-kv\"`), or replace the entry with a `deleted` / `renamed` / \nFAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)\n",
-  "ts": "2026-09-29T19:43:35Z"
+  "workflow": "restore-container-config",
+  "issues": ["1485", "1487"],
+  "worker": "qnfo-containers-pilot",
+  "creds_rc": "present",
+  "restore_rc": "0",
+  "post_outcome": "failure",
+  "head": "57dd82363db0e8b6c0267a3e1a50d5dcdae6cae7",
+  "ts": "2026-09-29T19:49:09Z",
+  "restore_tail": "declared containers: [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]\ndeclaring DO class=ShellContainer binding=SHELL_CONTAINER\npre /settings containers: null\nlive compatibility_date=2026-08-01 flags=['nodejs_compat']\npre live bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\n[S1-exports-dict-sqlite] PUT /content -> HTTP 200\n  post /settings bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\n  post /settings containers: null\n  UNVERIFIED-AT-SETTINGS: 200 accepted but /settings.containers is null\n  -> /status probe below is the authoritative signal\n  NOTE: PILOT_TOKEN not set -- /status probe skipped\nPUT-ACCEPTED: qnfo-containers-pilot upload succeeded via S1-exports-dict-sqlite\nSTRATEGY RESULT: [\"S1-exports-dict-sqlite=ACCEPTED\", \"S1-exports-dict-sqlite=containers-null-at-settings\"]\n"
 }
