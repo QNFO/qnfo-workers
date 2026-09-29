@@ -62,3 +62,11 @@ crons = ["0 * * * *"]
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+# CANONICAL-DEPLOY-AUTO-1 (2026-09-29, issue #1406): comment-only touch so that
+# .github/workflows/canonical-deploy.yml fires for this worker. That workflow deploys
+# through scripts/canonical_deploy.py, which acquires the deploy-guard lock, writes the
+# fleet ledger row, installs declared bindings where the live ops deployer supports it
+# (BINDING-INSTALL-MERGE-1, issue #1448), and PUTs the [triggers] crons above so they
+# stop being inert. Deployed artifact is unchanged by this comment; only the deploy
+# PATH changes, which is the actual defect.
