@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.28-affirm-veto";
+var VERSION = "2.37.29-affirm-veto-clause";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -834,7 +834,13 @@ async function triggerBacklog(env, args, userText) {
     //    check would refuse the owner's own standing instruction
     //    "Do not stop, do not terminate, do not interrupt execution. Drain ...".
     //    `execut\w*` is NOT a veto target for that same reason.
-    if (/(?:do\s+not|don'?t|never|no|stop|cancel|abort|hold\s+off|not\s+yet)\s+(?:the\s+|a\s+|any\s+)?(?:drain|run|execute|proceed|trigger|remediate|fix|close|clear)\b/i.test(__s)) return false;
+    var __segs = __s.split(/[.!?;\n]+/);
+    for (var __i = 0; __i < __segs.length; __i++) {
+      // AFFIRM-VETO-CLAUSE-TARGETS-1 (2026-09-29): veto scoped to its OWN clause; the
+      // same-clause target list excludes run/fix/close/clear so status prose
+      // such as "not yet run" in a neighbouring sentence cannot veto the drain.
+      if (/(?:do\s+not|don'?t|never|no|stop|cancel|abort|hold\s+off|not\s+yet)\s+(?:the\s+|a\s+|any\s+)?(?:drain|run|execute|proceed|trigger|remediate|fix|close|clear)\b/i.test(__segs[__i]) && /\b(?:drain|execute|proceed|trigger|remediate)\b/i.test(__segs[__i])) return false;
+    }
     // 2. Intent-bearing affirmatives only. The vague tokens that made the gate
     //    vacuous ('please'/'backlog'/'fix'/'close'/'clear'/'start'/'run') are gone;
     //    every legitimate drain instruction contains `drain`, so nothing that

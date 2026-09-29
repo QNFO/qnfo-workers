@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.14.4";
+var VERSION = "1.15.0-cron-dow-cf";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -185,6 +185,23 @@ var AMS_SCHEDULE = {
   "quality-score": { times: ["06:20"], days: "*", fixed: null },
   "overdue-guard": { times: ["05:10"], days: "*", fixed: null }
 };
+function isoDowToCf(spec) {
+  const s = String(spec == null ? "*" : spec).trim();
+  if (s === "*" || s === "") return "*";
+  const conv = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return n;
+    return String((v % 7 + 7) % 7 + 1);
+  };
+  return s.split(",").map((part) => {
+    const p = part.trim();
+    const m = /^(\d+)-(\d+)$/.exec(p);
+    if (m) return conv(m[1]) + "-" + conv(m[2]);
+    if (/^\d+$/.test(p)) return conv(p);
+    return p;
+  }).join(",");
+}
+__name(isoDowToCf, "isoDowToCf");
 function buildCrons(offset) {
   const crons = [];
   for (const [job, s] of Object.entries(AMS_SCHEDULE)) {
@@ -203,13 +220,14 @@ function buildCrons(offset) {
       }
       for (const [mm, hours] of Object.entries(byMinute)) {
         const hs = [...new Set(hours)].sort((a, b) => a - b).join(",");
-        crons.push({ job, cron: mm + " " + hs + " * * " + s.days });
+        crons.push({ job, cron: mm + " " + hs + " * * " + isoDowToCf(s.days) });
       }
     }
   }
   return crons;
 }
 __name(buildCrons, "buildCrons");
+/* CF-DOW-1 */
 function amsOffset(instant) {
   try {
     const dtf = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Amsterdam", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -227,13 +245,21 @@ function amsOffset(instant) {
 __name(amsOffset, "amsOffset");
 async function syncSchedules(env, force) {
   const off = amsOffset(/* @__PURE__ */ new Date());
-  const stored = await stateGet(env, "cron_offset", String(off));
-  if (!force && String(off) === String(stored)) return { changed: false, offset: off };
   const crons = buildCrons(off);
-  const r = await cfApi(env, "/workers/scripts/" + WORKER_NAME + "/schedules", "PUT", crons.map((c) => ({ cron: c.cron })));
+  const list = crons.map((c) => c.cron);
+  const fp = list.slice().sort().join("|");
+  const stored = await stateGet(env, "cron_offset", "");
+  const storedFp = await stateGet(env, "cron_fingerprint", "");
+  if (!force && String(off) === String(stored) && fp === storedFp) {
+    return { changed: false, offset: off, count: list.length };
+  }
+  const r = await cfApi(env, "/workers/scripts/" + WORKER_NAME + "/schedules", "PUT", list.map((cron) => ({ cron })));
   const ok = r.status === 200 && r.body && r.body.success;
-  if (ok) await stateSet(env, "cron_offset", String(off));
-  return { changed: true, ok, offset: off, crons: crons.map((c) => c.cron), status: r.status };
+  if (ok) {
+    await stateSet(env, "cron_offset", String(off));
+    await stateSet(env, "cron_fingerprint", fp);
+  }
+  return { changed: true, ok, offset: off, count: list.length, crons: list, status: r.status };
 }
 __name(syncSchedules, "syncSchedules");
 function decodeHeader(s) {
@@ -1015,7 +1041,7 @@ async function jobWeeklyOps(env) {
   if (dst.changed) {
     L.push("DST re-sync: offset=" + dst.offset + ", schedules " + (dst.ok ? "updated" : "UPDATE FAILED (status " + dst.status + ")"));
   } else {
-    L.push("Schedules: 11 cron triggers, Amsterdam offset +" + dst.offset + ".");
+    L.push("Schedules: " + (dst.count || buildCrons(dst.offset).length) + " cron triggers, Amsterdam offset +" + dst.offset + ".");
   }
   try {
     if (env.QNFO_INFRA) {
@@ -2107,6 +2133,11 @@ var worker_default = {
     const cron = event.cron;
     const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
     const map = dispatchMap(off);
+    try {
+      await syncSchedules(env, false);
+    } catch (e) {
+      console.log("schedule self-repair err", e && e.message || e);
+    }
     const job = map[cron];
     if (!job || !JOBS[job]) {
       console.log("no job for cron", cron, "offset", off);

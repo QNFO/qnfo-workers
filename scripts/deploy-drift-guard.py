@@ -16,6 +16,10 @@ CLASSES (no class is ever silently dropped):
   NO_LIVE_VERSION  worker answers /health but omits a version field (live gap)
   NOT_DEPLOYED     genuinely absent: HTTP 404 AND not in the CF account script list
   NO_HEALTH_ROUTE  IS deployed, but https://<name>.q08.workers.dev/health 404s
+  CRON_ONLY        IS deployed, /health 404s, AND the directory declares >=1 cron trigger
+                   with NO HTTP surface (no routes / workers_dev / custom domain). A
+                   scheduled-only worker has no HTTP surface by construction, so its
+                   404 is not a monitoring gap (CRON_ONLY-2, issue #1402).
                    (workers.dev route disabled, or no /health route) -- NOT "not deployed"
   NOT_A_WORKER     the directory declares no worker config (no wrangler.toml/json/jsonc)
                    AND ships no worker artifact AND the name is absent from the CF script
@@ -179,6 +183,60 @@ def wrangler_name(d):
     return None
 
 
+def declared_crons(d):
+    """Cron triggers declared in the wrangler.toml ([] when none)."""
+    p = os.path.join(ROOT, d, "wrangler.toml")
+    if not os.path.isfile(p):
+        return []
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return []
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s.startswith("crons"):
+            continue
+        if "=" not in s or "[" not in s or "]" not in s:
+            continue
+        body = s.split("[", 1)[1].rsplit("]", 1)[0]
+        for tok in body.split(","):
+            tok = tok.strip()
+            for q in (chr(34), chr(39)):
+                tok = tok.strip(q)
+            if tok:
+                out.append(tok)
+    return out
+
+
+def declares_http_surface(d):
+    """True when ANY HTTP surface is declared. FAIL-CLOSED on doubt."""
+    toks = ("routes", "workers_dev", "route =", "[route", "[[routes]]")
+    p = os.path.join(ROOT, d, "wrangler.toml")
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            return True
+        return any(t in text for t in toks)
+    for fn in ("wrangler.json", "wrangler.jsonc"):
+        q = os.path.join(ROOT, d, fn)
+        if os.path.isfile(q):
+            try:
+                with open(q, encoding="utf-8", errors="replace") as fh:
+                    return "routes" in fh.read()
+            except OSError:
+                return True
+    return True
+
+
+def cron_only_declared(d):
+    """CRON_ONLY-2 (issue #1402): >=1 cron and no HTTP surface."""
+    return bool(declared_crons(d)) and not declares_http_surface(d)
+
+
 def deployed_workers(acct, token):
     """The authoritative deployed-script set from the CF API.
 
@@ -329,6 +387,7 @@ def main():
     not_deployed, sync_workers, live_err, no_health = [], [], [], []
     multi_version = []
     not_a_worker = []
+    cron_only = []
     label_mismatch = []
 
     for d in sorted(os.listdir(ROOT)):
@@ -350,7 +409,12 @@ def main():
             # a deployed worker with a disabled workers.dev route also 404s here, and
             # calling that NOT_DEPLOYED is the false negative NAME-RESOLUTION-1 closes.
             if deployed is None or worker in deployed:
-                no_health.append((d, worker))
+                # CRON_ONLY-2 (issue #1402): a scheduled-only worker has no HTTP
+                # surface by construction. Fail-closed: ambiguous stays NO_HEALTH_ROUTE.
+                if cron_only_declared(d):
+                    cron_only.append((d, worker))
+                else:
+                    no_health.append((d, worker))
             elif declared is None and rpath is None:
                 # NOT-DEPLOYED-NONWORKER-NOISE-1: no wrangler config, no worker artifact,
                 # and the name is absent from the account -- this directory is not a worker.
@@ -418,6 +482,9 @@ def main():
             "no_live_version": [{"worker": w, "dir": d, "repo": r} for d, w, r in no_live_ver],
             "live_err": [{"worker": w, "dir": d, "err": e} for d, w, e in live_err],
             "no_health_route": [{"worker": w, "dir": d} for d, w in no_health],
+            "cron_only": [{"worker": w, "dir": d, "crons": declared_crons(d)}
+                          for d, w in cron_only],
+            "cron_only_count": len(cron_only),
             "not_deployed_workers": [{"worker": w, "dir": d} for d, w in not_deployed],
             "not_deployed_dirs": [d for d, w in not_deployed],
             "not_deployed_notdrift": len(not_deployed),
@@ -440,6 +507,8 @@ def main():
             print(f"NO_LIVE_VERSION {w} (dir {d}): repo={rv_}")
         for d, w in no_health:
             print(f"NO_HEALTH_ROUTE {w} (dir {d})")
+        for d, w in cron_only:
+            print(f"CRON_ONLY {w} (dir {d}): crons={','.join(declared_crons(d))}")
         for d, w in not_a_worker:
             print(f"NOT_A_WORKER {w} (dir {d})")
         for d, w, e in live_err:
@@ -449,7 +518,8 @@ def main():
               f"content_drift={len(content_drift)} ahead={len(ahead)} "
               f"multi_version={len(multi_version)} "
               f"no_repo_version={len(no_repo_ver)} no_live_version={len(no_live_ver)} "
-              f"no_health_route={len(no_health)} live_err={len(live_err)} "
+              f"no_health_route={len(no_health)} cron_only={len(cron_only)} "
+              f"live_err={len(live_err)} "
               f"not_deployed_notdrift={len(not_deployed)} "
               f"not_a_worker={len(not_a_worker)} "
               f"cf_script_list={deployed is not None} "

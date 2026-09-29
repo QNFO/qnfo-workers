@@ -345,6 +345,24 @@ def probe_version(worker):
         return "ERR:" + str(e)[:60]
 
 
+def declares_containers(worker):
+    """CONTAINER-CONFIG-DROPPED-1: True if <worker>/wrangler.toml declares [[containers]].
+
+    raw_put.py PUTs /content and cannot transmit script-level container config, so an
+    automatic redeploy of such a worker silently destroys its container binding.
+    Measured: deployment_history ids 172/175/177 vs the first container.error row 8s
+    after id 172. Container workers must go through wrangler deploy
+    (.github/workflows/deploy-containers-pilot.yml).
+    """
+    p = os.path.join(ROOT, worker, "wrangler.toml")
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            txt = f.read()
+    except OSError:
+        return False
+    return "[[containers]]" in txt
+
+
 def apply_ahead(d=None):
     # DEAD-STATE-FILE-1 (2026-09-29): prefer the caller-supplied payload; the on-disk
     # file is now only a fallback for an out-of-process caller. Previously this read was
@@ -357,7 +375,14 @@ def apply_ahead(d=None):
     ahead = d.get("ahead", [])
     print(f"auto-deploy candidates (repo strictly ahead): {len(ahead)}")
     applied, failed = [], []
+    container_skips = []
     for it in ahead:
+        if declares_containers(w):
+            print("::warning::SKIPPED " + w + " -- declares [[containers]]; raw_put.py "
+                  "cannot transmit container config (CONTAINER-CONFIG-DROPPED-1, #1485). "
+                  "Deploy via .github/workflows/deploy-containers-pilot.yml")
+            container_skips.append((w, rv))
+            continue
         w, art, rv = it["worker"], it["artifact"], it["repo"]
         print(f"-> raw_put {w} {art} (repo {rv} > live {it['live']})")
         p = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "raw_put.py"), w, art],
