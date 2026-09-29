@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.26-samezone-fetch-fallback";
+var VERSION = "2.37.27-self-fetch-guard";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1643,10 +1643,30 @@ function fleetWorkerNamesForHost(host) {
   return out;
 }
 
+// SELF-FETCH-GUARD-1 (2026-09-29): a Worker cannot fetch its own hostname. The
+// subrequest re-enters the zone, terminates at this worker, waits on itself, and
+// surfaces as HTTP 522 -- indistinguishable from a genuine fleet outage. Resolve
+// self-identity from WORKER + CANON_BASE so the refusal can be labelled.
+function isSelfFetchHost(host) {
+  try {
+    const h = String(host || "").toLowerCase();
+    if (!h) return false;
+    if (h === WORKER + ".q08.workers.dev") return true;
+    const names = fleetWorkerNamesForHost(h);
+    for (let i = 0; i < names.length; i++) {
+      if (names[i] === WORKER) return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 function fleetWorkersDevFallback(u) {
   try {
     const host = String(u && u.hostname || "").toLowerCase();
     if (!host || host.endsWith(".workers.dev")) return null;
+    if (isSelfFetchHost(host)) return null; /* SELF-FETCH-GUARD-1: never fall back to self */
     const names = fleetWorkerNamesForHost(host);
     if (!names.length) return null;
     const alt = new URL(String(u && u.href || ""));
@@ -1670,6 +1690,18 @@ async function webFetchTool(env, args) {
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "only http/https supported" };
   if (isPrivateHost(u.hostname)) return { ok: false, error: "blocked host (private/internal): " + u.hostname };
+  // SELF-FETCH-GUARD-1 (2026-09-29): refuse a self-fetch before any network call.
+  // Without this the call burns two 522 subrequests and reports the result as a fleet
+  // outage, which is how "ops.qnfo.org is down" readings from inside qnfo-ops arise.
+  if (isSelfFetchHost(u.hostname)) {
+    return {
+      ok: false,
+      error: "self-fetch blocked: " + WORKER + " cannot fetch its own hostname (" + u.hostname + ")",
+      url,
+      self_fetch: true,
+      hint: "use fleet_status for in-fleet health, or the *.q08.workers.dev origin of a DIFFERENT worker"
+    };
+  }
   const max = Math.max(500, Math.min(parseInt(args && args.maxChars, 10) || 8e3, 3e4));
   // SAME-ZONE-FETCH-FALLBACK-1: a same-zone custom domain fronted by another Worker
   // returns 522 from Worker context. Retry the identical request against the target's

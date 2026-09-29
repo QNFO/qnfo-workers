@@ -92,7 +92,7 @@ def token():
 
 
 def _api(url, tok, data=None, ctype=None):
-    headers = {"Authorization": "Bearer " + tok}
+    headers = {"Authorization": "Bearer " + tok, "User-Agent": FLEET_UA}
     if ctype:
         headers["Content-Type"] = ctype
     req = urllib.request.Request(url, data=data, method="PUT" if data else "GET", headers=headers)
@@ -119,7 +119,8 @@ def _post_json(url, tok, payload):
         url,
         data=data,
         method="POST",
-        headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"},
+        headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json",
+                 "User-Agent": FLEET_UA},
     )
     try:
         with urllib.request.urlopen(req, timeout=90) as r:
@@ -138,13 +139,17 @@ def _settings(worker, tok):
 
 
 GUARD = os.environ.get("DEPLOY_GUARD_URL", "https://qnfo-deploy-guard.q08.workers.dev")
+
+# CF-URLLIB-UA-1010-1 - explicit UA; Cloudflare 403/1010 bans the urllib default UA.
+FLEET_UA = "QNFO-fleet-ci/1.0 (+https://qnfo.org; raw_put.py)"
 _LOCK = {"worker": None, "token": None}  # DEPLOY-GUARD-WRAP-2
 
 
 def _guard_call(path, payload):
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(GUARD + path, data=data, method="POST",
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": FLEET_UA})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, json.loads(r.read().decode())
@@ -168,6 +173,7 @@ def guard_lock(worker):
         print("DEPLOY-LOCK: acquired ttl=900")
         return True
     print("DEPLOY-LOCK: NOT acquired (HTTP %s) %s - deploying anyway; uncoordinated-deploy may fire"
+          " | CF-URLLIB-UA-1010-1: HTTP 403 code 1010 means the User-Agent was rejected"
           % (st, str(j)[:160]))
     return False
 
@@ -186,6 +192,8 @@ def guard_ledger(worker, frm, to, ok, note):
                                     "ok": bool(ok), "note": note})
     good = st == 200 and bool(j and j.get("logged"))
     print("DEPLOY-GUARD-LEDGER: HTTP %s %s %s" % (st, "OK" if good else "FAILED", str(j)[:160]))
+    if st == 403:
+        print("  ^ CF-URLLIB-UA-1010-1: guard rejected this client (Cloudflare 1010). The ledger did NOT advance.")
     return good
 
 
