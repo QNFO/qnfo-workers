@@ -1,4 +1,4 @@
-const QNFO_VERSION = "1.6.2";
+const QNFO_VERSION = "1.6.3-version-sot";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -45,7 +45,7 @@ var worker_default = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     console.log("[qnfo-lifecycle] cron triggered:", cron);
-     try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?, ?, ?, 1)").bind("qnfo-lifecycle", "fabric-20260910", new Date().toISOString()).run(); } catch (e) {}
+     try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?, ?, ?, 1)").bind("qnfo-lifecycle", QNFO_VERSION, new Date().toISOString()).run(); } catch (e) {}
     try {
       // CRON-CONSOLIDATE-1 (2026-09-27 fleet reorg): the four lightweight daily D1 audit/
       // maintenance tasks (lifecycle, memory-maintain, ula-check, drift-audit) now share ONE
@@ -73,7 +73,7 @@ function health(env, origin) {
   return new Response(JSON.stringify({
     status: "ok",
     worker: "qnfo-lifecycle",
-    version: "1.6.2-cronconsolidate",
+    version: QNFO_VERSION,
     cronSchedules: 5,
     features: ["lifecycle-scan", "graph-seed", "backup", "drift-audit-enhanced", "secrets-audit-enhanced", "registry-sync", "infra-ping", "ula-check", "memory-maintain"],
     bindings: { d1: ["qnfo-audit", "qnfo-graph", "portfolio-state", "living-paper", "ipatent-db"], r2: ["qnfo", "qnfo-audit", "qnfo-backups"] }
