@@ -2,12 +2,12 @@
   "workflow": "apply-fleet-autoaudit-d1ok-v2",
   "issue": "D1-REST-ENVELOPE-OK-1",
   "supersedes": "apply-fleet-autoaudit-d1ok (v1, run 36597615732)",
-  "run_id": "36598238437",
+  "run_id": "36599042198",
   "run_attempt": "1",
-  "sha": "ff4e2ee0f401b79d8e5840d1fc038e4a5c6f9b9e",
-  "patch_rc": "",
+  "sha": "26b2d2a62682d641fb6a610ceb514db33618a564",
+  "patch_rc": "0",
   "syntax_rc": "0",
   "assert_rc": "1",
-  "patch_log_tail": "::error::post-condition failed: d1_err call sites != 2\nanchor 1: applied (1/1)\nanchor 2: applied (1/1)\nanchor 3: applied (1/1)\nanchor 4: applied (1/1)\n",
+  "patch_log_tail": "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)\n",
   "note": "d1_writes_ok must be 110 and d1_write_failures [] in the next fleet-autoaudit artifact"
 }
