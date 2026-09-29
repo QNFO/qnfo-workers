@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.18-d1-guard-literal-aware";
+var VERSION = "2.37.19-d1-guard-literal-fn-aware";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -923,7 +923,8 @@ function d1ReadOnlyGuard(sql) {
     return { ok: false, rejected: true, error: "read-only SELECT/WITH only - this tool can never write. First token seen: " + (stripped.trim().split(/\s+/)[0] || "(empty)").slice(0, 24), hint: "start the statement with SELECT or WITH; use ops_d1_write for mutations" };
   }
   if (stripped.indexOf(";") >= 0) return { ok: false, rejected: true, error: "single read statement only - an interior ';' was found outside string literals", hint: "send exactly one SELECT/WITH statement" };
-  var mm = /\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.exec(stripped);
+  var mm = /\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|truncate)\b/i.exec(stripped);
+  if (/\breplace\s+into\b/i.test(stripped)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - 'REPLACE INTO' is a mutation statement", hint: "use ops_d1_write for REPLACE INTO; the replace() scalar function is allowed in reads" };
   if (mm) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keyword '" + mm[1].toLowerCase() + "' appears as SQL, not inside a string literal", hint: "a keyword inside a quoted literal is now allowed; this rejection means it was real SQL" };
   return { ok: true, sql: sql };
 }
