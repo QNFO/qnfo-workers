@@ -1,37 +1,42 @@
 #!/usr/bin/env python3
-"""driftguard-label-and-lifecycle-sot-patch.py - issue 1370 (2026-09-29, rev 4).
+"""driftguard-label-and-lifecycle-sot-patch.py - issue 1370 (2026-09-29, rev 5).
 
-FOUR verified defects, plus two self-inflicted ones caught by this patcher's own
-verification and fixed here. Rev 1 and rev 2 both FAILED CLOSED in CI and never
-landed; rev 3 landed but its heartbeat edit was wrong. Both failure modes are
-designed out in rev 4.
+FOUR verified defects in the fleet, plus THREE self-inflicted ones that this
+patcher's own verification caught and rev 5 fixes. The self-inflicted set is the
+most useful part of this file's history: each one was a real bug that reached a
+commit, and each is now a gate.
 
-E) ANCHOR-DRIFT-1 (why rev 1 and rev 2 never landed). Both used multi-line
-   exact-string anchors copied from a read of scripts/deploy-drift-guard.py taken
-   earlier in the same session. That file moved under them THREE times while the
-   patcher was being written:
+E) ANCHOR-DRIFT-1 (killed rev 1 and rev 2). Both used multi-line exact-string
+   anchors copied from a read of scripts/deploy-drift-guard.py taken earlier in the
+   same session. That file moved under them FOUR times while this patcher was being
+   written:
         9,781 B (331 lines)  <- rev 1 anchors derived here
        15,139 B (330 lines)  <- rev 2 anchors derived here
-       17,531 B (365 lines)  <- rev 3/rev 4 anchors derived here (current main)
-   Every multi-line anchor eventually matched 0 times and the patcher aborted by
-   design -- correctly, but uselessly. Rev 4 is LINE-ANCHORED: each edit locates
-   its target by a single-line regex predicate, asserts EXACTLY ONE match, and
-   never depends on surrounding lines or absolute line numbers.
+       17,531 B (365 lines)  <- rev 3/rev 4 anchors derived here
+       18,404 B              <- current main, rev 5 verified against this
+   Every multi-line anchor eventually matched 0 times. Rev 5 is LINE-ANCHORED:
+   each edit locates its target by a single-line regex predicate, asserts EXACTLY
+   ONE match, and never depends on surrounding lines or absolute line numbers. The
+   rev-4 run against the 18,404 B file applied all eight guard edits cleanly, which
+   is the design working as intended.
 
-F) QUOTED-LITERAL-TRAP (rev 3 defect, caught by rev 3's own marker assertion).
-   The heartbeat source reads .bind("qnfo-lifecycle", "fabric-20260910", ...) --
-   the literal is QUOTED. Replacing the bare substring "fabric-20260910" leaves the
-   surrounding quotes in place and emits .bind(..., "QNFO_VERSION", ...), i.e. the
-   STRING "QNFO_VERSION" instead of the constant's value. That is the same
-   two-sources-of-truth defect this file exists to fix, one level worse: the
-   heartbeat row would have carried a constant's NAME as its version. Rev 4
-   replaces the quoted literal, and asserts the post-condition textually.
+F) QUOTED-LITERAL-TRAP (rev 3 defect). The heartbeat source reads
+   .bind("qnfo-lifecycle", "fabric-20260910", ...) -- the literal is QUOTED.
+   Replacing the bare substring leaves the surrounding quotes and emits
+   .bind(..., "QNFO_VERSION", ...): the STRING "QNFO_VERSION" instead of the
+   constant's value. That is the same two-sources-of-truth defect this file exists
+   to fix, one level worse -- the heartbeat row would have carried a constant's NAME
+   as its version. Rev 5 replaces the quoted literal and asserts the result.
 
-G) POST-CONDITION GAP (rev 3 defect). Rev 3 verified that edits APPLIED but never
-   that the RESULT was semantically correct, which is why (F) survived to commit.
-   Rev 4 asserts the emitted text after every file: the widened VERSION_RE must
-   actually match `var`/`let`/`const` forms, and the heartbeat must reference the
-   bare identifier. A failed post-condition raises and writes nothing.
+G) POST-CONDITION GAP (rev 3 defect). Rev 3 checked that edits APPLIED but never
+   that the RESULT was semantically correct, which is how (F) reached a commit.
+   Rev 5 asserts the emitted text after every file and raises before writing.
+
+H) NAMESPACE-FREE exec (rev 4 defect). Rev 4's raw_put post-condition did
+   `ns = {}; exec(VER_LINE, ns)`, so the emitted `re.compile(...)` raised
+   NameError: name 're' is not defined and the run aborted after patching the guard.
+   Rev 5 seeds the namespace with re. Caught by executing the patcher, not by
+   reading it.
 
 A) scripts/deploy-drift-guard.py classified a worker as DRIFT on ANY inequality
    between the repo VERSION constant and the live /health version. qnfo-lifecycle
@@ -232,8 +237,9 @@ def patch_rawput(text, path):
     ]
     out = "\n".join(lines)
 
-    # G -- post-condition: the emitted regex must actually match all three forms.
-    ns = {}
+    # G/H -- post-condition: the emitted regex must actually match all three forms.
+    # The namespace must contain re, or exec raises NameError (rev 4 defect H).
+    ns = {"re": re}
     exec(VER_LINE, ns)
     rx = ns["VERSION_RE"]
     for probe, want in (('var VERSION = "1.2.3";', "1.2.3"),
