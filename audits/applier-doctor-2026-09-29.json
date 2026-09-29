@@ -1,14 +1,16 @@
 {
  "counts": {
-  "already-applied": 19,
-  "applied-now": 3,
-  "error": 6,
+  "already-applied": 20,
+  "applied-now": 2,
+  "error": 8,
   "stale-anchor": 5
  },
  "errored": [
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/driftguard-server-version-patch.py",
+  "scripts/fleet-autoaudit-d1ok-patch-v2.py",
   "scripts/fleet-autoaudit-d1ok-patch.py",
+  "scripts/github409-variant-reread-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
@@ -16,8 +18,7 @@
  "marker": "APPLIER-DOCTOR-1",
  "never_landed": [
   "scripts/apply-pending-patches.py",
-  "scripts/deploy-guard-ms-failclosed-patch.py",
-  "scripts/patch-404hint-list-1.py"
+  "scripts/deploy-guard-ms-failclosed-patch.py"
  ],
  "results": [
   {
@@ -31,15 +32,13 @@
   },
   {
    "changed_files": [
-    " M ci-status/applier-doctor.json",
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
+    " M ci-status/applier-doctor.json"
    ],
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=32 {'already-applied': 19, 'stale-anchor': 10, 'landed': 2, 'error': 1}",
-    "LANDED(2): deploy-guard-ms-failclosed-patch.py, patch-404hint-list-1.py",
+    "SUMMARY total=34 {'already-applied': 20, 'stale-anchor': 12, 'landed': 1, 'error': 1}",
+    "LANDED(1): deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "applied-now"
@@ -158,6 +157,17 @@
   },
   {
    "changed_files": [],
+   "rc": 8,
+   "script": "scripts/fleet-autoaudit-d1ok-patch-v2.py",
+   "tail": [
+    "anchor 3: applied (1/1)",
+    "anchor 4: applied (1/1)",
+    "::error::post-condition failed: d1_err call sites != 2"
+   ],
+   "verdict": "error"
+  },
+  {
+   "changed_files": [],
    "rc": 5,
    "script": "scripts/fleet-autoaudit-d1ok-patch.py",
    "tail": [
@@ -195,7 +205,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 367525 (unchanged)",
+    "bytes: 367668 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -210,6 +220,15 @@
     "changed=false"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 1,
+   "script": "scripts/github409-variant-reread-patch.py",
+   "tail": [
+    "FAIL-CLOSED: the short-circuiting `if (!curSha) break;` survived in qnfo-ops/worker.js"
+   ],
+   "verdict": "error"
   },
   {
    "changed_files": [],
@@ -228,16 +247,13 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=367527 marker=1",
-    "  deployed-current.worker.js bytes=367527 marker=1"
+    "  worker.js bytes=367670 marker=1",
+    "  deployed-current.worker.js bytes=367670 marker=1"
    ],
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-404hint-list-1.py",
    "tail": [
@@ -245,7 +261,7 @@
     "MARKER_COUNT=1",
     "OK"
    ],
-   "verdict": "applied-now"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -365,6 +381,6 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "total": 33,
- "ts": "2026-09-29T16:27:47.288Z"
+ "total": 35,
+ "ts": "2026-09-29T16:34:26.259Z"
 }
