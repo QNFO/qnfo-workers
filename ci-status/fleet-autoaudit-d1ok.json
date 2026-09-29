@@ -1,0 +1,12 @@
+{
+  "workflow": "apply-fleet-autoaudit-d1ok",
+  "issue": "D1-REST-ENVELOPE-OK-1",
+  "run_id": "36597615732",
+  "run_attempt": "1",
+  "sha": "d62aef53fe682e46f5f764ba98457bb267d86cc2",
+  "patch_rc": "",
+  "syntax_rc": "0",
+  "assert_rc": "1",
+  "patch_log_tail": "::error::post-condition failed: 3 legacy res.get(\"ok\") call site(s) remain -- aborting WITHOUT writing.\nanchor 1: applied (1/1)\nanchor 2: applied (1/1)\nanchor 3: applied (1/1)\nanchor 4: applied (1/1)\n",
+  "note": "d1_writes_ok must be 110 and d1_write_failures [] in the next fleet-autoaudit artifact"
+}
