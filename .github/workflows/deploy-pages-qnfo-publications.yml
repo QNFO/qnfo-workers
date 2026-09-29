@@ -1,0 +1,106 @@
+name: deploy-pages-qnfo-publications
+
+# ARCHIVE-PAGES-UNDEPLOYABLE-1 (filed 2026-09-29)
+#
+# Problem: qnfo-web-unified/archive-qnfo.html is the source of archive.qnfo.org
+# (see qnfo-web-unified/README.md: "QNFO Research Archive | archive.qnfo.org |
+# qnfo-publications Pages | archive-qnfo.html"). The repo carries 36 workflows,
+# NONE of which deploy a Cloudflare Pages project. Commit f6601128 repaired the
+# file, but production still serves the pre-fix bytes:
+#   - line 14 `<style` (unclosed; the @import line ends `;>`)
+#   - line 61 `.archive-grid{grid-template-column` (truncated mid-property)
+#   - orphaned `s:1fr}` block displaced to line 74
+#   - stale counts "658+ papers" and "2,500+ nodes, 1,400+ edges"
+# so the fix is structurally undeployable. This workflow adds the missing path.
+#
+# FAIL-CLOSED BY DESIGN (three gates):
+#   1. workflow_dispatch ONLY, with an explicit confirm input that must equal DEPLOY.
+#      No push trigger: a Pages deploy is a full replace of the project's assets,
+#      and this repo cannot prove what else the qnfo-publications project holds.
+#      Auto-deploying an unverified full-replace is a production-breaking action.
+#   2. Content gate on the staged asset: the repaired markers must be present and
+#      the known corruption markers must be absent, else the job exits non-zero.
+#   3. Post-deploy live verification against https://archive.qnfo.org/.
+#
+# KNOWN RISK (stated, not hidden): `wrangler pages deploy` replaces the project's
+# file set. If qnfo-publications holds assets beyond the archive page, this deploy
+# removes them. Resolve by listing the project's current deployment before the
+# first run. Until then this workflow must be run manually and deliberately.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY to publish the repaired archive page to qnfo-publications"
+        required: true
+        default: ""
+      project:
+        description: "Pages project name"
+        required: true
+        default: "qnfo-publications"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-qnfo-publications
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate 1 - explicit confirmation
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.confirm }}" != "DEPLOY" ]; then
+            echo "::error::confirm input must be exactly DEPLOY (got '${{ github.event.inputs.confirm }}')"
+            exit 1
+          fi
+          echo "confirmation ok"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Gate 2 - stage and validate the asset
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp qnfo-web-unified/archive-qnfo.html dist/index.html
+          bytes=$(wc -c < dist/index.html)
+          echo "staged bytes: $bytes"
+          # repaired markers MUST be present
+          grep -q '<style>' dist/index.html || { echo "::error::style tag not repaired"; exit 1; }
+          grep -q '8,349 nodes' dist/index.html || { echo "::error::graph counts not repaired"; exit 1; }
+          grep -q '446 QNFO papers' dist/index.html || { echo "::error::paper count not repaired"; exit 1; }
+          # corruption markers MUST be absent
+          if grep -q 'grid-template-column$' dist/index.html; then echo "::error::truncated grid rule still present"; exit 1; fi
+          if grep -q '658+' dist/index.html; then echo "::error::stale 658+ count still present"; exit 1; fi
+          if grep -q '2,500+' dist/index.html; then echo "::error::stale 2,500+ count still present"; exit 1; fi
+          echo "content gate passed"
+
+      - name: Upload staged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qnfo-publications-dist
+          path: dist
+          if-no-files-found: error
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ github.event.inputs.project }} --branch=main
+
+      - name: Gate 3 - verify live
+        run: |
+          set -euo pipefail
+          sleep 15
+          curl -sS --max-time 25 https://archive.qnfo.org/ -o /tmp/live.html
+          echo "live bytes: $(wc -c < /tmp/live.html)"
+          grep -q '<style>' /tmp/live.html || { echo "::error::live style tag still malformed"; exit 1; }
+          grep -q '8,349 nodes' /tmp/live.html || { echo "::error::live page still serves stale graph counts"; exit 1; }
+          grep -q '446 QNFO papers' /tmp/live.html || { echo "::error::live page still serves stale paper count"; exit 1; }
+          echo "VERIFY_OK archive.qnfo.org now serves the repaired page"
