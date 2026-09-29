@@ -34,11 +34,40 @@ name: lifecycle-sot-and-deploy
 # repository artifacts are byte-identical (sha d3b76f91, 30293 B) and live was 30295 B, a
 # 2-byte trailing-whitespace delta rather than a live mutation. A permanently red gate on
 # a worker whose bytes match live is worse than no gate.
+#
+# SECOND REVISION, 2026-09-29 ~16:4xZ -- closes #1394 / STALE-PREFLIGHT-1 recurrence.
+#
+# The first revision of this workflow asserted a FROZEN tag:
+#   grep -q 'const QNFO_VERSION = "1.6.3-version-sot";' qnfo-lifecycle/worker.js
+# and the companion applier pinned the same tag in its EDITS table. Measured state when
+# this was found:
+#   * qnfo-lifecycle/worker.js AND its mirror both read "1.6.4-metric-freshness"
+#     (sha 3629a0939cb8639fa440554957ea2090fb6697ed, 35174 B, byte-identical);
+#   * live /health answered "1.6.3-version-sot";
+#   * deployment_history id 120 logged a qnfo-lifecycle deploy at 16:13:04Z with
+#     version_id "unknown" -- the deploy path ran and shipped nothing new;
+#   * deployment_history held ZERO rows for qnfo-lifecycle at 1.6.4.
+#
+# So the artifact was ALREADY CORRECT and the deploy was blocked by the gate's own anchor,
+# not by any defect in the artifact. A fail-closed gate whose anchor is overtaken by a
+# concurrent writer becomes a permanently red job with no detector
+# (ANCHOR-INVALIDATION-RED-JOB-1, #1383) -- and it also silently withholds the fix it was
+# written to ship. THE GATE NOW ASSERTS THE PROPERTY, NEVER THE TAG: exactly one
+# QNFO_VERSION constant (any semver-with-suffix tag), both derivations present, the two
+# legacy literals absent, mirror parity, and ESM parseability. A future version bump can no
+# longer break this gate.
+#
+# `scripts/lifecycle-version-sot-apply.py` is now also a push trigger: an applier that
+# changes without its workflow re-running is ORPHANED-APPLIER-1 by construction, which is
+# the failure this workflow was created to remove. The workflow's own commit touches only
+# qnfo-lifecycle/worker.js and its mirror, neither of which is a trigger path, so this
+# cannot loop.
 
 on:
   push:
     paths:
       - '.github/workflows/lifecycle-sot-and-deploy.yml'
+      - 'scripts/lifecycle-version-sot-apply.py'
   workflow_dispatch:
 
 permissions:
@@ -67,13 +96,18 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Apply LIFECYCLE-VERSION-SOT-1 (fail-closed, idempotent)
+      - name: Apply LIFECYCLE-VERSION-SOT-1 (fail-closed, idempotent, version-agnostic)
         run: python3 scripts/lifecycle-version-sot-apply.py
 
       - name: Assert the patched properties (fail the job if any is false)
         run: |
           set -euo pipefail
-          grep -q 'const QNFO_VERSION = "1.6.3-version-sot";' qnfo-lifecycle/worker.js
+          # PROPERTY, NOT TAG (2026-09-29). The previous frozen literal
+          # 'const QNFO_VERSION = "1.6.3-version-sot";' failed closed on the
+          # 1.6.4-metric-freshness bump and silently blocked every deploy while the
+          # artifact itself was already correct.
+          grep -qE 'const QNFO_VERSION = "[0-9]+\.[0-9]+\.[0-9]+-[A-Za-z0-9._-]+";' qnfo-lifecycle/worker.js
+          test "$(grep -c 'const QNFO_VERSION = ' qnfo-lifecycle/worker.js)" = "1"
           grep -q 'version: QNFO_VERSION,' qnfo-lifecycle/worker.js
           grep -q 'QNFO_VERSION, new Date().toISOString()' qnfo-lifecycle/worker.js
           if grep -q 'fabric-20260910' qnfo-lifecycle/worker.js; then echo 'stale heartbeat literal survived'; exit 1; fi
@@ -105,6 +139,6 @@ jobs:
           set -euo pipefail
           sleep 10
           python3 scripts/deploy-drift-guard.py qnfo-lifecycle --json > /tmp/post.json 2> /tmp/post.err || true
-          cat /tmp/post.json 2> /dev/null || true
-          cat /tmp/post.err 2> /dev/null || true
+          cat /tmp/post.json 2>/dev/null || true
+          cat /tmp/post.err 2>/dev/null || true
           python3 -c "import json;d=json.load(open('/tmp/post.json'));print('post-deploy: sync=%s drift=%s label_mismatch=%s ahead=%s' % (d['sync'], len(d['drift']), d.get('label_mismatch_count'), len(d['ahead'])));assert d['sync']==1, d;print('LIVE CONFIRMED: repository artifact and live /health agree')"
