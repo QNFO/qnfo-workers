@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""
+canonical_deploy.py -- deploy QNFO workers through the CANONICAL path.
+
+WHY THIS EXISTS (root cause, 2026-09-29)
+----------------------------------------
+The legacy path `scripts/raw_put.py` performs exactly one CF API call:
+    PUT /accounts/<acct>/workers/scripts/<name>/content
+That is enough to change a worker's code, but it performs NONE of the
+following, and each omission is an open defect:
+
+  1. no deploy-guard LOCK acquire/release
+        -> deploy-guard classifies the mutation as `uncoordinated-deploy`
+        -> agent_issues #1340, #1341, #1342, #1343 (DEPLOY-UNCOORDINATED-DEPLOY)
+  2. no `fleet_deploys` ledger row
+        -> deploy-guard computes logged = (ledger_row_ts >= modified_on - 180s)
+        -> false => `DEPLOY-UNLOGGED-MUTATION`
+  3. no PUT /accounts/<acct>/workers/scripts/<name>/schedules
+        -> crons declared in wrangler.toml are INERT. Editing
+           `crons = [...]` in the repo has no effect on the live trigger.
+           This is why the #1193 / #1337 fix (fleet-exec hourly -> */10)
+           could be committed and still not take effect: `last_fired`
+           never advanced past 08:00:47Z.
+
+The canonical path is a single server-side route on qnfo-ops:
+
+    POST https://ops.qnfo.org/ops/deploy
+    Authorization: Bearer $OPS_ROUTER_AUTH_KEY
+    Content-Type: application/json
+    body: {"worker": "<name>", "path": "<repo-relative path to worker.js>", "ref": "main"}
+
+`opsDeploy(env, body)` performs the complete, ordered sequence:
+    lock acquire (fail-closed)
+      -> fetch source from GitHub at `ref`
+      -> PUT /content   (binding-preserving: redeclares existing bindings;
+                         BINDING-PRESERVE-1 aborts if bindings can't be read)
+      -> live verify
+      -> POST guard /ledger
+      -> read wrangler.toml  ->  PUT /schedules   <-- cron apply lives here
+    lock release
+
+USAGE
+-----
+    export OPS_ROUTER_AUTH_KEY=...        # never commit this
+    python3 scripts/canonical_deploy.py --worker fleet-exec --path fleet-exec/worker.js
+    python3 scripts/canonical_deploy.py --manifest deploy-targets.txt
+    python3 scripts/canonical_deploy.py --manifest deploy-targets.txt --dry-run
+
+EXIT CODES
+----------
+    0  all requested deploys succeeded and were verified
+    1  one or more deploys failed (route error surfaced verbatim)
+    2  configuration error (missing auth key / bad manifest / bad args)
+    3  fail-closed abort (lock held, or preflight refused)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+OPS_DEPLOY_URL = os.environ.get("OPS_DEPLOY_URL", "https://ops.qnfo.org/ops/deploy")
+AUTH_ENV = "OPS_ROUTER_AUTH_KEY"
+DEFAULT_REF = "main"
+DEFAULT_TIMEOUT = 180
+
+
+def die(code: int, msg: str) -> "NoReturn":  # type: ignore[valid-type]
+    print(f"FAIL: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int) -> dict:
+    """POST one deploy request to the canonical route. Returns parsed JSON.
+
+    Fails closed: a non-2xx status is surfaced verbatim, never swallowed.
+    """
+    payload = json.dumps({"worker": worker, "path": path, "ref": ref}).encode()
+    req = urllib.request.Request(
+        OPS_DEPLOY_URL,
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "qnfo-canonical-deploy/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", "replace")
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:2000]
+        return {"ok": False, "status": e.code, "error": detail}
+    except urllib.error.URLError as e:
+        return {"ok": False, "status": 0, "error": f"URLError: {e.reason}"}
+
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        parsed = {"raw": body[:2000]}
+    parsed.setdefault("status", status)
+    if status >= 300:
+        parsed["ok"] = False
+    return parsed
+
+
+def read_manifest(path: str) -> list[tuple[str, str]]:
+    """Parse deploy-targets.txt.
+
+    Accepted line forms (blank lines and # comments ignored):
+        <worker>
+        <worker> <repo-relative-path>
+    A bare worker name defaults to <worker>/worker.js.
+    """
+    targets: list[tuple[str, str]] = []
+    with open(path, "r", encoding="utf-8") as fh:
+        for lineno, raw in enumerate(fh, 1):
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) == 1:
+                targets.append((parts[0], f"{parts[0]}/worker.js"))
+            elif len(parts) == 2:
+                targets.append((parts[0], parts[1]))
+            else:
+                die(2, f"{path}:{lineno}: expected '<worker> [path]', got {line!r}")
+    if not targets:
+        die(2, f"{path}: manifest contains no deploy targets")
+    return targets
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Deploy workers via the canonical /ops/deploy route.")
+    ap.add_argument("--worker", help="single worker script name")
+    ap.add_argument("--path", help="repo-relative path to the worker source (default <worker>/worker.js)")
+    ap.add_argument("--manifest", help="file listing '<worker> [path]' per line")
+    ap.add_argument("--ref", default=DEFAULT_REF, help=f"git ref to deploy from (default {DEFAULT_REF})")
+    ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="per-deploy timeout seconds")
+    ap.add_argument("--dry-run", action="store_true", help="print the plan, call nothing")
+    args = ap.parse_args(argv)
+
+    if args.worker and args.manifest:
+        die(2, "--worker and --manifest are mutually exclusive")
+    if args.worker:
+        targets = [(args.worker, args.path or f"{args.worker}/worker.js")]
+    elif args.manifest:
+        targets = read_manifest(args.manifest)
+    else:
+        die(2, "one of --worker or --manifest is required")
+
+    token = os.environ.get(AUTH_ENV, "").strip()
+    if not token and not args.dry_run:
+        die(2, f"{AUTH_ENV} is not set (required; never commit it)")
+
+    print(f"canonical deploy: {len(targets)} target(s) -> {OPS_DEPLOY_URL} (ref={args.ref})")
+    for worker, path in targets:
+        print(f"  - {worker}  <-  {path}")
+
+    if args.dry_run:
+        print("dry-run: no requests issued")
+        return 0
+
+    results: list[tuple[str, bool, dict]] = []
+    for worker, path in targets:
+        t0 = time.time()
+        print(f"\n==> {worker} ({path})", flush=True)
+        res = post_deploy(worker, path, args.ref, token, args.timeout)
+        dt = time.time() - t0
+        ok = bool(res.get("ok"))
+        results.append((worker, ok, res))
+        verdict = "OK" if ok else "FAIL"
+        print(f"    {verdict} in {dt:.1f}s  status={res.get('status')}")
+        # Surface the route's own fields without assuming a fixed schema.
+        for key in ("version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "error", "detail"):
+            if key in res:
+                print(f"    {key}: {json.dumps(res[key])[:400]}")
+
+    failed = [w for w, ok, _ in results if not ok]
+    print(f"\nsummary: {len(results) - len(failed)}/{len(results)} ok")
+    if failed:
+        print(f"failed workers: {', '.join(failed)}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
