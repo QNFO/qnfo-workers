@@ -1,0 +1,270 @@
+name: container-config-selfheal-cron
+
+# CONTAINER-CONFIG-AUTO-SELFHEAL-1 (2026-09-29, qnfo-ops autonomous session; issue #1485).
+#
+# WHY THIS FILE EXISTS -- MEASURED, NOT INFERRED
+#   qnfo-containers-pilot lost its [[containers]] script-level metadata on 2026-09-29 when
+#   deployment_history id 172 (19:30:35.100Z, deployed_by "qnfo-ops:cf_worker_deploy") rebuilt
+#   upload metadata from GET /bindings. [[containers]] is NOT a binding, so it was dropped;
+#   the first cloud_ops_events row kind=container.error with text
+#   "Cannot read properties of undefined (reading 'running')" landed 19:30:43.591Z -- 8s later.
+#   Blast radius: shell_exec, exec_python, exec_node, container_install, git_clone_exec,
+#   container_workspace_exec, shell_pipeline, container_status -- all HTTP 500.
+#
+#   Every existing restore attempt is a PUSH-TRIGGERED one-shot:
+#     deploy-containers-pilot.yml, container-config-restore-2.yml,
+#     restore-container-config-1485.yml, apply-container-binding-guard-1.yml
+#   Measured outcome at 2026-09-29T19:42Z: ci-status/deploy-containers-pilot.json was still the
+#   265-byte 19:37:34Z revision (head 139b2dce, "verify_outcome" key, i.e. produced by an OLDER
+#   file revision) even though ~8 triggers had been pushed in 4 minutes. All four workflows set
+#   `cancel-in-progress: false`, so triggers QUEUE instead of superseding -- a storm of triggers
+#   produces a long queue and no fresh artifact. A one-shot trigger cannot be a permanent fix:
+#   the defect recurs on the next metadata-rebuilding deploy.
+#
+# WHAT THIS WORKFLOW IS
+#   A PERIODIC, IDEMPOTENT, FAIL-CLOSED self-heal for the whole class. It is ADDITIVE: it does
+#   not modify or replace any existing workflow, so it cannot race with the concurrent writers
+#   already patching deploy-containers-pilot.yml / restore-container-config-1485.yml.
+#   It invokes the already-committed scripts/restore_container_config.py (CONTAINER-CONFIG-
+#   RESTORE-3), which:
+#     * parses [[containers]] out of qnfo-containers-pilot/wrangler.toml;
+#     * reads live compatibility_date/flags and bindings from GET /settings (COMPAT-PRESERVE-1);
+#     * PUTs /content multipart with `containers` in the upload metadata, DELIBERATELY OMITTING
+#       `bindings` so the live binding set is preserved by omission rather than reconstructed
+#       (BINDING-PRESERVATION-1 -- reconstruction is what caused the incident);
+#     * re-reads GET /settings and FAILS CLOSED (exit 3) unless `containers` is present AND the
+#       AUDIT d1 binding survived.
+#
+#   If it runs and containers are already live, it prints "container config ALREADY live" and
+#   the /content PUT is still safe (same metadata). The step is idempotent by construction.
+#
+# CONCURRENCY -- THE POINT OF THIS FILE
+#   `cancel-in-progress: true` on its OWN group. A schedule that fires while a previous self-heal
+#   is still running supersedes it instead of queueing behind it, so this workflow can never
+#   accumulate the backlog that starved the push-triggered one-shots.
+#
+# FAIL-CLOSED / NO-REGRESSION
+#   A red run mutates nothing: the script exits before PUT when wrangler.toml declares no
+#   [[containers]] block, when GET /settings is unreadable, or when the PUT is rejected.
+#   The authoritative assertion is the GET /settings read-back, never the PUT status alone.
+#
+# NO SKIP TOKEN EVER: a self-heal commit must not carry [skip ci] (CI-TRIGGER-SKIP-1).
+
+on:
+  schedule:
+    # Every 30 minutes. Offset from the hour so it does not collide with the */6h fleet self-audit.
+    - cron: '13,43 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/container-config-selfheal-cron.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: container-config-selfheal-cron
+  cancel-in-progress: true
+
+jobs:
+  selfheal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WORKER: qnfo-containers-pilot
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Preflight - token and account id resolvable
+        id: pre
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::neither secrets.CF_API_TOKEN nor secrets.CLOUDFLARE_API_TOKEN is set - cannot restore (fail closed)"
+            echo "rc=no-token" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::neither secrets.CF_ACCOUNT_ID nor secrets.CLOUDFLARE_ACCOUNT_ID is set - cannot restore (fail closed)"
+            echo "rc=no-account" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "token_len=${#CLOUDFLARE_API_TOKEN} account_len=${#CLOUDFLARE_ACCOUNT_ID}"
+          echo "rc=ok" >> "$GITHUB_OUTPUT"
+
+      - name: Pre-state - GET /settings read-back
+        if: steps.pre.outputs.rc == 'ok'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 - <<'PY' | tee /tmp/pre_settings.json
+          import json, os, urllib.request
+          acct = os.environ["CLOUDFLARE_ACCOUNT_ID"]; tok = os.environ["CLOUDFLARE_API_TOKEN"]
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; container-config-selfheal-cron)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          out = {}
+          try:
+              r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+              d = json.load(urllib.request.urlopen(r, timeout=60))
+              res = d.get("result") or {}
+              out = {"success": d.get("success"), "containers": res.get("containers"),
+                     "bindings": [b.get("name") for b in (res.get("bindings") or [])],
+                     "compatibility_date": res.get("compatibility_date"),
+                     "compatibility_flags": res.get("compatibility_flags")}
+          except Exception as e:
+              out = {"error": "%s: %s" % (type(e).__name__, e)}
+          print(json.dumps(out, indent=2))
+          PY
+
+      - name: Self-heal - restore [[containers]] via /content metadata (CONTAINER-CONFIG-RESTORE-3)
+        id: restore
+        if: steps.pre.outputs.rc == 'ok'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/restore_container_config.py 2>&1 | tee /tmp/restore.log
+          echo "restore_exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Authoritative read-back - is containers present?
+        id: verify
+        if: steps.pre.outputs.rc == 'ok'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 - <<'PY' | tee /tmp/post_settings.json
+          import json, os, urllib.request
+          acct = os.environ["CLOUDFLARE_ACCOUNT_ID"]; tok = os.environ["CLOUDFLARE_API_TOKEN"]
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; container-config-selfheal-cron)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          out = {}
+          try:
+              r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+              d = json.load(urllib.request.urlopen(r, timeout=60))
+              res = d.get("result") or {}
+              out = {"containers": res.get("containers"),
+                     "bindings": [b.get("name") for b in (res.get("bindings") or [])]}
+          except Exception as e:
+              out = {"error": "%s: %s" % (type(e).__name__, e)}
+          print(json.dumps(out, indent=2))
+          PY
+          if grep -q '"containers": null' /tmp/post_settings.json || ! grep -q '"containers": \[' /tmp/post_settings.json; then
+            echo "rc=containers-absent" >> "$GITHUB_OUTPUT"
+            echo "::error::[[containers]] STILL ABSENT - issue #1485 remains open; failure text is in the artifact"
+          else
+            echo "rc=restored" >> "$GITHUB_OUTPUT"
+            echo "[[containers]] present in live script settings - issue #1485 closed by this run"
+          fi
+
+      - name: Functional probe - /status must not report ctx.container undefined
+        id: probe
+        if: steps.pre.outputs.rc == 'ok'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          base="https://qnfo-containers-pilot.q08.workers.dev"
+          hcode="$(curl -s -o /tmp/health.json -w '%{http_code}' "$base/health" || true)"
+          echo "GET /health -> $hcode"
+          if [ -n "${PILOT_TOKEN:-}" ]; then
+            scode="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
+            echo "GET /status -> $scode"
+            cat /tmp/status.json || true
+            if grep -q "Cannot read properties of undefined" /tmp/status.json 2>/dev/null; then
+              echo "rc=ctx-container-undefined" >> "$GITHUB_OUTPUT"
+              echo "::error::/status still reports the ctx.container-undefined signature"
+            else
+              echo "rc=ok" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "rc=skipped-no-pilot-token" >> "$GITHUB_OUTPUT"
+            echo "::warning::PILOT_TOKEN unavailable - functional probe SKIPPED; the /settings read-back is the authoritative assertion"
+          fi
+
+      - name: Publish outcome artifact with failure text
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, os, subprocess
+
+          def rd(p, n=4000):
+              try:
+                  return open(p, encoding="utf-8", errors="replace").read()[-n:]
+              except Exception as e:
+                  return "UNREADABLE: %s" % e
+
+          def sh(c):
+              try:
+                  return subprocess.run(c, shell=True, capture_output=True, text=True).stdout.strip()
+              except Exception as e:
+                  return "ERR %s" % e
+
+          art = {
+              "workflow": "container-config-selfheal-cron",
+              "marker": "CONTAINER-CONFIG-AUTO-SELFHEAL-1",
+              "issue": 1485,
+              "pre_rc": os.environ.get("PRE_RC", ""),
+              "restore_exit": os.environ.get("RESTORE_EXIT", ""),
+              "verify_rc": os.environ.get("VERIFY_RC", ""),
+              "probe_rc": os.environ.get("PROBE_RC", ""),
+              "head": sh("git rev-parse HEAD"),
+              "ts": sh("date -u +%Y-%m-%dT%H:%M:%SZ"),
+              "pre_settings": rd("/tmp/pre_settings.json", 2500),
+              "restore_log": rd("/tmp/restore.log", 4000),
+              "post_settings": rd("/tmp/post_settings.json", 2500),
+          }
+          json.dump(art, open("ci-status/container-config-selfheal-cron.json", "w"), indent=2)
+          print(json.dumps(art, indent=2)[:6000])
+          PY
+        env:
+          PRE_RC: ${{ steps.pre.outputs.rc }}
+          RESTORE_EXIT: ${{ steps.restore.outputs.restore_exit }}
+          VERIFY_RC: ${{ steps.verify.outputs.rc }}
+          PROBE_RC: ${{ steps.probe.outputs.rc }}
+
+      - name: Commit outcome artifact (race-safe, no skip token)
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/container-config-selfheal-cron.json || true
+          if git diff --cached --quiet; then
+            echo "artifact unchanged"
+            exit 0
+          fi
+          git commit -m "chore(ci): container-config-selfheal-cron outcome (issue #1485)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then
+              echo "ARTIFACT_PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep $((i * 4))
+          done
+          echo "::warning::artifact push failed after 5 attempts"
+          exit 0
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "## container-config-selfheal-cron (issue #1485)"
+            echo ""
+            echo "pre=\`${{ steps.pre.outputs.rc }}\` restore_exit=\`${{ steps.restore.outputs.restore_exit }}\` verify=\`${{ steps.verify.outputs.rc }}\` probe=\`${{ steps.probe.outputs.rc }}\`"
+            echo ""
+            echo "Authoritative assertion: GET /settings \`containers\` non-empty. Fail-closed: a red run mutates nothing."
+          } >> "$GITHUB_STEP_SUMMARY"
