@@ -1,0 +1,91 @@
+name: apply-unmangle-worker-js
+
+# UNMANGLE-WORKER-JS-1 (2026-09-29).
+#
+# Repairs `*/worker.js` files that were committed as raw Cloudflare Workers
+# API multipart/form-data responses instead of as extracted script payloads.
+# Known instance: qnfo-errata-publish/worker.js (mangled 2026-09-08 by
+# commit 7046ce02) -- 738236-byte envelope wrapping a 738039-byte bundle.
+#
+# This workflow is the repo's own `apply-*` convention: land the fix as code,
+# let CI commit the byte-level repair, so no agent has to inline a 738 KB blob
+# through an API write.
+#
+# Three modes, one job:
+#   1. push / schedule  -> REPAIR (extract payload, commit back)
+#   2. --check guard    -> FAIL CLOSED if any worker.js is still mangled
+#   3. dispatch         -> manual re-run
+#
+# Loop safety: the commit-back step is skipped when the actor is the bot, and
+# the job holds a concurrency lock, so a repair commit cannot re-trigger a
+# repair storm.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/worker.js"
+      - "scripts/unmangle-worker-js.py"
+      - ".github/workflows/apply-unmangle-worker-js.yml"
+  schedule:
+    # daily, offset from deploy-drift (06:17) and mirror-sync
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-unmangle-worker-js
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  unmangle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Detect MIME-mangled worker.js (fail-closed guard)
+        run: python scripts/unmangle-worker-js.py --check
+        continue-on-error: true
+        id: guard
+
+      - name: Repair MIME-mangled worker.js
+        run: python scripts/unmangle-worker-js.py
+
+      - name: Verify every repaired worker.js parses as an ES module
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            cp "$f" /tmp/check.mjs
+            if ! node --check /tmp/check.mjs 2>/tmp/err; then
+              echo "::error file=$f::syntax error: $(head -1 /tmp/err)"
+              fail=1
+            fi
+          done < <(find . -name worker.js -not -path "./.git/*")
+          if [ "$fail" -ne 0 ]; then
+            echo "SYNTAX GATE FAILED"
+            exit 1
+          fi
+          echo "syntax gate: all worker.js parse as ESM"
+
+      - name: Commit repaired sources
+        if: github.actor != 'github-actions[bot]'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- '*/worker.js'; then
+            echo "no mangled sources to repair"
+            exit 0
+          fi
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -- '*/worker.js'
+          git commit -m "fix(fleet): UNMANGLE-WORKER-JS-1 extract MIME payload from worker.js [skip ci]"
+          git push origin HEAD:main
