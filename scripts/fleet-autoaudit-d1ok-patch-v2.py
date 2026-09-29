@@ -33,6 +33,14 @@ WHY v2 (v1 = scripts/fleet-autoaudit-d1ok-patch.py, run 36597615732):
   same naive scan with grep. A bare-literal scan cannot tell a legacy CALL SITE from a mention
   in prose. v2 asserts on call-site patterns only.
 
+v2.1 (2026-09-29, observed in a REAL run, not a simulation): the v2 post-condition
+  `out.count("d1_err(res)") != 2` was UNSATISFIABLE -- it counted the `def d1_err(res):`
+  definition inside HELPER as a call site, so the count was always 3 and the applier aborted
+  with rc=8 on every run despite applying all 4 anchors. The check now subtracts the
+  definition line. This is the same class of defect as v1's: a post-condition that counts
+  text the patch itself introduced. Any future post-condition here must be expressed as a
+  CALL-SITE pattern (or def-adjusted), never as a bare substring.
+
 FAIL-CLOSED CONTRACT: every anchor below must match EXACTLY ONCE, the two legacy call sites
 must be gone afterwards, and each new call site must appear exactly once. Any deviation aborts
 non-zero WITHOUT writing the file.
@@ -50,43 +58,7 @@ MARKER = "D1-REST-ENVELOPE-OK-1"
 LEGACY_WRITE = 'if res.get("ok"):'
 LEGACY_PURGE = 'if not res.get("ok"):'
 
-HELPER = '''def d1_ok(res):
-    """D1-REST-ENVELOPE-OK-1: true success test for a D1 REST reply.
-
-    d1() returns the raw Cloudflare envelope on success -- the shape carrying the keys
-    success, errors, messages and result -- and only sets its own "ok" key on a transport
-    exception. A truthiness test on that key is therefore None (falsy) for EVERY successful
-    call, which is what made every successful write look like a failure.
-    """
-    if res.get("ok") is False:
-        return False
-    if res.get("ok") is True:
-        return True
-    if res.get("success") is not True:
-        return False
-    blocks = res.get("result") or []
-    if blocks and isinstance(blocks[0], dict) and blocks[0].get("success") is False:
-        return False
-    return True
-
-
-def d1_err(res):
-    """Human-readable failure reason for a d1() reply (never the string None)."""
-    if res.get("error") is not None:
-        return str(res.get("error"))
-    errs = res.get("errors") or []
-    if errs:
-        return json.dumps(errs)[:200]
-    blocks = res.get("result") or []
-    if blocks and isinstance(blocks[0], dict):
-        blk = blocks[0]
-        if blk.get("results") and isinstance(blk["results"], dict):
-            return json.dumps(blk["results"])[:200]
-        return json.dumps(blk)[:200]
-    return "unknown D1 failure (no error, no errors, no result block)"
-
-
-'''
+HELPER = '''def d1_ok(res):\n    """D1-REST-ENVELOPE-OK-1: true success test for a D1 REST reply.\n\n    d1() returns the raw Cloudflare envelope on success -- the shape carrying the keys\n    success, errors, messages and result -- and only sets its own "ok" key on a transport\n    exception. A truthiness test on that key is therefore None (falsy) for EVERY successful\n    call, which is what made every successful write look like a failure.\n    """\n    if res.get("ok") is False:\n        return False\n    if res.get("ok") is True:\n        return True\n    if res.get("success") is not True:\n        return False\n    blocks = res.get("result") or []\n    if blocks and isinstance(blocks[0], dict) and blocks[0].get("success") is False:\n        return False\n    return True\n\n\ndef d1_err(res):\n    """Human-readable failure reason for a d1() reply (never the string None)."""\n    if res.get("error") is not None:\n        return str(res.get("error"))\n    errs = res.get("errors") or []\n    if errs:\n        return json.dumps(errs)[:200]\n    blocks = res.get("result") or []\n    if blocks and isinstance(blocks[0], dict):\n        blk = blocks[0]\n        if blk.get("results") and isinstance(blk["results"], dict):\n            return json.dumps(blk["results"])[:200]\n        return json.dumps(blk)[:200]\n    return "unknown D1 failure (no error, no errors, no result block)"\n\n\n'''
 
 REPLACEMENTS = [
     # 1. insert the helpers immediately before the first consumer
@@ -146,7 +118,8 @@ def main():
         print("::error::post-condition failed: new call sites not exactly once",
               file=sys.stderr)
         return 7
-    if out.count("d1_err(res)") != 2:
+    # v2.1: subtract the definition line -- counting it made this check unsatisfiable (always 3).
+    if out.count("d1_err(res)") - out.count("def d1_err(res):") != 2:
         print("::error::post-condition failed: d1_err call sites != 2", file=sys.stderr)
         return 8
 
