@@ -1,7 +1,7 @@
 {
  "counts": {
   "already-applied": 23,
-  "applied-now": 2,
+  "applied-now": 3,
   "error": 6,
   "stale-anchor": 6
  },
@@ -15,6 +15,7 @@
  ],
  "marker": "APPLIER-DOCTOR-1",
  "never_landed": [
+  "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/deploy-guard-ms-failclosed-patch.py"
  ],
@@ -30,13 +31,25 @@
   },
   {
    "changed_files": [
+    " M scripts/applier-doctor.py"
+   ],
+   "rc": 0,
+   "script": "scripts/applier-doctor-outcome-aware-patch.py",
+   "tail": [
+    "APPLIED: APPLIER-DOCTOR-OUTCOME-AWARE-1 -> scripts/applier-doctor.py (+2496 bytes)",
+    "SUMMARY: 6 required anchors spliced, outcome-first classification enabled"
+   ],
+   "verdict": "applied-now"
+  },
+  {
+   "changed_files": [
     " M ci-status/applier-doctor.json"
    ],
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=36 {'already-applied': 23, 'stale-anchor': 11, 'landed': 1, 'error': 1}",
-    "LANDED(1): deploy-guard-ms-failclosed-patch.py",
+    "SUMMARY total=37 {'already-applied': 23, 'landed': 2, 'stale-anchor': 11, 'error': 1}",
+    "LANDED(2): applier-doctor-outcome-aware-patch.py, deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "applied-now"
@@ -395,6 +408,6 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "total": 37,
- "ts": "2026-09-29T16:37:43.639Z"
+ "total": 38,
+ "ts": "2026-09-29T16:42:25.168Z"
 }
