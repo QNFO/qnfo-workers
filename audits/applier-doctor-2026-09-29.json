@@ -5,7 +5,7 @@
   "error": 1,
   "stale-anchor": 3,
   "superseded": 10,
-  "undetermined": 8
+  "undetermined": 9
  },
  "errored": [
   "scripts/patch-cron-only-class.py"
@@ -509,6 +509,25 @@
   },
   {
    "changed_files": [],
+   "declared_signals": [
+    "..",
+    "DISK-RECLAIM-1",
+    "CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1",
+    "ENOSPC-CACHE-1",
+    "MIGRATION-NOTE-1",
+    "CONTAINER-STDERR-1",
+    "pip cache purge",
+    "workspace/.disk-report.txt"
+   ],
+   "rc": 3,
+   "script": "scripts/patch-container-disk-reclaim-1.py",
+   "tail": [
+    "FAIL-CLOSED: reclaim steps not inserted exactly once in qnfo-containers-pilot/worker.js"
+   ],
+   "verdict": "undetermined"
+  },
+  {
+   "changed_files": [],
    "rc": 1,
    "script": "scripts/patch-cron-only-class.py",
    "tail": [
@@ -785,8 +804,8 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 65,
- "ts": "2026-09-29T19:30:11.568Z",
+ "total": 66,
+ "ts": "2026-09-29T19:31:17.878Z",
  "undetermined": [
   "scripts/affirm-veto-clause-targets-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
@@ -794,6 +813,7 @@
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
+  "scripts/patch-container-disk-reclaim-1.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
