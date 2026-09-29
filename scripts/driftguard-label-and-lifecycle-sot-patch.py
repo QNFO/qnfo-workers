@@ -1,40 +1,57 @@
 #!/usr/bin/env python3
-"""driftguard-label-and-lifecycle-sot-patch.py - issue 1370 (2026-09-29).
+"""driftguard-label-and-lifecycle-sot-patch.py - issue 1370 (2026-09-29, rev 3).
 
-Three verified defects, all reproduced from live output in one session.
+FOUR verified defects. Rev 1 and rev 2 both FAILED CLOSED in CI and never landed;
+the reason is itself a defect and is designed out in rev 3.
 
-A) scripts/deploy-drift-guard.py classified a worker as DRIFT on ANY inequality between
-   the repo VERSION constant and the live /health version. qnfo-lifecycle carries repo
-   constant "1.6.2" and live /health "1.6.2-cronconsolidate", so it reported DRIFT
-   forever -- while qnfo-lifecycle/worker.js and qnfo-lifecycle/deployed-current.worker.js
-   are the SAME sha (d3b76f91bea19cf5ad8acd802c993494d4de45d2) and the live bundle is
-   2 bytes larger (30295 vs 30293, trailing whitespace only). The guard's own docstring
-   filed that case under DEPLOY-UNLOGGED-MUTATION; that attribution is wrong and is
-   corrected here.
+E) ANCHOR-DRIFT-1 (why rev 1 and rev 2 never landed). Both used multi-line
+   exact-string anchors copied from a read of scripts/deploy-drift-guard.py taken
+   earlier in the same session. That file moved under them THREE times while the
+   patcher was being written:
+        9,781 B (331 lines)  <- rev 1 anchors derived here
+       15,139 B (330 lines)  <- rev 2 anchors derived here
+       17,531 B (365 lines)  <- rev 3 anchors derived here (current main)
+   Every multi-line anchor eventually matched 0 times and the patcher aborted by
+   design -- correctly, but uselessly. Rev 3 is LINE-ANCHORED: each edit locates
+   its target by a single-line regex predicate, asserts EXACTLY ONE match, and
+   never depends on surrounding lines or absolute line numbers. Idempotent: an
+   edit whose result is already present is skipped, not re-applied.
+
+A) scripts/deploy-drift-guard.py classified a worker as DRIFT on ANY inequality
+   between the repo VERSION constant and the live /health version. qnfo-lifecycle
+   carries repo constant "1.6.2" and live /health "1.6.2-cronconsolidate", so it
+   reported DRIFT forever -- while qnfo-lifecycle/worker.js and
+   qnfo-lifecycle/deployed-current.worker.js are byte-identical (30293 B each) and
+   the live bundle is 30295 B: a 2-byte trailing-whitespace delta, NOT a live
+   mutation. The guard's own docstring filed that under DEPLOY-UNLOGGED-MUTATION;
+   that attribution is wrong and is corrected here.
    FIX: a LABEL_MISMATCH class -- repo != live but cmp_ver() == 0 (numeric prefixes
    equal). Emitted in text and JSON, never counted toward the exit code, because a
-   redeploy cannot change a label and the --content sha check remains the authority on
-   whether the bytes differ.
+   redeploy cannot change a label and the --content sha check remains the authority
+   on whether the bytes differ.
 
 B) scripts/raw_put.py extracted the deployed version with r'var VERSION = "([^"]+)"'.
-   A worker using `const QNFO_VERSION = "..."` therefore landed in
-   qnfo-audit.deployment_history with version_id="unknown" -- a null version in the very
-   ledger DEPLOY-LEDGER-1 exists to keep honest.
-   FIX: widen to the alternation the guard already uses,
-   (?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*"([^"]+)", so the two tools cannot
+   A worker using `const QNFO_VERSION = "..."` (qnfo-lifecycle, qnfo-memory-mcp)
+   therefore landed in qnfo-audit.deployment_history with version_id="unknown" -- a
+   null version in the very ledger DEPLOY-LEDGER-1 exists to keep honest.
+   FIX: widen to the alternation the guard already uses, so the two tools cannot
    disagree about what version a worker is.
 
-C) qnfo-lifecycle answered /health from a hardcoded tag while the bundle constant said
-   something else -- two sources of truth for one fact, which is what made (A) fire.
-   FIX: /health derives from QNFO_VERSION and the constant is bumped to the tag that
-   describes this build. Applied identically to worker.js and deployed-current.worker.js;
-   the calling workflow asserts byte parity afterwards because mirror-guard flags a
-   divergent pair.
+C) qnfo-lifecycle carried THREE sources of truth for one fact: /health answered from
+   a hardcoded tag ("1.6.2-cronconsolidate"), the bundle constant said "1.6.2", and
+   the scheduled() heartbeat stamped qnfo-audit.fleet_heartbeat with the literal
+   "fabric-20260910" -- the only one of the three that actually reached the
+   heartbeat table. That divergence is what made (A) fire.
+   FIX: /health and the heartbeat both derive from QNFO_VERSION; the constant is
+   bumped to the tag describing this build. Applied identically to worker.js and
+   deployed-current.worker.js; the calling workflow asserts byte parity afterwards
+   because mirror-guard flags a divergent pair.
 
-FAIL-CLOSED: every edit requires exactly one occurrence; a miss raises and nothing is
-written. Re-running on an already-patched file is a no-op, not an error.
+FAIL-CLOSED: every edit requires exactly one match; a miss raises and NOTHING is
+written for that file. Re-running on an already-patched file is a no-op.
 """
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,138 +62,190 @@ LIFECYCLE = [
     os.path.join(ROOT, "qnfo-lifecycle", "deployed-current.worker.js"),
 ]
 
-GUARD_EDITS = [
-    (
-        "  DRIFT            repo VERSION != live /health version  (reconcile required)\n",
-        "  DRIFT            repo VERSION != live /health version, NUMERICALLY different\n"
-        "                   (reconcile required)\n"
-        "  LABEL_MISMATCH   repo VERSION != live /health version but the NUMERIC prefix\n"
-        "                   is equal (repo 1.6.2 vs live 1.6.2-cronconsolidate). Reported\n"
-        "                   in text and JSON, NEVER fatal: a redeploy cannot change a\n"
-        "                   label, and the repo artifact can be byte-identical to live.\n"
-        "                   The --content sha check stays the authority on the bytes\n"
-        "                   (issue 1370).\n",
-    ),
-    (
-        "the live bundle can be AHEAD of the repo (DEPLOY-UNLOGGED-MUTATION, issues\n"
-        "#1340-#1343, and the qnfo-lifecycle 1.6.2-cronconsolidate case). `--ahead` therefore\n",
-        "the live bundle can be AHEAD of the repo (DEPLOY-UNLOGGED-MUTATION, issues\n"
-        "#1340-#1343). The qnfo-lifecycle 1.6.2 vs 1.6.2-cronconsolidate case was NOT a\n"
-        "live mutation: both repo artifacts and the live bundle share sha d3b76f91 (30293\n"
-        "vs 30295 bytes, trailing whitespace only), so it is a LABEL_MISMATCH (issue\n"
-        "1370). `--ahead` therefore\n",
-    ),
-    (
-        "Exit: 0 clean (scoped: SYNC only) | 1 any DRIFT / CONTENT_DRIFT / NO_*_VERSION / LIVE_ERR\n",
-        "Exit: 0 clean (scoped: SYNC only) | 1 any DRIFT / CONTENT_DRIFT / NO_*_VERSION / LIVE_ERR\n"
-        "      LABEL_MISMATCH is reported but NEVER fatal (issue 1370).\n",
-    ),
-    (
-        "    drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []\n"
-        "    not_deployed, sync_workers, live_err = [], [], []\n",
-        "    drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []\n"
-        "    not_deployed, sync_workers, live_err = [], [], []\n"
-        "    label_mismatch = []\n",
-    ),
-    (
-        "        elif lv != rv:\n"
-        "            drift.append((d, rv, lv))\n"
-        "            if cmp_ver(rv, lv) == 1:\n"
-        "                ahead.append((d, rv, lv, rpath))\n",
-        "        elif lv != rv and cmp_ver(rv, lv) == 0:\n"
-        "            # LABEL_MISMATCH: identical numeric version, different build tag. Repo\n"
-        "            # and live agree on the version; only the label string differs. Not\n"
-        "            # drift: a redeploy cannot change a label, and --content is the\n"
-        "            # authority on whether the bytes actually differ.\n"
-        "            label_mismatch.append((d, rv, lv))\n"
-        "        elif lv != rv:\n"
-        "            drift.append((d, rv, lv))\n"
-        "            if cmp_ver(rv, lv) == 1:\n"
-        "                ahead.append((d, rv, lv, rpath))\n",
-    ),
-    (
-        '            "ahead": [{"worker": d, "repo": r, "live": l, "artifact": p}\n'
-        "                      for d, r, l, p in ahead],\n",
-        '            "ahead": [{"worker": d, "repo": r, "live": l, "artifact": p}\n'
-        "                      for d, r, l, p in ahead],\n"
-        '            "label_mismatch": [{"worker": d, "repo": r, "live": l}\n'
-        "                               for d, r, l in label_mismatch],\n"
-        '            "label_mismatch_count": len(label_mismatch),\n',
-    ),
-    (
-        "        for d, rv_, lv_ in drift:\n"
-        '            print(f"DRIFT {d}: repo={rv_} live={lv_}")\n',
-        "        for d, rv_, lv_ in drift:\n"
-        '            print(f"DRIFT {d}: repo={rv_} live={lv_}")\n'
-        "        for d, rv_, lv_ in label_mismatch:\n"
-        '            print(f"LABEL_MISMATCH {d}: repo={rv_} live={lv_} (numeric prefix equal)")\n',
-    ),
-    (
-        '        print(f"deploy-drift-guard[{tag}]: sync={len(sync_workers)} drift={len(drift)} "\n'
-        '              f"content_drift={len(content_drift)} ahead={len(ahead)} "\n',
-        '        print(f"deploy-drift-guard[{tag}]: sync={len(sync_workers)} drift={len(drift)} "\n'
-        '              f"label_mismatch={len(label_mismatch)} "\n'
-        '              f"content_drift={len(content_drift)} ahead={len(ahead)} "\n',
-    ),
-    (
-        "    problems = len(drift) + len(content_drift) + len(no_repo_ver) + len(no_live_ver) + len(live_err)\n",
-        "    # label_mismatch is deliberately NOT counted: it is a labelling defect, not a\n"
-        "    # deploy defect, and failing on it kept the gate permanently red for a worker\n"
-        "    # whose bytes are identical to live (issue 1370).\n"
-        "    problems = len(drift) + len(content_drift) + len(no_repo_ver) + len(no_live_ver) + len(live_err)\n",
-    ),
-]
+NEW_VER = "1.6.3-version-sot"
+OLD_VER = "1.6.2"
+OLD_TAG = "1.6.2-cronconsolidate"
+OLD_HB = "fabric-20260910"
 
-RAWPUT_EDITS = [
-    (
-        'VERSION_RE = re.compile(r\'var VERSION = "([^"]+)"\')\n',
-        "# LEDGER-VERSION-EXTRACT-1 (issue 1370): the old regex matched ONLY\n"
-        "# `var VERSION = \"...\"`. A worker using `const QNFO_VERSION = \"...\"`\n"
-        "# (qnfo-lifecycle, qnfo-memory-mcp) was recorded in deployment_history as\n"
-        "# version_id=\"unknown\", so the ledger DEPLOY-LEDGER-1 exists to keep honest\n"
-        "# carried a null version for a whole class of workers. Same alternation as\n"
-        "# scripts/deploy-drift-guard.py CONST, so the two tools cannot disagree.\n"
-        "VERSION_RE = re.compile(r'(?:var|let|const)\\s+(?:QNFO_)?VERSION\\s*=\\s*\"([^\"]+)\"')\n",
-    ),
-]
-
-LIFECYCLE_EDITS = [
-    ('const QNFO_VERSION = "1.6.2";', 'const QNFO_VERSION = "1.6.3-version-sot";'),
-    ('version: "1.6.2-cronconsolidate",', "version: QNFO_VERSION,"),
-]
+# The widened extractor. Built with repr() at write time so no escaping ambiguity
+# can creep in between this source and the bytes raw_put.py receives.
+VER_PATTERN = '(?:var|let|const)\\s+(?:QNFO_)?VERSION\\s*=\\s*"([^"]+)"'
 
 
-def patch(path, edits):
+def _indent(s):
+    return re.match(r"^(\s*)", s).group(1)
+
+
+def _find_one(lines, pat, what, path):
+    rx = re.compile(pat)
+    hits = [i for i, s in enumerate(lines) if rx.search(s)]
+    if len(hits) != 1:
+        raise SystemExit(
+            "FAIL-CLOSED: anchor %s matched %d lines in %s (need exactly 1)\nregex: %s"
+            % (what, len(hits), path, pat)
+        )
+    return hits[0]
+
+
+def patch_guard(text, path):
+    lines = text.split("\n")
+
+    # A1 -- docstring: DRIFT line becomes DRIFT + LABEL_MISMATCH description.
+    if "LABEL_MISMATCH   repo VERSION" not in text:
+        i = _find_one(lines, r"^\s*DRIFT\s+repo VERSION != live /health version",
+                      "guard-A1", path)
+        lines[i] = ("  DRIFT            repo VERSION != live /health version, "
+                    "NUMERICALLY different")
+        lines[i + 1:i + 1] = [
+            "                   (reconcile required)",
+            "  LABEL_MISMATCH   repo VERSION != live /health version but the NUMERIC prefix",
+            "                   is equal (repo 1.6.2 vs live 1.6.2-cronconsolidate). Reported",
+            "                   in text and JSON, NEVER fatal: a redeploy cannot change a",
+            "                   label, and the repo artifact can be byte-identical to live.",
+            "                   The --content sha check stays the authority on the bytes",
+            "                   (issue 1370).",
+        ]
+
+    # A2 -- exit-code contract line.
+    if "LABEL_MISMATCH is reported but NEVER fatal" not in text:
+        i = _find_one(lines, r"^Exit: 0 clean \(scoped: SYNC only\)", "guard-A2", path)
+        lines[i + 1:i + 1] = [
+            "      LABEL_MISMATCH is reported but NEVER fatal (issue 1370).",
+        ]
+
+    # A3 -- accumulator initialisation.
+    if "label_mismatch = []" not in text:
+        i = _find_one(
+            lines,
+            r"^\s*not_deployed, sync_workers, live_err, no_health = \[\], \[\], \[\], \[\]\s*$",
+            "guard-A3", path)
+        lines[i + 1:i + 1] = [_indent(lines[i]) + "label_mismatch = []"]
+
+    # A4 -- the classification branch. Inserted BEFORE the plain `elif lv != rv:`
+    # so a numerically-equal label never reaches the DRIFT class.
+    if "label_mismatch.append(" not in text:
+        i = _find_one(lines, r"^\s*elif lv != rv:\s*$", "guard-A4", path)
+        ind = _indent(lines[i])
+        lines[i:i + 1] = [
+            ind + "elif lv != rv and cmp_ver(rv, lv) == 0:",
+            ind + "    # LABEL_MISMATCH: identical numeric version, different build tag.",
+            ind + "    # A redeploy cannot change a label, and --content is the authority",
+            ind + "    # on whether the bytes actually differ (issue 1370).",
+            ind + "    label_mismatch.append((d, worker, rv, lv))",
+            ind + "elif lv != rv:",
+        ]
+
+    # A5 -- JSON output.
+    if '"label_mismatch_count"' not in text:
+        i = _find_one(lines, r'"no_health_route":', "guard-A5", path)
+        ind = _indent(lines[i])
+        lines[i + 1:i + 1] = [
+            ind + '"label_mismatch": [{"worker": w, "dir": d, "repo": r, "live": l}',
+            ind + '                   for d, w, r, l in label_mismatch],',
+            ind + '"label_mismatch_count": len(label_mismatch),',
+        ]
+
+    # A6 -- text output.
+    if "LABEL_MISMATCH {w}" not in text:
+        i = _find_one(
+            lines,
+            r'print\(f"DRIFT \{w\} \(dir \{d\}\): repo=\{rv_\} live=\{lv_\}"\)',
+            "guard-A6", path)
+        ind = _indent(lines[i])
+        lines[i + 1:i + 1] = [
+            ind + "for d, w, rv_, lv_ in label_mismatch:",
+            ind + '    print(f"LABEL_MISMATCH {w} (dir {d}): repo={rv_} live={lv_} '
+                  '(numeric prefix equal)")',
+        ]
+
+    # A7 -- summary line (implicit string concatenation; indentation is free).
+    if "label_mismatch={len(label_mismatch)}" not in text:
+        i = _find_one(
+            lines,
+            r'print\(f"deploy-drift-guard\[\{tag\}\]: sync=\{len\(sync_workers\)\} '
+            r'drift=\{len\(drift\)\}',
+            "guard-A7", path)
+        lines[i + 1:i + 1] = [
+            _indent(lines[i]) + 'f"label_mismatch={len(label_mismatch)} "',
+        ]
+
+    # A8 -- keep LABEL_MISMATCH out of the exit code.
+    if "label_mismatch is deliberately NOT counted" not in text:
+        i = _find_one(lines, r"^\s*problems = len\(drift\) \+ len\(content_drift\)",
+                      "guard-A8", path)
+        ind = _indent(lines[i])
+        lines[i:i] = [
+            ind + "# label_mismatch is deliberately NOT counted: it is a labelling defect,",
+            ind + "# not a deploy defect, and failing on it kept the gate permanently red",
+            ind + "# for a worker whose bytes are identical to live (issue 1370).",
+        ]
+
+    return "\n".join(lines)
+
+
+def patch_rawput(text, path):
+    if "LEDGER-VERSION-EXTRACT-1" in text:
+        return text
+    lines = text.split("\n")
+    i = _find_one(lines, r"^VERSION_RE = re\.compile\(r'var VERSION", "rawput-B1", path)
+    lines[i:i + 1] = [
+        "# LEDGER-VERSION-EXTRACT-1 (issue 1370): the old regex matched ONLY",
+        '# `var VERSION = "..."`. A worker using `const QNFO_VERSION = "..."`',
+        "# (qnfo-lifecycle, qnfo-memory-mcp) was recorded in deployment_history as",
+        '# version_id="unknown" -- a null version in the ledger DEPLOY-LEDGER-1',
+        "# exists to keep honest. Same alternation as deploy-drift-guard.py, so the",
+        "# two tools cannot disagree about what version a worker is.",
+        "VERSION_RE = re.compile(" + repr(VER_PATTERN) + ")",
+    ]
+    return "\n".join(lines)
+
+
+def patch_lifecycle(text, path):
+    lines = text.split("\n")
+
+    # C1 -- bump the constant (anchored: "1.6.2" is a prefix of the old tag).
+    if NEW_VER not in text:
+        i = _find_one(lines, r'^const QNFO_VERSION = "' + re.escape(OLD_VER) + r'";\s*$',
+                      "lifecycle-C1", path)
+        lines[i] = 'const QNFO_VERSION = "%s";' % NEW_VER
+
+    # C2 -- heartbeat literal -> constant.
+    if OLD_HB in text:
+        lines = [s.replace(OLD_HB, "QNFO_VERSION") for s in lines]
+
+    # C3 -- /health tag -> constant.
+    if OLD_TAG in text:
+        i = _find_one(lines, r'^\s*version: "' + re.escape(OLD_TAG) + r'",\s*$',
+                      "lifecycle-C3", path)
+        lines[i] = _indent(lines[i]) + "version: QNFO_VERSION,"
+
+    return "\n".join(lines)
+
+
+def patch_file(path, fn):
     if not os.path.isfile(path):
         raise SystemExit("FAIL-CLOSED: missing file " + path)
     with open(path, encoding="utf-8") as fh:
-        text = fh.read()
-    changed = False
-    for old, new in edits:
-        n = text.count(old)
-        if n == 0:
-            if new in text:
-                continue
-            raise SystemExit("FAIL-CLOSED: anchor not found in " + path + "\n---\n" + old[:220])
-        if n != 1:
-            raise SystemExit("FAIL-CLOSED: anchor occurs %d times in %s\n---\n%s"
-                             % (n, path, old[:220]))
-        text = text.replace(old, new)
-        changed = True
-    if changed:
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(text)
-        print("patched " + path)
-    else:
+        orig = fh.read()
+    new = fn(orig, path)
+    if new == orig:
         print("already applied: " + path)
-    return changed
+        return False
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(new)
+    print("patched " + path)
+    return True
 
 
 def main():
-    patch(GUARD, GUARD_EDITS)
-    patch(RAWPUT, RAWPUT_EDITS)
+    changed = []
+    for path, fn in ((GUARD, patch_guard), (RAWPUT, patch_rawput)):
+        if patch_file(path, fn):
+            changed.append(path)
     for p in LIFECYCLE:
-        patch(p, LIFECYCLE_EDITS)
+        if patch_file(p, patch_lifecycle):
+            changed.append(p)
+    print("CHANGED=" + ",".join(changed))
     return 0
 
 
