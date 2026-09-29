@@ -786,7 +786,7 @@
   "scripts/telemetry-truth-patch.py"
  ],
  "total": 65,
- "ts": "2026-09-29T19:30:11.568Z",
+ "ts": "2026-09-29T19:33:52.531Z",
  "undetermined": [
   "scripts/affirm-veto-clause-targets-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
