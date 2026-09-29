@@ -4,8 +4,16 @@ name: deploy-containers-pilot
 # workflow qnfo-containers-pilot/wrangler.toml references as the only path that transmits
 # [[containers]]. See the commit message for the full evidence chain.
 #
-# Trigger surface is deliberately broad (push to main + the pilot dir + dispatch) because
-# the failure mode being fixed is a trigger that never fired.
+# FAIL-OPEN-GATE-FIX (2026-09-29, issue #1485): the previous revision of this file exited 0
+# when PILOT_TOKEN was unavailable, i.e. it reported a green run for a run that verified
+# nothing - a fail-open gate on the exact issue it claims to close. That branch now fails
+# closed, and the verdict is recorded in ci-status/ so the outcome is observable in-band.
+#
+# WHY THIS FILE MUST BE EDITED TO RETRIGGER: [[containers]] is not a binding and not a
+# /content field, so scripts/raw_put.py and the ops cf_worker_deploy path cannot transmit
+# it - only `wrangler deploy` can. Editing this workflow (or qnfo-containers-pilot/**)
+# is therefore the retrigger mechanism. A retrigger commit must never carry [skip ci]:
+# that suppresses the very workflow that applies the fix (CI-TRIGGER-SKIP-1).
 
 on:
   push:
@@ -21,7 +29,7 @@ on:
         default: "false"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: deploy-containers-pilot
@@ -36,6 +44,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -66,34 +76,70 @@ jobs:
 
       - name: wait for propagation
         if: ${{ github.event.inputs.verify_only != 'true' }}
-        run: sleep 20
+        run: sleep 25
 
       - name: verify container config is live (closes #1485)
+        id: verify
         run: |
-          set -euo pipefail
-          # The pilot worker exposes /status behind PILOT_TOKEN. If PILOT_TOKEN is not in
-          # this repo's secrets the probe cannot run; report that explicitly rather than
-          # claiming success.
-          if [ -z "${PILOT_TOKEN:-}" ]; then
-            echo "::warning::PILOT_TOKEN not available to this workflow - container verification SKIPPED, #1485 NOT closed by this run"
-            exit 0
-          fi
+          set -uo pipefail
           base="https://qnfo-containers-pilot.q08.workers.dev"
+          if [ -z "${PILOT_TOKEN:-}" ]; then
+            echo "::error::PILOT_TOKEN not available to this workflow - verification impossible, failing closed (fail-open here is what let #1485 appear closed)"
+            echo "verdict=UNVERIFIED_NO_TOKEN" >> "$GITHUB_OUTPUT"
+            printf '%s' '{"ok":false,"reason":"no PILOT_TOKEN in secrets - verification impossible"}' > /tmp/status.json
+            exit 1
+          fi
           code="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
           echo "GET /status -> $code"
           cat /tmp/status.json || true
           echo
           if [ "$code" != "200" ]; then
             echo "::error::/status returned $code - container config still not live (#1485 open)"
+            echo "verdict=FAIL_HTTP_$code" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           if grep -q "Cannot read properties of undefined" /tmp/status.json; then
             echo "::error::/status reports the ctx.container-undefined signature - #1485 still open"
+            echo "verdict=FAIL_CTX_UNDEFINED" >> "$GITHUB_OUTPUT"
             exit 1
           fi
+          echo "verdict=PASS" >> "$GITHUB_OUTPUT"
           echo "container config verified live"
         env:
           PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+
+      - name: record verdict artifact
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - "${{ steps.verify.outputs.verdict }}" "${{ job.status }}" <<'PY'
+          import json, os, sys, datetime
+          verdict = sys.argv[1] or "NO_VERDICT"
+          job = sys.argv[2] if len(sys.argv) > 2 else "unknown"
+          rec = {
+              "workflow": "deploy-containers-pilot",
+              "issue": "#1485",
+              "verdict": verdict,
+              "job_status": job,
+              "head": os.environ.get("GITHUB_SHA", "")[:12],
+              "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+          with open("ci-status/deploy-containers-pilot.json", "w") as fh:
+              json.dump(rec, fh, indent=1)
+          print(json.dumps(rec))
+          PY
+          git config user.name qnfo-selfheal-bot
+          git config user.email selfheal-bot@qnfo.org
+          git add ci-status/deploy-containers-pilot.json
+          git commit -m "chore(ci-status): deploy-containers-pilot verdict [skip ci]" || echo "no change to commit"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "artifact pushed"; break
+            fi
+            echo "push attempt $i lost the race; retrying"
+            sleep $((i * 3))
+          done
 
       - name: summarize outcome
         if: always()
@@ -105,3 +151,5 @@ jobs:
           echo "A green run means \`wrangler deploy\` transmitted the [[containers]] block AND" >> "$GITHUB_STEP_SUMMARY"
           echo "the authenticated /status probe came back 200 without the" >> "$GITHUB_STEP_SUMMARY"
           echo "\`ctx.container\`-undefined signature. A red run is fail-closed and wipes nothing." >> "$GITHUB_STEP_SUMMARY"
+          echo "A red run with verdict=UNVERIFIED_NO_TOKEN means the deploy may have succeeded" >> "$GITHUB_STEP_SUMMARY"
+          echo "but could not be verified - add PILOT_TOKEN to repository secrets." >> "$GITHUB_STEP_SUMMARY"
