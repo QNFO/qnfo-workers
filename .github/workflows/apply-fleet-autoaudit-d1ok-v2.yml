@@ -1,0 +1,154 @@
+name: apply-fleet-autoaudit-d1ok-v2
+
+# D1-REST-ENVELOPE-OK-1 v2: apply the fail-closed patch that stops fleet-autoaudit.py from
+# classifying every SUCCESSFUL D1 write as a failure.
+#
+# WHY v2 (v1 = .github/workflows/apply-fleet-autoaudit-d1ok.yml, run 36597615732):
+#   v1's patcher applied all four anchors (1/1 each) and then ABORTED in its own
+#   post-condition, because that check counted the BARE literal res.get("ok") across the
+#   whole file -- which includes the helper text the patch itself inserts (3 matches).
+#   v1's assert step repeats the same naive scan with grep, so it would fail even against a
+#   correct patch. A bare-literal scan cannot distinguish a legacy CALL SITE from a mention
+#   in prose. v2 asserts call-site patterns only (grep -F, fixed strings).
+#
+# WHY A WORKFLOW AND NOT A DIRECT COMMIT: the fix must be applied to a 365-line file that is
+# owned by several concurrent writers. A deterministic, anchor-asserting patcher is safer than
+# a hand-typed full-file rewrite, and the patcher aborts WITHOUT writing if any anchor has
+# been overtaken (ANCHOR-INVALIDATION-RED-JOB-1, issue #1383).
+#
+# PATH FILTER NOTE (AUDIT-CADENCE-PATHLOCK-1, issue #1385): this workflow's push filter lists
+# BOTH the patcher and this file, so a push of either re-arms the apply. It deliberately does
+# NOT filter on scripts/fleet-autoaudit.py, so a concurrent writer touching only the target
+# cannot silently strand this repair.
+#
+# COMMIT-BACK NOTE: the SOURCE patch is committed only on success; the ci-status artifact is
+# committed even on failure, because a failed run is exactly the run whose outcome must be
+# readable (APPLY-WORKFLOW-ARTIFACT-NOT-PERSISTED-1 / GREEN-ONLY-COMMITBACK).
+#
+# DOWNSTREAM EFFECT ONCE GREEN: main() stops exiting rc=1 on every run, so the auto-deploy
+# step in fleet-autodeploy.yml (custom if:, implicitly ANDed with success()) becomes reachable
+# again -- restoring automatic worker updates fleet-wide. Expect d1_writes_ok=110 and
+# d1_write_failures=[] in the next audits/fleet-autoaudit-<date>.json.
+
+on:
+  push:
+    paths:
+      - 'scripts/fleet-autoaudit-d1ok-patch-v2.py'
+      - '.github/workflows/apply-fleet-autoaudit-d1ok-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-fleet-autoaudit-d1ok-v2
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply patch (fail-closed, idempotent)
+        id: patch
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/fleet-autoaudit-d1ok-patch-v2.py 2>&1 | tee /tmp/patch.log
+          echo "rc=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Syntax gate (py_compile)
+        id: syntax
+        if: steps.patch.outputs.rc == '0'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 -m py_compile scripts/fleet-autoaudit.py 2>&1 | tee /tmp/syntax.log
+          echo "rc=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      # v2: fixed-string CALL-SITE assertions. The bare literal is deliberately NOT grepped,
+      # because the helper text this patch inserts legitimately contains it.
+      - name: Assert legacy call sites are gone (call-site patterns only)
+        id: assert
+        if: steps.patch.outputs.rc == '0'
+        continue-on-error: true
+        run: |
+          set +e
+          set -o pipefail
+          f=scripts/fleet-autoaudit.py
+          fail=0
+          if grep -n -F 'if res.get("ok"):' "$f"; then echo "::error::legacy write_audit_rows call site still present"; fail=1; fi
+          if grep -n -F 'if not res.get("ok"):' "$f"; then echo "::error::legacy purge_stale call site still present"; fail=1; fi
+          if [ "$(grep -c -F 'def d1_ok(res):' "$f")" != "1" ]; then echo "::error::d1_ok not defined exactly once"; fail=1; fi
+          if [ "$(grep -c -F 'def d1_err(res):' "$f")" != "1" ]; then echo "::error::d1_err not defined exactly once"; fail=1; fi
+          if [ "$(grep -c -F 'if d1_ok(res):' "$f")" != "1" ]; then echo "::error::new write_audit_rows call site not exactly once"; fail=1; fi
+          if [ "$(grep -c -F 'if not d1_ok(res):' "$f")" != "1" ]; then echo "::error::new purge_stale call site not exactly once"; fail=1; fi
+          if [ "$(grep -c -F 'd1_err(res)' "$f")" != "2" ]; then echo "::error::d1_err call sites != 2"; fail=1; fi
+          if [ "$fail" != "0" ]; then
+            echo "rc=1" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "rc=0" >> "$GITHUB_OUTPUT"
+
+      - name: Write ci-status artifact
+        if: always()
+        run: |
+          mkdir -p ci-status
+          cat > ci-status/fleet-autoaudit-d1ok-v2.json <<JSON
+          {
+            "workflow": "apply-fleet-autoaudit-d1ok-v2",
+            "issue": "D1-REST-ENVELOPE-OK-1",
+            "supersedes": "apply-fleet-autoaudit-d1ok (v1, run 36597615732)",
+            "run_id": "${{ github.run_id }}",
+            "run_attempt": "${{ github.run_attempt }}",
+            "sha": "${{ github.sha }}",
+            "patch_rc": "${{ steps.patch.outputs.rc }}",
+            "syntax_rc": "${{ steps.syntax.outputs.rc }}",
+            "assert_rc": "${{ steps.assert.outputs.rc }}",
+            "patch_log_tail": $(python3 -c 'import json,os;print(json.dumps(open("/tmp/patch.log").read()[-600:] if os.path.exists("/tmp/patch.log") else "no log"))'),
+            "note": "d1_writes_ok must be 110 and d1_write_failures [] in the next fleet-autoaudit artifact"
+          }
+          JSON
+          echo "--- status ---"; cat ci-status/fleet-autoaudit-d1ok-v2.json
+
+      - name: Commit patched source (green only)
+        if: steps.patch.outputs.rc == '0' && steps.syntax.outputs.rc == '0' && steps.assert.outputs.rc == '0'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -A -- scripts/fleet-autoaudit.py
+          if git diff --cached --quiet; then
+            echo "no source change staged (already patched)"; exit 0
+          fi
+          git commit -m "fix(fleet-autoaudit): D1-REST-ENVELOPE-OK-1 read the real D1 envelope [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then echo "source pushed on attempt $i"; exit 0; fi
+            echo "push rejected (attempt $i) - rebasing"
+            git pull --rebase --autostash origin main
+            sleep $((i * 3))
+          done
+          echo "::error::source push failed after 5 attempts (concurrent writers)"
+          exit 1
+
+      - name: Commit ci-status artifact (always, rebase + retry)
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -A -- ci-status/fleet-autoaudit-d1ok-v2.json || true
+          if git diff --cached --quiet; then echo "no artifact change"; exit 0; fi
+          git commit -m "chore(ci-status): fleet-autoaudit-d1ok-v2 [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then echo "artifact pushed on attempt $i"; exit 0; fi
+            echo "push rejected (attempt $i) - rebasing"
+            git pull --rebase --autostash origin main
+            sleep $((i * 3))
+          done
+          echo "::error::artifact push failed after 5 attempts (concurrent writers)"
+          exit 1
