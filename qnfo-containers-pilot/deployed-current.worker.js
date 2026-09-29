@@ -2,7 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.1-start-race-lock";
+// ENOSPC-CACHE-1: apt cache + .deb archives reclaimed on cold start (issue #1445)
+var VERSION = "1.0.2-apt-clean-enospc";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -96,7 +97,7 @@ var ShellContainer = class {
     await this.run([
       "bash",
       "-c",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ripgrep 2>&1 | tail -3; git config --global user.email ops@qnfo.org; git config --global user.name 'QNFO ops'; echo INIT_DONE"
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ripgrep 2>&1 | tail -3; apt-get clean >/dev/null 2>&1 || true; rm -rf /var/cache/apt/archives/*.deb >/dev/null 2>&1 || true;  git config --global user.email ops@qnfo.org; git config --global user.name 'QNFO ops'; echo INIT_DONE"
     ]);
     this._initialized = true;
   }
