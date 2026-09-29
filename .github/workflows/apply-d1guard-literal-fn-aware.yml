@@ -8,6 +8,18 @@ name: apply-d1guard-literal-fn-aware
 # the ORPHANED-APPLIER-1 failure mode: a fix that exists in the repo but has no
 # execution path to live. The workflow below is that execution path.
 #
+# VERSION-PIN-AGNOSTIC-1 (issue 1355, 2026-09-29): the deploy preflight previously
+# hard-pinned
+#     var VERSION = "2.37.18-d1-guard-literal-fn-aware";
+# while the artifact on main had already advanced to 2.37.19-d1-guard-literal-fn-aware.
+# grep -cF therefore returned 0, `test 0 = 1` failed, and the deploy job NEVER RAN: the
+# fix was committed to main at 12:28Z and live stayed at 2.37.17 for the rest of the
+# day. This is STALE-PREFLIGHT-1 recurring exactly one commit later. The preflight now
+# derives the version from the artifact and asserts the GUARD PROPERTY -- the
+# literal-stripping scanner is present, the REPLACE INTO re-check is present, the legacy
+# blanket-rejection message is gone, and source/mirror are byte-identical -- instead of
+# matching a frozen version literal. A version pin can no longer block a real fix.
+#
 # WHAT IT FIXES (issue 1349, reproduced live before the patch):
 #   ops_d1_query  SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE '%delete%'
 #     -> {"ok":false,"rejected":true,"error":"read-only SELECT/WITH only - mutation
@@ -21,7 +33,7 @@ name: apply-d1guard-literal-fn-aware
 # stronger where it matters.
 #
 # DEPLOY: scripts/raw_put.py PUTs to the CF API /content endpoint, which updates the
-# CODE ONLY and preserves all 48 live bindings (BINDING-PRESERVATION-1). raw_put.py is
+# CODE ONLY and preserves all live bindings (BINDING-PRESERVATION-1). raw_put.py is
 # fail-closed (exit 3, deploys nothing on error). The applier writes worker.js AND its
 # deployed-current mirror in the same commit so mirror-guard stays green and the
 # qnfo-fleet-control redeploy cron cannot revert the fix.
@@ -126,16 +138,23 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Preflight - artifact must carry the guard fix
+      - name: Preflight - artifact must carry the guard fix (version-pin-agnostic)
+        id: pre
         run: |
           set -euo pipefail
-          test "$(grep -cF 'var VERSION = "2.37.18-d1-guard-literal-fn-aware";' qnfo-ops/worker.js)" = "1"
-          test "$(grep -cF 'd1ReadOnlyGuard' qnfo-ops/worker.js)" = "2"
-          test "$(grep -cF 'reindex|replace|truncate' qnfo-ops/worker.js || true)" = "0"
+          VER="$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/^var VERSION = "//; s/";$//')"
+          echo "artifact_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "artifact VERSION=$VER"
+          case "$VER" in
+            *d1-guard-literal*) echo "version is a d1-guard-literal revision" ;;
+            *) echo "REFUSING: artifact is not a d1-guard-literal revision ($VER)"; exit 1 ;;
+          esac
+          test "$(grep -cF 'd1StripLiterals' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'd1ReadOnlyGuard' qnfo-ops/worker.js || true)" -ge 1
           test "$(grep -cF 'replace\s+into' qnfo-ops/worker.js || true)" -ge 1
           test "$(grep -cF 'mutation keywords are rejected anywhere' qnfo-ops/worker.js || true)" = "0"
           cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
-          echo "preflight OK: guard fix present, legacy message gone, mirrors byte-identical"
+          echo "preflight OK: literal-aware guard present, legacy blanket message gone, mirrors byte-identical"
 
       - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
         env:
@@ -147,13 +166,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECT_VER: ${{ steps.pre.outputs.artifact_version }}
         run: |
           set -euo pipefail
           curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
             -o /tmp/live.js
           echo "live-bytes=$(wc -c < /tmp/live.js)"
-          test "$(grep -cF '2.37.18-d1-guard-literal-fn-aware' /tmp/live.js || true)" -ge 1
-          test "$(grep -cF 'd1ReadOnlyGuard' /tmp/live.js || true)" -ge 2
+          echo "expected-version=$EXPECT_VER"
+          test "$(grep -cF "$EXPECT_VER" /tmp/live.js || true)" -ge 1
+          test "$(grep -cF 'd1StripLiterals' /tmp/live.js || true)" -ge 1
           test "$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js || true)" = "0"
-          echo "VERIFIED: live qnfo-ops carries D1-GUARD-LITERAL-AND-FN-AWARE-1"
+          echo "VERIFIED: live qnfo-ops carries the literal+function-aware D1 read-only guard"
