@@ -236,6 +236,7 @@ def main():
 
     drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []
     not_deployed, sync_workers, live_err, no_health = [], [], [], []
+    seen_workers = set()
 
     for d in sorted(os.listdir(ROOT)):
         if not os.path.isdir(os.path.join(ROOT, d)):
@@ -248,6 +249,12 @@ def main():
         worker = wrangler_name(d) or d
         if wanted and d not in wanted and worker not in wanted:
             continue
+        # DUP-WORKER-1: two directories can resolve to the SAME deployed worker.
+        # Emitting it twice produced the malformed note
+        # "NO_REPO_VERSION+NO_REPO_VERSION" and double-counted the fleet.
+        if worker in seen_workers:
+            continue
+        seen_workers.add(worker)
         rv, rpath, rtext = repo_artifact(d)
         live, lv = live_result(worker)
         if not live and lv is None:
@@ -257,7 +264,10 @@ def main():
             if deployed is None or worker in deployed:
                 no_health.append((d, worker))
             else:
-                not_deployed.append(d)
+                # NOT-DEPLOYED-IDENTITY-1: emit the RESOLVED worker, not the
+                # directory. Mixing the two spaces in one column made a
+                # directory name look like a worker name (issue #1377).
+                not_deployed.append(worker)
             continue
         if not live:  # ERR (not 404)
             live_err.append((d, worker, lv))
