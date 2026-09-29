@@ -1,27 +1,35 @@
-# CONTAINER-CONFIG-RESTORE-1 (2026-09-29, issue #1485). LIVE EVIDENCE, NOT INFERENCE:
-#   deployment_history id 172 -> qnfo-containers-pilot deployed 2026-09-29T19:30:35.100Z by
-#   "qnfo-ops:cf_worker_deploy" with notes "bindings_preserved=2". GET /bindings returned
-#   ONLY {d1 AUDIT, secret PILOT_TOKEN, durable_object_namespace SHELL_CONTAINER} - the
-#   [[containers]] block below is not a binding, so the redeploy rebuilt metadata without
-#   it. First cloud_ops_events row of kind=container.error with text
-#   "Cannot read properties of undefined (reading 'running')" landed at 19:30:43.591Z,
-#   i.e. 8 SECONDS after that deploy. Blast radius: shell_exec, exec_python, exec_node,
-#   container_install, git_clone_exec, container_workspace_exec, shell_pipeline.
-#   This commit deliberately touches wrangler.toml to fire deploy-containers-pilot.yml,
-#   because wrangler deploy is the only path that transmits [[containers]].
+# qnfo-containers-pilot — Cloudflare Containers pilot (bash / python3.12 / node22 on Firecracker)
 #
-#   RETRIGGER NOTE (2026-09-29): the first attempt (commit 129f0a2b) carried "[skip ci]"
-#   in its message, which suppresses GitHub Actions push triggers, so
-#   deploy-containers-pilot.yml never ran and ci-status/ gained no
-#   deploy-containers-pilot.json. This retrigger deliberately uses a message with NO skip
-#   token. A deploy trigger must never carry [skip ci] - that is the CI-TRIGGER-SKIP-1
-#   class: the fix commit disables the workflow that would apply the fix.
+# RETRIGGER-5 (2026-09-29, qnfo-ops autonomous session; issues #1485 / #1487 / #1493).
+# MEASURED STATE AT THIS COMMIT (live reads, not inference):
+#   - GET /bindings -> exactly ONE binding: secret PILOT_TOKEN. The `AUDIT` d1 binding and the
+#     `SHELL_CONTAINER` durable-object binding were DESTROYED at 2026-09-29T19:45:02Z by the
+#     CONTAINER-CONFIG-RESTORE-4 /content PUT, which omitted `bindings` entirely. Falsification
+#     recorded in scripts/restore_container_config.py (RESTORE-5 docstring): omitting `bindings`
+#     is binding-DESTROYING, not binding-preserving; only secret_text survives (it lives
+#     outside the upload metadata).
+#   - GET /status -> {"ok":false,"error":"Cannot read properties of undefined (reading 'running')"}
+#     i.e. ctx.container is undefined => the [[containers]] block is absent from script metadata.
+#   - shell_exec / exec_python / exec_node / shell_pipeline / git_clone_exec / container_install
+#     all fail: the pilot calls env.SHELL_CONTAINER.idFromName and the DO binding is gone.
+#   - wrangler deploy fails closed with [provisioned_class_missing_from_config]: class
+#     'ShellContainer' has a provisioned DO namespace (f3e32894405c49f9b33e8612c6d27861) but is
+#     not declared in `exports`. The /content path must therefore send `exports` explicitly as
+#     {"ShellContainer": {"type": "durable-object", "storage": "sqlite"}} — that shape returned
+#     HTTP 200 at 19:45:02Z (named_handlers: [{"name":"ShellContainer","handlers":["class"]}]).
 #
-# DO-MIGRATION-NOTE-1 2026-09-22 (R3/F2): a `wrangler deploy --dry-run` validates
-# client-side structure ONLY - it cannot prove the server accepts this migration. The
-# class already exists (created via the API), so a real wrangler deploy may FAIL CLOSED
-# (Cloudflare rejects a creating migration for an already-depended-on class). It never
-# wipes. The operative deploy path remains scripts/raw_put.py (binding-preserving).
+# This commit re-fires BOTH workflows whose trigger paths cover this file:
+#   .github/workflows/deploy-containers-pilot.yml        (wrangler path, transmits [[containers]])
+#   .github/workflows/restore-container-config-1485.yml  (/content-metadata path, RESTORE-5)
+# Decisive artifact: ci-status/restore-container-config-1485.json with marker
+# CONTAINER-CONFIG-RESTORE-5 and post_settings.bindings == [AUDIT, PILOT_TOKEN, SHELL_CONTAINER].
+#
+# CI-TRIGGER-SKIP-1: this commit deliberately carries NO skip token — a deploy trigger must
+# never disable the workflow that would apply the fix.
+#
+# This revision condenses the accumulated comment history (CONTAINER-CONFIG-RESTORE-1,
+# RETRIGGER-1..4, DO-MIGRATION-NOTE-1, CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1) into this
+# header. All OPERATIVE config below is preserved verbatim.
 
 name = "qnfo-containers-pilot"
 main = "worker.js"
@@ -29,28 +37,8 @@ compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-# qnfo-containers-pilot v1.0.0 — Full-stack shell execution on Cloudflare Containers
-# Image: nikolaik/python-nodejs:python3.12-nodejs22 (Python 3.12 + Node.js 22 + npm)
-# Startup: installs git + ripgrep + curl via apt-get on first cold start (~10-15s)
-# Scale-to-zero: idle containers shut down automatically (cost = $0 when idle)
-# Cost: $0.00002/vCPU-sec + $0.0000025/GiB-sec (utilization-based, Firecracker VM)
-# BINDING-PRESERVATION-1: bindings verified from live CF API 2026-09-13
-
-# CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1 (issue #1456) — instance_type lite -> basic.
-# MEASURED 2026-09-29: /dev/vdc 1.9G total / 1.7G used / 121M free (94%). /usr = 1494M
-# (base image), /workspace 39M, apt cache 12K, /root/.cache 1M, /tmp 1M — the caches were
-# ALREADY clean, so cache hygiene cannot close the gap (the ENOSPC-CACHE-1 fix in worker.js
-# v1.0.2 reclaimed the apt cache but not the capacity gap). A manual reclaim freed 198M
-# (94% -> 83%), leaving the ~1.5G image as the floor.
-# lite  = 1/16 vCPU, 256 MiB RAM, 2 GB disk  (too small; also the source of transient
-#         `container error` under git+node+python)
-# basic = 1/4 vCPU,  1 GiB RAM,   4 GB disk  (~2.4G free over the image)
-# DEPLOY BLOCKER: instance_type is part of the [[containers]] config, NOT a binding and
-# NOT a /content field — GET .../bindings returns only {d1 AUDIT, secret PILOT_TOKEN,
-# durable_object_namespace SHELL_CONTAINER}. So scripts/raw_put.py (/content PUT) and the
-# ops cf_worker_deploy path CANNOT apply this and risk dropping the container config;
-# applying it requires `wrangler deploy` of this directory with a CF token.
-
+# CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1 (issue #1456): lite = 1/16 vCPU, 256 MiB RAM, 2 GB
+# disk (94% full) — the source of transient container errors. basic = 1/4 vCPU, 1 GiB RAM, 4 GB.
 [[containers]]
 class_name = "ShellContainer"
 image = "docker.io/nikolaik/python-nodejs:python3.12-nodejs22"
@@ -71,59 +59,3 @@ database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 # Auth: wrangler secret put PILOT_TOKEN
-
-# RETRIGGER-2 (2026-09-29, qnfo-ops, issue #1485) — empirical Actions-trigger test.
-# EVIDENCE: commit a59d0b84 (2026-09-29T19:33:58Z, message contains NO skip token) touched
-# this exact file, and yet:
-#   - ci-status/deploy-containers-pilot.json does NOT exist in the repo (the workflow's
-#     artifact step is `if: always()`, so any run that started would have written it);
-#   - deployment_history ids 175/177/178/179 (19:34:11 -> 19:35:04Z) are ALL /content-only
-#     deploys ("qnfo-ops:cf_worker_deploy" bindings_preserved=2, and
-#     "scripts/raw_put.py /content deploy") - none is a wrangler deploy;
-#   - a live probe still returns status.ok=false
-#     "Cannot read properties of undefined (reading 'running')" and GET /bindings still
-#     returns 3 bindings with no containers block.
-# Therefore push-triggered Actions for this workflow appear not to execute. This commit
-# re-fires the trigger with no skip token. If ci-status/deploy-containers-pilot.json still
-# does not appear, the CI layer itself (not the wrangler command) is the root cause and the
-# container config must be restored through a Cloudflare-side path instead.
-#
-# RETRIGGER-3 (2026-09-29, qnfo-ops, issue #1485) — FALSIFIES the RETRIGGER-2 hypothesis.
-# RETRIGGER-2 concluded "push-triggered Actions for this workflow appear not to execute".
-# That inference was UNFALSIFIED, not verified: the workflow FILE did not exist on main at
-# a59d0b84 (19:33:58Z) — it was added around 19:36Z, per its own header ("This file did not
-# exist"). GitHub cannot create a run for a workflow that is not yet on the default branch,
-# so zero runs was the EXPECTED result and is not evidence of a broken CI layer.
-# COUNTER-EVIDENCE that CI push triggers DO work in this repo: ci-status/apply-pending.json
-# (workflow apply-pending-patches, apply_rc=0, job_status=success, head 9f164fbc) and
-# ci-status/unmangle-worker-js.json (guard_exit=success, repair_exit=success, head 52411213)
-# were both written on 2026-09-29 19:34-19:36Z, i.e. by push-triggered runs.
-# This commit is the controlled test: workflow file present on main + trigger path touched +
-# NO skip token. Decisive artifact: ci-status/deploy-containers-pilot.json.
-# If that artifact appears with wrangler_outcome=success, #1485 is closed by CI. If it
-# appears with a failure tail, the tail names the real blocker (e.g. DO migration rejection,
-# missing CLOUDFLARE_API_TOKEN, or wrangler auth). If it does NOT appear at all while other
-# workflows' artifacts continue to land, the per-workflow trigger is the fault and the
-# restore must go through a Cloudflare-side deploy path that carries containers metadata.
-
-# RETRIGGER-4 (2026-09-29T~19:5xZ, qnfo-ops autonomous session, issue #1485) — MEASURED STATE.
-# This commit re-fires BOTH workflows whose trigger paths cover this file:
-#   .github/workflows/deploy-containers-pilot.yml      (wrangler path, transmits [[containers]])
-#   .github/workflows/restore-container-config-1485.yml (/content-metadata path, CONTAINER-CONFIG-RESTORE-4)
-# Ground truth at RETRIGGER-4 time, all from live reads (not inference):
-#   - GET https://qnfo-containers-pilot.q08.workers.dev/health -> HTTP 200, version
-#     1.0.3-clone-egress-timeout-fallback (worker JS is live and healthy);
-#   - GET /status -> {"ok":false,"error":"Cannot read properties of undefined (reading 'running')"}
-#     => ctx.container is undefined => the [[containers]] block is absent from script metadata;
-#   - GET /bindings -> exactly 3: d1 AUDIT, secret PILOT_TOKEN, durable_object_namespace
-#     SHELL_CONTAINER. No containers entry is representable in this endpoint at all, which is
-#     precisely why BINDING-PRESERVATION-1 could never protect it;
-#   - deployment_history ids 172/175/177/178/179/182 are ALL /content-only deploys
-#     (qnfo-ops:cf_worker_deploy and scripts/raw_put.py). Zero wrangler deploys on record.
-#   - ci-status/restore-container-config-1485.json is ABSENT from the ci-status listing, so
-#     the CONTAINER-CONFIG-RESTORE-4 workflow had never completed a run at that time.
-# The decisive artifact for this trigger is ci-status/restore-container-config-1485.json,
-# which captures BOTH the wrangler log tail and the /content-metadata restore log tail plus
-# a pre/post GET /settings read-back. If it lands with post_settings.containers non-empty,
-# #1485 is closed by CI. If it lands with both tails red, the failure text is finally
-# recoverable (the CI-ARTIFACT-NO-FAILURE-TEXT-1 defect that made prior iterations blind).
