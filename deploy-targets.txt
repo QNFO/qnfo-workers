@@ -1,0 +1,13 @@
+# canonical-deploy targets: <worker> [source-path]
+#
+# Deploys here go through qnfo-ops POST /ops/deploy, which performs the CANONICAL sequence:
+#   deploy-guard lock (fail-closed) -> GitHub source fetch -> binding-preserving /content PUT
+#   -> live version verify -> guard /ledger POST -> CF /schedules PUT from wrangler.toml
+#
+# Reason this manifest exists (2026-09-29): raw_put.py deploys produced
+# DEPLOY-UNLOGGED-MUTATION + DEPLOY-UNCOORDINATED-DEPLOY (issues #1340-#1343) and left
+# wrangler.toml [triggers] crons INERT (#1337). Re-deploying through /ops/deploy clears
+# both classes at the root: it writes the ledger row, takes the lock, and applies schedules.
+#
+fleet-exec fleet-exec/worker.js
+qnfo-social qnfo-social/worker.js
