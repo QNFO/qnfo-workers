@@ -4,8 +4,8 @@
   "applied-now": 1,
   "error": 1,
   "stale-anchor": 3,
-  "superseded": 14,
-  "undetermined": 12
+  "superseded": 10,
+  "undetermined": 8
  },
  "errored": [
   "scripts/patch-cron-only-class.py"
@@ -114,15 +114,11 @@
   {
    "changed_files": [
     " M ci-status/applier-doctor.json",
-    " M qnfo-ai/deployed-current.worker.js",
-    " M qnfo-ai/worker.js",
     " M qnfo-cloud-ops/deployed-current.worker.js",
     " M qnfo-cloud-ops/worker.js",
     " M qnfo-cloud-ops/wrangler.toml",
-    " M qnfo-containers-pilot/worker.js",
     " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js",
-    " M scripts/raw_put.py"
+    " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -135,8 +131,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(5): affirm-veto-clause-targets-patch.py, cloud-ops-cron-dow-patch.py, containers-pilot-status-guard-patch.py, patch-ensemble-budget-3.py, rawput-schedules-ua-patch.py",
-    "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py, patch-cron-only-class-1.py",
+    "LANDED(2): affirm-veto-clause-targets-patch.py, cloud-ops-cron-dow-patch.py",
+    "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -151,28 +147,6 @@
    "script": "scripts/attachguard-xml-form-patch.py",
    "tail": [
     "FAIL-CLOSED: pre-patch VERSION 'var VERSION = \"2.37.12-fm-stream-reasoning\";' not found in qnfo-ops/worker.js"
-   ],
-   "verdict": "superseded"
-  },
-  {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
-   ],
-   "outcome_present_in": [
-    "qnfo-ops/deployed-current.worker.js :: AUDIT-META-JSON-TRUNCATION-1",
-    "qnfo-ops/deployed-current.worker.js :: ISSUE-LEDGER-EXCLUSION-BLIND-1",
-    "qnfo-ops/deployed-current.worker.js :: AFFIRM-GUARD-VETO-2",
-    "qnfo-ops/deployed-current.worker.js :: function snippet(v, n)",
-    "qnfo-ops/deployed-current.worker.js :: _truncated",
-    "qnfo-ops/deployed-current.worker.js :: ISSUE-LEDGER-EXCLUSION-BLIND-1 sweep"
-   ],
-   "rc": 0,
-   "script": "scripts/audit-meta-json-exclusion-patch.py",
-   "tail": [
-    "snippet_json_safe: 3",
-    "ledger_sweep: 1",
-    "PATCH_APPLIED"
    ],
    "verdict": "superseded"
   },
@@ -243,45 +217,6 @@
     "FAIL-CLOSED: anchor 'constructor' matched 0 times (expected exactly 1)"
    ],
    "verdict": "undetermined"
-  },
-  {
-   "changed_files": [
-    " M qnfo-containers-pilot/worker.js"
-   ],
-   "declared_signals": [
-    "CONTAINER-STATUS-GUARD-1",
-    "CONN-LOST-RETRY-1",
-    "VERSION-ANCHOR-DRIFT-1",
-    "CONTAINER-BINDING-MISSING-1",
-    "this.ctx.container.running",
-    "this.ctx.container.exec"
-   ],
-   "rc": 0,
-   "script": "scripts/containers-pilot-status-guard-patch.py",
-   "tail": [
-    "  ok _doStart-running",
-    "  ok run-retry",
-    "  ok status"
-   ],
-   "verdict": "undetermined"
-  },
-  {
-   "changed_files": [
-    " M qnfo-ops/worker.js"
-   ],
-   "outcome_present_in": [
-    "qnfo-ops/worker.js :: CONTINUE-DIRECTIVE-INHERIT-1",
-    "qnfo-ops/worker.js :: isAutoContinueDirective(_c)",
-    "qnfo-ops/worker.js :: return _fb;",
-    "qnfo-ops/worker.js :: \\bno\\b"
-   ],
-   "rc": 0,
-   "script": "scripts/continue-directive-inherit-patch.py",
-   "tail": [
-    "OK: CONTINUE-DIRECTIVE-INHERIT-1 applied to qnfo-ops/worker.js; var VERSION = \"2.37.28-affirm-veto\"; -> var VERSION = \"2.37.29-continue-inherit\";",
-    "assertions: marker present; version bumped; skip hook present; fallback return present; old veto token list removed; bare no word-bounded"
-   ],
-   "verdict": "superseded"
   },
   {
    "changed_files": [],
@@ -574,55 +509,6 @@
   },
   {
    "changed_files": [],
-   "declared_signals": [
-    "..",
-    "DISK-RECLAIM-1",
-    "CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1",
-    "ENOSPC-CACHE-1",
-    "MIGRATION-NOTE-1",
-    "CONTAINER-STDERR-1",
-    "pip cache purge",
-    "workspace/.disk-report.txt"
-   ],
-   "rc": 3,
-   "script": "scripts/patch-container-disk-reclaim-1.py",
-   "tail": [
-    "FAIL-CLOSED: reclaim steps not inserted exactly once in qnfo-containers-pilot/worker.js"
-   ],
-   "verdict": "undetermined"
-  },
-  {
-   "changed_files": [],
-   "declared_signals": [
-    "..",
-    "CONTAINER-STDERR-1",
-    "error: j && j.error || \"container error\""
-   ],
-   "rc": 3,
-   "script": "scripts/patch-container-stderr-1.py",
-   "tail": [
-    "FAIL-CLOSED: marker count != 1 after edit in qnfo-ops/worker.js"
-   ],
-   "verdict": "undetermined"
-  },
-  {
-   "changed_files": [
-    " M scripts/deploy-drift-guard.py"
-   ],
-   "outcome_present_in": [
-    "scripts/deploy-drift-guard.py :: CRON_ONLY-1"
-   ],
-   "rc": 4,
-   "script": "scripts/patch-cron-only-class-1.py",
-   "tail": [
-    "applied: text output",
-    "applied: summary line",
-    "POST-CHECK FAILED: ['f\"cron_only={len(cron_only)} \"']"
-   ],
-   "verdict": "superseded"
-  },
-  {
-   "changed_files": [],
    "rc": 1,
    "script": "scripts/patch-cron-only-class.py",
    "tail": [
@@ -651,24 +537,6 @@
     "changed=0"
    ],
    "verdict": "already-applied"
-  },
-  {
-   "changed_files": [
-    " M qnfo-ai/deployed-current.worker.js",
-    " M qnfo-ai/worker.js"
-   ],
-   "declared_signals": [
-    "ENSEMBLE-BUDGET-3",
-    "ENSEMBLE-BUDGET-2"
-   ],
-   "rc": 0,
-   "script": "scripts/patch-ensemble-budget-3.py",
-   "tail": [
-    "patched         qnfo-ai/worker.js",
-    "patched         qnfo-ai/deployed-current.worker.js",
-    "changed=2"
-   ],
-   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -720,29 +588,6 @@
    "script": "scripts/raw-put-schedules-patch.py",
    "tail": [
     "FAIL(3): anchor count != 1 -> {'A_TAIL': 0} (concurrent writer? re-anchor before retrying)"
-   ],
-   "verdict": "superseded"
-  },
-  {
-   "changed_files": [
-    " M scripts/raw_put.py"
-   ],
-   "outcome_present_in": [
-    "scripts/raw_put.py :: SCHEDULES-UA-1010-1",
-    "scripts/raw_put.py :: DEPLOY-LEDGER-1",
-    "scripts/raw_put.py :: URLLIB-UA-1010-1",
-    "scripts/raw_put.py :: AUTODEPLOY-SCHEDULES-NOT-APPLIED-1",
-    "scripts/raw_put.py :: def schedules_put(",
-    "scripts/raw_put.py :: \"User-Agent\": FLEET_UA",
-    "scripts/raw_put.py :: method=\"PUT\"",
-    "scripts/raw_put.py :: \"crons\": list(crons)"
-   ],
-   "rc": 0,
-   "script": "scripts/rawput-schedules-ua-patch.py",
-   "tail": [
-    " no bare-urllib header block left   OK",
-    "PY_COMPILE_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/raw_put.py",
-    "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/raw_put.py"
    ],
    "verdict": "superseded"
   },
@@ -932,31 +777,23 @@
   "scripts/applier-classify-signature-and-retire-patch.py",
   "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/attachguard-xml-form-patch.py",
-  "scripts/audit-meta-json-exclusion-patch.py",
-  "scripts/continue-directive-inherit-patch.py",
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
-  "scripts/patch-cron-only-class-1.py",
   "scripts/raw-put-schedules-patch.py",
-  "scripts/rawput-schedules-ua-patch.py",
   "scripts/run-gate-internal-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 73,
- "ts": "2026-09-29T19:32:55.130Z",
+ "total": 65,
+ "ts": "2026-09-29T19:30:11.568Z",
  "undetermined": [
   "scripts/affirm-veto-clause-targets-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
-  "scripts/containers-pilot-status-guard-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
-  "scripts/patch-container-disk-reclaim-1.py",
-  "scripts/patch-container-stderr-1.py",
-  "scripts/patch-ensemble-budget-3.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]

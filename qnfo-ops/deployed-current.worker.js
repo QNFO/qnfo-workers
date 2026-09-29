@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.29-meta-json-exclusion";
+var VERSION = "2.37.28-affirm-veto";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -534,27 +534,8 @@ __name2222(normalizeResponsesContent, "normalizeResponsesContent");
 __name22222(normalizeResponsesContent, "normalizeResponsesContent");
 __name222222(normalizeResponsesContent, "normalizeResponsesContent");
 function snippet(v, n) {
-  const lim = n || 2e3;
-  // AUDIT-META-JSON-TRUNCATION-1 (issue 1483): a raw slice() of a JSON.stringify()
-  // result is malformed JSON and crashes every json_extract() consumer. Object
-  // payloads are now truncated PER FIELD so top-level keys survive -- args-first
-  // truncation used to eat `error` entirely at 600 chars, which is also why
-  // tool_error_exclusions could never match. Output is always parseable.
-  if (typeof v === "string") return v.slice(0, lim);
-  if (v === null || v === void 0) return "";
-  if (typeof v !== "object") return String(v).slice(0, lim);
-  const out = {};
-  for (const k of Object.keys(v)) {
-    const raw = v[k];
-    if (raw === void 0) continue;
-    const rs = typeof raw === "string" ? raw : JSON.stringify(raw);
-    if (rs === void 0) continue;
-    out[k] = rs.length > 240 ? rs.slice(0, 240) + "...[truncated]" : raw;
-  }
-  const s = JSON.stringify(out);
-  if (!s) return "";
-  if (s.length <= lim) return s;
-  return JSON.stringify({ _truncated: true, _len: s.length, head: s.slice(0, Math.max(0, lim - 160)) });
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s ? s.slice(0, n || 2e3) : "";
 }
 __name(snippet, "snippet");
 __name2(snippet, "snippet");
@@ -1498,26 +1479,6 @@ async function telemetryAnalyze(env, hours) {
         out.insertError = String(e3 && e3.message || e3);
       }
     }
-    // ISSUE-LEDGER-EXCLUSION-BLIND-1 (issue 1484): the per-tool loop above only visits
-    // tools present in the CURRENT window, so an open entry is never revisited once its
-    // tool goes quiet or its whole error class becomes excluded -- it stays open forever.
-    // Sweep the remaining open telemetry-self-heal entries and resolve any whose tool is
-    // not being filed in this pass.
-    try {
-      const _openL = await env.QNFO_AUDIT.prepare("SELECT fingerprint, title FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'").all();
-      const _rows = (_openL && _openL.results) || [];
-      let _swept = 0;
-      for (const _orow of _rows) {
-        const _m = /^\[self-heal\] tool (\S+) failing/.exec(String(_orow.title || ""));
-        if (!_m) continue;
-        if (out.rates && Object.prototype.hasOwnProperty.call(out.rates, _m[1])) continue;
-        await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET status = 'resolved', resolved_at = ?1, updated_at = ?1, resolution_note = 'ISSUE-LEDGER-EXCLUSION-BLIND-1 sweep: tool absent from the current window or fully excluded' WHERE fingerprint = ?2").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "), _orow.fingerprint).run();
-        _swept++;
-      }
-      if (_swept) out.swept = _swept;
-    } catch (eS) {
-      out.sweepError = String(eS && eS.message || eS);
-    }
   } catch (e) {
     out.error = String(e && e.message || e);
   }
@@ -2052,13 +2013,7 @@ async function d1Write(env, args, userText) {
   if (!sql) return { ok: false, error: "empty SQL" };
   if (!/^(insert|update|delete|replace|create|drop|alter)\b/i.test(sql)) return { ok: false, rejected: true, error: "write must start with INSERT/UPDATE/DELETE/REPLACE/CREATE/DROP/ALTER" };
   var destructive = /\b(drop|truncate)\b/i.test(sql) || /\b(delete|update)\b/i.test(sql) && !/\bwhere\b/i.test(sql);
-  // AFFIRM-GUARD-VETO-2 (issue 1482 residual): the previous predicate authorised on the
-  // bare tokens 'please'/'send it'/'affirm', so the destructive-write gate was vacuous.
-  // Intent-bearing tokens only, plus adjacency-scoped refusal polarity, mirroring the
-  // drain gate in triggerBacklog().
-  var _ut = String(userText || "");
-  var _veto = /(?:do\s+not|don'?t|never|no|stop|cancel|abort|hold\s+off|not\s+yet)\s+(?:the\s+|a\s+|any\s+)?(?:write|drop|delete|update|alter|truncate|execute|run|proceed|apply|migrate)\b/i.test(_ut);
-  var affirmed = !_veto && /\b(?:yes|yep|yeah|confirm|confirmed|approve|approved|authorized|authorised|go\s+ahead|do\s+it|run\s+it|proceed|execute)\b/i.test(_ut);
+  var affirmed = /(yes|please|confirm|go ahead|send it|do it|execute|proceed|approved|affirm)/i.test(String(userText || ""));
   if (destructive && args && args.confirm !== true && !affirmed) return { ok: false, rejected: true, error: "DESTRUCTIVE write requires confirm:true or explicit affirmation", plan: sql };
   var bind = DB_MAP[String(args && args.db || "audit")] || DB_MAP.audit;
   if (!env[bind]) return { ok: false, error: "db not bound: " + bind };
