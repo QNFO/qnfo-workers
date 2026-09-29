@@ -1,0 +1,78 @@
+name: dup-worker-name-gate
+
+# DUP-WORKER-NAME-GATE-1 (issue #1384).
+#
+# Fails CI if two or more wrangler configs in this repo declare the same
+# Cloudflare worker name. Regression history: a9b9a83c deleted the duplicate
+# configs, 07743499 re-touched those paths and restored them, and the duplicate
+# was live again on 2026-09-29. A one-off cleanup does not hold; this gate does.
+#
+# Runs on every push that touches a wrangler config, plus any push to this
+# workflow itself, plus manual dispatch. No cron (SCHEDULE-EVENT-NEVER-FIRES-1).
+# No unquoted colon inside a step name (WORKFLOW-YAML-LINT-1).
+
+on:
+  push:
+    paths:
+      - '**/wrangler.toml'
+      - '**/wrangler.json'
+      - '**/wrangler.jsonc'
+      - 'scripts/dup-worker-name-gate.py'
+      - '.github/workflows/dup-worker-name-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dup-worker-name-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Syntax check the gate
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/dup-worker-name-gate.py
+          echo "py_compile OK"
+
+      - name: Run duplicate worker-name gate
+        id: gate
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 scripts/dup-worker-name-gate.py --root . --json ci-status/dup-worker-name-gate.json
+          rc=$?
+          echo "gate_exit=$rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -eq 0 ]; then
+            echo "result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=FAIL" >> "$GITHUB_OUTPUT"
+          fi
+          # Always publish the artifact, then fail closed on the gate's own rc.
+          exit 0
+
+      - name: Upload gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dup-worker-name-gate
+          path: ci-status/dup-worker-name-gate.json
+          if-no-files-found: warn
+
+      - name: Fail if duplicate worker names are present
+        if: steps.gate.outputs.result != 'PASS'
+        run: |
+          set -euo pipefail
+          echo "GATE FAIL: duplicate worker names present - see ci-status/dup-worker-name-gate.json"
+          python3 scripts/dup-worker-name-gate.py --root . || true
+          exit 1
