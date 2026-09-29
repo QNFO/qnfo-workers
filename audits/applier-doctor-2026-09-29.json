@@ -1,6 +1,6 @@
 {
  "counts": {
-  "already-applied": 25,
+  "already-applied": 26,
   "stale-anchor": 3,
   "superseded": 10,
   "undetermined": 5
@@ -42,8 +42,8 @@
   {
    "changed_files": [
     " M ci-status/applier-doctor.json",
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
+    " M qnfo-containers-pilot/deployed-current.worker.js",
+    " M qnfo-containers-pilot/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -55,8 +55,8 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=42 {'already-applied': 25, 'stale-anchor': 13, 'landed': 3, 'error': 1}",
-    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, patch-binding-install-gate-1.py",
+    "SUMMARY total=43 {'already-applied': 26, 'stale-anchor': 13, 'landed': 3, 'error': 1}",
+    "LANDED(3): cf-urllib-ua-1010-patch.py, deploy-guard-ms-failclosed-patch.py, patch-enospc-cache-1.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "undetermined"
@@ -278,7 +278,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 367668 (unchanged)",
+    "bytes: 368752 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -330,8 +330,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=367670 marker=1",
-    "  deployed-current.worker.js bytes=367670 marker=1"
+    "  worker.js bytes=368754 marker=1",
+    "  deployed-current.worker.js bytes=368754 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -357,23 +357,32 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
-   ],
-   "declared_signals": [
-    "BINDING-INSTALL-MERGE-1",
-    "if (bindingsOut.length === 0) {",
-    "_seen.has(_k)",
-    "const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];",
-    "bindingsInstalled = _decl.length;"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-binding-install-gate-1.py",
    "tail": [
-    "marker=BINDING-INSTALL-MERGE-1",
-    "  PATCHED  qnfo-ops/worker.js",
-    "  PATCHED  qnfo-ops/deployed-current.worker.js"
+    "  ALREADY  qnfo-ops/worker.js",
+    "  ALREADY  qnfo-ops/deployed-current.worker.js",
+    "no-op: every target already carries the fix"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-containers-pilot/deployed-current.worker.js",
+    " M qnfo-containers-pilot/worker.js"
+   ],
+   "declared_signals": [
+    "..",
+    "ENOSPC-CACHE-1",
+    "// ENOSPC-CACHE-1: apt cache + .deb archives reclaimed on cold start (issue #1445)\\n"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-enospc-cache-1.py",
+   "tail": [
+    "PATCHED: qnfo-containers-pilot/worker.js (version -> 1.0.2-apt-clean-enospc)",
+    "PATCHED: qnfo-containers-pilot/deployed-current.worker.js (version -> 1.0.2-apt-clean-enospc)",
+    "RESULT: applied=2 already=0"
    ],
    "verdict": "undetermined"
   },
@@ -544,13 +553,13 @@
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
  ],
- "total": 43,
- "ts": "2026-09-29T16:58:07.274Z",
+ "total": 44,
+ "ts": "2026-09-29T17:06:31.994Z",
  "undetermined": [
   "scripts/apply-pending-patches.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
-  "scripts/patch-binding-install-gate-1.py",
+  "scripts/patch-enospc-cache-1.py",
   "scripts/selfheal-rate-aware-patch.py"
  ]
 }
