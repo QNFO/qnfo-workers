@@ -153,7 +153,14 @@ def classify(text: str, rc: int) -> str:
             return "error"
         if "fail-closed" in low or "anchor occurrence != 1" in low:
             return "stale-anchor"
-        if "does not match" in low:
+        # CLASSIFY-FAILCLOSED-DEFAULT-1 (issue #1466 residual, 2026-09-29).
+        # The bare `"does not match" in low` predicate classified ANY message
+        # carrying that phrase as benign anchor drift, so a genuine application
+        # failure was still masked as `stale-anchor` - the #1466 class narrowed,
+        # not removed. The drift SIGNATURE must now co-occur on one line:
+        # `anchor` and `does not match` within 60 characters of each other.
+        # `.` excludes newlines, so the window cannot span lines.
+        if re.search(r"anchor.{0,60}does not match|does not match.{0,60}anchor", low):
             return "stale-anchor"
         return "error"
     if "already applied" in low and "patched" not in low:
