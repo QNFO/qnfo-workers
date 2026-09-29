@@ -24,11 +24,21 @@ workers, missing-version workers, unreachable workers. Deliberate: mirror-autosy
 documents the regression class where an unattended copy reverted a live fix
 (qnfo-lifecycle live 1.6.2-cronconsolidate vs repo 1.6.2).
 
+NAME-RESOLUTION-1 / NO-HEALTH-ROUTE-1 (2026-09-29): the guard now probes the worker name
+declared in each directory's wrangler.toml instead of the directory name, and emits a
+NO_HEALTH_ROUTE class for workers that ARE deployed but whose workers.dev /health 404s.
+Both are consumed below. This matters because `classify()` is an allow-list: any class the
+guard emits that is NOT handled here would be silently dropped -- re-introducing exactly
+the silent-skip defect the guard refuses to allow. When the guard adds a class, add it
+here in the same commit.
+
 ADVERSARIAL NOTE: a green run of this script is NOT proof the fleet is correct. It proves
 every worker whose /health answers reports a version equal to the repo artifact, and (in
 --content mode) that the normalised live bundle hash matches. It cannot see behavioural
 breakage, a worker that answers /health but 500s on its real routes, or a worker with no
 version constant at all (that class is reported as NO_REPO_VERSION, never silently skipped).
+A NOT_DEPLOYED row now means the worker is absent from the CF account script list -- not
+merely that its workers.dev /health 404s (that is NO_HEALTH_ROUTE).
 """
 import datetime
 import json
@@ -98,7 +108,11 @@ def d1(sql, params):
 
 # ---------------------------------------------------------------- audit
 def classify(d):
-    """One dict per worker: the class, live version, repo version, match flag."""
+    """One dict per worker: the class, live version, repo version, match flag.
+
+    ALLOW-LIST: every class the guard can emit must be handled here. An unhandled class
+    is silently dropped, which is the defect this tool exists to prevent.
+    """
     rows = {}
 
     def put(worker, http, live, before, match, note):
@@ -119,6 +133,10 @@ def classify(d):
         put(it["worker"], 200, it.get("live"), None, 0, "NO_REPO_VERSION")
     for it in d.get("no_live_version", []):
         put(it["worker"], 200, None, it.get("repo"), 0, "NO_LIVE_VERSION")
+    # NO_HEALTH_ROUTE-1: deployed per the CF script list, but workers.dev /health 404s.
+    # NOT the same as NOT_DEPLOYED; conflating them hid live workers from every check.
+    for it in d.get("no_health_route", []):
+        put(it["worker"], 404, None, None, 0, "NO_HEALTH_ROUTE")
     for it in d.get("live_err", []):
         put(it["worker"], 0, None, None, 0, "LIVE_ERR")
     for w in d.get("not_deployed_workers", []):
@@ -147,6 +165,8 @@ def summary_md(d, rows, ok, failed, now):
         f"# {ISSUE_TAG} fleet self-audit - {now}Z", "",
         f"- workers classified: **{len(rows)}** | audit rows written: **{ok}** | write failures: **{len(failed)}**",
         f"- content-level check: **{'ON' if d.get('content_checked') else 'OFF (no CF token)'}**",
+        f"- name resolution (dir -> wrangler.toml `name`): **{'ON' if d.get('name_resolution') else 'OFF'}**",
+        f"- CF account script list (separates NO_HEALTH_ROUTE from NOT_DEPLOYED): **{'ON' if d.get('cf_script_list') else 'OFF (no CF token)'}**",
         f"- guard rc: `{d.get('_guard_rc')}`", "", "## Class counts", "", "| class | n |", "|---|---|",
     ]
     for k in sorted(counts):
@@ -155,7 +175,7 @@ def summary_md(d, rows, ok, failed, now):
     lines += ["", f"## Repo-ahead (safe to auto-deploy): {len(ahead)}", ""]
     if ahead:
         for it in ahead:
-            lines.append(f"- `{it['worker']}` repo `{it['repo']}` > live `{it['live']}`")
+            lines.append(f"- `{it['worker']}` (dir `{it.get('dir')}`) repo `{it['repo']}` > live `{it['live']}`")
     else:
         lines.append("- none")
     if failed:
@@ -165,7 +185,8 @@ def summary_md(d, rows, ok, failed, now):
     lines += ["", "## What this audit cannot see", "",
               "- behavioural breakage behind a 200 /health",
               "- workers with no version constant (reported as NO_REPO_VERSION, not skipped)",
-              "- content drift is hash-based on a normalised bundle, so formatting-only diffs are masked"]
+              "- content drift is hash-based on a normalised bundle, so formatting-only diffs are masked",
+              "- a worker deployed but with a disabled workers.dev route is NO_HEALTH_ROUTE, not verified"]
     return "\n".join(lines) + "\n"
 
 
