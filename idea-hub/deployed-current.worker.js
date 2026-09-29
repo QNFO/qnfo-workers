@@ -1,4 +1,17 @@
 // idea-hub v1.0.8-toolinv-gate-20260929
+// idea-hub v1.0.9-toolinv-shape-v2-20260929
+// Fixes #1412 (D4/D5 RESIDUAL SHAPE HOLES). v1.0.8's TOOLINV caught the three live
+//   leaks but its alternatives were over-specific: 'invoke <snake_case>' (no article),
+//   and 'use your X tool' (no 'the'). Live gate probes 2026-09-29T17:2xZ returned
+//   public:true for 'You must invoke the search tool ...' (D4) and 'Use the fetch
+//   tool ...' (D5). v1.0.9 replaces verb-specific alternation with one VERB+ARTICLE+
+//   NOUN-TYPE shape: (use|invoke|call|run) [your|the|a|an] <name> (tool|function|verb|
+//   api|endpoint|action)s? -- plus 'call <snake_case> with' and bare '<snake_case> tool'.
+//   Validated against the 39 live public titles (0 false positives) and the adversarial
+//   set ('Call it with caution', 'Use your own judgement', 'call a function with keyword
+//   arguments', 'Run the numbers', 'The tool with no name' all correctly unmatched).
+//   Fail-closed: an imperative tool directive is never a public title. Still NOT in
+//   INTERNAL/OPS, which also feed blocked(), so this gate cannot quarantine whole threads.
 // Fixes #1412 (RESIDUAL CLASS). The v1.0.7 STAMP gate closed the orchestrator-retry
 //   stamp vector, but the underlying OPS denylist enumerates SPECIFIC tool names and
 //   therefore structurally lags the tool surface. Three public RSS items still exposed
@@ -31,7 +44,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-const VERSION='1.0.8-toolinv-gate';
+const VERSION='1.0.9-toolinv-shape-v2';
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -59,7 +72,7 @@ const STAMP=/(prior submission was dropped|expressed-step abort|dropped by an ex
 // generic imperative tool-invocation SHAPE, not a tool-name list, so a newly registered
 // tool cannot leak as a public title. Validated: 3/3 live leaks caught, 0/40 live titles
 // and 0/10 adversarial probes false-positive.
-const TOOLINV=/(use\s+your\s+[a-z][a-z0-9_]{1,}\s+(tool|function|verb)|call\s+[a-z][a-z0-9_]{1,}(?:_[a-z0-9]+)+\s+with|invoke\s+[a-z][a-z0-9_]{1,}(?:_[a-z0-9]+)+|run\s+the\s+[a-z][a-z0-9_]{1,}\s+(tool|function))/i;
+const TOOLINV=/(?:use|invoke|call|run)\s+(?:your\s+|the\s+|a\s+|an\s+)?[a-z][a-z0-9_]{1,}(?:_[a-z0-9]+)*\s+(?:tools?|functions?|verbs?|apis?|endpoints?|actions?)\b|call\s+[a-z][a-z0-9_]{1,}(?:_[a-z0-9]+)+\s+with\b|(?<![a-z0-9])[a-z][a-z0-9]*(?:_[a-z0-9]+)+\s+(?:tool|function|verb)\b/i;
 function publicTitle(s){const t=clean(s,1000);if(STAMP.test(t))return false;if(TOOLINV.test(t))return false;return t.length>=12&&!has(t,INTERNAL)&&!has(t,OPS)&&!has(t,JUNK)&&has(t,RESEARCH)}
 function ts(v){if(!v)return null;if(typeof v==='number')return new Date(v).toISOString();let s=String(v).replace(' ','T');if(!/Z$|[+-]\d\d:\d\d$/.test(s))s+='Z';const d=new Date(s);return Number.isNaN(d.getTime())?String(v):d.toISOString()}
 let _qSet=null,_qAt=0;
