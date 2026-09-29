@@ -12,13 +12,13 @@ DEFECT (measured against main, 2026-09-29)
   patches therefore proved its own outcome present and was filed `superseded`.
   Superseded appliers are never run, so a correct fix was silently skipped.
 
-  Measured instance - scripts/rawput-schedules-ua-patch.py:
-    * its docstring quotes CF-URLLIB-UA-1010-1, which IS present in
-      scripts/raw_put.py (it is the existing comment explaining the UA ban);
+  Measured instance - the schedules User-Agent applier:
+    * its docstring quotes the existing UA-ban token, which IS present in
+      scripts/raw_put.py (it is the comment explaining the ban);
     * its actual outcome marker is absent from scripts/raw_put.py;
     * ANY-of therefore reported the outcome present -> superseded -> skipped.
-  Independent checks that the applier itself is correct: its anchor occurs
-  exactly once in main's raw_put.py, all six post-conditions pass, and
+  Independent checks that the skipped applier is correct: its anchor occurs
+  exactly once in main's raw_put.py, all six of its post-conditions pass, and
   schedules_put() is the only one of the four urllib.request.Request sites in the
   file without a User-Agent while _api(), _post_json() and _guard_call() all set
   FLEET_UA. Consequence of the skip: every raw_put deploy still records
@@ -59,11 +59,12 @@ A1_OLD = '''    m = _assign_lits(txt, r"MARKERS?")
     return _dedup(m)'''
 
 A1_NEW = '''    m = _assign_lits(txt, r"MARKERS?")
-    # An ASSIGNED marker is the applier's own idempotency constant and is
-    # authoritative. The docstring scan is only a fallback for appliers that
-    # declare no such constant: a docstring that merely QUOTES a token already
-    # present in the target file made outcome_present() report the outcome as
-    # already present, so the applier was filed `superseded` and never ran.
+    # OUTCOME-ALL-1: an ASSIGNED marker is the applier's own idempotency constant
+    # and is authoritative. The docstring scan is only a fallback for appliers
+    # that declare no such constant: a docstring that merely QUOTES a token
+    # already present in the target file made outcome_present() report the
+    # outcome as already present, so the applier was filed `superseded` and
+    # never ran.
     if not m:
         m = MARKER_TOKEN.findall(txt[:3000])
     return _dedup(m)'''
@@ -87,8 +88,8 @@ A2_OLD = '''    targets, markers, symbols = declared_outcome(script_rel)
     return (len(hits) > 0), hits, measurable'''
 
 A2_NEW = '''    targets, markers, symbols = declared_outcome(script_rel)
-    # Markers, when declared, are the authoritative outcome signal; the
-    # post-condition symbols are only a fallback. ALL declared signals must be
+    # OUTCOME-ALL-1: markers, when declared, are the authoritative outcome signal;
+    # the post-condition symbols are only a fallback. ALL declared signals must be
     # present before an applier is called superseded - the old ANY-of test let a
     # single coincidental token mark a needed, correct applier as already-done.
     signals = _dedup(markers) or _dedup(symbols)
