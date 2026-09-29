@@ -10,6 +10,13 @@
 #   This commit deliberately touches wrangler.toml to fire deploy-containers-pilot.yml,
 #   because wrangler deploy is the only path that transmits [[containers]].
 #
+#   RETRIGGER NOTE (2026-09-29): the first attempt (commit 129f0a2b) carried "[skip ci]"
+#   in its message, which suppresses GitHub Actions push triggers, so
+#   deploy-containers-pilot.yml never ran and ci-status/ gained no
+#   deploy-containers-pilot.json. This retrigger deliberately uses a message with NO skip
+#   token. A deploy trigger must never carry [skip ci] - that is the CI-TRIGGER-SKIP-1
+#   class: the fix commit disables the workflow that would apply the fix.
+#
 # DO-MIGRATION-NOTE-1 2026-09-22 (R3/F2): a `wrangler deploy --dry-run` validates
 # client-side structure ONLY - it cannot prove the server accepts this migration. The
 # class already exists (created via the API), so a real wrangler deploy may FAIL CLOSED
