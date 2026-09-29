@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.0-full-register-inventory";
+var VERSION = "2.0.1-health-probe-budget";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -505,8 +505,13 @@ var worker_default = {
       const open = await env.AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status='open'").first().catch(() => null);
       const led = await env.AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status='open'").first().catch(() => null);
       const stranded = await env.AUDIT.prepare("SELECT COUNT(*) c FROM ops_jobs WHERE status IN ('running','continuing','queued') AND length(COALESCE(response,'')) > 0").first().catch(() => null);
-      const inventory = await openInventory(env).catch(() => null);
-      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1, openIssuesTotal: inventory ? inventory.total : -1, inventory });
+      // HEALTH-PROBE-BUDGET-1 (2026-09-29): /health MUST stay cheap. This handler used to
+      // run the full 14-lane inventory scan, which on a cold isolate exceeded the
+      // 5s AbortController budget in qnfo-ops probeService() -> AbortError -> backlog_status
+      // and fleet_status both reported this worker as "timeout" while it was in fact
+      // healthy (curl http=200 in 1.6s). That false negative auto-filed agent_issues 1368.
+      // The full inventory is served by the separate /inventory route.
+      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1, openIssuesTotal: open ? open.c : -1 });
     }
     if (url.pathname === "/inventory") {
       return json({ ok: true, worker: WORKER, version: VERSION, inventory: await openInventory(env) });
