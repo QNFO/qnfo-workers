@@ -1,0 +1,8 @@
+{
+  "workflow": "apply-restore-container-config",
+  "marker": "CONTAINER-CONFIG-RESTORE-3-APPLIER",
+  "restore_rc": "",
+  "status_signature": "probe-skipped",
+  "log_tail": "declared containers: [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]\nlive compatibility_date=2026-08-01 flags=['nodejs_compat']\nlive bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\nPUT /content -> HTTP 400\n  body: {'result': None, 'success': False, 'errors': [{'code': 100402, 'message': 'Durable Object exports reconciliation failed:\\n- [provisioned_class_missing_from_config] class \\'ShellContainer\\': class \\'ShellContainer\\' has a provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but is not declared in `exports`. Every provisioned class must be declared in `exports` (live or tombstone); silent drift is not permitted. (add \\'ShellContainer\\' back to `exports` as `{\"type\": \"durable-object\", \"storage\": \"sqlite\"}` (or `\"legacy-kv\"`), or replace the entry with a `deleted` / `renamed` / \nFAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)\n",
+  "ts": "2026-09-29T19:43:35Z"
+}
