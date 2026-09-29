@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""fleet-autoaudit.py - FLEET-AUTOAUDIT-1: automatic fleet self-audit + worker update.
+
+WHY THIS EXISTS (root causes it closes):
+  * worker_live_audit froze at 2026-09-27T17:23Z (issue #1351) because NOTHING on a
+    schedule wrote it -- the table had no writer. This script is that writer.
+  * The fleet-wide repo<->live check was version-only and `continue-on-error: true`
+    (issue #1229), so content-level drift could never be seen. This script runs the
+    content-aware guard.
+  * Repo-ahead workers had no automatic path to live (deploy-qnfo-ops.yml covers ONE
+    worker). This script closes that loop for the safe direction only.
+
+MODES
+  --audit    (default) run scripts/deploy-drift-guard.py --all --content --json, UPSERT one
+             row per worker into qnfo-audit.worker_live_audit, write
+             audits/fleet-autoaudit-<date>.json, and open/refresh one tracking issue.
+  --apply    redeploy ONLY workers where the repo artifact is STRICTLY AHEAD of live by
+             numeric version comparison -- the one direction where redeploying the repo
+             cannot revert a live-ahead fix. Uses the repo's binding-preserving deployer
+             scripts/raw_put.py and verifies live /health afterwards.
+
+NEVER auto-applied (reported only): content drift on its own, repo-BEHIND (live-ahead)
+workers, missing-version workers, unreachable workers. Deliberate: mirror-autosync.yml
+documents the regression class where an unattended copy reverted a live fix
+(qnfo-lifecycle live 1.6.2-cronconsolidate vs repo 1.6.2).
+
+ADVERSARIAL NOTE: a green run of this script is NOT proof the fleet is correct. It proves
+every worker whose /health answers reports a version equal to the repo artifact, and (in
+--content mode) that the normalised live bundle hash matches. It cannot see behavioural
+breakage, a worker that answers /health but 500s on its real routes, or a worker with no
+version constant at all (that class is reported as NO_REPO_VERSION, never silently skipped).
+"""
+import datetime
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AUDIT_DB = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
+STATE = "/tmp/fleet-audit.json"
+ISSUE_TAG = "FLEET-AUTOAUDIT"
+
+UPSERT = ("INSERT INTO worker_live_audit "
+          "(worker,http,live_version,registry_before,match,note,probed_at) "
+          "VALUES (?,?,?,?,?,?,?) ON CONFLICT(worker) DO UPDATE SET "
+          "http=excluded.http, live_version=excluded.live_version, "
+          "registry_before=excluded.registry_before, match=excluded.match, "
+          "note=excluded.note, probed_at=excluded.probed_at")
+
+
+def die(msg, code=3):
+    print(f"::error::{msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def env(name, required=True):
+    v = os.environ.get(name, "")
+    if required and not v:
+        die(f"missing env {name}")
+    return v
+
+
+# ---------------------------------------------------------------- guard
+def run_guard():
+    cmd = [sys.executable, os.path.join(ROOT, "scripts", "deploy-drift-guard.py"),
+           "--all", "--content", "--json", "--ahead"]
+    p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    out = (p.stdout or "").strip().splitlines()
+    if not out:
+        die(f"deploy-drift-guard produced no stdout (rc={p.returncode}): {(p.stderr or '')[:200]}")
+    try:
+        data = json.loads(out[-1])
+    except json.JSONDecodeError as e:
+        die(f"deploy-drift-guard JSON parse failed: {e}")
+    data["_guard_rc"] = p.returncode
+    return data
+
+
+# ---------------------------------------------------------------- D1
+def d1(sql, params):
+    acct, token = env("CF_ACCOUNT_ID"), env("CLOUDFLARE_API_TOKEN")
+    url = (f"https://api.cloudflare.com/client/v4/accounts/{acct}"
+           f"/d1/database/{AUDIT_DB}/query")
+    body = json.dumps({"sql": sql, "params": params}).encode()
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Authorization": "Bearer " + token, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": f"HTTP {e.code}: {e.read()[:200]!r}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+# ---------------------------------------------------------------- audit
+def classify(d):
+    """One dict per worker: the class, live version, repo version, match flag."""
+    rows = {}
+
+    def put(worker, http, live, before, match, note):
+        if worker in rows and rows[worker]["note"] != "SYNC":
+            rows[worker]["note"] += "+" + note
+            rows[worker]["match"] = 0
+            return
+        rows[worker] = {"worker": worker, "http": http, "live": live,
+                        "before": before, "match": match, "note": note}
+
+    for w in d.get("sync_workers", []):
+        put(w, 200, None, None, 1, "SYNC")
+    for it in d.get("drift", []):
+        put(it["worker"], 200, it.get("live"), it.get("repo"), 0, "DRIFT")
+    for it in d.get("content_drift", []):
+        put(it["worker"], 200, None, it.get("repo_sha"), 0, "CONTENT_DRIFT")
+    for it in d.get("no_repo_version", []):
+        put(it["worker"], 200, it.get("live"), None, 0, "NO_REPO_VERSION")
+    for it in d.get("no_live_version", []):
+        put(it["worker"], 200, None, it.get("repo"), 0, "NO_LIVE_VERSION")
+    for it in d.get("live_err", []):
+        put(it["worker"], 0, None, None, 0, "LIVE_ERR")
+    for w in d.get("not_deployed_workers", []):
+        put(w, 404, None, None, 0, "NOT_DEPLOYED")
+    return rows
+
+
+def write_audit_rows(rows):
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    ok, failed = 0, []
+    for w in sorted(rows):
+        r = rows[w]
+        res = d1(UPSERT, [w, r["http"], r["live"], r["before"], r["match"], r["note"], now])
+        if res.get("ok"):
+            ok += 1
+        else:
+            failed.append((w, str(res.get("error"))[:120]))
+    return ok, failed, now
+
+
+def summary_md(d, rows, ok, failed, now):
+    counts = {}
+    for r in rows.values():
+        counts[r["note"]] = counts.get(r["note"], 0) + 1
+    lines = [
+        f"# {ISSUE_TAG} fleet self-audit - {now}Z", "",
+        f"- workers classified: **{len(rows)}** | audit rows written: **{ok}** | write failures: **{len(failed)}**",
+        f"- content-level check: **{'ON' if d.get('content_checked') else 'OFF (no CF token)'}**",
+        f"- guard rc: `{d.get('_guard_rc')}`", "", "## Class counts", "", "| class | n |", "|---|---|",
+    ]
+    for k in sorted(counts):
+        lines.append(f"| {k} | {counts[k]} |")
+    ahead = d.get("ahead", [])
+    lines += ["", f"## Repo-ahead (safe to auto-deploy): {len(ahead)}", ""]
+    if ahead:
+        for it in ahead:
+            lines.append(f"- `{it['worker']}` repo `{it['repo']}` > live `{it['live']}`")
+    else:
+        lines.append("- none")
+    if failed:
+        lines += ["", "## D1 write failures", ""]
+        for w, e in failed:
+            lines.append(f"- `{w}`: {e}")
+    lines += ["", "## What this audit cannot see", "",
+              "- behavioural breakage behind a 200 /health",
+              "- workers with no version constant (reported as NO_REPO_VERSION, not skipped)",
+              "- content drift is hash-based on a normalised bundle, so formatting-only diffs are masked"]
+    return "\n".join(lines) + "\n"
+
+
+def gh_api(method, path, payload=None):
+    token = env("GITHUB_TOKEN")
+    repo = env("GITHUB_REPOSITORY")
+    url = f"https://api.github.com/repos/{repo}{path}"
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "qnfo-fleet-autoaudit",
+        "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        return {"_error": f"HTTP {e.code}: {e.read()[:200]!r}"}
+    except Exception as e:
+        return {"_error": str(e)[:200]}
+
+
+def publish_issue(body):
+    existing = gh_api("GET", "/issues?state=open&per_page=100")
+    if isinstance(existing, list):
+        for it in existing:
+            if str(it.get("title", "")).startswith(ISSUE_TAG):
+                res = gh_api("PATCH", f"/issues/{it['number']}", {"body": body})
+                return "updated", it.get("number"), res.get("_error")
+    res = gh_api("POST", "/issues", {"title": f"{ISSUE_TAG}: scheduled fleet self-audit",
+                                     "body": body, "labels": ["fleet-autoaudit"]})
+    return "created", res.get("number"), res.get("_error")
+
+
+# ---------------------------------------------------------------- apply
+def probe_version(worker):
+    url = f"https://{worker}.q08.workers.dev/health"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "qnfo-fleet-autoaudit"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.load(r)
+        return data.get("version") or data.get("VERSION")
+    except Exception as e:
+        return "ERR:" + str(e)[:60]
+
+
+def apply_ahead():
+    if not os.path.isfile(STATE):
+        die("no audit state; run --audit first")
+    d = json.load(open(STATE))
+    ahead = d.get("ahead", [])
+    print(f"auto-deploy candidates (repo strictly ahead): {len(ahead)}")
+    applied, failed = [], []
+    for it in ahead:
+        w, art, rv = it["worker"], it["artifact"], it["repo"]
+        print(f"-> raw_put {w} {art} (repo {rv} > live {it['live']})")
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "raw_put.py"), w, art],
+                           capture_output=True, text=True, cwd=ROOT)
+        if p.returncode != 0:
+            failed.append((w, f"raw_put rc={p.returncode} {(p.stderr or '')[:160]}"))
+            print(f"::warning::raw_put failed for {w}")
+            continue
+        live = probe_version(w)
+        if live == rv:
+            applied.append((w, rv, live))
+        else:
+            failed.append((w, f"verify mismatch: expected {rv}, live {live}"))
+            print(f"::warning::{w} did not converge to {rv} (live {live})")
+    print(f"AUTO-DEPLOY applied={len(applied)} failed={len(failed)}")
+    for w, rv, lv in applied:
+        print(f"  OK {w} {rv}")
+    for w, e in failed:
+        print(f"  FAIL {w}: {e}")
+    return failed
+
+
+# ---------------------------------------------------------------- main
+def main():
+    mode = "--apply" if "--apply" in sys.argv else "--audit"
+    d = run_guard()
+    rows = classify(d)
+    ok, failed, now = write_audit_rows(rows)
+    body = summary_md(d, rows, ok, failed, now)
+    os.makedirs(os.path.join(ROOT, "audits"), exist_ok=True)
+    out = os.path.join(ROOT, "audits", f"fleet-autoaudit-{now[:10]}.json")
+    with open(out, "w", encoding="utf-8") as fh:
+        json.dump({"audited_at": now, "guard": d, "rows": rows,
+                   "d1_writes_ok": ok, "d1_write_failures": failed}, fh, indent=2, sort_keys=True)
+    print(body)
+    action, num, err = publish_issue(body)
+    if err:
+        print(f"::warning::issue publish {action} failed: {err}")
+    else:
+        print(f"self-audit issue {action}: #{num}")
+
+    rc = 1 if failed else 0
+    if mode == "--apply":
+        rc = 1 if apply_ahead() else rc
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()
