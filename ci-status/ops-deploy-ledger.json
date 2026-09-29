@@ -1,0 +1,8 @@
+{
+  "workflow": "apply-ops-deploy-ledger",
+  "issue": "1373 / OPS-DEPLOY-LEDGER-1",
+  "guard_exit": "success",
+  "job_status": "failure",
+  "head": "629362e43ac1be70c1556943cab653245d1b3aaa",
+  "ts": "2026-09-29T16:14:00.536Z"
+}

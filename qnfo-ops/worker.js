@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.24-cfread-404-hint";
+var VERSION = "2.37.25-ops-deploy-ledger";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2148,6 +2148,37 @@ async function installDeclaredBindings(env, worker) {
 __name(installDeclaredBindings, "installDeclaredBindings");
 __name2(installDeclaredBindings, "installDeclaredBindings");
 __name22(installDeclaredBindings, "installDeclaredBindings");
+// OPS-DEPLOY-LEDGER-1 (2026-09-29, issue #1373): cf_worker_deploy is this
+// endpoint's OWN deploy tool and it had NO deployment_history writer, so the
+// fleet deploy ledger could not see deploys made through this endpoint at all
+// (verified: zero occurrences of "deployment_history" in this file). Every
+// deploy attempt now records a row. FAIL-OPEN by design: a ledger failure must
+// never fail a deploy. `notes` is always non-empty because qnfo-audit carries a
+// BEFORE INSERT trigger `deployment_history_provenance_required_ins` that
+// ABORTs with 'deploy-ledger-row-without-provenance' on a blank note.
+async function recordDeployLedger(env, row) {
+  try {
+    if (!env || !env.QNFO_AUDIT) return { ok: false, error: "no QNFO_AUDIT binding" };
+    const _n = row && row.notes != null && String(row.notes).trim() ? String(row.notes) : "cf_worker_deploy: no note supplied";
+    const _r = await env.QNFO_AUDIT.prepare(
+      "INSERT INTO deployment_history (resource_type, resource_name, action, version_id, deployed_by, deployed_at, status, notes, _version) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)"
+    ).bind(
+      String(row && row.resource_type || "worker"),
+      String(row && row.resource_name || ""),
+      String(row && row.action || "deploy"),
+      row && row.version_id != null ? String(row.version_id) : null,
+      String(row && row.deployed_by || "qnfo-ops:cf_worker_deploy"),
+      iso(),
+      String(row && row.status || "success"),
+      _n.slice(0, 500),
+      1
+    ).run();
+    return { ok: true, changes: _r && _r.meta ? _r.meta.changes : null };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 200) };
+  }
+}
+
 async function cfWorkerDeploy(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
   const worker = String(args && args.worker || "").trim();
@@ -2253,8 +2284,12 @@ async function cfWorkerDeploy(env, args) {
       { method: "PUT", headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary }, body }
     );
     const j = await resp.json().catch(() => ({}));
-    if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400) };
-    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    if (!resp.ok) {
+      const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
+      return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
+    }
+    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
