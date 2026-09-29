@@ -1,0 +1,85 @@
+name: apply-d1guard-literal-aware
+
+# D1-GUARD-LITERAL-AWARE-1 (2026-09-29).
+#
+# Applies scripts/d1guard-literal-aware-patch.py to qnfo-ops/worker.js and its
+# deployed-current mirror, then commits the result to the branch that triggered the run.
+# Modelled on apply-attachguard-xml-form.yml, the repo's sanctioned commit-capable repair actor.
+#
+# WHY THIS FILE EXISTS: scripts/d1guard-literal-aware-patch.py was committed on 2026-09-29
+# (2cda479) WITHOUT an applier workflow, so the patch never ran -- the same "patch script
+# with no actor" gap that left 2.37.17-d1-schema-hint as the live version.
+#
+# NOTE the commit message is passed as single-line -m flags and never as an inline
+# multi-line string: a multi-line `git commit -m "..."` inside a `run: |` block scalar
+# puts its continuation lines at column 1, terminates the scalar, and makes the whole
+# workflow file invalid YAML -- the documented defect that made the earlier
+# apply-ops-patch.yml create runs with zero jobs (see the note in mirror-sync.yml).
+
+on:
+  push:
+    paths:
+      - 'scripts/d1guard-literal-aware-patch.py'
+      - '.github/workflows/apply-d1guard-literal-aware.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-d1guard-literal-aware
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/d1guard-literal-aware-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: Verify the deployed-current mirror stays in sync
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 scripts/mirror-guard.py
+
+      - name: Commit and push to the triggering branch
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-d1guard-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-ops 2.37.18-d1-guard-literal-aware): read-only guard must scan literals, not raw text"
+          BODY="D1-GUARD-LITERAL-AWARE-1: d1Query()'s read-only guard scanned the RAW statement for mutation keywords, so a keyword inside a STRING LITERAL was refused -- SELECT COUNT(*) FROM agent_issues WHERE title LIKE '%delete%' returned {ok:false,rejected:true}, making ops_d1_query the highest-volume failing tool on the endpoint and pushing agents into schema guessing. The keyword scan now runs on a literal/comment-stripped copy while the ORIGINAL text is what gets prepared. STRICTLY STRONGER: any interior ';' surviving literal-stripping is rejected, so 'SELECT 1; SELECT 2' -- which the pre-patch guard ACCEPTED -- is now refused. Read-only PRAGMAs are rewritten to their pragma_* table-valued form; mutation-capable PRAGMAs are refused with an allowlist hint. Every rejection now names the offending token and carries a hint."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          git push origin "HEAD:${{ github.ref_name }}"
