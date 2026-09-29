@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 16:18:54",
+  "audited_at": "2026-09-29 16:26:23",
   "d1_write_failures": [
     [
       "ai-health-prober",
@@ -445,11 +445,26 @@
   "d1_writes_ok": 0,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-lifecycle/deployed-current.worker.js",
+        "dir": "qnfo-lifecycle",
+        "live": "1.6.3-version-sot",
+        "repo": "1.6.4-metric-freshness",
+        "worker": "qnfo-lifecycle"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-lifecycle",
+        "live": "1.6.3-version-sot",
+        "repo": "1.6.4-metric-freshness",
+        "worker": "qnfo-lifecycle"
+      }
+    ],
     "live_err": [],
     "name_resolution": true,
     "no_health_route": [
@@ -830,7 +845,7 @@
       }
     ],
     "scope": "all",
-    "sync": 37,
+    "sync": 36,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
@@ -856,7 +871,6 @@
       "qnfo-intent-orchestrator",
       "qnfo-ipatent",
       "qnfo-kaizen",
-      "qnfo-lifecycle",
       "qnfo-memory-mcp",
       "qnfo-observability",
       "qnfo-ops",
@@ -1506,11 +1520,11 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": null,
+      "before": "1.6.4-metric-freshness",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.6.3-version-sot",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
