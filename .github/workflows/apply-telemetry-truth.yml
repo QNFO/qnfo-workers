@@ -1,0 +1,160 @@
+name: apply-telemetry-truth
+
+# TELEMETRY-TRUTH-1 (issue 1370) + BACKLOG-PROBE-TIMEOUT-1 (issues 1368/1369), 2026-09-29.
+#
+# WHY THIS WORKFLOW EXISTS: scripts/telemetry-truth-patch.py repairs two live qnfo-ops
+# observability defects. Without a workflow to invoke the applier it would repeat
+# ORPHANED-APPLIER-1 -- a fix committed to the repo with no execution path to production.
+# This workflow IS that execution path.
+#
+# DEFECT 1 (issue 1370) -- the self-heal counter reads the wrong store:
+#   telemetryReport() computed open_self_heal_issues from
+#       SELECT COUNT(*) FROM agent_issues WHERE status='open' AND category='telemetry-self-heal'
+#   but telemetryAnalyze() files into `issue_ledger`. Verified live 2026-09-29:
+#       issue_ledger  category='telemetry-self-heal' status='open' -> 8
+#       agent_issues  category='telemetry-self-heal' status='open' -> 0
+#   So the reported 0 was structural, not a healthy fleet. The applier counts both stores.
+#
+# DEFECT 2 (issues 1368/1369) -- a probe timeout logged with its reason destroyed:
+#   backlogStatus() returns ok: h.ok from probeService(), which aborted at a hard-coded
+#   5000 ms. Live cloud_ops_events evt-efe861ecce656e: tool backlog_status, status='error',
+#   meta {"resultOk":false,"error":"","ms":5000}. ms is exactly the abort budget, so this
+#   REFUTES issue 1369's premise (the call genuinely returned ok:false). The narrower real
+#   defect -- backlogStatus discarding h.error -- is what the applier fixes, plus an opt-in
+#   probe budget for this probe only. The 5s default is left unchanged.
+#
+# VERSION-PIN-AGNOSTIC-1 (issue 1355): the preflight below asserts ARTIFACT PROPERTIES, never
+# a frozen version literal. A hard-coded version pin blocked a real fix twice on 2026-09-29
+# (STALE-PREFLIGHT-1), including the deploy of 2.37.19.
+#
+# DEPLOY: scripts/raw_put.py PUTs to the CF API /content endpoint, which updates CODE ONLY and
+# preserves live bindings and compatibility settings (BINDING-PRESERVATION-1, COMPAT-PRESERVE-1)
+# and records a deployment_history ledger row (DEPLOY-LEDGER-1). The applier writes worker.js
+# AND its deployed-current mirror in one commit so mirror-guard stays green and the
+# qnfo-fleet-control */20 redeploy cron cannot revert the fix.
+#
+# NOTE commit messages are passed as single-line -m flags, never as an inline multi-line
+# string: a multi-line git commit -m inside a run: | scalar puts continuation lines at column
+# 1, terminates the scalar, and makes the whole workflow invalid YAML -- the documented defect
+# that produced runs with zero jobs.
+
+on:
+  push:
+    paths:
+      - 'scripts/telemetry-truth-patch.py'
+      - '.github/workflows/apply-telemetry-truth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-telemetry-truth
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/telemetry-truth-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced (already applied)"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: ESM syntax gate (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cp qnfo-ops/worker.js /tmp/telemetry-truth-check.mjs
+          node --check /tmp/telemetry-truth-check.mjs
+          echo "ESM parse OK"
+
+      - name: Mirror parity for the patched pair (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "qnfo-ops source and mirror are byte-identical"
+
+      - name: Fleet mirror-guard report (non-blocking)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 scripts/mirror-guard.py || true
+
+      - name: Commit and push to the triggering branch
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-telemetry-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-ops): #1370 #1368 #1369 telemetry truth + probe-error propagation"
+          BODY="Issue 1370: telemetryReport computed open_self_heal_issues from agent_issues while telemetryAnalyze files into issue_ledger, so the counter was pinned at 0 by construction (verified live: issue_ledger 8 open telemetry-self-heal rows, agent_issues 0). The counter now sums both stores, and the calls/fails/top queries now use the analyzer's own scope (job='qnfo-ops' AND text IS NOT NULL) so the report and the analyzer reason over the same population. Issues 1368/1369: backlogStatus dropped the probe's failure reason, so a 5s probe abort was logged with error:'' and filed a spurious TOOL-FAILURE ticket (cloud_ops_events evt-efe861ecce656e, ms=5000 exactly). This refutes 1369's premise that a successful call was mislabelled -- the call genuinely returned ok:false. The reason is now propagated and this probe opts into a 12s budget via a new probeService parameter whose default remains 5s, so fleet-wide probe latency is unchanged. The applier writes both worker.js and its deployed-current mirror so the fleet redeploy cron cannot revert the fix."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preflight - artifact must carry the fix and must NOT carry the old query
+        id: pre
+        run: |
+          set -euo pipefail
+          VER="$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/^var VERSION = "//; s/";$//')"
+          echo "artifact_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "artifact VERSION=$VER"
+          test "$(grep -cF 'TELEMETRY-TRUTH-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'PROBE-TIMEOUT-PARAM-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'BACKLOG-PROBE-TIMEOUT-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'issue_ledger' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF '_probeBudget' qnfo-ops/worker.js || true)" -ge 2
+          test "$(grep -cF "FROM agent_issues WHERE status = 'open' AND category = 'telemetry-self-heal'" qnfo-ops/worker.js || true)" -eq 0
+          test "$(grep -cF 'SELFHEAL-EXTRACTOR-BARE-NAME-1' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'out.rates' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'd1StripLiterals' qnfo-ops/worker.js || true)" -ge 1
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "preflight OK: split-store counter fixed, probe reason propagated, prior analyzer + D1 guard fixes retained, mirrors byte-identical"
+
+      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
