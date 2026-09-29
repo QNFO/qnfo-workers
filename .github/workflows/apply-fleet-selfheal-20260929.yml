@@ -77,8 +77,23 @@ jobs:
           git config user.name "qnfo-fleet-selfheal-bot"
           git config user.email "bot@qnfo.org"
           git add -A
+          # COMMITBACK-DRIFT-1: a bare `git push` loses against the concurrent fleet
+          # commit stream (qnfo-fleet-bot landed five commits in ~53s on 2026-09-29,
+          # 16:15:07-16:16:00Z). Run #2 of this workflow failed exactly there: steps
+          # "Apply" and "Post-conditions" both success, "Commit" failure, deploy
+          # skipped -- the applier was correct and only the push incantation was wrong.
+          # Use the pattern the two previously-green self-heal workflows use.
+          if git diff --cached --quiet; then
+            echo "nothing to commit (already applied)"; exit 0
+          fi
           git commit -m "fix(selfheal): METRIC-FRESHNESS-WRITER-1 (#1301), LEDGER-VERSION-EXTRACT-1 + LABEL-MISMATCH-CLASS-1 (#1370)"
-          git push
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"; exit 0
+            fi
+            echo "push attempt $i failed; retrying in 20s"; sleep 20
+          done
+          echo "PUSH_FAILED after 3 attempts"; exit 1
 
   deploy:
     needs: apply
