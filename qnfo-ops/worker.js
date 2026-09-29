@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.19-d1-guard-literal-fn-aware";
+var VERSION = "2.37.20-selfheal-analyzer-live";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1392,21 +1392,43 @@ async function telemetryAnalyze(env, hours) {
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
   const h = Math.min(Math.max(parseInt(hours, 10) || 6, 1), 168);
   const since = new Date(Date.now() - h * 3600 * 1e3).toISOString();
-  const out = { ok: true, windowHours: h, scanned: 0, persistent: [], recovered: 0, autoResolved: 0, filed: 0, alreadyOpen: 0, ts: iso() };
+  const out = { ok: true, windowHours: h, scanned: 0, persistent: [], recovered: 0, autoResolved: 0, filed: 0, alreadyOpen: 0, rates: {}, ts: iso() };
   try {
     const rows = await env.QNFO_AUDIT.prepare("SELECT text, MAX(ts) last_ts, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text IS NOT NULL GROUP BY text ORDER BY n DESC LIMIT 100").bind(since).all();
     out.scanned = (rows.results || []).length;
     for (const r of rows.results || []) {
-      if ((r.n || 0) < 2) continue;
-      const _tm = String(r.text).match(/(?:tool|tool_name|called)[=: ]+([A-Za-z0-9_.-]+)/i);
+      if ((r.n || 0) < 3) continue;
+      // SELFHEAL-EXTRACTOR-BARE-NAME-1 (issue 1165): cloud_ops_events.text holds the BARE
+      // tool name ("ops_d1_query"), not a "tool=NAME" pair. The previous extractor required
+      // the latter, so toolKey was "" for 15 of 15 real values and every row was discarded
+      // by the guard below -- the self-heal loop filed 0 tickets permanently.
+      const _raw = String(r.text).trim();
+      const _bm = /^[A-Za-z0-9_.-]+$/.test(_raw) ? [_raw, _raw] : null;
+      const _tm = _bm || _raw.match(/(?:tool|tool_name|called)[=: ]+([A-Za-z0-9_.-]+)/i);
       const toolKey = _tm ? _tm[1] : "";
       if (!toolKey) continue;
+      let _errs = r.n || 0;
+      let _oks = 0;
+      let _rate = 1;
+      let _fresh = true;
       try {
-        const okRow = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts > ?1 AND status = 'ok' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text LIKE ('%' || ?2 || '%')").bind(r.last_ts, toolKey).first();
-        if (okRow && okRow.c > 0) {
+        // SELFHEAL-RATE-NOT-ABSENCE-1 (issue 1165): the previous gate treated ONE success
+        // after the last error as full recovery, so a tool failing hundreds of times a day
+        // alongside thousands of successes could never file. File on a FAILURE RATE.
+        const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2").bind(since, toolKey).first();
+        _errs = (okRow && okRow.e) || r.n || 0;
+        _oks = (okRow && okRow.s) || 0;
+        _rate = _errs / Math.max(1, _errs + _oks);
+        _fresh = String(r.last_ts || "") >= new Date(Date.now() - h * 1800 * 1e3).toISOString();
+        out.rates = out.rates || {};
+        out.rates[toolKey] = { errors: _errs, successes: _oks, failureRate: Number(_rate.toFixed(4)), recent: _fresh };
+        if (!(_rate >= 0.15 && _fresh)) {
           out.recovered++;
           try {
-            const _fp = "selfheal:" + fnv32("[self-heal] tool " + String(r.text).slice(0, 60));
+            // SELFHEAL-FINGERPRINT-MISMATCH-1: this used String(r.text).slice(0,60) while
+            // the file path below used toolKey, so the two fingerprints could never match
+            // and a recovered tool's ticket could never be auto-resolved.
+            const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey);
             const openRow = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1 AND status = 'open' LIMIT 1").bind(_fp).first();
             if (openRow) {
               await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET status = 'resolved', resolved_at = ?1, updated_at = ?1 WHERE fingerprint = ?2").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "), openRow.fingerprint).run();
@@ -1418,7 +1440,7 @@ async function telemetryAnalyze(env, hours) {
         }
       } catch (e2) {
       }
-      const title = "[self-heal] tool " + toolKey + " failing x" + r.n + " (" + h + "h no recovery)";
+      const title = "[self-heal] tool " + toolKey + " failing x" + _errs + " (" + (100 * _rate).toFixed(1) + "% of " + (_errs + _oks) + " calls in " + h + "h)";
       try {
         const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey);
         const dup = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(_fp).first();
