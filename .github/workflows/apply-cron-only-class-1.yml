@@ -1,0 +1,187 @@
+name: apply-cron-only-class-1
+
+# CRON_ONLY-1 (issue #1402) applier.
+# Fires on push of its own patcher/workflow (the repo's apply-*.yml convention), so
+# pushing this file triggers the run. Also dispatchable by hand.
+on:
+  push:
+    paths:
+      - scripts/patch-cron-only-class-1.py
+      - .github/workflows/apply-cron-only-class-1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-cron-only-class-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: record pre-patch state
+        run: |
+          set -e
+          echo "guard bytes: $(wc -c < scripts/deploy-drift-guard.py)"
+          echo "CRON_ONLY occurrences before: $(grep -c 'CRON_ONLY' scripts/deploy-drift-guard.py || true)"
+          cp scripts/deploy-drift-guard.py /tmp/pre-guard.py
+
+      - name: apply CRON_ONLY-1 patch
+        id: patch
+        run: |
+          set +e
+          python3 scripts/patch-cron-only-class-1.py
+          rc=$?
+          echo "patch_rc=$rc"
+          echo "patch_rc=$rc" >> "$GITHUB_OUTPUT"
+          # rc 0 = applied, rc 1 = already applied (both fine); rc 3/4 = fail-closed abort
+          exit $rc
+
+      - name: guard - patched source parses and carries marker + helpers
+        run: |
+          set -e
+          python3 -m py_compile scripts/deploy-drift-guard.py
+          grep -qF 'CRON_ONLY-1' scripts/deploy-drift-guard.py
+          grep -qF 'def declared_crons(' scripts/deploy-drift-guard.py
+          grep -qF 'def declares_http_surface(' scripts/deploy-drift-guard.py
+          grep -qF 'def cron_only_declared(' scripts/deploy-drift-guard.py
+          grep -qF 'cron_only_count' scripts/deploy-drift-guard.py
+          echo "GUARD OK (syntax + marker + 3 helpers + json count)"
+
+      - name: guard - exit-code neutrality (CRON_ONLY must not fail the gate)
+        run: |
+          set -e
+          python3 - <<'PY'
+          import re
+          src = open("scripts/deploy-drift-guard.py", encoding="utf-8").read()
+          m = re.search(r"problems = .*", src)
+          assert m, "problems sum not found"
+          line = m.group(0)
+          assert "cron_only" not in line, "CRON_ONLY leaked into the exit-code sum: " + line
+          print("EXIT-CODE NEUTRALITY OK:", line.strip())
+          PY
+
+      - name: behavioural check - positive (ai-health-prober -> CRON_ONLY)
+        run: |
+          set -e
+          python3 scripts/deploy-drift-guard.py ai-health-prober > /tmp/pos.txt 2>/tmp/pos.err || true
+          cat /tmp/pos.txt; cat /tmp/pos.err || true
+          grep -qE '^CRON_ONLY ai-health-prober \(dir ai-health-prober\)' /tmp/pos.txt
+          if grep -qE '^NO_HEALTH_ROUTE ai-health-prober' /tmp/pos.txt; then
+            echo "FAIL: ai-health-prober still reported as NO_HEALTH_ROUTE"; exit 1
+          fi
+          echo "POSITIVE OK: ai-health-prober classified CRON_ONLY"
+
+      - name: behavioural check - negative control (crons + HTTP surface stays NO_HEALTH_ROUTE)
+        run: |
+          set -e
+          mkdir -p cron-neg-probe
+          cat > cron-neg-probe/wrangler.toml <<'TOML'
+          name = "cron-neg-probe"
+          workers_dev = true
+          [triggers]
+          crons = ["*/20 * * * *"]
+          TOML
+          python3 scripts/deploy-drift-guard.py cron-neg-probe > /tmp/neg.txt 2>/tmp/neg.err || true
+          cat /tmp/neg.txt; cat /tmp/neg.err || true
+          # an HTTP-bearing directory must NOT be silently reclassified out of NO_HEALTH_ROUTE
+          grep -qE '^NO_HEALTH_ROUTE cron-neg-probe' /tmp/neg.txt
+          if grep -qE '^CRON_ONLY cron-neg-probe' /tmp/neg.txt; then
+            echo "FAIL: negative control reclassified -- predicate is too permissive"; exit 1
+          fi
+          rm -rf cron-neg-probe
+          echo "NEGATIVE OK: HTTP-bearing dir stays NO_HEALTH_ROUTE"
+
+      - name: behavioural check - negative control (no config at all stays NO_HEALTH_ROUTE)
+        run: |
+          set -e
+          mkdir -p cron-nocfg-probe
+          python3 scripts/deploy-drift-guard.py cron-nocfg-probe > /tmp/neg2.txt 2>/tmp/neg2.err || true
+          cat /tmp/neg2.txt; cat /tmp/neg2.err || true
+          grep -qE '^NO_HEALTH_ROUTE cron-nocfg-probe' /tmp/neg2.txt
+          rm -rf cron-nocfg-probe
+          echo "NEGATIVE OK: unconfigured dir stays NO_HEALTH_ROUTE (fail-closed)"
+
+      - name: guard - fleet-wide classification diff (no class silently dropped)
+        run: |
+          set -e
+          # Full scan must still parse, must report every class, and must not crash.
+          python3 scripts/deploy-drift-guard.py --all --json > /tmp/fleet.json 2>/tmp/fleet.err || true
+          python3 - <<'PY'
+          import json
+          d = json.load(open("/tmp/fleet.json"))
+          for k in ("scope", "sync", "drift", "no_health_route", "cron_only",
+                    "cron_only_count", "not_deployed_workers", "not_a_worker",
+                    "cf_script_list"):
+              assert k in d, "missing key " + k
+          assert d["cron_only_count"] == len(d["cron_only"]), "count/membership mismatch"
+          names = [e["worker"] for e in d["cron_only"]]
+          print("CRON_ONLY members:", names)
+          assert "ai-health-prober" in names, "ai-health-prober missing from CRON_ONLY"
+          assert all(e.get("crons") for e in d["cron_only"]), "a CRON_ONLY row declares no crons"
+          print("FLEET SCAN OK: cron_only_count=%d scope=%s" % (d["cron_only_count"], d["scope"]))
+          PY
+
+      - name: commit patched guard (race-proof)
+        run: |
+          set -e
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add scripts/deploy-drift-guard.py
+          if git diff --cached --quiet; then
+            echo "no source change to commit (already applied)"
+          else
+            git commit -m "fix(drift-guard): CRON_ONLY-1 class scheduled-only workers as CRON_ONLY (issue #1402)"
+            ok=0
+            for i in 1 2 3 4 5; do
+              git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+              if git push origin HEAD:main; then ok=1; echo "commit-back push OK on attempt $i"; break; fi
+              echo "push attempt $i rejected (head moved) - retrying"
+              sleep 6
+            done
+            if [ "$ok" != "1" ]; then echo "COMMIT-BACK FAILED after 5 attempts"; exit 1; fi
+          fi
+
+      - name: verify landed on main (re-read, do not trust the push exit code)
+        run: |
+          set -e
+          git fetch origin main
+          git show origin/main:scripts/deploy-drift-guard.py > /tmp/landed.py
+          grep -qF 'CRON_ONLY-1' /tmp/landed.py
+          python3 -m py_compile /tmp/landed.py
+          echo "LANDED OK on origin/main: $(grep -c 'CRON_ONLY' /tmp/landed.py) CRON_ONLY occurrences"
+
+      # Always publish an outcome artifact so a zero-effect run can never be silent
+      # (FAILURE-ARTIFACT-LOSS-1 / CI-APPLIER-NEVER-APPLIES-1).
+      - name: publish outcome artifact
+        if: always()
+        run: |
+          mkdir -p ci-status
+          PRE=$(grep -c 'CRON_ONLY' /tmp/pre-guard.py || true)
+          POST=$(grep -c 'CRON_ONLY' scripts/deploy-drift-guard.py || true)
+          POS=$(grep -oE '^CRON_ONLY [^ ]+' /tmp/pos.txt 2>/dev/null | head -1 || true)
+          NEG=$(grep -oE '^NO_HEALTH_ROUTE [^ ]+' /tmp/neg.txt 2>/dev/null | head -1 || true)
+          HEAD=$(git rev-parse HEAD)
+          TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          printf '{\n  "workflow": "apply-cron-only-class-1",\n  "issue": "1402 / CRON_ONLY-1",\n  "marker": "CRON_ONLY-1",\n  "pre_marker_count": "%s",\n  "post_marker_count": "%s",\n  "positive_classified": "%s",\n  "negative_still": "%s",\n  "head": "%s",\n  "ts": "%s"\n}\n' "$PRE" "$POST" "$POS" "$NEG" "$HEAD" "$TS" > ci-status/cron-only-class-1.json
+          cat ci-status/cron-only-class-1.json
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "selfheal@qnfo.org"
+          git add ci-status/cron-only-class-1.json
+          if git diff --cached --quiet; then
+            echo "artifact unchanged"
+          else
+            git commit -m "ci(cron-only-class-1): outcome artifact"
+            for i in 1 2 3 4 5; do
+              git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+              git push origin HEAD:main && break
+              sleep 6
+            done
+          fi
