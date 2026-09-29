@@ -1,0 +1,187 @@
+name: restore-container-config-now
+
+# CONTAINER-RESTORE-NO-RUNNER-1 (2026-09-29, issues #1485 / #1487).
+# The restore script exists (scripts/restore_container_config.py, main, 9322 bytes) but no
+# workflow has ever produced an outcome artifact for it, so it had no proven runner.
+# This file triggers on its own path, so adding it fires it.
+#
+# Authoritative assertion: GET /settings must show non-empty `containers` AND the AUDIT d1
+# binding must survive. A red run mutates nothing that was not already absent (fail closed).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/restore-container-config-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: restore-container-config-now
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      WORKER: qnfo-containers-pilot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: pre-state - GET /settings containers (before)
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; restore-container-config-now)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          out = {}
+          try:
+              r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+              d = json.load(urllib.request.urlopen(r, timeout=60))
+              res = d.get("result") or {}
+              out = {
+                  "success": d.get("success"),
+                  "containers": res.get("containers"),
+                  "bindings": [b.get("name") for b in (res.get("bindings") or [])],
+                  "compatibility_date": res.get("compatibility_date"),
+                  "compatibility_flags": res.get("compatibility_flags"),
+              }
+          except Exception as e:
+              out = {"error": "%s: %s" % (type(e).__name__, e)}
+          print(json.dumps(out, indent=2))
+          open("/tmp/pre.json", "w").write(json.dumps(out, indent=2))
+          PY
+
+      - name: restore via /content metadata (captures full log)
+        id: restore
+        if: always()
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/restore_container_config.py 2>&1 | tee /tmp/restore.log
+          echo "restore_rc=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: post-state - GET /settings containers (after)
+        id: post
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; restore-container-config-now)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          out = {}
+          try:
+              r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+              d = json.load(urllib.request.urlopen(r, timeout=60))
+              res = d.get("result") or {}
+              out = {
+                  "success": d.get("success"),
+                  "containers": res.get("containers"),
+                  "bindings": [b.get("name") for b in (res.get("bindings") or [])],
+              }
+          except Exception as e:
+              out = {"error": "%s: %s" % (type(e).__name__, e)}
+          print(json.dumps(out, indent=2))
+          open("/tmp/post.json", "w").write(json.dumps(out, indent=2))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("containers_present=%s\n" % ("true" if out.get("containers") else "false"))
+          PY
+
+      - name: /status probe (ctx.container-undefined signature)
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          base="https://qnfo-containers-pilot.q08.workers.dev"
+          curl -s -o /tmp/status.json -w 'status_http=%{http_code}\n' "$base/status" || true
+          cat /tmp/status.json || true
+          echo
+          if grep -q "Cannot read properties of undefined" /tmp/status.json 2>/dev/null; then
+            echo "::error::/status still reports the ctx.container-undefined signature"
+          fi
+
+      - name: publish outcome artifact (with log tail)
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          def tail(p, n=40):
+              try:
+                  return "\n".join(open(p, encoding="utf-8", errors="replace").read().splitlines()[-n:])
+              except Exception as e:
+                  return "unreadable: %s" % e
+          def load(p):
+              try:
+                  return json.load(open(p))
+              except Exception as e:
+                  return {"error": str(e)}
+          art = {
+              "workflow": "restore-container-config-now",
+              "issue": 1485,
+              "restore_rc": os.environ.get("RESTORE_RC", ""),
+              "containers_present": os.environ.get("CONTAINERS_PRESENT", ""),
+              "head": os.environ.get("GITHUB_SHA", ""),
+              "pre_settings": load("/tmp/pre.json"),
+              "post_settings": load("/tmp/post.json"),
+              "restore_log_tail": tail("/tmp/restore.log"),
+              "status_probe": tail("/tmp/status.json", 10),
+          }
+          os.makedirs("ci-status", exist_ok=True)
+          open("ci-status/restore-container-config-now.json", "w").write(json.dumps(art, indent=2) + "\n")
+          print(json.dumps({k: art[k] for k in ("restore_rc", "containers_present", "head")}, indent=2))
+          PY
+          git config user.name "qnfo-ci-bot"
+          git config user.email "ci@qnfo.org"
+          git add ci-status/restore-container-config-now.json
+          git commit -m "ci(status): restore-container-config-now outcome" || echo "no change to commit"
+          git push origin HEAD:main || echo "push failed"
+
+      - name: FINAL GATE - containers must be live
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN absent - cannot assert; failing closed"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, sys, urllib.request
+          acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; restore-container-config-now-gate)"
+          url = "https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/qnfo-containers-pilot/settings" % acct
+          r = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+          d = json.load(urllib.request.urlopen(r, timeout=60))
+          res = d.get("result") or {}
+          cont = res.get("containers")
+          names = [b.get("name") for b in (res.get("bindings") or [])]
+          print("containers=%s bindings=%s" % (json.dumps(cont), json.dumps(names)))
+          if not cont:
+              print("::error::FINAL GATE: containers ABSENT after this run - #1485 still open")
+              sys.exit(1)
+          if "AUDIT" not in names:
+              print("::error::FINAL GATE: AUDIT d1 binding lost")
+              sys.exit(1)
+          print("FINAL GATE PASS: containers live, AUDIT binding intact - #1485 closed")
+          PY
