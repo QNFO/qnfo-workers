@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """mirror-guard.py - MIRROR-STALENESS-DEPLOY-FAIL-1 (issue 1077, MIRROR-AUTOMATION-1).
 MIRROR-CONTENT-DRIFT-1 (issue 1229, 2026-09-29): VERSION-only parity was a blind spot.
+MIRROR-MISSING-REPAIR-1 (2026-09-29): MISSING mirrors were a permanent blind spot.
 
 WHY: the canonical server-side deploy (qnfo-ops POST /ops/deploy) fetches the
 CANONICAL artifact from qnfo-workers main at <dir>/deployed-current.worker.js, NOT
@@ -35,9 +36,26 @@ events-radar aacdf94e) and ONE differing by CRLF line endings only
 stronger than VERSION-only comparison and needs no incident to justify it. Only the
 supporting figure is withdrawn. Do not cite the 20-worker/3720-line number again.
 
+MISSING LAYER (2026-09-29, MIRROR-MISSING-REPAIR-1): a directory holding worker.js but
+NO deployed-current.worker.js used to be printed and then dropped on the floor. Two
+independent defects kept it that way forever:
+  (a) this script never created the mirror -- the `if m is None` branch only recorded
+      the name; and
+  (b) mirror-sync.yml staged with `git add -u`, which by definition stages only
+      MODIFIED TRACKED files, so a newly created mirror could never be committed even
+      if this script had made one.
+A MISSING mirror is benign for the deploy route -- canonical() falls through to
+<dir>/worker.js -- so it is deliberately NOT added to `drift`, and the report gate
+stays green. Under --fix it is regenerated from source, but ONLY when the source is a
+self-contained deployable (import-free) and non-empty: the same safety precondition
+used for CONTENT-DRIFT. An empty source (0 bytes) is reported as EMPTY-SOURCE and
+never mirrored -- there is nothing to deploy, and mirroring it would manufacture a
+second empty artifact. Canonical case: paper-hub/worker.js is a 0-byte placeholder
+(git empty blob e69de29b).
+
 Usage:
   python scripts/mirror-guard.py          # report; exit 1 if any drift
-  python scripts/mirror-guard.py --fix    # regenerate lagging mirrors from source
+  python scripts/mirror-guard.py --fix    # regenerate lagging/missing mirrors
 Exit: 0 clean | 1 drift found
 """
 import hashlib, os, re, shutil, sys
@@ -99,7 +117,7 @@ def versions(path):
 def main(argv):
     fix = "--fix" in argv
     rows, drift, missing, fixed, captured = [], [], [], [], []
-    content_drift, review = [], []
+    content_drift, review, empty, fixed_missing = [], [], [], []
 
     for name in sorted(os.listdir(ROOT)):
         d = os.path.join(ROOT, name)
@@ -109,12 +127,33 @@ def main(argv):
         mir_p = os.path.join(d, "deployed-current.worker.js")
         if not os.path.exists(src_p):
             continue
+
+        # MIRROR-MISSING-REPAIR-1: a 0-byte source is a placeholder, not a deployable.
+        # Counting it as MISSING is noise; mirroring it would create a second empty
+        # artifact. Classify and move on before any version parsing.
+        try:
+            if os.path.getsize(src_p) == 0:
+                empty.append(name)
+                rows.append((name, "EMPTY-SOURCE", "0 bytes", "-"))
+                continue
+        except OSError:
+            pass
+
         s = versions(src_p)
         m = versions(mir_p) if os.path.exists(mir_p) else None
 
         if m is None:
-            missing.append(name)
-            rows.append((name, "MISSING", str(s), "-"))
+            # MIRROR-MISSING-REPAIR-1: repair only a self-contained, non-empty source.
+            # Deliberately NOT added to `drift`: a missing mirror does not break the
+            # deploy route (canonical() falls through to <dir>/worker.js), so gating on
+            # it would red the report on every push that adds a worker directory.
+            if fix and is_import_free(src_p):
+                shutil.copyfile(src_p, mir_p)
+                fixed_missing.append(name)
+                rows.append((name, "MISSING", str(s), "regenerated from source"))
+            else:
+                missing.append(name)
+                rows.append((name, "MISSING", str(s), "-"))
             continue
         if s == m:
             # MIRROR-CONTENT-DRIFT-1 (issue 1229): equal version constants do NOT
@@ -175,10 +214,15 @@ def main(argv):
         print("%-34s %-20s %-40s %s" % ("worker", "verdict", "source", "mirror"))
         for r in rows:
             print("%-34s %-20s %-40s %s" % r)
-    print("\nsummary: lagging=%d content_drift=%d review=%d fixed=%d missing_mirror=%d captured=%d"
-          % (len(drift), len(content_drift), len(review), len(fixed), len(missing), len(captured)))
+    print("\nsummary: lagging=%d content_drift=%d review=%d fixed=%d missing_mirror=%d fixed_missing=%d empty_source=%d captured=%d"
+          % (len(drift), len(content_drift), len(review), len(fixed), len(missing),
+             len(fixed_missing), len(empty), len(captured)))
     if missing:
         print("missing mirror: " + ", ".join(missing))
+    if fixed_missing:
+        print("regenerated missing mirror: " + ", ".join(fixed_missing))
+    if empty:
+        print("empty source (not mirrorable): " + ", ".join(empty))
     if captured:
         print("captured mirror: " + ", ".join(captured))
     if review:
