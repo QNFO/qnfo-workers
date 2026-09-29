@@ -87,3 +87,21 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 # re-fires the trigger with no skip token. If ci-status/deploy-containers-pilot.json still
 # does not appear, the CI layer itself (not the wrangler command) is the root cause and the
 # container config must be restored through a Cloudflare-side path instead.
+#
+# RETRIGGER-3 (2026-09-29, qnfo-ops, issue #1485) — FALSIFIES the RETRIGGER-2 hypothesis.
+# RETRIGGER-2 concluded "push-triggered Actions for this workflow appear not to execute".
+# That inference was UNFALSIFIED, not verified: the workflow FILE did not exist on main at
+# a59d0b84 (19:33:58Z) — it was added around 19:36Z, per its own header ("This file did not
+# exist"). GitHub cannot create a run for a workflow that is not yet on the default branch,
+# so zero runs was the EXPECTED result and is not evidence of a broken CI layer.
+# COUNTER-EVIDENCE that CI push triggers DO work in this repo: ci-status/apply-pending.json
+# (workflow apply-pending-patches, apply_rc=0, job_status=success, head 9f164fbc) and
+# ci-status/unmangle-worker-js.json (guard_exit=success, repair_exit=success, head 52411213)
+# were both written on 2026-09-29 19:34-19:36Z, i.e. by push-triggered runs.
+# This commit is the controlled test: workflow file present on main + trigger path touched +
+# NO skip token. Decisive artifact: ci-status/deploy-containers-pilot.json.
+# If that artifact appears with wrangler_outcome=success, #1485 is closed by CI. If it
+# appears with a failure tail, the tail names the real blocker (e.g. DO migration rejection,
+# missing CLOUDFLARE_API_TOKEN, or wrangler auth). If it does NOT appear at all while other
+# workflows' artifacts continue to land, the per-workflow trigger is the fault and the
+# restore must go through a Cloudflare-side deploy path that carries containers metadata.
