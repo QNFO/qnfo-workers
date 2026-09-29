@@ -1,0 +1,28 @@
+CONTAINER-CONFIG-RESTORE-1 trigger (2026-09-29T19:4xZ).
+
+This file exists only to fire .github/workflows/deploy-containers-pilot.yml, whose push
+trigger is scoped to paths under qnfo-containers-pilot/**.
+
+Why a separate file and not an edit to wrangler.toml:
+  - wrangler.toml carries the VERSION-adjacent config; touching it risks a version bump,
+    and a version bump makes the artifact STRICTLY AHEAD of live, which would cause
+    scripts/fleet-autoaudit.py --apply to redeploy it through scripts/raw_put.py
+    (CF /content PUT) -- the exact path that cannot transmit [[containers]] and that
+    dropped the container config at 2026-09-29T19:30:35.100Z (deployment_history id 172).
+  - This file is inert: it is not imported by worker.js and is not part of the bundle.
+
+No [skip ci] token is present anywhere in this commit message, deliberately: a fix commit
+that suppresses CI is CI-TRIGGER-SKIP-1, the class documented in qnfo-containers-pilot/
+wrangler.toml where commit 129f0a2b silently disabled the workflow that would have
+applied the fix.
+
+Evidence chain for the outage this triggers a repair for:
+  - live GET /bindings for qnfo-containers-pilot returns exactly 3 bindings
+    {d1 AUDIT, secret_text PILOT_TOKEN, durable_object_namespace SHELL_CONTAINER}
+    -> no container binding, because [[containers]] is script-level config, not a binding.
+  - qnfo-containers-pilot /status -> {"ok":false,"error":"Cannot read properties of
+    undefined (reading 'running')"} -> ctx.container is undefined in the DO.
+  - first cloud_ops_events kind=container.error row: 2026-09-29T19:30:43.591Z,
+    8s after the 19:30:35.100Z /content redeploy.
+  - blast radius: shell_exec, exec_python, exec_node, shell_pipeline, container_install,
+    git_clone_exec, container_workspace_exec, container_status.
