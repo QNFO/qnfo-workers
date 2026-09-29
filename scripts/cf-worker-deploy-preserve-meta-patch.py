@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""PRESERVE-WORKER-METADATA-1 applier (issue #1487).
+"""PRESERVE-WORKER-METADATA-1 applier (issue #1487). VERSION-AGNOSTIC (v2).
 
-Fail-closed, anchored patch for qnfo-ops/worker.js cfWorkerDeploy().
+WHY v2 EXISTS -- the v1 applier ROTTED
+--------------------------------------
+v1 pinned the anchor `var VERSION = "2.37.28-affirm-veto";`. A concurrent writer
+advanced qnfo-ops to 2.37.30-container-deploy-guard before the applier's workflow
+ran, so v1 would have exited 3 (anchor mismatch) and the fix would never land.
+That is the STALE-PREFLIGHT-1 / frozen-literal-gate class: a fix whose own gate
+guarantees it stops applying as soon as anything else moves. v2 derives the
+version literal from the source instead of pinning it.
 
-ROOT CAUSE
-----------
-cfWorkerDeploy rebuilds the deploy metadata from GET /bindings only:
+ROOT CAUSE (unchanged, measured)
+--------------------------------
+qnfo-ops cfWorkerDeploy() rebuilds the deploy metadata from GET /bindings only:
 
     Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate },
                   _compatFlags.length ? { compatibility_flags: _compatFlags } : {},
@@ -17,20 +24,18 @@ deploy through this path silently STRIPS it.
 
 OBSERVED CONSEQUENCE (outage #1485, 2026-09-29)
 -----------------------------------------------
-deployment_history id 172 -> qnfo-containers-pilot deployed 2026-09-29T19:30:35.100Z by
-"qnfo-ops:cf_worker_deploy" with notes "bindings_preserved=2". The first
-cloud_ops_events row matching "Cannot read properties of undefined (reading 'running')"
-landed 19:30:43.591Z - 8 SECONDS later. Every container tool then returned HTTP 500:
-shell_exec, exec_python, exec_node, container_install, git_clone_exec,
-container_workspace_exec, shell_pipeline, container_status.
+deployment_history id 172 -> qnfo-containers-pilot deployed 2026-09-29T19:30:35.100Z
+by "qnfo-ops:cf_worker_deploy". The first cloud_ops_events row matching "Cannot read
+properties of undefined (reading 'running')" landed 19:30:43.591Z -- 8 SECONDS later.
+Every container tool then returned HTTP 500: shell_exec, exec_python, exec_node,
+container_install, git_clone_exec, container_workspace_exec, shell_pipeline,
+container_status.
 
 SCOPE CORRECTION (measured, not assumed)
 ----------------------------------------
 Only cf_worker_deploy strips metadata. scripts/raw_put.py uses the /content endpoint,
-which replaces the module while PRESERVING settings/metadata - which is why raw_put
-deploys at 17:06Z / 17:10Z / 19:34Z did not strip [[containers]] and could not restore
-it once cf_worker_deploy had. raw_put.py is the SAFE deploy path; cf_worker_deploy is
-the stripper. An earlier revision of issue #1487 implicated both; that was wrong.
+which replaces the module while PRESERVING settings/metadata. raw_put.py is the SAFE
+deploy path; cf_worker_deploy is the stripper.
 
 FIX
 ---
@@ -38,7 +43,8 @@ FIX
 2. Fail CLOSED for a container worker whose container config could not be read:
    refuse the deploy rather than strip it.
 
-Exit codes: 0 = applied or already applied (idempotent); 3 = anchor mismatch (fail closed).
+Exit codes: 0 = applied or already applied (idempotent); 3 = anchor mismatch or
+precondition failure (fail closed, nothing written).
 """
 import os
 import re
@@ -49,8 +55,9 @@ TARGET = os.path.join(ROOT, "qnfo-ops", "worker.js")
 MIRROR = os.path.join(ROOT, "qnfo-ops", "deployed-current.worker.js")
 
 MARKER = "PRESERVE-WORKER-METADATA-1"
-OLD_VERSION = 'var VERSION = "2.37.28-affirm-veto";'
-NEW_VERSION = 'var VERSION = "2.37.29-preserve-worker-meta";'
+NEW_TAG = "preserve-worker-meta"
+# version-agnostic: capture the 2.37.<minor> prefix and bump <minor> by one
+VERSION_RE = re.compile(r'var VERSION = "(2\.37\.)(\d+)(?:-[^"]*)?";')
 
 A1_OLD = "    let _compatFlags = [];\n"
 A1_NEW = (
@@ -101,7 +108,6 @@ EDITS = [
     ("A1 compat-flags declaration", A1_OLD, A1_NEW),
     ("A2 settings read-back", A2_OLD, A2_NEW),
     ("A3 metadata rebuild + fail-closed guard", A3_OLD, A3_NEW),
-    ("A4 version bump", OLD_VERSION, NEW_VERSION),
 ]
 
 
@@ -117,15 +123,29 @@ def main():
         print("already applied: %s present in %s (%d bytes) - no change" % (MARKER, TARGET, len(src)))
         return 0
 
+    # derive the version literal from the source (no pinned literal -> no rot)
+    m = VERSION_RE.search(src)
+    if not m:
+        print("FAIL (fail-closed): could not find a 2.37.<minor> VERSION literal in %s" % TARGET)
+        return 3
+    old_version_literal = m.group(0)
+    new_version_literal = 'var VERSION = "%s%d-%s";' % (m.group(1), int(m.group(2)) + 1, NEW_TAG)
+    if src.count(old_version_literal) != 1:
+        print("FAIL (fail-closed): version literal %r matched %d times, expected 1"
+              % (old_version_literal, src.count(old_version_literal)))
+        return 3
+
+    all_edits = EDITS + [("A4 version bump (derived)", old_version_literal, new_version_literal)]
+
     # fail closed on any ambiguous anchor BEFORE mutating anything
-    for name, old, _new in EDITS:
+    for name, old, _new in all_edits:
         n = src.count(old)
         if n != 1:
             print("FAIL (fail-closed): anchor %s matched %d times, expected exactly 1" % (name, n))
             return 3
 
     out = src
-    for _name, old, new in EDITS:
+    for _name, old, new in all_edits:
         out = out.replace(old, new, 1)
 
     # structural sanity: the delimiter deltas must be unchanged by the patch
@@ -136,12 +156,16 @@ def main():
         print("FAIL (fail-closed): delimiter delta changed %s -> %s" % (deltas(src), deltas(out)))
         return 3
 
-    for need in (MARKER, "_preservedMeta", "_containerish", NEW_VERSION):
+    for need in (MARKER, "_preservedMeta", "_containerish", new_version_literal):
         if need not in out:
             print("FAIL (fail-closed): expected marker missing after patch: %s" % need)
             return 3
-    if OLD_VERSION in out:
-        print("FAIL (fail-closed): old version literal survived")
+    if old_version_literal in out:
+        print("FAIL (fail-closed): old version literal survived: %s" % old_version_literal)
+        return 3
+    # the stripper form must be gone: metadataPart must now spread _preservedMeta
+    if "_exports } : {}, _preservedMeta));" not in out:
+        print("FAIL (fail-closed): metadataPart still strips worker-level metadata")
         return 3
 
     with open(TARGET, "w", encoding="utf-8") as fh:
@@ -155,7 +179,7 @@ def main():
 
     print("PRESERVE-WORKER-METADATA-1 applied to %s" % TARGET)
     print("  bytes: %d -> %d (+%d)" % (len(src), len(out), len(out) - len(src)))
-    print("  version: 2.37.28-affirm-veto -> 2.37.29-preserve-worker-meta")
+    print("  version: %s -> %s" % (old_version_literal, new_version_literal))
     print("  mirror updated: %s" % wrote_mirror)
     return 0
 
