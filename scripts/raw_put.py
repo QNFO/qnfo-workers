@@ -71,7 +71,14 @@ from datetime import datetime, timezone
 ACCT = os.environ.get("CF_ACCOUNT_ID", "edb167b78c9fb901ea5bca3ce58ccc4b")
 DATE_FLOOR = "2026-08-01"
 AUDIT_DB = os.environ.get("CF_AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
-VERSION_RE = re.compile(r'var VERSION = "([^"]+)"')
+# LEDGER-VERSION-EXTRACT-1 (issue 1370 defect B): the old regex matched ONLY
+# `var VERSION = "..."`. A worker using `const QNFO_VERSION = "..."`
+# (qnfo-lifecycle, qnfo-memory-mcp) was recorded in deployment_history as
+# version_id="unknown" -- confirmed live: row 120, qnfo-lifecycle, deployed
+# 2026-09-29T16:13:04Z, while the bundle it shipped declares
+# const QNFO_VERSION = "1.6.3-version-sot". Same alternation as
+# scripts/deploy-drift-guard.py CONST, so the two tools cannot disagree.
+VERSION_RE = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*"([^"]+)"')
 
 
 def token():

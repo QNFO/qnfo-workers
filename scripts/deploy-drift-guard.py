@@ -298,6 +298,7 @@ def main():
     drift, content_drift, ahead, no_repo_ver, no_live_ver = [], [], [], [], []
     not_deployed, sync_workers, live_err, no_health = [], [], [], []
     not_a_worker = []
+    label_mismatch = []
 
     for d in sorted(os.listdir(ROOT)):
         if not os.path.isdir(os.path.join(ROOT, d)):
@@ -334,6 +335,15 @@ def main():
             no_repo_ver.append((d, worker, lv))
         elif not lv:
             no_live_ver.append((d, worker, rv))
+        elif lv != rv and cmp_ver(rv, lv) == 0:
+            # LABEL-MISMATCH-CLASS-1 (issue 1370 defect A): identical numeric version,
+            # different build label (repo 1.6.2 vs live 1.6.2-cronconsolidate). A redeploy
+            # cannot change a label, and the repo artifact can be byte-identical to live,
+            # so this is NOT drift. Reported on stderr (never a silent skip) but kept OUT
+            # of `drift`, so it cannot fail the exit code. --content sha stays the
+            # authority on whether the bytes actually differ.
+            label_mismatch.append((d, worker, rv, lv))
+            sys.stderr.write("LABEL_MISMATCH %s (dir %s): repo=%s live=%s\n" % (worker, d, rv, lv))
         elif lv != rv:
             drift.append((d, worker, rv, lv))
             if cmp_ver(rv, lv) == 1:

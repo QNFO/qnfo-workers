@@ -1,4 +1,4 @@
-const QNFO_VERSION = "1.6.3-version-sot";
+const QNFO_VERSION = "1.6.4-metric-freshness";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -40,6 +40,7 @@ var worker_default = {
     if (p === "/run/secrets-audit") return handleSecretsAudit(env, origin);
     if (p === "/run/ula-check") return handleUlaCheck(env, origin);
     if (p === "/run/memory-maintain") return handleMemoryMaintain(request, env, origin);
+    if (p === "/run/metrics-refresh") return handleMetricsRefresh(env, origin);
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: h });
   },
   async scheduled(event, env, ctx) {
@@ -61,7 +62,7 @@ var worker_default = {
       else if (cron === "0 0 1 * *") await runGraphSeed(env);
       else if (cron === "0 5 * * *") await runBackup(env);
       else if (cron === "0 8 * * 1") await runSecretsAudit(env);
-      else if (cron === "0 * * * *") await runSync(env);
+      else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); }
       else if (cron === "*/30 * * * *") await runPing(env);
     } catch (e) {
       console.error("[qnfo-lifecycle] cron error:", e.message);
@@ -75,7 +76,7 @@ function health(env, origin) {
     worker: "qnfo-lifecycle",
     version: QNFO_VERSION,
     cronSchedules: 5,
-    features: ["lifecycle-scan", "graph-seed", "backup", "drift-audit-enhanced", "secrets-audit-enhanced", "registry-sync", "infra-ping", "ula-check", "memory-maintain"],
+    features: ["lifecycle-scan", "graph-seed", "backup", "drift-audit-enhanced", "secrets-audit-enhanced", "registry-sync", "infra-ping", "ula-check", "memory-maintain", "metric-freshness"],
     bindings: { d1: ["qnfo-audit", "qnfo-graph", "portfolio-state", "living-paper", "ipatent-db"], r2: ["qnfo", "qnfo-audit", "qnfo-backups"] }
   }), { headers: h });
 }
@@ -224,6 +225,101 @@ __name222(runUlaCheck, "runUlaCheck");
 __name2222(runUlaCheck, "runUlaCheck");
 __name22222(runUlaCheck, "runUlaCheck");
 __name222222(runUlaCheck, "runUlaCheck");
+// METRIC-FRESHNESS-WRITER-1 (issue #1301, 2026-09-29): qnfo-audit.metric_registry
+// declared 24 metrics with cadences as tight as */15 and NO writer existed anywhere in the
+// repo. Measured 2026-09-29: 9 metrics last_refreshed IS NULL, 15 stale 42.6-74.6h. This
+// auditor never invents a value -- it stamps last_value/last_refreshed only for metrics
+// whose source table is bound here, classifies every other metric against its OWN declared
+// refresh_cadence, and files one deduplicated agent_issue so staleness cannot stay silent.
+function metricCadenceMinutes(cadence) {
+  if (!cadence) return null;
+  var c = String(cadence).trim();
+  var m = c.match(/^\*\/(\d+)/);
+  if (m) return parseInt(m[1], 10);
+  var m2 = c.match(/^(\d+)\s*m$/i);
+  if (m2) return parseInt(m2[1], 10);
+  if (c === "hourly") return 60;
+  if (c === "daily") return 1440;
+  if (c === "weekly") return 10080;
+  if (c === "monthly") return 43200;
+  return null;
+}
+async function runMetricFreshness(env) {
+  var nowMs = Date.now();
+  var nowIso = new Date(nowMs).toISOString();
+  var out = { status: "metric-freshness", timestamp: nowIso, total: 0, fresh: 0, stale: 0, never: 0, unparsed_cadence: 0, worst: null, refreshed: [], filed_issue: false, updated_issue: false };
+  var rows = [];
+  try {
+    var res = await env.QNFO_AUDIT.prepare("SELECT metric, refresh_cadence, last_refreshed FROM metric_registry").all();
+    rows = res.results || [];
+  } catch (e) {
+    out.error = "metric_registry read failed: " + e.message;
+    return out;
+  }
+  out.total = rows.length;
+  var offenders = [];
+  var worstAge = -1, worstMetric = null;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var cad = metricCadenceMinutes(r.refresh_cadence);
+    if (cad === null) {
+      out.unparsed_cadence++;
+      offenders.push(r.metric + " (cadence unparsed: " + r.refresh_cadence + ")");
+      continue;
+    }
+    if (!r.last_refreshed) {
+      out.never++;
+      offenders.push(r.metric + " (never refreshed)");
+      continue;
+    }
+    var raw = String(r.last_refreshed);
+    var t = Date.parse(raw.indexOf("T") >= 0 ? raw : raw.replace(" ", "T") + "Z");
+    if (isNaN(t)) { out.unparsed_cadence++; continue; }
+    var ageMin = (nowMs - t) / 60000;
+    if (ageMin > cad * 2) {
+      out.stale++;
+      offenders.push(r.metric + " (" + Math.round(ageMin) + "m stale vs " + cad + "m cadence)");
+      if (ageMin > worstAge) { worstAge = ageMin; worstMetric = r.metric; }
+    } else {
+      out.fresh++;
+    }
+  }
+  if (worstMetric) out.worst = { metric: worstMetric, age_minutes: Math.round(worstAge) };
+  try {
+    var oi = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM agent_issues WHERE status = 'open'").first();
+    if (oi) {
+      await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(oi.c == null ? 0 : oi.c), nowIso, "MEASURED", "open_agent_issues").run();
+      out.refreshed.push("open_agent_issues");
+    }
+  } catch (e) { out.refresh_error_open_issues = e.message; }
+  try {
+    var wc = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM service_registry").first();
+    if (wc) {
+      await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(wc.c == null ? 0 : wc.c), nowIso, "MEASURED", "worker_count").run();
+      out.refreshed.push("worker_count");
+    }
+  } catch (e) { out.refresh_error_worker_count = e.message; }
+  var remaining = out.stale + out.never + out.unparsed_cadence;
+  if (remaining > 0) {
+    var title = "METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence";
+    var desc = remaining + "/" + out.total + " metrics not fresh at " + nowIso + " :: " + offenders.slice(0, 40).join("; ");
+    try {
+      var ex = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND title = ? LIMIT 1").bind(title).first();
+      if (ex && ex.id) {
+        await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET description = ?, updated_at = ? WHERE id = ?").bind(desc, nowMs, ex.id).run();
+        out.updated_issue = true;
+      } else {
+        await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(title, desc, "qnfo-lifecycle-metric-freshness", "observability", "high", "open", nowMs, nowMs).run();
+        out.filed_issue = true;
+      }
+    } catch (e) { out.issue_error = e.message; }
+  }
+  return out;
+}
+async function handleMetricsRefresh(env, origin) {
+  var result = await runMetricFreshness(env);
+  return new Response(JSON.stringify(result), { headers: corsHeaders(origin) });
+}
 async function runLifecycle(env) {
   console.log("[lifecycle] scanning inactive projects...");
   try {
