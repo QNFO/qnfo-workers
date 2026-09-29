@@ -24,6 +24,15 @@ name: apply-ci-watchdog-logfetch
 # puts its continuation lines at column 1, terminates the scalar, and makes the whole
 # workflow file invalid YAML -- the WORKFLOW-YAML-LINT-1 class that made
 # deploy-qnfo-ops.yml create runs with ZERO jobs. Step names below also avoid ':'.
+#
+# PUSH-RACE-RETRY-1 (2026-09-29): run 36592518561 applied the patch, byte-compiled it,
+# passed the selftest and asserted the markers -- steps 4-7 ALL SUCCESS -- and then failed
+# at step 8 "Commit and push". Three commits landed on main inside that run window
+# (15:45:03, 15:45:07, 15:45:37), so `git push` was rejected as non-fast-forward and the
+# fully verified patch was discarded. A gate that passes and then throws the work away is
+# worse than no gate: it reports red for a correct patch and hides the real state.
+# The commit step now re-fetches, rebases onto the moved head and retries with a bounded
+# budget, so a concurrent writer can no longer discard a verified repair.
 
 on:
   push:
@@ -88,7 +97,7 @@ jobs:
           grep -q "invalid-workflow" scripts/ci_watchdog.py
           echo "CI-WATCHDOG-LOGFETCH-1 markers present"
 
-      - name: Commit and push to the triggering branch
+      - name: Commit and push to the triggering branch (race-safe, rebase and retry)
         if: steps.apply.outputs.changed == 'true'
         run: |
           set -euo pipefail
@@ -104,4 +113,22 @@ jobs:
           BODY="CI-WATCHDOG-LOGFETCH-1. gh() always attaches Authorization Bearer; the job-log endpoint answers 302 to a pre-signed object-store URL, and urllib's default redirect handler replays the original headers on the follow-up, so the signed URL rejects it and the body came back empty (curl probe http=403 size=180). Consequence: in CI every log fetch returned nothing and findings the structural classifier could not name degraded to unknown (the classifier docstring records 19 of 22 lost). Fix part 1 adds _raw_log(): hop 1 asks the API WITH auth and with redirect-following DISABLED and reads the 302 Location, hop 2 fetches that pre-signed URL with NO Authorization header -- the signed URL is itself the credential -- capped at 200 KB. job_logs() and the inline fetch in main() both route through it. Fix part 2 makes classify_structural() name a run whose display NAME is the workflow FILE PATH as invalid-workflow: that means GitHub could not parse the YAML, the run was created with ZERO jobs, and no log exists to fetch -- the deploy-qnfo-ops.yml class of 2026-09-29. Verified by scripts/ci-watchdog-selftest.py, which runs a local 302 server and asserts hop 1 carries Authorization, hop 2 does not, the body returns intact, and a 403 degrades to an empty string without crashing."
           FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
           git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
-          git push origin "HEAD:${{ github.ref_name }}"
+          BRANCH="${{ github.ref_name }}"
+          ok=0
+          for i in 1 2 3 4 5 6 7 8; do
+            git fetch origin "$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "rebase conflict on attempt $i; aborting rebase and retrying"
+              git rebase --abort || true
+              sleep 10
+              continue
+            fi
+            if git push origin "HEAD:$BRANCH"; then ok=1; break; fi
+            echo "push rejected on attempt $i (concurrent commit); retrying"
+            sleep 10
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::PUSH-RACE-EXHAUSTED - could not land the verified patch on $BRANCH after 8 attempts"
+            exit 1
+          fi
+          echo "landed $(git rev-parse --short HEAD) on $BRANCH"
