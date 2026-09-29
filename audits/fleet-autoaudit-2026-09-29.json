@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 16:12:46",
+  "audited_at": "2026-09-29 16:18:54",
   "d1_write_failures": [
     [
       "ai-health-prober",
@@ -449,26 +449,7 @@
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
-    "drift": [
-      {
-        "dir": "fleet-exec",
-        "live": "1.0.2",
-        "repo": "fleet-executor/0.3.2",
-        "worker": "fleet-exec"
-      },
-      {
-        "dir": "qnfo-lifecycle",
-        "live": "1.6.2-cronconsolidate",
-        "repo": "1.6.2",
-        "worker": "qnfo-lifecycle"
-      },
-      {
-        "dir": "qnfo-ops",
-        "live": "2.37.25-ops-deploy-ledger",
-        "repo": "2.37.24-cfread-404-hint",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "name_resolution": true,
     "no_health_route": [
@@ -849,9 +830,10 @@
       }
     ],
     "scope": "all",
-    "sync": 34,
+    "sync": 37,
     "sync_workers": [
       "calendar-api",
+      "fleet-exec",
       "idea-hub",
       "qnfo-memory-mcp",
       "personal-api",
@@ -874,8 +856,10 @@
       "qnfo-intent-orchestrator",
       "qnfo-ipatent",
       "qnfo-kaizen",
+      "qnfo-lifecycle",
       "qnfo-memory-mcp",
       "qnfo-observability",
+      "qnfo-ops",
       "qnfo-outreach",
       "qnfo-paper-indexer",
       "qnfo-paper-reviser",
@@ -962,11 +946,11 @@
       "worker": "events-radar"
     },
     "fleet-exec": {
-      "before": "fleet-executor/0.3.2",
+      "before": null,
       "http": 200,
-      "live": "1.0.2",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "fleet-exec"
     },
     "funding": {
@@ -1522,11 +1506,11 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.6.2",
+      "before": null,
       "http": 200,
-      "live": "1.6.2-cronconsolidate",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
@@ -1546,11 +1530,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.37.24-cfread-404-hint",
+      "before": null,
       "http": 200,
-      "live": "2.37.25-ops-deploy-ledger",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
