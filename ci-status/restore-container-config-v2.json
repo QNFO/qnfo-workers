@@ -1,0 +1,29 @@
+{
+  "workflow": "restore-container-config-v2",
+  "marker": "CONTAINER-CONFIG-RESTORE-8-VERIFY",
+  "issues": [
+    1485,
+    1487,
+    1494
+  ],
+  "worker": "qnfo-containers-pilot",
+  "ts": "2026-09-29T19:51:13Z",
+  "settings_http": 200,
+  "bindings": [
+    "AUDIT",
+    "PILOT_TOKEN",
+    "SHELL_CONTAINER"
+  ],
+  "missing_bindings": [],
+  "containers": null,
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "exports": null,
+  "status_http": null,
+  "probe_ok": null,
+  "note": "PILOT_TOKEN absent - gating on containers metadata instead",
+  "verdict": "FAIL",
+  "reason": "no probe and containers metadata absent"
+}
