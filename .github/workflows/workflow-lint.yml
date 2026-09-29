@@ -1,0 +1,42 @@
+name: workflow-lint
+
+# WORKFLOW-YAML-LINT-1 (2026-09-29).
+#
+# Structural prevention for the class that silently killed the canonical qnfo-ops
+# deploy path: an unquoted colon inside a step NAME made deploy-qnfo-ops.yml
+# unparseable, so GitHub created runs with ZERO jobs, conclusion=failure, and no
+# job log for any monitor to read. The deploy stopped happening and nothing said so.
+#
+# A workflow that cannot produce a job must never reach main. This gate parses every
+# workflow file and requires a non-empty `jobs:` mapping, and it fails closed.
+#
+# scripts/workflow-lint.py is the checker; it is also runnable standalone.
+
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/workflow-lint.py'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install --quiet pyyaml
+
+      - name: Lint every workflow file (fail closed)
+        run: python3 scripts/workflow-lint.py
