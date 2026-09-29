@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-29 19:14:07",
+  "audited_at": "2026-09-29 19:25:44",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -10,15 +10,15 @@
     "content_drift": [],
     "drift": [
       {
-        "dir": "qnfo-deploy-guard",
-        "live": "1.3.15-ms-failclosed",
-        "repo": "1.3.14-verifyadvance",
-        "worker": "qnfo-deploy-guard"
+        "dir": "qnfo-fleet-dashboard",
+        "live": "1.7.33-drift-failclosed",
+        "repo": "1.7.32-stale-gate-failclosed",
+        "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-ops",
-        "live": "2.37.27-self-fetch-guard",
-        "repo": "2.37.26-samezone-fetch-fallback",
+        "live": "2.37.28-affirm-veto",
+        "repo": "2.37.27-self-fetch-guard",
         "worker": "qnfo-ops"
       }
     ],
@@ -424,9 +424,9 @@
       "qnfo-backlog-exec",
       "qnfo-cloud-ops",
       "qnfo-containers-pilot",
+      "qnfo-deploy-guard",
       "qnfo-email",
       "qnfo-fleet-control",
-      "qnfo-fleet-dashboard",
       "qnfo-gateway",
       "qnfo-infra",
       "qnfo-intent-orchestrator",
@@ -897,11 +897,11 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.14-verifyadvance",
+      "before": null,
       "http": 200,
-      "live": "1.3.15-ms-failclosed",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
@@ -993,11 +993,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": null,
+      "before": "1.7.32-stale-gate-failclosed",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.7.33-drift-failclosed",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1121,9 +1121,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.37.26-samezone-fetch-fallback",
+      "before": "2.37.27-self-fetch-guard",
       "http": 200,
-      "live": "2.37.27-self-fetch-guard",
+      "live": "2.37.28-affirm-veto",
       "match": 0,
       "note": "DRIFT",
       "worker": "qnfo-ops"
