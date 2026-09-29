@@ -27,6 +27,15 @@ name: apply-backlog-health-cheap
 #   6. publish a machine-readable status artifact so the outcome is verifiable
 #      through the GitHub contents API without the Actions API
 #
+# WORKFLOW-YAML-LINT-1 (2026-09-29, second instance): the commit-back step name
+# used to read `- name: Commit back (race-safe: pull --rebase + bounded retry)`.
+# The unquoted `: ` inside that plain scalar is a YAML parse error, so every run
+# of this workflow was created with ZERO jobs and conclusion=failure (6 failures
+# / 0 successes in the run census, latest 2026-09-29T15:40:21Z). A zero-job run
+# produces no job log, so the watchdog could only classify it as `unknown`, and
+# the HEALTH-PROBE-BUDGET-1 patch had no working path to live. The name is
+# quoted now, and scripts/workflow-lint.py gates the whole class.
+#
 # NOTE ON SCHEDULES: SCHEDULE-EVENT-NEVER-FIRES-1 - the GitHub `schedule`
 # event has never fired on this repository, so this workflow deliberately
 # declares NO cron. It fires on push (to itself or its patch script) and on
@@ -130,7 +139,7 @@ jobs:
           EOF
           cat ci-status/backlog-health-cheap.json
 
-      - name: Commit back (race-safe: pull --rebase + bounded retry)
+      - name: "Commit back (race-safe: pull --rebase + bounded retry)"
         if: always()
         run: |
           set -uo pipefail
