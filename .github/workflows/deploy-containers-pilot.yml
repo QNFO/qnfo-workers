@@ -1,6 +1,6 @@
 name: deploy-containers-pilot
 
-# CONTAINER-CONFIG-DROPPED-1 (2026-09-29). Issue filed by the qnfo-ops session.
+# CONTAINER-CONFIG-DROPPED-1 (2026-09-29). Issue #1485.
 #
 # WHY THIS WORKFLOW EXISTS
 #   GET /accounts/<acct>/workers/scripts/<name>/bindings returns BINDINGS ONLY.
@@ -23,11 +23,15 @@ name: deploy-containers-pilot
 #   wrangler builds the complete script metadata from wrangler.toml.
 #   qnfo-containers-pilot/wrangler.toml documents this class verbatim.
 #
-# WHAT IT DOES
-#   Deploys qnfo-containers-pilot with wrangler (full metadata, containers
-#   included), then VERIFIES the fix by polling /status for containerRunning.
-#   /health is deliberately NOT used as the verification signal, because
-#   /health is exactly the false-green that hid this outage.
+# VERIFICATION NOTE (learned the hard way)
+#   /status is behind the PILOT_TOKEN auth gate, so an UNAUTHENTICATED poll of
+#   /status returns 401 - it can never observe the container state. /health is a
+#   false green by construction. So this workflow:
+#     * verifies with an AUTHENTICATED /status call when the PILOT_TOKEN repo
+#       secret is available, which is the only definitive signal;
+#     * otherwise reports UNVERIFIED and does not fail, because a 401 is not
+#       evidence of failure. The qnfo-ops session verifies via the service
+#       binding, which does carry the token.
 #
 # STYLE CONSTRAINTS
 #   * WORKFLOW-YAML-LINT-1: every step name below is colon-free.
@@ -77,10 +81,16 @@ jobs:
           echo "preflight ok"
 
       - name: Record the pre-deploy status
+        env:
+          PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
         continue-on-error: true
         run: |
           set -uo pipefail
-          code=$(curl -s -o /tmp/pre.json -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/status || true)
+          if [ -n "${PILOT_TOKEN:-}" ]; then
+            code=$(curl -s -o /tmp/pre.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" https://qnfo-containers-pilot.q08.workers.dev/status || true)
+          else
+            code=$(curl -s -o /tmp/pre.json -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/status || true)
+          fi
           echo "pre http=$code"
           head -c 300 /tmp/pre.json 2>/dev/null || true
           echo
@@ -98,16 +108,26 @@ jobs:
           exit $rc
 
       - name: Verify the container config is back
+        env:
+          PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
         run: |
           set -uo pipefail
+          if [ -z "${PILOT_TOKEN:-}" ]; then
+            echo "UNVERIFIED PILOT_TOKEN repo secret not set, so the auth-gated /status endpoint cannot be polled from CI"
+            echo "The qnfo-ops session verifies via the CONTAINERS_PILOT service binding instead"
+            exit 0
+          fi
           i=1
           while [ $i -le 6 ]; do
-            code=$(curl -s -o /tmp/post.json -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/status || true)
+            code=$(curl -s -o /tmp/post.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" https://qnfo-containers-pilot.q08.workers.dev/status || true)
             body=$(head -c 200 /tmp/post.json 2>/dev/null || true)
             echo "attempt $i http=$code body=$body"
             if [ "$code" = "200" ] && grep -q containerRunning /tmp/post.json; then
               echo "VERIFIED container config present"
               exit 0
+            fi
+            if grep -q "reading 'running'" /tmp/post.json 2>/dev/null; then
+              echo "still missing ctx.container, retrying"
             fi
             i=$((i + 1))
             sleep 10
@@ -121,7 +141,7 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p ci-status
-          printf '{"workflow":"deploy-containers-pilot","issue":"CONTAINER-CONFIG-DROPPED-1","head":"%s","ts":"%s"}\n' \
+          printf '{"workflow":"deploy-containers-pilot","issue":"1485","head":"%s","ts":"%s"}\n' \
             "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/deploy-containers-pilot.json
           cat ci-status/deploy-containers-pilot.json
 
