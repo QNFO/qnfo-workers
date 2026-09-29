@@ -3,7 +3,20 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 // ENOSPC-CACHE-1: apt cache + .deb archives reclaimed on cold start (issue #1445)
-var VERSION = "1.0.2-apt-clean-enospc";
+// CLONE-EGRESS-TIMEOUT-FALLBACK-1 (2026-09-29): /git/clone previously ran a bare
+// `git clone` with no wall-clock bound, no --single-branch and no fallback. On the
+// measured slow GitHub egress path the child process outlived the caller's 180s
+// budget, so callers recorded a container timeout instead of a clone result
+// (git_clone_exec 24h failure rate 18/40 = 45%, issues #1462 / #1465). Fix:
+//   (a) bound every git attempt with `timeout 150` so a stall returns a clean
+//       non-zero exit well inside the caller budget instead of hanging;
+//   (b) abort stalled transfers via -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60
+//       and cut round trips with --single-branch --no-tags + protocol.version=2;
+//   (c) fall back to a single-request codeload tarball when git still fails.
+// LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
+// so it is returned with method:"tarball", git:false and is only usable for
+// read/build workloads, not for git_op on that checkout.
+var VERSION = "1.0.3-clone-egress-timeout-fallback";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -189,24 +202,44 @@ var ShellContainer = class {
           "-c",
           "[ -d /workspace/" + name + "/.git ] && echo EXISTS || echo MISSING"
         ]);
+        const gitOpts = "-c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 -c protocol.version=2";
         let out;
+        let method = "git";
         if (checkOut.stdout.trim() === "EXISTS") {
           out = await this.run([
             "bash",
             "-c",
-            "cd /workspace/" + name + " && git fetch --depth=" + depth + " && git reset --hard origin/HEAD 2>&1"
+            "cd /workspace/" + name + " && timeout 150 git " + gitOpts + " fetch --depth=" + depth + " 2>&1 && git reset --hard origin/HEAD 2>&1"
           ]);
         } else {
           const branchFlag = branch ? "--branch " + branch + " " : "";
-          const depthFlag = depth > 0 ? "--depth=" + depth + " " : "";
+          const depthFlag = depth > 0 ? "--depth=" + depth + " --single-branch --no-tags " : "";
           out = await this.run([
             "bash",
             "-c",
-            "git clone " + depthFlag + branchFlag + JSON.stringify(repoUrl) + " /workspace/" + name + " 2>&1"
+            "timeout 150 git " + gitOpts + " clone " + depthFlag + branchFlag + JSON.stringify(repoUrl) + " /workspace/" + name + " 2>&1"
           ]);
         }
-        await logEvent(this.env, "container.git_clone", repoUrl, { exitCode: out.exitCode, name }, out.exitCode === 0 ? "ok" : "error");
-        return json({ ok: out.exitCode === 0, url: repoUrl, name, path: "/workspace/" + name, result: out });
+        if (out.exitCode !== 0) {
+          const m = repoUrl.match(/github\.com[/:]([^/]+)\/([^/?#]+)/);
+          if (m) {
+            const slug = m[1] + "/" + m[2].replace(/\.git$/, "");
+            const ref = branch || "main";
+            const fb = await this.run([
+              "bash",
+              "-c",
+              "rm -rf /workspace/" + name + " && mkdir -p /workspace/" + name + " && curl -sSL --max-time 150 " + JSON.stringify("https://codeload.github.com/" + slug + "/tar.gz/refs/heads/" + ref) + " | tar -xz -C /workspace/" + name + " --strip-components=1 2>&1 && echo TARBALL_OK"
+            ]);
+            if (fb.exitCode === 0 && fb.stdout.indexOf("TARBALL_OK") >= 0) {
+              await logEvent(this.env, "container.git_clone", repoUrl, { exitCode: 0, name, method: "tarball" }, "ok");
+              return json({ ok: true, url: repoUrl, name, path: "/workspace/" + name, method: "tarball", git: false, result: fb });
+            }
+            out = fb;
+            method = "tarball";
+          }
+        }
+        await logEvent(this.env, "container.git_clone", repoUrl, { exitCode: out.exitCode, name, method }, out.exitCode === 0 ? "ok" : "error");
+        return json({ ok: out.exitCode === 0, url: repoUrl, name, path: "/workspace/" + name, method, git: out.exitCode === 0 && method === "git", result: out });
       }
       if (path === "/git/op") {
         if (request.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
