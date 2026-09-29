@@ -17,10 +17,25 @@ workers_dev = true
 # Cost: $0.00002/vCPU-sec + $0.0000025/GiB-sec (utilization-based, Firecracker VM)
 # BINDING-PRESERVATION-1: bindings verified from live CF API 2026-09-13
 
+# CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1 (issue #1456) — instance_type lite -> basic.
+# MEASURED 2026-09-29: /dev/vdc 1.9G total / 1.7G used / 121M free (94%). /usr = 1494M
+# (base image), /workspace 39M, apt cache 12K, /root/.cache 1M, /tmp 1M — the caches were
+# ALREADY clean, so cache hygiene cannot close the gap (the ENOSPC-CACHE-1 fix in worker.js
+# v1.0.2 reclaimed the apt cache but not the capacity gap). A manual reclaim freed 198M
+# (94% -> 83%), leaving the ~1.5G image as the floor.
+# lite  = 1/16 vCPU, 256 MiB RAM, 2 GB disk  (too small; also the source of transient
+#         `container error` under git+node+python)
+# basic = 1/4 vCPU,  1 GiB RAM,   4 GB disk  (~2.4G free over the image)
+# DEPLOY BLOCKER: instance_type is part of the [[containers]] config, NOT a binding and
+# NOT a /content field — GET .../bindings returns only {d1 AUDIT, secret PILOT_TOKEN,
+# durable_object_namespace SHELL_CONTAINER}. So scripts/raw_put.py (/content PUT) and the
+# ops cf_worker_deploy path CANNOT apply this and risk dropping the container config;
+# applying it requires `wrangler deploy` of this directory with a CF token.
+
 [[containers]]
 class_name = "ShellContainer"
 image = "docker.io/nikolaik/python-nodejs:python3.12-nodejs22"
-instance_type = "lite"
+instance_type = "basic"
 max_instances = 3
 
 [[durable_objects.bindings]]
