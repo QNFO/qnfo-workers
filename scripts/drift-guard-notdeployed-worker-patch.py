@@ -1,117 +1,95 @@
 #!/usr/bin/env python3
 """drift-guard-notdeployed-worker-patch.py
 
-NOT-DEPLOYED-IDENTITY-1 + DUP-WORKER-1 (2026-09-29).
+NOT-DEPLOYED-IDENTITY-1 + DUP-WORKER-1 (2026-09-29) -- now a STATE ASSERTION, not a patch.
 
-TWO VERIFIED DEFECTS IN scripts/deploy-drift-guard.py, both found by RE-PROBING the
-15:51:44 FLEET-AUTOAUDIT-1 pass rather than trusting the class counts:
+STATUS: SUPERSEDED AS A PATCHER. This script no longer edits any file. Both fixes it was
+written to apply have landed by other routes, and it is kept (and kept GREEN) so that the
+workflow that runs it, .github/workflows/apply-drift-guard-notdeployed-fix.yml, becomes a
+regression guard instead of a permanently failing job.
 
-  1. NOT-DEPLOYED-IDENTITY-1 -- the not_deployed class appends the repo DIRECTORY name
-     (`not_deployed.append(d)`) while every other class carries the RESOLVED worker name.
-     worker_live_audit therefore mixed two identifier spaces in ONE column: a row reading
-     `agent-orchestrator` is a directory, a row reading `qnfo-agent-orchestrator` is a
-     deployed script. That ambiguity is what issue #1377 mis-read as a false negative.
-     Measured at 15:51:44Z: `agent-orchestrator` NOT_DEPLOYED (dir) sat beside
-     `qnfo-agent-orchestrator` NO_REPO_VERSION live=1.1.0 (resolved) -- the same worker,
-     two keys. Fix: append the resolved `worker`.
+WHY IT HAD TO CHANGE (measured 2026-09-29, issue #1382)
+  The previous revision anchored on two exact strings in scripts/deploy-drift-guard.py:
+      A1  '            else:\\n                not_deployed.append(d)\\n'
+      A2  '        worker = wrangler_name(d) or d\\n        if wanted and d not in wanted ...'
+  Re-counted against main (guard sha 9952ef80, 17,531 B):
+      A1 count = 0    (the guard now emits not_deployed.append((d, worker)))
+      A2 count = 0    (a concurrent writer refactored this into
+                       'declared = wrangler_name(d)' + 'worker = declared or d')
+      A3 count = 1
+  A1 and A2 are hard preconditions: count != 1 exits 3 BEFORE any edit. So the workflow step
+  'apply fail-closed patch' failed on every run, the job never reached py_compile or the
+  commit, and the fix could never land. A fail-closed guard whose anchors have all been
+  overtaken by other writers is not "safe"; it is a permanently red job that trains people
+  to ignore CI. That is the defect this revision closes.
 
-  2. DUP-WORKER-1 -- two directories can resolve to the SAME deployed worker (e.g. a dir
-     named `memory-mcp` and a second dir both declaring name = "qnfo-memory-mcp"). The
-     guard emitted that worker twice, fleet-autoaudit.py's classify() concatenated the note
-     into the malformed value `NO_REPO_VERSION+NO_REPO_VERSION`, and the fleet was
-     double-counted. Fix: dedupe on the resolved worker.
+WHAT IT ASSERTS NOW (exit 0 = both invariants hold, exit 3 = a regression)
+  I1  scripts/deploy-drift-guard.py emits the RESOLVED worker for the NOT_DEPLOYED class:
+      'not_deployed.append((d, worker))' present and the bare 'not_deployed.append(d)'
+      absent.
+  I2  scripts/fleet-autoaudit.py de-duplicates a repeated class note (NOTE-APPEND-IDEMPOTENT-1):
+      the guard can legitimately emit one resolved worker twice, because two repo
+      directories declare the same wrangler name -- verified on main:
+          memory-mcp/wrangler.toml      -> name = "qnfo-memory-mcp"
+          qnfo-memory-mcp/wrangler.toml -> name = "qnfo-memory-mcp"
+      Without I2 the consumer concatenated the class into the malformed value
+      'NO_REPO_VERSION+NO_REPO_VERSION' (measured in worker_live_audit on the 2026-09-29
+      16:00:58Z FLEET-AUTOAUDIT-1 run).
 
-WHAT THIS PATCH DOES NOT DO (adversarial, read before trusting it)
-  It does NOT change which workers are considered deployed, and it does NOT "fix" the 72
-  genuine NOT_DEPLOYED rows. Ten of those were re-probed directly: every one either
-  declares name == the directory (audit-hub, errata-hub, jnl-pipeline) or has no
-  wrangler.toml at all (ci-status, docs, ops-gateway, papers, personal-life-search,
-  qnfo-analytics, funding), and every one returns Cloudflare error 1042. The NOT_DEPLOYED
-  CLASS WAS CORRECT; only its identifier and its duplicate emission were wrong.
-  A green run here proves the identifier is now consistent and the file compiles. It does
-  NOT prove any worker is healthy, and it does not prove the next audit pass classifies
-  correctly -- that is verified separately by reading worker_live_audit after the next
-  fleet-autodeploy run.
+ADVERSARIAL
+  * A green run proves two string invariants in two files. It proves NOTHING about whether
+    the fleet is healthy, and nothing about whether NOT_DEPLOYED is the correct class for
+    any particular worker.
+  * It deliberately does NOT re-add a guard-side dedupe. Deduping inside the guard would
+    skip a whole repo directory and break the guard's documented invariant that every
+    directory yields exactly one class. The fix belongs in the consumer, where it is.
+  * I1 is a substring assertion. A rewrite that preserves the substring while changing
+    behaviour would pass. That is the accepted cost of not pinning a whole file.
 """
 import os
-import py_compile
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET = os.path.join(ROOT, "scripts", "deploy-drift-guard.py")
-MARK = "NOT-DEPLOYED-IDENTITY-1"
+GUARD = os.path.join(ROOT, "scripts", "deploy-drift-guard.py")
+CONSUMER = os.path.join(ROOT, "scripts", "fleet-autoaudit.py")
 
-A1_OLD = "            else:\n                not_deployed.append(d)\n"
-A1_NEW = ("            else:\n"
-          "                # NOT-DEPLOYED-IDENTITY-1: emit the RESOLVED worker, not the\n"
-          "                # directory. Mixing the two spaces in one column made a\n"
-          "                # directory name look like a worker name (issue #1377).\n"
-          "                not_deployed.append(worker)\n")
+I1_WANT = "not_deployed.append((d, worker))"
+I1_BAD = "not_deployed.append(d)"
+I2_WANT = 'if note not in rows[worker]["note"].split("+")'
 
-A2_OLD = ("        worker = wrangler_name(d) or d\n"
-          "        if wanted and d not in wanted and worker not in wanted:\n"
-          "            continue\n")
-A2_NEW = ("        worker = wrangler_name(d) or d\n"
-          "        if wanted and d not in wanted and worker not in wanted:\n"
-          "            continue\n"
-          "        # DUP-WORKER-1: two directories can resolve to the SAME deployed worker.\n"
-          "        # Emitting it twice produced the malformed note\n"
-          "        # \"NO_REPO_VERSION+NO_REPO_VERSION\" and double-counted the fleet.\n"
-          "        if worker in seen_workers:\n"
-          "            continue\n"
-          "        seen_workers.add(worker)\n")
 
-A3_OLD = "    not_deployed, sync_workers, live_err, no_health = [], [], [], []\n"
-A3_NEW = ("    not_deployed, sync_workers, live_err, no_health = [], [], [], []\n"
-          "    seen_workers = set()\n")
-
-ANCHORS = [("A1", A1_OLD, A1_NEW), ("A2", A2_OLD, A2_NEW), ("A3", A3_OLD, A3_NEW)]
+def read(path):
+    if not os.path.isfile(path):
+        print("::error::missing " + path)
+        return None
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
 
 
 def main():
-    if not os.path.isfile(TARGET):
-        print("::error::missing " + TARGET)
-        return 3
-    with open(TARGET, encoding="utf-8") as fh:
-        src = fh.read()
-
-    if MARK in src:
-        print("ALREADY_PATCHED: no change")
-        return 0
-
-    for name, old, _ in ANCHORS:
-        n = src.count(old)
-        if n != 1:
-            print("::error::anchor %s matched %d times (need exactly 1) - fail closed"
-                  % (name, n))
-            return 3
-
-    out = src
-    for _, old, new in ANCHORS:
-        out = out.replace(old, new, 1)
-
-    for probe in ("not_deployed.append(worker)", "seen_workers = set()",
-                  "if worker in seen_workers:"):
-        if probe not in out:
-            print("::error::expected marker missing after patch: " + probe)
-            return 3
-    if "not_deployed.append(d)" in out:
-        print("::error::old dir-name append still present - fail closed")
+    guard = read(GUARD)
+    consumer = read(CONSUMER)
+    if guard is None or consumer is None:
         return 3
 
-    tmp = TARGET + ".patched"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(out)
-    try:
-        py_compile.compile(tmp, doraise=True)
-    except py_compile.PyCompileError as e:
-        print("::error::patched file does not compile: %s" % e)
-        return 3
-    os.replace(tmp, TARGET)
+    failures = []
+    if I1_WANT not in guard:
+        failures.append("I1: %s absent from deploy-drift-guard.py" % I1_WANT)
+    if I1_BAD in guard:
+        failures.append("I1: legacy %s still present (NOT_DEPLOYED keyed by directory)"
+                        % I1_BAD)
+    if I2_WANT not in consumer:
+        failures.append("I2: NOTE-APPEND-IDEMPOTENT-1 absent from fleet-autoaudit.py")
 
-    print("PATCHED ok: %d -> %d bytes (+%d)" % (len(src), len(out), len(out) - len(src)))
-    print("markers: NOT-DEPLOYED-IDENTITY-1 present, dir-name append removed, "
-          "seen_workers dedupe present")
+    if failures:
+        for f in failures:
+            print("::error::" + f)
+        return 3
+
+    print("SUPERSEDED-AS-PATCHER: no file edited (both fixes already landed)")
+    print("I1 OK: deploy-drift-guard.py emits the resolved worker for NOT_DEPLOYED")
+    print("I2 OK: fleet-autoaudit.py de-duplicates a repeated class note")
+    print("invariants asserted: 2/2")
     return 0
 
 
