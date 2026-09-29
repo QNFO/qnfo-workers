@@ -1,483 +1,14 @@
 {
-  "audited_at": "2026-09-29 16:32:30",
-  "d1_write_failures": [
-    [
-      "ai-health-prober",
-      "None"
-    ],
-    [
-      "audit-hub",
-      "None"
-    ],
-    [
-      "audits",
-      "None"
-    ],
-    [
-      "calendar-api",
-      "None"
-    ],
-    [
-      "ci-status",
-      "None"
-    ],
-    [
-      "companion-hub",
-      "None"
-    ],
-    [
-      "docs",
-      "None"
-    ],
-    [
-      "errata-hub",
-      "None"
-    ],
-    [
-      "events-radar",
-      "None"
-    ],
-    [
-      "fleet-exec",
-      "None"
-    ],
-    [
-      "funding",
-      "None"
-    ],
-    [
-      "idea-hub",
-      "None"
-    ],
-    [
-      "jnl-pipeline",
-      "None"
-    ],
-    [
-      "jnl-referee",
-      "None"
-    ],
-    [
-      "jnl-reviser",
-      "None"
-    ],
-    [
-      "jnl-watch",
-      "None"
-    ],
-    [
-      "jnl-zenodo",
-      "None"
-    ],
-    [
-      "machine-readability",
-      "None"
-    ],
-    [
-      "migrations",
-      "None"
-    ],
-    [
-      "notes-intake",
-      "None"
-    ],
-    [
-      "obsidian-writer",
-      "None"
-    ],
-    [
-      "ops-gateway",
-      "None"
-    ],
-    [
-      "osf-integrity-check",
-      "None"
-    ],
-    [
-      "paper-hub",
-      "None"
-    ],
-    [
-      "papers",
-      "None"
-    ],
-    [
-      "personal-api",
-      "None"
-    ],
-    [
-      "personal-companion",
-      "None"
-    ],
-    [
-      "personal-events-radar",
-      "None"
-    ],
-    [
-      "personal-life-indexer",
-      "None"
-    ],
-    [
-      "personal-life-maintain",
-      "None"
-    ],
-    [
-      "personal-life-search",
-      "None"
-    ],
-    [
-      "q08-signal-engine",
-      "None"
-    ],
-    [
-      "qnfo-agent-orchestrator",
-      "None"
-    ],
-    [
-      "qnfo-agent-ws",
-      "None"
-    ],
-    [
-      "qnfo-ai",
-      "None"
-    ],
-    [
-      "qnfo-ai-calibration",
-      "None"
-    ],
-    [
-      "qnfo-ai-search",
-      "None"
-    ],
-    [
-      "qnfo-analytics",
-      "None"
-    ],
-    [
-      "qnfo-archive",
-      "None"
-    ],
-    [
-      "qnfo-artifact-agent",
-      "None"
-    ],
-    [
-      "qnfo-artifacts",
-      "None"
-    ],
-    [
-      "qnfo-arxiv-radar",
-      "None"
-    ],
-    [
-      "qnfo-auditor",
-      "None"
-    ],
-    [
-      "qnfo-autopilot",
-      "None"
-    ],
-    [
-      "qnfo-backlog-exec",
-      "None"
-    ],
-    [
-      "qnfo-blank-audit",
-      "None"
-    ],
-    [
-      "qnfo-calendar-intake",
-      "None"
-    ],
-    [
-      "qnfo-chameleon",
-      "None"
-    ],
-    [
-      "qnfo-chat-canary",
-      "None"
-    ],
-    [
-      "qnfo-citation-watch",
-      "None"
-    ],
-    [
-      "qnfo-cloud-ops",
-      "None"
-    ],
-    [
-      "qnfo-code-agent",
-      "None"
-    ],
-    [
-      "qnfo-code-orchestrator",
-      "None"
-    ],
-    [
-      "qnfo-containers-pilot",
-      "None"
-    ],
-    [
-      "qnfo-ddocs-indexer",
-      "None"
-    ],
-    [
-      "qnfo-deploy-guard",
-      "None"
-    ],
-    [
-      "qnfo-email",
-      "None"
-    ],
-    [
-      "qnfo-email-orchestrator",
-      "None"
-    ],
-    [
-      "qnfo-errata-orchestrator",
-      "None"
-    ],
-    [
-      "qnfo-errata-publish",
-      "None"
-    ],
-    [
-      "qnfo-errata-respond",
-      "None"
-    ],
-    [
-      "qnfo-errata-watch",
-      "None"
-    ],
-    [
-      "qnfo-error-selfheal",
-      "None"
-    ],
-    [
-      "qnfo-events",
-      "None"
-    ],
-    [
-      "qnfo-fleet-advisor",
-      "None"
-    ],
-    [
-      "qnfo-fleet-calibrator",
-      "None"
-    ],
-    [
-      "qnfo-fleet-control",
-      "None"
-    ],
-    [
-      "qnfo-fleet-dashboard",
-      "None"
-    ],
-    [
-      "qnfo-fleet-deploy",
-      "None"
-    ],
-    [
-      "qnfo-fleet-feed",
-      "None"
-    ],
-    [
-      "qnfo-gateway",
-      "None"
-    ],
-    [
-      "qnfo-idea-factory",
-      "None"
-    ],
-    [
-      "qnfo-idea-miner",
-      "None"
-    ],
-    [
-      "qnfo-idea-triage",
-      "None"
-    ],
-    [
-      "qnfo-impact",
-      "None"
-    ],
-    [
-      "qnfo-infra",
-      "None"
-    ],
-    [
-      "qnfo-intent-orchestrator",
-      "None"
-    ],
-    [
-      "qnfo-ipatent",
-      "None"
-    ],
-    [
-      "qnfo-kaizen",
-      "None"
-    ],
-    [
-      "qnfo-lifecycle",
-      "None"
-    ],
-    [
-      "qnfo-memory-mcp",
-      "None"
-    ],
-    [
-      "qnfo-observability",
-      "None"
-    ],
-    [
-      "qnfo-ops",
-      "None"
-    ],
-    [
-      "qnfo-outreach",
-      "None"
-    ],
-    [
-      "qnfo-paper-explainer",
-      "None"
-    ],
-    [
-      "qnfo-paper-indexer",
-      "None"
-    ],
-    [
-      "qnfo-paper-reviser",
-      "None"
-    ],
-    [
-      "qnfo-pdf",
-      "None"
-    ],
-    [
-      "qnfo-pipeline-ops",
-      "None"
-    ],
-    [
-      "qnfo-proof",
-      "None"
-    ],
-    [
-      "qnfo-qwav",
-      "None"
-    ],
-    [
-      "qnfo-register-guard",
-      "None"
-    ],
-    [
-      "qnfo-research-exec",
-      "None"
-    ],
-    [
-      "qnfo-research-radar",
-      "None"
-    ],
-    [
-      "qnfo-research-supervisor",
-      "None"
-    ],
-    [
-      "qnfo-scorecard",
-      "None"
-    ],
-    [
-      "qnfo-signal-loop",
-      "None"
-    ],
-    [
-      "qnfo-skill-sync",
-      "None"
-    ],
-    [
-      "qnfo-skills-discovery",
-      "None"
-    ],
-    [
-      "qnfo-social",
-      "None"
-    ],
-    [
-      "qnfo-subscribers",
-      "None"
-    ],
-    [
-      "qnfo-thread-ingest",
-      "None"
-    ],
-    [
-      "qnfo-tools-mcp",
-      "None"
-    ],
-    [
-      "qnfo-twin-maintain",
-      "None"
-    ],
-    [
-      "qnfo-venue-radar",
-      "None"
-    ],
-    [
-      "qnfo-web-unified",
-      "None"
-    ],
-    [
-      "radar-hub",
-      "None"
-    ],
-    [
-      "research-daily-brief",
-      "None"
-    ],
-    [
-      "scripts",
-      "None"
-    ],
-    [
-      "vault-indexer",
-      "None"
-    ]
-  ],
-  "d1_writes_ok": 0,
+  "audited_at": "2026-09-29 16:44:25",
+  "d1_write_failures": [],
+  "d1_writes_ok": 110,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-lifecycle/deployed-current.worker.js",
-        "dir": "qnfo-lifecycle",
-        "live": "1.6.3-version-sot",
-        "repo": "1.6.4-metric-freshness",
-        "worker": "qnfo-lifecycle"
-      },
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/deployed-current.worker.js",
-        "dir": "qnfo-ops",
-        "live": "2.37.24-404hint-list",
-        "repo": "2.37.25-ops-deploy-ledger",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
-    "drift": [
-      {
-        "dir": "qnfo-lifecycle",
-        "live": "1.6.3-version-sot",
-        "repo": "1.6.4-metric-freshness",
-        "worker": "qnfo-lifecycle"
-      },
-      {
-        "dir": "qnfo-ops",
-        "live": "2.37.24-404hint-list",
-        "repo": "2.37.25-ops-deploy-ledger",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "name_resolution": true,
     "no_health_route": [
@@ -858,7 +389,7 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 37,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
@@ -884,8 +415,10 @@
       "qnfo-intent-orchestrator",
       "qnfo-ipatent",
       "qnfo-kaizen",
+      "qnfo-lifecycle",
       "qnfo-memory-mcp",
       "qnfo-observability",
+      "qnfo-ops",
       "qnfo-outreach",
       "qnfo-paper-indexer",
       "qnfo-paper-reviser",
@@ -897,7 +430,7 @@
       "qnfo-tools-mcp"
     ]
   },
-  "purge_error": "None",
+  "purge_error": null,
   "rows": {
     "ai-health-prober": {
       "before": null,
@@ -1532,11 +1065,11 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.6.4-metric-freshness",
+      "before": null,
       "http": 200,
-      "live": "1.6.3-version-sot",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
@@ -1556,11 +1089,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.37.25-ops-deploy-ledger",
+      "before": null,
       "http": 200,
-      "live": "2.37.24-404hint-list",
-      "match": 0,
-      "note": "DRIFT",
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
@@ -1780,5 +1313,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": null
+  "stale_rows_purged": 0
 }
