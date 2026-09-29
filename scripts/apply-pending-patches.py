@@ -141,8 +141,19 @@ def revert_paths(root: Path, codes: dict) -> list:
 def classify(text: str, rc: int) -> str:
     low = text.lower()
     if rc != 0:
-        # Fail-closed patchers deliberately exit non-zero on anchor drift.
-        if "fail-closed" in low or "anchor" in low or "does not match" in low:
+        # APPLIER-CLASSIFY-UNMASKED-1 (issue #1466, 2026-09-29).
+        # The old predicate was a BARE `"anchor" in low`, so a genuine crash
+        # whose *filename* contains "anchor" was filed as `stale-anchor`. The
+        # applier written to fix version-anchor rot was therefore reported AS
+        # that rot (NameError: name 'Path' is not defined) and never ran.
+        #
+        # A real Python traceback now takes precedence over the heuristic, and
+        # the heuristic requires the drift SIGNATURE, not the bare word.
+        if "traceback (most recent call last)" in low:
+            return "error"
+        if "fail-closed" in low or "anchor occurrence != 1" in low:
+            return "stale-anchor"
+        if "does not match" in low:
             return "stale-anchor"
         return "error"
     if "already applied" in low and "patched" not in low:
