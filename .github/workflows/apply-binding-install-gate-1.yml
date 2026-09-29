@@ -28,6 +28,14 @@ name: apply-binding-install-gate-1
 # to its patch script, and on manual dispatch.
 #
 # WORKFLOW-YAML-LINT-1: no step name in this file contains an unquoted colon-space.
+#
+# GREP-COUNT-SET-E-1 (fixed 2026-09-29): the verify step ran under `set -euo pipefail` and
+# captured `legacy=$(grep -cF 'if (bindingsOut.length === 0) {' "$f")`. `grep -c` exits 1
+# when the count is ZERO, which IS the post-patch state being asserted, so `set -e` aborted
+# the step on its own success condition. Measured: head e8da491b recorded
+# patch_step=success, job_status=failure in ci-status/binding-install-gate-1.json. Every
+# `grep -c` capture now ends with `|| true` so the count is data and the following `test`
+# performs the assertion.
 
 on:
   push:
@@ -72,11 +80,11 @@ jobs:
           python3 -m py_compile scripts/patch-binding-install-gate-1.py
           echo "py_compile OK"
           for f in qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js; do
-            n=$(grep -cF "BINDING-INSTALL-MERGE-1" "$f")
+            n=$(grep -cF "BINDING-INSTALL-MERGE-1" "$f" || true)
             test "$n" -eq 1
-            legacy=$(grep -cF 'if (bindingsOut.length === 0) {' "$f")
+            legacy=$(grep -cF 'if (bindingsOut.length === 0) {' "$f" || true)
             test "$legacy" -eq 0
-            dedup=$(grep -cF '_seen.has(_k)' "$f")
+            dedup=$(grep -cF '_seen.has(_k)' "$f" || true)
             test "$dedup" -eq 1
             cp "$f" /tmp/check.mjs
             node --check /tmp/check.mjs
