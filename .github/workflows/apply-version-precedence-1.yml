@@ -1,0 +1,146 @@
+name: apply-version-precedence-1
+
+# VERSION-PRECEDENCE-1 + NOTE-APPEND-IDEMPOTENT-1 (2026-09-29). See
+# scripts/patch-version-precedence-1.py for the full defect record.
+#
+# Two defects measured on the 2026-09-29 15:58:20Z worker_live_audit run:
+#   * qnfo-archive was written note=DRIFT with registry_before="qnfo-archive/fabric-20260910"
+#     against a live /health of 1.2.0. The guard's version regex preferred QNFO_VERSION (a
+#     build tag) over VERSION (the served value), so the DRIFT is permanent and
+#     unreconcilable -- and --ahead, which gates the default-ON auto-deploy, compares that
+#     same string numerically.
+#   * qnfo-memory-mcp was written note=NO_REPO_VERSION+NO_REPO_VERSION. Two directories
+#     resolve to the same worker name (DUP-WORKER-1) and the consumer appended the same
+#     class twice, producing a note that no classifier or per-class query matches.
+#
+# This follows the repository apply-* convention, minus the deploy step: the patch target is
+# a CI script, not a worker artifact, so there is no live bundle to redeploy and no
+# source/mirror parity to assert. The commit-back push touches scripts/deploy-drift-guard.py
+# and scripts/fleet-autoaudit.py, which are inputs of fleet-autodeploy.yml, so the audit
+# re-runs on the patched guard; an explicit dispatch is fired as well, best-effort.
+#
+# NOTE ON SCHEDULES: SCHEDULE-EVENT-NEVER-FIRES-1 -- the GitHub `schedule` event has never
+# fired on this repository, so this workflow declares NO cron. It fires on push to itself or
+# its patch script, and on manual dispatch.
+#
+# WORKFLOW-YAML-LINT-1: no step name in this file contains an unquoted colon-space, which is
+# the class that made apply-backlog-health-cheap.yml fail with ZERO jobs (6 failures /
+# 0 successes) and left its patch with no path to live.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/patch-version-precedence-1.py"
+      - ".github/workflows/apply-version-precedence-1.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-version-precedence-1
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  patch-verify-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Patch both scripts (fail-closed, idempotent)
+        id: patch
+        run: python3 scripts/patch-version-precedence-1.py
+
+      - name: Verify both scripts compile and carry the markers
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/deploy-drift-guard.py scripts/fleet-autoaudit.py
+          echo "py_compile OK"
+          grep -cF "VERSION-PRECEDENCE-1" scripts/deploy-drift-guard.py
+          grep -cF "NOTE-APPEND-IDEMPOTENT-1" scripts/fleet-autoaudit.py
+          echo "markers OK"
+
+      - name: Verify the resolver prefers VERSION over QNFO_VERSION
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys, types
+          src = open("scripts/deploy-drift-guard.py", encoding="utf-8").read()
+          mod = types.ModuleType("guard")
+          mod.__file__ = "scripts/deploy-drift-guard.py"
+          argv = sys.argv[:]
+          # if the module calls main() unguarded it must not run a live fleet scan here
+          sys.argv = ["guard", "--json", "___no_such_worker___"]
+          try:
+              exec(compile(src, mod.__file__, "exec"), mod.__dict__)
+          except SystemExit:
+              pass
+          finally:
+              sys.argv = argv
+          assert callable(mod._repo_version), "helper missing"
+          both = 'const QNFO_VERSION = "qnfo-archive/fabric-20260910";\nconst VERSION = "1.2.0";\n'
+          only = 'const QNFO_VERSION = "1.6.2";\n'
+          got_both, got_only = mod._repo_version(both), mod._repo_version(only)
+          print("both ->", got_both)
+          print("only ->", got_only)
+          assert got_both == "1.2.0", got_both
+          assert got_only == "1.6.2", got_only
+          assert mod._repo_version("no version constant here") is None
+          print("VERSION-PRECEDENCE-1 behaviour verified")
+          PY
+
+      - name: Publish machine-readable status
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/version-precedence-1.json <<EOF
+          {
+            "workflow": "apply-version-precedence-1",
+            "defects": ["VERSION-PRECEDENCE-1", "NOTE-APPEND-IDEMPOTENT-1"],
+            "patch_step": "${{ steps.patch.outcome }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/version-precedence-1.json
+
+      - name: "Commit back (race-safe: pull --rebase + bounded retry)"
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add scripts/deploy-drift-guard.py scripts/fleet-autoaudit.py ci-status/version-precedence-1.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit (patch was a no-op)"
+            exit 0
+          fi
+          git commit -m "fix(drift-guard): VERSION-PRECEDENCE-1 + NOTE-APPEND-IDEMPOTENT-1 (false DRIFT on qnfo-archive, unclassifiable compound note)"
+          for i in 1 2 3 4 5; do
+            echo "commit-back attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "commit-back OK on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::commit-back failed after 5 attempts"
+          exit 1
+
+      - name: Re-run the fleet audit with the patched guard
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run fleet-autodeploy.yml -f mode=audit || echo "dispatch skipped"
