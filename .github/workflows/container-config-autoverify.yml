@@ -1,0 +1,182 @@
+name: container-config-autoverify
+
+# CONTAINER-CONFIG-AUTOVERIFY-1 (2026-09-29, issues #1485 / #1487).
+#
+# WHY THIS EXISTS -- MEASURED, NOT INFERRED
+#   Cloudflare stores [[containers]] as SCRIPT-LEVEL metadata, NOT as a binding, so
+#   GET /workers/scripts/<name>/bindings can never show it and BINDING-PRESERVATION-1 can
+#   never protect it. Both automatic deployers in this fleet (qnfo-ops cf_worker_deploy and
+#   scripts/raw_put.py) rebuilt the upload from a partial read and therefore DROPPED it:
+#       deployment_history id 172  19:30:35.100Z  qnfo-ops:cf_worker_deploy
+#       first cloud_ops_events kind=container.error  19:30:43.591Z (8s later)
+#       text: "Cannot read properties of undefined (reading 'running')"
+#   Blast radius: shell_exec, exec_python, exec_node, container_install, git_clone_exec,
+#   container_workspace_exec, shell_pipeline, container_status -- all HTTP 500.
+#
+#   Two prior attempts to close this shipped as (a) a name-list guard inside qnfo-ops
+#   (container-config-drop-guard-patch.py, live as 2.37.30-container-deploy-guard) and
+#   (b) scripts/restore_container_config.py, which sends `containers` in /content metadata.
+#   The guard covers only cf_worker_deploy; the restore script had NO RUNNER until
+#   restore-container-config-1485.yml was added at ~19:5xZ and has still produced no
+#   ci-status artifact. Neither path asserts the invariant RECURRINGLY.
+#
+# WHAT THIS WORKFLOW DOES
+#   probe GET /settings.containers -> if absent, run scripts/restore_container_config.py
+#   -> re-probe -> write ci-status/container-config-autoverify.json with pre/post state, the
+#   restore rc and its output tail. The /settings read-back is the authoritative assertion;
+#   it does not trust what any deploy step claims.
+#
+# FAIL-CLOSED / NO-REGRESSION
+#   Every step is continue-on-error:true and the artifact step is if: always(), so a red run
+#   is still diagnosable from the repo (FAILURE-ARTIFACT-LOSS-1) and a probe failure can
+#   never skip the restore (WRANGLER-NOT-SKIPPABLE-1).
+#
+# TRIGGER NOTE
+#   SCHEDULE-EVENT-NEVER-FIRES-1 is measured in this repo, so the schedule below is
+#   BEST-EFFORT only -- the operative triggers are push (any qnfo-containers-pilot change)
+#   and workflow_dispatch. It is deliberately not schedule-only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/container-config-autoverify.yml"
+      - "qnfo-containers-pilot/**"
+      - "scripts/restore_container_config.py"
+      - "scripts/raw_put.py"
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: container-config-autoverify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER: qnfo-containers-pilot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: "probe, restore when absent, re-probe, publish artifact"
+        id: check
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 - <<'PY'
+          import datetime, json, os, subprocess, sys, urllib.request
+
+          acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          worker = os.environ.get("WORKER", "qnfo-containers-pilot")
+          ua = "QNFO-fleet-ci/1.0 (+https://qnfo.org; container-config-autoverify)"
+          url = ("https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/%s/settings"
+                 % (acct, worker))
+
+          def read():
+              try:
+                  r = urllib.request.Request(
+                      url, headers={"Authorization": "Bearer " + tok, "User-Agent": ua})
+                  d = json.load(urllib.request.urlopen(r, timeout=60))
+                  res = d.get("result") or {}
+                  return {
+                      "ok": bool(d.get("success")),
+                      "containers": res.get("containers"),
+                      "bindings": [b.get("name") for b in (res.get("bindings") or [])],
+                      "compatibility_date": res.get("compatibility_date"),
+                  }
+              except Exception as e:  # noqa: BLE001
+                  return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+
+          pre = read()
+          print("PRE:", json.dumps(pre))
+          rep = {"attempted": False, "rc": None, "tail": ""}
+          if not pre.get("containers"):
+              rep["attempted"] = True
+              try:
+                  p = subprocess.run([sys.executable, "scripts/restore_container_config.py"],
+                                     capture_output=True, text=True, timeout=600)
+                  rep["rc"] = p.returncode
+                  rep["tail"] = ((p.stdout or "")[-6000:] + (p.stderr or "")[-2000:])
+              except Exception as e:  # noqa: BLE001
+                  rep["rc"] = -1
+                  rep["tail"] = "%s: %s" % (type(e).__name__, e)
+              print("RESTORE rc=%s" % rep["rc"])
+              print(rep["tail"])
+          else:
+              print("containers already live - no restore needed")
+
+          post = read()
+          print("POST:", json.dumps(post))
+          out = {
+              "workflow": "container-config-autoverify",
+              "marker": "CONTAINER-CONFIG-AUTOVERIFY-1",
+              "issue": 1485,
+              "worker": worker,
+              "pre_containers": pre.get("containers"),
+              "pre_error": pre.get("error"),
+              "restore": rep,
+              "post_containers": post.get("containers"),
+              "post_bindings": post.get("bindings"),
+              "closed": bool(post.get("containers")),
+              "head": os.environ.get("GITHUB_SHA", ""),
+              "ts": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+          os.makedirs("ci-status", exist_ok=True)
+          with open("ci-status/container-config-autoverify.json", "w") as fh:
+              json.dump(out, fh, indent=2)
+          print("WROTE ci-status/container-config-autoverify.json")
+          print("closed=%s" % out["closed"])
+          PY
+          rc=$?
+          echo "check_rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: "commit the verification artifact"
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add ci-status/container-config-autoverify.json || true
+          if git diff --cached --quiet; then
+            echo "no artifact change"
+            exit 0
+          fi
+          git commit -m "ci(container-config): autoverify result"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main || true
+            if git push origin HEAD:main; then echo "PUSH OK attempt $i"; exit 0; fi
+            sleep $((i * 3))
+          done
+          echo "::warning::artifact not pushed after retries"
+          exit 0
+
+      - name: summarize
+        if: always()
+        run: |
+          {
+            echo "## container-config-autoverify"
+            echo ""
+            echo "Closes: CONTAINER-CONFIG-DROPPED-1 / issue #1485 (recurring assertion)"
+            echo ""
+            echo "check_rc=\`${{ steps.check.outputs.check_rc }}\`"
+            echo ""
+            echo "A green run with \`closed: true\` means GET /settings reports a non-empty"
+            echo "\`containers\` array for the worker. Anything else is fail-closed."
+          } >> "$GITHUB_STEP_SUMMARY"
