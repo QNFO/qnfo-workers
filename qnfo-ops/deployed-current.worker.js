@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.27-self-fetch-guard";
+var VERSION = "2.37.28-affirm-veto";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -826,7 +826,20 @@ __name22222(listIssues, "listIssues");
 __name222222(listIssues, "listIssues");
 async function triggerBacklog(env, args, userText) {
   function userAffirmative(t2) {
-    return /\b(yes|yep|yeah|confirm|confirmed|go ahead|do it|run it|proceed|drain|execute|exec|run|trigger|fix|start|please|remediate|remediation|resolve|close|clear|backlog)\b/i.test(String(t2 || ""));
+    var __s = String(t2 || "");
+    // AFFIRM-GUARD-VETO-1 (2026-09-29) -- closes #1481 (false negative) AND #1482
+    // (vacuous gate). This is an ACCIDENT-PREVENTION gate, NOT an auth boundary.
+    // 1. Refusal polarity, adjacency-scoped: a negation that targets the drain
+    //    action can never authorize it. Scoped deliberately -- a global negation
+    //    check would refuse the owner's own standing instruction
+    //    "Do not stop, do not terminate, do not interrupt execution. Drain ...".
+    //    `execut\w*` is NOT a veto target for that same reason.
+    if (/(?:do\s+not|don'?t|never|no|stop|cancel|abort|hold\s+off|not\s+yet)\s+(?:the\s+|a\s+|any\s+)?(?:drain|run|execute|proceed|trigger|remediate|fix|close|clear)\b/i.test(__s)) return false;
+    // 2. Intent-bearing affirmatives only. The vague tokens that made the gate
+    //    vacuous ('please'/'backlog'/'fix'/'close'/'clear'/'start'/'run') are gone;
+    //    every legitimate drain instruction contains `drain`, so nothing that
+    //    should authorize stops authorizing.
+    return /\b(?:yes|yep|yeah|confirm|confirmed|approve|approved|authorized|authorised|go\s+ahead|do\s+it|run\s+it|proceed|drain)\b/i.test(__s);
   }
   __name(userAffirmative, "userAffirmative");
   __name2(userAffirmative, "userAffirmative");

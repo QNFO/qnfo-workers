@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.32-stale-gate-failclosed";
+var VERSION = "1.7.33-drift-failclosed";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2765,7 +2765,10 @@ async function redHtml(env) {
     H.push("</table>");
   }
   const ig = st.integration || {};
-  const driftBad = (ig.drift && ig.drift.ghost || 0) + (ig.drift && ig.drift.unregistered || 0) + (ig.drift && ig.drift.unversioned || 0);
+  // DRIFT-FAILCLOSED-1 (issue #1301 residual): a FAILED integration read must not
+  // coalesce to 0. driftBad == null means "no readable drift signal"; every consumer
+  // below then treats it as FAIL-CLOSED (head 0), never as perfect headroom.
+  const driftBad = ig.drift ? ((ig.drift.ghost || 0) + (ig.drift.unregistered || 0) + (ig.drift.unversioned || 0)) : null;
   const sched = st.scheduled || [];
   const noRun = sched.filter(function(x) {
     return x.status === "NO-RUN";
@@ -2945,15 +2948,19 @@ async function redHtml(env) {
     { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
     { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
     { m: "workers_ai_cost_30d_usd", live: (waiCost != null ? "$" + waiCost.toFixed(2) + "/30d" : (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a")), head: waiCost != null ? c01((15.03 - waiCost) / (15.03 - 7.5)) : (aiN != null ? c01((1500000 - aiN) / 800000) : null) },
-    { m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }
+    { m: "drift_total", live: driftBad == null ? "n/a" : String(driftBad), head: driftBad == null ? 0 : c01(1 - driftBad) }
   ];
   const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.20, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.10, worker_count: 0.05, drift_total: 0.05 };
-  let wnum = 0, wsum = 0;
+  // GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301): a gate with NO readable value
+  // was SKIPPED, dropping its weight from wsum, so MISSING DATA RAISED the reported
+  // headroom. A null gate is now counted as head 0: absent evidence is not health.
+  let wnum = 0, wsum = 0, nullGates = 0;
   gateRows.forEach(function(x) {
     const w = gateW[x.m] != null ? gateW[x.m] : 0.1;
     const rmm = (mr || []).filter(function(y) { return y.metric === x.m; })[0];
     if (staleOf(rmm)) { wsum += w; return; }
     if (typeof x.head === "number") { wnum += w * x.head; wsum += w; }
+    else { nullGates += 1; wsum += w; }
   });
   const surv = wsum > 0 ? wnum / wsum : null;
   const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
@@ -2968,10 +2975,10 @@ async function redHtml(env) {
   H.push("</table>");
   H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + " (weighted, x cost-eff " + (costEff != null ? Math.round(costEff * 100) + "%" : "n/a") + " = SAI external_impact " + (extImpact != null ? extImpact.toFixed(3) : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; drives the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
   try {
-    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2)").run();
+    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2); FAIL-CLOSED #1301 null_gates=" + nullGates).run();
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
+  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad == null ? "n/a" : String(driftBad)) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
   H.push("</body></html>");
   return H.join("");
 }
