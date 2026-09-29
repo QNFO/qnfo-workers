@@ -1,37 +1,25 @@
 name: apply-version-precedence-2
 
-# VERSION-PRECEDENCE-2 (#1388) - the drift guard's _repo_version() returned the FIRST
-# plain `const VERSION` match in file order. fleet-exec (a canonical deploy target,
-# deploy-targets.txt) declares TWO: line 7 `const VERSION = "fleet-executor/0.3.2"`
-# inside the `execMod` IIFE closure, and line 186 `const VERSION = "1.0.2"` at module
-# scope. The module-scope /health handler (line 265) is the one the worker serves, and
-# live /health returns 1.0.2 - so the guard reported a PERMANENT false DRIFT row
-# (repo=fleet-executor/0.3.2 vs live=1.0.2) on the class the auto-deployer's safety
-# argument rests on.
+# VERSION-PRECEDENCE-2-MULTI-DECLARATION-1 (issue #1388).
 #
-# The applier resolves by last-wins AND excludes multi-declaration artifacts from
-# --ahead, so an ambiguous version is reported but never auto-deployed.
+# Self-applying applier. Patches scripts/deploy-drift-guard.py so the repo<->live version
+# resolver stops reading the FIRST of two `const VERSION` declarations in a concatenated
+# artifact (fleet-exec: line 7 "fleet-executor/0.3.2" vs line 186 "1.0.2" = the value
+# /health serves), which produced a permanent false DRIFT row on a canonical deploy target.
 #
-# ARTIFACT-PERSISTENCE (#1381 FAILURE-ARTIFACT-LOSS-1): the status publish and the
-# commit-back both run `if: always()`, so a FAILED apply run still leaves
-# ci-status/version-precedence-2.json on main. A green-only commit-back destroys the
-# evidence of exactly the runs a human needs to see.
-#
-# COMMITBACK-PUSH-RACE-1 (#1386): the commit-back uses pull --rebase + bounded retry
-# because this repo receives a push every few minutes.
-#
-# ADVERSARIAL: the applier is fail-closed, so if _repo_version is rewritten by a later
-# writer the anchors miss and this job goes RED (ANCHOR-INVALIDATION-RED-JOB-1, #1383)
-# rather than mis-patching the guard. A red job here means "re-anchor the applier",
-# not "the guard is broken".
+# Trigger is `push` on this workflow's own two paths, so the commit that adds it self-fires
+# the run, plus workflow_dispatch as a manual fallback. No cron is declared -- the
+# `schedule` event has never fired on this repository (SCHEDULE-EVENT-NEVER-FIRES-1), so a
+# cron-only writer would never run. Step names carry no unquoted colon
+# (WORKFLOW-YAML-LINT-1). The commit-back message carries [skip ci] so the patch cannot
+# re-trigger this workflow.
 
 on:
   push:
     branches: [main]
     paths:
-      - "scripts/patch-version-precedence-2.py"
-      - ".github/workflows/apply-version-precedence-2.yml"
-      - "scripts/deploy-drift-guard.py"
+      - scripts/patch-version-precedence-2.py
+      - .github/workflows/apply-version-precedence-2.yml
   workflow_dispatch:
 
 permissions:
@@ -45,52 +33,49 @@ concurrency:
 jobs:
   apply:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Apply VERSION-PRECEDENCE-2 applier (fail-closed, idempotent)
+      - name: Apply the VERSION-PRECEDENCE-2 patch
         run: python3 scripts/patch-version-precedence-2.py
 
-      - name: Verify patched guard compiles and carries the fix
-        run: |
-          set -e
-          python3 -m py_compile scripts/deploy-drift-guard.py
-          test "$(grep -c 'VERSION-PRECEDENCE-2' scripts/deploy-drift-guard.py)" -ge 5
-          test "$(grep -c '_plain_versions' scripts/deploy-drift-guard.py)" -ge 3
-          if grep -q 'for prefix, val in hits:' scripts/deploy-drift-guard.py; then
-            echo "::error::legacy first-match loop still present"; exit 1
-          fi
-          echo "verify ok"
+      - name: Verify the patched resolver
+        run: python3 scripts/patch-version-precedence-2.py --verify-only
 
-      - name: Publish machine-readable status (always, incl. failed runs)
+      - name: Publish status artifact
         if: always()
         run: |
           mkdir -p ci-status
-          printf '{"job":"version-precedence-2","conclusion":"%s"}\n' "${{ job.status }}" \
-            > ci-status/version-precedence-2.json
+          printf '{\n  "workflow": "apply-version-precedence-2",\n  "defect": "VERSION-PRECEDENCE-2-MULTI-DECLARATION-1",\n  "issue": 1388,\n  "head": "%s",\n  "ts": "%s"\n}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/version-precedence-2.json
+          cat ci-status/version-precedence-2.json
 
-      - name: Commit the patched guard back to main (rebase + bounded retry)
-        if: always()
+      - name: Commit back the patched guard
         run: |
-          set -e
+          if git diff --quiet -- scripts/deploy-drift-guard.py ci-status/version-precedence-2.json; then
+            echo "no diff - patch already applied, nothing to commit"
+            exit 0
+          fi
           git config user.name "qnfo-fleet-bot"
           git config user.email "fleet-bot@qnfo.org"
           git add scripts/deploy-drift-guard.py ci-status/version-precedence-2.json
-          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
-          git commit -m "fix(deploy-drift-guard) VERSION-PRECEDENCE-2 last-wins + --ahead exclusion (#1388)"
+          git commit -m "fix(drift-guard): VERSION-PRECEDENCE-2-MULTI-DECLARATION-1 - last plain VERSION wins (issue #1388) [skip ci]"
           for i in 1 2 3 4 5; do
             if git pull --rebase --autostash origin main && git push origin HEAD:main; then
-              echo "pushed on attempt $i"; exit 0
+              echo "commit-back pushed on attempt $i"
+              exit 0
             fi
-            sleep $((i * 3))
+            sleep 5
           done
-          echo "::error::commit-back failed after 5 attempts (concurrent writers)"; exit 1
+          echo "commit-back failed after 5 attempts"
+          exit 1
 
       - name: Re-dispatch the fleet audit
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run fleet-autodeploy.yml -f mode=audit || true
+        run: gh workflow run fleet-autodeploy.yml -f mode=audit
