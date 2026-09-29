@@ -1,9 +1,10 @@
 {
  "counts": {
-  "already-applied": 23,
-  "applied-now": 3,
+  "already-applied": 24,
+  "applied-now": 2,
   "error": 6,
-  "stale-anchor": 6
+  "stale-anchor": 3,
+  "superseded": 3
  },
  "errored": [
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
@@ -15,7 +16,6 @@
  ],
  "marker": "APPLIER-DOCTOR-1",
  "never_landed": [
-  "scripts/applier-doctor-outcome-aware-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/deploy-guard-ms-failclosed-patch.py"
  ],
@@ -30,16 +30,13 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M scripts/applier-doctor.py"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/applier-doctor-outcome-aware-patch.py",
    "tail": [
-    "APPLIED: APPLIER-DOCTOR-OUTCOME-AWARE-1 -> scripts/applier-doctor.py (+2496 bytes)",
-    "SUMMARY: 6 required anchors spliced, outcome-first classification enabled"
+    "ALREADY APPLIED: APPLIER-DOCTOR-OUTCOME-AWARE-1 present in scripts/applier-doctor.py - no change"
    ],
-   "verdict": "applied-now"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [
@@ -48,20 +45,24 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=37 {'already-applied': 23, 'landed': 2, 'stale-anchor': 11, 'error': 1}",
-    "LANDED(2): applier-doctor-outcome-aware-patch.py, deploy-guard-ms-failclosed-patch.py",
+    "SUMMARY total=37 {'already-applied': 24, 'stale-anchor': 11, 'landed': 1, 'error': 1}",
+    "LANDED(1): deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
    "verdict": "applied-now"
   },
   {
    "changed_files": [],
+   "outcome_present_in": [
+    "qnfo-ops/worker.js :: var VERSION = ",
+    "qnfo-ops/deployed-current.worker.js :: var VERSION = "
+   ],
    "rc": 3,
    "script": "scripts/attachguard-xml-form-patch.py",
    "tail": [
     "FAIL-CLOSED: pre-patch VERSION 'var VERSION = \"2.37.12-fm-stream-reasoning\";' not found in qnfo-ops/worker.js"
    ],
-   "verdict": "stale-anchor"
+   "verdict": "superseded"
   },
   {
    "changed_files": [],
@@ -94,12 +95,16 @@
   },
   {
    "changed_files": [],
+   "outcome_present_in": [
+    "qnfo-ops/worker.js :: var VERSION = ",
+    "qnfo-ops/deployed-current.worker.js :: var VERSION = "
+   ],
    "rc": 3,
    "script": "scripts/d1guard-literal-aware-patch.py",
    "tail": [
     "ABORT: pre-patch VERSION anchor occurs 0 times in qnfo-ops/worker.js"
    ],
-   "verdict": "stale-anchor"
+   "verdict": "superseded"
   },
   {
    "changed_files": [
@@ -347,12 +352,15 @@
   },
   {
    "changed_files": [],
+   "outcome_present_in": [
+    "qnfo-backlog-exec/worker.js :: var VERSION = "
+   ],
    "rc": 3,
    "script": "scripts/run-gate-internal-patch.py",
    "tail": [
     "FAIL: pre-patch VERSION not found: var VERSION = \"1.6.4-run-gate\";"
    ],
-   "verdict": "stale-anchor"
+   "verdict": "superseded"
   },
   {
    "changed_files": [],
@@ -401,13 +409,15 @@
   }
  ],
  "stale_anchor": [
-  "scripts/attachguard-xml-form-patch.py",
-  "scripts/d1guard-literal-aware-patch.py",
   "scripts/deploy-guard-wrap-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
-  "scripts/raw-put-schedules-patch.py",
+  "scripts/raw-put-schedules-patch.py"
+ ],
+ "superseded": [
+  "scripts/attachguard-xml-form-patch.py",
+  "scripts/d1guard-literal-aware-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
  "total": 38,
- "ts": "2026-09-29T16:42:25.168Z"
+ "ts": "2026-09-29T16:42:53.382Z"
 }
