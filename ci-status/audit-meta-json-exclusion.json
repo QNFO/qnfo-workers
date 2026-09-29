@@ -1,0 +1,19 @@
+{
+  "check": "audit-meta-json-exclusion-1",
+  "worker": "qnfo-ops",
+  "version": "2.37.29-meta-json-exclusion",
+  "issues": [
+    1483,
+    1484,
+    1482
+  ],
+  "markers": [
+    "AUDIT-META-JSON-TRUNCATION-1",
+    "ISSUE-LEDGER-EXCLUSION-BLIND-1",
+    "AFFIRM-GUARD-VETO-2"
+  ],
+  "patch_exit": "0",
+  "deploy_outcome": "0",
+  "binding_present": "1",
+  "ts": "2026-09-29T19:33:20Z"
+}
