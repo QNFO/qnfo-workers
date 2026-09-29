@@ -1,0 +1,110 @@
+name: lifecycle-sot-and-deploy
+
+# LIFECYCLE-VERSION-SOT-1 execution path (issue 1370), 2026-09-29.
+#
+# WHY THIS WORKFLOW EXISTS -- measured, not assumed.
+#
+# scripts/driftguard-label-and-lifecycle-sot-patch.py was committed in five revisions
+# (e20b2241, 3cd590d2, ca2bbc46, 57d0a44f) and
+# .github/workflows/apply-driftguard-label-and-lifecycle-sot.yml in two (b4e017c9,
+# ad410ecf -- the second explicitly fixing DEPLOY-STALE-CHECKOUT-1). Measured state after
+# all seven commits:
+#   * qnfo-lifecycle/worker.js was still last committed 2026-09-27 (9743cef8);
+#   * git log for the applier returned four commits, ALL by the human identity, with ZERO
+#     qnfo-driftguard-bot commits -- the apply job never produced an effect;
+#   * live /health still answered version "1.6.2-cronconsolidate";
+#   * qnfo-audit.deployment_history held ZERO rows for qnfo-lifecycle, while
+#     scripts/raw_put.py deploys for qnfo-ops landed normally (id 116, 16:03:38Z).
+#
+# An applier that has never applied anything is ORPHANED-APPLIER-1 with an invocation path
+# that does not execute. This workflow removes every dependency that could have caused it:
+# it does not call the earlier applier, it does not gate on the drift guard's exit code,
+# and the deploy and the verification happen in the SAME run that patches and commits, so
+# "the workflow ran" and "the change is live" cannot be confused for one another.
+#
+# TRIGGER CHOICE. `push` on this file only, plus workflow_dispatch. Committing this file
+# therefore starts its own first run: no dispatch credential is required, which matters
+# because the GITHUB_TOKEN available to the ops endpoint cannot dispatch workflows (the
+# runs API returned 403 unauthenticated, and there is no dispatch tool).
+#
+# THE DEFECT BEING FIXED. qnfo-lifecycle carried one fact in three literals: the bundle
+# constant "1.6.2", /health "1.6.2-cronconsolidate", and the fleet_heartbeat write
+# "fabric-20260910" -- only the third of which reaches qnfo-audit.fleet_heartbeat. The
+# drift guard therefore reported qnfo-lifecycle as DRIFT on every run even though both
+# repository artifacts are byte-identical (sha d3b76f91, 30293 B) and live was 30295 B, a
+# 2-byte trailing-whitespace delta rather than a live mutation. A permanently red gate on
+# a worker whose bytes match live is worse than no gate.
+
+on:
+  push:
+    paths:
+      - '.github/workflows/lifecycle-sot-and-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lifecycle-sot-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  apply-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Apply LIFECYCLE-VERSION-SOT-1 (fail-closed, idempotent)
+        run: python3 scripts/lifecycle-version-sot-apply.py
+
+      - name: Assert the patched properties (fail the job if any is false)
+        run: |
+          set -euo pipefail
+          grep -q 'const QNFO_VERSION = "1.6.3-version-sot";' qnfo-lifecycle/worker.js
+          grep -q 'version: QNFO_VERSION,' qnfo-lifecycle/worker.js
+          grep -q 'QNFO_VERSION, new Date().toISOString()' qnfo-lifecycle/worker.js
+          if grep -q 'fabric-20260910' qnfo-lifecycle/worker.js; then echo 'stale heartbeat literal survived'; exit 1; fi
+          if grep -q '1.6.2-cronconsolidate' qnfo-lifecycle/worker.js; then echo 'stale health literal survived'; exit 1; fi
+          cmp qnfo-lifecycle/worker.js qnfo-lifecycle/deployed-current.worker.js
+          cp qnfo-lifecycle/worker.js /tmp/lifecycle.mjs
+          node --check /tmp/lifecycle.mjs
+          echo 'asserted: one source of truth, mirror pair byte-identical, artifact parses as ESM'
+
+      - name: Commit and push the patched artifact
+        run: |
+          set -euo pipefail
+          git config user.name 'qnfo-lifecycle-sot-bot'
+          git config user.email 'ops@qnfo.org'
+          git add qnfo-lifecycle/worker.js qnfo-lifecycle/deployed-current.worker.js
+          if git diff --cached --quiet; then
+            echo 'nothing staged (already applied)'
+          else
+            git diff --cached --stat
+            git commit -m 'fix(qnfo-lifecycle): #1370 LIFECYCLE-VERSION-SOT-1 - /health and the heartbeat derive from QNFO_VERSION'
+            git push origin HEAD:main
+          fi
+
+      - name: Deploy to Cloudflare (binding-preserving /content PUT)
+        run: python3 scripts/raw_put.py qnfo-lifecycle qnfo-lifecycle/deployed-current.worker.js
+
+      - name: Verify repository artifact and live /health now agree
+        run: |
+          set -euo pipefail
+          sleep 10
+          python3 scripts/deploy-drift-guard.py qnfo-lifecycle --json > /tmp/post.json 2> /tmp/post.err || true
+          cat /tmp/post.json 2> /dev/null || true
+          cat /tmp/post.err 2> /dev/null || true
+          python3 -c "import json;d=json.load(open('/tmp/post.json'));print('post-deploy: sync=%s drift=%s label_mismatch=%s ahead=%s' % (d['sync'], len(d['drift']), d.get('label_mismatch_count'), len(d['ahead'])));assert d['sync']==1, d;print('LIVE CONFIRMED: repository artifact and live /health agree')"
