@@ -3,7 +3,7 @@
   "already-applied": 24,
   "applied-now": 2,
   "error": 6,
-  "stale-anchor": 3,
+  "stale-anchor": 4,
   "superseded": 3
  },
  "errored": [
@@ -31,6 +31,15 @@
   },
   {
    "changed_files": [],
+   "rc": 3,
+   "script": "scripts/applier-doctor-classify-patch.py",
+   "tail": [
+    "FAIL-CLOSED: anchor LISTS matched 0 times (expected 1) - nothing written"
+   ],
+   "verdict": "stale-anchor"
+  },
+  {
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/applier-doctor-outcome-aware-patch.py",
    "tail": [
@@ -45,7 +54,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "SUMMARY total=37 {'already-applied': 24, 'stale-anchor': 11, 'landed': 1, 'error': 1}",
+    "SUMMARY total=38 {'already-applied': 24, 'stale-anchor': 12, 'landed': 1, 'error': 1}",
     "LANDED(1): deploy-guard-ms-failclosed-patch.py",
     "wrote ci-status/applier-doctor.json"
    ],
@@ -409,6 +418,7 @@
   }
  ],
  "stale_anchor": [
+  "scripts/applier-doctor-classify-patch.py",
   "scripts/deploy-guard-wrap-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/raw-put-schedules-patch.py"
@@ -418,6 +428,6 @@
   "scripts/d1guard-literal-aware-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "total": 38,
- "ts": "2026-09-29T16:42:53.382Z"
+ "total": 39,
+ "ts": "2026-09-29T16:45:01.611Z"
 }
