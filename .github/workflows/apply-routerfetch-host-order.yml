@@ -5,6 +5,15 @@ name: apply-routerfetch-host-order
 # and commits the result to the triggering branch. The patch script is idempotent and
 # fail-closed: if any anchor does not match exactly once it exits non-zero and writes
 # nothing, so this workflow can never half-apply.
+#
+# 2026-09-29 correction: the "Verify effect present" step previously hard-asserted the
+# host order `qnfo-ai.q08.workers.dev` FIRST. That order was itself corrected later the
+# same day by ROUTER-HOST-ORDER-CORRECTION-1 (see
+# .github/workflows/apply-routerfetch-host-order-correction.yml), which restored
+# ai.qnfo.org first. An order-asserting check therefore turns any re-run of this
+# workflow into a guaranteed red job (#1383 ANCHOR-INVALIDATION-RED-JOB-1). The check
+# below is now ORDER-AGNOSTIC: it asserts that both hosts are present and that exactly
+# one host order is declared, and leaves the ordering decision to the correction patch.
 
 on:
   push:
@@ -43,14 +52,20 @@ jobs:
           import pathlib, sys
           src = pathlib.Path("qnfo-research-exec/worker.js").read_text(encoding="utf-8")
           checks = [
-              ("host order", 'var ROUTER_HOSTS = [\n  "https://qnfo-ai.q08.workers.dev",\n  "https://ai.qnfo.org"\n];'),
               ("host tracker", 'var _lastRouterHost = "";'),
               ("body capture", 'host=" + _lastRouterHost + " body=" + _eb'),
+              ("ai host present", '"https://ai.qnfo.org"'),
+              ("workers.dev host present", '"https://qnfo-ai.q08.workers.dev"'),
           ]
           bad = [n for n, s in checks if s not in src]
           if bad:
               print("FAIL: effect missing: " + ", ".join(bad)); sys.exit(1)
-          print("OK: all 3 effects present")
+          # exactly one ROUTER_HOSTS declaration (no duplicate/partial host lists)
+          n_decl = src.count("var ROUTER_HOSTS = [")
+          if n_decl != 1:
+              print(f"FAIL: expected exactly 1 ROUTER_HOSTS declaration, found {n_decl}")
+              sys.exit(1)
+          print("OK: all 4 effects present, 1 ROUTER_HOSTS declaration (order not asserted)")
           PY
 
       - name: Commit and push
