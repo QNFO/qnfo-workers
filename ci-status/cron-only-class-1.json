@@ -1,0 +1,13 @@
+{
+  "credential_present": "yes",
+  "head": "879fe6b91d444ad55b59181dab3c9726ba2a7aac",
+  "issue": "1402 / CRON_ONLY-1",
+  "marker": "CRON_ONLY-1",
+  "negative_still": "",
+  "patch_rc": "2",
+  "positive_classified": "",
+  "post_marker_count": "0\n0",
+  "pre_marker_count": "0\n0",
+  "ts": "2026-09-29T19:34:13.000Z",
+  "workflow": "apply-cron-only-class-1"
+}
