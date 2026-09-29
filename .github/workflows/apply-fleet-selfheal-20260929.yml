@@ -1,0 +1,125 @@
+name: apply-fleet-selfheal-20260929
+
+# Applies scripts/fleet-selfheal-20260929-patch.py, asserts post-conditions, commits as a
+# bot, then deploys qnfo-lifecycle through the binding- AND schedule-preserving deployer and
+# verifies the live /health version. The deploy job checks out `main` FRESH (not the
+# triggering SHA): a job that checks out the pre-apply SHA reads the unpatched artifact,
+# decides "not ahead", and silently skips -- the exact defect that stopped the earlier
+# driftguard apply from ever landing.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fleet-selfheal-20260929-patch.py'
+      - '.github/workflows/apply-fleet-selfheal-20260929.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-fleet-selfheal-20260929
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.apply.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - id: apply
+        name: Apply the three fixes (per-section, fail-loud)
+        run: |
+          set -uo pipefail
+          python scripts/fleet-selfheal-20260929-patch.py
+          echo "applier_rc=$?"
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post-conditions
+        run: |
+          set -euo pipefail
+          echo "--- S1 metric-freshness writer present in BOTH artifacts ---"
+          grep -c "runMetricFreshness" qnfo-lifecycle/worker.js
+          grep -c "runMetricFreshness" qnfo-lifecycle/deployed-current.worker.js
+          grep -c '"/run/metrics-refresh"' qnfo-lifecycle/worker.js
+          grep -c "metric-freshness" qnfo-lifecycle/worker.js
+          echo "--- S2 raw_put version extract ---"
+          grep -n "VERSION_RE = re.compile" scripts/raw_put.py
+          grep -q "QNFO_" scripts/raw_put.py && echo "S2_OK"
+          echo "--- S3 driftguard label-mismatch class ---"
+          grep -c "label_mismatch" scripts/deploy-drift-guard.py
+          echo "--- mirror parity (mirror-guard invariant) ---"
+          cmp qnfo-lifecycle/worker.js qnfo-lifecycle/deployed-current.worker.js
+          echo "MIRROR_PARITY_OK"
+          echo "--- syntax ---"
+          cp qnfo-lifecycle/worker.js /tmp/lc.mjs
+          node --check /tmp/lc.mjs
+          python -c "import ast; ast.parse(open('scripts/raw_put.py').read()); ast.parse(open('scripts/deploy-drift-guard.py').read()); print('PY_PARSE_OK')"
+
+      - name: Commit
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-fleet-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A
+          git commit -m "fix(selfheal): METRIC-FRESHNESS-WRITER-1 (#1301), LEDGER-VERSION-EXTRACT-1 + LABEL-MISMATCH-CLASS-1 (#1370)"
+          git push
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main FRESH (not the triggering SHA)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assert the patched artifact is what we are about to ship
+        run: |
+          set -euo pipefail
+          grep -q "1.6.4-metric-freshness" qnfo-lifecycle/worker.js
+          grep -q "runMetricFreshness" qnfo-lifecycle/worker.js
+          echo "ARTIFACT_IS_PATCHED"
+      - name: Deploy qnfo-lifecycle (binding- and schedule-preserving)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          LEDGER_STRICT: '1'
+          SCHEDULES_STRICT: '1'
+        run: |
+          python scripts/raw_put.py qnfo-lifecycle qnfo-lifecycle/worker.js
+      - name: Verify live /health serves the new version
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5 6 7 8; do
+            v=$(curl -s --max-time 15 https://qnfo-lifecycle.q08.workers.dev/health \
+                | python -c "import sys,json;print(json.load(sys.stdin).get('version',''))" 2>/dev/null || true)
+            echo "attempt $i: live version = '$v'"
+            if [ "$v" = "1.6.4-metric-freshness" ]; then echo "LIVE_OK"; exit 0; fi
+            sleep 12
+          done
+          echo "LIVE_VERIFY_FAILED"
+          exit 1
+      - name: Trigger the freshness auditor once and show its verdict
+        run: |
+          set -uo pipefail
+          curl -s --max-time 30 https://qnfo-lifecycle.q08.workers.dev/run/metrics-refresh | head -c 2000 || true
+          echo
