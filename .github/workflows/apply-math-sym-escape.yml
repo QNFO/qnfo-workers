@@ -1,0 +1,130 @@
+name: apply-math-sym-escape
+
+# MATH-SYM-UTF8-ESCAPE-1 (2026-09-29).
+#
+# ROOT CAUSE (byte-verified, not theorised):
+#   qnfo-gateway/worker.js carries a MATH_SYM table whose VALUES are the only raw
+#   non-ASCII literals in the file (everything else -- COMMON_CSS, the `· DOI:`
+#   separators, displayTitle's M map -- is either escaped (\uXXXX / \xB7) or absent).
+#   The DEPLOYED bundle emits exactly those MATH_SYM glyphs Latin-1 double-encoded:
+#
+#     served papers.qnfo.org  -> "mean energy <C3 A2 C2 9F C2 A8>H<...>"  (0 correct U+27E8)
+#     D1 living-paper abstract -> "$\langle H \rangle$ ... $\tau \ge \pi\hbar$"  (pure ASCII)
+#     repo qnfo-gateway/worker.js -> "\\langle": "\u27E8"  (byte-clean, 0 mojibake)
+#
+#   Measured asymmetry on one page load (papers.qnfo.org/, 47237 B):
+#     mangled  = exactly the MATH_SYM-produced glyphs: 2x U+27E8, 2x U+27E9, 1x U+03C4,
+#                1x U+03C0, 1x U+2265, 1x U+210F  (each one Latin-1 C1 control away)
+#     correct  = data-sourced Unicode on the same page: U+2014 x9, U+00B7 x48, U+2248 x2,
+#                and a literal U+03C0 inside "R = e^{2*pi*i*s}" that did NOT come from MATH_SYM
+#   => data-sourced Unicode survives the response path; the raw literal does not.
+#
+# FIX: make the artifact pure ASCII. Every character > U+007F in worker.js and its
+#   deployed-current.worker.js mirror is rewritten as a \uXXXX escape, which is the
+#   same string at runtime and immune to any charset step in the deploy path. The
+#   VERSION constant is bumped 3.7.15-latex-feed -> 3.7.16-utf8-escape so the repo
+#   artifact is STRICTLY AHEAD, which is the only condition under which
+#   fleet-autodeploy.yml's --apply will redeploy it.
+#
+# WHY THE OLD PATH NEVER FIXED THIS: fleet-autodeploy.py --apply redeploys ONLY
+#   workers strictly ahead by numeric version. Repo and live both read
+#   3.7.15-latex-feed, so the corrupted live bundle was classified content-drift-only
+#   and was never overwritten -- report-only by design, forever.
+#
+# MIRROR PARITY (mirror-guard.py runs BLOCKING inside fleet-autodeploy): a VERSION-equal
+#   pair is content-hash compared and CONTENT-DRIFT fails the gate. Both artifacts are
+#   therefore patched in the SAME commit, so the pair stays byte-identical.
+#
+# ADVERSARIAL: the transformation is mechanical but not free. A raw non-ASCII character
+#   inside a String.raw template would change meaning under escaping (none present --
+#   the script refuses the file if "String.raw" appears). A syntactically valid but
+#   semantically wrong escape is caught by node --check plus the content assertions
+#   below. Residual risk: the escape is correct, the deploy succeeds, and the page
+#   still mangles because the corruption is applied to the RESPONSE rather than the
+#   artifact -- the guard step reports the post-deploy state instead of assuming it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/math-sym-escape-patch.py"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-math-sym-escape
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Escape non-ASCII literals + bump version
+        run: python scripts/math-sym-escape-patch.py
+
+      - name: Verify both artifacts are pure ASCII, parse as ESM, and carry the bump
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          bad = []
+          for p in ("qnfo-gateway/worker.js", "qnfo-gateway/deployed-current.worker.js"):
+              try:
+                  b = open(p, "rb").read()
+              except OSError as e:
+                  bad.append("%s unreadable: %s" % (p, e)); continue
+              if any(x > 127 for x in b):
+                  bad.append("%s still contains non-ASCII bytes" % p)
+              s = b.decode("utf-8", "replace")
+              if "var MATH_SYM" not in s:
+                  bad.append("%s lost MATH_SYM" % p)
+              if "3.7.16-utf8-escape" not in s:
+                  bad.append("%s version not bumped" % p)
+          if bad:
+              print("VERIFY FAILED:"); [print("  -", x) for x in bad]; sys.exit(1)
+          print("verify: both artifacts pure ASCII, MATH_SYM present, version bumped")
+          PY
+          cp qnfo-gateway/worker.js /tmp/a.mjs
+          node --check /tmp/a.mjs
+          cp qnfo-gateway/deployed-current.worker.js /tmp/b.mjs
+          node --check /tmp/b.mjs
+          echo "syntax gate: both artifacts parse as ESM"
+
+      - name: Commit both artifacts (race-safe, bounded retry)
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -- qnfo-gateway/worker.js qnfo-gateway/deployed-current.worker.js
+          if git diff --cached --quiet; then
+            echo "already escaped; nothing to commit"
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "fix(qnfo-gateway): MATH-SYM-UTF8-ESCAPE-1 escape non-ASCII literals, bump 3.7.16-utf8-escape"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i rejected by a concurrent writer; retrying"
+            sleep $((i * 5))
+          done
+          echo "::error::COMMITBACK-PUSH-RACE-1: push failed after 5 attempts"
+          exit 1
