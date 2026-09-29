@@ -45,6 +45,7 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
+import atexit
 from datetime import datetime, timezone
 
 ACCT = os.environ.get("CF_ACCOUNT_ID", "edb167b78c9fb901ea5bca3ce58ccc4b")
@@ -109,6 +110,58 @@ def _settings(worker, tok):
     return st, None
 
 
+GUARD = os.environ.get("DEPLOY_GUARD_URL", "https://qnfo-deploy-guard.q08.workers.dev")
+_LOCK = {"worker": None, "token": None}  # DEPLOY-GUARD-WRAP-2
+
+
+def _guard_call(path, payload):
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(GUARD + path, data=data, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode())
+        except ValueError:
+            return e.code, None
+    except Exception as e:
+        return 0, {"error": str(e)}
+
+
+def guard_lock(worker):
+    """Acquire a deploy_locks lease. Non-fatal: the fleet_deploys row is the rule
+    that closes unlogged-mutation; the lease only closes uncoordinated-deploy."""
+    st, j = _guard_call("/lock/acquire", {"worker": worker, "owner": "ci/raw_put",
+                                          "actor": "scripts/raw_put.py",
+                                          "session_id": uuid.uuid4().hex, "ttl_sec": 900})
+    if st == 200 and j and j.get("acquired"):
+        _LOCK["worker"], _LOCK["token"] = worker, j.get("token")
+        print("DEPLOY-LOCK: acquired ttl=900")
+        return True
+    print("DEPLOY-LOCK: NOT acquired (HTTP %s) %s - deploying anyway; uncoordinated-deploy may fire"
+          % (st, str(j)[:160]))
+    return False
+
+
+def guard_unlock():
+    if _LOCK["worker"] and _LOCK["token"]:
+        st, j = _guard_call("/lock/release", {"worker": _LOCK["worker"], "token": _LOCK["token"]})
+        print("DEPLOY-LOCK: release HTTP %s %s" % (st, str(j)[:120]))
+        _LOCK["worker"], _LOCK["token"] = None, None
+
+
+def guard_ledger(worker, frm, to, ok, note):
+    """POST /ledger so fleet_deploys advances - the table the guard actually reads."""
+    st, j = _guard_call("/ledger", {"worker": worker, "actor": "scripts/raw_put.py",
+                                    "from": frm, "to": to, "source_path": "scripts/raw_put.py",
+                                    "ok": bool(ok), "note": note})
+    good = st == 200 and bool(j and j.get("logged"))
+    print("DEPLOY-GUARD-LEDGER: HTTP %s %s %s" % (st, "OK" if good else "FAILED", str(j)[:160]))
+    return good
+
+
 def artifact_version(code):
     m = VERSION_RE.search(code)
     return m.group(1) if m else "unknown"
@@ -141,6 +194,8 @@ def main(argv):
         return 3
     worker, path = argv[1], argv[2]
     tok = token()
+    guard_lock(worker)
+    atexit.register(guard_unlock)
     code = open(path, encoding="utf-8").read()
     if not code.strip():
         print("REFUSING: artifact is empty")
@@ -202,6 +257,8 @@ def main(argv):
         print("WARNING: deploy succeeded but the ledger row was not written (DEPLOY-LEDGER-1). "
               "Set LEDGER_STRICT=1 to make this fatal.")
 
+    guard_ledger(worker, None, ver, True, notes)
+    guard_unlock()
     print(f"OK: {worker} {ver} deployed with compatibility_date={got_date} and {len(got_flags)} flag(s) preserved")
     return 0
 
