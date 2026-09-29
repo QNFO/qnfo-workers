@@ -16,7 +16,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.3-clone-egress-timeout-fallback";
+var VERSION = "1.0.4-container-ctx-guard";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -79,6 +79,7 @@ var ShellContainer = class {
     this._starting = null;
   }
   async ensureStarted() {
+    if (!this.ctx.container) { throw new Error("CONTAINER-CONFIG-MISSING-1: ctx.container is undefined - the [[containers]] block is not attached to this deployment (issue #1485). A /content PUT drops it; redeploy through the metadata-preserving path."); }
     if (this.ctx.container.running) return;
     if (this._starting) return this._starting;
     this._starting = this._doStart().finally(() => {
@@ -87,6 +88,7 @@ var ShellContainer = class {
     return this._starting;
   }
   async _doStart() {
+    if (!this.ctx.container) { throw new Error("CONTAINER-CONFIG-MISSING-1: ctx.container is undefined - the [[containers]] block is not attached to this deployment (issue #1485). A /content PUT drops it; redeploy through the metadata-preserving path."); }
     if (this.ctx.container.running) return;
     let lastErr = null;
     for (let attempt = 0; attempt < 2; attempt++) {

@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.30-container-deploy-guard";
+var VERSION = "2.37.31-continuation-inherit";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3722,11 +3722,27 @@ function contentToText(c) {
   return String(c);
 }
 __name(contentToText, "contentToText");
+function isContinuationDirective(s) {
+  // CONTINUATION-INHERIT-GUARD-1 (2026-09-29): the client appends an auto-continue
+  // directive as the last user-role message on continuation turns. It carries no
+  // authorization intent, so the confirm gate must not evaluate it as if it were
+  // the operator's instruction -- that is the #1481 root cause.
+  const t = String(s || "").trim();
+  if (!t || t.length > 400) return false;
+  if (/^\s*continue\s*[.!]?\s*$/i.test(t)) return true;
+  if (/^\s*continue\b/i.test(t) && /(definition-of-done|\bDoD\b|closeout)/i.test(t)) return true;
+  return false;
+}
+__name(isContinuationDirective, "isContinuationDirective");
 function lastUserText(messages) {
   const arr = messages || [];
+  let _fallback = "";
   for (let i = arr.length - 1; i >= 0; i--) {
     if (arr[i] && arr[i].role === "user") {
       const _c = contentToText(arr[i].content);
+      if (!_fallback) _fallback = _c;
+      // Inherit the last SUBSTANTIVE turn; a bare auto-continue directive is not one.
+      if (isContinuationDirective(_c)) continue;
       const _g = attachmentGuard(_c);
       if (_g) {
         const _nc = _c + "\n\n[" + _g + "]";
@@ -3736,7 +3752,7 @@ function lastUserText(messages) {
       return _c;
     }
   }
-  return "";
+  return _fallback;
 }
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");

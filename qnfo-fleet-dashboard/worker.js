@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.33-drift-failclosed";
+var VERSION = "1.7.34-panel6-mediated-count";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2799,8 +2799,9 @@ async function redHtml(env) {
   H.push("</div>");
   let qu = null, gwf = null, vq = [], dl = null, pr = null, sv = null, er = null;
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_loop_quarantine");
-    qu = r && r.length ? r[0].n : null;
+    // PANEL6-MEDIATED-COUNT-1 issue #1486 - reuse panel 4 mediated count.  An unfiltered
+    // COUNT(*) here displayed 105 already-remediated rows as UNREMEDIATED.
+    qu = (typeof _elq === "number") ? _elq : null;
   } catch (e) {
   }
   try {
@@ -2813,17 +2814,17 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM deploy_locks WHERE expires_at > CAST(strftime('%s','now') AS INTEGER)");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)");
     dl = r && r.length ? r[0].n : null;
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_parse_failures WHERE status='open'");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
     pr = r && r.length ? r[0].n : null;
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_send_violations WHERE resolved=0");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
     sv = r && r.length ? r[0].n : null;
   } catch (e) {
   }
@@ -2833,7 +2834,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   H.push('<div class="panel"><h2>6 &middot; UNREMEDIATED REGISTERS</h2><table><tr><th>register</th><th>count</th><th>meaning</th></tr>');
-  H.push('<tr><td>email_loop_quarantine</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops held in quarantine</td></tr>");
+  H.push('<tr><td>email_loop_quarantine (open)</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops not yet processed/archived/spam</td></tr>");
   H.push('<tr><td>ai_gateway_failures</td><td class="' + (gwf && gwf.total > 0 ? "bad" : "ok") + '">' + (gwf ? gwf.total.toLocaleString() : "?") + "</td><td>gateway error events (all-time; latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + ")</td></tr>");
   H.push("<tr><td>version_queue</td><td>" + esc(vq.map(function(x) {
     return x.status + ":" + x.n;

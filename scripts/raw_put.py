@@ -255,10 +255,16 @@ def schedules_get(worker, tok):
 
 
 def schedules_put(worker, crons, tok):
+    # CF-SCHEDULES-UA-1010-1: the schedules PUT sent no explicit client id, and Cloudflare
+    # answers urllib's default one with HTTP 403 / error 1010. So this call failed
+    # on EVERY deploy (ledger: schedules=FAILED) and every repo crons edit was
+    # inert fleet-wide. Send the module's own client id, the one every other call
+    # in this file already sends.
     url = SCHEDULES_API.format(acct=ACCT, worker=worker)
     data = json.dumps({"crons": list(crons)}).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="PUT", headers={
-        "Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+        "Authorization": "Bearer " + tok, "Content-Type": "application/json",
+        "User-Agent": FLEET_UA})
     try:
         with urllib.request.urlopen(req, timeout=90) as r:
             return r.status, r.read().decode()[:200]
@@ -317,6 +323,54 @@ def ledger_write(worker, version, tok, notes):
     return ok
 
 
+
+# --- CONTAINER-CONFIG-PRESERVE-1 (issues #1485 / #1487) ------------------------------
+# Cloudflare stores [[containers]] as SCRIPT-LEVEL metadata, NOT as a binding, so
+# BINDING-PRESERVATION-1 cannot protect it and a /content PUT that omits it DESTROYS it.
+CONTAINER_BLOCK_RE = re.compile(r"\[\[containers\]\]([\s\S]*?)(?=\n\[\[|\Z)")
+CONTAINER_KEY_RE = {
+    "class_name": re.compile(r'^\s*class_name\s*=\s*"([^"]*)"', re.M),
+    "image": re.compile(r'^\s*image\s*=\s*"([^"]*)"', re.M),
+    "instance_type": re.compile(r'^\s*instance_type\s*=\s*"([^"]*)"', re.M),
+}
+CONTAINER_MAX_RE = re.compile(r"^\s*max_instances\s*=\s*(\d+)", re.M)
+
+
+def declared_containers(artifact_path):
+    """[[containers]] declared beside the artifact -> list of dicts, or [] when none."""
+    d = os.path.dirname(os.path.abspath(artifact_path))
+    for fn in ("wrangler.toml", "wrangler.json", "wrangler.jsonc"):
+        p = os.path.join(d, fn)
+        if not os.path.isfile(p):
+            continue
+        try:
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            return []
+        if fn != "wrangler.toml":
+            try:
+                data = json.loads(text)
+            except ValueError:
+                return []
+            cr = data.get("containers") if isinstance(data, dict) else None
+            return [c for c in cr if isinstance(c, dict)] if isinstance(cr, list) else []
+        out = []
+        for block in CONTAINER_BLOCK_RE.findall(text):
+            entry = {}
+            for key, rx in CONTAINER_KEY_RE.items():
+                m = rx.search(block)
+                if m:
+                    entry[key] = m.group(1)
+            m = CONTAINER_MAX_RE.search(block)
+            if m:
+                entry["max_instances"] = int(m.group(1))
+            if entry:
+                out.append(entry)
+        return out
+    return []
+
+
 def main(argv):
     if len(argv) < 3:
         print(__doc__)
@@ -346,6 +400,21 @@ def main(argv):
         compat_date = DATE_FLOOR
 
     meta = {"main_module": "worker.js", "compatibility_date": compat_date}
+    # CONTAINER-CONFIG-PRESERVE-1: /content PUT metadata that omits `containers` DESTROYS the
+    # script-level container config (it is NOT a binding, so BINDING-PRESERVATION-1 never
+    # covered it). Carry the live config forward; if it is already gone, carry the sibling
+    # wrangler.toml declaration so this deployer can also RESTORE it.
+    _live_containers = (live or {}).get("containers") or []
+    _decl_containers = declared_containers(path)
+    _want_containers = _live_containers or _decl_containers
+    if _want_containers:
+        meta["containers"] = _want_containers
+        _csrc = "live /settings" if _live_containers else "wrangler.toml declaration"
+        print("CONTAINERS: carrying " + str(len(_want_containers)) + " entr(y|ies) from "
+              + _csrc + " -> " + json.dumps(_want_containers))
+    else:
+        print("CONTAINERS: none live and none declared - nothing to preserve")
+
     if compat_flags:
         meta["compatibility_flags"] = compat_flags
     meta_json = json.dumps(meta)
@@ -376,6 +445,18 @@ def main(argv):
     if got_flags != compat_flags:
         print(f"FAIL: compatibility_flags changed across the deploy ({compat_flags} -> {got_flags}) - COMPAT-PRESERVE-1 violated")
         return 3
+    # CONTAINER-CONFIG-PRESERVE-1 fail-closed assertion: a worker whose sibling wrangler.toml
+    # declares [[containers]] must come out of this deploy still carrying its container config.
+    if _decl_containers:
+        got_containers = after.get("containers") or []
+        if not got_containers:
+            print("FAIL: " + worker + " declares [[containers]] but /settings reports none after "
+                  "the deploy - CONTAINER-CONFIG-PRESERVE-1 violated (#1485)")
+            print("      restore via .github/workflows/container-config-autoverify.yml, "
+                  ".github/workflows/restore-container-config-1485.yml, or wrangler deploy")
+            return 3
+        print("post-deploy containers: " + json.dumps(got_containers))
+
 
     # AUTODEPLOY-SCHEDULES-NOT-APPLIED-1 (issue 1390): the /content PUT above does NOT touch
     # the cron trigger, so the declared set is applied and verified here.
