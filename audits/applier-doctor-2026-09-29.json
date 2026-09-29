@@ -2,12 +2,13 @@
  "counts": {
   "already-applied": 19,
   "applied-now": 2,
-  "error": 5,
+  "error": 6,
   "stale-anchor": 5
  },
  "errored": [
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
   "scripts/driftguard-server-version-patch.py",
+  "scripts/fleet-autoaudit-d1ok-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/selfheal-volfloor-patch.py",
   "scripts/telemetry-truth-patch.py"
@@ -136,6 +137,17 @@
    "script": "scripts/driftguard-server-version-patch.py",
    "tail": [
     "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)"
+   ],
+   "verdict": "error"
+  },
+  {
+   "changed_files": [],
+   "rc": 5,
+   "script": "scripts/fleet-autoaudit-d1ok-patch.py",
+   "tail": [
+    "anchor 3: applied (1/1)",
+    "anchor 4: applied (1/1)",
+    "::error::post-condition failed: 3 legacy res.get(\"ok\") call site(s) remain -- aborting WITHOUT writing."
    ],
    "verdict": "error"
   },
@@ -337,6 +349,6 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "total": 31,
- "ts": "2026-09-29T16:24:46.739Z"
+ "total": 32,
+ "ts": "2026-09-29T16:25:52.770Z"
 }
