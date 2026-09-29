@@ -1,0 +1,32 @@
+{
+  "_marker": "RETIRED-PATCHES-1",
+  "_generated": "2026-09-29T19:20:00Z",
+  "_source": "ci-status/applier-doctor.json",
+  "_head": "07bfb57c7dd7e5b5c811c0e2ba356f5d64445bae",
+  "_purpose": "Machine-readable quarantine list for patch scripts that can never apply to the current tree. Rationale: applier-doctor measured 59 scripts/*patch*.py on 2026-09-29 -> 38 already-applied, 14 stale-anchor, 6 error, 1 landed. The 20 non-applying scripts are re-executed on every applier run, producing permanent noise and masking genuinely new drift. Quarantining them makes the applier signal-only.",
+  "_policy": "Quarantine is NOT deletion. Each entry is retained with its measured evidence. A script may only leave quarantine when an owner re-anchors it against the current tree or explicitly retires it.",
+  "_classification_pending": "This manifest deliberately does NOT classify entries as obsolete vs still-needed. That distinction requires per-script owner review and cannot be inferred from an anchor miss alone: an anchor miss can mean (a) the target code moved on (obsolete) or (b) the fix is still needed but the tree drifted (live defect). Guessing would hide real defects.",
+  "counts": { "total": 59, "already_applied": 38, "stale_anchor": 14, "error": 6, "landed": 1, "quarantined": 20 },
+  "quarantine": [
+    { "script": "applier-classify-signature-and-retire-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: anchor 'classify' occurs 0 times (expected exactly 1) - nothing written" },
+    { "script": "applier-doctor-classify-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: anchor DOC matched 0 times (expected 1) - nothing written" },
+    { "script": "attachguard-xml-form-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: pre-patch VERSION 'var VERSION = \"2.37.12-fm-stream-reasoning\";' not found in qnfo-ops/worker.js" },
+    { "script": "container-start-race-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: anchor 'constructor' matched 0 times (expected exactly 1)" },
+    { "script": "dashboard-drift-failclosed-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: post-conditions failed: null gate counted as 0", "note": "changed qnfo-fleet-dashboard/worker.js then reverted - safe, but never lands" },
+    { "script": "dashboard-gate-failopen-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: anchor 'freshness-gate' matched 0 times in qnfo-fleet-dashboard/worker.js" },
+    { "script": "deploy-guard-wrap-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: anchor 'imports' matched 0 times (expected 1) - nothing written", "note": "superseded in practice by deploy-guard-wrap-patch-v2.py which is already-applied" },
+    { "script": "driftguard-label-and-lifecycle-sot-patch.py", "verdict": "stale-anchor", "evidence": "regex: ^const QNFO_VERSION = \"1\\.6\\.2\";\\s*$", "note": "changed scripts/deploy-drift-guard.py then reverted" },
+    { "script": "github409-variant-reread-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: the short-circuiting `if (!curSha) break;` survived in qnfo-ops/worker.js" },
+    { "script": "patch-cron-only-class.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED ANCHOR-INVALID edit 1: expected exactly 1 match, found 0 for anchor 'LIVE_ERR /health unreachable or non-404 error'", "note": "relates to open issue #1402 CRON-ONLY-CLASS-MISSING-1" },
+    { "script": "selfheal-rate-aware-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED: qnfo-ops/worker.js anchor A1 matched 0 times (expected 1)" },
+    { "script": "selfheal-volfloor-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED [A/rate-gate-volfloor]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written." },
+    { "script": "telemetry-truth-patch.py", "verdict": "stale-anchor", "evidence": "FAIL-CLOSED [A/openIssues-store]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written." },
+    { "script": "version-anchor-normalize-patch.py", "verdict": "stale-anchor", "evidence": "count=0 before/after = snapshot(root)" },
+    { "script": "applier-doctor-outcome-aware-patch.py", "verdict": "error", "evidence": "FAIL(3): anchor count != 1 -> {ci-status key tuple: 0} for ci-status key tuple" },
+    { "script": "d1guard-literal-aware-patch.py", "verdict": "error", "evidence": "ABORT: pre-patch VERSION anchor occurs 0 times in qnfo-ops/worker.js" },
+    { "script": "driftguard-server-version-patch.py", "verdict": "error", "evidence": "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)" },
+    { "script": "fleet-autoaudit-v4-envelope-patch.py", "verdict": "error", "evidence": "::error::anchor drift on scripts/fleet-autoaudit.py: expected (def,site_a,site_b,msg)=(1,1,1,1), got (1, 0, 0, 0)" },
+    { "script": "raw-put-schedules-patch.py", "verdict": "error", "evidence": "FAIL(3): anchor count != 1 -> {'A_TAIL': 0} (concurrent writer? re-anchor before retrying)" },
+    { "script": "run-gate-internal-patch.py", "verdict": "error", "evidence": "FAIL: pre-patch VERSION not found: var VERSION = \"1.6.4-run-gate\";" }
+  ]
+}
