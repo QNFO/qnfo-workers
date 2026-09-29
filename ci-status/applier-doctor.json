@@ -1,18 +1,18 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "c41ad5a112584c4471c5e6f322cc1d07f6dbe254",
-  "total": 52,
+  "head": "956f34994f48e4b7956ad62593c8ea9ef39aba87",
+  "total": 53,
   "summary": {
-    "already-applied": 32,
-    "stale-anchor": 16,
+    "already-applied": 33,
     "landed": 3,
+    "stale-anchor": 16,
     "error": 1
   },
   "landed": [
+    "applier-classify-signature-and-retire-patch.py",
     "cf-urllib-ua-1010-patch.py",
-    "deploy-guard-ms-failclosed-patch.py",
-    "research-exec-terminal-rescue-patch.py"
+    "deploy-guard-ms-failclosed-patch.py"
   ],
   "results": [
     {
@@ -20,15 +20,23 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.05,
+      "seconds": 0.03,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
+    },
+    {
+      "script": "applier-classify-signature-and-retire-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "seconds": 0.02,
+      "tail": "APPLIER-CLASSIFY-SIGNATURE-1 + APPLIER-RETIRE-1 applied"
     },
     {
       "script": "applier-doctor-classify-patch.py",
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.05,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: anchor DOC matched 0 times (expected 1) - nothing written"
     },
     {
@@ -36,7 +44,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.12,
+      "seconds": 0.04,
       "tail": "FAIL(3): anchor count != 1 -> {ci-status key tuple: 0} for ci-status key tuple"
     },
     {
@@ -52,7 +60,7 @@
       "rc": 0,
       "verdict": "landed",
       "changed": true,
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "APPLIED: scripts/raw_put.py now 19338 bytes, 4 User-Agent insertions, AST OK"
     },
     {
@@ -60,7 +68,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "OK applied=0"
     },
     {
@@ -68,7 +76,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.01,
       "tail": "already patched: scripts/ci_watchdog.py contains '_raw_log'; no change"
     },
     {
@@ -76,7 +84,7 @@
       "rc": 3,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: anchor 'constructor' matched 0 times (expected exactly 1)"
     },
     {
@@ -100,7 +108,7 @@
       "rc": 0,
       "verdict": "landed",
       "changed": true,
-      "seconds": 0.08,
+      "seconds": 0.07,
       "tail": "OK - DEPLOY-GUARD-MS-FAILCLOSED-1 applied, guard is fail-closed"
     },
     {
@@ -124,7 +132,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.01,
       "tail": "invariants asserted: 2/2"
     },
     {
@@ -148,7 +156,7 @@
       "rc": 2,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)"
     },
     {
@@ -180,7 +188,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "SUMMARY S1=OK S2=OK S3=OK"
     },
     {
@@ -188,7 +196,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.13,
+      "seconds": 0.11,
       "tail": "CHANGED=0"
     },
     {
@@ -228,7 +236,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.01,
       "tail": "  invariant coverage lives in scripts/drift-guard-notdeployed-worker-patch.py (#1383)"
     },
     {
@@ -244,7 +252,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.06,
+      "seconds": 0.05,
       "tail": "OK"
     },
     {
@@ -260,7 +268,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "no-op: every target already carries the fix"
     },
     {
@@ -284,7 +292,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.01,
       "tail": "OK: VERSION-PRECEDENCE-1 + NOTE-APPEND-IDEMPOTENT-1 applied"
     },
     {
@@ -292,7 +300,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "ALREADY APPLIED: VERSION-PRECEDENCE-2 present; idempotent no-op"
     },
     {
@@ -316,7 +324,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.02,
+      "seconds": 0.01,
       "tail": ""
     },
     {
@@ -324,23 +332,23 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.25,
+      "seconds": 0.09,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
       "script": "research-exec-terminal-rescue-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
-      "seconds": 0.09,
-      "tail": "changed_files: 2"
+      "verdict": "already-applied",
+      "changed": false,
+      "seconds": 0.07,
+      "tail": "changed_files: 0"
     },
     {
       "script": "router-transport-failover-patch.py",
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "already-patched: qnfo-research-exec/deployed-current.worker.js"
     },
     {
@@ -372,7 +380,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "nothing to do"
     },
     {
@@ -380,7 +388,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "already patched (SELFHEAL-EXTRACTOR-BARE-NAME-1 present); no change"
     },
     {
@@ -388,7 +396,7 @@
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "already patched (SELFHEAL-METRIC-TABLE-MISMATCH-1 present); no change"
     },
     {
@@ -396,7 +404,7 @@
       "rc": 1,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "FAIL-CLOSED: qnfo-ops/worker.js anchor A1 matched 0 times (expected 1)"
     },
     {
@@ -404,7 +412,7 @@
       "rc": 1,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "FAIL-CLOSED [A/rate-gate-volfloor]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written."
     },
     {
@@ -420,7 +428,7 @@
       "rc": 1,
       "verdict": "stale-anchor",
       "changed": false,
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "FAIL-CLOSED [A/openIssues-store]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written."
     },
     {
@@ -432,5 +440,5 @@
       "tail": "NameError: name 'Path' is not defined"
     }
   ],
-  "ts": "2026-09-29T19:05:55Z"
+  "ts": "2026-09-29T19:06:46Z"
 }
