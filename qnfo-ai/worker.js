@@ -1133,6 +1133,12 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   // most min(stageCap, remaining); stages are skipped once the budget is spent, falling back to
   // whatever text we already have.
   const ENSEMBLE_BUDGET_MS = 45e3;
+  // ENSEMBLE-BUDGET-2 (2026-09-29): stage-share caps. Previously every stage took
+  // Math.min(<cap>, _remaining()) with the primary capped at 4e4 inside a 45e3 budget, so a
+  // slow primary left ~0 ms for each fallback and the ensemble was guaranteed to return
+  // FALLBACK_TEXT (measured 24/24 canned on 2026-09-29, avg latency 50034 ms). Each stage now
+  // keeps a real slice of the same deadline instead of racing the whole budget.
+  const _stageCap = (share, floorMs) => Math.max(floorMs, Math.min(Math.floor(ENSEMBLE_BUDGET_MS * share), _remaining()));
   const _deadline = t0 + ENSEMBLE_BUDGET_MS;
   const _remaining = () => Math.max(0, _deadline - Date.now());
   let primaryText = "";
@@ -1150,14 +1156,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
-    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-primary");
+    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), _stageCap(0.5, 8e3), "ensemble-primary");
     primaryText = extractWAContent(primary);
   } catch (e) {
     primaryText = "";
   }
   if (!primaryText) {
     try {
-      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-fallback");
+      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), _stageCap(0.3, 6e3), "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
     } catch (e2) {
@@ -1168,7 +1174,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (!primaryText) {
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), Math.min(25e3, _remaining()), "ensemble-primary-retry");
+      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), _stageCap(0.15, 5e3), "ensemble-primary-retry");
       const rt = extractWAContent(retry);
       if (rt && String(rt).trim()) {
         primaryText = rt;

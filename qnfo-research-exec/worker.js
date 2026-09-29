@@ -1500,8 +1500,13 @@ async function gwCall(env, prompt, maxTokens) {
     }
     const j = await r.json();
     const c = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-    if (typeof c === "string" && c) return c;
-    await logEvent(env, "gw-fallback", "gateway empty content; falling back to Workers AI", "warn");
+    // GW-CANNED-DETECT-1 (2026-09-29): the gateway answers HTTP 200 with a ~370-char canned
+    // FALLBACK_TEXT when its ensemble budget is exhausted. gwCall used to return that as a real
+    // answer, so stageReconcile/stageRevise (>= 10000 chars) terminalised every row. Detect the
+    // canned signature and degrade to the Workers AI path instead of feeding it downstream.
+    const _canned = typeof c === "string" && /I do not have a reliable answer for that right now|ensemble mode \(model=ensemble\) cross-checks answers across models/i.test(c);
+    if (typeof c === "string" && c && !_canned) return c;
+    await logEvent(env, _canned ? "gw-canned" : "gw-fallback", _canned ? "gateway returned canned FALLBACK_TEXT (len=" + String(c).trim().length + "); falling back to Workers AI" : "gateway empty content; falling back to Workers AI", "warn");
     return await aiText(env, MODELS[0], prompt, maxTokens);
   } catch (e) {
     clearTimeout(t);
