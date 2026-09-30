@@ -1,0 +1,113 @@
+name: remediation-consumer
+
+# REMEDIATION-CONSUMER-1 (2026-09-30).
+#
+# Measured state before this workflow: qnfo-audit had 18 active rows in
+# `remediation_contracts`, 8 enabled `remediation_modules`, and TWO armed auto-close
+# triggers (remediation_verification_autoclose_ins/_upd) that close `agent_issues` the
+# moment a `remediation_verifications` row lands with pass=1, a trusted transport and
+# non-empty expected/observed. What did not exist was any process that read the
+# contract table: no scripts/*remed* file, no .github/workflows/*remed* file, and no
+# reference to `remediation_contracts` anywhere in scripts/ or .github/. So every
+# contract sat at attempts=0 / last_verdict=NULL and the auto-close machine could
+# never fire once. This workflow runs the consumer that closes that loop.
+#
+# CADENCE (SCHEDULE-EVENT-NEVER-FIRES-1): the GitHub `schedule` event has never fired
+# on this repository, so the cron below is an opportunistic extra. The load-bearing
+# triggers are `push` (on the consumer itself) and `workflow_run` chained off the
+# workflows that already fire on this repo, which gives a real cadence without
+# depending on a dead event.
+#
+# LOOP SAFETY: the consumer writes no repository file except its own ci-status
+# artifact, and that commit carries `[skip ci]`, so it cannot re-trigger this
+# workflow or fleet-autodeploy. The workflow_run chain is therefore acyclic.
+#
+# ADVERSARIAL: a green run proves the probes executed and what they returned. It does
+# NOT prove the underlying fleet is healthy - a contract whose probe is not a literal
+# SELECT is skipped by design and will keep its issue open, which is the intended
+# fail-closed behaviour, not a pass.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/remediation-consumer.py'
+      - '.github/workflows/remediation-consumer.yml'
+  workflow_run:
+    workflows: ["apply-pending-patches", "fleet-autodeploy", "mirror-sync"]
+    types: [completed]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remediation-consumer
+  cancel-in-progress: false
+
+jobs:
+  consume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Self-test the verdict classifier
+        run: python3 scripts/remediation-consumer.py --selftest
+
+      - name: Run the remediation consumer
+        id: consume
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 scripts/remediation-consumer.py | tee /tmp/remediation-consumer.json
+          echo "--- consumer output above ---"
+
+      - name: Publish the status artifact
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, pathlib
+          raw = pathlib.Path("/tmp/remediation-consumer.json")
+          try:
+              d = json.loads(raw.read_text())
+          except Exception as e:
+              d = {"ok": False, "error": "no parseable consumer output: %s" % e}
+          d["marker"] = "REMEDIATION-CONSUMER-1"
+          d["head"] = "${{ github.sha }}"
+          d["job_status"] = "${{ job.status }}"
+          pathlib.Path("ci-status/remediation-consumer.json").write_text(json.dumps(d, indent=1)[:8000])
+          print(json.dumps({k: d.get(k) for k in ("ok", "due", "pass", "fail", "error")}))
+          PY
+
+      - name: Commit the status artifact
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/remediation-consumer.json
+          if git diff --cached --quiet; then echo "no status change"; exit 0; fi
+          git commit -m "ci(status): remediation-consumer [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "status pushed on attempt $i"
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "status push failed after 3 attempts"
+          exit 0
