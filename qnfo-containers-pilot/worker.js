@@ -166,7 +166,8 @@ class ShellContainer {
         const cwd = body.cwd ? String(body.cwd) : WORKSPACE;
         if (!code) return json({ ok: false, error: "body.code required" }, 400);
         await this.ensureStarted();
-        const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && node -e " + JSON.stringify(code)]);
+        const b64 = btoa(unescape(encodeURIComponent(code)));
+        const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && printf %s " + JSON.stringify(b64) + " | base64 -d | node -"]);
         return json({ ok: out.exitCode === 0, result: out });
       }
       if (path === "/pip") {
