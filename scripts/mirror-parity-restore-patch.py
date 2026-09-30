@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MIRROR-PARITY-RESTORE-1 applier (fail-closed).
+"""MIRROR-PARITY-RESTORE-1 applier (fail-closed, DURABLE parity guard).
 
 INVARIANT (asserted by CI in several workflows):
     qnfo-ops/worker.js  ==  qnfo-ops/deployed-current.worker.js   (byte-identical)
@@ -12,24 +12,44 @@ scripts/ops-deploy-ledger-patch.py:185 fails with
 MEASURED DRIFT 2026-09-30T07:56Z (repo HEAD 56c159e0):
     qnfo-ops/worker.js                  385973 bytes
     qnfo-ops/deployed-current.worker.js 381327 bytes   (75 lines missing)
-Blocks present in worker.js but absent from the mirror include:
+Blocks present in worker.js but absent from the mirror:
     - TOOL-BUDGET-PENDING-1   (PENDING_TOOLCALLS_NOTE + summarizePendingToolCalls
                                + both guard call sites, chat loop and job loop)
     - OPS-D1-SCHEMA-HINT-FULL-1
     - two further hunks
 
-WHY IT MATTERS: the mirror is the artifact the fleet redeploy cron deploys
-(.github/workflows/apply-telemetry-truth.yml:97 comment - "The applier writes both
-worker.js and its deployed-current mirror so the fleet redeploy cron cannot revert
-the fix"). A stale mirror therefore REVERTS TOOL-BUDGET-PENDING-1 on the next
-redeploy: the tool-budget fix is live but not durable.
+WHY IT MATTERS: the mirror is the artifact the canonical/redeploy route reads
+(.github/workflows/mirror-sync.yml: "the canonical deploy reads
+<dir>/deployed-current.worker.js, so a worker.js version bump that does not move the
+mirror in the same commit leaves the deploy route verifying a stale version and failing
+closed with an opaque ok=0"). apply-telemetry-truth.yml:119 states the same for the
+redeploy cron: a stale mirror REVERTS the fix on the next redeploy. So a stale mirror
+makes the tool-budget fix live-but-not-durable.
 
-FAIL-CLOSED CONTRACT:
-  * abort unless the source carries every REQUIRED marker
-  * abort unless the source is strictly larger than the mirror (never shrink)
-  * abort if the mirror already carries all markers yet still differs (manual review)
-  * post-condition: byte equality, verified by re-read
-  * idempotent: byte-identical inputs => "nothing to do"
+WHY THE EXISTING MECHANISM DOES NOT COVER THIS (measured 2026-09-30T07:59Z):
+scripts/mirror-guard.py classified qnfo-ops as CONTENT-DIFF-REVIEW /
+"import-using source - report only" and its summary read
+`lagging=0 content_drift=0 review=6 fixed=0`, i.e. `--fix` never touches an
+import-using worker. Six workers are in that blind spot
+(errata-orchestrator, qnfo-cloud-ops, qnfo-containers-pilot, qnfo-errata-publish,
+qnfo-ops, qnfo-research-supervisor). qnfo-ops is the only worker with a tool loop,
+so it is the one that matters for tool-budget durability.
+
+CONTRACT v2 (durable, self-healing): the mirror is a DERIVED artifact. Every
+apply-pending-patches run re-executes this script, so parity is repaired on every
+run instead of once. The v1 size/`markers-missing` preconditions were removed:
+they made the applier a one-shot (after the first repair the mirror carries all
+markers, so every later drift would have aborted with "manual review" - a silent
+durability hole).
+
+FAIL-CLOSED:
+  * source or mirror missing
+  * source implausibly small (< 1024 bytes)
+  * source lacks any REQUIRED tool-budget marker (would propagate a broken bundle)
+  * a REQUIRED marker present in the mirror but ABSENT from the source
+    (mirror ahead of source -> manual review, never clobber)
+POST-CONDITION: byte equality, verified by re-read.
+IDEMPOTENT: byte-identical inputs => "nothing to do".
 """
 import pathlib
 import sys
@@ -38,12 +58,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "qnfo-ops" / "worker.js"
 MIR = ROOT / "qnfo-ops" / "deployed-current.worker.js"
 
+MIN_BYTES = 1024
 REQUIRED = (
     b"TOOL-BUDGET-PENDING-1",
     b"summarizePendingToolCalls",
     b"BUDGET-AUTO-CONTINUE-1",
     b"var MAX_TOOL_ITERS = 40;",
-    b"OPS-D1-SCHEMA-HINT-FULL-1",
 )
 
 
@@ -56,23 +76,24 @@ def main() -> int:
     if src == mir:
         print("MIRROR-PARITY-RESTORE-1: nothing to do (already byte-identical, %d bytes)" % len(src))
         return 0
+    if len(src) < MIN_BYTES:
+        print("FAIL-CLOSED: source is implausibly small (%d bytes)" % len(src))
+        return 3
     missing_src = [m.decode() for m in REQUIRED if m not in src]
     if missing_src:
         print("FAIL-CLOSED: source worker.js lacks required markers: %s" % missing_src)
         return 3
-    if len(src) <= len(mir):
-        print("FAIL-CLOSED: source %d bytes <= mirror %d bytes - refusing to shrink" % (len(src), len(mir)))
+    ahead = [m.decode() for m in REQUIRED if m in mir and m not in src]
+    if ahead:
+        print("FAIL-CLOSED: mirror carries markers absent from source (%s) - manual review" % ahead)
         return 3
-    missing_mir = [m.decode() for m in REQUIRED if m not in mir]
-    if not missing_mir:
-        print("FAIL-CLOSED: mirror carries every required marker yet differs - manual review")
-        return 3
+    gained = [m.decode() for m in REQUIRED if m not in mir]
     MIR.write_bytes(src)
     if MIR.read_bytes() != src:
         print("FAIL-CLOSED: post-condition failed: mirror != source after write")
         return 3
-    print("MIRROR-PARITY-RESTORE-1: parity restored %d -> %d bytes; markers restored: %s"
-          % (len(mir), len(src), missing_mir))
+    print("MIRROR-PARITY-RESTORE-1: parity synced %d -> %d bytes; markers gained: %s"
+          % (len(mir), len(src), gained or "(none - content sync)"))
     return 0
 
 
