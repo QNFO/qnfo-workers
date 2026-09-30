@@ -1,7 +1,43 @@
 {
- "ok": false,
- "error": "no parseable consumer output: [Errno 2] No such file or directory: '/tmp/remediation-consumer.json'",
+ "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "head": "edde1db043d54e7eb2b0f5507a65234a660c2bea",
- "job_status": "failure"
+ "verifier": "remediation-consumer@6324da329f95",
+ "due": 2,
+ "pass": 1,
+ "fail": 0,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "CI-WATCHDOG-REAPER-SUBJECT-SHAPE-1",
+   "issue_id": null,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "rawput-schedules-applied",
+   "issue_id": 1498,
+   "verdict": "pass",
+   "expected": "applied",
+   "observed": "applied",
+   "written": true
+  }
+ ],
+ "trusted_transports": [
+  "binding-http",
+  "cf-api",
+  "code-read",
+  "container",
+  "curl",
+  "d1-query",
+  "dns",
+  "edge-ext",
+  "external",
+  "external-curl",
+  "external-http",
+  "external-https",
+  "http"
+ ],
+ "spent_ms": 5035,
+ "head": "6324da329f95f6f3753f61745a5395edbac60705",
+ "job_status": "success"
 }
