@@ -34,6 +34,10 @@ name: apply-autodeploy-dead-state
 
 on:
   push:
+    # BRANCH-FILTER-1 (2026-09-30): without this, a push to ANY branch that touches this workflow's paths ran it,
+    # including its production deploy / push-to-main steps. Editing lifecycle-sot-and-deploy.yml on a PR branch did
+    # exactly that (run 36740563280, a real qnfo-lifecycle /content PUT from a feature branch).
+    branches: [main]
     paths:
       - "scripts/autodeploy-dead-state-fix.py"
       - ".github/workflows/apply-autodeploy-dead-state.yml"
