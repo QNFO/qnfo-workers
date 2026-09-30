@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.6-obs-summary";
+var VERSION = "2.38.7-github-write-reread";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1995,18 +1995,32 @@ async function githubFileWrite(env, args) {
   let res = await githubApi(env, "PUT", apiPath, body);
   let attempts = 1;
   let conflictStatus = null;
+  // GITHUB-409-VARIANT-RETRY-GAP-1 (issue 1396): the re-read below is the same api.github.com that throttles
+  // this worker's egress, so `if (!curSha) break;` aborted on the FIRST iteration whenever the re-read was
+  // throttled and the caller saw the original 409 with attempts=1. The re-read is now retried in its own right
+  // (3 tries, linear backoff). A 404 still ends the loop at once: the file does not exist, so this is a genuine
+  // create/create race and must fail loudly. If the re-read stays throttled the PUT is retried anyway, since a
+  // 409 is often transient and a retry costs one request, and the result says so (sha_reread_failed).
+  let shaRereadFailed = false;
   while (attempts < 4 && res && (res.status === 409 || res.status === 422)) {
     conflictStatus = res.status;
-    const cur = await githubApi(env, "GET", apiPath + "?ref=" + encodeURIComponent(branch || "main"), void 0);
-    const curSha = cur && cur.json && cur.json.sha ? String(cur.json.sha) : null;
-    if (!curSha) break;
-    body.sha = curSha;
+    let cur = null;
+    let curSha = null;
+    for (let rr = 1; rr <= 3 && !curSha; rr++) {
+      cur = await githubApi(env, "GET", apiPath + "?ref=" + encodeURIComponent(branch || "main"), void 0);
+      curSha = cur && cur.json && cur.json.sha ? String(cur.json.sha) : null;
+      if (curSha || cur && cur.status === 404) break;
+      await new Promise(function (r2) { return setTimeout(r2, 250 * rr); });
+    }
+    if (!curSha && cur && cur.status === 404) break;
+    if (curSha) body.sha = curSha;
+    else shaRereadFailed = true;
     await new Promise(function (r) { return setTimeout(r, 250 * attempts); });
     res = await githubApi(env, "PUT", apiPath, body);
     attempts++;
   }
-  if (res.status === 201 || res.status === 200) return { ok: true, repo, path, commit: res.json && res.json.commit && res.json.commit.sha, url: res.json && res.json.content && res.json.content.html_url, attempts, sha_retried: attempts > 1 };
-  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300), attempts, conflict_status: conflictStatus };
+  if (res.status === 201 || res.status === 200) return { ok: true, repo, path, commit: res.json && res.json.commit && res.json.commit.sha, url: res.json && res.json.content && res.json.content.html_url, attempts, sha_retried: attempts > 1, sha_reread_failed: shaRereadFailed };
+  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300), attempts, conflict_status: conflictStatus, sha_reread_failed: shaRereadFailed };
 }
 __name(githubFileWrite, "githubFileWrite");
 __name2(githubFileWrite, "githubFileWrite");
