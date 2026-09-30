@@ -12,6 +12,10 @@ name: remediation-consumer
 # contract sat at attempts=0 / last_verdict=NULL and the auto-close machine could
 # never fire once. This workflow runs the consumer that closes that loop.
 #
+# BRIDGE (2026-10-01): the consumer can only verify a contract, it cannot create one.
+# scripts/remediation_contract_bridge.py now registers a contract for every open
+# issue, so the due set is bounded by the open backlog. See remediation-bridge.yml.
+#
 # CADENCE (SCHEDULE-EVENT-NEVER-FIRES-1): the GitHub `schedule` event has never fired
 # on this repository, so the cron below is an opportunistic extra. The load-bearing
 # triggers are `push` (on the consumer itself) and `workflow_run` chained off the
@@ -55,6 +59,13 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # BRIDGE-THROUGHPUT-1 (2026-10-01): the bridge
+      # (scripts/remediation_contract_bridge.py) registered a contract for every open
+      # issue, so the due set is now bounded by the open backlog rather than by a
+      # hand-written handful. The script default is 10; raise it so a single run
+      # drains the whole due set instead of 10 per hour. 40 keeps the run well inside
+      # the 15 minute job timeout (measured: 4273 ms for 1 contract).
+      REMEDIATION_MAX_ITEMS: "40"
     steps:
       - uses: actions/checkout@v4
 
