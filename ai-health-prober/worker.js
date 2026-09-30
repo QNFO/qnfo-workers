@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.6-heartbeat";
+var VERSION = "2.3.7-probe-cost-tier";
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
 // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
 // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -98,15 +98,39 @@ async function reconcileHealth(env, probedIds, now) {
   return out;
 }
 __name(reconcileHealth, "reconcileHealth");
-async function runProbe(env) {
+// PROBE-COST-TIER-1 (2026-10-01, issue 1682): every */20 run pinged all 10 entries (720 runs/day,
+// reasoning models included; probe traffic measured at ~16% of Workers AI neurons). The coverage
+// gate only needs a probe within 26 h, so a model whose last probe was OK is now re-probed at most
+// every PROBE_OK_INTERVAL_MS; a degraded/failing/unknown model is still probed every run so recovery
+// is detected at the same 20-min resolution. Entries sharing an @cf id (deepseek-v4-pro and
+// deepseek-v4-pro-wa) are probed once per run and the result written to both keys. ?force=1 on /run
+// probes everything.
+var PROBE_OK_INTERVAL_MS = 2 * 36e5;
+async function runProbe(env, force) {
   const now = Date.now();
   const results = [];
   const probedIds = [];
+  const prior = {};
+  if (env.QNFO_AUDIT && !force) {
+    try {
+      const rows = await env.QNFO_AUDIT.prepare("SELECT model_id, status, last_probe_ts FROM ai_model_health").all();
+      for (const row of rows && rows.results || []) prior[row.model_id] = row;
+    } catch (e) {
+    }
+  }
+  const byId = {};
+  let skipped = 0;
   for (let i = 0; i < MODELS.length; i++) {
     const m = MODELS[i];
-    const r = await probeOne(env, m);
     const mid = canonicalId(m.internal || m.id);
     probedIds.push(mid);
+    const pr = prior[mid];
+    const lastMs = pr ? toMs(pr.last_probe_ts) : null;
+    if (!force && pr && pr.status === "ok" && lastMs != null && now - lastMs < PROBE_OK_INTERVAL_MS) {
+      skipped++;
+      continue;
+    }
+    const r = byId[m.id] || (byId[m.id] = await probeOne(env, m));
     results.push({ model: mid, ok: r.ok, ms: r.ms || null });
     if (env.QNFO_AUDIT) {
       try {
@@ -124,7 +148,7 @@ async function runProbe(env) {
     if (results[i].ok) up++;
   }
   const extra = await reconcileHealth(env, probedIds, now);
-  return { probed: results.length, up, down: results.length - up, reconciled: extra.reconciled, namespaceCleared: extra.namespaceCleared, uncovered: extra.uncovered };
+  return { probed: results.length, skipped_recent_ok: skipped, calls: Object.keys(byId).length, up, down: results.length - up, reconciled: extra.reconciled, namespaceCleared: extra.namespaceCleared, uncovered: extra.uncovered };
 }
 __name(runProbe, "runProbe");
 async function checkFreshness(env) {
@@ -196,7 +220,7 @@ var worker_default = {
     const u = new URL(request.url);
     if (u.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, models: MODELS.length, signals: SIGNALS.length });
     if (u.pathname === "/run") {
-      const p = await runProbe(env);
+      const p = await runProbe(env, u.searchParams.get("force") === "1");
       const f = await checkFreshness(env);
       const coverage = await checkHealthCoverage(env, Date.now());
       let st = 0, idle = 0;

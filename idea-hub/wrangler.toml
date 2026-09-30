@@ -35,3 +35,7 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
+
+# IDEA-TRIAGE-CONSUMER-ABSENT-1 (issue 1689): hourly proposal triage (ported from retired qnfo-idea-triage).
+[triggers]
+crons = ["23 * * * *"]

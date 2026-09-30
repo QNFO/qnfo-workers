@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.41-errors-since-deploy";
+var VERSION = "1.7.42-autonomy-stale-flag";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1700,6 +1700,16 @@ async function buildState(env, ctx) {
   if (_active.length) issues.push({ sev: "err", text: _active.length + " worker(s) with errors in the last " + ERR_ACTIVE_MS / 36e5 + "h and after their current deploy: " + _active.map(_errFmt).join(", ") });
   if (_unfixed.length) issues.push({ sev: "warn", text: _unfixed.length + " worker(s) with 24h errors, none in the last " + ERR_ACTIVE_MS / 36e5 + "h and no deploy since: " + _unfixed.map(_errFmt).join(", ") });
   if (analytics.error) issues.push({ sev: "warn", text: "analytics unavailable: " + analytics.error });
+  // AUTONOMY-SCORE-STALE-FLAG-1 (2026-10-01, issue 1679): mission 2.1 makes the VSM and OODA scores the fleet's
+  // self-tracking, and they sat 6-20 days stale with nothing on this page saying so. qnfo-autonomy-scorer now
+  // rescores them daily; flag any VSM/OODA/composite row older than 48h so a stopped scorer is visible.
+  try {
+    const stale = await d1all(env.AUDIT, "SELECT dimension, scored_at FROM autonomy_scores WHERE framework IN ('VSM','OODA','composite') AND (scored_at IS NULL OR scored_at < ?)", [new Date(nowMs - 48 * 36e5).toISOString().slice(0, 10)]) || [];
+    if (stale.length) issues.push({ sev: "warn", text: stale.length + " autonomy score(s) older than 48h (qnfo-autonomy-scorer not rescoring): " + stale.map(function(r) {
+      return r.dimension + "@" + (r.scored_at || "never");
+    }).join(", ") });
+  } catch (e) {
+  }
   const chains = [];
   const sysChains = systemIntegration && systemIntegration.chains || [];
   for (const c of sysChains) {

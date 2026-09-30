@@ -16,7 +16,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.7-do-dispatch-guard";
+var VERSION = "1.0.8-public-exec-closed";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -334,8 +334,18 @@ var worker_default = {
         ok: true,
         worker: "qnfo-containers-pilot",
         version: VERSION,
-        capabilities: ["bash", "python3.12", "node22", "npm", "pip", "git", "ripgrep", "workspace-fs", "git-clone", "full-shell"]
+        capabilities: ["bash", "python3.12", "node22", "npm", "pip", "git", "ripgrep", "workspace-fs", "git-clone", "full-shell"],
+        public_exec: false
       });
+    }
+    // PILOT-PUBLIC-EXEC-CLOSED-1 (2026-10-01, issue 1677): the full shell was reachable from the
+    // internet on *.workers.dev behind one static PILOT_TOKEN. The only command caller is qnfo-ops,
+    // which uses the CONTAINERS_PILOT service binding with host containers-pilot.internal; CI probes
+    // use only /health (above) and the token-gated /status. A public request always carries the
+    // routed hostname (Cloudflare routes on Host, so it cannot claim the internal one), so refuse
+    // every other path from a public hostname. A leaked token no longer yields a shell.
+    if (url.hostname !== "containers-pilot.internal" && url.pathname !== "/status") {
+      return json({ ok: false, error: "forbidden: command paths are reachable only via the qnfo-ops service binding" }, 403);
     }
     const id = env.SHELL_CONTAINER.idFromName("default");
     const stub = env.SHELL_CONTAINER.get(id);

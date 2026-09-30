@@ -30,6 +30,7 @@ import datetime as dt
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 
 ACCOUNT = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or "edb167b78c9fb901ea5bca3ce58ccc4b"
@@ -132,6 +133,30 @@ def main() -> int:
         rows = [{**x["dimensions"], "requests": x["count"], **x["sum"]} for x in r["rows"].get("aiGatewayRequestsAdaptiveGroups", [])]
         rows.sort(key=lambda x: -(x.get("cost") or 0))
         out["ai_gateway_7d"] = rows
+
+    # 5. Attribution sample for the busiest (gateway, model) pairs (issue 1684: 21.6k req/7d to model
+    #    'deepseek-flash' on gateway 'default' with no repo caller). The REST logs carry metadata,
+    #    path and request headers that GraphQL aggregates drop. Keys only; never prompt bodies.
+    top = sorted((x for x in out.get("ai_gateway_7d", []) if isinstance(x, dict)),
+                 key=lambda x: -(x.get("requests") or 0))[:4] if isinstance(out.get("ai_gateway_7d"), list) else []
+    samples = []
+    for x in top:
+        gw, model = x.get("gateway"), x.get("model")
+        url = ("https://api.cloudflare.com/client/v4/accounts/%s/ai-gateway/gateways/%s/logs?per_page=10&order_by=created_at&direction=desc&search=%s"
+               % (ACCOUNT, urllib.parse.quote(str(gw)), urllib.parse.quote(str(model))))
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + TOKEN})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                body = json.loads(r.read().decode())
+            logs = []
+            for lg in body.get("result") or []:
+                logs.append({k: lg.get(k) for k in ("created_at", "provider", "model", "path", "success", "cached", "status_code",
+                                                     "metadata", "request_type", "step", "request_head", "response_head")
+                             if k in lg})
+            samples.append({"gateway": gw, "model": model, "requests_7d": x.get("requests"), "logs": logs})
+        except Exception as e:  # noqa: BLE001 - diagnostic
+            samples.append({"gateway": gw, "model": model, "error": str(e)[:300]})
+    out["ai_gateway_attribution"] = samples
 
     os.makedirs(os.path.dirname(OUT) or ".", exist_ok=True)
     with open(OUT, "w") as f:

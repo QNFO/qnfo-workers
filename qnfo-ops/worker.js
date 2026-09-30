@@ -29,7 +29,26 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.15-audit-trail-writer";
+var VERSION = "2.38.16-aig-caller-meta";
+// AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
+// model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
+// cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
+// analytics attribute spend per worker. Caller-set metadata is preserved; non-gateway requests are untouched.
+var __AIG_WORKER = "qnfo-ops";
+var __aigBaseFetch = globalThis.fetch;
+globalThis.fetch = function(input, init) {
+  try {
+    var u = typeof input === "string" ? input : input && input.url ? input.url : String(input);
+    if (u.indexOf("https://gateway.ai.cloudflare.com/") === 0) {
+      var h = new Headers(init && init.headers || (typeof input !== "string" && input && input.headers) || undefined);
+      if (!h.has("cf-aig-metadata")) h.set("cf-aig-metadata", JSON.stringify({ worker: __AIG_WORKER }));
+      init = Object.assign({}, init || {}, { headers: h });
+    }
+  } catch (e) {
+  }
+  return __aigBaseFetch(input, init);
+};
+
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";

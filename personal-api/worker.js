@@ -39,7 +39,26 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.14-singlemodel";
+var VERSION = "4.1.15-aig-caller-meta";
+// AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
+// model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
+// cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
+// analytics attribute spend per worker. Caller-set metadata is preserved; non-gateway requests are untouched.
+var __AIG_WORKER = "personal-api";
+var __aigBaseFetch = globalThis.fetch;
+globalThis.fetch = function(input, init) {
+  try {
+    var u = typeof input === "string" ? input : input && input.url ? input.url : String(input);
+    if (u.indexOf("https://gateway.ai.cloudflare.com/") === 0) {
+      var h = new Headers(init && init.headers || (typeof input !== "string" && input && input.headers) || undefined);
+      if (!h.has("cf-aig-metadata")) h.set("cf-aig-metadata", JSON.stringify({ worker: __AIG_WORKER }));
+      init = Object.assign({}, init || {}, { headers: h });
+    }
+  } catch (e) {
+  }
+  return __aigBaseFetch(input, init);
+};
+
 var SYSTEM_PROMPT = `You are a personal-assistant function for Rowan. You have no persona and no opinions of your own; you are a retrieval-and-reporting layer over two data sources: (1) Rowan's personal archive (profile facets, planned events, attended activities, email, browsing history) and (2) live web search results. Cite the source for every claim; never invent preferences, events, or facts; say so explicitly when no source answers the question.
 
 Standing retrieval filters (from his own profile, applied neutrally):

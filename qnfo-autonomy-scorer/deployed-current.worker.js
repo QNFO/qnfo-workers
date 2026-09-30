@@ -4,11 +4,15 @@
 // table went stale (last 2026-09-24). A score nobody recomputes is an assertion, not a measurement.
 //
 // SCOPE (deliberate): only dimensions that can be derived from data are written. Judgement dimensions
-// (s4_intelligence, independent_decision, s5_policy, ooda_closure, watchmaker_inverted, novelty, s1/s2 ...) are NEVER
-// touched; when one is past its own next_score date the composite says so instead of pretending it is fresh.
+// (independent_decision, watchmaker_inverted, novelty) are NEVER touched; when one is past its own next_score
+// date the composite says so instead of pretending it is fresh.
+// v1.1.0 VSM-OODA-MEASURED-1 (2026-10-01, issues 1679 / 1690): mission 2.1 requires periodic autonomy scores under
+// BOTH frameworks, but s1/s2/s4/s5 and ooda_closure were still hand-scored (last 09-10..09-24). Every VSM system
+// (S1-S5 plus S3*) and every OODA stage is now recomputed daily from live registers; each formula is stated in
+// the row's evidence. The composite is mirrored into survival_state.sai so the survival panel is no longer NULL.
 // Every write is a bounded UPSERT of a known dimension plus an append to autonomy_score_history. If the fact query
 // fails, nothing is written (fail closed).
-var VERSION = "1.0.0-measured";
+var VERSION = "1.1.1-vsm-ooda-measured";
 var WORKER = "qnfo-autonomy-scorer";
 var DAY = 86400000;
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
@@ -52,6 +56,70 @@ function scoreFromFacts(f, nowMs) {
     gap: f.open_now > 50 ? "open backlog " + f.open_now + " above ceiling 50" : (closeRate < 1 ? "closing slower than filing" : "none measured"),
     confidence: f.filed7 >= 10 ? "high" : "medium"
   });
+  // ---- VSM S1, S2, S3*, S4, S5 ----
+  var liveRatio = f.live_n > 0 ? f.live_ok / f.live_n : null;
+  if (liveRatio !== null) {
+    var pubRatio = Math.min(1, f.pub30 / 30);
+    out.push({
+      dimension: "s1_operations", framework: "VSM", score: r1(5 * liveRatio * (0.5 + 0.5 * pubRatio)),
+      evidence: "MEASURED: operational units serving " + f.live_ok + "/" + f.live_n + " (worker_live_audit http=200 among deployable workers, " + pct(liveRatio) + "%); research published last 30d " + f.pub30 + " vs mission target 30 (one per day). score = 5 x serving x (0.5 + 0.5 x min(1, pub30/30)).",
+      gap: pubRatio < 1 ? "publishing " + f.pub30 + "/30 per 30d" : (f.live_ok < f.live_n ? (f.live_n - f.live_ok) + " unit(s) not serving" : "none measured"),
+      confidence: "high"
+    });
+  }
+  var syncT = f.sync_n + f.drift_n;
+  var fgT = f.fg_fresh + f.fg_stale;
+  if (syncT > 0 && fgT > 0) {
+    var s2 = 0.5 * (f.sync_n / syncT) + 0.5 * (f.fg_fresh / fgT);
+    out.push({
+      dimension: "s2_coordination", framework: "VSM", score: r1(5 * s2),
+      evidence: "MEASURED: shared-state coherence. live==repo " + f.sync_n + "/" + syncT + "; freshness_guard shared registers fresh " + f.fg_fresh + "/" + fgT + " (stale " + f.fg_stale + "). score = 5 x (0.5 x sync + 0.5 x fresh).",
+      gap: f.fg_stale ? f.fg_stale + " shared register(s) stale" : (f.drift_n ? f.drift_n + " worker(s) drifted" : "none measured"),
+      confidence: "medium"
+    });
+  }
+  if (f.guards_n > 0) {
+    out.push({
+      dimension: "s3_star_audit", framework: "VSM", score: r1(5 * f.guards_ok / f.guards_n),
+      evidence: "MEASURED: guard_registry " + f.guards_ok + "/" + f.guards_n + " guards status=verified with a negative test. score = 5 x verified/total.",
+      gap: f.guards_n - f.guards_ok ? (f.guards_n - f.guards_ok) + " guard(s) unverified" : "none measured",
+      confidence: "medium"
+    });
+  }
+  if (f.sig30 > 0) {
+    out.push({
+      dimension: "s4_intelligence", framework: "VSM", score: r1(5 * f.sig30_done / f.sig30),
+      evidence: "MEASURED: environment signals last 30d (expired orphans excluded) " + f.sig30 + ", triaged (status != new) " + f.sig30_done + " (" + pct(f.sig30_done / f.sig30) + "%). score = 5 x triaged/received.",
+      gap: f.sig30 - f.sig30_done ? (f.sig30 - f.sig30_done) + " signal(s) untriaged" : "none measured",
+      confidence: f.sig30 >= 50 ? "high" : "medium"
+    });
+  }
+  if (f.gates_n > 0) {
+    out.push({
+      dimension: "s5_policy", framework: "VSM", score: r1(5 * f.gates_met / f.gates_n),
+      evidence: "MEASURED: identity/impact gates (impact_thresholds) MET " + f.gates_met + "/" + f.gates_n + ". score = 5 x met/total. Business gates cannot be met by engineering alone; see the owner-decision list.",
+      gap: f.gates_n - f.gates_met ? (f.gates_n - f.gates_met) + " gate(s) open" : "none measured",
+      confidence: "high"
+    });
+  }
+  // ---- OODA: each stage measured; closure is the weakest stage (a loop is as fast as its slowest leg) ----
+  var stages = [];
+  if (fgT > 0) stages.push(["observe", f.fg_fresh / fgT, "freshness_guard fresh " + f.fg_fresh + "/" + fgT]);
+  if (f.open_now > 0) stages.push(["orient", f.triaged / f.open_now, "open issues triaged " + f.triaged + "/" + f.open_now]);
+  else stages.push(["orient", 1, "no open issues"]);
+  if (f.triaged > 0) stages.push(["decide", 1 - f.breached / f.triaged, "triaged issues within SLA " + (f.triaged - f.breached) + "/" + f.triaged]);
+  var actR = f.filed7 > 0 ? Math.min(1, f.closed7 / f.filed7) : 1;
+  stages.push(["act", actR, "7d closed/filed " + f.closed7 + "/" + f.filed7]);
+  var weakest = null;
+  for (var k = 0; k < stages.length; k++) {
+    out.push({ dimension: "ooda_" + stages[k][0], framework: "OODA", score: r1(5 * stages[k][1]),
+      evidence: "MEASURED: " + stages[k][2] + " (" + pct(stages[k][1]) + "%). score = 5 x ratio.",
+      gap: stages[k][1] < 1 ? stages[k][0] + " below 100%" : "none measured", confidence: "medium" });
+    if (!weakest || stages[k][1] < weakest[1]) weakest = stages[k];
+  }
+  out.push({ dimension: "ooda_closure", framework: "OODA", score: r1(5 * weakest[1]),
+    evidence: "MEASURED: loop closure = weakest stage (" + stages.map(function (x) { return x[0] + " " + pct(x[1]) + "%"; }).join(", ") + ").",
+    gap: "weakest stage: " + weakest[0], confidence: "medium" });
   return out;
 }
 // Pure: measured dims + the current table -> overall row. Judgement dims are carried unchanged.
@@ -84,11 +152,31 @@ var FACT_SQL = "SELECT " +
   "(SELECT count(*) FROM agent_issues WHERE created_at > (strftime('%s','now')-604800)*1000) AS filed7," +
   "(SELECT count(*) FROM agent_issues WHERE status!='open' AND updated_at > (strftime('%s','now')-604800)*1000) AS closed7," +
   "(SELECT count(*) FROM agent_issues WHERE status='open') AS open_now";
+// Split from FACT_SQL: D1 caps the number of terms in one compound SELECT.
+var FACT_SQL2 = "SELECT " +
+  "(SELECT count(*) FROM worker_live_audit WHERE note NOT IN ('NOT_A_WORKER','NOT_DEPLOYED','CRON_ONLY')) AS live_n," +
+  "(SELECT count(*) FROM worker_live_audit WHERE note NOT IN ('NOT_A_WORKER','NOT_DEPLOYED','CRON_ONLY') AND http=200) AS live_ok," +
+  "(SELECT count(*) FROM research_queue WHERE published_at > datetime('now','-30 day')) AS pub30," +
+  "(SELECT count(*) FROM freshness_guard WHERE status='fresh') AS fg_fresh," +
+  "(SELECT count(*) FROM freshness_guard WHERE status='stale') AS fg_stale," +
+  "(SELECT count(*) FROM guard_registry) AS guards_n," +
+  "(SELECT count(*) FROM guard_registry WHERE status='verified') AS guards_ok";
+var FACT_SQL3 = "SELECT " +
+  "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status!='expired') AS sig30," +
+  "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status NOT IN ('new','expired')) AS sig30_done," +
+  "(SELECT count(*) FROM impact_thresholds) AS gates_n," +
+  "(SELECT count(*) FROM impact_thresholds WHERE state='MET') AS gates_met," +
+  "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open') AS triaged," +
+  "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND replace(t.sla_due_at,'T',' ') < datetime('now')) AS breached";
 function json(o, s) { return new Response(JSON.stringify(o, null, 1), { status: s || 200, headers: { "content-type": "application/json" } }); }
 async function collect(env) {
   var r = await env.AUDIT.prepare(FACT_SQL).first();
-  if (!r) throw new Error("fact query returned no row");
-  var keys = ["dep_ok", "dep_fail", "sync_n", "drift_n", "heal_acted", "heal_good", "filed7", "closed7", "open_now"];
+  var r2 = await env.AUDIT.prepare(FACT_SQL2).first();
+  var r3 = await env.AUDIT.prepare(FACT_SQL3).first();
+  if (!r || !r2 || !r3) throw new Error("fact query returned no row");
+  r = Object.assign({}, r, r2, r3);
+  var keys = ["dep_ok", "dep_fail", "sync_n", "drift_n", "heal_acted", "heal_good", "filed7", "closed7", "open_now",
+    "live_n", "live_ok", "pub30", "fg_fresh", "fg_stale", "guards_n", "guards_ok", "sig30", "sig30_done", "gates_n", "gates_met", "triaged", "breached"];
   var f = {};
   for (var i = 0; i < keys.length; i++) { var v = Number(r[keys[i]]); if (!isFinite(v) || v < 0) throw new Error("bad fact " + keys[i]); f[keys[i]] = v; }
   return f;
@@ -109,6 +197,7 @@ async function run(env, write) {
       stmts.push(env.AUDIT.prepare("INSERT INTO autonomy_scores (dimension, framework, score, scale, evidence, gap, confidence, scored_at, next_score) VALUES (?1,?2,?3,'0-5',?4,?5,?6,?7,?8) ON CONFLICT(dimension) DO UPDATE SET framework=excluded.framework, score=excluded.score, scale=excluded.scale, evidence=excluded.evidence, gap=excluded.gap, confidence=excluded.confidence, scored_at=excluded.scored_at, next_score=excluded.next_score").bind(x.dimension, x.framework, x.score, x.evidence, x.gap, x.confidence, day, next));
       stmts.push(env.AUDIT.prepare("INSERT INTO autonomy_score_history (dimension, score, evidence, scored_at, ts) VALUES (?1,?2,?3,?4,?5)").bind(x.dimension, x.score, x.evidence, day, now));
     }
+    if (comp) stmts.push(env.AUDIT.prepare("INSERT INTO survival_state (id, ts, sai) VALUES (1, ?1, ?2) ON CONFLICT(id) DO UPDATE SET sai=excluded.sai").bind(new Date(now).toISOString(), comp.score));
     stmts.push(env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker,version,ts,ok) VALUES (?1,?2,?3,1) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(WORKER, VERSION, new Date(now).toISOString()));
     await env.AUDIT.batch(stmts);
   }
