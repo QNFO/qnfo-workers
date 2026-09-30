@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.31-continuation-inherit";
+var VERSION = "2.38.0-toolbudget-canonical";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -101,7 +101,7 @@ var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-f
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-var MAX_TOOL_ITERS = 12;
+var MAX_TOOL_ITERS = 40;  // TOOLBUDGET-CANONICAL-1: was 12; the 300s wall clock is the binding cap
 var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
@@ -982,7 +982,21 @@ async function d1Query(env, args) {
           const hit = rows2.find(function(r) { return String(r.tbl || "").toLowerCase() === want; });
           if (hit) { out.available_columns = hit.cols; out.hint = "use a column from available_columns for table " + hit.tbl; }
         }
-        if (!out.available_columns) out.schema_tables = rows2.map(function(r) { return r.tbl; }).slice(0, 80);
+        if (!out.available_columns) {
+          // OPS-D1-SCHEMA-HINT-FULL-1 (issue #1490): this list was capped at 80 entries in
+          // ALPHABETICAL order. MEASURED 2026-09-29: QNFO_AUDIT holds 306 tables, so every
+          // table sorting after "email_commands" was INVISIBLE and agents kept guessing names
+          // (166 agent-schema-guess tool failures in the preceding 24h). Never truncate
+          // silently again: report the total, flag truncation, and name the enumerator.
+          const _tblAll = rows2.map(function(r) { return r.tbl; })
+            .filter(function(t) { return !!t; });
+          out.schema_tables = _tblAll.slice(0, 400);
+          out.schema_tables_total = _tblAll.length;
+          out.schema_tables_truncated = _tblAll.length > out.schema_tables.length;
+          out.hint = "table not found. schema_tables lists " + out.schema_tables.length +
+            " of " + out.schema_tables_total + " tables; enumerate all with: " +
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
+        }
       }
     } catch (e2) {}
     return out;
@@ -2337,13 +2351,11 @@ async function cfWorkerDeploy(env, args) {
   // without extending it is still exposed. Detection would require reading the
   // worker's wrangler.toml, which this endpoint has no binding for.
   const _CONTAINER_WORKERS = ["qnfo-containers-pilot"];
-  if (_CONTAINER_WORKERS.indexOf(worker) !== -1 && !(args && args.allow_container_config_drop)) {
-    return {
-      ok: false,
-      rejected: true,
-      error: "CONTAINER-CONFIG-DROPPED-1: " + worker + " declares [[containers]]; cf_worker_deploy PUTs /content and rebuilds bindings from GET /bindings, and [[containers]] is not a binding, so this deploy would destroy the container config and take the whole container tool family down. Deploy with wrangler deploy (.github/workflows/deploy-containers-pilot.yml). Pass allow_container_config_drop:true only for a deliberate container teardown."
-    };
-  }
+  // CONTAINER-GUARD-AFTER-READ-1 (issues #1485/#1487): the decision moved BELOW the live
+  // /settings read. A name check evaluated before the read can never distinguish
+  // "container config unreadable" from "container config absent", and it refuses the very
+  // deploy that would restore the config.
+  const _isContainerWorker = _CONTAINER_WORKERS.indexOf(worker) !== -1;
   // FM8-VERSION-DOWNGRADE (2026-09-26): refuse a SEMVER DOWNGRADE by default. A stale
   // WORKTREE-GRAFT-PUSH-1 reverts the repo to OLD versions (canonical: qnfo-gateway 3.7.4 to
   // 3.6.1, qnfo-ops 2.37.6 to 2.36.47) and, because GitHub main is the deploy source, the
@@ -2426,6 +2438,12 @@ async function cfWorkerDeploy(env, args) {
     }
     let _compatDate = "2026-08-01";
     let _compatFlags = [];
+    // PRESERVE-WORKER-METADATA-2 (issues #1485/#1487): [[containers]] is SCRIPT-LEVEL
+    // config, not a binding, so BINDING-PRESERVE-1 never carried it and every /content PUT
+    // silently dropped it (MEASURED: deployment_history id 172 at 19:30:35.100Z, first
+    // container.error at 19:30:43.591Z -- 8s later). Read it from the SAME GET /settings
+    // call already used for compatibility_date.
+    let _containers = [];
     try {
       const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
       if (_sResp.ok) {
@@ -2433,11 +2451,24 @@ async function cfWorkerDeploy(env, args) {
         const _sr = _sj && _sj.result;
         if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
         if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
+        if (_sr && Array.isArray(_sr.containers)) _containers = _sr.containers.slice();
       }
     } catch (_e) {
     }
     if (!_compatDate) _compatDate = "2026-08-01";
-    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}));
+    if (_isContainerWorker && !_containers.length &&
+        !(args && args.allow_container_config_drop)) {
+      return {
+        ok: false,
+        rejected: true,
+        error: "CONTAINER-CONFIG-DROPPED-1: " + worker + " is a container worker and "
+          + "GET /settings returned NO containers array, so this PUT would leave the "
+          + "container config absent (the measured #1485 failure). Restore it with "
+          + "scripts/restore_container_config_v5.py (versions API). Pass "
+          + "allow_container_config_drop:true only for a deliberate teardown."
+      };
+    }
+    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     // FM7-HEALTH-VERSION-PARITY-1 (2026-09-26, FATAL): refuse a deploy whose source /health
     // returns a HARDCODED literal version instead of its single VERSION const. A lying /health is
@@ -4174,7 +4205,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e4);
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5)  // TOOLBUDGET-CANONICAL-1: was 3e4 (30s); canonical 300s;
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
@@ -4440,6 +4471,20 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           } catch (e) { }
         }
         const deadlineHit = Date.now() > loopDeadline;
+        if ((iter >= maxIters || deadlineHit) && !globalThis.__opsBailLogged) {
+          globalThis.__opsBailLogged = true;
+          try {
+            const _bail = { kind: "ops_tool_budget_bail", marker: "TOOLBUDGET-CANONICAL-1",
+              iter, maxIters, deadlineHit, loopDeadlineMs,
+              stream: isStream, ts: new Date().toISOString() };
+            if (env && env.QNFO_AUDIT) {
+              env.QNFO_AUDIT.prepare(
+                "INSERT INTO cloud_ops_events (kind, detail, ts) VALUES (?, ?, ?)"
+              ).bind("ops_tool_budget_bail", JSON.stringify(_bail), Date.now())
+               .run().catch(function () {});
+            }
+          } catch (e) { }
+        }
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
