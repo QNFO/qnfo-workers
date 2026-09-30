@@ -8,15 +8,35 @@ name: applier-doctor
 # / error. This makes the two previously-invisible applier failure modes
 # measurable on every push that touches a patch script.
 #
+# APPLIER-ROT-DISPOSITION-1 (added 2026-09-30 by qnfo-ops). The chain was
+# DETECT (this workflow) -> FILE (applier-rot-triage.yml) -> *nothing*. That is
+# FILING-NOT-FIXING-1 / CLOSED-LOOP-DISPOSITION-1 in production: rot was measured,
+# reported, and never retired, so each rotted applier re-filed the same issue on
+# every run (canonical: issues #1533-#1542, all filed from ONE doctor run at
+# 2026-09-30T13:56:10Z). This workflow now owns the missing third stage.
+#
+#   The disposition step retires exactly the appliers the doctor itself classified
+#   `superseded` -- a positive determination by the fleet's own detector that the
+#   applier has no remaining work. It MOVES, never deletes:
+#     scripts/<stem>.py              -> scripts/_retired/<stem>.py
+#     .github/workflows/<wf>.yml     -> .github/workflows/_retired/<wf>.yml
+#   Both destinations are outside the globs that consume them (`scripts/*patch*.py`
+#   is non-recursive; GitHub only loads .github/workflows/*.yml at the top level),
+#   so the retirement is effective, auditable, and reversible with one git mv.
+#
+#   `stale-anchor` is deliberately NOT retired: the anchor is gone but the change may
+#   or may not be present, and discarding a real fix is worse than a red row. Those
+#   stay filed by applier-rot-triage.yml with the doctor's own remedy line.
+#
 # WHY THIS WORKFLOW IS WRITTEN THIS WAY (the class it must not join):
 #   * WORKFLOW-YAML-LINT-1 -- an unquoted colon inside a step NAME made
 #     deploy-qnfo-ops.yml unparseable, so GitHub created runs with ZERO jobs and
-#     no log. Every step name below is colon-free; workflow-lint.yml gates it.
+#     no log. Every step name below is colon-free and quoted; workflow-lint.yml gates it.
 #   * FAILURE-ARTIFACT-LOSS-1 / #1381 -- appliers that only commit on success
 #     leave no trace when they fail. The doctor step is continue-on-error and the
 #     ci-status artifact is written with if always, so a run that finds nothing
 #     is still visible in ci-status/applier-doctor.json.
-#   * COMMITBACK-DRIFT-1 / the 409 class -- the commit-back retries with
+#   * COMMITBACK-DRIFT-1 / the 409 class -- every commit-back retries with
 #     pull --rebase --autostash so a concurrent writer cannot strand it.
 #   * The GitHub `schedule` event has never fired in this repo, so this workflow
 #     is push-triggered plus workflow_dispatch -- never schedule-only.
@@ -50,7 +70,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run the applier doctor
+      - name: "Run the applier doctor"
         id: doctor
         continue-on-error: true
         run: |
@@ -62,7 +82,89 @@ jobs:
           echo "doctor_rc=$rc" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Commit the doctor report
+      - name: "Retire superseded appliers (disposition)"
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess, sys
+
+          ROOT = os.getcwd()
+          rep = os.path.join(ROOT, "ci-status", "applier-doctor.json")
+          if not os.path.isfile(rep):
+              print("NO-REPORT nothing to dispose")
+              sys.exit(0)
+
+          try:
+              data = json.load(open(rep, encoding="utf-8"))
+          except Exception as exc:
+              print("REPORT-UNREADABLE " + str(exc))
+              sys.exit(0)
+
+          sup = data.get("superseded") or []
+          if not sup:
+              print("NO-SUPERSEDED nothing to retire")
+              sys.exit(0)
+
+          os.makedirs(os.path.join(ROOT, "scripts", "_retired"), exist_ok=True)
+          os.makedirs(os.path.join(ROOT, ".github", "workflows", "_retired"), exist_ok=True)
+
+          moved = []
+          for rel in sup:
+              src = os.path.join(ROOT, rel)
+              if not os.path.isfile(src):
+                  print("SKIP-MISSING " + rel)
+                  continue
+              base = os.path.basename(rel)
+              dst = os.path.relpath(os.path.join(ROOT, "scripts", "_retired", base), ROOT)
+              subprocess.run(["git", "mv", rel, dst], check=False)
+              moved.append(base[:-3] if base.endswith(".py") else base)
+
+          if not moved:
+              print("NOTHING-MOVED")
+              sys.exit(0)
+
+          wfdir = os.path.join(ROOT, ".github", "workflows")
+          refs = {}
+          for f in sorted(os.listdir(wfdir)):
+              if not (f.endswith(".yml") or f.endswith(".yaml")):
+                  continue
+              try:
+                  t = open(os.path.join(wfdir, f), encoding="utf-8", errors="replace").read()
+              except OSError:
+                  continue
+              found = set(re.findall(r"scripts/([A-Za-z0-9_\-]*patch[A-Za-z0-9_\-]*)\.py", t))
+              if found:
+                  refs[f] = found
+
+          for wf, scripts in refs.items():
+              if len(scripts) == 1 and next(iter(scripts)) in moved:
+                  src = os.path.join(".github", "workflows", wf)
+                  dst = os.path.join(".github", "workflows", "_retired", wf)
+                  subprocess.run(["git", "mv", src, dst], check=False)
+                  print("retired workflow " + wf)
+
+          print("retired scripts " + ",".join(moved))
+          PY
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A scripts/ .github/workflows/ ci-status/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "NO-DISPOSITION nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore(applier): retire superseded appliers [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "DISPOSITION_PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "DISPOSITION_PUSH_FAILED after 5 attempts"
+          exit 1
+
+      - name: "Commit the doctor report"
         continue-on-error: true
         run: |
           set -uo pipefail
@@ -84,7 +186,7 @@ jobs:
           echo "PUSH_FAILED after 5 attempts"
           exit 1
 
-      - name: Surface the verdict
+      - name: "Surface the verdict"
         if: always()
         run: |
           set -uo pipefail
