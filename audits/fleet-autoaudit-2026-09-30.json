@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 20:04:03",
+  "audited_at": "2026-09-30 20:08:56",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -26,14 +26,7 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [
-      {
-        "dir": "qnfo-ops",
-        "live": "2.38.15-audit-trail-writer",
-        "repo": "2.38.14-do-loop-budget-parity",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -411,7 +404,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -547,6 +540,11 @@
         "dir": "qnfo-observability",
         "version": "1.2.12-chain-draining",
         "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.15-audit-trail-writer",
+        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1278,11 +1276,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.14-do-loop-budget-parity",
+      "before": "2.38.15-audit-trail-writer",
       "http": 200,
       "live": "2.38.15-audit-trail-writer",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
