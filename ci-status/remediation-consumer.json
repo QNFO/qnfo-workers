@@ -2,6 +2,6 @@
  "ok": false,
  "error": "no parseable consumer output: [Errno 2] No such file or directory: '/tmp/remediation-consumer.json'",
  "marker": "REMEDIATION-CONSUMER-1",
- "head": "ec5d51f2ae6a2e8d85202fc01d88795c77ec0ecf",
+ "head": "edde1db043d54e7eb2b0f5507a65234a660c2bea",
  "job_status": "failure"
 }
