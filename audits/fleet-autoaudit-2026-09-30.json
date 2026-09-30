@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 23:16:24",
+  "audited_at": "2026-09-30 23:20:48",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -493,7 +493,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.41-owned-metrics",
+        "version": "0.4.42-uncached-crons",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.41-owned-metrics",
+      "before": "0.4.42-uncached-crons",
       "http": 200,
-      "live": "0.4.41-owned-metrics",
+      "live": "0.4.42-uncached-crons",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
