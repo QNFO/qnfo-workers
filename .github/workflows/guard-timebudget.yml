@@ -1,0 +1,53 @@
+name: guard-timebudget
+
+# TIME-BUDGET-GUARD-WIRED-1 / RELOCK-1 (2026-09-30).
+#
+# WHY THIS WORKFLOW EXISTS
+#   qnfo-ops/scripts/guard-timebudget.sh is the regression gate for the
+#   OPS-TIME-BUDGET-1 / TOOL-BUDGET-CEILING-1 ceilings, but NO workflow invoked it.
+#   An orphaned guard is a guard that does not exist.  The measured consequence:
+#   OPS_NONSTREAM_DEADLINE_MS sat at 3e4 ms (30 s -- 10% of the canonical 300000 ms)
+#   for every non-streaming client, including the mobile ChatBox client that cannot
+#   execute code on-device, producing "tool budget exhausted before these could run".
+#   A prior commit (d7698a81) claimed to wire this guard but instead DELETED two
+#   unrelated workflows and added no guard invocation.  This file is the real one.
+#
+# WHAT IT ENFORCES (OPS-SETTINGS-IMMUTABLE-1)
+#   Every ceiling the guard asserts is canonical and may only ever be corrected
+#   TOWARD canonical.  A drift must fail CI loudly, never pass silently.
+#
+# NOTE ON A FAILING FIRST RUN
+#   The guard's version-drift arm compares repo VERSION against live /health.  If it
+#   fails on first run, that is a TRUE POSITIVE (main has been reverted behind the
+#   deployed worker) and must be fixed by landing the source relock, NOT by weakening
+#   the guard.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'qnfo-ops/worker.js'
+      - 'qnfo-ops/deployed-current.worker.js'
+      - 'qnfo-ops/wrangler.toml'
+      - 'qnfo-ops/scripts/guard-timebudget.sh'
+      - '.github/workflows/guard-timebudget.yml'
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: guard-timebudget
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run guard-timebudget.sh
+        run: bash qnfo-ops/scripts/guard-timebudget.sh
