@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.41-owned-metrics";
+var VERSION = "0.4.42-uncached-crons";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1932,6 +1932,21 @@ async function declaredCrons(env, worker) {
   var cands = [worker];
   if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
   for (var a = 0; a < cands.length; a++) {
+    // GH-API-UNCACHED-CRONS-1 (fi #1021, 2026-10-01): raw.githubusercontent.com is CDN-cached and
+    // ?cb= only busts within FRESH_MS buckets, so a fresh wrangler.toml commit could still be served
+    // STALE for hours. Canonical observation: qnfo-cloud-ops main declares 21 crons (== live) yet the
+    // scan read a stale 24-cron pre-CF-DOW list -> a false cronDrift every hourly cycle. Read the
+    // UNcached GitHub contents API first; keep raw as a fallback so a rate-limit never blinds the scan.
+    try {
+      var hdr = { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)", "Accept": "application/vnd.github.raw" };
+      if (env.GITHUB_TOKEN) hdr.Authorization = "Bearer " + env.GITHUB_TOKEN;
+      var ra = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + cands[a] + "/wrangler.toml?ref=main", { headers: hdr }, FETCH_TIMEOUT_MS);
+      if (ra.ok) {
+        var ta = await ra.text();
+        if (ta && ta.slice(0, 4) !== "404:" && ta.indexOf("crons") >= 0) return tomlCrons(ta);
+      }
+    } catch (e) {
+    }
     try {
       var r = await timedFetch(GH + "qnfo-workers/main/" + cands[a] + "/wrangler.toml?cb=" + Math.floor(Date.now() / FRESH_MS), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
       if (!r.ok) continue;
