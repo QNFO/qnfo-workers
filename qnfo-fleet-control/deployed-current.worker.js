@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.39-selfstate-obs1";
+var VERSION = "0.4.39-selfstate-obs2";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2479,6 +2479,7 @@ var worker_default2 = {
     }
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
     ctx.waitUntil(pollObservability(env).catch((e) => console.error("pollObservability error:", e && e.message || e)));
+    ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -2651,6 +2652,55 @@ async function pollObservability(env) {
   }
 }
 __name(pollObservability, "pollObservability");
+async function reassertObservability(env) {
+  try {
+    var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+    var token = env.CF_API_TOKEN;
+    if (!token) return { ok: false, error: "reassertObservability: no CF_API_TOKEN" };
+    var H = { Authorization: "Bearer " + token, "User-Agent": "qnfo-fleet-control-obs" };
+    var base = "https://api.cloudflare.com/client/v4/accounts/" + acct;
+    var doMap = {};
+    try {
+      var nsr = await fetch(base + "/workers/durable_objects/namespaces", { headers: H, signal: AbortSignal.timeout(8e3) });
+      var nsj = await nsr.json().catch(function() { return null; });
+      if (nsj && nsj.success && nsj.result) {
+        for (var i = 0; i < nsj.result.length; i++) {
+          var ns = nsj.result[i];
+          if (ns.script && ns.class) doMap[ns.script] = { clazz: ns.class, storage: ns.use_sqlite ? "sqlite" : "legacy-kv" };
+        }
+      }
+    } catch (e1) {}
+    var wr = await fetch(base + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(8e3) });
+    var wj = await wr.json().catch(function() { return null; });
+    var workers = wj && wj.success && wj.result ? wj.result : [];
+    var patched = 0, skipped = 0;
+    for (var w = 0; w < workers.length; w++) {
+      var name = workers[w].id;
+      if (!name) continue;
+      var sr = await fetch(base + "/workers/scripts/" + name + "/settings", { headers: H, signal: AbortSignal.timeout(8e3) });
+      var sj = await sr.json().catch(function() { return null; });
+      var o = sj && sj.success && sj.result ? sj.result.observability : null;
+      var ok = o && o.enabled === true && o.logs && o.logs.enabled === true && o.traces && o.traces.enabled === true && o.issues && o.issues.enabled === true;
+      if (ok) { skipped++; continue; }
+      var settings = { observability: { enabled: true, head_sampling_rate: 1, redact_query_string: false, logs: { enabled: true, head_sampling_rate: 1, persist: true, invocation_logs: true, destinations: ["cloudflare"] }, traces: { enabled: true, head_sampling_rate: 1, persist: true, destinations: ["cloudflare"] }, issues: { enabled: true } } };
+      if (doMap[name]) {
+        var ex = {}; ex[doMap[name].clazz] = { type: "durable-object", storage: doMap[name].storage }; settings.exports = ex;
+      }
+      try {
+        var boundary = "----QNFO" + Date.now() + "-" + Math.random().toString(36).slice(2);
+        var body = ["--" + boundary, 'Content-Disposition: form-data; name="settings"', "Content-Type: application/json", "", JSON.stringify(settings), "--" + boundary + "--"].join("\u000d\u000a");
+        var pr = await fetch(base + "/workers/scripts/" + name + "/settings", { method: "PATCH", headers: { Authorization: H.Authorization, "User-Agent": H["User-Agent"], "Content-Type": "multipart/form-data; boundary=" + boundary }, body: body, signal: AbortSignal.timeout(8e3) });
+        var pj = await pr.json().catch(function() { return null; });
+        var po = pj && pj.success && pj.result ? pj.result.observability : null;
+        if (po && po.enabled === true) patched++;
+      } catch (e2) {}
+    }
+    return { ok: true, patched: patched, skipped: skipped };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 300) };
+  }
+}
+__name(reassertObservability, "reassertObservability");
 var FleetAdvisor = advisorMod.FleetAdvisor;
 export {
   FleetAdvisor,
