@@ -75,7 +75,7 @@ def main() -> int:
     out: dict = {"generated_at": end, "account": ACCOUNT}
 
     # 1. 24h errors by script x status x hour
-    q = ('query { viewer { %s { workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:"%s", datetime_leq:"%s", errors_gt:0}) '
+    q = ('query { viewer { %s { workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:"%s", datetime_leq:"%s", status_neq:"success"}) '
          '{ sum { requests errors } dimensions { scriptName status datetimeHour } } } } }') % (acct, d1, end)
     r = gql(q)
     if "error" in r:
@@ -84,6 +84,8 @@ def main() -> int:
         agg: dict = {}
         for row in r["rows"].get("workersInvocationsAdaptive", []):
             dm, sm = row["dimensions"], row["sum"]
+            if not sm.get("errors"):
+                continue
             a = agg.setdefault(dm["scriptName"], {"errors": 0, "by_status": {}, "last_error_hour": "", "hours": {}})
             a["errors"] += sm["errors"]
             a["by_status"][dm["status"]] = a["by_status"].get(dm["status"], 0) + sm["errors"]
