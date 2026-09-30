@@ -1,10 +1,10 @@
 {
  "counts": {
-  "already-applied": 66,
+  "already-applied": 68,
   "error": 7,
   "stale-anchor": 11,
   "superseded": 4,
-  "undetermined": 10
+  "undetermined": 9
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -132,8 +132,10 @@
   {
    "changed_files": [
     " M ci-status/apply-pending-report.json",
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js",
+    " M qnfo-email/deployed-current.worker.js",
+    " M qnfo-email/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -142,7 +144,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): toolbudget-bail-instrument-1-patch.py",
+    "LANDED(1): schedules-live-1-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -499,7 +501,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 383210 (unchanged)",
+    "bytes: 385590 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -572,8 +574,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=383212 marker=1",
-    "  deployed-current.worker.js bytes=383212 marker=1"
+    "  worker.js bytes=385592 marker=1",
+    "  deployed-current.worker.js bytes=385592 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -911,6 +913,27 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js",
+    " M qnfo-email/deployed-current.worker.js",
+    " M qnfo-email/worker.js"
+   ],
+   "declared_signals": [
+    "SCHEDULES-LIVE-1",
+    "SCHEDULES-BODY-SHAPE-1",
+    "EMAIL-APPROVAL-GATE-1"
+   ],
+   "rc": 0,
+   "script": "scripts/schedules-live-1-patch.py",
+   "tail": [
+    "  \"skipped\": [],",
+    "  \"errors\": []",
+    "}"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/self-fetch-guard-patch.py",
@@ -988,40 +1011,26 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
-   ],
-   "declared_signals": [
-    "TOOLBUDGET-BAIL-1",
-    "async function logToolBudgetBail(",
-    "logToolBudgetBail(env, strategy, pendingToolCalls.length"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/toolbudget-bail-instrument-1-patch.py",
    "tail": [
-    "qnfo-ops/deployed-current.worker.js [helper]: patched",
-    "qnfo-ops/deployed-current.worker.js [call site]: patched",
-    "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (4 target(s) changed)"
+    "qnfo-ops/deployed-current.worker.js [helper]: already applied (idempotent no-op)",
+    "qnfo-ops/deployed-current.worker.js [call site]: already applied (idempotent no-op)",
+    "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (0 target(s) changed)"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
-   ],
-   "declared_signals": [
-    "TOOLBUDGET-BAIL-RECORD-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/toolbudget-bail-record-1-patch.py",
    "tail": [
-    "TOOLBUDGET-BAIL-RECORD-1: OK worker.js patched (384404 B)",
-    "TOOLBUDGET-BAIL-RECORD-1: OK deployed-current.worker.js patched (384404 B)",
-    "TOOLBUDGET-BAIL-RECORD-1: complete, 2 target(s) changed"
+    "TOOLBUDGET-BAIL-RECORD-1: already applied to worker.js (no change)",
+    "TOOLBUDGET-BAIL-RECORD-1: already applied to deployed-current.worker.js (no change)",
+    "TOOLBUDGET-BAIL-RECORD-1: complete, 0 target(s) changed"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -1088,8 +1097,8 @@
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/patch-cron-only-class-2.py"
  ],
- "total": 98,
- "ts": "2026-09-30T08:20:28.131Z",
+ "total": 99,
+ "ts": "2026-09-30T08:49:17.067Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
@@ -1097,9 +1106,8 @@
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
   "scripts/panel6-mediated-count-patch.py",
+  "scripts/schedules-live-1-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
-  "scripts/toolbudget-bail-instrument-1-patch.py",
-  "scripts/toolbudget-bail-record-1-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
 }
