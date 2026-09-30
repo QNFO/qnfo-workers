@@ -1,27 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6324da329f95",
- "due": 2,
- "pass": 1,
+ "verifier": "remediation-consumer@bc2b87edd3c0",
+ "due": 0,
+ "pass": 0,
  "fail": 0,
- "skipped": 1,
- "contracts": [
-  {
-   "class": "CI-WATCHDOG-REAPER-SUBJECT-SHAPE-1",
-   "issue_id": null,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "rawput-schedules-applied",
-   "issue_id": 1498,
-   "verdict": "pass",
-   "expected": "applied",
-   "observed": "applied",
-   "written": true
-  }
- ],
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -37,7 +22,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 5035,
- "head": "6324da329f95f6f3753f61745a5395edbac60705",
+ "spent_ms": 2295,
+ "head": "bc2b87edd3c0f06598f9b56555a8ee52f324afe0",
  "job_status": "success"
 }
