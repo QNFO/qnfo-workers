@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.43-uncached-crons";
+var VERSION = "0.4.44-uncached-crons-json";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1938,12 +1938,26 @@ async function declaredCrons(env, worker) {
     // scan read a stale 24-cron pre-CF-DOW list -> a false cronDrift every hourly cycle. Read the
     // UNcached GitHub contents API first; keep raw as a fallback so a rate-limit never blinds the scan.
     try {
-      var hdr = { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)", "Accept": "application/vnd.github.raw" };
-      if (env.GITHUB_TOKEN) hdr.Authorization = "Bearer " + env.GITHUB_TOKEN;
+      // Use the SAME authenticated JSON contents API that landFix proves works in this worker
+      // (ghHeaders), then base64-decode. raw.githubusercontent CDN was observed serving a stale
+      // pre-CF-DOW 24-cron copy to this worker even when every external vantage returned the
+      // current 21-cron file; the authenticated JSON API is uncached and versioned.
+      var hdr = { "Authorization": "Bearer " + (env.GITHUB_TOKEN || ""), "User-Agent": "qnfo-fleet-control/cron-source", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
       var ra = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + cands[a] + "/wrangler.toml?ref=main", { headers: hdr }, FETCH_TIMEOUT_MS);
       if (ra.ok) {
-        var ta = await ra.text();
-        if (ta && ta.slice(0, 4) !== "404:" && ta.indexOf("crons") >= 0) return tomlCrons(ta);
+        var ja = await ra.json();
+        var b64 = String(ja && ja.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+        if (!b64 && ja && ja.sha) {
+          var br = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/git/blobs/" + ja.sha, { headers: hdr }, FETCH_TIMEOUT_MS);
+          if (br.ok) {
+            var bj = await br.json();
+            b64 = String(bj && bj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+          }
+        }
+        if (b64) {
+          var ta = atob(b64);
+          if (ta && ta.indexOf("crons") >= 0) return tomlCrons(ta);
+        }
       }
     } catch (e) {
     }
