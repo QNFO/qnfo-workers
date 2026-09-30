@@ -3,6 +3,7 @@
   "already-applied": 77,
   "error": 8,
   "stale-anchor": 11,
+  "superseded": 1,
   "undetermined": 9
  },
  "errored": [
@@ -142,7 +143,8 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json"
+    " M ci-status/apply-pending-report.json",
+    " M scripts/apply-pending-patches.py"
    ],
    "declared_signals": [
     ".",
@@ -151,7 +153,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(0): nothing to apply - main is current",
+    "LANDED(1): patch-applier-retire-lifecycle-1.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -592,6 +594,21 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M scripts/apply-pending-patches.py"
+   ],
+   "outcome_present_in": [
+    "scripts/apply-pending-patches.py :: APPLIER-RETIRE-2"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-applier-retire-lifecycle-1.py",
+   "tail": [
+    "OK patched scripts/apply-pending-patches.py (15891 bytes)",
+    "APPLIER-RETIRE-2 + APPLIER-CLASSIFY-SIGNATURE-2 applied"
+   ],
+   "verdict": "superseded"
+  },
+  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-apply-trigger-1490.py",
@@ -1002,7 +1019,7 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
-    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 209478}"
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 210620}"
    ],
    "verdict": "already-applied"
   },
@@ -1123,9 +1140,11 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "superseded": [],
- "total": 105,
- "ts": "2026-09-30T20:44:07.213Z",
+ "superseded": [
+  "scripts/patch-applier-retire-lifecycle-1.py"
+ ],
+ "total": 106,
+ "ts": "2026-09-30T23:45:29.930Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
