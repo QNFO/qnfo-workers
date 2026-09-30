@@ -9,6 +9,11 @@ workers_dev = true
 # Cron refresh = every 15 min (cloud); GET /api/state auto-refreshes when older than 15 min.
 # Secrets (set via wrangler secret put): CF_TOKEN (account analytics read; used for GraphQL 24h per-script stats)
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"

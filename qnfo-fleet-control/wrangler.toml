@@ -16,6 +16,11 @@ workers_dev = true
 # Canonical deploy: CF API multipart (as-built 2026-09-11). This toml is the spec; wrangler deploy needs
 # verify against live bindings (DEPLOY-VERIFY-VERSION-1).
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [triggers]
 crons = ["*/20 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1", "0 * * * *"]
 

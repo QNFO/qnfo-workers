@@ -6,6 +6,11 @@ send_email = [
   { type = "send_email", name = "SEND_EMAIL" }
 ]
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [triggers]
 crons = ["0 11 * * 1-5"]
 

@@ -3,6 +3,11 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"

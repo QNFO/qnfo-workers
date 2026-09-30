@@ -2,6 +2,11 @@ name = "qnfo-backlog-exec"
 main = "worker.js"
 compatibility_date = "2024-11-01"
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"

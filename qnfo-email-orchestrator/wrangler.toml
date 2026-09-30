@@ -3,6 +3,11 @@ main = "worker.js"
 compatibility_date = "2026-08-10"
 
 # Management: wrangler-managed since 2026-09-08 model-audit deploy (BINDING-PRESERVATION-1 active toml)
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [vars]
 DRY_RUN = "false"
 

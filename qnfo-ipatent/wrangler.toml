@@ -6,6 +6,11 @@ compatibility_date = "2026-08-01"
 # Deploys: wrangler deploy from THIS directory (bindings below reproduce the live set exactly).
 # Live custom route: ipatent.qnfo.org (verified). qnfo.org gateway 301s /ipatent here.
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "IPATENT_DB"
 database_name = "ipatent-db"

@@ -4,6 +4,11 @@ compatibility_date = "2026-08-01"
 workers_dev = true
 
 # v0.2.0 - hourly R2 .ics publish (QNFO.OPS.010 Stage C)
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [triggers]
 crons = ["17 * * * *"]
 

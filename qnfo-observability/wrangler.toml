@@ -10,6 +10,11 @@ workers_dev = true
 # Cron: hourly ingest+digest (cloud layer, NOT device-bound).
 # Canonical source: QNFO/qnfo-workers/qnfo-observability/
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"

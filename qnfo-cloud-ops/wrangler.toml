@@ -3,6 +3,11 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [ai]
 binding = "AI"
 

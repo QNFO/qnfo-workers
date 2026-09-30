@@ -7,6 +7,11 @@ workers_dev = true
 # SECRET-HYGIENE-1 2026-09-22: the stale `[vars] INDEX_TOKEN` was removed. It was not
 # live, and the worker now reads the token from the INDEX_TOKEN *secret* binding.
 # Secrets (wrangler secret put): INDEX_TOKEN
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [ai]
 binding = "AI"
 

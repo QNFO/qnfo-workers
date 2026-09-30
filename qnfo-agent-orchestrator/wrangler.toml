@@ -9,6 +9,11 @@ main = "worker.js"
 compatibility_date = "2026-08-10"
 compatibility_flags = ["nodejs_compat"]
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[durable_objects.bindings]]
 name = "AGENT_TASK"
 class_name = "AgentTask"

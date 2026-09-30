@@ -39,6 +39,11 @@ workers_dev = true
 
 # CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1 (issue #1456): lite = 1/16 vCPU, 256 MiB RAM, 2 GB
 # disk (94% full) — the source of transient container errors. basic = 1/4 vCPU, 1 GiB RAM, 4 GB.
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[containers]]
 class_name = "ShellContainer"
 image = "docker.io/nikolaik/python-nodejs:python3.12-nodejs22"

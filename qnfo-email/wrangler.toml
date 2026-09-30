@@ -14,6 +14,11 @@ send_email = [
 ]
 
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "AUDIT_DB"
 database_name = "qnfo-audit"

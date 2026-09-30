@@ -5,6 +5,11 @@ compatibility_date = "2026-08-01"
 # Secrets (persist across deploys; set once):
 #   REVISER_TOKEN - X-Reviser-Token bearer auth
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "PAPERS_DB"
 database_name = "living-paper"

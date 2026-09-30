@@ -6,6 +6,11 @@ workers_dev = true
 
 # Secrets: BSKY_HANDLE (qnfo.bsky.social), BSKY_APP_PASS, SOCIAL_TOKEN (HTTP endpoint auth)
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "DB"
 database_name = "qnfo-audit"

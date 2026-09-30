@@ -5,6 +5,11 @@ send_email = [
   { name = "SEND_EMAIL" }
 ]
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "AUDIT"
 database_name = "qnfo-audit"

@@ -8,6 +8,11 @@ workers_dev = true
 # Digest: skill staleness scan (weekly Mon 10:00 UTC) + meta-claims application loop (daily 02:00 UTC).
 # OPS-KAIZEN-DIGEST-1 (2026-09-04): weekly scan includes an Ops AI Gateway section (ops_ai_log 7d stats).
 
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[d1_databases]]
 binding = "QNFO_AUDIT"
 database_name = "qnfo-audit"
