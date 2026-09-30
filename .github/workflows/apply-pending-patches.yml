@@ -28,6 +28,29 @@ name: apply-pending-patches
 #     is marker-based with bounded retry, not exact-VERSION equality (exact
 #     equality produces false-negative CI failures when a concurrent agent
 #     deploys a newer version).
+#   * SILENT-LANDING-LOSS-1 (added 2026-09-30 by qnfo-ops) -- every step used
+#     to carry continue-on-error, so a commit-back PUSH_FAILED still reported
+#     job success and a lost landing left nothing red. The commit-back step is
+#     now fail-loud and its outcome is recorded as push_ok in the artifact.
+#   * CI-STATUS-PATH-GUESS-1 (added 2026-09-30 by qnfo-ops) -- measured this
+#     day, the largest bucket of unfiled ops tool errors was github_repo_read
+#     404s on ci-status/<name>.json paths no workflow ever wrote
+#     (restore-container-config-1485.json, ensemble-budget-3.json,
+#     deploy-containers-pilot.json, fix-pilot-container-class.json, ...).
+#     ci-status/index.json now lists every artifact a run actually published,
+#     so a reader never guesses a filename again.
+#   * COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1 (added 2026-09-30 by
+#     qnfo-ops) -- the commit-back step staged
+#       git add -A scripts/ '*worker.js' ci-status/
+#     a pathspec that CANNOT match qnfo-ops/scripts/*.sh or
+#     .github/workflows/*.yml. Any patch that touched a file outside those
+#     three paths was written into this ephemeral worktree and then silently
+#     discarded at commit time, while the applier still reported it "landed"
+#     and PARTIAL-APPLY-1's revert stayed quiet (nothing failed). Measured
+#     consequence: the TOOLBUDGET-CANONICAL-1 rewrite of
+#     qnfo-ops/scripts/guard-timebudget.sh was dropped on every run, so the
+#     guard stayed old AND orphaned and the OPS-SETTINGS-IMMUTABLE-1 tool-loop
+#     budget drift gate never fired. Staging is now tree-wide.
 
 on:
   push:
@@ -90,12 +113,19 @@ jobs:
           if [ "$found" = "0" ]; then echo "no worker bundles changed"; fi
 
       - name: "Commit landed patches (race-safe: pull --rebase + bounded retry)"
-        continue-on-error: true
+        id: commitback
         run: |
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
-          git add -A scripts/ '*worker.js' ci-status/ 2>/dev/null || git add -A
+          # COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1: this was
+          #   git add -A scripts/ '*worker.js' ci-status/
+          # which silently dropped qnfo-ops/scripts/*.sh and .github/workflows/*.yml
+          # written by patchers. Stage the whole tree. This cannot resurrect a
+          # half-applied patch: the applier already reverts the exact paths a failing
+          # patcher touched (PARTIAL-APPLY-1 / REVERT-COLLATERAL-1), so anything left
+          # dirty at this point is a deliberate, successful write.
+          git add -A
           if git diff --cached --quiet; then
             echo "nothing to commit (main already current)"
             exit 0
@@ -143,6 +173,7 @@ jobs:
             "workflow": "apply-pending-patches",
             "marker": "APPLY-PENDING-1",
             "apply_rc": "${{ steps.apply.outputs.apply_rc }}",
+            "push_ok": "${{ steps.commitback.outcome }}",
             "job_status": "${{ job.status }}",
             "head": "${{ github.sha }}",
             "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
@@ -153,6 +184,26 @@ jobs:
             echo "--- applier-doctor.json ---"
             head -c 2000 ci-status/applier-doctor.json
           fi
+
+      - name: "Publish the artifact index for ci-status"
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, pathlib
+          d = pathlib.Path("ci-status")
+          files = sorted(p.name for p in d.glob("*") if p.is_file() and p.name != "index.json")
+          idx = {
+              "marker": "CI-STATUS-INDEX-1",
+              "workflow": "apply-pending-patches",
+              "artifacts": files,
+              "count": len(files),
+              "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it.",
+          }
+          (d / "index.json").write_text(json.dumps(idx, indent=2))
+          print(json.dumps(idx))
+          PY
 
       - name: "Commit the status artifact"
         if: always()

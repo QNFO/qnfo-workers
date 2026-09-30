@@ -86,9 +86,11 @@ def token():
     t = os.environ.get("CLOUDFLARE_API_TOKEN")
     if t:
         return t.strip()
-    p = r"C:\Users\LENOVO\tokens\cloudflare"
-    if os.path.exists(p):
-        return open(p).read().strip()
+    # LOCAL-TOKEN-PATH-REMOVED-1: this deployer used to fall back to a developer
+    # workstation path (C:\Users\...\tokens\cloudflare). That is a client-side
+    # execution remnant inside a CI/container tool: it can never resolve on a runner
+    # or in a container, and it only invites a secret to be committed to the repo.
+    # Server-side execution only - credentials come from the environment.
     raise SystemExit("no CF token (set CLOUDFLARE_API_TOKEN)")
 
 
@@ -250,9 +252,32 @@ def declared_crons(artifact_path):
 
 
 def schedules_get(worker, tok):
+    # CF-SCHEDULES-RESPONSE-SHAPE-1 (issue 1498): the GET `result` is an OBJECT
+    # {"schedules":[{"cron":...}]}, not a bare array. The old
+    # `sorted(body.get("result") or [])` therefore sorted the dict KEYS and returned
+    # ['schedules'], which never equalled the declared set - so the in-sync
+    # short-circuit never fired and EVERY deploy re-PUT. The legacy bare-array shape is
+    # still tolerated so this cannot regress against an older API.
     st, body = _api(SCHEDULES_API.format(acct=ACCT, worker=worker), tok)
     if st == 200 and isinstance(body, dict) and body.get("success"):
-        return st, sorted(body.get("result") or [])
+        res = body.get("result")
+        if isinstance(res, dict):
+            items = res.get("schedules")
+        elif isinstance(res, list):
+            items = res
+        else:
+            items = None
+        if items is None:
+            return st, None
+        out = []
+        for s in items:
+            if isinstance(s, dict):
+                c = s.get("cron")
+                if isinstance(c, str) and c.strip():
+                    out.append(c)
+            elif isinstance(s, str) and s.strip():
+                out.append(s)
+        return st, sorted(out)
     return st, None
 
 
@@ -263,7 +288,15 @@ def schedules_put(worker, crons, tok):
     # inert fleet-wide. Send the module's own client id, the one every other call
     # in this file already sends.
     url = SCHEDULES_API.format(acct=ACCT, worker=worker)
-    data = json.dumps({"crons": list(crons)}).encode("utf-8")
+    # CF-SCHEDULES-BODY-SHAPE-1 (issue 1498, ROOT CAUSE): the PUT requestBody is a
+    # top-level JSON ARRAY of workers_schedule objects (required field: cron), NOT
+    # {"crons":[...]}. The object form is rejected with HTTP 400 / code 10026
+    # "Could not parse request body", which is exactly what deployment_history rows
+    # 188-193 record for 5 workers - so every repo crons edit was inert fleet-wide.
+    # Verified against the official schema (cloudflare/api-schemas openapi.yaml,
+    # operationId worker-cron-trigger-update-cron-triggers: requestBody type: array)
+    # and reproduced against a stub endpoint: object -> 400/10026, array -> 200.
+    data = json.dumps([{"cron": c} for c in crons]).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="PUT", headers={
         "Authorization": "Bearer " + tok, "Content-Type": "application/json",
         "User-Agent": FLEET_UA})

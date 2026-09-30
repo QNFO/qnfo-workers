@@ -1,0 +1,37 @@
+--- a/qnfo-fleet-dashboard/worker.js
++++ b/qnfo-fleet-dashboard/worker.js
+@@ function execTargetFor(category, resource, env)
+   if (category === "queue-freshness") {
+-    if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
++    if (r.indexOf("outreach") >= 0) {
++      const ACT_MS = Date.parse("2026-09-15T00:00:00Z");
++      if (Date.now() < ACT_MS) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
++      return { safe: false, noAction: true, note: "outreach ACTIVATION_AT (2026-09-15) has passed; external send gate is qnfo-outreach pipeline_state.external_sends_enabled, not a date - no auto-drain from this lane (OUTREACH-LANE-INERT-1 / #1508)" };
++    }
+     return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
+   }
+   if (category === "integration-chain") {
+     ...
+-    if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
++    if (r.indexOf("outreach") >= 0) {
++      const ACT_MS = Date.parse("2026-09-15T00:00:00Z");
++      if (Date.now() < ACT_MS) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
++      return { safe: false, noAction: true, note: "outreach ACTIVATION_AT (2026-09-15) has passed; external send gate is qnfo-outreach pipeline_state.external_sends_enabled, not a date - no auto-drain from this lane (OUTREACH-LANE-INERT-1 / #1508)" };
++    }
+
+RATIONALE (2026-09-30, qnfo-ops):
+  Observed live receipts (self_heal_actions ids 3270/3264/3258, ref iss-13152cf9) return
+  "[no-action] outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain"
+  on 2026-09-30 - 15 days AFTER the cited date. The refusal is unconditional and hardcoded,
+  so it can never expire and the rationale it reports is false. It also blocks the
+  queue-freshness remedy for outreach_queue (25 pending rows, newest 119h stale).
+  NOT fixed by arming sends: qnfo-outreach/worker.js:193 requires
+  now >= ACTIVATION_AT_MS AND pipeline_state['external_sends_enabled'] === '1'.
+  Arming that flag is an irreversible outbound action and requires owner approval.
+  This patch only makes the refusal date-derived and truthful; it does NOT arm sending.
+
+APPLY NOTE:
+  The live file is the compiled bundle (183,344 bytes, 3,187 lines) committed at
+  qnfo-fleet-dashboard/worker.js; line numbers above are from that bundle
+  (1010 and 1018). A full-content PUT is required to deploy (payload >40k read cap),
+  so apply via the repo's deploy workflow, not by hand-editing the bundle.

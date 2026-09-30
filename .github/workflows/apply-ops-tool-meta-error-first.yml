@@ -1,0 +1,170 @@
+name: apply-ops-tool-meta-error-first
+
+# OPS-TOOL-META-ERROR-FIRST-1 driver (2026-09-30, qnfo-ops).
+#
+# ROOT CAUSE: qnfo-ops logToolEvent() wrote snippet({ args, resultOk, error, ms }, 600)
+# with args FIRST, so the 600-char slice ended inside a long args payload and the
+# error field never reached cloud_ops_events.meta. tool_error_exclusions is consulted
+# by instr(meta, pattern) in tool_failures_24h, tool_error_files_issue_v2 and
+# tool_error_rate_filer_v3_ins, so excluded-but-truncated classes stopped matching and
+# the triggers filed tickets for known-benign classes (#1520/#1524-#1529/#1532/#1537,
+# mechanism of #1484 ISSUE-LEDGER-EXCLUSION-BLIND-1).
+#
+# FIX: serialise error/resultOk/ms BEFORE args so the bounded slice can never drop them.
+#
+# NO-CRON-NOTE: this repository's GitHub `schedule` event has never fired
+# (SCHEDULE-EVENT-NEVER-FIRES-1), so this workflow declares no cron. It fires on push
+# to itself or on manual dispatch.
+#
+# WORKFLOW-YAML-LINT-1: no step name in this file contains an unquoted colon-space.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-ops-tool-meta-error-first.yml'
+      - 'scripts/patch-ops-tool-meta-error-first.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-ops-tool-meta-error-first
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: "Run the applier (idempotent, fail-closed)"
+        id: apply
+        run: |
+          set -uo pipefail
+          export REPO_ROOT="$GITHUB_WORKSPACE"
+          python3 scripts/patch-ops-tool-meta-error-first.py 2>&1 | tee /tmp/apply.log
+          rc=${PIPESTATUS[0]}
+          echo "applier_exit=$rc" >> "$GITHUB_OUTPUT"
+          test "$rc" -eq 0 || exit "$rc"
+
+      - name: "Verify marker, ordering and bundle syntax"
+        id: verify
+        run: |
+          set -uo pipefail
+          fail=0
+          for f in qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js; do
+            if grep -qF "OPS-TOOL-META-ERROR-FIRST-1" "$f"; then
+              echo "MARKER OK $f"
+            else
+              echo "MARKER MISSING $f"
+              fail=1
+            fi
+            if grep -qF 'snippet({ args, resultOk: !!(res && res.ok), error:' "$f"; then
+              echo "LEGACY ARGS-FIRST FORM STILL PRESENT in $f"
+              fail=1
+            else
+              echo "LEGACY ARGS-FIRST FORM REMOVED in $f"
+            fi
+            cp "$f" /tmp/check.mjs
+            if node --check /tmp/check.mjs; then
+              echo "SYNTAX OK $f"
+            else
+              echo "SYNTAX FAIL $f"
+              fail=1
+            fi
+          done
+          if grep -qF 'var VERSION = "2.38.2-tool-meta-error-first";' qnfo-ops/worker.js; then
+            echo "VERSION OK"
+          else
+            echo "VERSION NOT BUMPED"
+            fail=1
+          fi
+          if cmp -s qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js; then
+            echo "MIRROR OK worker.js == deployed-current.worker.js"
+          else
+            echo "MIRROR DRIFT between worker.js and deployed-current.worker.js"
+            fail=1
+          fi
+          echo "verify_fail=$fail" >> "$GITHUB_OUTPUT"
+          test "$fail" -eq 0
+
+      - name: "Commit the patch back to main (race-safe)"
+        id: commit
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          if git diff --quiet; then
+            echo "commit_outcome=no-op"
+            echo "commit_outcome=no-op" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git add -A
+          git commit -m "fix(ops): OPS-TOOL-META-ERROR-FIRST-1 - serialise error before args so the 600-char meta slice cannot drop it (#1484)" || true
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "commit_outcome=pushed"
+              echo "commit_outcome=pushed" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "push attempt $i failed, rebasing"
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "commit_outcome=push-failed"
+          echo "commit_outcome=push-failed" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: "Canonical deploy qnfo-ops"
+        id: deploy_ops
+        continue-on-error: true
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "SKIP qnfo-ops deploy (OPS_ROUTER_AUTH_KEY not configured)"
+            exit 0
+          fi
+          python3 scripts/canonical_deploy.py --worker qnfo-ops --path qnfo-ops/worker.js 2>&1 | tee /tmp/deploy-ops.log
+          echo "deploy_ops_exit=${PIPESTATUS[0]}"
+
+      - name: "Publish machine-readable status"
+        if: always()
+        run: |
+          mkdir -p ci-status
+          printf '{"marker":"OPS-TOOL-META-ERROR-FIRST-1","applier_exit":"%s","verify_fail":"%s","commit_outcome":"%s","ts":"%s"}\n' \
+            "${{ steps.apply.outputs.applier_exit }}" \
+            "${{ steps.verify.outputs.verify_fail }}" \
+            "${{ steps.commit.outputs.commit_outcome }}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/ops-tool-meta-error-first.json
+          cat ci-status/ops-tool-meta-error-first.json
+
+      - name: "Commit status artifact (race-safe)"
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -f ci-status/ops-tool-meta-error-first.json
+          git commit -m "ci(ops): OPS-TOOL-META-ERROR-FIRST-1 status artifact [skip ci]" || exit 0
+          for i in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          exit 0

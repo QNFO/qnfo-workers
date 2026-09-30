@@ -31,6 +31,14 @@ name: mirror-sync
 # gate (it can still fail on CAPTURED / unresolvable drift), while this workflow is
 # the repair actor. detect -> act -> verify.
 #
+# CI-RUNAWAY-LOOP-1 (2026-09-30, qnfo-ops): `on: push: branches: [main]` carried no
+# filter, so this workflow also ran on every PURE-ARTIFACT commit (ci-status/**,
+# audits/**) produced by the fleet's own bots. It does not itself commit in that case,
+# so it was not part of the self-heal cycle -- but every one of those runs burned a
+# runner and a queue slot for a push that could not possibly contain a worker mirror.
+# `paths-ignore` is therefore added for the artifact trees only; a push that touches
+# ANY worker source still runs the repair actor.
+#
 # Invariants:
 #   - rewrites only */deployed-current.worker.js files
 #   - commits only when mirror-guard.py --fix actually changed a file
@@ -46,6 +54,9 @@ name: mirror-sync
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "ci-status/**"
+      - "audits/**"
   # Invocable by ci-watchdog: when mirror-guard goes red the watchdog
   # dispatches this repair actor. Without a workflow_dispatch trigger that
   # call returns 422, the finding stays unactionable, and the monitor can

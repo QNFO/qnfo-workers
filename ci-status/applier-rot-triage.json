@@ -1,0 +1,8 @@
+{
+  "workflow": "applier-rot-triage",
+  "marker": "APPLIER-ROT-TRIAGE-1",
+  "rc": "0",
+  "job_status": "success",
+  "head": "0c1ba8ff9b4c6921a7fc61672cbf7a7252181874",
+  "ts": "2026-09-30T13:54:16.384Z"
+}

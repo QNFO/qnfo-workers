@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.31-continuation-inherit";
+var VERSION = "2.38.2-tool-meta-error-first";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -99,11 +99,53 @@ var OPS_EXEC_MODELS = {
 };
 var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-frontier-reason": true };
 var GW_MAX_OUT = 32768;
+// OPS-OUTPUT-CAP-DECOUPLE-1 (issue #1531): the effective gateway ceiling. This was a bare
+// literal, so the advertised /v1/models max_output and the delivered ceiling disagreed by
+// 12x with no way to reconcile them. The DEFAULT IS UNCHANGED -- this only makes the
+// ceiling readable from OPS_GW_MAX_OUT so it can be raised once the upstream's true limit
+// is measured. Do NOT raise the default speculatively: a non-auth 4xx from the provider is
+// fatal on this path (only auth 4xx free-falls).
+function gwMaxOut(env) {
+  try {
+    var v = envInt(env, "OPS_GW_MAX_OUT", 0);
+    return v > 0 ? v : GW_MAX_OUT;
+  } catch (e) {
+    return GW_MAX_OUT;
+  }
+}
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-var MAX_TOOL_ITERS = 12;
+var MAX_TOOL_ITERS = 40;
+// TOOL-BUDGET-PENDING-1 (2026-09-30): final-round tool calls are RECORDED, never dropped.
+var PENDING_TOOLCALLS_NOTE = "\n\n[tool-budget-exhausted] {n} tool call(s) were NOT executed this turn because the tool budget (iteration cap or wall-clock deadline) was exhausted. They are listed in the pending_tool_calls field of this response and can be replayed on the next turn.";
+function summarizePendingToolCalls(toolCalls) {
+  try {
+    return (toolCalls || []).map(function(tc) {
+      const fn = tc && tc.function || {};
+      let args = fn.arguments;
+      if (typeof args !== "string") {
+        try { args = JSON.stringify(args); } catch (e) { args = String(args); }
+      }
+      return { name: String(fn.name || ""), arguments: String(args == null ? "" : args).slice(0, 4e3) };
+    }).filter(function(x) { return x.name; });
+  } catch (e) {
+    return [];
+  }
+}
 var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
+
+// TOOLBUDGET-BAIL-RECORD-1 (2026-09-30): budget-bail observability. The tool
+// loop is forced into its final round when the round cap or the wall-clock
+// deadline is hit. Before this recorder existed that event left no trace in
+// qnfo-audit, so a caller-visible "tool budget exhausted before these could
+// run" could not be diagnosed from the fleet's own logs.
+function opsToolBudgetBail(env, scope, iter, maxIters, deadlineHit) {
+  try {
+    return env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_tool_budget_bail", scope, snippet({ iter: iter, maxIters: maxIters, deadlineHit: !!deadlineHit, version: VERSION }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { return null; }
+}
+__name(opsToolBudgetBail, "opsToolBudgetBail");
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
@@ -272,6 +314,17 @@ async function logEscalation(env, taskClass, fromModel, toModel, kind, reason) {
   } catch (e) { console.log("model_ladder_escalations insert failed:", e && e.message || e); }
 }
 __name(logEscalation, "logEscalation");
+// TOOLBUDGET-BAIL-1 (2026-09-30): D3a machine-readable bail record. The bail path
+// already writes a model_ladder_escalations row (kind='tool-budget-exhausted'); this
+// adds the cloud_ops_events row so a bail is countable in the fleet event stream
+// instead of only being visible as the user-facing 'tool budget exhausted' symptom.
+async function logToolBudgetBail(env, strategy, n, names, maxIters, deadlineHit) {
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+      .bind(randId("evt-"), iso(), "ops_tool_budget_bail", "tool-budget-exhausted", snippet({ strategy, pending: n, tools: names, maxIters, deadlineHit: !!deadlineHit }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { console.log("ops_tool_budget_bail insert failed:", e && e.message || e); }
+}
+__name(logToolBudgetBail, "logToolBudgetBail");
 // L0 DETERMINISTIC-FIRST: answer well-known single-turn ops intents with zero model calls.
 // Patterns are deliberately tight so agent-loop canaries ("Reply exactly: ...", tool directives) never match.
 async function deterministicOpsAnswer(env, text) {
@@ -982,7 +1035,21 @@ async function d1Query(env, args) {
           const hit = rows2.find(function(r) { return String(r.tbl || "").toLowerCase() === want; });
           if (hit) { out.available_columns = hit.cols; out.hint = "use a column from available_columns for table " + hit.tbl; }
         }
-        if (!out.available_columns) out.schema_tables = rows2.map(function(r) { return r.tbl; }).slice(0, 80);
+        if (!out.available_columns) {
+          // OPS-D1-SCHEMA-HINT-FULL-1 (issue #1490): this list was capped at 80 entries in
+          // ALPHABETICAL order. MEASURED 2026-09-29: QNFO_AUDIT holds 306 tables, so every
+          // table sorting after "email_commands" was INVISIBLE and agents kept guessing names
+          // (166 agent-schema-guess tool failures in the preceding 24h). Never truncate
+          // silently again: report the total, flag truncation, and name the enumerator.
+          const _tblAll = rows2.map(function(r) { return r.tbl; })
+            .filter(function(t) { return !!t; });
+          out.schema_tables = _tblAll.slice(0, 400);
+          out.schema_tables_total = _tblAll.length;
+          out.schema_tables_truncated = _tblAll.length > out.schema_tables.length;
+          out.hint = "table not found. schema_tables lists " + out.schema_tables.length +
+            " of " + out.schema_tables_total + " tables; enumerate all with: " +
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
+        }
       }
     } catch (e2) {}
     return out;
@@ -2337,13 +2404,11 @@ async function cfWorkerDeploy(env, args) {
   // without extending it is still exposed. Detection would require reading the
   // worker's wrangler.toml, which this endpoint has no binding for.
   const _CONTAINER_WORKERS = ["qnfo-containers-pilot"];
-  if (_CONTAINER_WORKERS.indexOf(worker) !== -1 && !(args && args.allow_container_config_drop)) {
-    return {
-      ok: false,
-      rejected: true,
-      error: "CONTAINER-CONFIG-DROPPED-1: " + worker + " declares [[containers]]; cf_worker_deploy PUTs /content and rebuilds bindings from GET /bindings, and [[containers]] is not a binding, so this deploy would destroy the container config and take the whole container tool family down. Deploy with wrangler deploy (.github/workflows/deploy-containers-pilot.yml). Pass allow_container_config_drop:true only for a deliberate container teardown."
-    };
-  }
+  // CONTAINER-GUARD-AFTER-READ-1 (issues #1485/#1487): the decision moved BELOW the live
+  // /settings read. A name check evaluated before the read can never distinguish
+  // "container config unreadable" from "container config absent", and it refuses the very
+  // deploy that would restore the config.
+  const _isContainerWorker = _CONTAINER_WORKERS.indexOf(worker) !== -1;
   // FM8-VERSION-DOWNGRADE (2026-09-26): refuse a SEMVER DOWNGRADE by default. A stale
   // WORKTREE-GRAFT-PUSH-1 reverts the repo to OLD versions (canonical: qnfo-gateway 3.7.4 to
   // 3.6.1, qnfo-ops 2.37.6 to 2.36.47) and, because GitHub main is the deploy source, the
@@ -2426,6 +2491,12 @@ async function cfWorkerDeploy(env, args) {
     }
     let _compatDate = "2026-08-01";
     let _compatFlags = [];
+    // PRESERVE-WORKER-METADATA-2 (issues #1485/#1487): [[containers]] is SCRIPT-LEVEL
+    // config, not a binding, so BINDING-PRESERVE-1 never carried it and every /content PUT
+    // silently dropped it (MEASURED: deployment_history id 172 at 19:30:35.100Z, first
+    // container.error at 19:30:43.591Z -- 8s later). Read it from the SAME GET /settings
+    // call already used for compatibility_date.
+    let _containers = [];
     try {
       const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
       if (_sResp.ok) {
@@ -2433,11 +2504,24 @@ async function cfWorkerDeploy(env, args) {
         const _sr = _sj && _sj.result;
         if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
         if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
+        if (_sr && Array.isArray(_sr.containers)) _containers = _sr.containers.slice();
       }
     } catch (_e) {
     }
     if (!_compatDate) _compatDate = "2026-08-01";
-    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}));
+    if (_isContainerWorker && !_containers.length &&
+        !(args && args.allow_container_config_drop)) {
+      return {
+        ok: false,
+        rejected: true,
+        error: "CONTAINER-CONFIG-DROPPED-1: " + worker + " is a container worker and "
+          + "GET /settings returned NO containers array, so this PUT would leave the "
+          + "container config absent (the measured #1485 failure). Restore it with "
+          + "scripts/restore_container_config_v5.py (versions API). Pass "
+          + "allow_container_config_drop:true only for a deliberate teardown."
+      };
+    }
+    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     // FM7-HEALTH-VERSION-PARITY-1 (2026-09-26, FATAL): refuse a deploy whose source /health
     // returns a HARDCODED literal version instead of its single VERSION const. A lying /health is
@@ -3309,7 +3393,7 @@ __name222222(execTool, "execTool");
 async function logToolEvent(env, name, args, res, ms) {
   if (!env.QNFO_AUDIT) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ args, resultOk: !!(res && res.ok), error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, ms }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ /* OPS-TOOL-META-ERROR-FIRST-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
   } catch (e) {
   }
 }
@@ -3499,7 +3583,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
-  let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
+  let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -3573,7 +3657,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
-  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
+  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -3967,7 +4051,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   try {
     if (isStream) {
       const _relayIsOAI = isOAIUpstream(relayUp);
-      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
+      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, gwMaxOut(env)), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, gwMaxOut(env)), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
@@ -4174,7 +4258,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e4);
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5);
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
@@ -4318,7 +4402,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     }
     const _streamModel = execUpstream || UPSTREAM_MODEL;
     const _streamIsOAI = isOAIUpstream(_streamModel);
-    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, gwMaxOut(env)), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, gwMaxOut(env)), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
@@ -4379,6 +4463,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     return await finalize();
   }, "streamFinalAnswer");
   let finalized = false;
+  var pendingToolCalls = [];
   const finalize = /* @__PURE__ */ __name222222(async function() {
     if (finalized) return null;
     finalized = true;
@@ -4408,6 +4493,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         emitChunk({}, "tool_calls");
       } else {
         if (!streamedTokens) emitChunk({ role: "assistant", content }, null);
+        if (pendingToolCalls && pendingToolCalls.length) emitChunk({ role: "assistant", content: "", pending_tool_calls: pendingToolCalls }, null);
         emitChunk({}, finishReason || "stop");
       }
       emitDone();
@@ -4416,7 +4502,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (clientHandoff) {
       return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: clientHandoff, finish_reason: "tool_calls" }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
     }
-    return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason || "stop" }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
+    return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason || "stop" }], pending_tool_calls: pendingToolCalls && pendingToolCalls.length ? pendingToolCalls : void 0, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
   }, "finalize");
   const runner = /* @__PURE__ */ __name222222(async function() {
     if (isStream) emitProgress();
@@ -4443,7 +4529,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
-        if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+        if (!withTools) {
+          if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
+          work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+        }
         const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
         if (isStream) {
@@ -4482,7 +4571,16 @@ async function handleChat(env, body, authHeader, ua, ctx) {
             ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, servedBy || UPSTREAM_MODEL, "tool-call-invalid", _bad + " invalid tool call(s) in model response"));
           }
         }
-        if (toolCalls && iter < maxIters) {
+        if (toolCalls && !withTools) {
+          // TOOL-BUDGET-PENDING-1: budget spent, model still emitted tool calls. Do NOT execute
+          // them (the budget is spent) and do NOT drop them silently (the old defect).
+          pendingToolCalls = summarizePendingToolCalls(toolCalls);
+          escalations += pendingToolCalls.length;
+          toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + pendingToolCalls.map(function(p) { return p.name; }).join(",") });
+          ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "tool-budget-exhausted", pendingToolCalls.length + " tool call(s) not executed (budget spent): " + pendingToolCalls.map(function(p) { return p.name; }).join(",")));
+          // TOOLBUDGET-BAIL-1: emit the D3a bail record (cloud_ops_events kind=ops_tool_budget_bail).
+          ctx.waitUntil(logToolBudgetBail(env, strategy, pendingToolCalls.length, pendingToolCalls.map(function(p) { return p.name; }).join(","), maxIters, !!deadlineHit));
+        } else if (toolCalls && withTools) {
           streamedTokens = false;
           const serverCalls = toolCalls.filter(function(tc) {
             return tc && tc.function && _opsToolNames.has(tc.function.name);
@@ -4514,6 +4612,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           continue;
         }
         content = String(msg0 && msg0.content || "");
+        if (pendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(pendingToolCalls.length))).trim();
         if (!String(content || "").trim() && !toolCalls && withTools && !cacheHit) {
           escalations++;
           ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "empty-content-with-tools", "model returned empty content while tools were available"));
@@ -5341,7 +5440,10 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       }
       const withTools = turn < maxTurns;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
-      if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+      if (!withTools) {
+        if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "job-workflow", turn, maxTurns, false);
+        work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+      }
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "20 seconds", backoff: "exponential" }, timeout: "15 minutes" }, async function() {
@@ -5357,7 +5459,11 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       const choice = resp && resp.choices && resp.choices[0];
       const msg0 = choice && choice.message;
       const toolCalls = msg0 && Array.isArray(msg0.tool_calls) && msg0.tool_calls.length ? msg0.tool_calls : null;
-      if (toolCalls && withTools) {
+      if (toolCalls && !withTools) {
+        // TOOL-BUDGET-PENDING-1: record the unexecuted final-round calls, never drop them.
+        var jobPendingToolCalls = summarizePendingToolCalls(toolCalls);
+        toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + jobPendingToolCalls.map(function(p) { return p.name; }).join(",") });
+      } else if (toolCalls && withTools) {
         const serverCalls = toolCalls.filter(function(tc) {
           return tc && tc.function && opsToolNames.has(String(tc.function.name));
         });
@@ -5387,6 +5493,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       }
       content = String(msg0 && msg0.content || "");
       finishReason = choice && choice.finish_reason || "stop";
+      if (typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(jobPendingToolCalls.length))).trim();
       if (withTools && finishReason === "length") {
         try {
           const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
@@ -5400,7 +5507,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
         }
         if (!content || !String(content).trim()) content = "The answer was truncated by the token budget after a retry. Split the request or re-POST /v1/jobs for another attempt.";
       }
-      final = { status: "succeeded", response: content, finishReason };
+      final = { status: "succeeded", response: content, finishReason, pending_tool_calls: typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length ? jobPendingToolCalls : void 0 };
       break;
     }
     if (!final) final = { status: "succeeded", response: String(content || "(iteration cap reached with no final answer)"), finishReason };
@@ -6023,3 +6130,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+// TOOLBUDGET-RELOCK-1 (2026-09-30): re-landed MAX_TOOL_ITERS=40 and OPS_NONSTREAM_DEADLINE_MS=3e5 after an applier revert. See qnfo-ops/scripts/guard-timebudget.sh.
