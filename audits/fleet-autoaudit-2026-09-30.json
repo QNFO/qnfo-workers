@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 23:30:12",
+  "audited_at": "2026-09-30 23:44:33",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -493,12 +493,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.44-uncached-crons-json",
+        "version": "0.4.45-wai-cost-writer",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.40-dispatch-abort-classify",
+        "version": "1.7.41-errors-since-deploy",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1140,17 +1140,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.44-uncached-crons-json",
+      "before": "0.4.45-wai-cost-writer",
       "http": 200,
-      "live": "0.4.44-uncached-crons-json",
+      "live": "0.4.45-wai-cost-writer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.40-dispatch-abort-classify",
+      "before": "1.7.41-errors-since-deploy",
       "http": 200,
-      "live": "1.7.40-dispatch-abort-classify",
+      "live": "1.7.41-errors-since-deploy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
