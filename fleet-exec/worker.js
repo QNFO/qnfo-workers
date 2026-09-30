@@ -263,10 +263,11 @@ var schedDefault = {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, version: VERSION });
-    if (url.pathname === "/tick" && request.method === "POST") {
-      const fired = await runTick(env);
-      return json({ ok: true, fired: fired });
-    }
+    // FLEET-EXEC-TICK-UNAUTH-1 (issue #1672): the unauthenticated POST /tick route was
+    // removed. It had zero callers in the repo, and fleet-exec declares no secrets, so it
+    // could not be gated fail-closed without provisioning one. Cron dispatch is unaffected:
+    // scheduled() above calls runTick(env) directly and never used this route. Any future
+    // on-demand trigger belongs on an authenticated control worker, not here.
     return json({ ok: false, error: "not found" }, 404);
   }
 };

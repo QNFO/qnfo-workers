@@ -1,17 +1,16 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "ea8b8c1bca24515a989f023e3c238cbdfedc4511",
-  "total": 102,
+  "head": "4f880bdc493e357fb4105344f5ca69b03719dc83",
+  "total": 103,
   "summary": {
-    "landed": 2,
-    "already-applied": 68,
-    "stale-anchor": 22,
-    "error": 10
+    "already-applied": 75,
+    "stale-anchor": 18,
+    "error": 9,
+    "landed": 1
   },
   "landed": [
-    "adr009-audit-trail-unwritten-1-patch.py",
-    "toolbudget-permanent-durability-patch.py"
+    "patch-fleet-exec-tick-unauth-1.py"
   ],
   "reverted": [
     {
@@ -25,11 +24,11 @@
     {
       "script": "adr009-audit-trail-unwritten-1-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "OK: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 complete, 1 target(s) changed"
+      "seconds": 0.04,
+      "tail": "OK: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 complete, 0 target(s) changed"
     },
     {
       "script": "affirm-guard-veto-patch.py",
@@ -37,7 +36,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -46,7 +45,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -64,7 +63,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
     },
     {
@@ -91,7 +90,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "APPLIER-CLASSIFY-UNMASKED-1: nothing to do (all edits already applied)"
     },
     {
@@ -100,7 +99,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: anchor DOC matched 0 times (expected 1) - nothing written"
     },
     {
@@ -118,7 +117,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.17,
       "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -145,7 +144,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL (fail-closed): could not find a 2.37.<minor> VERSION literal in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/worker.js"
     },
     {
@@ -181,7 +180,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -190,7 +189,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -199,7 +198,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "ALREADY PATCHED (CLOUD-OPS-HEALTH-AUTH-1 present); no change"
     },
     {
@@ -208,7 +207,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "[done] changes: none (already applied)"
     },
     {
@@ -217,7 +216,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -226,7 +225,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: anchor 'constructor' matched 0 times (expected exactly 1)"
     },
     {
@@ -235,7 +234,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -244,7 +243,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ABORT: pre-patch VERSION anchor occurs 0 times in qnfo-ops/worker.js"
     },
     {
@@ -253,7 +252,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "ALREADY APPLIED (DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1 present)"
     },
     {
@@ -271,7 +270,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED - nothing to do"
     },
     {
@@ -280,7 +279,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "ALREADY APPLIED (DEPLOY-GUARD-WRAP-2) - nothing to do"
     },
     {
@@ -289,7 +288,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: anchor 'imports' matched 0 times (expected 1) - nothing written"
     },
     {
@@ -327,7 +326,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.07,
       "tail": "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)"
     },
     {
@@ -336,7 +335,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -363,7 +362,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "::error::anchor drift on scripts/fleet-autoaudit.py: expected (def,site_a,site_b,msg)=(1,1,1,1), got (1, 0, 0, 0)"
     },
     {
@@ -372,7 +371,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "SUMMARY S1=FAILED S2=OK S3=OK"
     },
     {
@@ -381,7 +380,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -390,7 +389,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.12,
+      "seconds": 0.13,
       "tail": "CHANGED=0"
     },
     {
@@ -404,12 +403,12 @@
     },
     {
       "script": "github-write-409-retry-patch.py",
-      "rc": 1,
-      "verdict": "stale-anchor",
+      "rc": 0,
+      "verdict": "already-applied",
       "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "FAIL-CLOSED: already repaired (marker(s) GITHUB-409-RETRY-1) but source/mirror diverge"
+      "tail": "parity: source==mirror"
     },
     {
       "script": "github409-retry-patch.py",
@@ -422,12 +421,12 @@
     },
     {
       "script": "github409-variant-reread-patch.py",
-      "rc": 1,
-      "verdict": "stale-anchor",
+      "rc": 0,
+      "verdict": "already-applied",
       "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "FAIL-CLOSED: mirror pair diverged after patch (405799 vs 403879 bytes)"
+      "tail": "changed=false"
     },
     {
       "script": "idea-hub-rss-stamp-gate-patch.py",
@@ -462,8 +461,8 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "  deployed-current.worker.js bytes=403879 marker=1"
+      "seconds": 0.04,
+      "tail": "  deployed-current.worker.js bytes=405799 marker=1"
     },
     {
       "script": "outreach-cap-status-1-patch.py",
@@ -471,7 +470,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "RESULT rc=0 changed=False"
     },
     {
@@ -494,12 +493,12 @@
     },
     {
       "script": "patch-404hint-list-1.py",
-      "rc": 3,
-      "verdict": "error",
+      "rc": 0,
+      "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.05,
-      "tail": "FAIL(3): mirror parity broken after patch"
+      "seconds": 0.06,
+      "tail": "OK"
     },
     {
       "script": "patch-apply-trigger-1490.py",
@@ -525,7 +524,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "no-op: every target already carries the fix"
     },
     {
@@ -570,7 +569,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "RESULT: applied=0 already=2 (nothing to do)"
     },
     {
@@ -583,12 +582,21 @@
       "tail": "changed=0"
     },
     {
+      "script": "patch-fleet-exec-tick-unauth-1.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "reverted": [],
+      "seconds": 0.04,
+      "tail": "OK FLEET-EXEC-TICK-UNAUTH-1"
+    },
+    {
       "script": "patch-github-read-404-hint-1.py",
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "DONE: 0 file(s) patched, marker=GITHUB-READ-404-HINT-1"
     },
     {
@@ -624,7 +632,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "TITLE-PROMOTE-1: already applied"
     },
     {
@@ -642,7 +650,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.08,
+      "seconds": 0.1,
       "tail": "SYNC-VERSION-CAPTURE-1: APPLIED AND VERIFIED (guard emits version; consumer captures it)"
     },
     {
@@ -669,7 +677,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "VERSION-QUOTE-1 already applied - no-op"
     },
     {
@@ -678,7 +686,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "OK: QUEUE-DRAIN-DISPATCH-FALSE-TIMEOUT-1 complete, 0 target(s) changed"
     },
     {
@@ -687,7 +695,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL(3): anchor count != 1 -> {'A_TAIL': 0} (concurrent writer? re-anchor before retrying)"
     },
     {
@@ -723,7 +731,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.01,
+      "seconds": 0.02,
       "tail": ""
     },
     {
@@ -732,7 +740,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.07,
+      "seconds": 0.08,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
@@ -750,7 +758,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already-patched: qnfo-research-exec/deployed-current.worker.js"
     },
     {
@@ -777,7 +785,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL: pre-patch VERSION not found: var VERSION = \"1.6.4-run-gate\";"
     },
     {
@@ -786,7 +794,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -804,7 +812,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "}"
     },
     {
@@ -813,7 +821,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -840,7 +848,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: qnfo-ops/worker.js anchor A1 matched 0 times (expected 1)"
     },
     {
@@ -881,12 +889,12 @@
     },
     {
       "script": "toolbudget-bail-instrument-1-patch.py",
-      "rc": 1,
-      "verdict": "stale-anchor",
+      "rc": 0,
+      "verdict": "already-applied",
       "changed": false,
       "reverted": [],
       "seconds": 0.08,
-      "tail": "  FAIL: mirror parity broken: qnfo-ops/worker.js != qnfo-ops/deployed-current.worker.js"
+      "tail": "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (0 target(s) changed)"
     },
     {
       "script": "toolbudget-bail-record-1-patch.py",
@@ -899,21 +907,21 @@
     },
     {
       "script": "toolbudget-do-loop-parity-1-patch.py",
-      "rc": 3,
-      "verdict": "stale-anchor",
+      "rc": 0,
+      "verdict": "already-applied",
       "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "ABORT (fail-closed): worker.js and deployed-current.worker.js already diverge (405797 vs 403877 bytes); refusing to patch"
+      "tail": "ALREADY APPLIED (idempotent no-op): TOOLBUDGET-DO-LOOP-PARITY-1 present in both bundles"
     },
     {
       "script": "toolbudget-permanent-durability-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "TOOLBUDGET-PERMANENT-1 ok (edits=1)"
+      "tail": "TOOLBUDGET-PERMANENT-1 ok (edits=0)"
     },
     {
       "script": "toolbudget-relock-1-patch.py",
@@ -921,7 +929,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "OK: TOOLBUDGET-RELOCK-1 complete, 0 target(s) changed"
     },
     {
@@ -939,9 +947,9 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "  count=0          after = snapshot(root)"
     }
   ],
-  "ts": "2026-09-30T20:02:14Z"
+  "ts": "2026-09-30T20:40:40Z"
 }
