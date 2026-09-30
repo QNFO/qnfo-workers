@@ -240,6 +240,13 @@ def main(argv: list[str] | None = None) -> int:
         for key in ("converged", "version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "error", "detail"):
             if key in res:
                 print(f"    {key}: {json.dumps(res[key])[:400]}")
+        # ROUTE-LOG-VISIBLE-1: print the route's own per-step log for the declared-config steps, so a skipped or
+        # failed schedules / workers_dev apply is visible in CI instead of silently absent (SCHEDULES-PATH-OFF-BY-ONE-1).
+        for step in res.get("log") or []:
+            if isinstance(step, dict) and step.get("step") in ("crons", "workers_dev", "verify", "lock"):
+                print(f"    log.{step.get('step')}: {json.dumps(step)[:300]}")
+        if isinstance(res.get("log"), list) and not any(isinstance(x, dict) and x.get("step") == "crons" for x in res["log"]):
+            print("    ::warning::route log has no 'crons' step - declared wrangler.toml config was not evaluated")
 
     failed = [w for w, ok, _ in results if not ok]
     print(f"\nsummary: {len(results) - len(failed)}/{len(results)} ok")
