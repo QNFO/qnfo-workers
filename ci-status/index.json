@@ -30,6 +30,7 @@
     "github-write-409-retry.json",
     "guard-timebudget.json",
     "ops-deploy-ledger.json",
+    "ops-tool-meta-error-first.json",
     "panel6-mediated-count-2.json",
     "preserve-worker-meta.json",
     "raw-put-schedules.json",
@@ -48,6 +49,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 45,
+  "count": 46,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
