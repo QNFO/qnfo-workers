@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 07:46:55",
+  "audited_at": "2026-09-30 08:13:51",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -26,7 +26,20 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-cloud-ops",
+        "live": "1.15.2-schedules-register-repair",
+        "repo": "1.15.1-cron-alias-dispatch",
+        "worker": "qnfo-cloud-ops"
+      },
+      {
+        "dir": "qnfo-ops",
+        "live": "2.37.32-tool-budget-ceiling-1",
+        "repo": "2.37.31-continuation-inherit",
+        "worker": "qnfo-ops"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -404,7 +417,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 34,
     "sync_workers": [
       "calendar-api",
       "fleet-exec",
@@ -418,7 +431,6 @@
       "qnfo-ai-search",
       "qnfo-archive",
       "qnfo-backlog-exec",
-      "qnfo-cloud-ops",
       "qnfo-containers-pilot",
       "qnfo-deploy-guard",
       "qnfo-email",
@@ -432,7 +444,6 @@
       "qnfo-lifecycle",
       "qnfo-memory-mcp",
       "qnfo-observability",
-      "qnfo-ops",
       "qnfo-outreach",
       "qnfo-paper-indexer",
       "qnfo-paper-reviser",
@@ -847,11 +858,11 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": null,
+      "before": "1.15.1-cron-alias-dispatch",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.15.2-schedules-register-repair",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-cloud-ops"
     },
     "qnfo-code-agent": {
@@ -1103,11 +1114,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": null,
+      "before": "2.37.31-continuation-inherit",
       "http": 200,
-      "live": null,
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.37.32-tool-budget-ceiling-1",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
