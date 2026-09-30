@@ -62,6 +62,7 @@ import os
 import sys
 import time
 import urllib.error
+import re
 import urllib.request
 
 OPS_DEPLOY_URL = os.environ.get("OPS_DEPLOY_URL", "https://ops.qnfo.org/ops/deploy")
@@ -109,6 +110,63 @@ def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int) -> d
     if status >= 300:
         parsed["ok"] = False
     return parsed
+
+
+VERSION_RE = re.compile(r'var\s+VERSION\s*=\s*"([^"]+)"')
+LOCK_WAIT_S = int(os.environ.get("CANONICAL_LOCK_WAIT_S", "240"))
+LOCK_POLL_S = 20
+
+
+def repo_version(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            m = VERSION_RE.search(fh.read())
+        return m.group(1) if m else None
+    except OSError:
+        return None
+
+
+def live_version(worker: str) -> str | None:
+    """Live /health version over the public workers.dev route (a GitHub runner is not a Worker, so the
+    same-zone 1042 restriction does not apply here)."""
+    req = urllib.request.Request(f"https://{worker}.q08.workers.dev/health",
+                                 headers={"User-Agent": "qnfo-canonical-deploy/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return (json.loads(resp.read().decode("utf-8", "replace")) or {}).get("version")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def lock_contended(res: dict) -> bool:
+    return "lock not acquired" in json.dumps(res)[:4000]
+
+
+def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout: int) -> dict:
+    """DEPLOY-LOCK-CONTENTION-1 (2026-09-30). One push to main can start TWO deployers for the same worker
+    (deploy-qnfo-ops.yml -> raw_put.py and this workflow -> /ops/deploy; or a fleet-control heal), and the
+    deploy-guard lock correctly lets only one through. Measured: canonical-deploy runs 36758875374 and
+    36758416523 went RED on "lock not acquired (fail-closed)" while a concurrent deployer shipped the same
+    commit. A held lock is contention, not failure: wait (bounded), and if the live worker already reports
+    the repo VERSION, the goal state is reached and the deploy is a no-op success."""
+    want = repo_version(path)
+    deadline = time.time() + LOCK_WAIT_S
+    while True:
+        res = post_deploy(worker, path, ref, token, timeout)
+        if res.get("ok") or not lock_contended(res):
+            return res
+        lv = live_version(worker)
+        if want and lv == want:
+            return {"ok": True, "status": res.get("status"), "converged": True, "version": lv,
+                    "detail": "lock held by a concurrent deployer and live already reports the repo "
+                              "VERSION -- goal state reached (DEPLOY-LOCK-CONTENTION-1)"}
+        if time.time() >= deadline:
+            res["detail"] = (f"lock still held after {LOCK_WAIT_S}s and live={lv!r} != repo={want!r} "
+                             "(DEPLOY-LOCK-CONTENTION-1)")
+            return res
+        print(f"    lock held by a concurrent deployer (live={lv!r}, want={want!r}); retry in {LOCK_POLL_S}s",
+              flush=True)
+        time.sleep(LOCK_POLL_S)
 
 
 def read_manifest(path: str) -> list[tuple[str, str]]:
@@ -172,14 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     for worker, path in targets:
         t0 = time.time()
         print(f"\n==> {worker} ({path})", flush=True)
-        res = post_deploy(worker, path, args.ref, token, args.timeout)
+        res = deploy_with_contention(worker, path, args.ref, token, args.timeout)
         dt = time.time() - t0
         ok = bool(res.get("ok"))
         results.append((worker, ok, res))
         verdict = "OK" if ok else "FAIL"
         print(f"    {verdict} in {dt:.1f}s  status={res.get('status')}")
         # Surface the route's own fields without assuming a fixed schema.
-        for key in ("version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "error", "detail"):
+        for key in ("converged", "version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "error", "detail"):
             if key in res:
                 print(f"    {key}: {json.dumps(res[key])[:400]}")
 

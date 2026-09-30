@@ -49,6 +49,8 @@ TITLE_PREFIX = "[ci-watchdog]"
 # A finding filed against the watchdog itself is an unbreakable loop: the
 # monitor goes red, flags its own red, and can never recover.
 SELF_WORKFLOWS = {"ci-watchdog"}
+# One-shot workflows (appliers / restorers) are never re-dispatched on a timer (ONE-SHOT-NO-TIMER-1).
+ONE_SHOT_PREFIXES = ("apply-", "restore-", "container-config-restore")
 
 
 def gh(path: str, method: str = "GET", body: dict | None = None):
@@ -421,10 +423,17 @@ def main() -> int:
         k, subj = f["class"], f["subject"]
         line = f"- `{k}` **{subj}** — {f['evidence']}"
         if k == "silent-schedule":
+            wf_file = _wf_file(inventory, subj)
             if subj in recent_wf:
                 tracked.append((line, "already dispatched within the last 55 min"))
+            elif wf_file.startswith(ONE_SHOT_PREFIXES):
+                # ONE-SHOT-NO-TIMER-1 (2026-09-30): an applier/restorer's schedule is a retry guard for a
+                # change that either landed (re-running it is noise, or RED on a moved anchor: #139/#142)
+                # or a break-glass restore (re-running it blind re-uploads a healthy worker: #1506).
+                # Never re-run a one-shot on a timer; push triggers and manual dispatch still work.
+                tracked.append((line, "one-shot workflow; not timer-dispatched (ONE-SHOT-NO-TIMER-1)"))
             else:
-                ok, how = dispatch(_wf_file(inventory, subj))
+                ok, how = dispatch(wf_file)
                 (acted if ok else unactionable).append((line, f"dispatched -> {how}"))
         elif k == "codeql-config":
             ok, how = configure_codeql()

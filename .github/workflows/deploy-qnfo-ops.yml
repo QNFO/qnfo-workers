@@ -125,7 +125,29 @@ jobs:
       - name: D1-GUARD-BATTERY-1 self-audit (blocking)
         run: node scripts/d1guard-battery.mjs
 
-      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
+      # DEPLOY-LOCK-CONTENTION-1 (2026-09-30): canonical-deploy.yml ALSO deploys qnfo-ops on every push that
+      # changes qnfo-ops/worker.js, through the canonical /ops/deploy route (lock + ledger + schedules). Running
+      # raw_put.py here as well started two deployers for one worker on every such push; the loser failed
+      # closed on the deploy-guard lock (lock-contention anomalies) and whichever finished LAST decided
+      # whether qnfo-ops read as canonical. This workflow is the BREAK-GLASS path for a qnfo-ops that cannot
+      # deploy itself: raw_put.py runs only when the live qnfo-ops is not healthy. The verify step below still
+      # waits for the artifact VERSION either way.
+      - name: Break-glass check - is the canonical /ops/deploy route available?
+        id: canon
+        run: |
+          set -uo pipefail
+          code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://qnfo-ops.q08.workers.dev/health || true)"
+          echo "live qnfo-ops /health -> $code"
+          if [ "$code" = "200" ]; then
+            echo "skip_raw_put=true" >> "$GITHUB_OUTPUT"
+            echo "qnfo-ops is healthy: canonical-deploy.yml owns this deploy; raw_put.py (break-glass) skipped"
+          else
+            echo "skip_raw_put=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::qnfo-ops /health=$code - canonical route unavailable, using break-glass raw_put.py"
+          fi
+
+      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT) - break-glass only
+        if: steps.canon.outputs.skip_raw_put != 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -152,7 +174,7 @@ jobs:
           echo "artifact=$V build=$VB"
           ok=0
           mode=full
-          for i in $(seq 1 12); do
+          for i in $(seq 1 24); do
             # VERIFY-CONTENT-ENDPOINT-1 (2026-09-30): run 36734005769 logged the 52-byte body as
             # {"code":1001,"error":"method_not_allowed"}, i.e. Cloudflare now rejects GET .../content
             # (the legacy path is upload-only). Try the read endpoint first (.../content/v2) and keep the
@@ -214,7 +236,7 @@ jobs:
             sleep 15
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::VERIFY-FAILED - live qnfo-ops did not converge to $V and did not supersede it within 12 attempts (~3 min)"
+            echo "::error::VERIFY-FAILED - live qnfo-ops did not converge to $V and did not supersede it within 24 attempts (~6 min)"
             exit 1
           fi
           if [ "$mode" = "degraded" ]; then

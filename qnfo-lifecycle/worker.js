@@ -1,4 +1,5 @@
-const QNFO_VERSION = "1.6.4-metric-freshness";
+var VERSION = "1.6.5-metric-undefined-class"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -247,10 +248,10 @@ function metricCadenceMinutes(cadence) {
 async function runMetricFreshness(env) {
   var nowMs = Date.now();
   var nowIso = new Date(nowMs).toISOString();
-  var out = { status: "metric-freshness", timestamp: nowIso, total: 0, fresh: 0, stale: 0, never: 0, unparsed_cadence: 0, worst: null, refreshed: [], filed_issue: false, updated_issue: false };
+  var out = { status: "metric-freshness", timestamp: nowIso, total: 0, fresh: 0, stale: 0, never: 0, unparsed_cadence: 0, undefined: 0, undefined_metrics: [], worst: null, refreshed: [], filed_issue: false, updated_issue: false };
   var rows = [];
   try {
-    var res = await env.QNFO_AUDIT.prepare("SELECT metric, refresh_cadence, last_refreshed FROM metric_registry").all();
+    var res = await env.QNFO_AUDIT.prepare("SELECT metric, refresh_cadence, last_refreshed, state FROM metric_registry").all();
     rows = res.results || [];
   } catch (e) {
     out.error = "metric_registry read failed: " + e.message;
@@ -261,6 +262,14 @@ async function runMetricFreshness(env) {
   var worstAge = -1, worstMetric = null;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
+    // METRIC-UNDEFINED-CLASS-1 (2026-09-30, #1411): a metric in state UNDEFINED has no agreed formula, so no writer can
+    // ever refresh it; counting it as "stale" kept this ticket open forever for a definition gap, not a freshness gap.
+    // Report it in its own class (undefined_metrics) and keep it out of the staleness verdict.
+    if (String(r.state || "").toUpperCase() === "UNDEFINED") {
+      out.undefined++;
+      out.undefined_metrics.push(r.metric);
+      continue;
+    }
     var cad = metricCadenceMinutes(r.refresh_cadence);
     if (cad === null) {
       out.unparsed_cadence++;
@@ -300,9 +309,24 @@ async function runMetricFreshness(env) {
     }
   } catch (e) { out.refresh_error_worker_count = e.message; }
   var remaining = out.stale + out.never + out.unparsed_cadence;
+  var stTitle = "METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence";
+  if (remaining === 0) {
+    // METRIC-STALENESS-SELF-CLOSE-1 (2026-09-30): the auditor could FILE and UPDATE its ticket but never close it, so
+    // even a fully fresh registry left #1411 open. Close on positive evidence (this run's own verdict), writing
+    // issue_triage.close_evidence first as the qnfo-audit close trigger requires.
+    try {
+      var ox = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND title = ? LIMIT 1").bind(stTitle).first();
+      if (ox && ox.id) {
+        var evd = "qnfo-lifecycle/" + QNFO_VERSION + " at " + nowIso + ": 0 stale / 0 never / 0 unparsed of " + out.total + " metrics (" + out.fresh + " fresh" + (out.undefined ? ", " + out.undefined + " UNDEFINED excluded: " + out.undefined_metrics.join(",") : "") + ")";
+        await env.QNFO_AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence) VALUES (?1, 'METRIC-STALENESS-SELF-CLOSE-1', 'resolved', 'qnfo-lifecycle', datetime('now'), 'auditor verdict: registry fresh', ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='resolved'").bind(ox.id, evd).run();
+        await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='resolved', close_channel='lifecycle-metric-freshness', updated_at=? WHERE id=? AND status='open'").bind(nowMs, ox.id).run();
+        out.closed_issue = ox.id;
+      }
+    } catch (e) { out.close_error = e.message; }
+  }
   if (remaining > 0) {
     var title = "METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence";
-    var desc = remaining + "/" + out.total + " metrics not fresh at " + nowIso + " :: " + offenders.slice(0, 40).join("; ");
+    var desc = remaining + "/" + out.total + " metrics not fresh at " + nowIso + " :: " + offenders.slice(0, 40).join("; ") + (out.undefined ? " || excluded as UNDEFINED (definition gap, not staleness): " + out.undefined_metrics.join(", ") : "");
     try {
       var ex = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND title = ? LIMIT 1").bind(title).first();
       if (ex && ex.id) {

@@ -106,7 +106,18 @@ jobs:
           pre = read()
           print("PRE:", json.dumps(pre))
           rep = {"attempted": False, "rc": None, "tail": ""}
-          if not pre.get("containers"):
+          # RESTORE-ONLY-WHEN-RED-1 (2026-09-30): /settings.containers reads null even for a RUNNING
+          # container (SETTINGS-NOT-A-CONTAINER-OBSERVATION-POINT-1), so "absent at /settings" was true on
+          # every run and this job re-uploaded the worker on every qnfo-containers-pilot push. Decide on
+          # functional evidence instead (scripts/container_restore_gate.py).
+          g = subprocess.run([sys.executable, "scripts/container_restore_gate.py"], capture_output=True, text=True)
+          print("GATE:", (g.stdout or "").strip()[-600:])
+          try:
+              gate = json.loads((g.stdout or "{}").strip().splitlines()[-1])
+          except Exception:  # noqa: BLE001
+              gate = {"need_restore": False, "reason": "gate output unreadable"}
+          rep["gate"] = gate
+          if gate.get("need_restore"):
               rep["attempted"] = True
               try:
                   p = subprocess.run([sys.executable, "scripts/restore_container_config.py"],
