@@ -1570,10 +1570,22 @@ async function jobOutreach(env) {
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) {
         out.skipped_dupe++;
+        /* OUTREACH-TERMINAL-STATUS-1 (#1294/#1508): a duplicate must leave the
+           work set. It used to `continue` with no status write, so the
+           ORDER BY created_at ASC LIMIT 10 window re-selected it on every run
+           and starved every row behind it. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-dup', error='duplicate contact (contact_ledger/outreach_log)' WHERE id=?1").bind(r.id).run().catch(function() {
+        });
         continue;
       }
       if (!validEmail(email)) {
         out.errors.push({ id: r.id, error: "invalid email " + email });
+        /* OUTREACH-TERMINAL-STATUS-1 (#1294/#1508): an un-sendable address must
+           leave the work set, not be re-selected forever. This is the same
+           class that sent a malformed address twice (#1479); the row is now
+           parked instead of re-queued. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-invalid', error=?2 WHERE id=?1").bind(r.id, "invalid email " + email).run().catch(function() {
+        });
         continue;
       }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
