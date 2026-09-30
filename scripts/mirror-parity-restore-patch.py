@@ -23,8 +23,8 @@ WHY IT MATTERS: the mirror is the artifact the canonical/redeploy route reads
 <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the
 mirror in the same commit leaves the deploy route verifying a stale version and failing
 closed with an opaque ok=0"). apply-telemetry-truth.yml:119 states the same for the
-redeploy cron: a stale mirror REVERTS the fix on the next redeploy. So a stale mirror
-makes the tool-budget fix live-but-not-durable.
+redeploy cron. A stale mirror therefore makes the tool-budget fix live-but-not-durable:
+the next redeploy reverts it.
 
 WHY THE EXISTING MECHANISM DOES NOT COVER THIS (measured 2026-09-30T07:59Z):
 scripts/mirror-guard.py classified qnfo-ops as CONTENT-DIFF-REVIEW /
@@ -35,19 +35,20 @@ import-using worker. Six workers are in that blind spot
 qnfo-ops, qnfo-research-supervisor). qnfo-ops is the only worker with a tool loop,
 so it is the one that matters for tool-budget durability.
 
-CONTRACT v2 (durable, self-healing): the mirror is a DERIVED artifact. Every
+CONTRACT v3 (durable, self-healing): the mirror is a DERIVED artifact. Every
 apply-pending-patches run re-executes this script, so parity is repaired on every
-run instead of once. The v1 size/`markers-missing` preconditions were removed:
-they made the applier a one-shot (after the first repair the mirror carries all
+run instead of once. v1's size/`markers-missing` preconditions were removed because
+they made the applier a one-shot: after the first repair the mirror carries all
 markers, so every later drift would have aborted with "manual review" - a silent
-durability hole).
+durability hole. v2's separate "mirror ahead" branch was removed in v3 because it
+was UNREACHABLE (any REQUIRED marker absent from the source is already caught by
+the source-marker check, which returns first); that was found by direct test, not
+by reading.
 
 FAIL-CLOSED:
   * source or mirror missing
   * source implausibly small (< 1024 bytes)
   * source lacks any REQUIRED tool-budget marker (would propagate a broken bundle)
-  * a REQUIRED marker present in the mirror but ABSENT from the source
-    (mirror ahead of source -> manual review, never clobber)
 POST-CONDITION: byte equality, verified by re-read.
 IDEMPOTENT: byte-identical inputs => "nothing to do".
 """
@@ -82,10 +83,6 @@ def main() -> int:
     missing_src = [m.decode() for m in REQUIRED if m not in src]
     if missing_src:
         print("FAIL-CLOSED: source worker.js lacks required markers: %s" % missing_src)
-        return 3
-    ahead = [m.decode() for m in REQUIRED if m in mir and m not in src]
-    if ahead:
-        print("FAIL-CLOSED: mirror carries markers absent from source (%s) - manual review" % ahead)
         return 3
     gained = [m.decode() for m in REQUIRED if m not in mir]
     MIR.write_bytes(src)
