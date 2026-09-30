@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.39-selfstate-1";
+var VERSION = "0.4.39-selfstate-obs1";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2478,6 +2478,7 @@ var worker_default2 = {
       return calibratorMod.default.scheduled(event, env, ctx);
     }
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
+    ctx.waitUntil(pollObservability(env).catch((e) => console.error("pollObservability error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -2596,6 +2597,60 @@ async function disposeRetired(env) {
   }
 }
 __name(disposeRetired, "disposeRetired");
+async function pollObservability(env) {
+  try {
+    var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+    var token = env.CF_API_TOKEN;
+    var db = env.AUDIT_DB || env.AUDIT;
+    if (!token || !db) return { ok: false, error: "pollObservability: CF_API_TOKEN or AUDIT_DB missing" };
+    var H = { Authorization: "Bearer " + token, "User-Agent": "qnfo-fleet-control-obs" };
+    var base = "https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/observability";
+    var out = { ok: true, summary: null, issuesIngested: 0, usageWorkers: 0 };
+    var sr = await fetch(base + "/issues/summary", { headers: H, signal: AbortSignal.timeout(8e3) });
+    var sj = await sr.json().catch(function() { return null; });
+    out.summary = sj && sj.success ? sj.result : null;
+    var ir = await fetch(base + "/issues?status=active&perPage=100", { headers: H, signal: AbortSignal.timeout(8e3) });
+    var ij = await ir.json().catch(function() { return null; });
+    var issues = ij && ij.success && ij.result ? ij.result : [];
+    for (var i = 0; i < issues.length; i++) {
+      var it = issues[i];
+      var fp = "cf-obs-" + (it.id || ("idx" + i));
+      var payload = JSON.stringify(it).slice(0, 8000);
+      try {
+        await db.prepare("INSERT OR IGNORE INTO fleet_issue_dispatch (fingerprint, category, sev, owner, action, payload, state) VALUES (?,?,?,?,?,?,?)")
+          .bind(fp, "worker-observability", "warn", "fleet", "obs-ingest", payload, "new").run();
+        await db.prepare("INSERT INTO fleet_issue_loop (fingerprint, category, sev, owner, title, first_seen, last_seen, occurrences, dispatch_state, last_action) VALUES (?,?,?,?,?,?,?,1,?,?) ON CONFLICT(fingerprint) DO UPDATE SET last_seen=excluded.last_seen, occurrences=fleet_issue_loop.occurrences+1, last_action=excluded.last_action")
+          .bind(fp, "worker-observability", "warn", "fleet", String(it.title || it.service || "observability-issue").slice(0, 200), it.firstObserved || Date.now(), it.lastObserved || Date.now(), "dispatched", "obs-ingest").run();
+        out.issuesIngested++;
+      } catch (e2) {}
+    }
+    var now = Date.now();
+    var from = now - 864e5;
+    var ur = await fetch(base + "/usage?from=" + from + "&to=" + now, { headers: H, signal: AbortSignal.timeout(8e3) });
+    var uj = await ur.json().catch(function() { return null; });
+    var bd = uj && uj.success && uj.result && uj.result.breakdown ? uj.result.breakdown : [];
+    var per = {};
+    for (var b = 0; b < bd.length; b++) {
+      var sv = bd[b].service || "unknown";
+      per[sv] = (per[sv] || 0) + (Number(bd[b].count) || 0);
+    }
+    var keys = Object.keys(per);
+    for (var k = 0; k < keys.length; k++) {
+      try {
+        await db.prepare("INSERT INTO analytics_dash_workers (worker, requests) VALUES (?,?) ON CONFLICT(worker) DO UPDATE SET requests=excluded.requests").bind(keys[k], per[keys[k]]).run();
+      } catch (e3) {}
+    }
+    out.usageWorkers = keys.length;
+    try {
+      await db.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-ingest', 'qnfo-fleet-control', ?)")
+        .bind(JSON.stringify({ activeIssues: out.summary && out.summary.activeIssues, resolved: out.summary && out.summary.resolvedIssues, issuesIngested: out.issuesIngested, usageWorkers: out.usageWorkers })).run();
+    } catch (e4) {}
+    return out;
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 300) };
+  }
+}
+__name(pollObservability, "pollObservability");
 var FleetAdvisor = advisorMod.FleetAdvisor;
 export {
   FleetAdvisor,
