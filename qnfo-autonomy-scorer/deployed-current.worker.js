@@ -12,7 +12,7 @@
 // the row's evidence. The composite is mirrored into survival_state.sai so the survival panel is no longer NULL.
 // Every write is a bounded UPSERT of a known dimension plus an append to autonomy_score_history. If the fact query
 // fails, nothing is written (fail closed).
-var VERSION = "1.1.0-vsm-ooda-measured";
+var VERSION = "1.1.1-vsm-ooda-measured";
 var WORKER = "qnfo-autonomy-scorer";
 var DAY = 86400000;
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
