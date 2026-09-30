@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.3-schema-first";
+var VERSION = "2.38.4-registry-health";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -803,6 +803,21 @@ __name2222(probeService, "probeService");
 __name22222(probeService, "probeService");
 __name222222(probeService, "probeService");
 async function fleetStatus(env) {
+  /* OPS-REGISTRY-HEALTH-1 (2026-09-30): FLEET is binding-scoped (12 services), so every other
+     worker fell through to { healthy: null, probe: "api" } -- measured 27 of 38 with no health
+     at all, while deployedCount counted them as deployed because probe === "api". The registry is
+     registry-scoped: service_registry carries base_url for 38/38, so the gap was the PROBE, not
+     the data. Resolve unbound workers through it and probe them over HTTP. */
+  const regMap = {};
+  if (env.QNFO_AUDIT) {
+    try {
+      const rr = await env.QNFO_AUDIT.prepare("SELECT service, base_url FROM service_registry").all();
+      for (const s of rr.results || []) {
+        if (s.service && s.base_url) regMap[s.service] = String(s.base_url).replace(/\/+$/, "");
+      }
+    } catch (e) {
+    }
+  }
   const out = await Promise.all(FLEET.map(async function(f) {
     const h = await probeService(env, f, "/health");
     let count = null;
@@ -828,7 +843,29 @@ async function fleetStatus(env) {
   for (const w of apiList) {
     if (boundNames.has(w.id)) continue;
     const hs = w.handlers || [];
-    out.push({ name: w.id, healthy: null, http: null, version: "", error: null, count: null, probe: "api", modified_on: w.modified_on || null, handlers: hs.map(function(h) {
+    const base = regMap[w.id] || null;
+    let rh = null;
+    if (base) {
+      const rctrl = new AbortController();
+      const rt = setTimeout(function() {
+        rctrl.abort();
+      }, 6e3);
+      try {
+        const resp = await fetch(base + "/health", { signal: rctrl.signal, headers: { "User-Agent": "qnfo-ops-fleet-status/registry-health" } });
+        clearTimeout(rt);
+        let body = {};
+        try {
+          body = await resp.json();
+        } catch (e) {
+          body = {};
+        }
+        rh = { ok: resp.ok, http: resp.status, version: body.version || body.VERSION || "", error: null };
+      } catch (e) {
+        clearTimeout(rt);
+        rh = { ok: false, http: 0, version: "", error: e && e.name === "AbortError" ? "timeout" : e && e.message ? e.message : String(e) };
+      }
+    }
+    out.push({ name: w.id, healthy: rh ? rh.ok : null, http: rh ? rh.http : null, version: rh ? rh.version : "", error: rh ? rh.error : null, count: null, probe: rh ? "registry-http" : "api", base_url: base, modified_on: w.modified_on || null, handlers: hs.map(function(h) {
       return Array.isArray(h) ? String(h[0]) : String(h);
     }).slice(0, 8) });
   }
@@ -841,7 +878,13 @@ async function fleetStatus(env) {
   const deployed = out.filter(function(x) {
     return x.healthy === true || x.probe === "api";
   }).length;
-  return { ok: true, fleet: out, healthyCount: healthy, deployedCount: deployed, total: out.length, ts: iso() };
+  const probed = out.filter(function(x) {
+    return x.healthy !== null;
+  }).length;
+  const unprobed = out.filter(function(x) {
+    return x.healthy === null;
+  }).length;
+  return { ok: true, fleet: out, healthyCount: healthy, deployedCount: deployed, probedCount: probed, unprobedCount: unprobed, total: out.length, ts: iso() };
 }
 __name(fleetStatus, "fleetStatus");
 __name2(fleetStatus, "fleetStatus");
