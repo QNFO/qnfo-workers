@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.0-cron-dow-cf";
+var VERSION = "1.15.1-cron-alias-dispatch";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2056,9 +2056,40 @@ var JOBS = {
   "engagement": jobEngagement,
   "radar": jobRadar
 };
+function cfDowToIso(spec) {
+  const s = String(spec == null ? "*" : spec).trim();
+  if (s === "*" || s === "") return "*";
+  const conv = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return n;
+    return String((v - 2 + 7) % 7 + 1);
+  };
+  return s.split(",").map((part) => {
+    const p = part.trim();
+    const m = /^(\d+)-(\d+)$/.exec(p);
+    if (m) return conv(m[1]) + "-" + conv(m[2]);
+    if (/^\d+$/.test(p)) return conv(p);
+    return p;
+  }).join(",");
+}
+__name(cfDowToIso, "cfDowToIso");
 function dispatchMap(offset) {
   const map = {};
-  for (const c of buildCrons(offset)) map[c.cron] = c.job;
+  const all = buildCrons(offset);
+  for (const c of all) map[c.cron] = c.job;
+  /* CRON-ALIAS-DISPATCH-1 (#1500): a trigger list written before the #1473
+     ISO->CF day-of-week fix still fires ISO-spelled crons (e.g. "30 5 * * 1").
+     Register that spelling as an alias so a stale registration dispatches its
+     job instead of silently returning "no job for cron". */
+  for (const c of all) {
+    const p = String(c.cron).split(" ");
+    if (p.length === 5 && p[4] !== "*") {
+      const iso = p.slice();
+      iso[4] = cfDowToIso(p[4]);
+      const alt = iso.join(" ");
+      if (alt && !(alt in map)) map[alt] = c.job;
+    }
+  }
   return map;
 }
 __name(dispatchMap, "dispatchMap");
@@ -2134,13 +2165,22 @@ var worker_default = {
     const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
     const map = dispatchMap(off);
     try {
-      await syncSchedules(env, false);
+      const sr = await syncSchedules(env, false);
+      if (sr && sr.changed) {
+        await stateSet(env, "cron_sync_error", sr.ok ? "" : "PUT failed status=" + sr.status + " at " + (/* @__PURE__ */ new Date()).toISOString());
+      }
     } catch (e) {
       console.log("schedule self-repair err", e && e.message || e);
+      try {
+        await stateSet(env, "cron_sync_error", "threw: " + String(e && e.message || e).slice(0, 200));
+      } catch (e2) {}
     }
     const job = map[cron];
     if (!job || !JOBS[job]) {
       console.log("no job for cron", cron, "offset", off);
+      try {
+        await recordEvent(env, "cron-noop", "cn-" + String(cron).replace(/[^0-9a-z]/gi, "") + "-" + Date.now().toString(36), "CRON-DISPATCH-NOOP-1: no job mapped for registered cron " + cron + " (offset " + off + ")", { cron, offset: off });
+      } catch (e) {}
       return;
     }
     try {
