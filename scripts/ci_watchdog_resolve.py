@@ -33,6 +33,7 @@ Env: GH_TOKEN/GITHUB_TOKEN (issues:write, actions:read, contents:read)
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -46,9 +47,25 @@ DRY = os.environ.get("DRY_RUN") == "1"
 API = "https://api.github.com"
 LABEL = "ci-watchdog"
 PREFIX = "[ci-watchdog]"
+# RATE-LIMIT-AWARE-1: GITHUB_TOKEN gives a repo ~1000 API calls/hour, shared by every workflow and by
+# CodeQL's SARIF upload. This reaper runs on every push to main, so it must not burn the budget blind.
+MIN_BUDGET = 25          # below this many remaining core calls a pass is not worth starting
+RATE_LIMITED = False     # set by gh() when GitHub answers 403/429 with a rate-limit signal
+
+
+def _looks_rate_limited(e) -> bool:
+    """True if an HTTPError is GitHub saying "you are out of budget" rather than "forbidden"."""
+    try:
+        h = e.headers
+        if h is not None and (h.get("x-ratelimit-remaining") == "0" or h.get("retry-after")):
+            return True
+        return "rate limit" in e.read().decode("utf-8", "replace").lower()
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def gh(path: str, method: str = "GET", body: dict | None = None):
+    global RATE_LIMITED
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(API + path, data=data, method=method)
     req.add_header("Accept", "application/vnd.github+json")
@@ -61,10 +78,31 @@ def gh(path: str, method: str = "GET", body: dict | None = None):
             raw = r.read().decode() or "null"
             return r.status, json.loads(raw)
     except urllib.error.HTTPError as e:
+        if e.code in (403, 429) and _looks_rate_limited(e):
+            RATE_LIMITED = True
         return e.code, None
     except Exception as e:  # noqa: BLE001
         print(f"  ! request failed {path}: {e}", file=sys.stderr)
         return 0, None
+
+
+def rate_limit_core():
+    """(remaining, limit, reset_epoch) for the core budget, or None if it cannot be read.
+
+    GET /rate_limit does not itself count against the limit, so it is safe to call when nearly out.
+    """
+    st, d = gh("/rate_limit")
+    if st != 200 or not isinstance(d, dict):
+        return None
+    c = (d.get("resources") or {}).get("core") or d.get("rate") or {}
+    return c.get("remaining"), c.get("limit"), c.get("reset")
+
+
+def _utc(epoch) -> str:
+    try:
+        return datetime.datetime.fromtimestamp(int(epoch), datetime.timezone.utc).strftime("%H:%M:%SZ")
+    except Exception:  # noqa: BLE001
+        return "?"
 
 
 def _subject_candidates(subject: str) -> list[str]:
@@ -189,6 +227,14 @@ def main() -> int:
     if not TOKEN and not DRY:
         print("ci-watchdog-resolve: no token; refusing to run non-dry", file=sys.stderr)
         return 0
+    rl = rate_limit_core()
+    if rl is not None:
+        rem, lim, reset = rl
+        print(f"ci-watchdog-resolve: core rate limit {rem}/{lim} remaining, resets {_utc(reset)}")
+        if isinstance(rem, int) and rem < MIN_BUDGET:
+            print(f"ci-watchdog-resolve: only {rem} calls left (< {MIN_BUDGET}); skipping this pass rather than "
+                  f"starving CodeQL and other jobs or misreporting API errors. Nothing is closed (fail-closed).")
+            return 0
     st, items = gh(f"/repos/{REPO}/issues?state=open&labels={LABEL}&per_page=100")
     if st != 200 or not isinstance(items, list):
         print(f"ci-watchdog-resolve: cannot list issues (http-{st})")
@@ -196,7 +242,11 @@ def main() -> int:
     print(f"ci-watchdog-resolve: repo={REPO} open[{LABEL}]={len(items)} dry={DRY}")
     closed = kept = 0
     all_wfs = list_workflows()
+    run_cache: dict = {}
     for it in items:
+        if RATE_LIMITED:
+            print("ci-watchdog-resolve: GitHub rate limit hit mid-pass; stopping. Remaining findings are untouched.")
+            break
         if it.get("pull_request"):
             continue
         title = it.get("title") or ""
@@ -210,13 +260,23 @@ def main() -> int:
         klass, subj = [x.strip() for x in rest.split(":", 1)]
         num = it.get("number")
         m = re.search(r"run=(\d+)", it.get("body") or "")
-        fail_run, fail_created, fail_wf_id = (m.group(1) if m else None), None, None
-        if fail_run:
-            stx, rx = gh(f"/repos/{REPO}/actions/runs/{fail_run}")
-            if stx == 200 and rx:
+        fail_run, fail_created, fail_wf_id, why = (m.group(1) if m else None), None, None, None
+        if not fail_run:
+            why = "no run id in the issue body"
+        else:
+            if fail_run not in run_cache:
+                run_cache[fail_run] = gh(f"/repos/{REPO}/actions/runs/{fail_run}")
+            stx, rx = run_cache[fail_run]
+            if stx == 200 and rx and rx.get("created_at"):
                 fail_created = rx.get("created_at")
                 fail_wf_id = rx.get("workflow_id")
-        g = latest_green(subj, fail_created, all_wfs)
+            else:
+                why = f"cannot read failing run {fail_run} (http-{stx})"
+        # FAIL-CLOSED-NO-BASELINE-1: the green-run rule means "strictly NEWER than the failure". With no
+        # failure timestamp there is nothing to be newer than, and latest_green(subj, None) would accept ANY
+        # success, including one older than the failure (reproduced: a 2020 run closed two findings). So the
+        # green-run rule only runs when the failure time is known; a retired workflow needs no timestamp.
+        g = latest_green(subj, fail_created, all_wfs) if fail_created else None
         if not g:
             rw = retired_by_id(fail_wf_id, all_wfs) or retired_workflow(subj, all_wfs)
             if rw:
@@ -244,9 +304,12 @@ def main() -> int:
                 closed += 1 if ok else 0
                 kept += 0 if ok else 1
                 continue
-            print(f"  - #{num} {klass}/{subj}: NO green run after the failure "
-                  f"(fail_run={fail_run} at {fail_created}, "
-                  f"names={_subject_candidates(subj)}); left open")
+            if why:
+                print(f"  - #{num} {klass}/{subj}: {why}; left open (fail-closed, no baseline to compare against)")
+            else:
+                print(f"  - #{num} {klass}/{subj}: NO green run after the failure "
+                      f"(fail_run={fail_run} at {fail_created}, "
+                      f"names={_subject_candidates(subj)}); left open")
             kept += 1
             continue
         comment = (
