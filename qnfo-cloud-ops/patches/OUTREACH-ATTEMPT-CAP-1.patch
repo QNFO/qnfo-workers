@@ -1,0 +1,116 @@
+OUTREACH-ATTEMPT-CAP-1 -- terminalize a twice-failed email lookup
+=================================================================
+Target file : qnfo-cloud-ops/worker.js   (main = "worker.js" per wrangler.toml)
+Defect      : D3 -- needs-email self-loop / LIMIT-10 starvation
+Filed by    : qnfo-ops, 2026-09-30
+Related     : #1294 (resolved, OUTREACH-QUEUE-SELECTOR-DRIFT-1), #1508 (closed, falsified)
+
+WHY THIS IS NOT LANDED AS A DIRECT COMMIT
+-----------------------------------------
+worker.js is a single 126,602-byte deployed bundle with no src/ directory. The
+GitHub write tools available to qnfo-ops accept FULL file content only (no
+partial/offset edit), and no read tool returns the whole file in one window
+(repo read caps at 20k chars, workspace read at 100k). Re-emitting 126KB by hand
+into a production bundle risks silent corruption of a worker that runs scheduled
+fleet jobs. Applying this patch from a container is also impossible: the
+container has no push credentials. This patch file is therefore committed to a
+branch for review and one-command application.
+
+THE DEFECT
+----------
+Selector (worker.js:1547):
+  SELECT id, paper_id, author, email, reason FROM outreach_queue
+   WHERE status IN ('pending','needs-email') ORDER BY created_at ASC LIMIT 10
+
+Failure branch (worker.js:1562-1566):
+      if (!email) {
+        out.skipped_no_email++;
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='needs-email', error='email lookup failed (HTML+e-print)' WHERE id=?1 AND status='pending'").bind(r.id).run().catch(function() {
+        });
+        continue;
+      }
+
+Trace for a row whose lookup fails:
+  run 1: row is 'pending' -> UPDATE fires (guard status='pending' holds) -> row becomes 'needs-email'.
+  run 2: row is re-SELECTED (selector includes 'needs-email'), verifyArxivEmail is
+         called again (a real arXiv HTML + e-print fetch), and if it fails again the
+         guard status='pending' NO LONGER holds, so NO status write occurs -> `continue`.
+  run N: identical to run 2. The row never leaves the work set.
+
+Two consequences:
+  1. Wasteful/amplifying network load: verifyArxivEmail is re-run against arXiv on
+     every drain, forever, for each stuck row. This is the mechanism that can
+     trigger arXiv rate-limiting, which then degrades lookups for healthy rows.
+  2. Starvation: ORDER BY created_at ASC means these permanently-old rows sit at the
+     FRONT of the LIMIT 10 window and are re-selected every run, displacing the
+     pending rows behind them.
+
+Current blast radius: LATENT. At the 2026-09-30 probe there were 0 rows in
+'needs-email' state (outreach_queue = 22 pending / 27 skipped / 20 sent), so no row
+is currently affected. The defect arms itself the next time a radar-hub candidate
+with email IS NULL fails resolution.
+
+THE PATCH (exact, one hunk)
+---------------------------
+Apply with:
+  python3 - <<'PY'
+  import io
+  p = "qnfo-cloud-ops/worker.js"
+  s = io.open(p, encoding="utf-8").read()
+
+  OLD = """          out.skipped_no_email++;
+          await env.AUDIT.prepare("UPDATE outreach_queue SET status='needs-email', error='email lookup failed (HTML+e-print)' WHERE id=?1 AND status='pending'").bind(r.id).run().catch(function() {
+          });
+          continue;"""
+
+  NEW = """          out.skipped_no_email++;
+          /* OUTREACH-ATTEMPT-CAP-1: a row that fails lookup while ALREADY in
+             needs-email has now failed twice; terminalize it. Without this the row
+             stays inside the selector ('pending','needs-email') forever, re-running
+             verifyArxivEmail on every drain and occupying one of the LIMIT 10 slots
+             (ORDER BY created_at ASC), which starves newer pending rows. */
+          await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-no-email', error='email lookup failed twice (HTML+e-print)' WHERE id=?1 AND status='needs-email'").bind(r.id).run().catch(function() {
+          });
+          await env.AUDIT.prepare("UPDATE outreach_queue SET status='needs-email', error='email lookup failed (HTML+e-print)' WHERE id=?1 AND status='pending'").bind(r.id).run().catch(function() {
+          });
+          continue;"""
+
+  assert s.count(OLD) == 1, "expected exactly 1 occurrence, found %d" % s.count(OLD)
+  io.open(p, "w", encoding="utf-8").write(s.replace(OLD, NEW))
+  print("patched OK")
+  PY
+  node --check qnfo-cloud-ops/worker.js   # bundle must still parse
+
+Why two statements rather than one: the two guards are mutually exclusive
+(status='needs-email' vs status='pending'), so exactly one fires per row and the
+row is guaranteed to leave the work set on its second failure. A row gets exactly
+one retry, preserving recovery from a transient arXiv failure.
+
+NO SCHEMA CHANGE: this deliberately avoids adding an `attempts` column to
+outreach_queue. The existing status value itself encodes "attempt 1 done", so the
+fix is two statements and zero migrations.
+
+VERIFICATION PLAN (must be run after deploy)
+--------------------------------------------
+  SELECT status, COUNT(*) n FROM outreach_queue GROUP BY status;
+  -- expect no unbounded growth of 'needs-email'; any row that reaches
+  -- 'skipped-no-email' is terminal and must not be re-selected.
+  SELECT id, status, error FROM outreach_queue WHERE status='needs-email';
+  -- expect this set to be strictly transient (empty after the following drain).
+
+ADVERSARIAL / KNOWN LIMITATIONS
+-------------------------------
+1. Two strikes may be too few if arXiv is degraded for an extended window: a row
+   could be terminalized while the outage is ongoing, losing a recoverable contact.
+   Mitigation is manual re-queue (paper_id and reason are retained on the row).
+   A schema-backed attempt counter with backoff would be strictly better; it is
+   out of scope here precisely because it needs a migration.
+2. The patch does not address why radar-hub inserts candidates with email IS NULL
+   in the first place. Fixing the producer (resolve or terminalize at insert time)
+   would remove this class entirely and is the better long-term fix.
+3. `node --check` validates syntax only. It does NOT prove the statement guards are
+   semantically correct against live D1. The guards must be confirmed by the
+   verification queries above.
+4. This file was authored from a read of main @ b801d33. If worker.js has changed
+   since, the assert will fail closed rather than patch the wrong region -- re-derive
+   the OLD block before applying.
