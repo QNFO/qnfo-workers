@@ -1,18 +1,10 @@
 {
-  "audited_at": "2026-09-30 15:49:25",
+  "audited_at": "2026-09-30 16:07:55",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-cloud-ops/deployed-current.worker.js",
-        "dir": "qnfo-cloud-ops",
-        "live": "1.15.3-schedules-live-1",
-        "repo": "1.15.4-outreach-attempt-cap-1",
-        "worker": "qnfo-cloud-ops"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -36,10 +28,16 @@
     "cron_only_count": 2,
     "drift": [
       {
-        "dir": "qnfo-cloud-ops",
-        "live": "1.15.3-schedules-live-1",
-        "repo": "1.15.4-outreach-attempt-cap-1",
-        "worker": "qnfo-cloud-ops"
+        "dir": "qnfo-fleet-dashboard",
+        "live": "1.7.35-realtime-obs",
+        "repo": "1.7.34-panel6-mediated-count-writeback1",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "dir": "qnfo-ops",
+        "live": "2.38.6-obs-summary",
+        "repo": "2.38.5-backlog-probe-error",
+        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
@@ -419,7 +417,7 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 34,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -482,6 +480,11 @@
         "worker": "qnfo-backlog-exec"
       },
       {
+        "dir": "qnfo-cloud-ops",
+        "version": "1.15.4-outreach-attempt-cap-1",
+        "worker": "qnfo-cloud-ops"
+      },
+      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.6-node-b64-exports",
         "worker": "qnfo-containers-pilot"
@@ -498,13 +501,8 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.39-selfstate-obs1",
+        "version": "0.4.39-selfstate-obs3",
         "worker": "qnfo-fleet-control"
-      },
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.34-panel6-mediated-count-writeback1",
-        "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
@@ -545,11 +543,6 @@
         "dir": "qnfo-observability",
         "version": "1.2.10-research-queue-enum",
         "worker": "qnfo-observability"
-      },
-      {
-        "dir": "qnfo-ops",
-        "version": "2.38.5-backlog-probe-error",
-        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1011,9 +1004,9 @@
     "qnfo-cloud-ops": {
       "before": "1.15.4-outreach-attempt-cap-1",
       "http": 200,
-      "live": "1.15.3-schedules-live-1",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "1.15.4-outreach-attempt-cap-1",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-cloud-ops"
     },
     "qnfo-code-agent": {
@@ -1137,9 +1130,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.39-selfstate-obs1",
+      "before": "0.4.39-selfstate-obs3",
       "http": 200,
-      "live": "0.4.39-selfstate-obs1",
+      "live": "0.4.39-selfstate-obs3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1147,9 +1140,9 @@
     "qnfo-fleet-dashboard": {
       "before": "1.7.34-panel6-mediated-count-writeback1",
       "http": 200,
-      "live": "1.7.34-panel6-mediated-count-writeback1",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.7.35-realtime-obs",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1275,9 +1268,9 @@
     "qnfo-ops": {
       "before": "2.38.5-backlog-probe-error",
       "http": 200,
-      "live": "2.38.5-backlog-probe-error",
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.38.6-obs-summary",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
