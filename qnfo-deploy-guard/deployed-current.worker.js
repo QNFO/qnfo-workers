@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.15-ms-failclosed";
+var VERSION = "1.3.16-burst-coalesce";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -96,6 +96,26 @@ async function refreshRegistryVersion(env, w, explicitVer) {
     return ver;
   } catch (e) { return null; }
 }
+// ANOMALY-BURST-COALESCE-1 (2026-09-30): fileIssue() dedupes only by exact open title and the per-worker title
+// embeds the worker name, so one bulk out-of-band mutation of N workers filed N separate high-priority tickets in a
+// single scan (48 DEPLOY-UNLOGGED-MUTATION issues in ~9 s, half of the open agent_issues backlog: file rate beat
+// close rate). When more than BURST_MAX distinct workers share an anomaly type in one scan, replace them with ONE
+// fleet-level anomaly that carries the count and the full worker list, so nothing is lost and one open ticket
+// (deduped by its stable title) covers the whole event. A genuine one-off (<= BURST_MAX) still files per worker.
+var BURST_MAX = 3;
+var BURST_TYPES = ["unlogged-mutation", "uncoordinated-deploy"];
+function coalesceBursts(list) {
+  var out = list.slice();
+  for (var bt = 0; bt < BURST_TYPES.length; bt++) {
+    var type = BURST_TYPES[bt];
+    var grp = out.filter(function (x) { return x.type === type; });
+    if (grp.length <= BURST_MAX) continue;
+    out = out.filter(function (x) { return x.type !== type; });
+    var names = grp.map(function (x) { return x.worker; });
+    out.push({ type: type, worker: "fleet", count: grp.length, sample: names.slice(0, 12), workers: names });
+  }
+  return out;
+}
 async function scan(env) {
   var t0 = Date.now();
   var fp = await getJson(FLEET_URLS, 15000);
@@ -160,6 +180,7 @@ async function scan(env) {
   }
   if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
   var seen = {}; var uniq = []; for (var m = 0; m < anomalies.length; m++) { var key = anomalies[m].type + "|" + anomalies[m].worker; if (!seen[key]) { seen[key] = 1; uniq.push(anomalies[m]); } }
+  uniq = coalesceBursts(uniq);
   var filed = [];
   for (var n = 0; n < uniq.length; n++) {
     var a = uniq[n]; var title;
