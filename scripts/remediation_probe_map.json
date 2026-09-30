@@ -1,0 +1,16 @@
+{
+  "_marker": "REMEDIATION-PROBE-MAP-1 (2026-10-01)",
+  "_contract": "Every value under `probes` MUST be a single literal SELECT/WITH that returns one row carrying an `expected` and an `observed` column. The bridge (scripts/remediation_contract_bridge.py) rejects anything else to the `needs-machine-probe` sentinel, so a malformed entry degrades to 'inactive', never to a false pass. Do NOT add a probe whose observed value is derived from its expected value, and do NOT add a probe that returns a constant.",
+  "probes": {
+    "1654": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM signals WHERE status='new'", "transport": "d1-query", "claim": "no signals stuck in status=new"},
+    "1629": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM guard_registry WHERE verified_at IS NULL", "transport": "d1-query", "claim": "every registered guard has been verified"},
+    "1619": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM v_sla_breaches", "transport": "d1-query", "claim": "no open SLA breaches"},
+    "1543": {"probe": "SELECT '0' AS expected, CAST(COALESCE(SUM(genuine_failures),0) AS TEXT) AS observed FROM tool_failures_24h WHERE tool='web_fetch'", "transport": "d1-query", "claim": "web_fetch has no genuine failures in 24h"},
+    "1664": {"probe": "SELECT '0' AS expected, CAST(COALESCE(SUM(genuine_failures),0) AS TEXT) AS observed FROM tool_failures_24h WHERE tool='shell_exec'", "transport": "d1-query", "claim": "shell_exec has no genuine failures in 24h"},
+    "1639": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN julianday('now')-julianday(replace(substr((SELECT MAX(ingested_at) FROM notes_intake),1,19),'T',' ')) <= 1 THEN 1 ELSE 0 END AS TEXT) AS observed", "transport": "d1-query", "claim": "notes intake ingested within 24h"},
+    "1640": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN julianday('now')-julianday(replace(substr((SELECT MAX(ts) FROM evolve_candidates),1,19),'T',' ')) <= 2 THEN 1 ELSE 0 END AS TEXT) AS observed", "transport": "d1-query", "claim": "self-evolution loop produced a candidate within 48h"},
+    "1628": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN julianday('now')-julianday(replace(substr((SELECT MAX(ts) FROM capability_audit_snapshot),1,19),'T',' ')) <= 2 THEN 1 ELSE 0 END AS TEXT) AS observed", "transport": "d1-query", "claim": "capability audit snapshot refreshed within 48h"},
+    "1614": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN (SELECT COUNT(*) FROM capability_catalog) >= 30 THEN 1 ELSE 0 END AS TEXT) AS observed", "transport": "d1-query", "claim": "capability catalog exists and is populated"},
+    "1668": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN (SELECT COUNT(*) FROM worker_removals) >= 1 THEN 1 ELSE 0 END AS TEXT) AS observed", "transport": "d1-query", "claim": "worker removal ledger exists and is populated"}
+  }
+}
