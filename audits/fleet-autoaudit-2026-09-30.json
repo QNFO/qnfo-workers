@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-09-30 14:43:46",
+  "audited_at": "2026-09-30 14:54:27",
   "d1_write_failures": [],
-  "d1_writes_ok": 110,
+  "d1_writes_ok": 112,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -473,7 +473,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.5-container-import-fix",
+        "version": "1.0.6-node-b64-exports",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -590,6 +590,14 @@
   },
   "purge_error": null,
   "rows": {
+    "ai-health-prober": {
+      "before": null,
+      "http": null,
+      "live": null,
+      "match": 0,
+      "note": "CRON_ONLY",
+      "worker": "ai-health-prober"
+    },
     "audit-hub": {
       "before": null,
       "http": 404,
@@ -1015,9 +1023,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.5-container-import-fix",
+      "before": "1.0.6-node-b64-exports",
       "http": 200,
-      "live": "1.0.5-container-import-fix",
+      "live": "1.0.6-node-b64-exports",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1045,6 +1053,14 @@
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
+    },
+    "qnfo-email-orchestrator": {
+      "before": null,
+      "http": null,
+      "live": null,
+      "match": 0,
+      "note": "CRON_ONLY",
+      "worker": "qnfo-email-orchestrator"
     },
     "qnfo-errata-orchestrator": {
       "before": null,
