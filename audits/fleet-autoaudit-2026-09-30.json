@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 11:03:44",
+  "audited_at": "2026-09-30 13:55:50",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -26,7 +26,14 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-containers-pilot",
+        "live": "1.0.5-container-import-fix",
+        "repo": "1.0.4-container-ctx-guard",
+        "worker": "qnfo-containers-pilot"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -404,7 +411,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -470,11 +477,6 @@
         "dir": "qnfo-cloud-ops",
         "version": "1.15.3-schedules-live-1",
         "worker": "qnfo-cloud-ops"
-      },
-      {
-        "dir": "qnfo-containers-pilot",
-        "version": "1.0.4-container-ctx-guard",
-        "worker": "qnfo-containers-pilot"
       },
       {
         "dir": "qnfo-deploy-guard",
@@ -1017,9 +1019,9 @@
     "qnfo-containers-pilot": {
       "before": "1.0.4-container-ctx-guard",
       "http": 200,
-      "live": "1.0.4-container-ctx-guard",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.0.5-container-import-fix",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-containers-pilot"
     },
     "qnfo-ddocs-indexer": {
