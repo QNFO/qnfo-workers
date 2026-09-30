@@ -1,10 +1,18 @@
 {
-  "audited_at": "2026-09-30 15:28:49",
+  "audited_at": "2026-09-30 15:38:34",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-cloud-ops/deployed-current.worker.js",
+        "dir": "qnfo-cloud-ops",
+        "live": "1.15.3-schedules-live-1",
+        "repo": "1.15.4-outreach-attempt-cap-1",
+        "worker": "qnfo-cloud-ops"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -26,7 +34,14 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-cloud-ops",
+        "live": "1.15.3-schedules-live-1",
+        "repo": "1.15.4-outreach-attempt-cap-1",
+        "worker": "qnfo-cloud-ops"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -404,7 +419,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -465,11 +480,6 @@
         "dir": "qnfo-backlog-exec",
         "version": "2.0.1-health-probe-budget",
         "worker": "qnfo-backlog-exec"
-      },
-      {
-        "dir": "qnfo-cloud-ops",
-        "version": "1.15.3-schedules-live-1",
-        "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-containers-pilot",
@@ -999,11 +1009,11 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.15.3-schedules-live-1",
+      "before": "1.15.4-outreach-attempt-cap-1",
       "http": 200,
       "live": "1.15.3-schedules-live-1",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-cloud-ops"
     },
     "qnfo-code-agent": {
