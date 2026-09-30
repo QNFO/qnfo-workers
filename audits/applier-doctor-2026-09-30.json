@@ -1,9 +1,10 @@
 {
  "counts": {
-  "already-applied": 53,
+  "already-applied": 54,
+  "applied-now": 1,
   "error": 8,
   "stale-anchor": 11,
-  "superseded": 6,
+  "superseded": 5,
   "undetermined": 8
  },
  "errored": [
@@ -17,7 +18,9 @@
   "scripts/telemetry-truth-patch.py"
  ],
  "marker": "APPLIER-DOCTOR-2",
- "never_landed": [],
+ "never_landed": [
+  "scripts/cloud-ops-cron-alias-dispatch-patch.py"
+ ],
  "results": [
   {
    "changed_files": [],
@@ -133,7 +136,8 @@
   {
    "changed_files": [
     " M ci-status/apply-pending-report.json",
-    " M scripts/raw_put.py"
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -142,7 +146,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): schedules-diag-legible-patch.py",
+    "LANDED(1): cloud-ops-cron-alias-dispatch-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -208,6 +212,20 @@
     "CLASSIFY-FAILCLOSED-DEFAULT-1: nothing to do (all edits already applied)"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js"
+   ],
+   "rc": 0,
+   "script": "scripts/cloud-ops-cron-alias-dispatch-patch.py",
+   "tail": [
+    "STATE worker.js alias=4 noop=1 syncerr=2 version=1.15.1-cron-alias-dispatch",
+    "STATE deployed-current.worker.js alias=4 noop=1 syncerr=2 version=1.15.1-cron-alias-dispatch",
+    "TOTAL_EDITS 6"
+   ],
+   "verdict": "applied-now"
   },
   {
    "changed_files": [],
@@ -840,18 +858,13 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M scripts/raw_put.py"
-   ],
-   "outcome_present_in": [
-    "scripts/raw_put.py :: SCHEDULES-DIAG-LEGIBLE-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/schedules-diag-legible-patch.py",
    "tail": [
-    "LANDED SCHEDULES-DIAG-LEGIBLE-1"
+    "NOOP - already applied"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -954,11 +967,10 @@
   "scripts/container-restore5-repair-bindings-patch.py",
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/patch-404hint-list-1.py",
-  "scripts/patch-cron-only-class-2.py",
-  "scripts/schedules-diag-legible-patch.py"
+  "scripts/patch-cron-only-class-2.py"
  ],
- "total": 86,
- "ts": "2026-09-30T07:13:23.185Z",
+ "total": 87,
+ "ts": "2026-09-30T07:19:40.842Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
