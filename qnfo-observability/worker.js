@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = "1.2.10-research-queue-enum"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+const VERSION = "1.2.11-outreach-gate-derive"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -355,7 +355,11 @@ const INTEGRATION_CHAINS = [
     // consumer (qnfo-cloud-ops jobOutreach) drains 'pending','needs-email'. Watch the real enum.
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM outreach_queue WHERE status IN ('pending','needs-email','queued')",
     total: "SELECT COUNT(*) n FROM outreach_queue",
-    max: 20, minOk: null, expectEmpty: false, want: 'pending+needs-email <= 20 (sends gated until 2026-09-15)' },
+    // OUTREACH-GATE-DERIVE-1 (2026-09-30): want text cited 2026-09-15 as the send gate, but the
+    // real gate is qnfo-outreach pipeline_state.external_sends_enabled (read live, currently '1').
+    // The candidate ceiling (20) is unchanged; only the rationale is corrected so it never claims
+    // a date in the past is still gating sends.
+    max: 20, minOk: null, expectEmpty: false, want: 'pending+needs-email <= 20 (send gate = qnfo-outreach pipeline_state.external_sends_enabled; drain = qnfo-cloud-ops job=outreach, 8/day)' },
   { id: 'issues', name: 'Chat failures -> backlog triage', producer: 'ops gateway', consumer: 'qnfo-backlog-exec', medium: 'agent_issues',
     // v1.2.7: consumer was mislabeled 'qnfo-kaizen' (a weekly DIGEST that never drains). The real drainer is
     // qnfo-backlog-exec, verified live 2026-09-21 (/health openBacklog=32, strandedOpsJobs=0). Attribution fix only.

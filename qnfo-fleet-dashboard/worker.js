@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.35-realtime-obs";
+var VERSION = "1.7.36-refresh-deadline";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -450,7 +450,7 @@ __name2222(failish, "failish");
 async function d1Count(env) {
   try {
     if (!env.CF_TOKEN) return null;
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/d1/database?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN } });
+    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/d1/database?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     if (!r.ok) return null;
     const j = await r.json();
     return Array.isArray(j.result) ? j.result.length : null;
@@ -614,7 +614,7 @@ __name2222(liveSaiInputs, "liveSaiInputs");
 async function liveScripts(env) {
   try {
     if (!env.CF_TOKEN) return null;
-    const resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN } });
+    const resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     if (!resp.ok) return null;
     const j = await resp.json();
     const list = j && j.result || [];
@@ -1007,7 +1007,14 @@ var EXEC_COOLDOWN_MS = 5 * 60 * 1e3;
 function execTargetFor(category, resource, env) {
   const r = String(resource || "").toLowerCase();
   if (category === "queue-freshness") {
-    if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
+    if (r.indexOf("outreach") >= 0) {
+      // OUTREACH-GATE-DERIVE-1 (2026-09-30): the refusal cited 2026-09-15 unconditionally,
+      // 15 days after that date had passed, so it could never expire and reported a false
+      // rationale. Derive it from the live activation instant instead.
+      const ACT_MS = Date.parse("2026-09-15T00:00:00Z");
+      if (Date.now() < ACT_MS) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
+      return { safe: false, noAction: true, note: "outreach ACTIVATION_AT (2026-09-15) has passed; external send gate is qnfo-outreach pipeline_state.external_sends_enabled (read live, not a date) and the drain runs on the qnfo-cloud-ops cron (job=outreach, 8/day cap) - no auto-drain from this lane (OUTREACH-LANE-INERT-1 / #1508)" };
+    }
     return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
   }
   if (category === "integration-chain") {
@@ -1015,7 +1022,11 @@ function execTargetFor(category, resource, env) {
     if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
     if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return env && env.REVISER_TOKEN ? { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log", auth: "X-Reviser-Token" } : { safe: false, noAction: true, note: "PAPER-REVISER-SCAN-UNAUTHORIZED-1: /run/scan needs qnfo-paper-reviser X-Reviser-Token which this worker does not hold; qnfo-paper-reviser cron 37 */4 drains it - no auto-dispatch" };
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: false, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "observability worker retired (wave-A consolidation) - fail-closed to manual disposition" };
-    if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
+    if (r.indexOf("outreach") >= 0) {
+      const ACT_MS = Date.parse("2026-09-15T00:00:00Z");
+      if (Date.now() < ACT_MS) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
+      return { safe: false, noAction: true, note: "outreach ACTIVATION_AT (2026-09-15) has passed; external send gate is qnfo-outreach pipeline_state.external_sends_enabled (read live, not a date) and the drain runs on the qnfo-cloud-ops cron (job=outreach, 8/day cap) - no auto-drain from this lane (OUTREACH-LANE-INERT-1 / #1508)" };
+    }
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
     return { safe: false, noAction: true, escalate: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
   }
@@ -1077,7 +1088,7 @@ async function execOne(env, row, prevState) {
     if (!svc) throw new Error("binding " + spec.svc + " not bound");
     const _eh = { "User-Agent": PROBE_UA };
     if (spec.auth === "X-Reviser-Token" && env.REVISER_TOKEN) _eh["X-Reviser-Token"] = env.REVISER_TOKEN;
-    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: _eh });
+    const res = await svc.fetch("https://" + spec.svc + spec.path, { method: "POST", headers: _eh, signal: AbortSignal.timeout(3e4) });
     status = res.status;
     ok = res.ok;
     body = squash(await res.text()).slice(0, 240);
@@ -1536,7 +1547,7 @@ async function buildState(env, ctx) {
     try { const gs = await d1all(env.OUTREACH, "SELECT value FROM pipeline_state WHERE key='external_sends_enabled'"); gate = gs && gs.length ? String(gs[0].value) : null; } catch (e) { gate = null; }
     const gated = gate === "0" || gate === "false";
     const stale = !gated && open > 0 && age !== null && age > 24;
-    queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: drainable.mx || null, age_h: age, stale, selector_drift: false, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: nc > 0 ? nc + " candidates awaiting contact enrichment (no email; not sendable)" : "external sends gated until 2026-09-15" });
+    queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: drainable.mx || null, age_h: age, stale, selector_drift: false, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: nc > 0 ? nc + " candidates awaiting contact enrichment (no email; not sendable)" : gated ? "external sends gated (kill switch off)" : stale ? "drain due - qnfo-cloud-ops jobOutreach (8/day cap)" : "none" });
     push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24h)" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
   });
   const analytics = await analytics24(env);
@@ -2280,7 +2291,24 @@ async function runRefresh(env, ctx) {
   if (inflight) return inflight;
   inflight = (async function() {
     const t0 = Date.now();
-    const st = await buildState(env, ctx);
+    // REFRESH-DEADLINE-1 (2026-09-30): buildState fans out to 38 live probes + several
+    // CF/GitHub API calls. Under partial degradation a single unresponsive sub-request
+    // held the whole invocation to the 900s cron wall limit -> Cloudflare reported
+    // "Worker invocation ended with exceededWallTime" (14 internalError/24h, issue class
+    // from the Workers Observability API). Bound the refresh so the handler always
+    // returns a state (possibly degraded) well before the platform wall limit.
+    let st;
+    try {
+      st = await Promise.race([buildState(env, ctx), new Promise(function(_res, rej) {
+        setTimeout(function() {
+          rej(new Error("REFRESH-DEADLINE-1: buildState exceeded 90000ms"));
+        }, 9e4);
+      })]);
+    } catch (eD) {
+      const prev = await loadState(env);
+      if (prev && prev.state) return prev.state;
+      return { generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION, refresh_ms: Date.now() - t0, deadline_error: String(eD && eD.message || eD), fleet: { workers: 0, scheduled: 0, probes: 0, d1_databases: 0, analytics_error: "refresh deadline" }, totals: { req24: 0, err24: 0 }, scheduled: [], audits: [], probes: [], chains: [], issues: [], issue_counts: { err: 0, warn: 0, total: 0 }, integration: {}, meta: {}, verdict: "UNKNOWN" };
+    }
     st.refresh_ms = Date.now() - t0;
     await saveState(env, st, st.refresh_ms);
     if (ctx && ctx.waitUntil) ctx.waitUntil(loopMaybeSync(env, st).catch(function() {
@@ -3031,7 +3059,7 @@ async function roiHtml(env) {
   }
   let cap = null;
   try {
-    const cr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + env.CF_TOKEN } });
+    const cr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     const cj = await cr.json();
     const v = cj.result || {};
     cap = v.spend_limits && v.spend_limits.rules ? v.spend_limits.rules[0].limit : null;
@@ -3039,7 +3067,7 @@ async function roiHtml(env) {
   }
   let workersN = null;
   try {
-    const wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN } });
+    const wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
     const wj = await wr.json();
     workersN = (wj.result || []).length;
   } catch (e) {
