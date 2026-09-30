@@ -200,10 +200,17 @@ def unfiltered_deployers(files: list[str]) -> list[str]:
             branches = (on["push"] or {}).get("branches")
             if branches and set(branches) <= {"main"}:
                 continue
+            # A step (or job) guarded by `if: ... refs/heads/main ...` only runs on main, so it is not the
+            # hazard this rule is about (dup-worker-name-gate's commit-back is such a step).
+            def _main_only(node) -> bool:
+                return "refs/heads/main" in str((node or {}).get("if") or "")
+
             runs = " ".join(
                 (s.get("run") or "")
                 for j in (doc.get("jobs") or {}).values()
+                if not _main_only(j)
                 for s in (j.get("steps") or [])
+                if not _main_only(s)
             )
             if DEPLOYS_RE.search(join_continuations(runs)):
                 out.append(os.path.basename(p))
