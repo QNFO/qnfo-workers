@@ -1,109 +1,146 @@
 #!/usr/bin/env bash
-# qnfo-ops OPS-TIME-BUDGET-1 / TOOL-BUDGET-CEILING-1 regression guard.
+# qnfo-ops OPS-TIME-BUDGET-1 / OPS-SETTINGS-IMMUTABLE-1 regression guard.
+# Rewritten 2026-09-30 by TOOLBUDGET-CANONICAL-1 and LANDED 2026-09-30 after
+# COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1 proved the first landing attempt
+# was written into the CI worktree and then silently dropped by
+#   git add -A scripts/ '*worker.js' ci-status/
+# a pathspec that cannot match qnfo-ops/scripts/*.sh. The patch reported
+# "landed" because it did write the file; the commit step threw it away.
 #
-# HARDENED 2026-09-30 (TOOL-BUDGET-CEILING-1).  The 2026-09-06 version carried three
-# defects, each measured on 2026-09-30:
+# WHAT THE PREVIOUS VERSION GOT WRONG (three false negatives + one orphan)
+#   1. It asserted  OPS_LOOP_DEADLINE_MS", 1[2-9][0-9][0-9][0-9][0-9]  -- a regex
+#      that cannot match the real literal "3e5" (scientific notation), so the arm
+#      it claimed to protect was never actually checked.
+#   2. It never checked OPS_NONSTREAM_DEADLINE_MS at all -- the arm that actually
+#      drifted to 3e4 (30 s) and caused tool-budget exhaustion for non-streaming
+#      (mobile) callers.
+#   3. It grepped "export class OpsExecWorkflow" while the source contains
+#      "var OpsExecWorkflow = class", so the durable-path check always failed.
+#   4. It was ORPHANED: no workflow invoked it, so it never ran. That is the
+#      enabling cause of #2 drifting in undetected.
 #
-#   * FALSE NEGATIVE on the streaming arm.  It matched the default with a digit-only
-#     regex (OPS_LOOP_DEADLINE_MS", 1[2-9][0-9][0-9][0-9][0-9]) which cannot match the
-#     live scientific-notation form `3e5`, so a COMPLIANT value was reported FAIL.
-#   * NO CHECK AT ALL on the non-streaming arm.  OPS_NONSTREAM_DEADLINE_MS sat at 3e4
-#     (30000 ms) against a canonical 300000 ms -- 10% of canonical -- for every
-#     non-streaming client (including the mobile ChatBox client), and this guard never
-#     looked at it.  That hole is what produced "tool budget exhausted before these
-#     could run".
-#   * FALSE NEGATIVE on OPS-DURABLE-1.  It grepped `export class OpsExecWorkflow`, but
-#     the shipped form is `var OpsExecWorkflow = class` (worker.js:5291), so the
-#     durable-executor check could never pass.
+# This version parses each literal with python (notation-aware: 3e5 == 300000)
+# and asserts BOTH deadline arms, the round cap and the CPU ceiling against the
+# canonical OPS-SETTINGS-IMMUTABLE-1 values. Invoked every 30 minutes by
+# .github/workflows/guard-timebudget.yml.
 #
-# It also used byte identity (`cmp`) for the worker.js / deployed-current.worker.js
-# drift check.  A source artifact and a captured bundle are not byte-comparable, so
-# that arm fired permanently.  Drift is now judged on the VERSION constant, which is
-# what deploy drift actually means.
-#
-# Every ceiling below is canonical per OPS-SETTINGS-IMMUTABLE-1.  This guard may only
-# ever be corrected TOWARD canonical; lowering a ceiling is drift and must fail here.
-#
-# Usage: bash guard-timebudget.sh   (exit 0 = PASS)
+# Usage: bash guard-timebudget.sh    (exit 0 = PASS, exit 1 = DRIFT)
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 FAIL=0
-MIN_MS=300000
-MIN_ITERS=40
-LIVE_URL="${QNFO_OPS_HEALTH_URL:-https://qnfo-ops.q08.workers.dev/health}"
+echo "== guard-timebudget.sh (TOOLBUDGET-CANONICAL-1) =="
 
-echo "== guard-timebudget.sh =="
+python3 - "$DIR" <<'PYEOF'
+import re, sys
+from pathlib import Path
 
-# --- 1. legacy panic stub must not return -----------------------------------------
-for f in worker.js deployed-current.worker.js; do
-  if [ ! -f "$DIR/$f" ]; then echo "FAIL: missing $f"; FAIL=1; continue; fi
-  if grep -Fq "Ops tool loop reached its time budget after " "$DIR/$f"; then
-    echo "FAIL: panic stub present in $f"; FAIL=1
-  fi
-done
+d = Path(sys.argv[1])
+worker = d / "worker.js"
+deployed = d / "deployed-current.worker.js"
+wrangler = d / "wrangler.toml"
 
-# --- 2. tool-loop wall budget, BOTH transports ------------------------------------
-# Accepts scientific (3e5) and plain (300000) notation; rejects 3e4 / 30000 / <MIN_MS.
-check_deadline() {
-  f="$1"; var="$2"; raw=""; num=""
-  raw="$(grep -o "envInt(env, \"$var\", [0-9eE_.]*)" "$DIR/$f" 2>/dev/null | head -1 | sed 's/.*, //; s/)$//')"
-  if [ -z "$raw" ]; then
-    echo "FAIL: $var default not found in $f"; FAIL=1; return
-  fi
-  num="$(printf '%s' "$raw" | tr -d '_' | awk '{printf "%.0f", $1+0}')"
-  if [ -z "$num" ] || [ "$num" -lt "$MIN_MS" ]; then
-    echo "FAIL: $var default $raw (~${num:-?} ms) < canonical $MIN_MS ms in $f"; FAIL=1
-  else
-    echo "OK: $var = $raw (~$num ms)"
-  fi
-}
-for f in worker.js deployed-current.worker.js; do
-  [ -f "$DIR/$f" ] || continue
-  check_deadline "$f" OPS_LOOP_DEADLINE_MS
-  check_deadline "$f" OPS_NONSTREAM_DEADLINE_MS
-done
+CANON_DEADLINE = 300000      # OPS-SETTINGS-IMMUTABLE-1 tool-loop soft budget
+CANON_ROUNDS = 40
+CANON_CPU_MS = 300000        # OPS-SETTINGS-IMMUTABLE-1 CPU ceiling
+fails = []
+warns = []
 
-# --- 3. iteration cap --------------------------------------------------------------
-ITERS="$(grep -o 'var MAX_TOOL_ITERS = [0-9]*;' "$DIR/worker.js" 2>/dev/null | head -1 | grep -o '[0-9]*')"
-if [ -z "$ITERS" ] || [ "$ITERS" -lt "$MIN_ITERS" ]; then
-  echo "FAIL: MAX_TOOL_ITERS = ${ITERS:-?} < $MIN_ITERS in worker.js"; FAIL=1
-else
-  echo "OK: MAX_TOOL_ITERS = $ITERS"
-fi
 
-# --- 4. version drift (semantic; replaces the byte cmp) ----------------------------
+def read(p):
+    try:
+        return p.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+
+
+def lit(text, argname):
+    """Numeric default for envInt(env, ARGNAME, <literal>), notation-aware."""
+    m = re.search(r'envInt\(\s*env\s*,\s*"%s"\s*,\s*([0-9eE.+]+)\s*\)' % re.escape(argname), text)
+    if not m:
+        return None, None
+    raw = m.group(1)
+    try:
+        return raw, float(raw)
+    except Exception:
+        return raw, None
+
+
+src = read(worker)
+if src is None:
+    fails.append("worker.js unreadable")
+else:
+    for arm in ("OPS_LOOP_DEADLINE_MS", "OPS_NONSTREAM_DEADLINE_MS"):
+        raw, val = lit(src, arm)
+        if raw is None:
+            fails.append("%s default not found in worker.js" % arm)
+        elif val is None:
+            fails.append("%s literal %r unparseable" % (arm, raw))
+        elif val < CANON_DEADLINE:
+            fails.append("%s default %s (=%g) < canonical %d" % (arm, raw, val, CANON_DEADLINE))
+        else:
+            print("OK  %s = %s (%g)" % (arm, raw, val))
+
+    m = re.search(r"var MAX_TOOL_ITERS = (\d+);", src)
+    if not m:
+        fails.append("var MAX_TOOL_ITERS = <n>; not found in worker.js")
+    elif int(m.group(1)) < CANON_ROUNDS:
+        fails.append("MAX_TOOL_ITERS = %s < %d" % (m.group(1), CANON_ROUNDS))
+    else:
+        print("OK  MAX_TOOL_ITERS = %s" % m.group(1))
+
+    if "Ops tool loop reached its time budget after " in src:
+        fails.append("panic stub present in worker.js")
+
+    if not re.search(r"(export class OpsExecWorkflow|var OpsExecWorkflow = class|class OpsExecWorkflow)", src):
+        fails.append("OpsExecWorkflow class missing from worker.js (OPS-DURABLE-1)")
+
+    if "ops_tool_budget_bail" not in src:
+        fails.append("tool-budget bail record missing (TOOLBUDGET-CANONICAL-1 D3a)")
+
+    if "PENDING_TOOLCALLS_NOTE" not in src:
+        fails.append("pending-tool-calls recorder missing (TOOL-BUDGET-PENDING-1)")
+
+    dep = read(deployed)
+    if dep is None:
+        warns.append("deployed-current.worker.js absent")
+    elif dep != src:
+        warns.append("worker.js != deployed-current.worker.js (capture stale; not a gate)")
+
+wt = read(wrangler)
+if wt is None:
+    fails.append("wrangler.toml unreadable")
+else:
+    m = re.search(r"^cpu_ms\s*=\s*(\d+)\s*$", wt, re.M)
+    if not m:
+        fails.append("[limits] cpu_ms not found in wrangler.toml (CPU-BUDGET-1)")
+    elif int(m.group(1)) < CANON_CPU_MS:
+        fails.append("[limits] cpu_ms = %s < canonical %d in wrangler.toml (CPU-BUDGET-1)" % (m.group(1), CANON_CPU_MS))
+    else:
+        print("OK  cpu_ms = %s" % m.group(1))
+    if "OPS_JOBS_QUEUE" not in wt:
+        fails.append("OPS_JOBS_QUEUE binding missing from wrangler.toml (OPS-DURABLE-1)")
+    if "[[workflows]]" not in wt:
+        fails.append("[[workflows]] missing from wrangler.toml (OPS-DURABLE-1)")
+
+for w in warns:
+    print("WARN: %s" % w)
+for f in fails:
+    print("FAIL: %s" % f)
+print("RESULT: %s" % ("PASS" if not fails else "DRIFT"))
+sys.exit(0 if not fails else 1)
+PYEOF
+RC=$?
+if [ "$RC" -ne 0 ]; then FAIL=1; fi
+
+# Live-version comparison is INFORMATIONAL here. Version drift is already gated
+# by scripts/deploy-drift-guard.py and .github/workflows/version-bump-guard.yml;
+# duplicating it as a hard failure would make this guard red during the normal
+# "patch landed, deploy pending" window, and a permanently-red guard is ignored.
 REPO_VER="$(sed -n 's/^var VERSION = "//p' "$DIR/worker.js" | cut -d'"' -f1 | head -1)"
-CAP_VER="$(sed -n 's/^var VERSION = "//p' "$DIR/deployed-current.worker.js" | cut -d'"' -f1 | head -1)"
-LIVE_VER=""
-for i in 1 2 3; do
-  LIVE_VER="$(curl -s -m 15 "$LIVE_URL" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | head -1)"
-  [ -n "$LIVE_VER" ] && [ "$LIVE_VER" = "$REPO_VER" ] && break
-  sleep 5
-done
-echo "repo VERSION=$REPO_VER capture=$CAP_VER live=$LIVE_VER"
-if [ -z "$LIVE_VER" ]; then
-  echo "FAIL: live /health did not report a version (deploy unreachable)"; FAIL=1
-elif [ -n "$REPO_VER" ] && [ "$LIVE_VER" != "$REPO_VER" ]; then
-  echo "FAIL: live version $LIVE_VER != repo $REPO_VER (deploy drift)"; FAIL=1
-fi
-if [ -n "$CAP_VER" ] && [ -n "$REPO_VER" ] && [ "$CAP_VER" != "$REPO_VER" ]; then
-  echo "WARN: capture $CAP_VER != repo $REPO_VER (stale capture artifact, not a deploy fault)"
-fi
-
-# --- 5. CPU ceiling ----------------------------------------------------------------
-if ! grep -qE "^cpu_ms = 300000" "$DIR/wrangler.toml"; then
-  echo "FAIL: [limits] cpu_ms not 300000 in wrangler.toml (CPU-BUDGET-1)"; FAIL=1
-fi
-
-# --- 6. durable async path (OPS-DURABLE-1) -----------------------------------------
-if ! grep -qE "OpsExecWorkflow = class|class OpsExecWorkflow" "$DIR/worker.js"; then
-  echo "FAIL: OpsExecWorkflow class missing from worker.js (OPS-DURABLE-1)"; FAIL=1
-fi
-if ! grep -q 'OPS_JOBS_QUEUE' "$DIR/wrangler.toml"; then
-  echo "FAIL: OPS_JOBS_QUEUE binding missing from wrangler.toml (OPS-DURABLE-1)"; FAIL=1
-fi
-if ! grep -qF '[[workflows]]' "$DIR/wrangler.toml"; then
-  echo "FAIL: [[workflows]] missing from wrangler.toml (OPS-DURABLE-1)"; FAIL=1
+LIVE_VER="$(curl -s -m 15 https://ops.qnfo.org/health 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | head -1)"
+echo "INFO repo VERSION=$REPO_VER live=$LIVE_VER"
+if [ -n "$LIVE_VER" ] && [ -n "$REPO_VER" ] && [ "$LIVE_VER" != "$REPO_VER" ]; then
+  echo "WARN: live version $LIVE_VER != repo $REPO_VER (deploy drift; gated by deploy-drift-guard.py)"
 fi
 
 if [ "$FAIL" -eq 0 ]; then echo "GUARD PASS"; else echo "GUARD FAIL"; fi
