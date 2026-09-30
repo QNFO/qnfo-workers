@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 07:54:52",
+  "audited_at": "2026-09-30 08:03:13",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -26,14 +26,7 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [
-      {
-        "dir": "qnfo-ops",
-        "live": "2.37.32-tool-budget-ceiling-1",
-        "repo": "2.37.31-continuation-inherit",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -411,43 +404,188 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
-      "calendar-api",
-      "fleet-exec",
-      "idea-hub",
-      "personal-api",
-      "personal-companion",
-      "q08-signal-engine",
-      "qnfo-agent-orchestrator",
-      "qnfo-ai",
-      "qnfo-ai-calibration",
-      "qnfo-ai-search",
-      "qnfo-archive",
-      "qnfo-backlog-exec",
-      "qnfo-cloud-ops",
-      "qnfo-containers-pilot",
-      "qnfo-deploy-guard",
-      "qnfo-email",
-      "qnfo-fleet-control",
-      "qnfo-fleet-dashboard",
-      "qnfo-gateway",
-      "qnfo-infra",
-      "qnfo-intent-orchestrator",
-      "qnfo-ipatent",
-      "qnfo-kaizen",
-      "qnfo-lifecycle",
-      "qnfo-memory-mcp",
-      "qnfo-observability",
-      "qnfo-outreach",
-      "qnfo-paper-indexer",
-      "qnfo-paper-reviser",
-      "qnfo-pdf",
-      "qnfo-research-exec",
-      "qnfo-skill-sync",
-      "qnfo-social",
-      "qnfo-subscribers",
-      "qnfo-tools-mcp"
+      {
+        "dir": "calendar-api",
+        "version": "0.3.3-autopublish",
+        "worker": "calendar-api"
+      },
+      {
+        "dir": "fleet-exec",
+        "version": "1.0.2",
+        "worker": "fleet-exec"
+      },
+      {
+        "dir": "idea-hub",
+        "version": "1.0.9-toolinv-shape-v2",
+        "worker": "idea-hub"
+      },
+      {
+        "dir": "personal-api",
+        "version": "4.1.14-singlemodel",
+        "worker": "personal-api"
+      },
+      {
+        "dir": "personal-companion",
+        "version": "1.7.1-adv1",
+        "worker": "personal-companion"
+      },
+      {
+        "dir": "q08-signal-engine",
+        "version": "0.7.31-urlsafe",
+        "worker": "q08-signal-engine"
+      },
+      {
+        "dir": "qnfo-agent-orchestrator",
+        "version": "1.1.0",
+        "worker": "qnfo-agent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ai",
+        "version": "5.29.3-roster-auth",
+        "worker": "qnfo-ai"
+      },
+      {
+        "dir": "qnfo-ai-calibration",
+        "version": "1.2.5-degradereconcile",
+        "worker": "qnfo-ai-calibration"
+      },
+      {
+        "dir": "qnfo-ai-search",
+        "version": "1.0.2",
+        "worker": "qnfo-ai-search"
+      },
+      {
+        "dir": "qnfo-archive",
+        "version": "1.2.0",
+        "worker": "qnfo-archive"
+      },
+      {
+        "dir": "qnfo-backlog-exec",
+        "version": "2.0.1-health-probe-budget",
+        "worker": "qnfo-backlog-exec"
+      },
+      {
+        "dir": "qnfo-cloud-ops",
+        "version": "1.15.1-cron-alias-dispatch",
+        "worker": "qnfo-cloud-ops"
+      },
+      {
+        "dir": "qnfo-containers-pilot",
+        "version": "1.0.4-container-ctx-guard",
+        "worker": "qnfo-containers-pilot"
+      },
+      {
+        "dir": "qnfo-deploy-guard",
+        "version": "1.3.15-ms-failclosed",
+        "worker": "qnfo-deploy-guard"
+      },
+      {
+        "dir": "qnfo-email",
+        "version": "2.1.5",
+        "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.37-opsprobe-writeback1",
+        "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.7.34-panel6-mediated-count-writeback1",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "dir": "qnfo-gateway",
+        "version": "3.7.16-utf8-escape",
+        "worker": "qnfo-gateway"
+      },
+      {
+        "dir": "qnfo-infra",
+        "version": "1.2.9",
+        "worker": "qnfo-infra"
+      },
+      {
+        "dir": "qnfo-intent-orchestrator",
+        "version": "1.3.6",
+        "worker": "qnfo-intent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ipatent",
+        "version": "3.4.2",
+        "worker": "qnfo-ipatent"
+      },
+      {
+        "dir": "qnfo-kaizen",
+        "version": "0.3.2-glm53",
+        "worker": "qnfo-kaizen"
+      },
+      {
+        "dir": "qnfo-lifecycle",
+        "version": "1.6.4-metric-freshness",
+        "worker": "qnfo-lifecycle"
+      },
+      {
+        "dir": "qnfo-memory-mcp",
+        "version": "2.0.3",
+        "worker": "qnfo-memory-mcp"
+      },
+      {
+        "dir": "qnfo-observability",
+        "version": "1.2.10-research-queue-enum",
+        "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.37.32-tool-budget-ceiling-1",
+        "worker": "qnfo-ops"
+      },
+      {
+        "dir": "qnfo-outreach",
+        "version": "0.3.2",
+        "worker": "qnfo-outreach"
+      },
+      {
+        "dir": "qnfo-paper-indexer",
+        "version": "3.0.5-purge-orphan-sweep",
+        "worker": "qnfo-paper-indexer"
+      },
+      {
+        "dir": "qnfo-paper-reviser",
+        "version": "1.2.2",
+        "worker": "qnfo-paper-reviser"
+      },
+      {
+        "dir": "qnfo-pdf",
+        "version": "1.0.0",
+        "worker": "qnfo-pdf"
+      },
+      {
+        "dir": "qnfo-research-exec",
+        "version": "0.9.22-terminal-rescue",
+        "worker": "qnfo-research-exec"
+      },
+      {
+        "dir": "qnfo-skill-sync",
+        "version": "1.1.2",
+        "worker": "qnfo-skill-sync"
+      },
+      {
+        "dir": "qnfo-social",
+        "version": "0.7.16-dissem-reply-arity",
+        "worker": "qnfo-social"
+      },
+      {
+        "dir": "qnfo-subscribers",
+        "version": "1.1.2-suppression-gate",
+        "worker": "qnfo-subscribers"
+      },
+      {
+        "dir": "qnfo-tools-mcp",
+        "version": "1.1.5",
+        "worker": "qnfo-tools-mcp"
+      }
     ]
   },
   "purge_error": null,
@@ -469,9 +607,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": null,
+      "before": "0.3.3-autopublish",
       "http": 200,
-      "live": null,
+      "live": "0.3.3-autopublish",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -517,9 +655,9 @@
       "worker": "events-radar"
     },
     "fleet-exec": {
-      "before": null,
+      "before": "1.0.2",
       "http": 200,
-      "live": null,
+      "live": "1.0.2",
       "match": 1,
       "note": "SYNC",
       "worker": "fleet-exec"
@@ -533,9 +671,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": null,
+      "before": "1.0.9-toolinv-shape-v2",
       "http": 200,
-      "live": null,
+      "live": "1.0.9-toolinv-shape-v2",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -645,17 +783,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": null,
+      "before": "4.1.14-singlemodel",
       "http": 200,
-      "live": null,
+      "live": "4.1.14-singlemodel",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": null,
+      "before": "1.7.1-adv1",
       "http": 200,
-      "live": null,
+      "live": "1.7.1-adv1",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -693,17 +831,17 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": null,
+      "before": "0.7.31-urlsafe",
       "http": 200,
-      "live": null,
+      "live": "0.7.31-urlsafe",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
-      "before": null,
+      "before": "1.1.0",
       "http": 200,
-      "live": null,
+      "live": "1.1.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-agent-orchestrator"
@@ -725,25 +863,25 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": null,
+      "before": "5.29.3-roster-auth",
       "http": 200,
-      "live": null,
+      "live": "5.29.3-roster-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": null,
+      "before": "1.2.5-degradereconcile",
       "http": 200,
-      "live": null,
+      "live": "1.2.5-degradereconcile",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": null,
+      "before": "1.0.2",
       "http": 200,
-      "live": null,
+      "live": "1.0.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -757,9 +895,9 @@
       "worker": "qnfo-analytics"
     },
     "qnfo-archive": {
-      "before": null,
+      "before": "1.2.0",
       "http": 200,
-      "live": null,
+      "live": "1.2.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-archive"
@@ -805,9 +943,9 @@
       "worker": "qnfo-autopilot"
     },
     "qnfo-backlog-exec": {
-      "before": null,
+      "before": "2.0.1-health-probe-budget",
       "http": 200,
-      "live": null,
+      "live": "2.0.1-health-probe-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-backlog-exec"
@@ -853,9 +991,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": null,
+      "before": "1.15.1-cron-alias-dispatch",
       "http": 200,
-      "live": null,
+      "live": "1.15.1-cron-alias-dispatch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -877,9 +1015,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": null,
+      "before": "1.0.4-container-ctx-guard",
       "http": 200,
-      "live": null,
+      "live": "1.0.4-container-ctx-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -893,17 +1031,17 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": null,
+      "before": "1.3.15-ms-failclosed",
       "http": 200,
-      "live": null,
+      "live": "1.3.15-ms-failclosed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": null,
+      "before": "2.1.5",
       "http": 200,
-      "live": null,
+      "live": "2.1.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -973,17 +1111,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": null,
+      "before": "0.4.37-opsprobe-writeback1",
       "http": 200,
-      "live": null,
+      "live": "0.4.37-opsprobe-writeback1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": null,
+      "before": "1.7.34-panel6-mediated-count-writeback1",
       "http": 200,
-      "live": null,
+      "live": "1.7.34-panel6-mediated-count-writeback1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1005,9 +1143,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": null,
+      "before": "3.7.16-utf8-escape",
       "http": 200,
-      "live": null,
+      "live": "3.7.16-utf8-escape",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1045,49 +1183,49 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": null,
+      "before": "1.2.9",
       "http": 200,
-      "live": null,
+      "live": "1.2.9",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
     },
     "qnfo-intent-orchestrator": {
-      "before": null,
+      "before": "1.3.6",
       "http": 200,
-      "live": null,
+      "live": "1.3.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": null,
+      "before": "3.4.2",
       "http": 200,
-      "live": null,
+      "live": "3.4.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
     },
     "qnfo-kaizen": {
-      "before": null,
+      "before": "0.3.2-glm53",
       "http": 200,
-      "live": null,
+      "live": "0.3.2-glm53",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": null,
+      "before": "1.6.4-metric-freshness",
       "http": 200,
-      "live": null,
+      "live": "1.6.4-metric-freshness",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
-      "before": null,
+      "before": "2.0.3",
       "http": 200,
-      "live": null,
+      "live": "2.0.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-memory-mcp"
@@ -1101,25 +1239,25 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": null,
+      "before": "1.2.10-research-queue-enum",
       "http": 200,
-      "live": null,
+      "live": "1.2.10-research-queue-enum",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.37.31-continuation-inherit",
+      "before": "2.37.32-tool-budget-ceiling-1",
       "http": 200,
       "live": "2.37.32-tool-budget-ceiling-1",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": null,
+      "before": "0.3.2",
       "http": 200,
-      "live": null,
+      "live": "0.3.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-outreach"
@@ -1133,25 +1271,25 @@
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
-      "before": null,
+      "before": "3.0.5-purge-orphan-sweep",
       "http": 200,
-      "live": null,
+      "live": "3.0.5-purge-orphan-sweep",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-indexer"
     },
     "qnfo-paper-reviser": {
-      "before": null,
+      "before": "1.2.2",
       "http": 200,
-      "live": null,
+      "live": "1.2.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": null,
+      "before": "1.0.0",
       "http": 200,
-      "live": null,
+      "live": "1.0.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1189,9 +1327,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": null,
+      "before": "0.9.22-terminal-rescue",
       "http": 200,
-      "live": null,
+      "live": "0.9.22-terminal-rescue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1229,9 +1367,9 @@
       "worker": "qnfo-signal-loop"
     },
     "qnfo-skill-sync": {
-      "before": null,
+      "before": "1.1.2",
       "http": 200,
-      "live": null,
+      "live": "1.1.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-skill-sync"
@@ -1245,17 +1383,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": null,
+      "before": "0.7.16-dissem-reply-arity",
       "http": 200,
-      "live": null,
+      "live": "0.7.16-dissem-reply-arity",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": null,
+      "before": "1.1.2-suppression-gate",
       "http": 200,
-      "live": null,
+      "live": "1.1.2-suppression-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
@@ -1269,9 +1407,9 @@
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
-      "before": null,
+      "before": "1.1.5",
       "http": 200,
-      "live": null,
+      "live": "1.1.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-tools-mcp"
