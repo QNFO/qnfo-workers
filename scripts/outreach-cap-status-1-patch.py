@@ -26,6 +26,16 @@ WHAT IT DOES
 
 Idempotent: a second run detects the post-state and writes nothing.
 Fail-closed: a missing anchor writes NOTHING and exits non-zero.
+
+LANDING NOTE (2026-09-30)
+-------------------------
+The first push of this patcher (commit b831ccc) did NOT land.  Its
+apply-pending-patches run (id 36768582932, created 19:51:37Z) finished with
+conclusion "cancelled" while the concurrency group reports
+cancel-in-progress: false, and a concurrent agent pushed 1281aec 13 seconds
+later.  A patch script being present on main is therefore NOT evidence that the
+applier ran it; the run's own conclusion must be read.  This revision is a
+re-push whose only purpose is to trigger a fresh applier run.
 """
 
 import os
