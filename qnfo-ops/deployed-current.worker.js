@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.9-fleet-selfprobe";
+var VERSION = "2.38.10-workers-dev-apply";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -873,11 +873,46 @@ async function fleetStatus(env) {
         rh = { ok: false, http: 0, version: "", error: e && e.name === "AbortError" ? "timeout" : e && e.message ? e.message : String(e) };
       }
     }
-    return { name: w.id, healthy: rh ? rh.ok : null, http: rh ? rh.http : null, version: rh ? rh.version : "", error: rh ? rh.error : null, count: null, probe: rh ? (rh.self ? "self" : (regMap[w.id] ? "registry-http" : "workers-dev-fallback")) : "api", base_url: base, modified_on: w.modified_on || null, handlers: hs.map(function(h) {
+    // FLEET-SELFPROBE-1 (4): a custom-domain base_url on ops' own zone (e.g. ideas.qnfo.org) answers 522 to a
+    // subrequest from this worker; one retry over the worker's workers.dev URL separates "target down" from
+    // "probe path blocked".
+    let probeKind = rh ? (rh.self ? "self" : (regMap[w.id] ? "registry-http" : "workers-dev-fallback")) : "api";
+    if (rh && !rh.ok && !rh.self && base && base.indexOf(".q08.workers.dev") < 0) {
+      try {
+        const r2 = await fetch("https://" + w.id + ".q08.workers.dev/health", { signal: AbortSignal.timeout(6e3), headers: { "User-Agent": "qnfo-ops-fleet-status/registry-health" } });
+        if (r2.ok) {
+          let b2 = {};
+          try { b2 = await r2.json(); } catch (e) { b2 = {}; }
+          rh = { ok: true, http: r2.status, version: b2.version || b2.VERSION || "", error: null };
+          probeKind = "workers-dev-retry";
+        }
+      } catch (e) {}
+    }
+    return { name: w.id, healthy: rh ? rh.ok : null, http: rh ? rh.http : null, version: rh ? rh.version : "", error: rh ? rh.error : null, count: null, probe: probeKind, base_url: base, modified_on: w.modified_on || null, handlers: hs.map(function(h) {
       return Array.isArray(h) ? String(h[0]) : String(h);
     }).slice(0, 8) };
   }));
   for (const _x of _extra) out.push(_x);
+  // CRON-ONLY-HEARTBEAT-1: a worker HTTP cannot reach (cron-only, no workers.dev route) is judged by its own
+  // fleet_heartbeat row: fresh (< 2 h) and ok -> healthy, via probe "heartbeat". Same rule as fleet-control /state.
+  if (env.QNFO_AUDIT) {
+    try {
+      const hbr = await env.QNFO_AUDIT.prepare("SELECT worker, version, ts, ok FROM fleet_heartbeat").all();
+      const hbm = {};
+      for (const h of hbr.results || []) hbm[h.worker] = h;
+      for (const x of out) {
+        if (x.healthy === true) continue;
+        const h = hbm[x.name];
+        if (!h || !h.ts) continue;
+        const age = Date.now() - new Date(String(h.ts).replace(" ", "T") + (String(h.ts).indexOf("Z") >= 0 ? "" : "Z")).getTime();
+        if (!isFinite(age)) continue;
+        x.healthy = age < 72e5 && Number(h.ok) === 1;
+        x.probe = "heartbeat";
+        x.heartbeat_age_min = Math.round(age / 6e4);
+        if (!x.version && h.version) x.version = h.version;
+      }
+    } catch (e) {}
+  }
   out.sort(function(a, b) {
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });
@@ -5731,6 +5766,15 @@ async function opsDeploy(env, args) {
               var sr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/schedules", { method: "PUT", headers: { "Authorization": "Bearer " + (env.CF_API_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(crons.map(function(c3) { return { cron: c3 }; })) });
               log.push({ step: "crons", http: sr.status, count: crons.length, crons });
             } else { log.push({ step: "crons", note: "wrangler.toml declares no crons" }); }
+            // WORKERS-DEV-DECLARED-APPLY-1 (2026-09-30): an API /content upload never enables the workers.dev route,
+            // so a worker whose wrangler.toml declares workers_dev = true answered "error code: 1042" on
+            // <name>.q08.workers.dev -- its /health was unreachable to every census (measured: qnfo-autonomy-scorer).
+            // Apply the declaration ADDITIVELY: enable when declared true; never disable (cron-only workers that
+            // omit it keep their current state).
+            if (/^\s*workers_dev\s*=\s*true\b/m.test(wt)) {
+              var sdr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/subdomain", { method: "POST", headers: { "Authorization": "Bearer " + (env.CF_API_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify({ enabled: true }) });
+              log.push({ step: "workers_dev", http: sdr.status, enabled: sdr.ok });
+            }
           } else { log.push({ step: "crons", note: "no wrangler.toml (" + wr.status + ")" }); }
         }
       } catch (eCrons) { log.push({ step: "crons", error: String(eCrons && eCrons.message || eCrons).slice(0, 140) }); }

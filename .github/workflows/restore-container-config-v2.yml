@@ -13,14 +13,12 @@ name: restore-container-config-v2
 #
 # CI-TRIGGER-SKIP-1: commits made by this workflow carry NO skip token.
 
+# CONTAINER-WORKFLOW-SPRAWL-1 (2026-09-30, agent_issues #1506): DISPATCH-ONLY (break-glass).
+# The '*/30' schedule never fires on this repo, but ci-watchdog's silent-schedule class DISPATCHES any
+# workflow that declares one, so this unconditional restore was re-run on a timer and re-uploaded
+# qnfo-containers-pilot with no evidence that anything was broken. The automatic, evidence-gated path
+# is container-config-selfheal-cron.yml (scripts/container_restore_gate.py).
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/restore_container_config_v2.py'
-      - '.github/workflows/restore-container-config-v2.yml'
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:

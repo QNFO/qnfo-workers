@@ -93,11 +93,11 @@ def token():
     raise SystemExit("no CF token (set CLOUDFLARE_API_TOKEN)")
 
 
-def _api(url, tok, data=None, ctype=None):
+def _api(url, tok, data=None, ctype=None, method=None):
     headers = {"Authorization": "Bearer " + tok, "User-Agent": FLEET_UA}
     if ctype:
         headers["Content-Type"] = ctype
-    req = urllib.request.Request(url, data=data, method="PUT" if data else "GET", headers=headers)
+    req = urllib.request.Request(url, data=data, method=method or ("PUT" if data else "GET"), headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=90) as r:
             raw = r.read().decode()
@@ -420,6 +420,23 @@ def declared_compat_flags(artifact_path):
     return re.findall(r'"([^"]+)"', m.group(1)) if m else []
 
 
+def apply_workers_dev(worker, artifact_path, tok):
+    """WORKERS-DEV-DECLARED-APPLY-1 (2026-09-30): a /content upload never enables the workers.dev route, so a
+    worker declaring workers_dev = true answered 'error code: 1042' on <name>.q08.workers.dev and its /health
+    was invisible to every census. Enable it when (and only when) the sibling wrangler.toml declares it."""
+    p = os.path.join(os.path.dirname(os.path.abspath(artifact_path)), "wrangler.toml")
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            declared = re.search(r"^\s*workers_dev\s*=\s*true\b", fh.read(), re.M) is not None
+    except OSError:
+        declared = False
+    if not declared:
+        return
+    url = f"https://api.cloudflare.com/client/v4/accounts/{ACCT}/workers/scripts/{worker}/subdomain"
+    st, out = _api(url, tok, data=json.dumps({"enabled": True}).encode(), ctype="application/json", method="POST")
+    print("WORKERS-DEV: POST /subdomain enabled=true -> HTTP %s %s" % (st, str(out)[:120]))
+
+
 def observability_reassert():
     """OBS-RESET-ON-DEPLOY-1 (2026-09-30): a /content PUT creates a NEW script version, and the
     observability setting is PER-VERSION, so EVERY code deploy resets it to unset (measured:
@@ -572,6 +589,10 @@ def main(argv):
 
     guard_ledger(worker, None, ver, True, notes)
     observability_reassert()
+    try:
+        apply_workers_dev(worker, path, tok)
+    except Exception as e:  # noqa: BLE001 - declared-route apply must never fail a landed deploy
+        print("WORKERS-DEV: skipped (%s)" % str(e)[:140])
     guard_unlock()
     print(f"OK: {worker} {ver} deployed with compatibility_date={got_date}, "
           f"{len(got_flags)} flag(s) preserved, {sched_note}")

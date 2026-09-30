@@ -1,12 +1,14 @@
 name: restore-container-config-exec
 
+# CONTAINER-WORKFLOW-SPRAWL-1 (2026-09-30, agent_issues #1506): DISPATCH-ONLY (break-glass).
+# This one-shot restore used to fire on every push touching scripts/restore_container_config.py or
+# qnfo-containers-pilot/wrangler.toml, alongside four sibling restorers and the real deploy
+# (deploy-containers-pilot.yml). Measured on the 2026-09-30T18:33Z push: FIVE unconditional
+# /content re-uploads of qnfo-containers-pilot in 13 s (fleet_deploys 1080-1086), racing each other
+# for the deploy lock. The automatic path is now container-config-selfheal-cron.yml, gated by
+# scripts/container_restore_gate.py (restore only on evidence of the #1485 class). Run this by hand
+# only when that gate is wrong.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/restore-container-config-exec.yml'
-      - 'scripts/restore_container_config.py'
-      - 'qnfo-containers-pilot/wrangler.toml'
   workflow_dispatch:
 
 permissions:

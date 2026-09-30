@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.40-obs-ledger";
+var VERSION = "0.4.41-owned-metrics";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2512,6 +2512,13 @@ var worker_default2 = {
     if (p === "/obs/reassert" && request.method === "POST") {
       return json(await reassertObservability(env));
     }
+    if (p === "/metrics/refresh" && request.method === "POST") {
+      var mah = request.headers.get("Authorization") || "";
+      var mat = mah.indexOf("Bearer ") === 0 ? mah.slice(7) : mah;
+      var mok = mat && ((env.DEPLOY_ADMIN_TOKEN && mat === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && mat === env.SELFHEAL_TOKEN));
+      if (!mok) return json({ error: "unauthorized" }, 401);
+      return json(await refreshOwnedMetrics(env));
+    }
     if (p === "/advisor" || p.startsWith("/advisor/")) {
       const u2 = new URL(request.url);
       u2.pathname = p.slice("/advisor".length) || "/";
@@ -2535,6 +2542,7 @@ var worker_default2 = {
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
     ctx.waitUntil(pollObservability(env).catch((e) => console.error("pollObservability error:", e && e.message || e)));
     ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e)));
+    ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -2707,6 +2715,79 @@ async function pollObservability(env) {
   }
 }
 __name(pollObservability, "pollObservability");
+/* OWNED-METRICS-WRITER-1 (2026-09-30, agent_issues #1411 METRIC-REGISTRY-STALENESS-1): metric_registry names
+   qnfo-fleet-control as the OWNER of drift_total, cost_usd_30d, cost_per_successful_task_by_class and
+   gateway_cap_30d_usd, but nothing in the fleet wrote them: they froze at 2026-09-27/29 while declaring hourly/daily
+   cadences, and the lifecycle freshness auditor kept the ticket open. This writer recomputes them hourly from the
+   same sources their registry formulas name, with the semantics of the last recorded values (cost_usd_30d 190.56 ~
+   SUM(model_ladder_budget.spent_usd) = 190.81 now; cost_per_successful 0.2127 = that sum / successful ops calls).
+   It never invents a value: a metric whose source cannot be read this cycle is left untouched and reported. */
+async function refreshOwnedMetrics(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  var out = { ok: true, written: [], skipped: {} };
+  if (!db) return { ok: false, error: "no AUDIT binding" };
+  var nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  async function put(metric, value) {
+    await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2 WHERE metric=?3").bind(String(value), nowIso, metric).run();
+    out.written.push(metric + "=" + value);
+  }
+  try {
+    var c = await db.prepare("SELECT SUM(spent_usd) AS s FROM model_ladder_budget WHERE month >= strftime('%Y-%m', 'now', '-30 day')").first();
+    var spent = c && c.s != null ? Number(c.s) : null;
+    var okr = await db.prepare("SELECT COUNT(*) AS n FROM ops_ai_log WHERE ok=1 AND ts >= datetime('now','-30 day')").first();
+    var okN = okr ? Number(okr.n || 0) : 0;
+    if (spent != null && isFinite(spent)) {
+      await put("cost_usd_30d", spent.toFixed(2));
+      if (okN > 0) await put("cost_per_successful_task_by_class", (spent / okN).toFixed(4));
+      else out.skipped.cost_per_successful_task_by_class = "0 successful ops calls in 30d";
+    } else {
+      out.skipped.cost_usd_30d = "model_ladder_budget unreadable";
+    }
+  } catch (e) {
+    out.skipped.cost = String(e && e.message || e).slice(0, 160);
+  }
+  var token = env.CF_API_TOKEN;
+  var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+  if (!token) {
+    out.skipped.drift_total = out.skipped.gateway_cap_30d_usd = "no CF_API_TOKEN";
+    return out;
+  }
+  var H = { Authorization: "Bearer " + token, "User-Agent": "qnfo-fleet-control-metrics/" + VERSION };
+  try {
+    var wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(1e4) });
+    var wj = await wr.json().catch(function () { return null; });
+    if (wj && wj.success && Array.isArray(wj.result) && wj.result.length) {
+      var live = {};
+      wj.result.forEach(function (w) { if (w && w.id) live[w.id] = 1; });
+      var rr = await db.prepare("SELECT service, version, state, kind FROM service_registry").all();
+      var reg = rr.results || [], inReg = {}, ghost = 0, unversioned = 0, unregistered = 0;
+      reg.forEach(function (r) {
+        inReg[r.service] = 1;
+        var isLive = !r.state || r.state === "live";
+        if (isLive && (!r.kind || r.kind === "worker") && !live[r.service]) ghost++;
+        if (isLive && live[r.service] && (r.version == null || String(r.version).trim() === "")) unversioned++;
+      });
+      Object.keys(live).forEach(function (n) { if (!inReg[n]) unregistered++; });
+      await put("drift_total", ghost + unregistered + unversioned);
+      out.drift = { ghost: ghost, unregistered: unregistered, unversioned: unversioned };
+    } else {
+      out.skipped.drift_total = "CF workers/scripts list unreadable";
+    }
+  } catch (e) {
+    out.skipped.drift_total = String(e && e.message || e).slice(0, 160);
+  }
+  try {
+    var gr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/ai-gateway/gateways/default", { headers: H, signal: AbortSignal.timeout(8e3) });
+    var gj = await gr.json().catch(function () { return null; });
+    var rules = gj && gj.success && gj.result && gj.result.spend_limits && gj.result.spend_limits.rules ? gj.result.spend_limits.rules : [];
+    if (rules.length && rules[0].limit != null) await put("gateway_cap_30d_usd", Number(rules[0].limit));
+    else out.skipped.gateway_cap_30d_usd = "gateway spend_limits unreadable";
+  } catch (e) {
+    out.skipped.gateway_cap_30d_usd = String(e && e.message || e).slice(0, 160);
+  }
+  return out;
+}
+__name(refreshOwnedMetrics, "refreshOwnedMetrics");
 async function reassertObservability(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
