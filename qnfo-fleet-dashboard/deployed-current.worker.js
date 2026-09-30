@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.37-realtime-truth";
+var VERSION = "1.7.38-registry-refresh";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2549,6 +2549,8 @@ var worker_default = {
       })));
       ctx.waitUntil(within(persistRoiSnapshot(env).catch(function() {
       })));
+      ctx.waitUntil(within(refreshRegistryMetrics(env).catch(function() {
+      })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
       } catch (e3) {
@@ -2567,6 +2569,97 @@ var worker_default = {
     }
   }
 };
+// REGISTRY-REFRESH-DASHBOARD-1 (2026-09-30, agent_issues #1411): metric_registry names this worker's
+// cron as the refresher for pageviews_30d / impressions_growth_30d, but nothing wrote them (stale
+// since 09-27/09-29), and guard_rcs / referral_30d / fleet_context_tokens had no live writer at all.
+// Each value is computed from its source here; a source that cannot be read leaves the row
+// untouched (never a fabricated zero). Throttled to one pass per ~55 min.
+var REGISTRY_GUARD_WORKFLOWS = ["mirror-guard.yml", "version-bump-guard.yml", "workflow-lint.yml", "deploy-gate.yml", "dup-worker-name-gate.yml"];
+async function refreshRegistryMetrics(env) {
+  const out = { refreshed: [], skipped: [] };
+  const nowIso = new Date().toISOString();
+  try {
+    const last = await d1all(env.AUDIT, "SELECT last_refreshed FROM metric_registry WHERE metric='pageviews_30d'");
+    const lt = last && last.length ? Date.parse(String(last[0].last_refreshed || "").replace(" ", "T")) : NaN;
+    if (isFinite(lt) && Date.now() - lt < 55 * 60 * 1e3) return { throttled: true };
+  } catch (e) {
+  }
+  const put = async function(metric, value, state, extraSql, extraBind) {
+    try {
+      await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state=?3" + (extraSql || "") + " WHERE metric=?4").bind(String(value), nowIso, state, metric, ...(extraBind || [])).run();
+      out.refreshed.push(metric);
+    } catch (e) {
+      out.skipped.push(metric + ": " + String(e && e.message || e).slice(0, 80));
+    }
+  };
+  const acct = 'accounts(filter: { accountTag: "' + ACCOUNT + '" })';
+  const win = function(fromH, toH) {
+    return 'filter: { datetime_geq: "' + new Date(Date.now() - fromH * 36e5).toISOString() + '", datetime_leq: "' + new Date(Date.now() - toH * 36e5).toISOString() + '" }';
+  };
+  let pv30 = null, pvPrior = null;
+  try {
+    const a = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(720, 0) + ") { count } } } }");
+    const b = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(1440, 720) + ") { count } } } }");
+    const ra = a && (((a.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
+    const rb = b && (((b.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
+    if (Array.isArray(ra)) pv30 = ra.reduce(function(x, r) { return x + (r.count || 0); }, 0);
+    if (Array.isArray(rb)) pvPrior = rb.reduce(function(x, r) { return x + (r.count || 0); }, 0);
+  } catch (e) {
+  }
+  if (pv30 != null) await put("pageviews_30d", pv30, "MEASURED");
+  else out.skipped.push("pageviews_30d: RUM unreadable");
+  if (pv30 != null && pvPrior > 0) {
+    const g = Math.round(1e4 * (pv30 - pvPrior) / pvPrior) / 100;
+    await put("impressions_growth_30d", (g >= 0 ? "+" : "") + g.toFixed(2) + "%", "RATIFIED");
+  } else out.skipped.push("impressions_growth_30d: prior window unreadable");
+  try {
+    const r = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(720, 0) + ") { count dimensions { refererHost } } } } }");
+    const rows = r && (((r.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
+    if (Array.isArray(rows)) {
+      const own = /(^|\.)(qnfo\.org|q08\.org|q08\.workers\.dev)$/i;
+      const ref = rows.reduce(function(x, r2) {
+        const h = String((r2.dimensions || {}).refererHost || "").trim();
+        return x + (h && !own.test(h) ? r2.count || 0 : 0);
+      }, 0);
+      await put("referral_30d", ref, "MEASURED");
+    } else out.skipped.push("referral_30d: refererHost dimension unreadable");
+  } catch (e) {
+    out.skipped.push("referral_30d: " + String(e && e.message || e).slice(0, 60));
+  }
+  // guard_rcs: the local guards it named were retired with the local machine's recurring jobs; the
+  // same guards now run as CI gates on main. rc = number of those gates whose latest main run failed.
+  if (env.GITHUB_TOKEN) {
+    let failing = 0, read = 0;
+    const bad = [];
+    for (const wf of REGISTRY_GUARD_WORKFLOWS) {
+      const g = await ghCall(env, "GET", "/repos/QNFO/qnfo-workers/actions/workflows/" + wf + "/runs?branch=main&status=completed&per_page=1");
+      const run = g.ok && g.json && g.json.workflow_runs && g.json.workflow_runs[0];
+      if (!run) continue;
+      read++;
+      if (run.conclusion !== "success") {
+        failing++;
+        bad.push(wf.replace(".yml", ""));
+      }
+    }
+    if (read === REGISTRY_GUARD_WORKFLOWS.length) await put("guard_rcs", failing, "MEASURED", ", source_of_truth=?5", ["GitHub Actions: latest completed main run of " + REGISTRY_GUARD_WORKFLOWS.join(", ") + " (rc = count not success" + (bad.length ? ": " + bad.join(",") : "") + "); local guards retired with the local machine's recurring jobs"]);
+    else out.skipped.push("guard_rcs: read " + read + "/" + REGISTRY_GUARD_WORKFLOWS.length + " guard runs");
+  }
+  // fleet_context_tokens: the D1-measurable operable context (bytes/4). System prompt + tool schemas
+  // are not stored in D1 and are excluded (documented in the row's formula).
+  try {
+    const sr = await d1all(env.AUDIT, "SELECT COALESCE(SUM(length(COALESCE(service,''))+length(COALESCE(purpose,''))+length(COALESCE(base_url,''))),0) AS b FROM service_registry");
+    const ho = await d1all(env.AUDIT, "SELECT COALESCE(SUM(length(COALESCE(summary,''))+length(COALESCE(pending_work,''))+length(COALESCE(next_action,''))),0) AS b FROM (SELECT summary, pending_work, next_action FROM handoffs ORDER BY id DESC LIMIT 200)");
+    const kg = env.GRAPH ? await d1all(env.GRAPH, "SELECT COALESCE(SUM(length(id)+length(label)+length(name)),0) AS b FROM nodes") : null;
+    const pp = env.LIVING ? await d1all(env.LIVING, "SELECT COALESCE(SUM(length(COALESCE(slug,''))+length(COALESCE(title,''))),0) AS b FROM papers") : null;
+    if (sr && ho && kg && pp) {
+      const bytes = Number(sr[0].b) + Number(ho[0].b) + Number(kg[0].b) + Number(pp[0].b);
+      await put("fleet_context_tokens", Math.round(bytes / 4), "MEASURED", ", formula=?5", ["D1-measurable lean operable context, bytes/4: service_registry(service,purpose,base_url) + qnfo-graph.nodes(id,label,name) + living-paper.papers(slug,title) + last 200 handoffs(summary,pending_work,next_action). Excludes system prompt + tool schemas (not in D1). Refreshed by qnfo-fleet-dashboard cron."]);
+    } else out.skipped.push("fleet_context_tokens: a source DB is unbound");
+  } catch (e) {
+    out.skipped.push("fleet_context_tokens: " + String(e && e.message || e).slice(0, 60));
+  }
+  return out;
+}
 async function persistRoiSnapshot(env) {
   try {
     const d = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -2736,7 +2829,8 @@ async function redHtml(env) {
   }
   const _liveGate = {
     full_reports_live_30d: rep30 != null ? { st: rep30 >= 2 ? "MET" : "OPEN", v: String(rep30) } : null,
-    impressions_growth_30d: growth != null ? { st: growth >= 30 ? "MET" : "OPEN", v: (growth >= 0 ? "+" : "") + growth + "% vs frozen baseline" } : null,
+    // metric_registry.impressions_growth_30d (RATIFIED 2026-09-27): prior-window MoM is authoritative.
+    impressions_growth_30d: trueMoM != null ? { st: trueMoM >= 30 ? "MET" : "OPEN", v: (trueMoM >= 0 ? "+" : "") + trueMoM + "% prior-window MoM" } : null,
     subscribers_growth_monthly: _new30 != null ? { st: _new30 >= 10 ? "MET" : "OPEN", v: "+" + _new30 + " in 30d" } : null,
     worker_count: _wcLive != null && isFinite(_wcLive) ? { st: _wcLive <= 28 ? "MET" : "OPEN", v: String(_wcLive) } : null,
     workers_ai_cost_30d_usd: _waiLive != null && isFinite(_waiLive) ? { st: _waiLive <= 7.5 ? "MET" : "OPEN", v: "$" + _waiLive.toFixed(2) } : null
@@ -2754,7 +2848,7 @@ async function redHtml(env) {
       }
     }
   }
-  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + " (gate &ge;2 &rarr; " + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; vs frozen baseline 5,610 (target 7,293 = +30% by 2026-10-25) = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " " + (growth != null && growth < 30 ? '&mdash; <b class="bad">NOT MET</b>' : '&mdash; <span class="ok">MET</span>') + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
+  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + " (gate &ge;2 &rarr; " + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; context: vs frozen baseline 5,610 = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + ' (not the gate: metric_registry ratified prior-window MoM on 2026-09-27)' + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
   let inv = null, bal = null, tup = null, aiN = null;
   try {
     const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/billing/invoice-preview", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
@@ -3066,17 +3160,16 @@ async function redHtml(env) {
   H.push("<tr><td>Output (30d / all-time)</td><td>" + (rep30 != null ? rep30 : "?") + " full reports / " + (repTotal != null ? repTotal : "?") + " total &middot; " + (zenodoN != null ? zenodoN : "?") + " Zenodo DOIs</td></tr>");
   H.push("<tr><td>Cost per full report (30d)</td><td>" + (cpr != null ? "$" + cpr.toFixed(2) : "?") + "</td></tr>");
   H.push("<tr><td>Break-even at $10/mo subscriber</td><td>" + (monthly != null ? Math.ceil(monthly / 10) + " paying subscribers" : "?") + "</td></tr>");
-  H.push("<tr><td>Pageviews 30d vs frozen baseline 5,610 (kill-gate definition)</td><td>" + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : '<span class="warn">n/a</span>') + ' <span class="sub">(30d vs prior-30d: ' + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + "; day-over-day snapshot " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + ")</span></td></tr>");
+  H.push("<tr><td>Pageviews 30d vs prior 30d (registry gate definition)</td><td>" + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : '<span class="warn">n/a</span>') + ' <span class="sub">(context: vs frozen baseline 5,610 ' + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + "; day-over-day snapshot " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + ")</span></td></tr>");
   H.push("</table>");
-  // ROI-VERDICT-GATE-DEFN-1 (2026-09-30): the verdict read "GATES ON TRACK" from the prior-window
-  // MoM while the same page marked the kill gate (+30% over the frozen 5,610 baseline) NOT MET.
-  // The verdict now uses the kill-gate definition it describes.
+  // The impressions gate follows metric_registry.impressions_growth_30d (prior-window MoM, RATIFIED
+  // 2026-09-27); the frozen-baseline comparison is shown for context only.
   let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (growth != null && growth >= 30 && rep30 != null && rep30 >= 2) {
+  if (trueMoM != null && trueMoM >= 30 && rep30 != null && rep30 >= 2) {
     verdict = "GATES ON TRACK";
     vcls = "ok";
   } else if (rep30 != null && rep30 >= 2) {
-    verdict = "PARTIAL \u2014 reports gate met, impressions gate " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "% of +30% vs frozen baseline" : "unmeasured");
+    verdict = "PARTIAL \u2014 reports gate met, impressions gate " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "% of +30% prior-window MoM" : "unmeasured");
     vcls = "warn";
   }
   H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + "/mo) and zero revenue, the 2026-10-25 phase-1 retirement fires unless the +30% impressions gate passes or the gates are revised by owner.</span></div>");
