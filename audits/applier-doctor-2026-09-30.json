@@ -1,10 +1,10 @@
 {
  "counts": {
-  "already-applied": 64,
+  "already-applied": 66,
   "error": 7,
   "stale-anchor": 11,
-  "superseded": 5,
-  "undetermined": 8
+  "superseded": 4,
+  "undetermined": 10
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -132,8 +132,8 @@
   {
    "changed_files": [
     " M ci-status/apply-pending-report.json",
-    " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js"
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -142,7 +142,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): outreach-selector-terminal-status-patch.py",
+    "LANDED(1): toolbudget-bail-instrument-1-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -578,19 +578,14 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js"
-   ],
-   "outcome_present_in": [
-    "qnfo-cloud-ops/deployed-current.worker.js :: OUTREACH-TERMINAL-STATUS-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/outreach-selector-terminal-status-patch.py",
    "tail": [
-    "OUTREACH-TERMINAL-STATUS-1: qnfo-cloud-ops/worker.js=patched, qnfo-cloud-ops/deployed-current.worker.js=patched"
+    "OUTREACH-TERMINAL-STATUS-1: qnfo-cloud-ops/worker.js=already-applied, qnfo-cloud-ops/deployed-current.worker.js=already-applied",
+    "already applied (marker present) - nothing written"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -993,6 +988,42 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
+   ],
+   "declared_signals": [
+    "TOOLBUDGET-BAIL-1",
+    "async function logToolBudgetBail(",
+    "logToolBudgetBail(env, strategy, pendingToolCalls.length"
+   ],
+   "rc": 0,
+   "script": "scripts/toolbudget-bail-instrument-1-patch.py",
+   "tail": [
+    "qnfo-ops/deployed-current.worker.js [helper]: patched",
+    "qnfo-ops/deployed-current.worker.js [call site]: patched",
+    "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (4 target(s) changed)"
+   ],
+   "verdict": "undetermined"
+  },
+  {
+   "changed_files": [
+    " M qnfo-ops/deployed-current.worker.js",
+    " M qnfo-ops/worker.js"
+   ],
+   "declared_signals": [
+    "TOOLBUDGET-BAIL-RECORD-1"
+   ],
+   "rc": 0,
+   "script": "scripts/toolbudget-bail-record-1-patch.py",
+   "tail": [
+    "TOOLBUDGET-BAIL-RECORD-1: OK worker.js patched (384404 B)",
+    "TOOLBUDGET-BAIL-RECORD-1: OK deployed-current.worker.js patched (384404 B)",
+    "TOOLBUDGET-BAIL-RECORD-1: complete, 2 target(s) changed"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/toolbudget-permanent-durability-patch.py",
@@ -1011,6 +1042,15 @@
     "already applied qnfo-ops/worker.js",
     "already applied qnfo-ops/deployed-current.worker.js",
     "OK: TOOLBUDGET-RELOCK-1 complete, 0 target(s) changed"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/toolbudget-source-lock-1-patch.py",
+   "tail": [
+    "TOOLBUDGET-SOURCE-LOCK-1: no change - worker.js already satisfies all canonical invariants"
    ],
    "verdict": "already-applied"
   },
@@ -1046,11 +1086,10 @@
   "scripts/attachguard-xml-form-patch.py",
   "scripts/container-restore5-repair-bindings-patch.py",
   "scripts/dashboard-gate-failopen-patch.py",
-  "scripts/outreach-selector-terminal-status-patch.py",
   "scripts/patch-cron-only-class-2.py"
  ],
- "total": 95,
- "ts": "2026-09-30T08:17:54.627Z",
+ "total": 98,
+ "ts": "2026-09-30T08:20:28.131Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
@@ -1059,6 +1098,8 @@
   "scripts/github409-variant-reread-patch.py",
   "scripts/panel6-mediated-count-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
+  "scripts/toolbudget-bail-instrument-1-patch.py",
+  "scripts/toolbudget-bail-record-1-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
 }
