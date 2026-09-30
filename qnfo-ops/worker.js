@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.4-registry-health";
+var VERSION = "2.38.5-backlog-probe-error";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -777,7 +777,7 @@ async function probeService(env, f, path) {
   const ctrl = new AbortController();
   const t = setTimeout(function() {
     ctrl.abort();
-  }, 5e3);
+  }, f.timeoutMs || 5e3);
   try {
     const headers = {};
     if (f.auth && env.EMAIL_API_KEY) headers["Authorization"] = "Bearer " + env.EMAIL_API_KEY;
@@ -1613,8 +1613,8 @@ async function telemetryReport(env, hours) {
   const since = new Date(Date.now() - h * 3600 * 1e3).toISOString();
   const out = { ok: true, windowHours: h, ts: iso() };
   try {
-    const calls = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool'").bind(since).first();
-    const fails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool'").bind(since).first();
+    const calls = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops'").bind(since).first();
+    const fails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops'").bind(since).first();
     const chats = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1").bind(since).first();
     const chatFails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1 AND ok = 0").bind(since).first();
     // SELFHEAL-METRIC-TABLE-MISMATCH-1 (issue 1370): telemetry_analyze() INSERTs into
@@ -1622,7 +1622,7 @@ async function telemetryReport(env, hours) {
     // agent_issues/telemetry-self-heal = 0 while issue_ledger/telemetry-self-heal = 8 open.
     // The report advertised open_self_heal_issues=0 against 8 genuinely open tickets.
     const openIssues = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'").first();
-    const top = await env.QNFO_AUDIT.prepare("SELECT text, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' GROUP BY text ORDER BY n DESC LIMIT 5").bind(since).all();
+    const top = await env.QNFO_AUDIT.prepare("SELECT text, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text IS NOT NULL GROUP BY text ORDER BY n DESC LIMIT 5").bind(since).all();
     out.tool_calls = calls && calls.c || 0;
     out.tool_failures = fails && fails.c || 0;
     out.chats = chats && chats.c || 0;
@@ -4860,8 +4860,8 @@ __name22222(cfAnalytics, "cfAnalytics");
 __name222222(cfAnalytics, "cfAnalytics");
 async function backlogStatus(env) {
   if (!env.BACKLOG) return { ok: false, error: "backlog binding missing" };
-  const h = await probeService(env, { binding: "BACKLOG", name: "qnfo-backlog-exec" }, "/health");
-  return { ok: h.ok, healthy: h.ok, http: h.http, version: h.body && h.body.version || "", openBacklog: h.body && typeof h.body.openBacklog === "number" ? h.body.openBacklog : -1 };
+  const h = await probeService(env, { binding: "BACKLOG", name: "qnfo-backlog-exec", timeoutMs: 15e3 }, "/health");
+  return { ok: h.ok, healthy: h.ok, http: h.http, error: h.ok ? "" : h.error || "http " + h.http, version: h.body && h.body.version || "", openBacklog: h.body && typeof h.body.openBacklog === "number" ? h.body.openBacklog : -1 };
 }
 __name(backlogStatus, "backlogStatus");
 __name2(backlogStatus, "backlogStatus");
