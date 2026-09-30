@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.11-selfheal-resolve-path";
+var VERSION = "2.38.12-schedules-path-fix";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -5773,7 +5773,13 @@ async function opsDeploy(env, args) {
         log.push({ step: "guard-ledger", error: String(e3 && e3.message || e3).slice(0, 140) });
       }
       try {
-        var wtPath = (file.slice(-11) === "/worker.js") ? file.slice(0, -11) + "/wrangler.toml" : file;
+        // SCHEDULES-PATH-OFF-BY-ONE-1 (2026-09-30): this was `file.slice(-11) === "/worker.js"`, an 11-char slice
+        // compared with a 10-char literal, so it was NEVER true: wtPath always equalled `file` and the whole
+        // wrangler.toml block (cron PUT, and the declared workers_dev apply below) was skipped on EVERY canonical
+        // deploy, although this route is documented as the path that applies schedules. Derive the sibling
+        // wrangler.toml for any <dir>/<artifact>.js (worker.js or deployed-current.worker.js).
+        var _slash = file.lastIndexOf("/");
+        var wtPath = (_slash > 0 && /\.m?js$/.test(file)) ? file.slice(0, _slash) + "/wrangler.toml" : file;
         if (wtPath !== file) {
           var wr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + wtPath + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
           if (wr.ok) {

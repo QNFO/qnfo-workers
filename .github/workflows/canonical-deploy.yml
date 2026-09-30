@@ -182,15 +182,6 @@ jobs:
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
+          # ARTIFACT-PUSH-CONFLICT-1: snapshot re-apply, never a rebase conflict (was: run 36760796833).
           git add ci-status/canonical-deploy.json
-          if git diff --cached --quiet; then echo "no status change"; exit 0; fi
-          git commit -m "ci(status): canonical-deploy [skip ci]"
-          for i in 1 2 3; do
-            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
-              echo "status pushed on attempt $i"
-              exit 0
-            fi
-            sleep 4
-          done
-          echo "status push failed after 3 attempts"
-          exit 0
+          bash scripts/push_artifact.sh "ci(status): canonical-deploy [skip ci]" ci-status/canonical-deploy.json || true
