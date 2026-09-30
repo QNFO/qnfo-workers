@@ -9,11 +9,11 @@ Compiled 2026-09-30. Generated from `docs/backlog/quniverse-backlog-2026-09-30.j
 ## Summary
 
 - New open issues filed: **20** (agent_issues 1676-1695).
-- Roadmap build-outs: **63** (broken 1, gate-verify 5, not-built 25, owner-decision 11, partial 21).
+- Roadmap build-outs: **73** (broken 2, gate-verify 5, not-built 30, owner-decision 14, partial 22).
 - Fleet-lessons failure ledger audited: **49** entries (enforced-partial 5, enforced-unverified 15, enforced-verified 8, local-only 8, open 1, violated 9, violated-remediated 3).
 - Pre-existing open issues mapped: **84**.
 
-Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA stage: act 34, decide 12, observe 7, orient 10.
+Roadmap coverage by VSM system: S1 19, S2 4, S3 24, S3* 5, S4 7, S5 14. By OODA stage: act 40, decide 15, observe 8, orient 10.
 
 ## 1. New open issues (not built, not working, or not autonomous)
 
@@ -57,6 +57,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-WATCHMAKER-INDEX-1 | not-built | S5 / orient | qnfo-fleet-control | Publish a daily watchmaker index (count of recurring operations that still need a human), target 0 | paper 6.8 |
 | RM-DURABLE-AGENT-EXECUTION-1 | not-built | S1 / act | qnfo-ops | Durable multi-step agent execution on Workflows with checkpointed continuation (removes tool-budget exhaustion as a failure class) | ops_ai_log INCOMPLETE turns; #1624 |
 | RM-CODE-ORCHESTRATOR-1 | not-built | S1 / act | qnfo-ops | Autonomous self-verifying cloud code agent: plan -> branch edit -> container verify -> iterate -> PR | qnfo-ops/docs/CODE-AGENT-ORCHESTRATOR-SPEC.md (spec-only 2026-09-06) |
+| RM-AGENT-WS-DECISION-1 | owner-decision | S5 / decide | qnfo-fleet-control | qnfo-agent-ws (agent websocket workspace) exists in the repo but not in the live fleet: redeploy with a consumer or archive | master backlog v2 s2.5 |
 
 ### 2.2 Cost and efficiency (paper 6.3)
 
@@ -68,6 +69,8 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-COST-PER-TASK-ALL-PATHS-1 | partial | S3 / orient | qnfo-fleet-control | Cost per successful task by class across every AI path (research ensemble, q08, kaizen, calibration), not only qnfo-ops | paper 6.3; goals cost-routing-stack-l0l7 |
 | RM-COST-UNIFIED-SPEND-1 | partial | S3 / orient | qnfo-fleet-control | One unified monthly cost_usd: gateway unified billing + BYOK providers + Workers AI + Cloudflare plan | goals external-impact-per-dollar DoD (a) |
 | RM-COST-FREE-FIRST-PARITY-1 | gate-verify | S3 / orient | qnfo-fleet-control | Audit every AI-calling worker for one cost policy per path (streaming vs non-streaming, cron vs manual, agent final round) | paper B5/5.5 |
+| RM-EDGE-CACHE-PAPERS-1 | not-built | S1 / act | qnfo-gateway | Workers Cache in front of papers.qnfo.org (504s) and AI Gateway fallback routes for router 400s | docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md recommendations (master backlog v2 s2.1) |
+| RM-COST-FLOOR-40-1 | not-built | S3 / act | qnfo-ops | Cost floor: AI burn <= $40/month with direct-key (BYOK) spend visible alongside unified billing | docs/BUSINESS-PLAN.md Phase A; master backlog v2 Tier 0 item 4 |
 
 ### 2.3 Smaller verified core (paper 6.1)
 
@@ -77,6 +80,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-FLEET-BUDGET-WAVES-1 | not-built | S3 / act | deepchat-reorg | Fleet budget waves W1-W4: MCP 4->1 (qnfo-mcp), watchtower 5->2, verify-then-retire (containers-pilot, pdf), storage prune (vectorize qnfo-infra/ops-semcache) | reorg_work_queue 24-27 (due 2026-10-18) |
 | RM-DEAD-PROBES-VERIFY-1 | gate-verify | S3 / act | qnfo-fleet-control | Close the dead-probe deletions (size-semantics-probe-a/b, qnfo-egress-probe, qnfo-ops-ledger-selftest: already absent from the live list) and dispose qnfo-email-orchestrator (still live) with live-consumer proof | reorg_work_queue 67-71 |
 | RM-REPO-DEAD-SOURCES-1 | not-built | S3 / act | qnfo-fleet-control | Archive the 65 never-deployed or retired worker directories under archive/ with a manifest (smaller verified core) | worker_live_audit: 65 NOT_DEPLOYED + 9 NOT_A_WORKER repo dirs |
+| RM-D1-RETENTION-1 | not-built | S3 / act | qnfo-fleet-control | Retention policy for qnfo-audit (~296 tables, duplicate families, date-stamped snapshot tables, 230 MB) and Vectorize cap/dedupe | decisions #36-38 (master backlog v2 s7) |
 
 ### 2.4 Funnel, distribution and external impact (paper 6.5, business plan)
 
@@ -90,6 +94,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-BUFFER-MULTICHANNEL-1 | owner-decision | S5 / decide | owner | Decide multi-channel distribution (LinkedIn/X/Mastodon via Buffer, BUFFER_TOKEN unprovisioned) vs own-pages-only rule | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 vs BUSINESS-PLAN standing rule 'no social media' |
 | RM-SEO-INDEXNOW-JSONLD-1 | gate-verify | S1 / act | qnfo-research-exec | Verify IndexNow ping per publication and Schema.org ScholarlyArticle JSON-LD on every paper page | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 (T6) |
 | RM-CITATION-TRACKING-ALL-DOIS-1 | partial | S4 / observe | qnfo-paper-indexer | Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs feeding impact_scores | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s5; citation_stats 3,604 rows, impact_scores 81 |
+| RM-IDEA-STREAM-UI-1 | not-built | S1 / act | idea-hub | Public read-only real-time idea stream UI (QNFO idea/chat development) linked from qnfo.org | owner request 2026-08-28 (audits/2026-10-01-master-build-out-backlog-v2.md s2.6) |
 
 ### 2.5 Research products and the original program visions
 
@@ -110,6 +115,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-RESEARCH-BROWSER-QUEUES-1 | not-built | S2 / act | qnfo-research-exec | Research pipeline v0.1 on Queues + Browser Run (rendered-source grounding) | tasks GH-HND-096 |
 | RM-RADAR-WORKFLOWS-PILOT-1 | not-built | S2 / act | radar-hub | Workflows pilot on conference-radar / research-daily-brief | handoff 28852 (OPS.008 Phase 2) |
 | RM-ADAPTIVE-SUGGESTIONS-1 | owner-decision | S4 / orient | owner | Adaptive suggestion engine wave 1: suggestion-event logging + bandit (awaiting owner pick) | handoffs 28929/28930 |
+| RM-QOKI-OPEN-MIRROR-1 | owner-decision | S5 / decide | owner | QOKI: IPFS/Filecoin mirror of the paper corpus with DOI->slug->CID provenance and drift verifier; open-source the pipeline and audit tooling | funding/NLNET_PROPOSAL.md (master backlog v2 s2.7) |
 
 ### 2.6 Sites, archive and repositories
 
@@ -121,6 +127,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-REPO-HYGIENE-1 | not-built | S2 / act | qnfo-fleet-control | LICENSE files on the 8 artifact repos, repo topics/descriptions, releases/changelog, branch hygiene (16 diverged branches) | tasks GH-P0-034, GH-P1-036, GH-SPN-016/020; fleet_improvements 1575 |
 | RM-UNBOUND-R2-DISPOSITION-1 | owner-decision | S5 / decide | owner | Decide purpose/ownership of the 8 unbound-but-populated resources (R2 deepchat, git-repos, obsidian-vault, palimpsest-research, play-the-ball, personal-media, d-drive, releases) | reorg_work_queue 56; R2 inventory (19 buckets) |
 | RM-R2-PUBLIC-DATASETS-1 | owner-decision | S5 / decide | owner | R2 public custom domain for datasets (license-gated) and Cloudflare Stream adoption decision | handoff 28999 |
+| RM-PAGES-DEPLOY-PATH-1 | partial | S1 / act | qnfo-fleet-control | Repo-driven Pages deploys (archive.qnfo.org / qnfo-publications is manual and gated) plus a Pages inventory row in the census | master backlog v2 s2.11; .github/workflows/deploy-pages-qnfo-publications.yml |
 
 ### 2.7 Security
 
@@ -130,6 +137,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-WAF-RATE-LIMIT-1 | not-built | S3* / act | qnfo-fleet-control | WAF and rate-limit rules on public worker endpoints (ops, containers, idea form, email command routes) | cloudflare_capability_catalog waf/bot-mgmt not_considered |
 | RM-MCP-OAUTH-1 | owner-decision | S3* / decide | owner | Cloudflare MCP OAuth (identity-bound) for agent clients | handoffs 29788/29791 |
 | RM-DEEPCHAT-DB-ENCRYPTION-1 | not-built | S3* / act | deepchat-security | Encrypt the 1.3 GB local DeepChat database | handoff 29787 (due 2026-10-13) |
+| RM-CF-ONE-EMAIL-DLP-1 | owner-decision | S3* / decide | owner | Cloudflare One: email security retro scan, DLP, GitHub Enterprise Cloud configuration (with #1277 Access and #1279 CASB) | integration_scope GAP rows (master backlog v2 s2.8) |
 
 ### 2.8 Observability and platform adoption
 
@@ -139,6 +147,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-ANALYTICS-ENGINE-METERS-1 | not-built | S3 / observe | qnfo-fleet-control | Workers Analytics Engine meters per AI call and per task outcome (attribution and cost per task) | WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 |
 | RM-CAPABILITY-PRODUCT-LOOP-1 | partial | S4 / orient | qnfo-fleet-control | Cloudflare product loop: discover -> score -> propose -> adopt (AI Search, Agents SDK, Browser Run, Queues, Workflows, Sandbox, Tail Workers, Access) | #1675; cloudflare_capability_catalog |
 | RM-DO-AGENTS-DECISION-1 | owner-decision | S5 / decide | qnfo-fleet-control | Re-decide the adopted DO agents (FleetControlAgent, SignalLoopAgent, IntentOrchestratorAgent); qnfo-signal-loop is retired | goals deploy-fleet-control-agent / deploy-signal-loop-agent / deploy-intent-orchestrator-agent (adopted, not deployed); #1652 |
+| RM-SELF-KNOWLEDGE-VIEWS-1 | broken | S3 / observe | qnfo-fleet-control | One open-work surface: revive integration_state (#1617), unify the three open-work counts (#1625), populate the 4 empty self-knowledge views (v_waiting_on_human, v_triage_gap, v_open_tasks_no_dod, v_reopen_rate) | master backlog v2 s4 items 2 and 10; #1617/#1625 |
 
 ### 2.9 Owner surfaces
 
@@ -154,6 +163,7 @@ Roadmap coverage by VSM system: S1 16, S2 4, S3 20, S3* 4, S4 7, S5 12. By OODA 
 | RM-ADOPTED-GOALS-CLOSEOUT-1 | partial | S3 / act | qnfo-fleet-control | Verify and close or retire the adopted fleet goals: ops-model-toolcall-crisis, fleet-loop-actuation-gap, ops-exec-loop-parse-guard, self-heal-tool-list-correction, research-exec-newversion-draft-cleanup, skill-sync-public-route-404, skill-sync-esm-ai-deploy-path, skill-sync-r2-repo-sync-route, custom-prompts-template-parity, kaizen-anchor-parity-2-150, wrangler-deploy-fleet-control, repo-mirror-drift-closeout, cost-routing-stack-l0l7, external-impact-per-dollar, flap-guard goals | goals status=adopted (fleet-owned) |
 | RM-KAIZEN-GATE-CANDIDATES-1 | partial | S3 / act | qnfo-kaizen | Codify the 12 proposed kaizen gates as machine-enforced checks (RED-INVENTORY, BUILD-GATE-NOT-RUNTIME, DEAD-SERVICE-BINDING, LIVE-AHEAD-OF-REPO, CURRENCY-UNIT-TRAP, FLEET-VS-EXTERNAL-ATTRIBUTION, GATEWAY-RUNWAY-BRAKE, CLAIM-SHEET-DB-ENFORCEMENT, REGISTRY-DRIFT-CONCURRENT-REMOVAL, STALE-TEMPLATE-MODELKEY, GOVERNANCE-CAP-DISPOSITION, TEMPLATE-RUNTIME-INJECTION-PARITY) | kaizen_candidates status=proposed (12); task_dod 331 |
 | RM-KAIZEN-SCHEDULED-1 | partial | S3 / act | qnfo-kaizen | Execute the scheduled kaizen items: errata publish flip, outreach cap misclassification, unified per-record lifecycle scanner, risk-tiered kaizen auto-apply, weekly drift repair off the local cron, self-tuning router selection, errata-publish source in repo, probe coverage, recurring C4 finding, blank-audit alert cluster | kaizen_candidates status=scheduled (11) |
+| RM-ADR-013-014-ENFORCEMENT-1 | not-built | S3 / act | qnfo-research-exec | Enforce the accepted legal-immutability and authorship ADRs (append-only signed ledger for published artifacts, authorship verification at publish) | R2 adr/ADR-013-LEGAL-IMMUTABILITY.md, ADR-014-AUTHORSHIP-MANDATE.md (master backlog v2 s2.9) |
 
 ## 3. Fleet-lessons failure ledger: gate status
 
@@ -224,6 +234,9 @@ Each ledger entry in the paper names a remedy that became a standing gate. Statu
 - **RM-MCP-OAUTH-1**: Cloudflare MCP OAuth (identity-bound) for agent clients
 - **RM-DO-AGENTS-DECISION-1**: Re-decide the adopted DO agents (FleetControlAgent, SignalLoopAgent, IntentOrchestratorAgent); qnfo-signal-loop is retired
 - **RM-GATE-DEFINITIONS-OWNER-1**: Owner decisions before 2026-10-25: impressions gate definition (frozen 5,610 baseline vs ratified prior-window MoM) and worker-count gate (cap re-baselined to 39 vs <= 28)
+- **RM-QOKI-OPEN-MIRROR-1**: QOKI: IPFS/Filecoin mirror of the paper corpus with DOI->slug->CID provenance and drift verifier; open-source the pipeline and audit tooling
+- **RM-CF-ONE-EMAIL-DLP-1**: Cloudflare One: email security retro scan, DLP, GitHub Enterprise Cloud configuration (with #1277 Access and #1279 CASB)
+- **RM-AGENT-WS-DECISION-1**: qnfo-agent-ws (agent websocket workspace) exists in the repo but not in the live fleet: redeploy with a consumer or archive
 - **SEC-EXPOSED-CREDENTIALS-UNROTATED-1** (#1676): coordinated credential rotation; the Cloudflare token rotation is identity-bound.
 - Pre-existing owner-gated issues: #1277 (Cloudflare Access), #1279 (CASB), #1468 (qnfo-cloud-ops secrets), #1477 (alerts mailbox), #1517 (lifecycle.qnfo.org DNS), #1616 (payment rail).
 
@@ -250,7 +263,11 @@ Each ledger entry in the paper names a remedy that became a standing gate. Statu
 - **security**: #1277 CF-ONE-ACCESS-NOT-DEPLOYED-1
 - **self-heal**: #1461 SELF-AUDIT-TOOLERR: exec_python; #1673 APPLIER-ROT-1; #1674 REMOVAL-LEDGER-WRITE-PATH-1
 
-## 6. Sources mined
+## 6. Reconciliation with the concurrent compilation
+
+`audits/2026-10-01-master-build-out-backlog-v2.md`: Compiled by a parallel session on 2026-10-01 (~00:0xZ). Its sections 2-8 were reconciled into this backlog: 10 build-outs unique to it were added (RM-IDEA-STREAM-UI-1 .. RM-COST-FLOOR-40-1); the rest map to existing issues or roadmap rows. Correction: its s2.1 states cloudflare_capability_catalog does not exist; the table exists (32 rows, 2026-09-30) and its wrong statuses are CAPABILITY-CATALOG-STATUS-WRONG-1 (#1695).
+
+## 7. Sources mined
 
 - qnfo.org/papers/quniverse-fleet-lessons (failure ledger A1-I10, roadmap 6.1-6.8)
 - qnfo-audit: agent_issues, fleet_improvements, goals, objectives, autonomy_scores, kaizen_candidates, evolve_candidates, reorg_work_queue, worker_consolidation, task_dod_register, tasks (legacy PM), routing_policy, cloudflare_capability_catalog, fleet_budget, fleet_agents, handoffs (session records), ops_ai_log (owner/agent chat turns), metric_registry, impact_thresholds

@@ -126,7 +126,13 @@ def main() -> int:
         L.append(f"- **{cat}**: " + "; ".join(f"#{e['id']} {e['key']}" for e in grp[cat]))
     L.append("")
 
-    L.append("## 6. Sources mined")
+    cc = d.get("concurrent_compilation")
+    if cc:
+        L.append("## 6. Reconciliation with the concurrent compilation")
+        L.append("")
+        L.append(f"`{cc['path']}`: {cc['note']}")
+        L.append("")
+    L.append("## 7. Sources mined")
     L.append("")
     for s in d["sources_mined"]:
         L.append(f"- {s}")

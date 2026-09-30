@@ -1,58 +1,52 @@
-// qnfo-memory-mcp v2.0 — REAL implementation (replaces the v1.2.0 stub that returned "OK" for every tool)
-// Authoritative source: QNFO/qnfo-workers (git). Deploy: wrangler deploy from this directory.
-// Transport: MCP Streamable HTTP (POST /mcp), SSE alias (/mcp/sse), /health.
-// Bindings: LIVING_PAPER (D1 papers), GRAPH_DB (D1 qnfo-graph nodes/edges/agent_memories),
-//           PAPER_VZ (Vectorize qwav-research-v2), AI (embeddings).
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-const PROTOCOL_VERSION = "2024-11-05";
-const SERVER_NAME = "qnfo-memory-mcp";
-const SERVER_VERSION = "2.0.3";
-const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
-
-const TOOLS = [
+// worker.js
+var PROTOCOL_VERSION = "2024-11-05";
+var SERVER_NAME = "qnfo-memory-mcp";
+var SERVER_VERSION = "2.0.4";
+var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
+var TOOLS = [
   { name: "search_papers", description: "Semantic search across QWAV research papers using Vectorize.", inputSchema: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "number", description: "Maximum results (1-20, default 10)", default: 10 } }, required: ["query"] } },
-  { name: "search_papers_enriched", description: "Semantic search papers AND return full body content. Searches Vectorize then enriches with D1 body_md, doi, authors.", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number", default: 5 }, includeBody: { type: "boolean", default: true }, bodyLimitChars: { type: "number", default: 3000 } }, required: ["query"] } },
+  { name: "search_papers_enriched", description: "Semantic search papers AND return full body content. Searches Vectorize then enriches with D1 body_md, doi, authors.", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number", default: 5 }, includeBody: { type: "boolean", default: true }, bodyLimitChars: { type: "number", default: 3e3 } }, required: ["query"] } },
   { name: "resolve_paper_id", description: "Resolve a paper identifier (slug, Vectorize ID, KG ID, DOI) into ALL cross-system identifiers.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
   { name: "search_memories", description: "Semantic search across persistent agent memories in Vectorize + D1.", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number", default: 5 }, category: { type: "string" } }, required: ["query"] } },
   { name: "remember_fact", description: "Store a durable fact with vector embedding. D1 + Vectorize + optional KG bridge.", inputSchema: { type: "object", properties: { content: { type: "string" }, category: { type: "string", enum: ["user_preference", "project_fact", "task_outcome", "heuristic", "anti_pattern"] }, importance: { type: "number", default: 0.7 }, summary: { type: "string" }, session_id: { type: "string" } }, required: ["content", "category"] } },
   { name: "recall_facts", description: "Recall stored facts from D1 by category or keyword match.", inputSchema: { type: "object", properties: { category: { type: "string" }, keyword: { type: "string" }, limit: { type: "number", default: 10 } }, required: [] } },
   { name: "query_graph", description: "Query the QNFO Knowledge Graph. stats, nodes, neighbors, impact, raw SQL.", inputSchema: { type: "object", properties: { endpoint: { type: "string", enum: ["stats", "nodes", "neighbors", "impact", "query"] }, params: { type: "object" } }, required: ["endpoint"] } },
-  { name: "get_paper_context", description: "Get full paper body content from D1 living-paper database by slug.", inputSchema: { type: "object", properties: { slug: { type: "string" }, limit_chars: { type: "number", default: 5000 } }, required: ["slug"] } }
+  { name: "get_paper_context", description: "Get full paper body content from D1 living-paper database by slug.", inputSchema: { type: "object", properties: { slug: { type: "string" }, limit_chars: { type: "number", default: 5e3 } }, required: ["slug"] } }
 ];
-
 function corsHeaders() {
   return { "Access-Control-Allow-Origin": "https://qnfo.org", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id" };
 }
+__name(corsHeaders, "corsHeaders");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...corsHeaders() } });
 }
+__name(json, "json");
 function sanitize(s) {
-  return String(s == null ? "" : s)
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uD800-\uDFFF]/g, "")
-    .trim()
-    .substring(0, 800);
+  return String(s == null ? "" : s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uD800-\uDFFF]/g, "").trim().substring(0, 800);
 }
-
+__name(sanitize, "sanitize");
 async function embed(env, text) {
   const result = await env.AI.run(EMBED_MODEL, { text: [text] });
   return result.data[0];
 }
+__name(embed, "embed");
 function sha256hex(str) {
   const enc = new TextEncoder().encode(str);
-  return crypto.subtle.digest("SHA-256", enc).then(buf =>
-    Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("")
+  return crypto.subtle.digest("SHA-256", enc).then(
+    (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("")
   );
 }
-
-// ---------- Tool handlers ----------
-
+__name(sha256hex, "sha256hex");
 async function tool_search_papers(args, env) {
   const query = sanitize(args.query);
   const limit = Math.min(parseInt(args.limit) || 10, 20);
   if (!query) return { content: [{ type: "text", text: JSON.stringify({ error: "query required" }) }], isError: true };
   const vec = await embed(env, query);
   const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 3, 50), returnMetadata: "all", returnValues: false });
-  const matches = (res.matches || []).filter(m => !m.id.startsWith("mem:"));
+  const matches = (res.matches || []).filter((m) => !m.id.startsWith("mem:"));
   const results = [];
   for (const m of matches.slice(0, limit)) {
     const slug = m.metadata?.slug || null;
@@ -68,21 +62,21 @@ async function tool_search_papers(args, env) {
       slug,
       title,
       score: m.score,
-      chunk: m.metadata?.chunk ?? m.metadata?.chunk_idx ?? null,
+      chunk: m.metadata?.chunk ?? m.metadata?.chunk_idx ?? null
     });
   }
   return { content: [{ type: "text", text: JSON.stringify({ count: results.length, results }) }] };
 }
-
+__name(tool_search_papers, "tool_search_papers");
 async function tool_search_papers_enriched(args, env) {
   const query = sanitize(args.query);
   const limit = Math.min(parseInt(args.limit) || 5, 20);
   const includeBody = args.includeBody !== false;
-  const bodyLimit = Math.min(parseInt(args.bodyLimitChars) || 3000, 50000);
+  const bodyLimit = Math.min(parseInt(args.bodyLimitChars) || 3e3, 5e4);
   if (!query) return { content: [{ type: "text", text: JSON.stringify({ error: "query required" }) }], isError: true };
   const vec = await embed(env, query);
   const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 3, 50), returnMetadata: "all", returnValues: false });
-  const matches = (res.matches || []).filter(m => !m.id.startsWith("mem:"));
+  const matches = (res.matches || []).filter((m) => !m.id.startsWith("mem:"));
   const results = [];
   for (const m of matches.slice(0, limit)) {
     const slug = m.metadata?.slug || null;
@@ -104,13 +98,13 @@ async function tool_search_papers_enriched(args, env) {
       doi: paper?.doi || null,
       authors: paper?.authors || null,
       abstract: paper?.abstract || null,
-      body: body,
-      body_truncated: paper?.body_md ? paper.body_md.length > bodyLimit : null,
+      body,
+      body_truncated: paper?.body_md ? paper.body_md.length > bodyLimit : null
     });
   }
   return { content: [{ type: "text", text: JSON.stringify({ count: results.length, results }) }] };
 }
-
+__name(tool_search_papers_enriched, "tool_search_papers_enriched");
 async function tool_resolve_paper_id(args, env) {
   const id = sanitize(args.id);
   if (!id) return { content: [{ type: "text", text: JSON.stringify({ error: "id required" }) }], isError: true };
@@ -125,11 +119,12 @@ async function tool_resolve_paper_id(args, env) {
   if (node?.results?.length) out.kg_nodes = node.results;
   try {
     const res = await env.PAPER_VZ.getByIds([id]);
-    if (res?.results?.length) out.vector = res.results.map(v => ({ id: v.id, metadata: v.metadata }));
-  } catch (e) { /* not a vector id */ }
+    if (res?.results?.length) out.vector = res.results.map((v) => ({ id: v.id, metadata: v.metadata }));
+  } catch (e) {
+  }
   return { content: [{ type: "text", text: JSON.stringify(out) }] };
 }
-
+__name(tool_resolve_paper_id, "tool_resolve_paper_id");
 async function tool_search_memories(args, env) {
   const query = sanitize(args.query);
   const limit = Math.min(parseInt(args.limit) || 5, 20);
@@ -137,8 +132,8 @@ async function tool_search_memories(args, env) {
   if (!query) return { content: [{ type: "text", text: JSON.stringify({ error: "query required" }) }], isError: true };
   const vec = await embed(env, query);
   const res = await env.PAPER_VZ.query(vec, { topK: Math.min(limit * 5, 50), returnMetadata: "all", returnValues: false });
-  let matches = (res.matches || []).filter(m => m.id.startsWith("mem:"));
-  if (category) matches = matches.filter(m => m.id.startsWith("mem:" + category + ":"));
+  let matches = (res.matches || []).filter((m) => m.id.startsWith("mem:"));
+  if (category) matches = matches.filter((m) => m.id.startsWith("mem:" + category + ":"));
   const results = [];
   for (const m of matches.slice(0, limit)) {
     const rec = await env.GRAPH_DB.prepare(
@@ -152,12 +147,12 @@ async function tool_search_memories(args, env) {
       summary: rec?.summary || null,
       importance: rec?.importance || null,
       session_id: rec?.session_id || null,
-      created_at: rec?.created_at || null,
+      created_at: rec?.created_at || null
     });
   }
   return { content: [{ type: "text", text: JSON.stringify({ count: results.length, results }) }] };
 }
-
+__name(tool_search_memories, "tool_search_memories");
 async function tool_remember_fact(args, env) {
   const content = sanitize(args.content);
   const category = args.category || "project_fact";
@@ -167,20 +162,20 @@ async function tool_remember_fact(args, env) {
   if (!content) return { content: [{ type: "text", text: JSON.stringify({ error: "content required" }) }], isError: true };
   const ts = Date.now();
   const id = "mem:" + category + ":" + ts + ":" + (await sha256hex(content)).slice(0, 8);
-  const created_at = new Date().toISOString();
+  const created_at = (/* @__PURE__ */ new Date()).toISOString();
   const metadata_json = JSON.stringify({ source: "qnfo-memory-mcp", timestamp: created_at });
   await env.GRAPH_DB.prepare(
     "INSERT OR REPLACE INTO agent_memories (id, category, content, summary, importance, session_id, created_at, expires_at, metadata_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)"
   ).bind(id, category, content, summary, importance, session_id, created_at, metadata_json).run();
   const vec = await embed(env, content);
   await env.PAPER_VZ.upsert([{
-    id: id,
+    id,
     values: vec,
-    metadata: { kind: "memory", category: category, content: sanitize(content).slice(0, 800) },
+    metadata: { kind: "memory", category, content: sanitize(content).slice(0, 800) }
   }]);
   return { content: [{ type: "text", text: JSON.stringify({ success: true, id, category, importance, created_at }) }] };
 }
-
+__name(tool_remember_fact, "tool_remember_fact");
 async function tool_recall_facts(args, env) {
   const category = args.category ? sanitize(args.category) : null;
   const keyword = args.keyword ? sanitize(args.keyword) : null;
@@ -205,7 +200,7 @@ async function tool_recall_facts(args, env) {
   }
   return { content: [{ type: "text", text: JSON.stringify({ count: rows.results.length, results: rows.results }) }] };
 }
-
+__name(tool_recall_facts, "tool_recall_facts");
 async function tool_query_graph(args, env) {
   const endpoint = args.endpoint || "stats";
   const params = args.params || {};
@@ -236,16 +231,19 @@ async function tool_query_graph(args, env) {
       case "neighbors": {
         const id = sanitize(params.id);
         if (!id) return { content: [{ type: "text", text: JSON.stringify({ error: "id required" }) }], isError: true };
-        // Match both node id conventions: "paper:<slug>" (KG sync) and "paper-<slug>" (D1 identifier)
         const bare = id.replace(/^paper[:|-]/, "");
         const alt1 = "paper:" + bare;
         const alt2 = "paper-" + bare;
         const rows = await env.GRAPH_DB.prepare(
           "SELECT e.source_id, e.target_id, e.relationship_type, n.id, n.label, n.name FROM edges e LEFT JOIN nodes n ON (n.id = e.source_id OR n.id = e.target_id) WHERE e.source_id IN (?1, ?2, ?3) OR e.target_id IN (?1, ?2, ?3) LIMIT 100"
         ).bind(id, alt1, alt2).all();
-        const neighbors = (rows.results || []).map(r => ({
-          source_id: r.source_id, target_id: r.target_id, relationship: r.relationship_type,
-          neighbor_id: r.id, label: r.label, name: r.name,
+        const neighbors = (rows.results || []).map((r) => ({
+          source_id: r.source_id,
+          target_id: r.target_id,
+          relationship: r.relationship_type,
+          neighbor_id: r.id,
+          label: r.label,
+          name: r.name
         }));
         return { content: [{ type: "text", text: JSON.stringify({ id, count: neighbors.length, neighbors }) }] };
       }
@@ -265,7 +263,7 @@ async function tool_query_graph(args, env) {
         if (!sql || !/^\s*(SELECT|PRAGMA)/i.test(sql)) {
           return { content: [{ type: "text", text: JSON.stringify({ error: "only SELECT/PRAGMA allowed" }) }], isError: true };
         }
-        const rows = await env.GRAPH_DB.prepare(sql).all().catch(e => ({ results: [], error: e.message }));
+        const rows = await env.GRAPH_DB.prepare(sql).all().catch((e) => ({ results: [], error: e.message }));
         return { content: [{ type: "text", text: JSON.stringify({ count: rows.results.length, results: rows.results, error: rows.error || null }) }] };
       }
       default:
@@ -275,10 +273,10 @@ async function tool_query_graph(args, env) {
     return { content: [{ type: "text", text: JSON.stringify({ error: "internal error", detail: e.message }) }], isError: true };
   }
 }
-
+__name(tool_query_graph, "tool_query_graph");
 async function tool_get_paper_context(args, env) {
   const slug = sanitize(args.slug);
-  const limit = Math.min(parseInt(args.limit_chars) || 5000, 100000);
+  const limit = Math.min(parseInt(args.limit_chars) || 5e3, 1e5);
   if (!slug) return { content: [{ type: "text", text: JSON.stringify({ error: "slug required" }) }], isError: true };
   const paper = await env.LIVING_PAPER.prepare(
     "SELECT slug, title, doi, authors, abstract, body_md, published, updated_at FROM papers WHERE slug = ?1 LIMIT 1"
@@ -286,12 +284,18 @@ async function tool_get_paper_context(args, env) {
   if (!paper) return { content: [{ type: "text", text: JSON.stringify({ error: "slug not found" }) }], isError: true };
   const body = paper.body_md ? paper.body_md.slice(0, limit) : null;
   return { content: [{ type: "text", text: JSON.stringify({
-    slug: paper.slug, title: paper.title, doi: paper.doi, authors: paper.authors,
-    abstract: paper.abstract, body, body_truncated: paper.body_md ? paper.body_md.length > limit : null,
-    published: paper.published, updated_at: paper.updated_at,
+    slug: paper.slug,
+    title: paper.title,
+    doi: paper.doi,
+    authors: paper.authors,
+    abstract: paper.abstract,
+    body,
+    body_truncated: paper.body_md ? paper.body_md.length > limit : null,
+    published: paper.published,
+    updated_at: paper.updated_at
   }) }] };
 }
-
+__name(tool_get_paper_context, "tool_get_paper_context");
 async function callTool(name, args, env) {
   const handlers = {
     search_papers: tool_search_papers,
@@ -301,14 +305,12 @@ async function callTool(name, args, env) {
     remember_fact: tool_remember_fact,
     recall_facts: tool_recall_facts,
     query_graph: tool_query_graph,
-    get_paper_context: tool_get_paper_context,
+    get_paper_context: tool_get_paper_context
   };
   const fn = handlers[name];
   return fn ? await fn(args, env) : { content: [{ type: "text", text: "Unknown tool: " + name }], isError: true };
 }
-
-// ---------- Transport ----------
-
+__name(callTool, "callTool");
 function sseResponse() {
   let closed = false;
   const transform = new TransformStream();
@@ -318,39 +320,58 @@ function sseResponse() {
     if (closed) return;
     writer.write(encoder.encode("data: " + JSON.stringify(data) + "\n\n"));
   }
+  __name(send, "send");
   return {
     response: new Response(transform.readable, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", ...corsHeaders() } }),
     send,
-    close: () => { closed = true; writer.close(); },
+    close: /* @__PURE__ */ __name(() => {
+      closed = true;
+      writer.close();
+    }, "close")
   };
 }
-
-export default {
+__name(sseResponse, "sseResponse");
+function bearerToken(request) {
+  const h = request.headers.get("Authorization") || "";
+  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
+  return m ? m[1] : "";
+}
+__name(bearerToken, "bearerToken");
+function constantTimeEqual(a, b) {
+  const ea = new TextEncoder().encode(String(a));
+  const eb = new TextEncoder().encode(String(b));
+  if (ea.length !== eb.length) return false;
+  let out = 0;
+  for (let i = 0; i < ea.length; i++) out |= ea[i] ^ eb[i];
+  return out === 0;
+}
+__name(constantTimeEqual, "constantTimeEqual");
+var worker_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
-
     if (url.pathname === "/health") {
-      return json({
-        status: "ok", server: SERVER_NAME, version: SERVER_VERSION, protocol: PROTOCOL_VERSION,
-        tools: TOOLS.map(t => t.name),
-        bindings: { ai: !!env.AI, d1_papers: !!env.LIVING_PAPER, d1_graph: !!env.GRAPH_DB, vz: !!env.PAPER_VZ },
-        enhancements: ["search_papers_enriched", "resolve_paper_id", "memory_kg_bridge"],
-        endpoints: { mcp_sse: "/mcp/sse", mcp_post: "/mcp" },
-      });
+      return json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION, auth: !!env.MCP_TOKEN });
     }
-
+    // MCP-AUTH-1 (2026-09-30, closes the external red-team finding "qnfo-memory-mcp is
+    // unauthenticated"): anonymous tools/list + arbitrary query_graph SQL + a remember_fact WRITE
+    // were reachable. Bearer-gate /mcp and /mcp/sse with a constant-time compare; fail CLOSED (503)
+    // when MCP_TOKEN is unset. /health stays open but slim (no tool list / binding detail).
+    if (!env.MCP_TOKEN) return json({ error: "server_misconfigured", detail: "MCP_TOKEN not set" }, 503);
+    if (!constantTimeEqual(bearerToken(request), env.MCP_TOKEN)) return json({ error: "unauthorized" }, 401);
     if (url.pathname === "/mcp/sse" && request.method === "GET") {
       const sse = sseResponse();
       sse.send({ jsonrpc: "2.0", method: "endpoint", params: { uri: url.origin + "/mcp" } });
       setTimeout(() => sse.close(), 100);
       return sse.response;
     }
-
     if (url.pathname === "/mcp" && request.method === "POST") {
       let body;
-      try { body = await request.json(); }
-      catch (e) { return json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null }, 400); }
+      try {
+        body = await request.json();
+      } catch (e) {
+        return json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null }, 400);
+      }
       if (!body || typeof body !== "object" || Array.isArray(body)) return json({ jsonrpc: "2.0", error: { code: -32600, message: "Invalid Request: body must be a JSON-RPC object" }, id: null }, 400);
       const method = body.method, params = body.params, id = body.id;
       if (method === "initialize") {
@@ -369,7 +390,10 @@ export default {
       if (method === "resources/list") return json({ jsonrpc: "2.0", id, result: { resources: [] } });
       return json({ jsonrpc: "2.0", id: id || null, error: { code: -32601, message: "Method not found: " + method } });
     }
-
     return json({ error: "Not found", path: url.pathname }, 404);
   }
 };
+export {
+  worker_default as default
+};
+//# sourceMappingURL=worker.js.map

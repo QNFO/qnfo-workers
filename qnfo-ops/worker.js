@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.13-agent-final-tier";
+var VERSION = "2.38.15-audit-trail-writer";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3572,10 +3572,51 @@ __name222(execTool, "execTool");
 __name2222(execTool, "execTool");
 __name22222(execTool, "execTool");
 __name222222(execTool, "execTool");
+// ADR-009-AUDIT-TRAIL-UNWRITTEN-1 (issue 1632): ADR-2026-009 mandates a
+// structured audit_trail record for every tool invocation producing mutable
+// output. Verified live 2026-09-30: this bundle held ZERO "audit_trail"
+// references while cloud_ops_events held 64590 ops_ai_tool rows, so realized
+// coverage was 0.03% and the trail could not reconstruct what changed.
+// Only MUTATING tools that actually SUCCEEDED are recorded -- read-only tools
+// produce no mutable output and are out of the ADR's scope. audit_trail
+// declares session_id/project_id/phase/task_id NOT NULL, so the loop writes
+// explicit sentinels that name the writer rather than inventing a session.
+var AUDIT_TRAIL_ACTIONS = {
+  ops_d1_write: "completed",
+  ops_issue_run: "completed",
+  r2_put: "completed",
+  r2_delete: "completed",
+  kv_put: "completed",
+  kv_delete: "completed",
+  workspace_write: "completed",
+  workspace_edit: "completed",
+  workspace_patch: "completed",
+  workspace_delete: "completed",
+  github_file_write: "completed",
+  github_create_branch: "completed",
+  github_pr: "completed",
+  github_cherry_pick: "completed",
+  email_respond: "completed",
+  email_mark: "completed",
+  research_queue: "completed",
+  cf_worker_deploy: "deployed"
+};
+async function logAuditTrail(env, name, args, res) {
+  var act = AUDIT_TRAIL_ACTIONS[name];
+  if (!act) return;
+  if (!(res && res.ok)) return;
+  if (res.dryRun || res.confirm_required) return;
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO audit_trail (session_id, project_id, phase, task_id, action, evidence, worker_name, timestamp, wbs_code) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind("ops-tool-loop", "qnfo-ops", "execution", String(name), act, snippet({ args: args, result: res }, 600), "qnfo-ops", iso(), "ADR-009-AUDIT-TRAIL-UNWRITTEN-1").run();
+  } catch (e) {
+  }
+}
+__name(logAuditTrail, "logAuditTrail");
 async function logToolEvent(env, name, args, res, ms) {
   if (!env.QNFO_AUDIT) return;
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ /* OPS-TOOL-META-ERROR-FIRST-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
+    await logAuditTrail(env, name, args, res);
   } catch (e) {
   }
 }
@@ -5504,7 +5545,21 @@ var AgenticOpsExec = class extends DurableObject {
         }
         iter++;
       }
-      if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
+      // TOOLBUDGET-DO-LOOP-PARITY-1 (2026-09-30): this DO/WS session loop had no final
+      // no-tools round, so a session whose round cap was spent returned
+      // "(tool loop did not converge within N iterations)" and NO answer at all -
+      // the same silent-failure class TOOL-BUDGET-PENDING-1 fixed on the chat path
+      // (worker.js L4731). Give it the identical final round and record the bail.
+      if (!finalText) {
+        try {
+          const _fin = await callDeepSeek(this.env, messages.concat([{ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE }]), DEFAULT_MAX_OUT, null, {});
+          const _fc = _fin && _fin.resp && _fin.resp.choices && _fin.resp.choices[0];
+          const _fm = _fc && _fc.message || {};
+          finalText = stripToolFrames(String(_fm.content || "").trim());
+        } catch (e) { finalText = ""; }
+        try { await logToolBudgetBail(this.env, "do-session", 0, "", maxIters, false); } catch (e) { }
+        if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
+      }
       await this.ctx.storage.put(historyKey, history);
       try {
         ws.send(JSON.stringify({ type: "message", role: "assistant", content: finalText }));

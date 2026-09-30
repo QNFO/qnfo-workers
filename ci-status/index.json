@@ -6,6 +6,7 @@
     "applier-rot-triage.json",
     "apply-pending-report.json",
     "apply-pending.json",
+    "attach-lifecycle-custom-domain.json",
     "backlog-health-cheap.json",
     "backlog-repo-sync.json",
     "binding-install-gate-1.json",
@@ -26,12 +27,14 @@
     "fix-pilot-container-class.json",
     "fleet-autoaudit-d1ok-v2.json",
     "fleet-autoaudit-d1ok.json",
+    "fleet-telemetry.json",
     "github-read-404-hint-1.json",
     "github-write-409-retry.json",
     "guard-timebudget.json",
     "ops-deploy-ledger.json",
     "ops-tool-meta-error-first.json",
     "panel6-mediated-count-2.json",
+    "panel6-mediated-count.json",
     "preserve-worker-meta.json",
     "raw-put-schedules.json",
     "remediation-consumer.json",
@@ -49,6 +52,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 46,
+  "count": 49,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }

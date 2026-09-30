@@ -820,6 +820,106 @@
    "owner": "qnfo-kaizen",
    "source": "kaizen_candidates status=scheduled (11)",
    "title": "Execute the scheduled kaizen items: errata publish flip, outreach cap misclassification, unified per-record lifecycle scanner, risk-tiered kaizen auto-apply, weekly drift repair off the local cron, self-tuning router selection, errata-publish source in repo, probe coverage, recurring C4 finding, blank-audit alert cluster"
+  },
+  {
+   "item": "RM-IDEA-STREAM-UI-1",
+   "area": "impact",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "idea-hub",
+   "source": "owner request 2026-08-28 (audits/2026-10-01-master-build-out-backlog-v2.md s2.6)",
+   "title": "Public read-only real-time idea stream UI (QNFO idea/chat development) linked from qnfo.org"
+  },
+  {
+   "item": "RM-QOKI-OPEN-MIRROR-1",
+   "area": "research-product",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "funding/NLNET_PROPOSAL.md (master backlog v2 s2.7)",
+   "title": "QOKI: IPFS/Filecoin mirror of the paper corpus with DOI->slug->CID provenance and drift verifier; open-source the pipeline and audit tooling"
+  },
+  {
+   "item": "RM-ADR-013-014-ENFORCEMENT-1",
+   "area": "governance",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-research-exec",
+   "source": "R2 adr/ADR-013-LEGAL-IMMUTABILITY.md, ADR-014-AUTHORSHIP-MANDATE.md (master backlog v2 s2.9)",
+   "title": "Enforce the accepted legal-immutability and authorship ADRs (append-only signed ledger for published artifacts, authorship verification at publish)"
+  },
+  {
+   "item": "RM-CF-ONE-EMAIL-DLP-1",
+   "area": "security",
+   "vsm": "S3*",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "integration_scope GAP rows (master backlog v2 s2.8)",
+   "title": "Cloudflare One: email security retro scan, DLP, GitHub Enterprise Cloud configuration (with #1277 Access and #1279 CASB)"
+  },
+  {
+   "item": "RM-PAGES-DEPLOY-PATH-1",
+   "area": "web",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "master backlog v2 s2.11; .github/workflows/deploy-pages-qnfo-publications.yml",
+   "title": "Repo-driven Pages deploys (archive.qnfo.org / qnfo-publications is manual and gated) plus a Pages inventory row in the census"
+  },
+  {
+   "item": "RM-EDGE-CACHE-PAPERS-1",
+   "area": "cost",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-gateway",
+   "source": "docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md recommendations (master backlog v2 s2.1)",
+   "title": "Workers Cache in front of papers.qnfo.org (504s) and AI Gateway fallback routes for router 400s"
+  },
+  {
+   "item": "RM-D1-RETENTION-1",
+   "area": "core",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "decisions #36-38 (master backlog v2 s7)",
+   "title": "Retention policy for qnfo-audit (~296 tables, duplicate families, date-stamped snapshot tables, 230 MB) and Vectorize cap/dedupe"
+  },
+  {
+   "item": "RM-SELF-KNOWLEDGE-VIEWS-1",
+   "area": "observability",
+   "vsm": "S3",
+   "ooda": "observe",
+   "status": "broken",
+   "owner": "qnfo-fleet-control",
+   "source": "master backlog v2 s4 items 2 and 10; #1617/#1625",
+   "title": "One open-work surface: revive integration_state (#1617), unify the three open-work counts (#1625), populate the 4 empty self-knowledge views (v_waiting_on_human, v_triage_gap, v_open_tasks_no_dod, v_reopen_rate)"
+  },
+  {
+   "item": "RM-AGENT-WS-DECISION-1",
+   "area": "autonomy",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "qnfo-fleet-control",
+   "source": "master backlog v2 s2.5",
+   "title": "qnfo-agent-ws (agent websocket workspace) exists in the repo but not in the live fleet: redeploy with a consumer or archive"
+  },
+  {
+   "item": "RM-COST-FLOOR-40-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-ops",
+   "source": "docs/BUSINESS-PLAN.md Phase A; master backlog v2 Tier 0 item 4",
+   "title": "Cost floor: AI burn <= $40/month with direct-key (BYOK) spend visible alongside unified billing"
   }
  ],
  "paper_gate_audit": [
@@ -1561,5 +1661,9 @@
    "category": "observability",
    "key": "CAPABILITY-PRODUCT-LOOP-INCOMPLETE-1"
   }
- ]
+ ],
+ "concurrent_compilation": {
+  "path": "audits/2026-10-01-master-build-out-backlog-v2.md",
+  "note": "Compiled by a parallel session on 2026-10-01 (~00:0xZ). Its sections 2-8 were reconciled into this backlog: 10 build-outs unique to it were added (RM-IDEA-STREAM-UI-1 .. RM-COST-FLOOR-40-1); the rest map to existing issues or roadmap rows. Correction: its s2.1 states cloudflare_capability_catalog does not exist; the table exists (32 rows, 2026-09-30) and its wrong statuses are CAPABILITY-CATALOG-STATUS-WRONG-1 (#1695)."
+ }
 }

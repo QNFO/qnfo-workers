@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var SERVER_VERSION = "2.0.3";
+var SERVER_VERSION = "2.0.4";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var TOOLS = [
   { name: "search_papers", description: "Semantic search across QWAV research papers using Vectorize.", inputSchema: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "number", description: "Maximum results (1-20, default 10)", default: 10 } }, required: ["query"] } },
@@ -331,22 +331,34 @@ function sseResponse() {
   };
 }
 __name(sseResponse, "sseResponse");
+function bearerToken(request) {
+  const h = request.headers.get("Authorization") || "";
+  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
+  return m ? m[1] : "";
+}
+__name(bearerToken, "bearerToken");
+function constantTimeEqual(a, b) {
+  const ea = new TextEncoder().encode(String(a));
+  const eb = new TextEncoder().encode(String(b));
+  if (ea.length !== eb.length) return false;
+  let out = 0;
+  for (let i = 0; i < ea.length; i++) out |= ea[i] ^ eb[i];
+  return out === 0;
+}
+__name(constantTimeEqual, "constantTimeEqual");
 var worker_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (url.pathname === "/health") {
-      return json({
-        status: "ok",
-        server: SERVER_NAME,
-        version: SERVER_VERSION,
-        protocol: PROTOCOL_VERSION,
-        tools: TOOLS.map((t) => t.name),
-        bindings: { ai: !!env.AI, d1_papers: !!env.LIVING_PAPER, d1_graph: !!env.GRAPH_DB, vz: !!env.PAPER_VZ },
-        enhancements: ["search_papers_enriched", "resolve_paper_id", "memory_kg_bridge"],
-        endpoints: { mcp_sse: "/mcp/sse", mcp_post: "/mcp" }
-      });
+      return json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION, auth: !!env.MCP_TOKEN });
     }
+    // MCP-AUTH-1 (2026-09-30, closes the external red-team finding "qnfo-memory-mcp is
+    // unauthenticated"): anonymous tools/list + arbitrary query_graph SQL + a remember_fact WRITE
+    // were reachable. Bearer-gate /mcp and /mcp/sse with a constant-time compare; fail CLOSED (503)
+    // when MCP_TOKEN is unset. /health stays open but slim (no tool list / binding detail).
+    if (!env.MCP_TOKEN) return json({ error: "server_misconfigured", detail: "MCP_TOKEN not set" }, 503);
+    if (!constantTimeEqual(bearerToken(request), env.MCP_TOKEN)) return json({ error: "unauthorized" }, 401);
     if (url.pathname === "/mcp/sse" && request.method === "GET") {
       const sse = sseResponse();
       sse.send({ jsonrpc: "2.0", method: "endpoint", params: { uri: url.origin + "/mcp" } });

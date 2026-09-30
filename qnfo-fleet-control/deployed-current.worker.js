@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.42-wai-cost-writer";
+var VERSION = "0.4.45-wai-cost-writer";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1932,6 +1932,35 @@ async function declaredCrons(env, worker) {
   var cands = [worker];
   if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
   for (var a = 0; a < cands.length; a++) {
+    // GH-API-UNCACHED-CRONS-1 (fi #1021, 2026-10-01): raw.githubusercontent.com is CDN-cached and
+    // ?cb= only busts within FRESH_MS buckets, so a fresh wrangler.toml commit could still be served
+    // STALE for hours. Canonical observation: qnfo-cloud-ops main declares 21 crons (== live) yet the
+    // scan read a stale 24-cron pre-CF-DOW list -> a false cronDrift every hourly cycle. Read the
+    // UNcached GitHub contents API first; keep raw as a fallback so a rate-limit never blinds the scan.
+    try {
+      // Use the SAME authenticated JSON contents API that landFix proves works in this worker
+      // (ghHeaders), then base64-decode. raw.githubusercontent CDN was observed serving a stale
+      // pre-CF-DOW 24-cron copy to this worker even when every external vantage returned the
+      // current 21-cron file; the authenticated JSON API is uncached and versioned.
+      var hdr = { "Authorization": "Bearer " + (env.GITHUB_TOKEN || ""), "User-Agent": "qnfo-fleet-control/cron-source", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+      var ra = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + cands[a] + "/wrangler.toml?ref=main", { headers: hdr }, FETCH_TIMEOUT_MS);
+      if (ra.ok) {
+        var ja = await ra.json();
+        var b64 = String(ja && ja.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+        if (!b64 && ja && ja.sha) {
+          var br = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/git/blobs/" + ja.sha, { headers: hdr }, FETCH_TIMEOUT_MS);
+          if (br.ok) {
+            var bj = await br.json();
+            b64 = String(bj && bj.content || "").replace(/[^A-Za-z0-9+/=]/g, "");
+          }
+        }
+        if (b64) {
+          var ta = atob(b64);
+          if (ta && ta.indexOf("crons") >= 0) return tomlCrons(ta);
+        }
+      }
+    } catch (e) {
+    }
     try {
       var r = await timedFetch(GH + "qnfo-workers/main/" + cands[a] + "/wrangler.toml?cb=" + Math.floor(Date.now() / FRESH_MS), { headers: { "User-Agent": "Mozilla/5.0 (qnfo-fleet-deploy)" } }, FETCH_TIMEOUT_MS);
       if (!r.ok) continue;

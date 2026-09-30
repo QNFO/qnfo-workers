@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.4-outreach-attempt-cap-1"; /* OUTREACH-ATTEMPT-CAP-1 */
+var VERSION = "1.15.5-outreach-cap-status-1"; /* OUTREACH-ATTEMPT-CAP-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -1529,7 +1529,7 @@ async function verifyArxivEmail(env, paperId) {
 }
 __name(verifyArxivEmail, "verifyArxivEmail");
 async function jobOutreach(env) {
-  const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, errors: [] };
+  const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, errors: [], capped: false };
   if (!env.SEND_EMAIL) return { status: "error", notes: { error: "SEND_EMAIL binding missing" } };
   try {
     const kill = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key = 'external_sends_enabled'").first();
@@ -1552,7 +1552,11 @@ async function jobOutreach(env) {
   out.pending = pending.length;
   for (const r of pending) {
     if (sentToday >= CAP) {
-      out.errors.push({ id: r.id, error: "daily cap reached" });
+      /* OUTREACH-CAP-STATUS-1 (#1662): hitting the daily cap is the EXPECTED terminal
+         state of a healthy drain, not a failure. Pushing it into out.errors made the
+         failure inventory and every status=error alert fire daily on a clean run. */
+      out.capped = true;
+      out.cap = CAP;
       break;
     }
     let email = r.email || null;
@@ -1654,8 +1658,11 @@ async function jobOutreach(env) {
     } catch (e) {
     }
   }
-  await recordEvent(env, "job-run", "jr-outreach-" + Date.now().toString(36), "outreach run: " + JSON.stringify(out), { job: "outreach", status: out.errors.length ? "partial" : "ok" });
-  return { status: out.errors.length ? "error" : "ok", notes: out };
+  /* OUTREACH-CAP-STATUS-1 (#1662): reserve "error" for genuine failures; report a
+     cap-limited drain as "capped" so it is visible without being an alarm. */
+  const _outStatus = out.errors.length ? "error" : out.capped ? "capped" : "ok";
+  await recordEvent(env, "job-run", "jr-outreach-" + Date.now().toString(36), "outreach run: " + JSON.stringify(out), { job: "outreach", status: out.errors.length ? "partial" : _outStatus });
+  return { status: _outStatus, notes: out };
 }
 __name(jobOutreach, "jobOutreach");
 async function jobWorkerHealth(env) {

@@ -1,0 +1,19 @@
+{
+  "marker": "ATTACH-LIFECYCLE-CUSTOM-DOMAIN-1",
+  "observability": "ATTACH-DOMAIN-OBSERVABLE-1",
+  "fallback": "ATTACH-DOMAIN-SCOPE-FALLBACK-1",
+  "hostname": "lifecycle.qnfo.org",
+  "service": "qnfo-lifecycle",
+  "account_id": "edb167b78c9fb901ea5bca3ce58ccc4b",
+  "token_present": true,
+  "stage": "verified",
+  "status": "success",
+  "http": 200,
+  "error": null,
+  "zone_id": "84e9dc1d7fb72629ccdbe3174ed24420",
+  "already_attached": null,
+  "custom_domain_http": 405,
+  "route_http": 200,
+  "dns_http": 200,
+  "ts": "2026-09-30T20:44:16Z"
+}
