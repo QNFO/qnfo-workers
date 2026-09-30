@@ -1,0 +1,48 @@
+name: guard-timebudget
+
+# TIME-BUDGET-GUARD-WIRED-1 (2026-09-30).
+#
+# WHY THIS WORKFLOW EXISTS
+#   qnfo-ops/scripts/guard-timebudget.sh was written 2026-09-06 to defend the
+#   OPS-SETTINGS-IMMUTABLE-1 ceilings, but NO workflow ever invoked it. A guard that
+#   nothing runs is not a guard, it is a comment. Measured consequence on 2026-09-30:
+#   the non-streaming tool-loop budget sat at 30000 ms against a canonical 300000 ms
+#   (10% of canonical) for every non-streaming client, and no check ever said so.
+#
+# TRIGGER-DEAD-1
+#   The GitHub `schedule` event has never fired on this repository, so this workflow
+#   declares NO cron. It is driven only by events that provably fire here:
+#     * push          -- the mechanism the whole apply-*.yml family already depends on
+#     * workflow_run  -- chained off apply-pending-patches and deploy-qnfo-ops, so the
+#                        guard re-runs after every path that can change the budgets
+#     * workflow_dispatch
+#
+# SEVERITY - DETECTOR, NOT GATE
+#   A failing run here is a visible red signal. It deliberately does not block any
+#   deploy: a red budget guard must never be able to wedge the only path that can
+#   fix it.
+
+on:
+  push:
+    paths:
+      - 'qnfo-ops/worker.js'
+      - 'qnfo-ops/deployed-current.worker.js'
+      - 'qnfo-ops/wrangler.toml'
+      - 'qnfo-ops/scripts/guard-timebudget.sh'
+      - '.github/workflows/guard-timebudget.yml'
+  workflow_run:
+    workflows: ["apply-pending-patches", "deploy-qnfo-ops"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the tool and time budget guard
+        run: bash qnfo-ops/scripts/guard-timebudget.sh

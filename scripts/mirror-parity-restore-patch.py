@@ -18,23 +18,6 @@ Blocks present in worker.js but absent from the mirror:
     - OPS-D1-SCHEMA-HINT-FULL-1
     - two further hunks
 
-DRIFT DIRECTION VERIFIED 2026-09-30T08:03Z (both blobs at 56c159e0 fetched raw and
-compared byte-wise, not inferred from commit text):
-    source 385973 B / 6114 lines   vs   mirror 381327 B / 6052 lines
-=> the MIRROR was BEHIND, so this restore was a fix and NOT a clobber of a mirror-ahead
-hotfix. Pre-repair marker counts: TOOL-BUDGET-PENDING-1 src=3 mirror=0,
-summarizePendingToolCalls src=3 mirror=0, OPS-D1-SCHEMA-HINT-FULL-1 src=1 mirror=0.
-Normalised line-set delta pre-repair: 62 lines source-only vs 8 mirror-only, and all 8
-are differently-wrapped build variants whose semantic equivalent IS present in the source
-(out.schema_tables, CONTAINER-CONFIG-DROPPED-1, metadataPart); token multiset delta 279
-source-only vs 10 mirror-only tokens - no feature lived only in the mirror.
-CAVEAT: the old mirror was a differently FORMATTED build of an older revision, so this
-applier makes the mirror a byte-copy of the source bundle rather than a separately built
-artifact. That is intended (the asserted invariant is byte equality) but it does mean the
-artifact the canonical deploy uploads changes formatting; only the version marker
-equality (VERSION "2.37.32-tool-budget-ceiling-1" in both source and live bundle) has
-been checked, not behavioural equivalence of the two builds.
-
 WHY IT MATTERS: the mirror is the artifact the canonical/redeploy route reads
 (.github/workflows/mirror-sync.yml: "the canonical deploy reads
 <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the

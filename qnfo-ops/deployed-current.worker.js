@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.0-toolbudget-canonical";
+var VERSION = "2.37.32-tool-budget-ceiling-1";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -101,7 +101,24 @@ var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-f
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-var MAX_TOOL_ITERS = 40;  // TOOLBUDGET-CANONICAL-1: was 12; the 300s wall clock is the binding cap
+// TOOL-BUDGET-CEILING-1 canonical ceilings restored (2026-09-30)
+var MAX_TOOL_ITERS = 40;
+// TOOL-BUDGET-PENDING-1 (2026-09-30): final-round tool calls are RECORDED, never dropped.
+var PENDING_TOOLCALLS_NOTE = "\n\n[tool-budget-exhausted] {n} tool call(s) were NOT executed this turn because the tool budget (iteration cap or wall-clock deadline) was exhausted. They are listed in the pending_tool_calls field of this response and can be replayed on the next turn.";
+function summarizePendingToolCalls(toolCalls) {
+  try {
+    return (toolCalls || []).map(function(tc) {
+      const fn = tc && tc.function || {};
+      let args = fn.arguments;
+      if (typeof args !== "string") {
+        try { args = JSON.stringify(args); } catch (e) { args = String(args); }
+      }
+      return { name: String(fn.name || ""), arguments: String(args == null ? "" : args).slice(0, 4e3) };
+    }).filter(function(x) { return x.name; });
+  } catch (e) {
+    return [];
+  }
+}
 var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
@@ -4205,7 +4222,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5)  // TOOLBUDGET-CANONICAL-1: was 3e4 (30s); canonical 300s;
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5);
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
@@ -4410,6 +4427,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     return await finalize();
   }, "streamFinalAnswer");
   let finalized = false;
+  var pendingToolCalls = [];
   const finalize = /* @__PURE__ */ __name222222(async function() {
     if (finalized) return null;
     finalized = true;
@@ -4432,6 +4450,32 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (cacheHit === 0 && !execUpstream && !clientTools && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
       ctx.waitUntil(chatCacheStore(env, prompt, String(content || "").trim(), wanted));
     }
+    // BUDGET-AUTO-CONTINUE-1 (2026-09-30): a turn that exhausts the 300s tool-loop soft
+    // budget (OPS-SETTINGS-IMMUTABLE-1) ends with an "INCOMPLETE:" line and the remaining
+    // work was DROPPED -- the client had to re-prompt. MEASURED 2026-09-30: 707/773 turns
+    // streamed, avg 198s against the 300s budget, so exhaustion is routine. Remediation
+    // uses the async path the settings spec itself prescribes: enqueue a durable ops_jobs
+    // continuation carrying the accumulated tool findings so the work resumes server-side
+    // with a fresh budget. Chain depth capped at 3.
+    try {
+      const _incM = String(content || "").match(/\bINCOMPLETE:\s*([^\n]{0,400})/i);
+      if (_incM && !codeMode && !clientHandoff && !(body && (body._autoContinue === true || body.x_ops_async === true))) {
+        const _depth = Number(body && body._continueDepth || 0);
+        if (_depth < 3) {
+          const _summ = toolLog.slice(-12).map(function(t) {
+            return "- " + t.name + " " + (t.ok ? "OK" : "FAIL") + ": " + String(t.summary || "").slice(0, 140);
+          }).join(String.fromCharCode(10));
+          const _resume = "AUTONOMOUS CONTINUATION (depth " + (_depth + 1) + "/3) - the previous interactive run exhausted its 300s tool-loop budget and reported:" + String.fromCharCode(10) + String(_incM[1] || "").trim() + String.fromCharCode(10, 10) + "ORIGINAL INSTRUCTION:" + String.fromCharCode(10) + String(prompt || "").slice(0, 4e3) + String.fromCharCode(10, 10) + "TOOL CALLS ALREADY MADE (oldest first):" + String.fromCharCode(10) + (_summ || "(none recorded)") + String.fromCharCode(10, 10) + "Resume the work NOW from exactly where it stopped. Do not repeat completed steps. Do not narrate. Finish the task and report the completed result with evidence.";
+          const _cjob = await createJobFromBody(env, { model: "ops-exec", _autoContinue: true, _continueDepth: _depth + 1, messages: [{ role: "system", content: OPS_SYSTEM_PROMPT + "\n\nToday is " + (new Date()).toISOString().slice(0, 10) + " (UTC)." }, { role: "user", content: _resume }] });
+          if (_cjob && _cjob.id) {
+            content = String(content || "") + String.fromCharCode(10, 10) + "AUTO-CONTINUE: durable job " + _cjob.id + " queued - the remaining work resumes server-side with a fresh budget (poll GET /v1/jobs/" + _cjob.id + ").";
+            ctx.waitUntil(logEscalation(env, strategy, UPSTREAM_MODEL, UPSTREAM_MODEL, "budget-auto-continue", "INCOMPLETE turn auto-continued as job " + _cjob.id + " depth " + (_depth + 1)));
+          } else if (_cjob && _cjob.error) {
+            ctx.waitUntil(logEscalation(env, strategy, UPSTREAM_MODEL, UPSTREAM_MODEL, "budget-auto-continue-failed", String(_cjob.error).slice(0, 300)));
+          }
+        }
+      }
+    } catch (eAC) { console.log("auto-continue failed:", eAC && eAC.message || eAC); }
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {
@@ -4439,6 +4483,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         emitChunk({}, "tool_calls");
       } else {
         if (!streamedTokens) emitChunk({ role: "assistant", content }, null);
+        if (pendingToolCalls && pendingToolCalls.length) emitChunk({ role: "assistant", content: "", pending_tool_calls: pendingToolCalls }, null);
         emitChunk({}, finishReason || "stop");
       }
       emitDone();
@@ -4447,7 +4492,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (clientHandoff) {
       return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: clientHandoff, finish_reason: "tool_calls" }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
     }
-    return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason || "stop" }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
+    return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason || "stop" }], pending_tool_calls: pendingToolCalls && pendingToolCalls.length ? pendingToolCalls : void 0, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
   }, "finalize");
   const runner = /* @__PURE__ */ __name222222(async function() {
     if (isStream) emitProgress();
@@ -4471,20 +4516,6 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           } catch (e) { }
         }
         const deadlineHit = Date.now() > loopDeadline;
-        if ((iter >= maxIters || deadlineHit) && !globalThis.__opsBailLogged) {
-          globalThis.__opsBailLogged = true;
-          try {
-            const _bail = { kind: "ops_tool_budget_bail", marker: "TOOLBUDGET-CANONICAL-1",
-              iter, maxIters, deadlineHit, loopDeadlineMs,
-              stream: isStream, ts: new Date().toISOString() };
-            if (env && env.QNFO_AUDIT) {
-              env.QNFO_AUDIT.prepare(
-                "INSERT INTO cloud_ops_events (kind, detail, ts) VALUES (?, ?, ?)"
-              ).bind("ops_tool_budget_bail", JSON.stringify(_bail), Date.now())
-               .run().catch(function () {});
-            }
-          } catch (e) { }
-        }
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
@@ -4527,7 +4558,14 @@ async function handleChat(env, body, authHeader, ua, ctx) {
             ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, servedBy || UPSTREAM_MODEL, "tool-call-invalid", _bad + " invalid tool call(s) in model response"));
           }
         }
-        if (toolCalls && iter < maxIters) {
+        if (toolCalls && !withTools) {
+          // TOOL-BUDGET-PENDING-1: budget spent, model still emitted tool calls. Do NOT execute
+          // them (the budget is spent) and do NOT drop them silently (the old defect).
+          pendingToolCalls = summarizePendingToolCalls(toolCalls);
+          escalations += pendingToolCalls.length;
+          toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + pendingToolCalls.map(function(p) { return p.name; }).join(",") });
+          ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "tool-budget-exhausted", pendingToolCalls.length + " tool call(s) not executed (budget spent): " + pendingToolCalls.map(function(p) { return p.name; }).join(",")));
+        } else if (toolCalls && withTools) {
           streamedTokens = false;
           const serverCalls = toolCalls.filter(function(tc) {
             return tc && tc.function && _opsToolNames.has(tc.function.name);
@@ -4559,6 +4597,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           continue;
         }
         content = String(msg0 && msg0.content || "");
+        if (pendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(pendingToolCalls.length))).trim();
         if (!String(content || "").trim() && !toolCalls && withTools && !cacheHit) {
           escalations++;
           ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "empty-content-with-tools", "model returned empty content while tools were available"));
@@ -5402,7 +5441,11 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       const choice = resp && resp.choices && resp.choices[0];
       const msg0 = choice && choice.message;
       const toolCalls = msg0 && Array.isArray(msg0.tool_calls) && msg0.tool_calls.length ? msg0.tool_calls : null;
-      if (toolCalls && withTools) {
+      if (toolCalls && !withTools) {
+        // TOOL-BUDGET-PENDING-1: record the unexecuted final-round calls, never drop them.
+        var jobPendingToolCalls = summarizePendingToolCalls(toolCalls);
+        toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + jobPendingToolCalls.map(function(p) { return p.name; }).join(",") });
+      } else if (toolCalls && withTools) {
         const serverCalls = toolCalls.filter(function(tc) {
           return tc && tc.function && opsToolNames.has(String(tc.function.name));
         });
@@ -5432,6 +5475,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       }
       content = String(msg0 && msg0.content || "");
       finishReason = choice && choice.finish_reason || "stop";
+      if (typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(jobPendingToolCalls.length))).trim();
       if (withTools && finishReason === "length") {
         try {
           const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
@@ -5445,7 +5489,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
         }
         if (!content || !String(content).trim()) content = "The answer was truncated by the token budget after a retry. Split the request or re-POST /v1/jobs for another attempt.";
       }
-      final = { status: "succeeded", response: content, finishReason };
+      final = { status: "succeeded", response: content, finishReason, pending_tool_calls: typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length ? jobPendingToolCalls : void 0 };
       break;
     }
     if (!final) final = { status: "succeeded", response: String(content || "(iteration cap reached with no final answer)"), finishReason };
