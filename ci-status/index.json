@@ -9,6 +9,7 @@
     "backlog-repo-sync.json",
     "binding-install-gate-1.json",
     "binding-merge-repair-1.json",
+    "cloud-ops-cron-dow-1.json",
     "container-binding-guard-1.json",
     "container-config-autoverify.json",
     "container-config-selfheal-cron.json",
@@ -34,11 +35,13 @@
     "restore-container-config-exports.json",
     "restore-container-config-v2.json",
     "restore-container-config.json",
+    "schedules-body-1498.json",
+    "sync-version-capture-1.json",
     "unmangle-worker-js.json",
     "version-precedence-1.json",
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 36,
+  "count": 39,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
