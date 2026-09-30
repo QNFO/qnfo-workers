@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.4-anthropic-adapt";
+var VERSION = "5.29.5-anthropic-relay";
 var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/messages", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
@@ -2532,6 +2532,34 @@ function anthTokenOf(request) {
   if (/^Bearer\s+/i.test(au)) return au.replace(/^Bearer\s+/i, "").trim();
   return "";
 }
+async function anthRelay(env, oai) {
+  // Clean tool-faithful relay: NO research/RAG/ensemble injection. The Anthropic
+  // client (Claude Code) owns its own system prompt + tool loop; we just need a
+  // raw, tool-capable model leg. Paid DeepSeek first (tools:true), free on error.
+  var maxT = oai.max_tokens || 8192;
+  var apiModel = "deepseek-chat";
+  try {
+    var up = await callDeepSeek(env, apiModel, oai.messages, maxT, oai.stream, oai.tools, { temperature: oai.temperature, top_p: oai.top_p, tool_choice: oai.tool_choice });
+    if (oai.stream) return up;
+    return new Response(JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: (up && up.choices) || [], usage: (up && up.usage) || {} }), { headers: { "Content-Type": "application/json" } });
+  } catch (e) {
+    var errMsg = "relay error: " + ((e && e.message) || e);
+    var ft = null;
+    try { ft = await qnfoAiFreeFallback(env, oai.messages, Math.min(maxT, 8192)); } catch (e2) {}
+    if (oai.stream) {
+      var enc = new TextEncoder();
+      var nl = String.fromCharCode(10, 10);
+      var st = new ReadableStream({ start: function (c) {
+        c.enqueue(enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, delta: { role: "assistant", content: ft || errMsg }, finish_reason: null }] }) + nl));
+        c.enqueue(enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb2", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + nl));
+        c.enqueue(enc.encode("data: [DONE]" + nl));
+        c.close();
+      } });
+      return new Response(st, { headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+    }
+    return new Response(JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, message: { role: "assistant", content: ft || errMsg }, finish_reason: "stop" }], usage: {} }), { headers: { "Content-Type": "application/json" } });
+  }
+}
 async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   var expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || authHeader.indexOf("Bearer ") !== 0 || !expected) return json({ type: "error", error: { type: "authentication_error", message: "Unauthorized" } }, 401);
@@ -2545,7 +2573,7 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   var wantStream = !!(body && body.stream);
   var oai = anthToOpenAI(body);
   if (!oai.messages.length) return json({ type: "error", error: { type: "invalid_request_error", message: "messages required" } }, 400);
-  var resp = await handleChat(env, oai, authHeader, ctx, ua);
+  var resp = await anthRelay(env, oai);
   var ctype = resp.headers.get("content-type") || "";
   if (ctype.indexOf("text/event-stream") >= 0) {
     if (wantStream) return new Response(anthStreamFromOpenAI(resp, oai.model), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
