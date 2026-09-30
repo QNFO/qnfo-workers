@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 19:02:29",
+  "audited_at": "2026-09-30 19:34:33",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -498,7 +498,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.36-refresh-deadline",
+        "version": "1.7.38-registry-refresh",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -538,12 +538,12 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.2.11-outreach-gate-derive",
+        "version": "1.2.12-chain-draining",
         "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.12-schedules-path-fix",
+        "version": "2.38.13-agent-final-tier",
         "worker": "qnfo-ops"
       },
       {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.23-heartbeat-upsert",
+        "version": "0.9.24-single-flight-lease",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1148,9 +1148,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.36-refresh-deadline",
+      "before": "1.7.38-registry-refresh",
       "http": 200,
-      "live": "1.7.36-refresh-deadline",
+      "live": "1.7.38-registry-refresh",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1268,17 +1268,17 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.2.11-outreach-gate-derive",
+      "before": "1.2.12-chain-draining",
       "http": 200,
-      "live": "1.2.11-outreach-gate-derive",
+      "live": "1.2.12-chain-draining",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.12-schedules-path-fix",
+      "before": "2.38.13-agent-final-tier",
       "http": 200,
-      "live": "2.38.12-schedules-path-fix",
+      "live": "2.38.13-agent-final-tier",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1356,9 +1356,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.23-heartbeat-upsert",
+      "before": "0.9.24-single-flight-lease",
       "http": 200,
-      "live": "0.9.23-heartbeat-upsert",
+      "live": "0.9.24-single-flight-lease",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
