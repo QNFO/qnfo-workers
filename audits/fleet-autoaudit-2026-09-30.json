@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 18:28:23",
+  "audited_at": "2026-09-30 18:39:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -483,7 +483,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.16-burst-coalesce",
+        "version": "1.3.17-settings-ledger-autoresolve",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -493,7 +493,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.39-selfstate-obs4",
+        "version": "0.4.40-obs-ledger",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.8-dangling-binding-prune",
+        "version": "2.38.9-fleet-selfprobe",
         "worker": "qnfo-ops"
       },
       {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.22-terminal-rescue",
+        "version": "0.9.23-heartbeat-upsert",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1052,9 +1052,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.16-burst-coalesce",
+      "before": "1.3.17-settings-ledger-autoresolve",
       "http": 200,
-      "live": "1.3.16-burst-coalesce",
+      "live": "1.3.17-settings-ledger-autoresolve",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.39-selfstate-obs4",
+      "before": "0.4.40-obs-ledger",
       "http": 200,
-      "live": "0.4.39-selfstate-obs4",
+      "live": "0.4.40-obs-ledger",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.8-dangling-binding-prune",
+      "before": "2.38.9-fleet-selfprobe",
       "http": 200,
-      "live": "2.38.8-dangling-binding-prune",
+      "live": "2.38.9-fleet-selfprobe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1356,9 +1356,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.22-terminal-rescue",
+      "before": "0.9.23-heartbeat-upsert",
       "http": 200,
-      "live": "0.9.22-terminal-rescue",
+      "live": "0.9.23-heartbeat-upsert",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
