@@ -1032,7 +1032,108 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.38-reorg-dispose-guards1";
+var VERSION = "0.4.39-selfstate-1";
+
+/* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
+   its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
+   ops fleet_status tool returned healthy=null for 27/38 because it probes only the 12 services it
+   holds service bindings for. service_registry carries base_url for 38/38, so the gap was the
+   PROBE, not the data. This route probes every registry base_url /health, aggregates issues +
+   queues + freshness, and snapshots the result so self-knowledge is also time-series. */
+var STATE_SCHEMA = "fleet-state/v1";
+async function selfState(env) {
+  var ts = (/* @__PURE__ */ new Date()).toISOString();
+  var out = { schema: STATE_SCHEMA, worker: "qnfo-fleet-control", version: VERSION, generated_at: ts, workers: [], issues: {}, queues: {}, freshness: {}, summary: {} };
+  var reg = [];
+  try {
+    var rr = await env.DB_AUDIT.prepare("SELECT service, version, base_url FROM service_registry ORDER BY service").all();
+    reg = rr.results || [];
+  } catch (e) {
+    out.registry_error = String(e && e.message || e).slice(0, 160);
+  }
+  var jobs = reg.map(function (s) {
+    var base = String(s.base_url || "").replace(/\/+$/, "");
+    if (!base) {
+      return Promise.resolve({ service: s.service, registry_version: s.version, up: false, http: null, live_version: null, error: "no base_url" });
+    }
+    var ctrl = new AbortController();
+    var to = setTimeout(function () { ctrl.abort(); }, 6e3);
+    return fetch(base + "/health", { signal: ctrl.signal, headers: { "User-Agent": "qnfo-fleet-selfstate/" + VERSION } }).then(function (res) {
+      return res.text().then(function (t) { return { st: res.status, t: t }; });
+    }).then(function (o) {
+      clearTimeout(to);
+      var lv = null;
+      try {
+        var j = JSON.parse(o.t);
+        lv = j.version || j.VERSION || null;
+      } catch (e) {
+        var m = String(o.t).match(/"?version"?\s*[:=]\s*"?([^",}\s]+)/i);
+        lv = m ? m[1] : null;
+      }
+      return { service: s.service, registry_version: s.version, base_url: base, up: o.st === 200, http: o.st, live_version: lv, drift: !!(lv && s.version && lv !== s.version) };
+    }).catch(function (e) {
+      clearTimeout(to);
+      return { service: s.service, registry_version: s.version, base_url: base, up: false, http: null, live_version: null, error: String(e && e.message || e).slice(0, 120) };
+    });
+  });
+  out.workers = await Promise.all(jobs);
+  var up = 0, down = 0, drift = 0, unk = 0;
+  for (var i = 0; i < out.workers.length; i++) {
+    var w = out.workers[i];
+    if (w.up) up++; else down++;
+    if (w.drift) drift++;
+    if (!w.live_version) unk++;
+  }
+  out.summary = { workers_total: out.workers.length, workers_up: up, workers_down: down, version_drift: drift, version_unknown: unk };
+  try {
+    var ir = await env.DB_AUDIT.prepare("SELECT priority, COUNT(*) AS n FROM agent_issues WHERE status='open' GROUP BY priority").all();
+    var by = {}, tot = 0;
+    (ir.results || []).forEach(function (x) { by[x.priority] = x.n; tot += x.n; });
+    var tr = await env.DB_AUDIT.prepare("SELECT id, priority, substr(title,1,140) AS title FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id LIMIT 12").all();
+    out.issues = { open_total: tot, by_priority: by, top: tr.results || [] };
+  } catch (e) {
+    out.issues = { error: String(e && e.message || e).slice(0, 160) };
+  }
+  try {
+    var qr = await env.DB_AUDIT.prepare("SELECT status, COUNT(*) AS n FROM outreach_queue GROUP BY status").all();
+    out.queues = { outreach_queue: qr.results || [] };
+  } catch (e) {
+    out.queues = { error: String(e && e.message || e).slice(0, 160) };
+  }
+  try {
+    var fr = await env.DB_AUDIT.prepare("SELECT MAX(refreshed_at) AS schema_index_at, COUNT(DISTINCT tbl) AS schema_tables FROM d1_schema_index").first();
+    var hb = await env.DB_AUDIT.prepare("SELECT COUNT(DISTINCT worker) AS heartbeat_workers_24h, MAX(ts) AS heartbeat_newest FROM fleet_heartbeat WHERE ts >= datetime('now','-1 day')").first();
+    var dr = await env.DB_AUDIT.prepare("SELECT COUNT(*) AS drift_rows_24h FROM fleet_drift_report WHERE ts >= datetime('now','-1 day')").first();
+    out.freshness = {
+      schema_index_at: fr && fr.schema_index_at,
+      schema_tables: fr && fr.schema_tables,
+      heartbeat_workers_24h: hb && hb.heartbeat_workers_24h,
+      heartbeat_newest: hb && hb.heartbeat_newest,
+      drift_rows_24h: dr && dr.drift_rows_24h
+    };
+  } catch (e) {
+    out.freshness = { error: String(e && e.message || e).slice(0, 160) };
+  }
+  try {
+    await env.DB_AUDIT.prepare("INSERT INTO fleet_state_snapshots (id, ts, source, workers_total, workers_up, workers_down, open_issues, open_high, payload) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(
+      "fs-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+      ts,
+      "fleet-control/state",
+      out.summary.workers_total,
+      out.summary.workers_up,
+      out.summary.workers_down,
+      out.issues.open_total || 0,
+      (out.issues.by_priority || {}).high || 0,
+      JSON.stringify(out).slice(0, 6e4)
+    ).run();
+    out.snapshot = "written";
+    await env.DB_AUDIT.prepare("DELETE FROM fleet_state_snapshots WHERE ts < datetime('now','-30 day')").run();
+  } catch (e) {
+    out.snapshot_error = String(e && e.message || e).slice(0, 160);
+  }
+  return out;
+}
+
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -2295,6 +2396,13 @@ var worker_default = {
       }
       return json({ ok: true, report: out2 });
     }
+    if (p === "/state") {
+      try {
+        return json(await selfState(env));
+      } catch (e) {
+        return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500);
+      }
+    }
     if (p === "/register" && request.method === "GET" && (admin || sh)) {
       try {
         return json({ ok: true, register: await registerWatch(env, 7) });
@@ -2336,6 +2444,10 @@ var worker_default = {
     var heal = await autoHeal(env);
     var res = await scan(env, heal);
     var opt = await optimizeFleet(env);
+    try {
+      await selfState(env);
+    } catch (e) {
+    }
     var rw = await registerWatch(env, 7);
     await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " landed=" + res.landed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
   }
