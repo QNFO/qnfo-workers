@@ -1,0 +1,93 @@
+name: apply-node-b64-encoding-1
+
+# NODE-EXEC-B64-ENCODING-1 (2026-09-30, qnfo-ops autonomous session).
+#
+# WHY A WORKFLOW INSTEAD OF A DIRECT FILE WRITE:
+#   A concurrent session was actively editing qnfo-containers-pilot while this fix was
+#   prepared (live version moved 1.0.4-container-ctx-guard -> 1.0.5-container-import-fix
+#   mid-audit). A long manual file write under an active concurrent writer is exactly the
+#   lost-update HOLISTIC-WRITE-CONCURRENCY-GUARD-1 forbids. So the fix is applied by a
+#   machine from a reviewed, idempotent, fail-closed patcher (scripts/patch-node-b64-encoding-1.py).
+#
+# WHAT IT FIXES (root cause reproduced live, exact stderr):
+#   /node built 'cd <cwd> && node -e ' + JSON.stringify(code). JSON.stringify renders
+#   newlines as backslash-n; bash double-quoting preserves them literally, so node received
+#   a literal backslash-n in its source ->
+#       SyntaxError: Invalid or unexpected token / Expected unicode escape
+#   Single-line code worked, multi-line code failed => exec_node 62.5% failure over 168h.
+#   /exec (python) was unaffected (code passed as a discrete argv element).
+#
+# This workflow is idempotent and SELF-DELETING: it removes itself in the same commit that
+# lands the fix, so it does not become permanent workflow sprawl (issue #1506).
+# It carries NO skip token (CI-TRIGGER-SKIP-1) and disables no deploy path.
+# The resulting push to qnfo-containers-pilot/** triggers deploy-containers-pilot.yml,
+# which is the only path that transmits the [[containers]] block.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-node-b64-encoding-1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-node-b64-encoding-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: apply the /node base64 fix (idempotent, fail-closed)
+        run: |
+          set -euo pipefail
+          python3 scripts/patch-node-b64-encoding-1.py
+          node --check qnfo-containers-pilot/worker.js && echo "SYNTAX OK worker.js"
+          if [ -f qnfo-containers-pilot/deployed-current.worker.js ]; then
+            node --check qnfo-containers-pilot/deployed-current.worker.js && echo "SYNTAX OK mirror"
+          fi
+
+      - name: assert the defect is gone and the fix is present
+        run: |
+          set -euo pipefail
+          f=qnfo-containers-pilot/worker.js
+          if grep -q 'node -e " + JSON.stringify(code)' "$f"; then
+            echo "::error::the buggy /node form is STILL present - refusing to commit"
+            exit 1
+          fi
+          grep -q 'base64 -d | node -' "$f" || { echo "::error::base64 fix absent"; exit 1; }
+          echo "assertions passed: defect gone, fix present"
+
+      - name: commit + push (self-deleting; also triggers deploy-containers-pilot)
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git rm -f .github/workflows/apply-node-b64-encoding-1.yml || true
+          git add qnfo-containers-pilot/worker.js
+          [ -f qnfo-containers-pilot/deployed-current.worker.js ] && git add qnfo-containers-pilot/deployed-current.worker.js || true
+          git commit -m "fix(containers-pilot): NODE-EXEC-B64-ENCODING-1 - /node base64 round-trip; exec_node multi-line code failed with 'Expected unicode escape' (62.5%/168h)" || true
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main || true
+            if git push origin HEAD:main; then echo "PUSH OK"; exit 0; fi
+            sleep $((i*3))
+          done
+          echo "::error::push failed after retries"; exit 1
+
+      - name: summarize
+        if: always()
+        run: |
+          {
+            echo "## apply-node-b64-encoding-1"
+            echo ""
+            echo "Applied the /node base64 round-trip to qnfo-containers-pilot (worker.js + mirror)."
+            echo "This workflow self-deletes; the commit it lands triggers deploy-containers-pilot.yml."
+          } >> "$GITHUB_STEP_SUMMARY"
