@@ -13,16 +13,21 @@ MEASURED STATE BEFORE THIS FILE (2026-10-01)
   by design, so those contracts were inert as well.
 
 WHAT THIS DOES
-  1. For every open issue with no contract row, insert a contract. The probe is
+  1. PROMOTE: for every contract still at the `needs-machine-probe` sentinel
+     whose issue now has a mapped probe, flip it to `active` with that probe.
+     Without this pass a sentinel contract could never become executable, even
+     after a probe was authored for it, because the insert loop below skips any
+     issue that already has a contract row in any status.
+  2. For every open issue with no contract row, insert a contract. The probe is
      NEVER invented. A machine-executable probe is taken from
      scripts/remediation_probe_map.json when the issue id is mapped; otherwise
      the contract is registered with status='needs-machine-probe' and the probe
      sentinel 'needs-machine-probe'. That status is not 'active', so the consumer
      will not execute it and no pass can be fabricated for it.
-  2. Lint active contracts: report every one whose probe is not a literal
+  3. Lint active contracts: report every one whose probe is not a literal
      SELECT/WITH. It neither rewrites nor deactivates them. It reports, so a
      later patch can supply a real probe.
-  3. Never writes `remediation_verifications`. Verification belongs to the
+  4. Never writes `remediation_verifications`. Verification belongs to the
      consumer; the bridge only makes the gap visible and bounded.
 
 CONTRACT (do not weaken)
@@ -31,6 +36,7 @@ CONTRACT (do not weaken)
   - Fail-closed: a contract this script cannot equip with a machine-executable
     probe is registered inactive, never active.
   - A mapped probe MUST be a literal SELECT/WITH or it is rejected to sentinel.
+  - Promotion is directional: sentinel -> active only. Nothing is ever demoted.
 """
 
 import json
@@ -150,6 +156,30 @@ def main():
         "SELECT DISTINCT issue_id FROM remediation_contracts WHERE issue_id IS NOT NULL")}
     out["open_issues"] = len(open_rows)
     out["with_contract_before"] = len([r for r in open_rows if r["id"] in have])
+
+    # PROBE-MAP-UPGRADE-1 (2026-10-01): promote sentinel contracts to active once a
+    # real probe exists for their issue. The insert loop below skips any issue that
+    # already has a contract row, so a contract registered as
+    # `needs-machine-probe` could never become executable even after a
+    # machine-executable probe was authored for it - the sentinel rows were
+    # permanently dormant and their issues could never be verified or closed.
+    # Directional only: sentinel -> active. Nothing is ever demoted, and a contract
+    # whose issue is still unmapped is left exactly as it was.
+    upgraded = 0
+    for row in d1(
+            "SELECT class, issue_id FROM remediation_contracts "
+            "WHERE status = ? AND issue_id IS NOT NULL", [SENTINEL]):
+        entry = probe_map.get(row.get("issue_id"))
+        if not entry:
+            continue
+        d1(
+            "UPDATE remediation_contracts SET verify_probe = ?, verify_transport = ?, "
+            "status = 'active', attempts = 0, last_verdict = NULL, "
+            "next_due_at = datetime('now') WHERE class = ?",
+            [entry["probe"], entry["transport"], row.get("class")],
+        )
+        upgraded += 1
+    out["upgraded_sentinel_to_active"] = upgraded
 
     inserted_active = 0
     inserted_sentinel = 0
