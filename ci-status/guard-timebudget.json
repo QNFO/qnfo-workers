@@ -1,8 +1,8 @@
 {
   "workflow": "guard-timebudget",
   "marker": "OPS-SETTINGS-IMMUTABLE-1",
-  "gate_rc": "1",
+  "gate_rc": "0",
   "job_status": "success",
-  "head": "4a1ab7549b4f8ecaece08c389bc0b744d213fe8f",
-  "ts": "2026-09-30T08:15:21.643Z"
+  "head": "53ee38f016c59ea6c5c4118e68bb60d5bac3b264",
+  "ts": "2026-09-30T13:47:02.472Z"
 }

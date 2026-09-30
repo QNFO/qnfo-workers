@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 09:01:31",
+  "audited_at": "2026-09-30 14:15:48",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -443,7 +443,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.3-roster-auth",
+        "version": "5.29.5-anthropic-relay",
         "worker": "qnfo-ai"
       },
       {
@@ -473,7 +473,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.4-container-ctx-guard",
+        "version": "1.0.5-container-import-fix",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.1-toolbudget-relock",
+        "version": "2.38.2-tool-meta-error-first",
         "worker": "qnfo-ops"
       },
       {
@@ -863,9 +863,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.3-roster-auth",
+      "before": "5.29.5-anthropic-relay",
       "http": 200,
-      "live": "5.29.3-roster-auth",
+      "live": "5.29.5-anthropic-relay",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1015,9 +1015,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.4-container-ctx-guard",
+      "before": "1.0.5-container-import-fix",
       "http": 200,
-      "live": "1.0.4-container-ctx-guard",
+      "live": "1.0.5-container-import-fix",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1247,9 +1247,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.1-toolbudget-relock",
+      "before": "2.38.2-tool-meta-error-first",
       "http": 200,
-      "live": "2.38.1-toolbudget-relock",
+      "live": "2.38.2-tool-meta-error-first",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"

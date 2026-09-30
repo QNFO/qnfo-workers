@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.1-toolbudget-relock";
+var VERSION = "2.38.2-tool-meta-error-first";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -99,6 +99,20 @@ var OPS_EXEC_MODELS = {
 };
 var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-frontier-reason": true };
 var GW_MAX_OUT = 32768;
+// OPS-OUTPUT-CAP-DECOUPLE-1 (issue #1531): the effective gateway ceiling. This was a bare
+// literal, so the advertised /v1/models max_output and the delivered ceiling disagreed by
+// 12x with no way to reconcile them. The DEFAULT IS UNCHANGED -- this only makes the
+// ceiling readable from OPS_GW_MAX_OUT so it can be raised once the upstream's true limit
+// is measured. Do NOT raise the default speculatively: a non-auth 4xx from the provider is
+// fatal on this path (only auth 4xx free-falls).
+function gwMaxOut(env) {
+  try {
+    var v = envInt(env, "OPS_GW_MAX_OUT", 0);
+    return v > 0 ? v : GW_MAX_OUT;
+  } catch (e) {
+    return GW_MAX_OUT;
+  }
+}
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
 var MAX_TOOL_ITERS = 40;
@@ -3379,7 +3393,7 @@ __name222222(execTool, "execTool");
 async function logToolEvent(env, name, args, res, ms) {
   if (!env.QNFO_AUDIT) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ args, resultOk: !!(res && res.ok), error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, ms }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ /* OPS-TOOL-META-ERROR-FIRST-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
   } catch (e) {
   }
 }
@@ -3569,7 +3583,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
-  let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
+  let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -3643,7 +3657,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
-  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
+  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -4037,7 +4051,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   try {
     if (isStream) {
       const _relayIsOAI = isOAIUpstream(relayUp);
-      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
+      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, gwMaxOut(env)), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, gwMaxOut(env)), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
@@ -4388,7 +4402,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     }
     const _streamModel = execUpstream || UPSTREAM_MODEL;
     const _streamIsOAI = isOAIUpstream(_streamModel);
-    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, gwMaxOut(env)), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, gwMaxOut(env)), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
