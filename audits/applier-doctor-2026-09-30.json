@@ -4,7 +4,7 @@
   "error": 8,
   "stale-anchor": 12,
   "superseded": 5,
-  "undetermined": 8
+  "undetermined": 9
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -132,7 +132,8 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json"
+    " M ci-status/apply-pending-report.json",
+    " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -141,7 +142,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(0): nothing to apply - main is current",
+    "LANDED(1): toolbudget-canonical-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -947,6 +948,23 @@
    "verdict": "stale-anchor"
   },
   {
+   "changed_files": [
+    " M qnfo-ops/worker.js"
+   ],
+   "declared_signals": [
+    "REPO_ROOT/.",
+    "TOOLBUDGET-CANONICAL-1",
+    "envInt(this.env, \"OPS_NONSTREAM_DEADLINE_MS\", 3e4)",
+    "ops_tool_budget_bail"
+   ],
+   "rc": 0,
+   "script": "scripts/toolbudget-canonical-patch.py",
+   "tail": [
+    "LANDED worker.js: MAX_TOOL_ITERS -> 40, OPS_NONSTREAM_DEADLINE_MS -> 3e5, bail-record instrumentation added, VERSION 2.37.31-continuation-inherit -> 2.38.0-toolbudget-canonical"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "declared_signals": [
     "REPO_ROOT/.",
@@ -982,8 +1000,8 @@
   "scripts/patch-404hint-list-1.py",
   "scripts/patch-cron-only-class-2.py"
  ],
- "total": 89,
- "ts": "2026-09-30T07:48:37.872Z",
+ "total": 90,
+ "ts": "2026-09-30T08:05:13.983Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
@@ -992,6 +1010,7 @@
   "scripts/github409-variant-reread-patch.py",
   "scripts/panel6-mediated-count-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
+  "scripts/toolbudget-canonical-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
 }
