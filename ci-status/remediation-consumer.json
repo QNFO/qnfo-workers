@@ -1,93 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@49ac406a96df",
- "due": 10,
- "pass": 2,
- "fail": 8,
+ "verifier": "remediation-consumer@1aa64e98378b",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-1543",
-   "issue_id": 1543,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "7",
-   "written": true
-  },
-  {
-   "class": "issue-1619",
-   "issue_id": 1619,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "18",
-   "written": true
-  },
-  {
-   "class": "issue-1628",
-   "issue_id": 1628,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1629",
-   "issue_id": 1629,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "36",
-   "written": true
-  },
-  {
-   "class": "issue-1639",
-   "issue_id": 1639,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1640",
-   "issue_id": 1640,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1654",
-   "issue_id": 1654,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "128",
-   "written": true
-  },
-  {
-   "class": "issue-1664",
-   "issue_id": 1664,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "60",
-   "written": true
-  },
-  {
-   "class": "issue-1614",
-   "issue_id": 1614,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1668",
-   "issue_id": 1668,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -103,7 +22,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 26608,
- "head": "49ac406a96df94c8c466eb29d9993beec0a9951e",
+ "spent_ms": 2149,
+ "head": "1aa64e98378b595596e3f35d2ed5a1b8443c583a",
  "job_status": "success"
 }
