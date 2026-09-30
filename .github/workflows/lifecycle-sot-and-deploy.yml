@@ -128,7 +128,16 @@ jobs:
           else
             git diff --cached --stat
             git commit -m 'fix(qnfo-lifecycle): #1370 LIFECYCLE-VERSION-SOT-1 - /health and the heartbeat derive from QNFO_VERSION'
-            git push origin HEAD:main
+            # PUSH-RACE-RETRY-2: main moves every few minutes, so a bare push loses the race and fails the
+            # step. Rebase and retry, and still fail the step if it never lands.
+            pushed=0
+            for i in 1 2 3 4 5; do
+              if git push origin HEAD:main; then pushed=1; break; fi
+              echo "push attempt $i rejected, rebasing"
+              git pull --rebase origin main || true
+              sleep $((i * 3))
+            done
+            if [ "$pushed" != "1" ]; then echo "::error::push to main failed after 5 attempts"; exit 1; fi
           fi
 
       - name: Deploy to Cloudflare (binding-preserving /content PUT)
