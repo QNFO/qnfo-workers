@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.3-schedules-live-1"; /* SCHEDULES-LIVE-1 */
+var VERSION = "1.15.4-outreach-attempt-cap-1"; /* OUTREACH-ATTEMPT-CAP-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -1541,10 +1541,10 @@ async function jobOutreach(env) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const sentKey = "outreach_sent_" + today;
   let sentToday = Number(await stateGet(env, sentKey, "0")) || 0;
-  const CAP = 3;
+  const CAP = 8; // OUTREACH-THROUGHPUT-1: aligned to fleet GLOBAL_DAILY_CAP=8 (qnfo-outreach/worker.js)
   let rows;
   try {
-    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status IN ('pending','needs-email') ORDER BY created_at ASC LIMIT 10").all();
+    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason, COALESCE(attempts,0) AS attempts FROM outreach_queue WHERE status IN ('pending','needs-email','needs-contact') ORDER BY created_at ASC LIMIT 25").all();
   } catch (e) {
     return { status: "error", notes: { error: String(e && e.message || e) } };
   }
@@ -1561,11 +1561,16 @@ async function jobOutreach(env) {
         email = await verifyArxivEmail(env, r.paper_id);
         if (!email) {
           out.skipped_no_email++;
-          await env.AUDIT.prepare("UPDATE outreach_queue SET status='needs-email', error='email lookup failed (HTML+e-print)' WHERE id=?1 AND status='pending'").bind(r.id).run().catch(function() {
+          /* OUTREACH-ATTEMPT-CAP-1 (#1562): 'needs-email' is INSIDE the drain selector,
+             so parking a failed lookup there re-selected it forever and starved every
+             row behind it in the window. Count attempts; leave the work set at the cap. */
+          const att = Number(r.attempts || 0) + 1;
+          const terminal = att >= 3;
+          await env.AUDIT.prepare("UPDATE outreach_queue SET status=?2, attempts=?3, error=?4 WHERE id=?1").bind(r.id, terminal ? "skipped-no-email" : "needs-email", att, "email lookup failed (HTML+e-print), attempt " + att + (terminal ? " - terminal" : "")).run().catch(function() {
           });
           continue;
         }
-        await env.AUDIT.prepare("UPDATE outreach_queue SET email=?1 WHERE id=?2").bind(email, r.id).run();
+        await env.AUDIT.prepare("UPDATE outreach_queue SET email=?1, attempts=0, error=NULL WHERE id=?2").bind(email, r.id).run();
       }
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) {
@@ -1617,9 +1622,14 @@ async function jobOutreach(env) {
   if (sentToday < CAP) {
     try {
       const fu = await env.AUDIT.prepare(
-        "SELECT email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) ORDER BY sent_at ASC LIMIT 3"
+        "SELECT id, email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) ORDER BY sent_at ASC LIMIT 3"
       ).all();
       for (const f of fu.results || []) {
+        if (!validEmail(f.email)) {
+          await env.AUDIT.prepare("UPDATE outreach_log SET status='rejected' WHERE id=?1").bind(f.id).run().catch(function() {
+          });
+          continue;
+        }
         if (sentToday >= CAP) break;
         try {
           const subject = "Re: " + String(f.subject || "").replace(/^Re:\s*/i, "");
