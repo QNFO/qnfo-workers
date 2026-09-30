@@ -53,12 +53,22 @@ never mirrored -- there is nothing to deploy, and mirroring it would manufacture
 second empty artifact. Canonical case: paper-hub/worker.js is a 0-byte placeholder
 (git empty blob e69de29b).
 
+PR SCOPE (2026-09-30, MIRROR-GUARD-PR-SCOPE-1): on a pull request the workflow checks out the MERGE ref, so
+lag that already exists on main counts against a PR that never touched that worker. The fleet's own ops bot
+lands worker.js source-only (its file-write tool writes one file per commit) and qnfo-mirror-bot repairs the
+mirror a few minutes later; PRs whose checks ran in that window went red for a worker they did not touch
+(seen on three PRs in one session, qnfo-fleet-control each time). With --scope-to-diff=REF only workers whose
+worker.js or deployed-current.worker.js differ between REF and HEAD can fail the gate; lag elsewhere is printed
+as PRE-EXISTING and does not block. If the diff cannot be computed it falls back to the strict global gate.
+The push-to-main run passes no flag, so main itself is still held to strict global parity.
+
 Usage:
-  python scripts/mirror-guard.py          # report; exit 1 if any drift
-  python scripts/mirror-guard.py --fix    # regenerate lagging/missing mirrors
+  python scripts/mirror-guard.py                          # report; exit 1 if any drift
+  python scripts/mirror-guard.py --fix                    # regenerate lagging/missing mirrors
+  python scripts/mirror-guard.py --scope-to-diff=HEAD^1   # PR mode: only fail on workers this change touches
 Exit: 0 clean | 1 drift found
 """
-import hashlib, os, re, shutil, sys
+import hashlib, os, re, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONST = re.compile(r'(?:var|let|const)\s+([A-Za-z0-9_]*VERSION[A-Za-z0-9_]*)\s*=\s*"([^"]*)"')
@@ -114,8 +124,28 @@ def versions(path):
     return dict(CONST.findall(src))
 
 
+def touched_workers(base_ref):
+    """Worker directories whose worker.js / deployed-current.worker.js differ between base_ref and HEAD.
+
+    Returns None when git cannot say (bad ref, shallow clone), so the caller falls back to the strict
+    global gate rather than silently passing.
+    """
+    try:
+        out = subprocess.run(["git", "diff", "--name-only", base_ref, "HEAD"], cwd=ROOT,
+                             capture_output=True, text=True, check=True).stdout.split()
+    except Exception:  # noqa: BLE001
+        return None
+    names = set()
+    for path in out:
+        parts = path.split("/")
+        if len(parts) == 2 and parts[1] in ("worker.js", "deployed-current.worker.js"):
+            names.add(parts[0])
+    return names
+
+
 def main(argv):
     fix = "--fix" in argv
+    scope_ref = next((a.split("=", 1)[1] for a in argv if a.startswith("--scope-to-diff=")), None)
     rows, drift, missing, fixed, captured = [], [], [], [], []
     content_drift, review, empty, fixed_missing = [], [], [], []
 
@@ -235,9 +265,20 @@ def main(argv):
         print("captured mirror: " + ", ".join(captured))
     if review:
         print("report-only (import-using source): " + ", ".join(review))
-    if drift and not fix:
+    blocking = drift
+    if scope_ref and drift:
+        touched = touched_workers(scope_ref)
+        if touched is None:
+            print("\nscope-to-diff: cannot compute the diff against %r; using the strict global gate" % scope_ref)
+        else:
+            blocking = [w for w in drift if w in touched]
+            pre = [w for w in drift if w not in touched]
+            if pre:
+                print("\nPRE-EXISTING lag in workers this change does not touch (reported, NOT blocking here; "
+                      "the push-to-main gate still enforces it): " + ", ".join(pre))
+    if blocking and not fix:
         print("\nDRIFT GATE FAILED - run with --fix to regenerate from source, then commit BOTH files")
-    return 1 if (drift and not fix) else 0
+    return 1 if (blocking and not fix) else 0
 
 
 if __name__ == "__main__":
