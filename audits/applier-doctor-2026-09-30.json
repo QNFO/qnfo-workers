@@ -1,9 +1,8 @@
 {
  "counts": {
   "already-applied": 75,
-  "error": 8,
+  "error": 9,
   "stale-anchor": 11,
-  "superseded": 1,
   "undetermined": 9
  },
  "errored": [
@@ -14,7 +13,8 @@
   "scripts/patch-container-exports-map-1.py",
   "scripts/patch-cron-only-class.py",
   "scripts/selfheal-volfloor-patch.py",
-  "scripts/telemetry-truth-patch.py"
+  "scripts/telemetry-truth-patch.py",
+  "scripts/unauth-trigger-1-patch.py"
  ],
  "marker": "APPLIER-DOCTOR-2",
  "never_landed": [],
@@ -143,9 +143,7 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json",
-    " M fleet-exec/deployed-current.worker.js",
-    " M fleet-exec/worker.js"
+    " M ci-status/apply-pending-report.json"
    ],
    "declared_signals": [
     ".",
@@ -154,7 +152,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): patch-fleet-exec-tick-unauth-1.py",
+    "LANDED(0): nothing to apply - main is current",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -683,23 +681,6 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M fleet-exec/deployed-current.worker.js",
-    " M fleet-exec/worker.js"
-   ],
-   "outcome_present_in": [
-    "fleet-exec/deployed-current.worker.js :: FLEET-EXEC-TICK-UNAUTH-1"
-   ],
-   "rc": 0,
-   "script": "scripts/patch-fleet-exec-tick-unauth-1.py",
-   "tail": [
-    "fleet-exec/worker.js                          patched d437ce0a79bda4538db20705f741722a01da6aa5c44d332217971a0dfde53bb0",
-    "fleet-exec/deployed-current.worker.js         patched d437ce0a79bda4538db20705f741722a01da6aa5c44d332217971a0dfde53bb0",
-    "OK FLEET-EXEC-TICK-UNAUTH-1"
-   ],
-   "verdict": "superseded"
-  },
-  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-github-read-404-hint-1.py",
@@ -1097,6 +1078,17 @@
   },
   {
    "changed_files": [],
+   "rc": 1,
+   "script": "scripts/unauth-trigger-1-patch.py",
+   "tail": [
+    "ok: insert helpers before execMod",
+    "ok: guard /run",
+    "STALE-ANCHOR: guard /tick matched 0 times (want 1); nothing written"
+   ],
+   "verdict": "error"
+  },
+  {
+   "changed_files": [],
    "declared_signals": [
     "REPO_ROOT/.",
     "normalize_version_anchors"
@@ -1123,11 +1115,9 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "superseded": [
-  "scripts/patch-fleet-exec-tick-unauth-1.py"
- ],
+ "superseded": [],
  "total": 104,
- "ts": "2026-09-30T20:40:41.284Z",
+ "ts": "2026-09-30T20:41:21.475Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
