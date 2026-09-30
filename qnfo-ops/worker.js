@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.5-backlog-probe-error";
+var VERSION = "2.38.6-obs-summary";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -65,7 +65,7 @@ __name(isOAIUpstream, "isOAIUpstream");
 __name2(isOAIUpstream, "isOAIUpstream");
 __name22(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/", "/fleet", "/cost", "/cost-router/stats", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
+var ROUTES = ["/health", "/obs-summary", "/", "/fleet", "/cost", "/cost-router/stats", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 // COST-ROUTING-STACK-1 L3 PRICE LADDER (2026-09-26): cheapest-capable-first within the agent-loop
 // canary PASS set. Live canaries 2026-09-26T13:2xZ: deepseek-v4-flash, deepseek-v4-pro, gpt-5.5,
@@ -5704,6 +5704,19 @@ var worker_default = {
     }
     const path = pathRaw.length > 1 ? pathRaw.replace(/\/+$/, "") : pathRaw;
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
+    if (path === "/obs-summary" && method === "GET") {
+      const o = { ok: true, worker: WORKER, version: VERSION, generatedAt: iso() };
+      try {
+        const w = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(requests),0) AS req FROM analytics_dash_workers").first();
+        const iss = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM fleet_issue_loop WHERE category='worker-observability'").first();
+        const inv = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM worker_invocations WHERE created_at > datetime('now','-1 day')").first();
+        o.workers_with_usage = w ? w.n : null;
+        o.events_24h = w ? w.req : null;
+        o.observability_issues = iss ? iss.n : null;
+        o.worker_invocations_24h = inv ? inv.n : null;
+      } catch (e) { o.error = String(e && e.message || e).slice(0, 200); }
+      return json(o);
+    }
     if (path === "/diag-wai" && method === "GET") {
       const o = {};
       for (const n of ["WAI", "AI"]) {
