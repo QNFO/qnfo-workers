@@ -254,7 +254,45 @@ def repair(tok, containers, compat_date, compat_flags, do_binding, class_name, c
     return (st == 200), "repair http %s" % st
 
 
+def _guard():
+    """RESTORE-LEDGER-1 (2026-09-30): this script is a DEPLOYER (it PUTs /content), yet it took no
+    deploy-guard lock and wrote no fleet_deploys row. Every run was therefore filed by qnfo-deploy-guard as
+    DEPLOY-UNLOGGED-MUTATION + DEPLOY-UNCOORDINATED-DEPLOY for qnfo-containers-pilot (agent_issues
+    1503/1609/1610), and container-config-selfheal-cron runs it after every push to main. Reuse raw_put.py's
+    lock + ledger helpers so every caller of this script is coordinated and logged. Best-effort: a guard
+    outage must not block a container restore, which is the break-glass path."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import raw_put  # noqa: WPS433 (local helper module)
+        return raw_put
+    except Exception as e:  # noqa: BLE001
+        print("DEPLOY-GUARD: helpers unavailable (%s) - restore proceeds unledgered" % e)
+        return None
+
+
 def main():
+    rc = _main()
+    return rc
+
+
+def _ledger(rp, ok, note):
+    if rp is None:
+        return
+    try:
+        rp.guard_ledger(WORKER, None, _declared_version(), ok, "BREAK-GLASS container-config restore: " + note)
+    except Exception as e:  # noqa: BLE001
+        print("DEPLOY-GUARD-LEDGER: failed (%s)" % e)
+
+
+def _declared_version():
+    try:
+        m = re.search(r'var\s+VERSION\s*=\s*"([^"]+)"', open(MODULE, encoding="utf-8").read())
+        return m.group(1) if m else None
+    except OSError:
+        return None
+
+
+def _main():
     tok = token()
     for path in (TOML, MODULE):
         if not os.path.isfile(path):
@@ -289,6 +327,28 @@ def main():
         return 3
 
     attempts = []
+    rp = _guard()
+    if rp is not None:
+        try:
+            rp.guard_lock(WORKER)
+        except Exception as e:  # noqa: BLE001
+            print("DEPLOY-LOCK: failed (%s)" % e)
+    try:
+        rc = _put_strategies(tok, containers, compat_date, compat_flags, class_name, do_binding,
+                             code, attempts)
+    finally:
+        if rp is not None:
+            try:
+                rp.guard_unlock()
+            except Exception:  # noqa: BLE001
+                pass
+    if any(a.endswith("=ACCEPTED") for a in attempts):
+        _ledger(rp, rc == 0, "rc=%s %s" % (rc, ",".join(attempts))[:300])
+    return rc
+
+
+def _put_strategies(tok, containers, compat_date, compat_flags, class_name, do_binding, code,
+                    attempts):
     for label, metadata in build_strategies(containers, compat_date, compat_flags,
                                             class_name, do_binding):
         st, body = put(tok, metadata, code)

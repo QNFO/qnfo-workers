@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.39-selfstate-obs4";
+var VERSION = "0.4.40-obs-ledger";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1051,8 +1051,18 @@ async function selfState(env) {
   } catch (e) {
     out.registry_error = String(e && e.message || e).slice(0, 160);
   }
+  /* FLEET-PROBE-1042-1 (2026-09-30): the first snapshots said workers_up=3/38. The 35 "down" workers all
+     answered 404 because a subrequest from this worker to another *.q08.workers.dev worker is Cloudflare
+     error 1042 (same zone) unless global_fetch_strictly_public is set; only the 3 custom-domain workers got
+     through. The flag is now declared in wrangler.toml (and deployers apply declared flags). Independently of
+     the flag: a 1042 answer says nothing about the target, so it is recorded as UNKNOWN (up:null), never as
+     down; this worker reports itself from its own VERSION; a registry row with no base_url falls back to the
+     workers.dev URL instead of being counted down. */
   var jobs = reg.map(function (s) {
-    var base = String(s.base_url || "").replace(/\/+$/, "");
+    var base = String(s.base_url || "").replace(/\/+$/, "") || (s.service ? "https://" + s.service + ".q08.workers.dev" : "");
+    if (s.service === "qnfo-fleet-control") {
+      return Promise.resolve({ service: s.service, registry_version: s.version, base_url: base, up: true, http: 200, live_version: VERSION, drift: !!(s.version && s.version !== VERSION), probe: "self" });
+    }
     if (!base) {
       return Promise.resolve({ service: s.service, registry_version: s.version, up: false, http: null, live_version: null, error: "no base_url" });
     }
@@ -1070,6 +1080,9 @@ async function selfState(env) {
         var m = String(o.t).match(/"?version"?\s*[:=]\s*"?([^",}\s]+)/i);
         lv = m ? m[1] : null;
       }
+      if (o.st !== 200 && /error code:?\s*1042/i.test(String(o.t))) {
+        return { service: s.service, registry_version: s.version, base_url: base, up: null, http: o.st, live_version: null, error: "cf-1042-same-zone-subrequest (probe blocked, target state unknown)" };
+      }
       return { service: s.service, registry_version: s.version, base_url: base, up: o.st === 200, http: o.st, live_version: lv, drift: !!(lv && s.version && lv !== s.version) };
     }).catch(function (e) {
       clearTimeout(to);
@@ -1077,20 +1090,46 @@ async function selfState(env) {
     });
   });
   out.workers = await Promise.all(jobs);
-  var up = 0, down = 0, drift = 0, unk = 0;
+  // CRON-ONLY-HEARTBEAT-1: a worker HTTP cannot see (cron-only: no workers.dev route; or a blocked probe) is judged
+  // by its own fleet_heartbeat row instead. Fresh (< 2 h) and ok -> up; stale or ok=0 -> down; no row -> unchanged.
+  try {
+    var hbr = await env.DB_AUDIT.prepare("SELECT worker, version, ts, ok FROM fleet_heartbeat").all();
+    var hbm = {};
+    (hbr.results || []).forEach(function (h) { hbm[h.worker] = h; });
+    for (var hi = 0; hi < out.workers.length; hi++) {
+      var hw = out.workers[hi];
+      if (hw.up === true) continue;
+      var h = hbm[hw.service];
+      if (!h || !h.ts) continue;
+      var age = Date.now() - new Date(String(h.ts).replace(" ", "T") + (String(h.ts).indexOf("Z") >= 0 ? "" : "Z")).getTime();
+      if (!isFinite(age)) continue;
+      hw.heartbeat_ts = h.ts;
+      hw.heartbeat_age_min = Math.round(age / 6e4);
+      hw.probe = "heartbeat";
+      hw.up = age < 72e5 && Number(h.ok) === 1;
+      if (!hw.live_version && h.version) {
+        hw.live_version = h.version;
+        hw.drift = !!(hw.registry_version && h.version !== hw.registry_version);
+      }
+    }
+  } catch (e) {
+    out.heartbeat_error = String(e && e.message || e).slice(0, 160);
+  }
+  var up = 0, down = 0, drift = 0, unk = 0, blocked = 0;
   for (var i = 0; i < out.workers.length; i++) {
     var w = out.workers[i];
-    if (w.up) up++; else down++;
+    if (w.up === null) blocked++; else if (w.up) up++; else down++;
     if (w.drift) drift++;
     if (!w.live_version) unk++;
   }
-  out.summary = { workers_total: out.workers.length, workers_up: up, workers_down: down, version_drift: drift, version_unknown: unk };
+  out.summary = { workers_total: out.workers.length, workers_up: up, workers_down: down, workers_unknown: blocked, version_drift: drift, version_unknown: unk, down_list: out.workers.filter(function (x) { return x.up === false; }).map(function (x) { return x.service + ":" + (x.http || x.error || "?"); }).slice(0, 20) };
   try {
     var ir = await env.DB_AUDIT.prepare("SELECT priority, COUNT(*) AS n FROM agent_issues WHERE status='open' GROUP BY priority").all();
     var by = {}, tot = 0;
     (ir.results || []).forEach(function (x) { by[x.priority] = x.n; tot += x.n; });
     var tr = await env.DB_AUDIT.prepare("SELECT id, priority, substr(title,1,140) AS title FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id LIMIT 12").all();
-    out.issues = { open_total: tot, by_priority: by, top: tr.results || [] };
+    var sr = await env.DB_AUDIT.prepare("SELECT COALESCE(source,'(none)') AS source, COUNT(*) AS n FROM agent_issues WHERE status='open' GROUP BY 1 ORDER BY n DESC LIMIT 10").all();
+    out.issues = { open_total: tot, by_priority: by, by_source: sr.results || [], top: tr.results || [] };
   } catch (e) {
     out.issues = { error: String(e && e.message || e).slice(0, 160) };
   }
@@ -2302,6 +2341,19 @@ var worker_default = {
       var optRes = await optimizeFleet(env);
       return json({ ok: true, optimize: optRes });
     }
+    /* FLEET-STATE-SUMMARY-PUBLIC-1 (2026-09-30): /state is admin-gated (it carries issue titles, some of which
+       describe open security gaps), so no dashboard, agent or probe without the deploy token could read the
+       fleet's own view of itself. This route serves the latest snapshot's COUNTS only -- no titles, no bodies. */
+    if (p === "/state/summary" && request.method === "GET") {
+      try {
+        var ss = await env.DB_AUDIT.prepare("SELECT ts, workers_total, workers_up, workers_down, open_issues, open_high, json_extract(payload,'$.summary.workers_unknown') AS workers_unknown, json_extract(payload,'$.summary.down_list') AS down_list, json_extract(payload,'$.issues.by_priority') AS by_priority FROM fleet_state_snapshots ORDER BY ts DESC LIMIT 1").first();
+        if (!ss) return json({ ok: false, error: "no snapshot yet" }, 404);
+        var sAge = Math.round((Date.now() - new Date(ss.ts).getTime()) / 6e4);
+        return json({ ok: true, schema: STATE_SCHEMA, version: VERSION, snapshot_ts: ss.ts, snapshot_age_min: sAge, stale: sAge > 130, workers: { total: ss.workers_total, up: ss.workers_up, down: ss.workers_down, unknown: ss.workers_unknown, down_list: ss.down_list ? JSON.parse(ss.down_list) : [] }, issues: { open: ss.open_issues, open_high: ss.open_high, by_priority: ss.by_priority ? JSON.parse(ss.by_priority) : {} } });
+      } catch (e) {
+        return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500);
+      }
+    }
     var admin = auth && env.DEPLOY_ADMIN_TOKEN && auth === env.DEPLOY_ADMIN_TOKEN;
     var sh = auth && env.SELFHEAL_TOKEN && auth === env.SELFHEAL_TOKEN;
     if (!admin && !sh) return json({ error: "unauthorized" }, 401);
@@ -2676,7 +2728,7 @@ async function reassertObservability(env) {
     var wr = await fetch(base + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(8e3) });
     var wj = await wr.json().catch(function() { return null; });
     var workers = wj && wj.success && wj.result ? wj.result : [];
-    var patched = 0, skipped = 0;
+    var patched = 0, skipped = 0, patchedNames = [];
     for (var w = 0; w < workers.length; w++) {
       var name = workers[w].id;
       if (!name) continue;
@@ -2695,11 +2747,22 @@ async function reassertObservability(env) {
         var pr = await fetch(base + "/workers/scripts/" + name + "/settings", { method: "PATCH", headers: { Authorization: H.Authorization, "User-Agent": H["User-Agent"], "Content-Type": "multipart/form-data; boundary=" + boundary }, body: body, signal: AbortSignal.timeout(8e3) });
         var pj = await pr.json().catch(function() { return null; });
         var po = pj && pj.success && pj.result ? pj.result.observability : null;
-        if (po && po.enabled === true) patched++;
+        if (po && po.enabled === true) {
+          patched++;
+          patchedNames.push(name);
+          /* SETTINGS-ONLY-LEDGER-1 (2026-09-30): a settings PATCH bumps CF modified_on exactly like a code
+             deploy, and it wrote no fleet_deploys row, so qnfo-deploy-guard read every reassert as an
+             unlogged + uncoordinated deploy (paired high tickets per worker, re-raised after every code
+             deploy because a code deploy resets per-version observability). Ledger it as SETTINGS-ONLY:
+             the guard counts it as logged, and never treats it as the worker's last CODE deploy. */
+          try {
+            await env.AUDIT_DB.prepare("INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,NULL,NULL,NULL,NULL,1,?3,?4)").bind(name, "qnfo-fleet-control/obs-reassert", "SETTINGS-ONLY: observability reassert (logs+traces+issues) by qnfo-fleet-control/" + VERSION, (/* @__PURE__ */ new Date()).toISOString()).run();
+          } catch (e4) {}
+        }
       } catch (e2) {}
     }
-    if (patched > 0) { try { await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-reassert', 'qnfo-fleet-control', ?)").bind("patched=" + patched + " skipped=" + skipped).run(); } catch (e3) {} }
-    return { ok: true, patched: patched, skipped: skipped };
+    if (patched > 0) { try { await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-reassert', 'qnfo-fleet-control', ?)").bind("patched=" + patched + " skipped=" + skipped + " workers=" + patchedNames.join(",")).run(); } catch (e3) {} }
+    return { ok: true, patched: patched, skipped: skipped, workers: patchedNames };
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
   }

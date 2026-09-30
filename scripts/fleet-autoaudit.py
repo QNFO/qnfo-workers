@@ -389,20 +389,33 @@ def apply_ahead(d=None):
     print(f"auto-deploy candidates (repo strictly ahead): {len(ahead)}")
     applied, failed = [], []
     container_skips = []
+    canonical = bool(os.environ.get("OPS_ROUTER_AUTH_KEY", "").strip())
     for it in ahead:
+        # APPLY-AHEAD-NAMEERROR-1 (2026-09-30): `w` was read by declares_containers() BEFORE it was bound
+        # below, so the FIRST repo-ahead worker raised NameError and killed the whole auto-deploy. It was
+        # latent only because `ahead` had been empty; unpack first.
+        w, art, rv = it["worker"], it["artifact"], it["repo"]
         if declares_containers(w):
             print("::warning::SKIPPED " + w + " -- declares [[containers]]; raw_put.py "
                   "cannot transmit container config (CONTAINER-CONFIG-DROPPED-1, #1485). "
                   "Deploy via .github/workflows/deploy-containers-pilot.yml")
             container_skips.append((w, rv))
             continue
-        w, art, rv = it["worker"], it["artifact"], it["repo"]
-        print(f"-> raw_put {w} {art} (repo {rv} > live {it['live']})")
-        p = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "raw_put.py"), w, art],
-                           capture_output=True, text=True, cwd=ROOT)
+        if canonical:
+            # AUTODEPLOY-CANONICAL-1: the canonical route takes the guard lock, ledgers, applies
+            # wrangler.toml schedules and declared compat flags. raw_put.py is only the fallback.
+            rel = os.path.relpath(os.path.join(ROOT, art), ROOT) if os.path.isabs(art) else art
+            print(f"-> canonical /ops/deploy {w} {rel} (repo {rv} > live {it['live']})")
+            p = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "canonical_deploy.py"),
+                                "--worker", w, "--path", rel], capture_output=True, text=True, cwd=ROOT)
+            print((p.stdout or "")[-1200:])
+        else:
+            print(f"-> raw_put {w} {art} (repo {rv} > live {it['live']})")
+            p = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "raw_put.py"), w, art],
+                               capture_output=True, text=True, cwd=ROOT)
         if p.returncode != 0:
-            failed.append((w, f"raw_put rc={p.returncode} {(p.stderr or '')[:160]}"))
-            print(f"::warning::raw_put failed for {w}")
+            failed.append((w, f"deploy rc={p.returncode} {(p.stderr or '')[:160]}"))
+            print(f"::warning::deploy failed for {w}")
             continue
         live = probe_version(w)
         if live == rv:

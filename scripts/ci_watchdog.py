@@ -208,6 +208,19 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
         return "build-gate", "a wrangler.toml `main` does not resolve; fix the entry-point or drop the stale wrangler.toml"
     if "MODULE_NOT_FOUND" in L or "Cannot find module" in L:
         return "missing-module", "the workflow references a file that is not committed; land it or retire the workflow"
+    # WATCHDOG-CLASSES-2 (2026-09-30): the three open findings #139/#142/#145 were all filed as `unknown`
+    # although their logs name the class exactly.
+    if "FAIL-CLOSED" in L and ("anchor" in L or "matched 0 times" in L or "occurs 0 times" in L):
+        return "stale-anchor", (
+            "an applier re-ran after its change landed (or the target moved) and its anchor no longer "
+            "matches; key idempotency on the feature's markers, not the exact VERSION literal "
+            "(APPLIER-LANDED-MARKERS-1), or retire the applier"
+        )
+    if "CONFLICT (content)" in L or ("failed to push some refs" in L and "rebase" in L):
+        return "push-race", (
+            "a concurrent writer moved main; an artifact commit must re-apply its snapshot onto "
+            "origin/main instead of merging (ARTIFACT-PUSH-CONFLICT-1)"
+        )
     if "not a valid model identifier" in L:
         return "unknown", "inspect"
     return "unknown", "inspect the job log"

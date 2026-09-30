@@ -10,3 +10,6 @@
 # python bytecode (never commit)
 __pycache__/
 *.pyc
+
+# scripts/deploy_gate.py --check writes wrangler dry-run output to <dir>/<name>/.dryrun-tmp/; never commit it
+.dryrun-tmp/

@@ -405,6 +405,21 @@ def declared_containers(artifact_path):
     return []
 
 
+def declared_compat_flags(artifact_path):
+    """COMPAT-FLAGS-DECLARED-APPLY-1 (2026-09-30): compatibility_flags declared in the sibling
+    wrangler.toml. The deploy used to carry ONLY the live flags, so a flag added to the repo
+    config never reached Cloudflare (the inert-config class of #1337 crons / #1456 containers).
+    The caller UNIONS these into the live set: nothing live is ever removed."""
+    p = os.path.join(os.path.dirname(os.path.abspath(artifact_path)), "wrangler.toml")
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return []
+    m = re.search(r"^\s*compatibility_flags\s*=\s*\[([^\]]*)\]", text, re.M)
+    return re.findall(r'"([^"]+)"', m.group(1)) if m else []
+
+
 def observability_reassert():
     """OBS-RESET-ON-DEPLOY-1 (2026-09-30): a /content PUT creates a NEW script version, and the
     observability setting is PER-VERSION, so EVERY code deploy resets it to unset (measured:
@@ -483,6 +498,10 @@ def main(argv):
     else:
         print("CONTAINERS: none live and none declared - nothing to preserve")
 
+    for _f in declared_compat_flags(path):
+        if _f not in compat_flags:
+            compat_flags = list(compat_flags) + [_f]
+            print("COMPAT-FLAGS: adding repo-declared flag " + _f + " (COMPAT-FLAGS-DECLARED-APPLY-1)")
     if compat_flags:
         meta["compatibility_flags"] = compat_flags
     meta_json = json.dumps(meta)
