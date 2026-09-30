@@ -1,15 +1,14 @@
 {
  "counts": {
-  "already-applied": 61,
-  "error": 8,
+  "already-applied": 64,
+  "error": 7,
   "stale-anchor": 11,
-  "superseded": 5,
-  "undetermined": 9
+  "superseded": 4,
+  "undetermined": 8
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
   "scripts/driftguard-label-and-lifecycle-sot-patch.py",
-  "scripts/github-write-409-retry-patch.py",
   "scripts/patch-container-binding-repair-1.py",
   "scripts/patch-container-exports-map-1.py",
   "scripts/patch-cron-only-class.py",
@@ -132,8 +131,7 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json",
-    " M qnfo-ops/deployed-current.worker.js"
+    " M ci-status/apply-pending-report.json"
    ],
    "declared_signals": [
     ".",
@@ -142,7 +140,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): mirror-parity-restore-patch.py",
+    "LANDED(0): nothing to apply - main is current",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -195,7 +193,7 @@
    "rc": 0,
    "script": "scripts/cf-worker-read-404-hint-patch.py",
    "tail": [
-    "MIRROR_IDENTICAL=no",
+    "MIRROR_IDENTICAL=yes",
     "MARKER_COUNT=1",
     "OK applied=0"
    ],
@@ -506,12 +504,14 @@
   },
   {
    "changed_files": [],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
-    "FAIL-CLOSED: already repaired (marker(s) GITHUB-409-RETRY-1) but source/mirror diverge"
+    "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
+    "bytes: 385971 (unchanged)",
+    "parity: source==mirror"
    ],
-   "verdict": "error"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -565,21 +565,13 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js"
-   ],
-   "declared_signals": [
-    "MIRROR-PARITY-RESTORE-1",
-    "TOOL-BUDGET-PENDING-1",
-    "OPS-D1-SCHEMA-HINT-FULL-1",
-    "BUDGET-AUTO-CONTINUE-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/mirror-parity-restore-patch.py",
    "tail": [
-    "MIRROR-PARITY-RESTORE-1: parity restored 381327 -> 385973 bytes; markers restored: ['TOOL-BUDGET-PENDING-1', 'summarizePendingToolCalls', 'OPS-D1-SCHEMA-HINT-FULL-1']"
+    "MIRROR-PARITY-RESTORE-1: nothing to do (already byte-identical, 385973 bytes)"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -599,7 +591,7 @@
    "tail": [
     "already patched (marker present) - no-op",
     "  worker.js bytes=385973 marker=1",
-    "  deployed-current.worker.js bytes=381327 marker=1"
+    "  deployed-current.worker.js bytes=385973 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -621,18 +613,14 @@
   },
   {
    "changed_files": [],
-   "outcome_present_in": [
-    "qnfo-ops/worker.js :: CF-WORKER-READ-404-HINT-LIST-1",
-    "qnfo-ops/deployed-current.worker.js :: CF-WORKER-READ-404-HINT-LIST-1"
-   ],
-   "rc": 3,
+   "rc": 0,
    "script": "scripts/patch-404hint-list-1.py",
    "tail": [
-    "ALREADY APPLIED (mirror)",
-    "MIRROR_IDENTICAL=no",
-    "FAIL(3): mirror parity broken after patch"
+    "MIRROR_IDENTICAL=yes",
+    "MARKER_COUNT=1",
+    "OK"
    ],
-   "verdict": "superseded"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -1039,18 +1027,16 @@
   "scripts/attachguard-xml-form-patch.py",
   "scripts/container-restore5-repair-bindings-patch.py",
   "scripts/dashboard-gate-failopen-patch.py",
-  "scripts/patch-404hint-list-1.py",
   "scripts/patch-cron-only-class-2.py"
  ],
  "total": 94,
- "ts": "2026-09-30T07:58:07.781Z",
+ "ts": "2026-09-30T07:59:37.908Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
-  "scripts/mirror-parity-restore-patch.py",
   "scripts/panel6-mediated-count-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
