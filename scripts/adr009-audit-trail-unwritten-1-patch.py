@@ -29,6 +29,11 @@ started|completed|blocked|skipped|deployed|archived -- cf_worker_deploy maps to
 
 Idempotent: a second run detects the post-state and writes nothing.
 Fail-closed: a missing or ambiguous anchor writes NOTHING and exits non-zero.
+
+ANCHOR-FIX-1 (2026-09-30): the cloud_ops_events call anchor originally carried a
+spurious leading quote and matched 0 times. The fail-closed guard aborted with
+nothing written, which is why this patcher is safe to re-run and safe to leave on
+main even if the applier is delayed.
 """
 
 import os
