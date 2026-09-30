@@ -1,9 +1,8 @@
 {
  "counts": {
-  "already-applied": 54,
-  "applied-now": 1,
+  "already-applied": 56,
   "error": 8,
-  "stale-anchor": 11,
+  "stale-anchor": 12,
   "superseded": 5,
   "undetermined": 8
  },
@@ -18,9 +17,7 @@
   "scripts/telemetry-truth-patch.py"
  ],
  "marker": "APPLIER-DOCTOR-2",
- "never_landed": [
-  "scripts/cloud-ops-cron-alias-dispatch-patch.py"
- ],
+ "never_landed": [],
  "results": [
   {
    "changed_files": [],
@@ -135,9 +132,7 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json",
-    " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js"
+    " M ci-status/apply-pending-report.json"
    ],
    "declared_signals": [
     ".",
@@ -146,7 +141,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): cloud-ops-cron-alias-dispatch-patch.py",
+    "LANDED(0): nothing to apply - main is current",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -214,26 +209,23 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/cloud-ops-cron-alias-dispatch-patch.py",
    "tail": [
     "STATE worker.js alias=4 noop=1 syncerr=2 version=1.15.1-cron-alias-dispatch",
     "STATE deployed-current.worker.js alias=4 noop=1 syncerr=2 version=1.15.1-cron-alias-dispatch",
-    "TOTAL_EDITS 6"
+    "TOTAL_EDITS 0"
    ],
-   "verdict": "applied-now"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/cloud-ops-cron-dow-patch.py",
    "tail": [
-    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.0-cron-dow-cf",
-    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.0-cron-dow-cf",
+    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.1-cron-alias-dispatch",
+    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.1-cron-alias-dispatch",
     "TOTAL_EDITS 0"
    ],
    "verdict": "already-applied"
@@ -417,6 +409,17 @@
     "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)"
    ],
    "verdict": "undetermined"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/email-approval-gate-patch.py",
+   "tail": [
+    "STATE worker.js gate=2 reputation=1 held=1 version=?",
+    "STATE deployed-current.worker.js gate=2 reputation=1 held=1 version=?",
+    "TOTAL_EDITS 0"
+   ],
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -936,6 +939,15 @@
   },
   {
    "changed_files": [],
+   "rc": 3,
+   "script": "scripts/tool-budget-pending-toolcalls-patch.py",
+   "tail": [
+    "TOOL-BUDGET-PENDING-1: FAIL-CLOSED anchor occurrence != 1 (found 0) for: 'var MAX_TOOL_ITERS = 40;'"
+   ],
+   "verdict": "stale-anchor"
+  },
+  {
+   "changed_files": [],
    "declared_signals": [
     "REPO_ROOT/.",
     "normalize_version_anchors"
@@ -960,7 +972,8 @@
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/patch-container-binding-guard-1.py",
   "scripts/raw-put-schedules-patch.py",
-  "scripts/run-gate-internal-patch.py"
+  "scripts/run-gate-internal-patch.py",
+  "scripts/tool-budget-pending-toolcalls-patch.py"
  ],
  "superseded": [
   "scripts/attachguard-xml-form-patch.py",
@@ -969,8 +982,8 @@
   "scripts/patch-404hint-list-1.py",
   "scripts/patch-cron-only-class-2.py"
  ],
- "total": 87,
- "ts": "2026-09-30T07:19:40.842Z",
+ "total": 89,
+ "ts": "2026-09-30T07:48:37.872Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
