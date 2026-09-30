@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 19:59:00",
+  "audited_at": "2026-09-30 20:04:03",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -28,16 +28,10 @@
     "cron_only_count": 2,
     "drift": [
       {
-        "dir": "q08-signal-engine",
-        "live": "0.7.32-titlepromote",
-        "repo": "0.7.31-urlsafe",
-        "worker": "q08-signal-engine"
-      },
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.7.40-dispatch-abort-classify",
-        "repo": "1.7.39-agissue-count",
-        "worker": "qnfo-fleet-dashboard"
+        "dir": "qnfo-ops",
+        "live": "2.38.15-audit-trail-writer",
+        "repo": "2.38.14-do-loop-budget-parity",
+        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
@@ -417,7 +411,7 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -443,6 +437,11 @@
         "dir": "personal-companion",
         "version": "1.7.1-adv1",
         "worker": "personal-companion"
+      },
+      {
+        "dir": "q08-signal-engine",
+        "version": "0.7.32-titlepromote",
+        "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-agent-orchestrator",
@@ -505,6 +504,11 @@
         "worker": "qnfo-fleet-control"
       },
       {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.7.40-dispatch-abort-classify",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
         "dir": "qnfo-gateway",
         "version": "3.7.16-utf8-escape",
         "worker": "qnfo-gateway"
@@ -543,11 +547,6 @@
         "dir": "qnfo-observability",
         "version": "1.2.12-chain-draining",
         "worker": "qnfo-observability"
-      },
-      {
-        "dir": "qnfo-ops",
-        "version": "2.38.14-do-loop-budget-parity",
-        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -847,11 +846,11 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.31-urlsafe",
+      "before": "0.7.32-titlepromote",
       "http": 200,
       "live": "0.7.32-titlepromote",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
@@ -1151,11 +1150,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.39-agissue-count",
+      "before": "1.7.40-dispatch-abort-classify",
       "http": 200,
       "live": "1.7.40-dispatch-abort-classify",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1281,9 +1280,9 @@
     "qnfo-ops": {
       "before": "2.38.14-do-loop-budget-parity",
       "http": 200,
-      "live": "2.38.14-do-loop-budget-parity",
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.38.15-audit-trail-writer",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
