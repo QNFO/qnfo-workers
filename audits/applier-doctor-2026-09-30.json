@@ -1,9 +1,10 @@
 {
  "counts": {
-  "already-applied": 69,
+  "already-applied": 70,
   "error": 8,
   "stale-anchor": 11,
-  "undetermined": 10
+  "superseded": 1,
+  "undetermined": 12
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -132,9 +133,12 @@
   {
    "changed_files": [
     " M ci-status/apply-pending-report.json",
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/scripts/guard-timebudget.sh",
-    " M qnfo-ops/worker.js"
+    " M q08-signal-engine/deployed-current.worker.js",
+    " M q08-signal-engine/worker.js",
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js",
+    " M qnfo-fleet-dashboard/deployed-current.worker.js",
+    " M qnfo-fleet-dashboard/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -143,7 +147,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): toolbudget-do-loop-parity-1-patch.py",
+    "LANDED(4): dashboard-agissue-undercount-patch.py, dashboard-open-issue-undercount-patch.py, outreach-cap-status-1-patch.py, patch-q08-title-promote-1.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -285,6 +289,20 @@
    "verdict": "stale-anchor"
   },
   {
+   "changed_files": [
+    " M qnfo-fleet-dashboard/worker.js"
+   ],
+   "declared_signals": [
+    "DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1"
+   ],
+   "rc": 0,
+   "script": "scripts/dashboard-agissue-undercount-patch.py",
+   "tail": [
+    "OK DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1: 207517 -> 208239 bytes; VERSION -> 1.7.39-agissue-count"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "rc": 1,
    "script": "scripts/dashboard-drift-failclosed-patch.py",
@@ -293,6 +311,22 @@
     "FAIL-CLOSED: edit 'version-bump' matched 0 times in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-dashboard/worker.js"
    ],
    "verdict": "error"
+  },
+  {
+   "changed_files": [
+    " M qnfo-fleet-dashboard/deployed-current.worker.js",
+    " M qnfo-fleet-dashboard/worker.js"
+   ],
+   "outcome_present_in": [
+    "qnfo-fleet-dashboard/deployed-current.worker.js :: DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1"
+   ],
+   "rc": 0,
+   "script": "scripts/dashboard-open-issue-undercount-patch.py",
+   "tail": [
+    "patched: /home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-dashboard/worker.js (4 edits)",
+    "patched: /home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-dashboard/deployed-current.worker.js (4 edits)"
+   ],
+   "verdict": "superseded"
   },
   {
    "changed_files": [],
@@ -456,7 +490,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 402907 (unchanged)",
+    "bytes: 403877 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -478,7 +512,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (402909 bytes)",
+    "mirror pair byte-identical (403879 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -521,10 +555,27 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=402909 marker=1",
-    "  deployed-current.worker.js bytes=402909 marker=1"
+    "  worker.js bytes=403879 marker=1",
+    "  deployed-current.worker.js bytes=403879 marker=1"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js"
+   ],
+   "declared_signals": [
+    "OUTREACH-CAP-STATUS-1"
+   ],
+   "rc": 0,
+   "script": "scripts/outreach-cap-status-1-patch.py",
+   "tail": [
+    "PATCHED qnfo-cloud-ops/worker.js (127426 -> 127905 bytes)",
+    "PATCHED qnfo-cloud-ops/deployed-current.worker.js (127426 -> 127905 bytes)",
+    "RESULT rc=0 changed=True"
+   ],
+   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -691,6 +742,23 @@
     "OK changed=0"
    ],
    "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M q08-signal-engine/deployed-current.worker.js",
+    " M q08-signal-engine/worker.js"
+   ],
+   "declared_signals": [
+    "TITLE-PROMOTE-1"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-q08-title-promote-1.py",
+   "tail": [
+    "TITLE-PROMOTE-1 q08-signal-engine/worker.js: applied (+1615 bytes)",
+    "TITLE-PROMOTE-1 q08-signal-engine/deployed-current.worker.js: applied (+1615 bytes)",
+    "TITLE-PROMOTE-1: patched 2 file(s)"
+   ],
+   "verdict": "undetermined"
   },
   {
    "changed_files": [],
@@ -986,21 +1054,13 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/scripts/guard-timebudget.sh",
-    " M qnfo-ops/worker.js"
-   ],
-   "declared_signals": [
-    "TOOLBUDGET-DO-LOOP-PARITY-1",
-    "TOOL-BUDGET-PENDING-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/toolbudget-do-loop-parity-1-patch.py",
    "tail": [
-    "APPLIED: worker.js + deployed-current.worker.js 402907 -> 403877 bytes; VERSION 2.38.13-agent-final-tier -> 2.38.14-do-loop-budget-parity; guard extended"
+    "ALREADY APPLIED (idempotent no-op): TOOLBUDGET-DO-LOOP-PARITY-1 present in both bundles"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -1061,19 +1121,23 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
- "superseded": [],
- "total": 98,
- "ts": "2026-09-30T19:51:38.110Z",
+ "superseded": [
+  "scripts/dashboard-open-issue-undercount-patch.py"
+ ],
+ "total": 102,
+ "ts": "2026-09-30T19:53:34.815Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
+  "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/driftguard-server-version-patch.py",
+  "scripts/outreach-cap-status-1-patch.py",
   "scripts/panel6-mediated-count-patch.py",
+  "scripts/patch-q08-title-promote-1.py",
   "scripts/patch-schedules-body-1498.py",
   "scripts/schedules-live-1-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
-  "scripts/toolbudget-do-loop-parity-1-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
 }
