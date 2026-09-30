@@ -40,8 +40,16 @@ on:
 permissions:
   contents: read
 
+# CONCURRENCY-PER-REF-1 (2026-09-30): this group used to be the constant `version-bump-guard`
+# with cancel-in-progress: true, and the workflow runs for a push or PR on ANY branch. A run on
+# one ref therefore cancelled the in-flight run on every other ref: run 36732557644 (the guard
+# for PR 87's head) was cancelled 4 s after it started, leaving the required-looking `guard`
+# check as `cancelled` on a commit whose content nothing had rejected. Scope the group to the
+# ref so a newer push supersedes only an older run of the SAME ref. github.ref differs between
+# the push event (refs/heads/x) and the pull_request event (refs/pull/N/merge), so those two
+# never cancel each other either.
 concurrency:
-  group: version-bump-guard
+  group: version-bump-guard-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
