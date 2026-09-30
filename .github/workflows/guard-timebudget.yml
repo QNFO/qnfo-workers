@@ -1,0 +1,116 @@
+name: guard-timebudget
+
+# OPS-SETTINGS-IMMUTABLE-1 drift gate for the qnfo-ops tool-loop budget.
+#
+# WHY THIS EXISTS (2026-09-30)
+# qnfo-ops/scripts/guard-timebudget.sh already existed, but NO workflow invoked it,
+# so the drift gate never fired. That is the enabling cause of
+# OPS_NONSTREAM_DEADLINE_MS sitting at 3e4 (30 s) instead of the canonical 3e5
+# (300 s): non-streaming (mobile) callers got one tenth of the tool-loop budget, the
+# loop expired after roughly four tool rounds, and the operator saw
+# "tool budget exhausted before these could run" instead of a finished task.
+#
+# The guard was also UNLANDABLE. The apply-pending commit step staged only
+# `scripts/`, `*worker.js` and `ci-status/`, a pathspec that cannot match
+# qnfo-ops/scripts/*.sh, so every rewrite of the guard was written into the ephemeral
+# CI worktree and discarded at commit time
+# (COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1). That pathspec is now fixed, and
+# this workflow removes the orphan half permanently.
+#
+# NOTE ON THE SCHEDULE EVENT (SCHEDULE-EVENT-NEVER-FIRES-1)
+# The GitHub `schedule` event has never fired in this repo, so the cron below is a
+# best-effort backstop ONLY. The gate's real trigger is push to main plus
+# workflow_dispatch: a push-triggered gate that always runs beats a scheduled one
+# that never does.
+#
+# Step names are colon-free (WORKFLOW-YAML-LINT-1).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-ops/worker.js"
+      - "qnfo-ops/wrangler.toml"
+      - "qnfo-ops/scripts/guard-timebudget.sh"
+      - ".github/workflows/guard-timebudget.yml"
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: guard-timebudget
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: "Run the tool-loop budget drift gate"
+        id: gate
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          rc=0
+          bash qnfo-ops/scripts/guard-timebudget.sh || rc=$?
+          echo "gate_rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "gate_rc=$rc"
+
+      - name: "Publish the gate outcome (always)"
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/guard-timebudget.json <<EOF
+          {
+            "workflow": "guard-timebudget",
+            "marker": "OPS-SETTINGS-IMMUTABLE-1",
+            "gate_rc": "${{ steps.gate.outputs.gate_rc }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/guard-timebudget.json
+
+      - name: "Commit the gate artifact (race-safe, bounded retry)"
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/guard-timebudget.json
+          if git diff --cached --quiet; then
+            echo "no status change"
+            exit 0
+          fi
+          git commit -m "ci(status): guard-timebudget gate outcome [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "STATUS_PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "status push failed"
+          exit 0
+
+      - name: "Fail the job if the gate is red"
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ "${{ steps.gate.outputs.gate_rc }}" != "0" ]; then
+            echo "::error::guard-timebudget.sh reported DRIFT (OPS-SETTINGS-IMMUTABLE-1)"
+            exit 1
+          fi
+          echo "guard-timebudget.sh PASS"

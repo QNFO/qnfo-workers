@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.1-cron-alias-dispatch";
+var VERSION = "1.15.3-schedules-live-1"; /* SCHEDULES-LIVE-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -1570,10 +1570,22 @@ async function jobOutreach(env) {
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) {
         out.skipped_dupe++;
+        /* OUTREACH-TERMINAL-STATUS-1 (#1294/#1508): a duplicate must leave the
+           work set. It used to `continue` with no status write, so the
+           ORDER BY created_at ASC LIMIT 10 window re-selected it on every run
+           and starved every row behind it. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-dup', error='duplicate contact (contact_ledger/outreach_log)' WHERE id=?1").bind(r.id).run().catch(function() {
+        });
         continue;
       }
       if (!validEmail(email)) {
         out.errors.push({ id: r.id, error: "invalid email " + email });
+        /* OUTREACH-TERMINAL-STATUS-1 (#1294/#1508): an un-sendable address must
+           leave the work set, not be re-selected forever. This is the same
+           class that sent a malformed address twice (#1479); the row is now
+           parked instead of re-queued. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-invalid', error=?2 WHERE id=?1").bind(r.id, "invalid email " + email).run().catch(function() {
+        });
         continue;
       }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
@@ -2206,12 +2218,19 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((err) => console.log("self-register err", err && err.message || err)));
       }
+      // CLOUD-OPS-HEALTH-AUTH-1 (#1471): this route is handled before the auth
+      // gate below, so it used to disclose binding/secret presence and the
+      // full cron map to anonymous callers. Serve a minimal public body; the
+      // detailed body requires a valid bearer token.
+      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION };
+      const healthToken = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      if (!auth(healthToken, env)) {
+        return new Response(JSON.stringify(publicBody), { headers: { "Content-Type": "application/json", ...CORS } });
+      }
       const off = amsOffset(/* @__PURE__ */ new Date());
       const crons = buildCrons(off).map((c) => c.cron + " -> " + c.job);
       return new Response(JSON.stringify({
-        ok: true,
-        worker: WORKER_NAME,
-        version: VERSION,
+        ...publicBody,
         jobs: Object.keys(JOBS),
         ams_offset: off,
         crons,

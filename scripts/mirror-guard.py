@@ -169,16 +169,24 @@ def main(argv):
                 captured.append(name)
                 rows.append((name, "CAPTURED", "plain source", "multipart-upload capture - NOT auto-fixable"))
                 continue
-            if is_import_free(src_p):
+            # MIRROR-GUARD-IMPORT-BLINDSPOT-1 (2026-09-30, issue #1513): an import-using source is a bundle
+            # INPUT, not a plain deployable, so the previous rule left it report-only and
+            # the scheduled mirror-sync could NEVER repair qnfo-ops parity. This branch is
+            # only reached when the source and mirror carry the SAME version constant, so the
+            # mirror is not version-ahead; worker.js is the source of truth and the canonical
+            # deploy reads the mirror, so a byte-divergent version-equal pair silently reverts
+            # the source. Repair it when the source is at least as large as the mirror (a stale
+            # same-version build is smaller; a mirror-ahead hotfix is larger and is left alone).
+            if is_import_free(src_p) or os.path.getsize(src_p) >= os.path.getsize(mir_p):
                 content_drift.append(name)
                 drift.append(name)
-                rows.append((name, "CONTENT-DRIFT", "sha=%s" % hs[:12], "sha=%s" % hm[:12]))
+                rows.append((name, "CONTENT-DRIFT-IMPORT-SOT", "sha=%s" % hs[:12], "sha=%s" % hm[:12]))
                 if fix:
                     shutil.copyfile(src_p, mir_p)
                     fixed.append(name)
             else:
                 review.append(name)
-                rows.append((name, "CONTENT-DIFF-REVIEW", "import-using source - report only", "sha=%s" % hm[:12]))
+                rows.append((name, "CONTENT-DIFF-REVIEW", "import-using source - mirror larger - report only", "sha=%s" % hm[:12]))
             continue
         if is_captured(mir_p):
             captured.append(name)

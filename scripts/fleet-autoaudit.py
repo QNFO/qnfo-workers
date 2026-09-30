@@ -174,8 +174,12 @@ def classify(d):
         rows[worker] = {"worker": worker, "http": http, "live": live,
                         "before": before, "match": match, "note": note}
 
-    for w in d.get("sync_workers", []):
-        put(w, 200, None, None, 1, "SYNC")
+    for it in d.get("sync_workers", []):
+        # SYNC-VERSION-CAPTURE-1 (issue 1509): sync_workers now carries the version.
+        # Accept both the object form and the legacy bare-string form so an older guard
+        # cannot crash this consumer.
+        _v = it.get("version") if isinstance(it, dict) else None
+        put(_w(it), 200, _v, _v, 1, "SYNC")
     for it in d.get("drift", []):
         put(it["worker"], 200, it.get("live"), it.get("repo"), 0, "DRIFT")
     for it in d.get("content_drift", []):

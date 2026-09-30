@@ -1,0 +1,10 @@
+{
+  "configs_scanned": 94,
+  "distinct_worker_names": 94,
+  "duplicates": {},
+  "gate": "DUP-WORKER-NAME-GATE-1",
+  "issue": 1384,
+  "no_name_configs": [],
+  "ok": true,
+  "root": "/home/runner/work/qnfo-workers/qnfo-workers"
+}

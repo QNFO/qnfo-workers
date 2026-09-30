@@ -16,7 +16,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.4-container-ctx-guard";
+var VERSION = "1.0.5-container-import-fix";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -68,7 +68,7 @@ async function logEvent(env, kind, text, meta, status) {
   }
 }
 __name(logEvent, "logEvent");
-var ShellContainer = class {
+class ShellContainer {
   static {
     __name(this, "ShellContainer");
   }
@@ -166,7 +166,8 @@ var ShellContainer = class {
         const cwd = body.cwd ? String(body.cwd) : WORKSPACE;
         if (!code) return json({ ok: false, error: "body.code required" }, 400);
         await this.ensureStarted();
-        const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && node -e " + JSON.stringify(code)]);
+        const b64 = btoa(unescape(encodeURIComponent(code)));
+        const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && printf %s " + JSON.stringify(b64) + " | base64 -d | node -"]);
         return json({ ok: out.exitCode === 0, result: out });
       }
       if (path === "/pip") {
@@ -341,8 +342,6 @@ var worker_default = {
     return stub.fetch(request);
   }
 };
-export {
-  ShellContainer,
-  worker_default as default
-};
+export { ShellContainer };
+export default worker_default;
 //# sourceMappingURL=worker.js.map
