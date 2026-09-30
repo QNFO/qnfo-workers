@@ -1,7 +1,7 @@
 {
  "counts": {
-  "already-applied": 75,
-  "error": 9,
+  "already-applied": 77,
+  "error": 8,
   "stale-anchor": 11,
   "undetermined": 9
  },
@@ -13,8 +13,7 @@
   "scripts/patch-container-exports-map-1.py",
   "scripts/patch-cron-only-class.py",
   "scripts/selfheal-volfloor-patch.py",
-  "scripts/telemetry-truth-patch.py",
-  "scripts/unauth-trigger-1-patch.py"
+  "scripts/telemetry-truth-patch.py"
  ],
  "marker": "APPLIER-DOCTOR-2",
  "never_landed": [],
@@ -683,6 +682,17 @@
   {
    "changed_files": [],
    "rc": 0,
+   "script": "scripts/patch-fleet-exec-tick-unauth-1.py",
+   "tail": [
+    "fleet-exec/worker.js                          already-applied ",
+    "fleet-exec/deployed-current.worker.js         already-applied ",
+    "OK FLEET-EXEC-TICK-UNAUTH-1"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
    "script": "scripts/patch-github-read-404-hint-1.py",
    "tail": [
     "ALREADY APPLIED: qnfo-ops/worker.js",
@@ -1078,14 +1088,12 @@
   },
   {
    "changed_files": [],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/unauth-trigger-1-patch.py",
    "tail": [
-    "ok: insert helpers before execMod",
-    "ok: guard /run",
-    "STALE-ANCHOR: guard /tick matched 0 times (want 1); nothing written"
+    "SUPERSEDED: UNAUTH-TRIGGER-1 already closed by patch-fleet-exec-tick-unauth-1.py (commit 81581bf); no-op"
    ],
-   "verdict": "error"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -1116,8 +1124,8 @@
   "scripts/run-gate-internal-patch.py"
  ],
  "superseded": [],
- "total": 104,
- "ts": "2026-09-30T20:41:21.475Z",
+ "total": 105,
+ "ts": "2026-09-30T20:44:07.213Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
