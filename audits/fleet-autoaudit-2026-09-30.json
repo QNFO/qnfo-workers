@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 15:38:34",
+  "audited_at": "2026-09-30 15:49:25",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -498,7 +498,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.38-reorg-dispose-guards1",
+        "version": "0.4.39-selfstate-obs1",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -548,7 +548,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.3-schema-first",
+        "version": "2.38.5-backlog-probe-error",
         "worker": "qnfo-ops"
       },
       {
@@ -1137,9 +1137,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.38-reorg-dispose-guards1",
+      "before": "0.4.39-selfstate-obs1",
       "http": 200,
-      "live": "0.4.38-reorg-dispose-guards1",
+      "live": "0.4.39-selfstate-obs1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1273,9 +1273,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.3-schema-first",
+      "before": "2.38.5-backlog-probe-error",
       "http": 200,
-      "live": "2.38.3-schema-first",
+      "live": "2.38.5-backlog-probe-error",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
