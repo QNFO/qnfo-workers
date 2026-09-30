@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.32-titlepromote"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.33-run-lifecycle"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -957,6 +957,43 @@ async function handleSubscribe(req, env, url) {
   return html("<h2>Almost there</h2><p>Check your inbox for a confirmation link.</p>");
 }
 
+// Q08-STUCK-RUN-ROWS-1 (v0.7.33, issue 1670): an async /run whose isolate the platform cut short leaves its
+// placeholder at status=running. generate() takes 30-90s, so anything still running after 30 min is dead.
+async function sweepStaleRuns(env) {
+  await env.DB.prepare("UPDATE engine_runs SET status='abandoned', error=COALESCE(error,'') || ' | STALE-RUN-SWEEP: isolate ended before finalize' WHERE status='running' AND ran_at < datetime('now','-30 minutes')").run().catch(function () {});
+}
+// Q08-GATE-OUTAGE-SELF-REPORT-1 (v0.7.33, issue 1671): 15 consecutive gate_failed cycles (~28h, runs 190-204) raised
+// nothing and were found only because a human asked why q08.org was quiet. After every cron cycle: if the last 3
+// finished generation runs published nothing AND the newest piece is older than 8h, file an agent_issue (the
+// open-title unique index dedupes repeats) and an alert. Recovery is visible as runs with piece_published=1.
+async function stallDetector(env) {
+  if (!env.AUDIT) return;
+  try {
+    var runs = await env.DB.prepare("SELECT id, status, piece_published, error FROM engine_runs WHERE status NOT IN ('running','abandoned','async-done') ORDER BY id DESC LIMIT 3").all();
+    var rs = runs && runs.results || [];
+    var pub = rs.filter(function (r) { return Number(r.piece_published) > 0; });
+    if (pub.length) {
+      // Recovered: close any open auto-filed stall issue with evidence (issue_close_evidence_required needs it first).
+      var open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE 'Q08-PUBLISH-STALL-AUTO-1:%'").all();
+      for (var o of (open && open.results || [])) {
+        await env.AUDIT.prepare("UPDATE issue_triage SET close_evidence=?1 WHERE issue_id=?2").bind("q08-signal-engine " + VERSION + " stallDetector: engine_runs #" + pub[0].id + " published (piece_published=1) at " + new Date().toISOString(), o.id).run();
+        await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel='auto-recovery', updated_at=?1 WHERE id=?2").bind(Date.now(), o.id).run();
+      }
+      return;
+    }
+    if (rs.length < 3) return;
+    var last = await env.DB.prepare("SELECT MAX(published_at) m FROM published_pieces").first();
+    var lastMs = last && last.m ? Date.parse(last.m) : 0;
+    var hours = lastMs ? (Date.now() - lastMs) / 36e5 : Infinity;
+    if (hours < 8) return;
+    var causes = rs.map(function (r) { return "#" + r.id + " " + r.status + ": " + String(r.error || "").slice(0, 80); }).join(" | ");
+    var title = "Q08-PUBLISH-STALL-AUTO-1: q08-signal-engine published nothing in the last 3 runs and " + (isFinite(hours) ? Math.round(hours) + "h" : "ever") + " since the last piece";
+    var desc = "Filed automatically by q08-signal-engine " + VERSION + " stallDetector. Last 3 finished runs: " + causes + ". Check the quality-gate sub-causes above (engine_runs.error) and GET https://q08.org/api/runs. Closes when a run publishes (piece_published=1).";
+    var now = Date.now();
+    await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'q08-signal-engine', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE 'Q08-PUBLISH-STALL-AUTO-1:%')").bind(title, desc, now).run().catch(function () {});
+    await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('q08-signal-engine', 'warn', ?1, 0)").bind(title).run().catch(function () {});
+  } catch (e) {}
+}
 export default {
   async fetch(req, env, ctx) {
     var url  = new URL(req.url);
@@ -982,12 +1019,18 @@ export default {
       var async_mode = url.searchParams.get("async") !== "0";
       if (async_mode) {
         var runId = Date.now().toString(36);
-        await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'running',?)").bind("run-id:" + runId + " async generation started").run().catch(function(){});
+        // Q08-STUCK-RUN-ROWS-1 (v0.7.33, issue 1670): this placeholder was never finalized. generate() writes its own
+        // engine_runs row, and the old completion handler rewrote the error text of MAX(id) - i.e. generate()'s row -
+        // so the placeholder stayed status=running forever (run 205). Finalize THIS row by id; rows whose isolate was
+        // cut short are closed by sweepStaleRuns() on the next cron.
+        var ph = await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'running',?)").bind("run-id:" + runId + " async generation started").run().catch(function(){ return null; });
+        var phId = ph && ph.meta ? ph.meta.last_row_id : null;
         ctx.waitUntil(generate(env).then(async (out) => {
-          await env.DB.prepare("UPDATE engine_runs SET error=? WHERE id=(SELECT MAX(id) FROM engine_runs)")
-            .bind("run-id:" + runId + " result:" + JSON.stringify(out).slice(0,200)).run().catch(()=>{});
+          if (phId) await env.DB.prepare("UPDATE engine_runs SET status='async-done', error=? WHERE id=? AND status='running'")
+            .bind("run-id:" + runId + " result:" + JSON.stringify(out).slice(0,200), phId).run().catch(()=>{});
         }).catch(async (e) => {
-          await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'error',?)").bind(String(e&&e.message||e).slice(0,500)).run().catch(()=>{});
+          if (phId) await env.DB.prepare("UPDATE engine_runs SET status='error', error=? WHERE id=?").bind(String(e&&e.message||e).slice(0,500), phId).run().catch(()=>{});
+          else await env.DB.prepare("INSERT INTO engine_runs (ms,status,error) VALUES (0,'error',?)").bind(String(e&&e.message||e).slice(0,500)).run().catch(()=>{});
         }));
         return json({ ok: true, worker: WORKER, version: VERSION, mode: "async", run_id: runId, note: "generating in background; poll /api/runs or /health. Async runs may be cut short by the platform after ~30s; the cron path is the reliable one." });
       }
@@ -1111,10 +1154,10 @@ export default {
 
   async scheduled(controller, env, ctx) {
     if (controller.cron === "0 17 * * *") { ctx.waitUntil(sendDigest(env)); return; }
-    ctx.waitUntil(generate(env).catch(async (e) => {
+    ctx.waitUntil(sweepStaleRuns(env).then(() => generate(env)).catch(async (e) => {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
       ).bind(String(e && e.message || e).slice(0, 500)).run().catch(() => {});
-    }));
+    }).then(() => stallDetector(env)));
   },
 };
