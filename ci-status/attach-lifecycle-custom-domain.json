@@ -1,0 +1,15 @@
+{
+  "marker": "ATTACH-LIFECYCLE-CUSTOM-DOMAIN-1",
+  "observability": "ATTACH-DOMAIN-OBSERVABLE-1",
+  "hostname": "lifecycle.qnfo.org",
+  "service": "qnfo-lifecycle",
+  "account_id": "edb167b78c9fb901ea5bca3ce58ccc4b",
+  "token_present": true,
+  "stage": "attach",
+  "status": "failed",
+  "http": 405,
+  "error": "attach http=405 body={\"success\": false, \"errors\": [{\"code\": 10405, \"message\": \"Method not allowed for this authentication scheme\"}], \"messages\": [], \"result\": null}",
+  "zone_id": "84e9dc1d7fb72629ccdbe3174ed24420",
+  "already_attached": null,
+  "ts": "2026-09-30T20:40:38Z"
+}
