@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.37-opsprobe-writeback1";
+var VERSION = "0.4.37-opsprobe";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1890,16 +1890,9 @@ async function budgetAudit(env, names) {
         out.over.push(r.node_class + " cur=" + r.current + " cap=" + r.cap);
       }
     }
-    if (!out.over.length) {
-      try {
-        await env.AUDIT.prepare("UPDATE self_heal_actions SET status='resolved', verified_at=datetime('now'), claim=COALESCE(claim,'SELFHEAL-WRITEBACK-CLOSE-1: budget back under cap, detection resolved'), confidence=COALESCE(confidence,'high') WHERE kind='node-budget' AND status='detected'").run();
-      } catch (e) {
-      }
-    }
     if (out.over.length) {
       out.note = "BUDGET-OVER " + out.over.join("; ");
       try {
-        await env.AUDIT.prepare("UPDATE self_heal_actions SET status='resolved', verified_at=datetime('now'), claim=COALESCE(claim,'SELFHEAL-WRITEBACK-CLOSE-1: superseded by a newer budget detection cycle'), confidence=COALESCE(confidence,'high') WHERE kind='node-budget' AND status='detected'").run();
         var recent = await env.AUDIT.prepare("SELECT COUNT(*) n FROM self_heal_actions WHERE kind='node-budget' AND ts > datetime('now','-30 minutes')").first();
         if (!recent || Number(recent.n || 0) === 0) {
           await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES ('node-budget','fleet-budget',?1,datetime('now'),'detected')").bind(out.note).run();

@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.32-tool-budget-ceiling-1";
+var VERSION = "2.37.31-continuation-inherit";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -101,8 +101,7 @@ var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-f
 var GW_MAX_OUT = 32768;
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-// TOOL-BUDGET-CEILING-1 canonical ceilings restored (2026-09-30)
-var MAX_TOOL_ITERS = 40;
+var MAX_TOOL_ITERS = 12;
 var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
@@ -4175,7 +4174,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5);
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e4);
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
@@ -4402,32 +4401,6 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (cacheHit === 0 && !execUpstream && !clientTools && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
       ctx.waitUntil(chatCacheStore(env, prompt, String(content || "").trim(), wanted));
     }
-    // BUDGET-AUTO-CONTINUE-1 (2026-09-30): a turn that exhausts the 300s tool-loop soft
-    // budget (OPS-SETTINGS-IMMUTABLE-1) ends with an "INCOMPLETE:" line and the remaining
-    // work was DROPPED -- the client had to re-prompt. MEASURED 2026-09-30: 707/773 turns
-    // streamed, avg 198s against the 300s budget, so exhaustion is routine. Remediation
-    // uses the async path the settings spec itself prescribes: enqueue a durable ops_jobs
-    // continuation carrying the accumulated tool findings so the work resumes server-side
-    // with a fresh budget. Chain depth capped at 3.
-    try {
-      const _incM = String(content || "").match(/\bINCOMPLETE:\s*([^\n]{0,400})/i);
-      if (_incM && !codeMode && !clientHandoff && !(body && (body._autoContinue === true || body.x_ops_async === true))) {
-        const _depth = Number(body && body._continueDepth || 0);
-        if (_depth < 3) {
-          const _summ = toolLog.slice(-12).map(function(t) {
-            return "- " + t.name + " " + (t.ok ? "OK" : "FAIL") + ": " + String(t.summary || "").slice(0, 140);
-          }).join(String.fromCharCode(10));
-          const _resume = "AUTONOMOUS CONTINUATION (depth " + (_depth + 1) + "/3) - the previous interactive run exhausted its 300s tool-loop budget and reported:" + String.fromCharCode(10) + String(_incM[1] || "").trim() + String.fromCharCode(10, 10) + "ORIGINAL INSTRUCTION:" + String.fromCharCode(10) + String(prompt || "").slice(0, 4e3) + String.fromCharCode(10, 10) + "TOOL CALLS ALREADY MADE (oldest first):" + String.fromCharCode(10) + (_summ || "(none recorded)") + String.fromCharCode(10, 10) + "Resume the work NOW from exactly where it stopped. Do not repeat completed steps. Do not narrate. Finish the task and report the completed result with evidence.";
-          const _cjob = await createJobFromBody(env, { model: "ops-exec", _autoContinue: true, _continueDepth: _depth + 1, messages: [{ role: "system", content: OPS_SYSTEM_PROMPT + "\n\nToday is " + (new Date()).toISOString().slice(0, 10) + " (UTC)." }, { role: "user", content: _resume }] });
-          if (_cjob && _cjob.id) {
-            content = String(content || "") + String.fromCharCode(10, 10) + "AUTO-CONTINUE: durable job " + _cjob.id + " queued - the remaining work resumes server-side with a fresh budget (poll GET /v1/jobs/" + _cjob.id + ").";
-            ctx.waitUntil(logEscalation(env, strategy, UPSTREAM_MODEL, UPSTREAM_MODEL, "budget-auto-continue", "INCOMPLETE turn auto-continued as job " + _cjob.id + " depth " + (_depth + 1)));
-          } else if (_cjob && _cjob.error) {
-            ctx.waitUntil(logEscalation(env, strategy, UPSTREAM_MODEL, UPSTREAM_MODEL, "budget-auto-continue-failed", String(_cjob.error).slice(0, 300)));
-          }
-        }
-      }
-    } catch (eAC) { console.log("auto-continue failed:", eAC && eAC.message || eAC); }
     ctx.waitUntil(logOps(env, logRec));
     if (isStream) {
       if (clientHandoff) {

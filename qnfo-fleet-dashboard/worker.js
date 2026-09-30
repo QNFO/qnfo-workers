@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.34-panel6-mediated-count-writeback1";
+var VERSION = "1.7.34-panel6-mediated-count";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1063,7 +1063,6 @@ async function execOne(env, row, prevState) {
     if (state2 !== prior) {
       try {
         await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + (spec && spec.note || ""), now, state2, now).run();
-        await env.AUDIT.prepare("UPDATE self_heal_actions SET status=?1, verified_at=?2, claim=COALESCE(claim,?3), confidence=COALESCE(confidence,'high') WHERE kind='fleet-issue' AND ref=?4 AND status='dispatched'").bind(state2, now, "SELFHEAL-WRITEBACK-CLOSE-1: closed by paired fleet-execute receipt", row.fingerprint).run();
       } catch (e) {
       }
       if (row.gh_number && state2 === "needs-human") await ghComment(env, row.gh_number, "**Execution receipt:** needs-human - " + (spec && spec.note || "no safe autonomous action") + ". Owner " + (row.owner || "fleet") + " must act.");
@@ -1091,7 +1090,6 @@ async function execOne(env, row, prevState) {
   if (state !== prior) {
     try {
       await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state + "] " + spec.note + " :: " + body.slice(0, 200), now, state, now).run();
-      await env.AUDIT.prepare("UPDATE self_heal_actions SET status=?1, verified_at=?2, claim=COALESCE(claim,?3), confidence=COALESCE(confidence,'high') WHERE kind='fleet-issue' AND ref=?4 AND status='dispatched'").bind(state, now, "SELFHEAL-WRITEBACK-CLOSE-1: closed by paired fleet-execute receipt", row.fingerprint).run();
     } catch (e) {
     }
     if (row.gh_number) await ghComment(env, row.gh_number, "**Execution receipt:** " + state + " - " + spec.note + " (HTTP " + status + ", " + ms + "ms). Evidence: " + body.slice(0, 200));

@@ -458,12 +458,7 @@ def main():
                 else:
                     ahead.append((d, worker, rv, lv, rpath))
         else:
-            # SYNC-VERSION-CAPTURE-1 (issue 1509): sync_workers used to be bare worker
-            # name strings, so the consumer had no version to write and
-            # worker_live_audit.live_version was NULL for every SYNC row -- making
-            # match=1 indistinguishable from a degenerate liveness pass. Emit the
-            # {worker,dir,version} object shape used by every other class.
-            sync_workers.append({"worker": worker, "dir": d, "version": lv})
+            sync_workers.append(worker)
         if want_content and content_ok and rtext is not None:
             live_text = live_content(worker, acct, token)
             if live_text is not None and _sha(live_text) != _sha(rtext):
