@@ -116,9 +116,9 @@ jobs:
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
-          git add ci-status/applier-rot-triage.json ci-status/applier-doctor.json
+          git add -A ci-status scripts .github/workflows
           if git diff --cached --quiet; then echo "no status change"; exit 0; fi
-          git commit -m "ci(status): applier-rot-triage [skip ci]"
+          git commit -m "ci(applier): applier-rot-triage + retire superseded appliers [skip ci]"
           for i in 1 2 3; do
             if git pull --rebase --autostash origin main && git push origin HEAD:main; then
               echo "status pushed on attempt $i"

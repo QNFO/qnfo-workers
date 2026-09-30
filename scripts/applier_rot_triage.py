@@ -94,6 +94,24 @@ def d1(sql, params):
         return {"success": False, "error": str(e)[:300]}
 
 
+def find_workflow(script):
+    """Map scripts/<x>-patch.py or scripts/patch-<x>.py -> .github/workflows/apply-<x>.yml."""
+    base = os.path.basename(script)
+    for suf in ("-patch.py", ".py"):
+        if base.endswith(suf):
+            base = base[: -len(suf)]
+            break
+    base = base.replace("patch-", "")
+    wfdir = ".github/workflows"
+    try:
+        for f in sorted(os.listdir(wfdir)):
+            if f.startswith("apply-") and f.endswith(".yml") and base and base in f:
+                return os.path.join(wfdir, f)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def main():
     if not ACCT or not TOKEN:
         die(2, "CF_ACCOUNT_ID/CLOUDFLARE_API_TOKEN absent; refusing to no-op silently")
@@ -106,6 +124,26 @@ def main():
         die(3, "cannot read %s: %s" % (DOCTOR, e))
 
     ts = rep.get("ts", "?")
+    # APPLIER-RETIRE-1 (2026-09-30): DISPOSITION for the superseded class. A `superseded`
+    # verdict means applier-doctor PROVED the applier's outcome is already present in a
+    # resolved target (outcome_present_in). Leaving the script + its apply workflow on disk
+    # re-rots and re-files forever (Theme G: detection must trigger a verified action that
+    # closes). Retire them: git rm the patch script + its matching apply workflow; the
+    # workflow's commit step publishes the removal. Recoverable from git history.
+    retired = []
+    for _s in rep.get("superseded") or []:
+        _t = [_s]
+        _wf = find_workflow(_s)
+        if _wf:
+            _t.append(_wf)
+        _r = subprocess.run(["git", "rm", "-q", "--"] + _t, capture_output=True, text=True)
+        if _r.returncode == 0:
+            retired.append(_s)
+            print("  RETIRED %s%s" % (os.path.basename(_s), (" + " + os.path.basename(_wf)) if _wf else ""))
+        else:
+            print("  retain %s (git rm rc=%s): %s" % (os.path.basename(_s), _r.returncode, (_r.stderr or "").strip()[:120]))
+    if retired:
+        print("RETIRE-SUMMARY %s retired=%d" % (MARKER, len(retired)))
     findings = []
     for verdict, key in (("stale-anchor", "stale_anchor"),
                          ("error", "errored"),
