@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.7-github-write-reread";
+var VERSION = "2.38.8-dangling-binding-prune";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -2578,8 +2578,12 @@ async function cfWorkerDeploy(env, args) {
           + "allow_container_config_drop:true only for a deliberate teardown."
       };
     }
+    const _buildBody = function () {
     const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
+    return body;
+    };
+    const body = _buildBody();
     // FM7-HEALTH-VERSION-PARITY-1 (2026-09-26, FATAL): refuse a deploy whose source /health
     // returns a HARDCODED literal version instead of its single VERSION const. A lying /health is
     // a Worker Contract v1 violation and poisons every consumer (deploy guard register-at-deploy,
@@ -2596,17 +2600,44 @@ async function cfWorkerDeploy(env, args) {
       while ((_hm = _hrx.exec(content)) !== null) { if (_hm[1] !== _vv) _bad.push(_hm[1]); }
       if (_bad.length) return { ok: false, rejected: true, error: "FM7-HEALTH-VERSION-PARITY-1: source /health returns a hardcoded version literal " + JSON.stringify(_bad) + " instead of the VERSION ident (const=" + JSON.stringify(_vv) + "). A literal is a LATENT violation: it diverges the moment VERSION is bumped (canonical: qnfo-gateway). Use `version: VERSION` (Worker Contract v1). Refusing deploy." };
     }
-    const resp = await fetch(
-      "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker),
-      { method: "PUT", headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary }, body }
-    );
-    const j = await resp.json().catch(() => ({}));
+    // DANGLING-BINDING-PRUNE-1 (2026-09-30): this path re-declares EVERY live binding (BINDING-PRESERVE-1), so a
+    // service binding whose target worker was deliberately deleted makes Cloudflare reject the whole deploy
+    // (error 10144, "Service binding 'X' references environment 'production' on Worker 'Y' which was not found")
+    // forever. REORG-2026-09-25 wave-5b deleted qnfo-fleet-feed and cleaned CAL_API by hand but missed
+    // FLEET_FEED on qnfo-backlog-exec, which then failed every canonical deploy (run 36739836840). On EXACTLY that
+    // error, drop only the binding Cloudflare names, only if it is a live pre-existing service binding (never one
+    // just installed from wrangler.toml), and retry, at most 3 times. Cloudflare's own validation is the trigger,
+    // so there is no separate existence probe that could return a false 404. Pass keep_dangling_bindings:true
+    // for the old strict behaviour. Every drop is returned and written to the deploy ledger.
+    const _putUrl = "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker);
+    const _putHeaders = { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary };
+    const _droppedBindings = [];
+    let resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body });
+    let j = await resp.json().catch(() => ({}));
+    for (let _pr = 0; _pr < 3 && !resp.ok && !(args && args.keep_dangling_bindings); _pr++) {
+      let _dead = null;
+      const _errs = j && Array.isArray(j.errors) ? j.errors : [];
+      for (const _er of _errs) {
+        if (_er && Number(_er.code) === 10144) {
+          const _dm = /Service binding '([^']+)' references environment '[^']*' on Worker '[^']*' which was not found/.exec(String(_er.message || ""));
+          if (_dm) { _dead = _dm[1]; break; }
+        }
+      }
+      if (!_dead) break;
+      const _wasLive = existingBindings.some(function (b) { return b && b.type === "service" && b.name === _dead; });
+      const _idx = bindingsOut.findIndex(function (b) { return b && b.type === "service" && b.name === _dead; });
+      if (!_wasLive || _idx < 0) break;
+      _droppedBindings.push({ name: _dead, service: bindingsOut[_idx].service || null });
+      bindingsOut.splice(_idx, 1);
+      resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
+      j = await resp.json().catch(() => ({}));
+    }
     if (!resp.ok) {
       const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
       return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
     }
-    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
