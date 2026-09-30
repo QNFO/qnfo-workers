@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 15:07:20",
+  "audited_at": "2026-09-30 15:19:45",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -27,13 +27,7 @@
     ],
     "cron_only_count": 2,
     "drift": [],
-    "live_err": [
-      {
-        "dir": "qnfo-web-unified",
-        "err": "ERR:<urlopen error _ssl.c:999: The handshake operation",
-        "worker": "qnfo-web-unified"
-      }
-    ],
+    "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
@@ -70,11 +64,15 @@
         "worker": "papers"
       },
       {
+        "dir": "qnfo-web-unified",
+        "worker": "qnfo-web-unified"
+      },
+      {
         "dir": "scripts",
         "worker": "scripts"
       }
     ],
-    "not_a_worker_count": 8,
+    "not_a_worker_count": 9,
     "not_deployed_dirs": [
       "agent-orchestrator",
       "audit-hub",
@@ -1450,10 +1448,10 @@
     },
     "qnfo-web-unified": {
       "before": null,
-      "http": 0,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "LIVE_ERR",
+      "note": "NOT_A_WORKER",
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
