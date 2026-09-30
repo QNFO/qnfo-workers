@@ -202,6 +202,15 @@ def classify(d):
     # not a worker. Written in its own class so it cannot inflate NOT_DEPLOYED.
     for it in d.get("not_a_worker", []):
         put(_w(it), 404, None, None, 0, "NOT_A_WORKER")
+    # CRON-ONLY-CONSUMER-1: deploy-drift-guard.py emits `cron_only` (deployed, cron-triggered
+    # workers with no fetch route, so no /health to probe) deliberately OUTSIDE its exit-code
+    # sum. This consumer had no handler, so classify() silently dropped the class: measured
+    # 2026-09-30, ai-health-prober and qnfo-email-orchestrator were absent from
+    # worker_live_audit although both are live with registered crons. http is NULL because
+    # nothing was probed; match stays 0 because the version is unverified, not because it
+    # differs (same convention as NO_HEALTH_ROUTE).
+    for it in d.get("cron_only", []):
+        put(_w(it), None, None, None, 0, "CRON_ONLY")
     return rows
 
 

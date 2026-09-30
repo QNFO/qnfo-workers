@@ -73,6 +73,81 @@ def join_continuations(text: str) -> str:
     return re.sub(r"\\[ \t]*\n[ \t]*", " ", text)
 
 
+# BRANCH-FILTER-1 (warn-only): a workflow whose `push` trigger is not restricted to `main` but
+# whose steps deploy to production or push to main runs those steps for a push to ANY branch
+# that touches its trigger paths. Measured 2026-09-30: 36 of 95 push-triggered workflows, and
+# run 36728140486 deployed qnfo-ops from a PR branch that had merely been updated from main.
+# Not blocking yet: each affected workflow lists its own file in its trigger paths, so editing
+# it re-fires it on main; fixing all 36 in one merge would launch ~35 applier runs at once.
+DEPLOYS_RE = re.compile(
+    r"raw_put\.py|wrangler(?:@\d+)? deploy|canonical_deploy\.py|git push origin HEAD:main"
+    r"|api\.cloudflare\.com/client/v4/accounts/\S*/workers/scripts/\S*(?:content|schedules)"
+)
+
+
+# UNVALIDATED-BUNDLE-COMMIT-1 (warn-only): a workflow that commits worker source to main but never
+# runs a syntax / import validity check first. Commits pushed by a workflow with the default
+# GITHUB_TOKEN do not trigger other workflows (GitHub's documented behaviour), so the push-time
+# guards (version-bump-guard, cf-import-guard) never see them: the workflow itself must validate
+# before it commits. Measured 2026-09-30: fix-pilot-container-class.yml committed a bundle that
+# Cloudflare rejects (error 10021) and nothing in CI saw it; 8 of 29 such workflows had no check.
+COMMITS_SRC_RE = re.compile(
+    r"git add[^\n]*(?:worker\.js|deployed-current\.worker\.js|qnfo-[a-z-]+/)|git add -A(?![^\n]*ci-status)"
+)
+PUSHES_MAIN_RE = re.compile(r"git push[^\n]*(?:HEAD:main|origin main)")
+VALIDATES_RE = re.compile(
+    r"node --check|node -c|esbuild|wrangler[^\n]*--dry-run|cf-import-guard|d1guard-battery"
+)
+
+
+def unvalidated_bundle_committers(files: list[str]) -> list[str]:
+    out: list[str] = []
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+            runs = " ".join(
+                (s.get("run") or "")
+                for j in (doc.get("jobs") or {}).values()
+                for s in (j.get("steps") or [])
+            )
+            runs = join_continuations(runs)
+            if COMMITS_SRC_RE.search(runs) and PUSHES_MAIN_RE.search(runs) and not VALIDATES_RE.search(runs):
+                out.append(os.path.basename(p))
+        except Exception:  # warn-only pass: never let it break the lint
+            continue
+    return out
+
+
+def unfiltered_deployers(files: list[str]) -> list[str]:
+    """Workflows with a push trigger not restricted to main whose run steps deploy or push to main."""
+    out: list[str] = []
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+            on = doc.get(True, doc.get("on")) if isinstance(doc, dict) else None
+            if isinstance(on, str):
+                on = {on: None}
+            elif isinstance(on, list):
+                on = {k: None for k in on}
+            if not isinstance(on, dict) or "push" not in on:
+                continue
+            branches = (on["push"] or {}).get("branches")
+            if branches and set(branches) <= {"main"}:
+                continue
+            runs = " ".join(
+                (s.get("run") or "")
+                for j in (doc.get("jobs") or {}).values()
+                for s in (j.get("steps") or [])
+            )
+            if DEPLOYS_RE.search(join_continuations(runs)):
+                out.append(os.path.basename(p))
+        except Exception:  # warn-only pass: never let it break the lint
+            continue
+    return out
+
+
 def run_blocks(doc: dict) -> list[str]:
     out: list[str] = []
     jobs = doc.get("jobs")
@@ -155,6 +230,21 @@ def main() -> int:
         print(f"OK     {p} jobs={sorted(jobs)}" + (f" [{'; '.join(notes)}]" if notes else ""))
 
     print()
+    risky = unfiltered_deployers(files)
+    if risky:
+        print(f"WARN BRANCH-FILTER-1: {len(risky)} workflow(s) deploy or push to main but their push trigger "
+              "is not restricted to `main` (a push to any branch touching their paths runs them):")
+        for name in risky:
+            print(f"  WARN {name}")
+        print()
+    unval = unvalidated_bundle_committers(files)
+    if unval:
+        print(f"WARN UNVALIDATED-BUNDLE-COMMIT-1: {len(unval)} workflow(s) commit worker source to main without a "
+              "syntax/import check (pushes made with the default GITHUB_TOKEN do not trigger the guard workflows, "
+              "so validate before committing):")
+        for name in unval:
+            print(f"  WARN {name}")
+        print()
     if bad:
         print(f"=== WORKFLOW-LINT FAILED: {len(bad)} invalid workflow file(s) ===")
         for b in bad:

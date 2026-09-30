@@ -49,9 +49,15 @@ max_instances = 3
 name = "SHELL_CONTAINER"
 class_name = "ShellContainer"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["ShellContainer"]
+# EXPORTS-DECLARATIVE-1 (issue #1485): this Worker was last deployed through the declarative
+# `exports` flow, and Cloudflare rejects reverting to `migrations` (error 100403). `wrangler
+# deploy` therefore failed with [provisioned_class_missing_from_config] / [container_class_not_
+# durable_object] because ShellContainer had no `exports` entry. `exports` and `migrations` cannot
+# coexist in one config, so the v1 migration is replaced by the live-class declaration below.
+# https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/
+[exports.ShellContainer]
+type = "durable-object"
+storage = "sqlite"
 
 [[d1_databases]]
 binding = "AUDIT"

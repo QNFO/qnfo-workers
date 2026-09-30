@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 14:15:48",
+  "audited_at": "2026-09-30 14:43:46",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -488,7 +488,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.37-opsprobe-writeback1",
+        "version": "0.4.38-reorg-dispose-guards1",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.2-tool-meta-error-first",
+        "version": "2.38.3-schema-first",
         "worker": "qnfo-ops"
       },
       {
@@ -1111,9 +1111,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.37-opsprobe-writeback1",
+      "before": "0.4.38-reorg-dispose-guards1",
       "http": 200,
-      "live": "0.4.37-opsprobe-writeback1",
+      "live": "0.4.38-reorg-dispose-guards1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1247,9 +1247,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.2-tool-meta-error-first",
+      "before": "2.38.3-schema-first",
       "http": 200,
-      "live": "2.38.2-tool-meta-error-first",
+      "live": "2.38.3-schema-first",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
