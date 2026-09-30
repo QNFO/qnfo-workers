@@ -1,0 +1,1669 @@
+{
+ "generated": "2026-09-30",
+ "mission": "Every recurring function runs in the cloud; the fleet operates, heals, audits, improves, publishes, and promotes itself; the human role is as narrow as possible. Progress is tracked with periodic autonomy scores under two frameworks (viable-system-model and observe-orient-decide-act).",
+ "sources_mined": [
+  "qnfo.org/papers/quniverse-fleet-lessons (failure ledger A1-I10, roadmap 6.1-6.8)",
+  "qnfo-audit: agent_issues, fleet_improvements, goals, objectives, autonomy_scores, kaizen_candidates, evolve_candidates, reorg_work_queue, worker_consolidation, task_dod_register, tasks (legacy PM), routing_policy, cloudflare_capability_catalog, fleet_budget, fleet_agents, handoffs (session records), ops_ai_log (owner/agent chat turns), metric_registry, impact_thresholds",
+  "AI Gateway + Workers AI analytics (fleet-telemetry-probe runs 2026-09-30)",
+  "R2 bucket inventory (19 buckets)",
+  "QNFO/qnfo-workers docs/*.md, qnfo-ops/docs/CODE-AGENT-ORCHESTRATOR-SPEC.md, PATCH-*.diff artifacts"
+ ],
+ "issues": [
+  {
+   "key": "SEC-EXPOSED-CREDENTIALS-UNROTATED-1",
+   "category": "security",
+   "priority": "critical",
+   "owner": "deepchat-security",
+   "vsm": "S3*",
+   "evidence": "Three endpoint keys (ops, qnfo-router, personal) remain in the git HISTORY of the public QNFO/qnfo-ops repo (redacted in HEAD 2026-09-30) and the Cloudflare API token sits in a private snapshot plus local client configs (handoffs 29784-29792). Rotation was deferred to 2026-10-03 because it breaks 7 workflows on OPS_ROUTER_AUTH_KEY, 35 on CLOUDFLARE_API_TOKEN and the mobile/desktop clients, so it needs a coordinated window; the CF token rotation is identity-bound (account owner).",
+   "dod": "All 4 credentials rotated; GitHub secrets and clients updated in the same window; each old value returns 401; optional history rewrite after rotation."
+  },
+  {
+   "key": "SEC-CONTAINERS-PILOT-SHELL-STATIC-TOKEN-1",
+   "category": "security",
+   "priority": "high",
+   "owner": "qnfo-fleet-control",
+   "vsm": "S3*",
+   "evidence": "qnfo-containers-pilot exposes a full Linux shell on the internet behind a single static PILOT_TOKEN with no Access policy and no rate limit (handoffs 29786/29787, due 2026-10-06).",
+   "dod": "Access service-token or rate-limit rule in front of /exec; token rotation path documented; unauthenticated probe returns 403."
+  },
+  {
+   "key": "SEC-MEMORY-MCP-UNAUTHENTICATED-1",
+   "category": "security",
+   "priority": "high",
+   "owner": "qnfo-memory-mcp",
+   "vsm": "S3*",
+   "evidence": "qnfo-memory-mcp (7,279 requests/30d) serves without authentication (handoff 29784).",
+   "dod": "Bearer or OAuth required; unauthenticated probe returns 401; all clients updated and verified."
+  },
+  {
+   "key": "AUTONOMY-SCORES-NOT-PERIODIC-1",
+   "category": "governance",
+   "priority": "high",
+   "owner": "qnfo-autonomy-scorer",
+   "vsm": "S3",
+   "evidence": "Mission 2.1 requires periodic VSM and OODA autonomy scores. autonomy_scores rows were last written 2026-09-10 (s1_operations) to 2026-09-24 (composite 3.6); qnfo-autonomy-scorer was recreated 2026-09-30T18:09Z and has 0 invocations in 24h. No dimension has been rescored for 6+ days, so the fleet's self-tracking against its mission is stale.",
+   "dod": "Scorer writes every VSM S1-S5, OODA and composite row at least daily; dashboard flags any dimension older than 48h; survival_state.sai mirrors the composite."
+  },
+  {
+   "key": "OPS-AGENT-TOOL-BUDGET-INCOMPLETE-1",
+   "category": "reliability",
+   "priority": "high",
+   "owner": "qnfo-ops",
+   "vsm": "S1",
+   "evidence": "ops_ai_log holds 30+ owner turns on 2026-09-29/30 that end 'INCOMPLETE: ... tool budget exhausted'; the 300s interactive loop cannot finish multi-step remediation and the durable path cancels 40 of 68 jobs (#1624). The owner asked repeatedly to 'fix tool budget exhausted systemwide'.",
+   "dod": "Tasks that exceed the interactive budget auto-promote to a durable Workflow with checkpointed continuation; fewer than 5% of owner turns end INCOMPLETE on budget over 7 days."
+  },
+  {
+   "key": "WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1",
+   "category": "cost",
+   "priority": "high",
+   "owner": "qnfo-fleet-control",
+   "vsm": "S3",
+   "evidence": "Workers AI used 5.57M neurons/30d (about $58 at list price vs the <= $7.50 gate) and 258k neurons in the last 24h (about $85/30d pace). aiInferenceAdaptiveGroups has no scriptName dimension and binding calls bypass AI Gateway logs, so spend cannot be attributed to a worker (fleet-telemetry-probe 2026-09-30).",
+   "dod": "Every Workers AI call carries a per-worker attribution (AI Gateway cf-aig-metadata or an Analytics Engine meter); a per-worker neuron table refreshes daily; the top-3 spenders are reduced."
+  },
+  {
+   "key": "AI-HEALTH-PROBER-PING-COST-1",
+   "category": "cost",
+   "priority": "medium",
+   "owner": "ai-health-prober",
+   "vsm": "S3",
+   "evidence": "ai-health-prober pings 10 large models every 20 min (720/day) including reasoning @cf/zai-org/glm-5.3 at about 300 neurons per ping, and probes @cf/deepseek-ai/deepseek-v4-pro-0813 twice per run under two internal names. The probe minute slots carried 16% of 24h Workers AI neurons (41.8k of 257.8k) on 2026-09-30.",
+   "dod": "Health derived from catalog availability or a 1-token non-reasoning ping; duplicate ids removed; cadence hourly plus on-failure; probe-slot neurons below 2% of total."
+  },
+  {
+   "key": "AI-SPEND-OVER-CAP-ALL-PROVIDERS-1",
+   "category": "cost",
+   "priority": "high",
+   "owner": "qnfo-ops",
+   "vsm": "S3",
+   "evidence": "Gateway-metered 7d cost (GraphQL aiGatewayRequestsAdaptiveGroups): gpt-5.5 $82 (879 req), deepseek-v4-pro $46 (3,363 req), deepseek-flash $41 (21,614 req), about $173/7d. The $150/30d spend limit governs unified billing only; BYOK DeepSeek bypasses it. Objective 2.3 targets about $110/month.",
+   "dod": "Per-provider caps including BYOK; one unified monthly cost_usd across all providers; agent-session gpt-5.5 traffic routed per business plan Phase A; 30d spend <= $150."
+  },
+  {
+   "key": "DEEPSEEK-FLASH-CALLER-UNKNOWN-1",
+   "category": "cost",
+   "priority": "medium",
+   "owner": "qnfo-ops",
+   "vsm": "S3",
+   "evidence": "21,614 requests/7d to model id 'deepseek-flash' on gateway 'default'; no worker in QNFO/qnfo-workers references that id, so the caller is unidentified (external client or dynamic route).",
+   "dod": "Caller identified from gateway log metadata; traffic attributed to an owner or blocked."
+  },
+  {
+   "key": "EMAIL-CALENDAR-INTAKE-UNPROVEN-1",
+   "category": "reliability",
+   "priority": "medium",
+   "owner": "calendar-api",
+   "vsm": "S1",
+   "evidence": "Paper 3.5 and Appendix A: the email-to-calendar intake is 'built rather than proven'. event_inbox still holds 0 rows ever (2026-09-30).",
+   "dod": "A synthetic forwarded invite produces a calendar row and a reminder end to end; a weekly synthetic canary keeps it proven."
+  },
+  {
+   "key": "GUARDS-LOCAL-ONLY-1",
+   "category": "governance",
+   "priority": "high",
+   "owner": "qnfo-ops",
+   "vsm": "S3",
+   "evidence": "prompt-store-verify, adversarial-guard, scheduler-guard and model_guard run only on the local machine (handoffs 29769/29773; fleet_improvements 1569 in_progress). Sessions without a local shell skip them, contradicting 'every recurring function runs in the cloud'.",
+   "dod": "Server-side scheduled runner (container or CI) executes all four; results land in D1; a failing guard files an issue."
+  },
+  {
+   "key": "LOCAL-MAINTENANCE-RESIDUE-1",
+   "category": "governance",
+   "priority": "medium",
+   "owner": "deepchat-ops",
+   "vsm": "S2",
+   "evidence": "Local-only scripts still carry recurring duties: local-config-selfheal.py re-asserts app/mcp settings each cycle, deepchat_boot_guard.py, backup_deepchat.py (handoffs 29752/29765; THIN-CLIENT-MIGRATION-SPEC-v2 residue). Paper 3.7 claims zero enabled local recurring jobs.",
+   "dod": "Inventory of local recurring jobs is 0, or each remaining job is documented as identity-bound with a cloud fallback."
+  },
+  {
+   "key": "RETIREMENT-USAGE-SIGNAL-DEGENERATE-1",
+   "category": "governance",
+   "priority": "medium",
+   "owner": "qnfo-fleet-control",
+   "vsm": "S3",
+   "evidence": "worker_invocations holds about 1 row, so the fail-closed consolidation guard disables automatic retirement (handoff 29763). The fleet cannot move from 39 live workers toward target 36 or the <= 28 survival gate without a real per-worker usage source.",
+   "dod": "disposeRetired and consolidation read 30d per-script requests from GraphQL workersInvocationsAdaptive (already measured by fleet-telemetry-probe) plus live-consumer proof (lessons F1/F2)."
+  },
+  {
+   "key": "IDEA-TRIAGE-CONSUMER-ABSENT-1",
+   "category": "reliability",
+   "priority": "medium",
+   "owner": "idea-hub",
+   "vsm": "S2",
+   "evidence": "19 idea_proposals are status=new and the producer has been silent since 2026-09-24. qnfo-idea-triage is no longer deployed, and worker_consolidation still lists idea-hub vs qnfo-idea-triage as ASSESS.",
+   "dod": "A live consumer drains new ideas to research_queue or rejects each with a reason; the chain probe shows consumer progress."
+  },
+  {
+   "key": "SURVIVAL-STATE-SAI-NULL-1",
+   "category": "observability",
+   "priority": "low",
+   "owner": "qnfo-fleet-dashboard",
+   "vsm": "S3",
+   "evidence": "survival_state.sai is NULL; the composite SAI in autonomy_scores is not mirrored (handoff 29764).",
+   "dod": "sai written on every evaluation from the latest composite, with its scored_at."
+  },
+  {
+   "key": "CRON-DECLARED-EXCEEDS-PLATFORM-1",
+   "category": "reliability",
+   "priority": "high",
+   "owner": "fleet-exec",
+   "vsm": "S2",
+   "evidence": "Declared schedules exceed what the platform registers (ops session 2026-09-30: '21 declared triggers cannot fit' the per-Worker trigger limit), fleet_budget cron_schedules sits at cap 50/50, and fleet-exec alone fires 1,440/day ('* * * * *', 52% of all fires; worker_consolidation CRON-REDUCE PLANNED). Paper C5: declared vs live divergence.",
+   "dod": "One dispatcher cron plus the D1 fleet_crons table as the single schedule truth; every declared trigger registered or folded into the dispatcher; fleet-exec at */5."
+  },
+  {
+   "key": "DISTRIBUTION-VOLUME-COLLAPSE-1",
+   "category": "dissemination",
+   "priority": "high",
+   "owner": "qnfo-social",
+   "vsm": "S1",
+   "evidence": "social_media_posts has 1 row in the last 30 days (last 2026-09-27) while 10 full reports were published; metric distribution_posts_30d = 1. Paper F1 and 6.5 require distribution to stay load-bearing and monitored end to end.",
+   "dod": "Every publication emits at least one queued post; queue drain monitored; alert when posts_30d < publications_30d."
+  },
+  {
+   "key": "PATCH-ARTIFACTS-UNRECONCILED-1",
+   "category": "governance",
+   "priority": "medium",
+   "owner": "qnfo-ops",
+   "vsm": "S2",
+   "evidence": "The repo carries PATCH diff artifacts with no recorded disposition: qnfo-ops PATCH-2026-09-22-attachment-empty-guard, PATCH-2026-09-26-attachment-guard-xml-form-and-telemetry-hours, PATCH-2026-09-27-registry-capability-preserve, PATCH-2026-09-30-output-cap-decoupling (#1531), aigw-routing.patch; qnfo-fleet-dashboard PATCH-2026-09-30-outreach-gate-derive.",
+   "dod": "Each diff is either verified applied (marker present on main and live) and deleted, or rejected with a reason."
+  },
+  {
+   "key": "LEGACY-PM-TASKS-UNRECONCILED-1",
+   "category": "governance",
+   "priority": "low",
+   "owner": "qnfo-fleet-control",
+   "vsm": "S2",
+   "evidence": "The legacy tasks table holds 178 non-done rows from the July PM bootstrap (152 Backlog, 24 To Do, 2 In Progress), including 24 templated 'Audit <project> state and execute next phase' P0 rows and duplicate WBS rows. Nothing consumes them and they are invisible to the dashboard inventory.",
+   "dod": "Every row migrated to task_dod_register or roadmap_implementation, or closed with a reason; the table becomes read-only."
+  },
+  {
+   "key": "CAPABILITY-CATALOG-STATUS-WRONG-1",
+   "category": "observability",
+   "priority": "medium",
+   "owner": "qnfo-fleet-control",
+   "vsm": "S4",
+   "evidence": "cloudflare_capability_catalog marks D1, R2, KV, Durable Objects, Queues, Cron Triggers, Vectorize, Workflows and Workers as not_considered although all are in use; only Workers AI is in_use. Residual of the product loop tracked in #1675.",
+   "dod": "Catalog status synced from live bindings/resources daily; in-use products read in_use."
+  }
+ ],
+ "roadmap": [
+  {
+   "item": "RM-S2-EVENT-DRIVEN-1",
+   "area": "autonomy",
+   "vsm": "S2",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "paper 2.2/6.6; autonomy_scores s2_coordination gap",
+   "title": "Event-driven coordination: Queues-based producer->consumer chaining (research, version, outreach, errata, issues) replacing time-triggered polling, with per-chain controllers"
+  },
+  {
+   "item": "RM-OODA-DEPLOY-LATENCY-1",
+   "area": "autonomy",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-ops",
+   "source": "paper 6.6; autonomy_scores ooda_closure gap",
+   "title": "Deploy-class act latency days -> minutes: canonical deploy on merge is live; remaining: agent-authored fixes open PRs and auto-merge when every gate is green"
+  },
+  {
+   "item": "RM-PROBE-VERIFIED-COVERAGE-1",
+   "area": "autonomy",
+   "vsm": "S3",
+   "ooda": "observe",
+   "status": "partial",
+   "owner": "qnfo-fleet-dashboard",
+   "source": "paper 6.6; kaizen kc-20260908-fleet-probe-coverage",
+   "title": "Verified probe coverage: content assertions (not only HTTP 200) for all 39 workers; cron-only workers via heartbeat (fleet_heartbeat holds 3 rows)"
+  },
+  {
+   "item": "RM-MONITOR-THE-MONITORS-1",
+   "area": "autonomy",
+   "vsm": "S3",
+   "ooda": "observe",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "paper 4.2.3 (open gap)",
+   "title": "Monitor the monitors: every monitor and cron writes a heartbeat; a meta-watchdog flags any monitor silent longer than 2x its cadence"
+  },
+  {
+   "item": "RM-S1-REDUNDANCY-1",
+   "area": "autonomy",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-ops",
+   "source": "autonomy_scores s1_operations gap 'no redundancy / single ops gateway'",
+   "title": "S1 redundancy: failover host and read-only degraded mode for the single ops gateway; workers.dev fallback added 2026-09-30"
+  },
+  {
+   "item": "RM-S4-BENCHMARK-1",
+   "area": "autonomy",
+   "vsm": "S4",
+   "ooda": "orient",
+   "status": "not-built",
+   "owner": "qnfo-ai-calibration",
+   "source": "autonomy_scores s4_intelligence gap",
+   "title": "S4 intelligence battery from n=8 to a SWE-bench Pro / Terminal-Bench subset, scored weekly"
+  },
+  {
+   "item": "RM-S5-RATIFICATION-SURFACE-1",
+   "area": "autonomy",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "goals: 7 proposed vrev-* objective revisions",
+   "title": "Owner ratification surface (email verb and dashboard) for the 7 pending objective revisions, with expiry and recorded decision"
+  },
+  {
+   "item": "RM-NOVEL-FAILURE-REPAIR-1",
+   "area": "autonomy",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "autonomy_scores self_healing gap; paper 2.2",
+   "title": "Scripted repair for novel failure classes: failure-class -> remediation_modules library with automatic dispatch and verification"
+  },
+  {
+   "item": "RM-WATCHMAKER-INDEX-1",
+   "area": "autonomy",
+   "vsm": "S5",
+   "ooda": "orient",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "paper 6.8",
+   "title": "Publish a daily watchmaker index (count of recurring operations that still need a human), target 0"
+  },
+  {
+   "item": "RM-DURABLE-AGENT-EXECUTION-1",
+   "area": "autonomy",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-ops",
+   "source": "ops_ai_log INCOMPLETE turns; #1624",
+   "title": "Durable multi-step agent execution on Workflows with checkpointed continuation (removes tool-budget exhaustion as a failure class)"
+  },
+  {
+   "item": "RM-CODE-ORCHESTRATOR-1",
+   "area": "autonomy",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-ops",
+   "source": "qnfo-ops/docs/CODE-AGENT-ORCHESTRATOR-SPEC.md (spec-only 2026-09-06)",
+   "title": "Autonomous self-verifying cloud code agent: plan -> branch edit -> container verify -> iterate -> PR"
+  },
+  {
+   "item": "RM-COST-L5-DISTILLATION-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-ops",
+   "source": "routing_policy L5 ABSENT; paper 6.3",
+   "title": "L5 distillation: exemplar bank / Workers AI LoRA for recurring task classes"
+  },
+  {
+   "item": "RM-COST-L6-DRAFT-VERIFY-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-ops",
+   "source": "routing_policy L6 PARTIAL",
+   "title": "L6 formal draft-verify pipeline (free draft, paid verify/repair) beyond the code class"
+  },
+  {
+   "item": "RM-COST-PREFIX-CACHE-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-ops",
+   "source": "routing_policy CTX PARTIAL (cache_read_tokens=0)",
+   "title": "Realize provider prompt/prefix caching (cache_read_tokens is 0 today)"
+  },
+  {
+   "item": "RM-COST-PER-TASK-ALL-PATHS-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "orient",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "paper 6.3; goals cost-routing-stack-l0l7",
+   "title": "Cost per successful task by class across every AI path (research ensemble, q08, kaizen, calibration), not only qnfo-ops"
+  },
+  {
+   "item": "RM-COST-UNIFIED-SPEND-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "orient",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "goals external-impact-per-dollar DoD (a)",
+   "title": "One unified monthly cost_usd: gateway unified billing + BYOK providers + Workers AI + Cloudflare plan"
+  },
+  {
+   "item": "RM-COST-FREE-FIRST-PARITY-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "orient",
+   "status": "gate-verify",
+   "owner": "qnfo-fleet-control",
+   "source": "paper B5/5.5",
+   "title": "Audit every AI-calling worker for one cost policy per path (streaming vs non-streaming, cron vs manual, agent final round)"
+  },
+  {
+   "item": "RM-CONSOLIDATION-WAVE-B-1",
+   "area": "core",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "worker_consolidation QUEUED/BLOCKED-PROOF/DEFERRED; task_dod 365",
+   "title": "Finish consolidation: 7 QUEUED merges due 2026-10-04 (observability, dashboard, kaizen, ai-calibration, backlog-exec -> fleet-control; lifecycle -> fleet-exec; skill-sync -> tools-mcp); resolve BLOCKED-PROOF (infra, agent-orchestrator, ai-search, containers-pilot) and DEFERRED (errata-hub, radar-hub)"
+  },
+  {
+   "item": "RM-FLEET-BUDGET-WAVES-1",
+   "area": "core",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "deepchat-reorg",
+   "source": "reorg_work_queue 24-27 (due 2026-10-18)",
+   "title": "Fleet budget waves W1-W4: MCP 4->1 (qnfo-mcp), watchtower 5->2, verify-then-retire (containers-pilot, pdf), storage prune (vectorize qnfo-infra/ops-semcache)"
+  },
+  {
+   "item": "RM-DEAD-PROBES-VERIFY-1",
+   "area": "core",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "gate-verify",
+   "owner": "qnfo-fleet-control",
+   "source": "reorg_work_queue 67-71",
+   "title": "Close the dead-probe deletions (size-semantics-probe-a/b, qnfo-egress-probe, qnfo-ops-ledger-selftest: already absent from the live list) and dispose qnfo-email-orchestrator (still live) with live-consumer proof"
+  },
+  {
+   "item": "RM-REPO-DEAD-SOURCES-1",
+   "area": "core",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "worker_live_audit: 65 NOT_DEPLOYED + 9 NOT_A_WORKER repo dirs",
+   "title": "Archive the 65 never-deployed or retired worker directories under archive/ with a manifest (smaller verified core)"
+  },
+  {
+   "item": "RM-FUNNEL-E2E-MONITOR-1",
+   "area": "impact",
+   "vsm": "S1",
+   "ooda": "observe",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "paper 6.5 and 4.2.3",
+   "title": "End-to-end funnel monitor: publication -> deposit -> page -> social -> pageviews -> subscribe, per-stage counters and alerts"
+  },
+  {
+   "item": "RM-SUBSCRIBE-CTA-1",
+   "area": "impact",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-subscribers",
+   "source": "docs/BUSINESS-PLAN.md Phase B.1 (1 subscriber)",
+   "title": "Subscribe CTA and landing on papers.qnfo.org and qnfo.org wired to double opt-in"
+  },
+  {
+   "item": "RM-PREMIUM-DIGEST-1",
+   "area": "impact",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "docs/BUSINESS-PLAN.md Phase B.1",
+   "title": "Premium research digest ($10/mo) product line (depends on NO-PAYMENT-RAIL-1 #1616)"
+  },
+  {
+   "item": "RM-IPATENT-B2B-1",
+   "area": "impact",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "docs/BUSINESS-PLAN.md Phase B.2; #1648",
+   "title": "ipatent.me patent analytics B2B pilot with 5 users"
+  },
+  {
+   "item": "RM-BESPOKE-REPORTS-1",
+   "area": "impact",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "docs/BUSINESS-PLAN.md Phase B.3",
+   "title": "Bespoke research reports offered through warm outreach replies (12 replied)"
+  },
+  {
+   "item": "RM-BUFFER-MULTICHANNEL-1",
+   "area": "impact",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 vs BUSINESS-PLAN standing rule 'no social media'",
+   "title": "Decide multi-channel distribution (LinkedIn/X/Mastodon via Buffer, BUFFER_TOKEN unprovisioned) vs own-pages-only rule"
+  },
+  {
+   "item": "RM-SEO-INDEXNOW-JSONLD-1",
+   "area": "impact",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "gate-verify",
+   "owner": "qnfo-research-exec",
+   "source": "docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 (T6)",
+   "title": "Verify IndexNow ping per publication and Schema.org ScholarlyArticle JSON-LD on every paper page"
+  },
+  {
+   "item": "RM-CITATION-TRACKING-ALL-DOIS-1",
+   "area": "impact",
+   "vsm": "S4",
+   "ooda": "observe",
+   "status": "partial",
+   "owner": "qnfo-paper-indexer",
+   "source": "docs/AUTONOMOUS-RESEARCH-PIPELINE.md s5; citation_stats 3,604 rows, impact_scores 81",
+   "title": "Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs feeding impact_scores"
+  },
+  {
+   "item": "RM-VISION-ASK-QWAV-1",
+   "area": "research-product",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-ai",
+   "source": "tasks GH-P3-081, GH-HND-093",
+   "title": "Ask QWAV: public natural-language research oracle (RAG over the 34,657-vector research index)"
+  },
+  {
+   "item": "RM-VISION-LIVING-PAPER-1",
+   "area": "research-product",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-archive",
+   "source": "tasks GH-P3-082; #1643 paper-explain dead",
+   "title": "Living Paper: interactive publications (clickable equations, AI chat, parameter playgrounds)"
+  },
+  {
+   "item": "RM-VISION-QWAV-SCAN-1",
+   "area": "research-product",
+   "vsm": "S4",
+   "ooda": "observe",
+   "status": "broken",
+   "owner": "radar-hub",
+   "source": "tasks GH-P3-083; #1642/#1653 radar family dormant",
+   "title": "QWAV-SCAN: arXiv scraper + classifier + daily digest (radar family dormant 20-27 days)"
+  },
+  {
+   "item": "RM-VISION-CONSISTENCY-ENGINE-1",
+   "area": "research-product",
+   "vsm": "S4",
+   "ooda": "orient",
+   "status": "not-built",
+   "owner": "qnfo-paper-indexer",
+   "source": "tasks GH-P3-084/092; #1651",
+   "title": "Cross-paper consistency engine: contradictions, redundancies, missing citations across 906 papers"
+  },
+  {
+   "item": "RM-VISION-ULTRAMETRIC-PLAYGROUND-1",
+   "area": "research-product",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-archive",
+   "source": "tasks GH-P3-085",
+   "title": "Ultrametric playground web app (ultrametric geometry, p-adic valuations, fault-tolerance simulation)"
+  },
+  {
+   "item": "RM-VISION-CONCEPT-GRAPH-1",
+   "area": "research-product",
+   "vsm": "S4",
+   "ooda": "orient",
+   "status": "partial",
+   "owner": "qnfo-memory-mcp",
+   "source": "tasks GH-P3-086",
+   "title": "Concept graph navigator over the 8,349-node KG (Durable Objects + interactive visualization)"
+  },
+  {
+   "item": "RM-VISION-REPRODUCE-BUTTON-1",
+   "area": "research-product",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-containers-pilot",
+   "source": "tasks GH-P3-087",
+   "title": "Reproducibility as code: a Reproduce button per computational claim via Sandbox/Containers"
+  },
+  {
+   "item": "RM-VISION-AUTO-PEER-REVIEW-1",
+   "area": "research-product",
+   "vsm": "S3",
+   "ooda": "orient",
+   "status": "partial",
+   "owner": "qnfo-research-exec",
+   "source": "tasks GH-P3-088",
+   "title": "Automated peer review as a pre-submission service (review stage exists internally only)"
+  },
+  {
+   "item": "RM-VISION-COMPUTE-CLOUD-1",
+   "area": "research-product",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-containers-pilot",
+   "source": "tasks GH-P3-089",
+   "title": "QWAV compute cloud: browser-run ultrametric embeddings, p-adic valuations, LoF reductions"
+  },
+  {
+   "item": "RM-VISION-AGENT-SWARM-1",
+   "area": "research-product",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-research-exec",
+   "source": "tasks GH-P3-090; #1638 QACP unbuilt",
+   "title": "Agent swarm: Explorer/Synthesizer/Verifier/Publisher/Curator role agents running 24/7"
+  },
+  {
+   "item": "RM-VISION-UNIFIED-PLATFORM-1",
+   "area": "research-product",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "partial",
+   "owner": "owner",
+   "source": "tasks GH-P3-091",
+   "title": "qnfo.org as the unified AI-native research platform integrating the 11 visions"
+  },
+  {
+   "item": "RM-QUALITY-REVISION-WAVE-1",
+   "area": "research-product",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-paper-reviser",
+   "source": "kaizen kc-20260908-quality-revision-wave (user directive); #1621",
+   "title": "Revise/expand all research papers with ensembles, iterations and feedback loops (zenodo_versions_per_flagship 1 vs >= 2)"
+  },
+  {
+   "item": "RM-RESEARCH-BROWSER-QUEUES-1",
+   "area": "research-product",
+   "vsm": "S2",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-research-exec",
+   "source": "tasks GH-HND-096",
+   "title": "Research pipeline v0.1 on Queues + Browser Run (rendered-source grounding)"
+  },
+  {
+   "item": "RM-RADAR-WORKFLOWS-PILOT-1",
+   "area": "research-product",
+   "vsm": "S2",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "radar-hub",
+   "source": "handoff 28852 (OPS.008 Phase 2)",
+   "title": "Workflows pilot on conference-radar / research-daily-brief"
+  },
+  {
+   "item": "RM-ADAPTIVE-SUGGESTIONS-1",
+   "area": "research-product",
+   "vsm": "S4",
+   "ooda": "orient",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "handoffs 28929/28930",
+   "title": "Adaptive suggestion engine wave 1: suggestion-event logging + bandit (awaiting owner pick)"
+  },
+  {
+   "item": "RM-PAGES-SITES-MIGRATION-1",
+   "area": "web",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "gate-verify",
+   "owner": "qnfo-gateway",
+   "source": "tasks GH-P2-064, GH-P2-067..075",
+   "title": "Migrate the 9 QWAV research sites to Cloudflare Pages (laws, paradigm, hierarchy, different, measure, unity, quantum, ai-poc; verify qlof-primer)"
+  },
+  {
+   "item": "RM-DNS-REDIRECTS-HEADERS-1",
+   "area": "web",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "gate-verify",
+   "owner": "qnfo-gateway",
+   "source": "tasks GH-P2-077/078/079",
+   "title": "Complete the DNS redirect chain to canonical destinations, security headers on every site, and fix Google Site broken links"
+  },
+  {
+   "item": "RM-ARCHIVE-MIGRATION-1",
+   "area": "web",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-archive",
+   "source": "tasks AM-T001..T007, GH-P2-046",
+   "title": "R2 archive migration of ARCHIVED projects and the Obsidian vault mapping, with discovery-index and KG ARCHIVE edges"
+  },
+  {
+   "item": "RM-REPO-HYGIENE-1",
+   "area": "web",
+   "vsm": "S2",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "tasks GH-P0-034, GH-P1-036, GH-SPN-016/020; fleet_improvements 1575",
+   "title": "LICENSE files on the 8 artifact repos, repo topics/descriptions, releases/changelog, branch hygiene (16 diverged branches)"
+  },
+  {
+   "item": "RM-UNBOUND-R2-DISPOSITION-1",
+   "area": "web",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "reorg_work_queue 56; R2 inventory (19 buckets)",
+   "title": "Decide purpose/ownership of the 8 unbound-but-populated resources (R2 deepchat, git-repos, obsidian-vault, palimpsest-research, play-the-ball, personal-media, d-drive, releases)"
+  },
+  {
+   "item": "RM-R2-PUBLIC-DATASETS-1",
+   "area": "web",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "handoff 28999",
+   "title": "R2 public custom domain for datasets (license-gated) and Cloudflare Stream adoption decision"
+  },
+  {
+   "item": "RM-SECRETS-STORE-1",
+   "area": "security",
+   "vsm": "S3*",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "deepchat-security",
+   "source": "tasks GH-HND-099; SEC-EXPOSED-CREDENTIALS-UNROTATED-1",
+   "title": "Secrets Store for API keys with scripted rotation across workers, GitHub secrets and clients"
+  },
+  {
+   "item": "RM-WAF-RATE-LIMIT-1",
+   "area": "security",
+   "vsm": "S3*",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "cloudflare_capability_catalog waf/bot-mgmt not_considered",
+   "title": "WAF and rate-limit rules on public worker endpoints (ops, containers, idea form, email command routes)"
+  },
+  {
+   "item": "RM-MCP-OAUTH-1",
+   "area": "security",
+   "vsm": "S3*",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "handoffs 29788/29791",
+   "title": "Cloudflare MCP OAuth (identity-bound) for agent clients"
+  },
+  {
+   "item": "RM-DEEPCHAT-DB-ENCRYPTION-1",
+   "area": "security",
+   "vsm": "S3*",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "deepchat-security",
+   "source": "handoff 29787 (due 2026-10-13)",
+   "title": "Encrypt the 1.3 GB local DeepChat database"
+  },
+  {
+   "item": "RM-TAIL-WORKERS-1",
+   "area": "observability",
+   "vsm": "S3",
+   "ooda": "observe",
+   "status": "not-built",
+   "owner": "qnfo-observability",
+   "source": "#1223 sampled worker_logs",
+   "title": "Tail Worker for unsampled exception capture across the fleet"
+  },
+  {
+   "item": "RM-ANALYTICS-ENGINE-METERS-1",
+   "area": "observability",
+   "vsm": "S3",
+   "ooda": "observe",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1",
+   "title": "Workers Analytics Engine meters per AI call and per task outcome (attribution and cost per task)"
+  },
+  {
+   "item": "RM-CAPABILITY-PRODUCT-LOOP-1",
+   "area": "observability",
+   "vsm": "S4",
+   "ooda": "orient",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "#1675; cloudflare_capability_catalog",
+   "title": "Cloudflare product loop: discover -> score -> propose -> adopt (AI Search, Agents SDK, Browser Run, Queues, Workflows, Sandbox, Tail Workers, Access)"
+  },
+  {
+   "item": "RM-DO-AGENTS-DECISION-1",
+   "area": "observability",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "qnfo-fleet-control",
+   "source": "goals deploy-fleet-control-agent / deploy-signal-loop-agent / deploy-intent-orchestrator-agent (adopted, not deployed); #1652",
+   "title": "Re-decide the adopted DO agents (FleetControlAgent, SignalLoopAgent, IntentOrchestratorAgent); qnfo-signal-loop is retired"
+  },
+  {
+   "item": "RM-OWNER-EMAIL-VERBS-1",
+   "area": "personal",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "partial",
+   "owner": "qnfo-email",
+   "source": "paper 2.6; #1472/#1477/#1480",
+   "title": "Owner email surface: ratify/kill/status verbs, DMARC-gated owner auth (live 2026-09-30), working alerts channel"
+  },
+  {
+   "item": "RM-GATE-DEFINITIONS-OWNER-1",
+   "area": "governance",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "impact_thresholds vs metric_registry impressions definition; fleet_budget workers cap 39 vs survival gate <= 28",
+   "title": "Owner decisions before 2026-10-25: impressions gate definition (frozen 5,610 baseline vs ratified prior-window MoM) and worker-count gate (cap re-baselined to 39 vs <= 28)"
+  },
+  {
+   "item": "RM-ADOPTED-GOALS-CLOSEOUT-1",
+   "area": "governance",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "goals status=adopted (fleet-owned)",
+   "title": "Verify and close or retire the adopted fleet goals: ops-model-toolcall-crisis, fleet-loop-actuation-gap, ops-exec-loop-parse-guard, self-heal-tool-list-correction, research-exec-newversion-draft-cleanup, skill-sync-public-route-404, skill-sync-esm-ai-deploy-path, skill-sync-r2-repo-sync-route, custom-prompts-template-parity, kaizen-anchor-parity-2-150, wrangler-deploy-fleet-control, repo-mirror-drift-closeout, cost-routing-stack-l0l7, external-impact-per-dollar, flap-guard goals"
+  },
+  {
+   "item": "RM-KAIZEN-GATE-CANDIDATES-1",
+   "area": "governance",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-kaizen",
+   "source": "kaizen_candidates status=proposed (12); task_dod 331",
+   "title": "Codify the 12 proposed kaizen gates as machine-enforced checks (RED-INVENTORY, BUILD-GATE-NOT-RUNTIME, DEAD-SERVICE-BINDING, LIVE-AHEAD-OF-REPO, CURRENCY-UNIT-TRAP, FLEET-VS-EXTERNAL-ATTRIBUTION, GATEWAY-RUNWAY-BRAKE, CLAIM-SHEET-DB-ENFORCEMENT, REGISTRY-DRIFT-CONCURRENT-REMOVAL, STALE-TEMPLATE-MODELKEY, GOVERNANCE-CAP-DISPOSITION, TEMPLATE-RUNTIME-INJECTION-PARITY)"
+  },
+  {
+   "item": "RM-KAIZEN-SCHEDULED-1",
+   "area": "governance",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-kaizen",
+   "source": "kaizen_candidates status=scheduled (11)",
+   "title": "Execute the scheduled kaizen items: errata publish flip, outreach cap misclassification, unified per-record lifecycle scanner, risk-tiered kaizen auto-apply, weekly drift repair off the local cron, self-tuning router selection, errata-publish source in repo, probe coverage, recurring C4 finding, blank-audit alert cluster"
+  },
+  {
+   "item": "RM-IDEA-STREAM-UI-1",
+   "area": "impact",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "idea-hub",
+   "source": "owner request 2026-08-28 (audits/2026-10-01-master-build-out-backlog-v2.md s2.6)",
+   "title": "Public read-only real-time idea stream UI (QNFO idea/chat development) linked from qnfo.org"
+  },
+  {
+   "item": "RM-QOKI-OPEN-MIRROR-1",
+   "area": "research-product",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "funding/NLNET_PROPOSAL.md (master backlog v2 s2.7)",
+   "title": "QOKI: IPFS/Filecoin mirror of the paper corpus with DOI->slug->CID provenance and drift verifier; open-source the pipeline and audit tooling"
+  },
+  {
+   "item": "RM-ADR-013-014-ENFORCEMENT-1",
+   "area": "governance",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-research-exec",
+   "source": "R2 adr/ADR-013-LEGAL-IMMUTABILITY.md, ADR-014-AUTHORSHIP-MANDATE.md (master backlog v2 s2.9)",
+   "title": "Enforce the accepted legal-immutability and authorship ADRs (append-only signed ledger for published artifacts, authorship verification at publish)"
+  },
+  {
+   "item": "RM-CF-ONE-EMAIL-DLP-1",
+   "area": "security",
+   "vsm": "S3*",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "owner",
+   "source": "integration_scope GAP rows (master backlog v2 s2.8)",
+   "title": "Cloudflare One: email security retro scan, DLP, GitHub Enterprise Cloud configuration (with #1277 Access and #1279 CASB)"
+  },
+  {
+   "item": "RM-PAGES-DEPLOY-PATH-1",
+   "area": "web",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "partial",
+   "owner": "qnfo-fleet-control",
+   "source": "master backlog v2 s2.11; .github/workflows/deploy-pages-qnfo-publications.yml",
+   "title": "Repo-driven Pages deploys (archive.qnfo.org / qnfo-publications is manual and gated) plus a Pages inventory row in the census"
+  },
+  {
+   "item": "RM-EDGE-CACHE-PAPERS-1",
+   "area": "cost",
+   "vsm": "S1",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-gateway",
+   "source": "docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md recommendations (master backlog v2 s2.1)",
+   "title": "Workers Cache in front of papers.qnfo.org (504s) and AI Gateway fallback routes for router 400s"
+  },
+  {
+   "item": "RM-D1-RETENTION-1",
+   "area": "core",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-fleet-control",
+   "source": "decisions #36-38 (master backlog v2 s7)",
+   "title": "Retention policy for qnfo-audit (~296 tables, duplicate families, date-stamped snapshot tables, 230 MB) and Vectorize cap/dedupe"
+  },
+  {
+   "item": "RM-SELF-KNOWLEDGE-VIEWS-1",
+   "area": "observability",
+   "vsm": "S3",
+   "ooda": "observe",
+   "status": "broken",
+   "owner": "qnfo-fleet-control",
+   "source": "master backlog v2 s4 items 2 and 10; #1617/#1625",
+   "title": "One open-work surface: revive integration_state (#1617), unify the three open-work counts (#1625), populate the 4 empty self-knowledge views (v_waiting_on_human, v_triage_gap, v_open_tasks_no_dod, v_reopen_rate)"
+  },
+  {
+   "item": "RM-AGENT-WS-DECISION-1",
+   "area": "autonomy",
+   "vsm": "S5",
+   "ooda": "decide",
+   "status": "owner-decision",
+   "owner": "qnfo-fleet-control",
+   "source": "master backlog v2 s2.5",
+   "title": "qnfo-agent-ws (agent websocket workspace) exists in the repo but not in the live fleet: redeploy with a consumer or archive"
+  },
+  {
+   "item": "RM-COST-FLOOR-40-1",
+   "area": "cost",
+   "vsm": "S3",
+   "ooda": "act",
+   "status": "not-built",
+   "owner": "qnfo-ops",
+   "source": "docs/BUSINESS-PLAN.md Phase A; master backlog v2 Tier 0 item 4",
+   "title": "Cost floor: AI burn <= $40/month with direct-key (BYOK) spend visible alongside unified billing"
+  }
+ ],
+ "paper_gate_audit": [
+  [
+   "A1",
+   "Transcript sweep before publish; fixes ship as new Zenodo versions",
+   "enforced-unverified",
+   "Needs a periodic sweep of published bodies to prove the gate holds."
+  ],
+  [
+   "A2",
+   "Canonical link in public description and related identifiers",
+   "violated",
+   "fleet_improvements 1573: publishV2 triples the funnel link and drops keywords."
+  ],
+  [
+   "A3",
+   "DB and deposit converge on one version string",
+   "violated",
+   "task_dod 385: 60 url-id != doi-id, 24 doi != zenodo_doi."
+  ],
+  [
+   "B1",
+   "Units audit before any cost escalation",
+   "violated-remediated",
+   "2026-09-30: dashboard burn used credit-netted amount_due ($0.00); workers_ai_cost_30d_usd was hand-set 15.6 vs ~58 measured. Fixed in #156/#161."
+  ],
+  [
+   "B2",
+   "Gate metrics computed from sources at evaluation time",
+   "violated-remediated",
+   "impact_thresholds stored OPEN while measured MET (fixed #156); #1615 still open."
+  ],
+  [
+   "B3",
+   "Per-day estimates re-derived before compliance breach",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "B4",
+   "Budget-cap exhaustion degrades to the free tier",
+   "enforced-verified",
+   "routing_policy L7 LIVE."
+  ],
+  [
+   "B5",
+   "One cost policy per path",
+   "violated-remediated",
+   "Agent final round took the chat free tier (#1271); fixed in qnfo-ops 2.38.13."
+  ],
+  [
+   "C1",
+   "Client-state changes mirrored into the enforcing guard",
+   "local-only",
+   "Guards run locally (GUARDS-LOCAL-ONLY-1)."
+  ],
+  [
+   "C2",
+   "Retired identifiers swept across every enforcing surface",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "C3",
+   "Client default model must resolve in the runtime registry",
+   "local-only",
+   ""
+  ],
+  [
+   "C4",
+   "Guard parsers fixed; mirrors compared byte-for-byte",
+   "enforced-verified",
+   "mirror-guard runs fail-closed in CI."
+  ],
+  [
+   "C5",
+   "Declared and live schedules converge to one truth",
+   "violated",
+   "CRON-DECLARED-EXCEEDS-PLATFORM-1."
+  ],
+  [
+   "C6",
+   "Version and model list reconciled together from the live endpoint",
+   "violated",
+   "#1628 capability_audit_snapshot 11 days stale."
+  ],
+  [
+   "C7",
+   "Parity guards wired fatal; absent anchor is a failure",
+   "violated",
+   "#1548 gates documented not enforced."
+  ],
+  [
+   "D1",
+   "Lock timestamps are numeric epochs; immortal rows reaped",
+   "enforced-verified",
+   "deploy_locks typeof guard; 0 active locks."
+  ],
+  [
+   "D2",
+   "Guard ledger resynchronised from live health on failure",
+   "enforced-verified",
+   "deploy-guard settle/autoResolve (1.3.17)."
+  ],
+  [
+   "D3",
+   "Distributed deploy lock; content-marker clobber detection",
+   "enforced-partial",
+   "Canonical deploy lock live; concurrent-agent contention still stalls the patch applier."
+  ],
+  [
+   "D4",
+   "Platform-correct command form in wrappers",
+   "local-only",
+   ""
+  ],
+  [
+   "D5",
+   "Symbol-closure check before deploy",
+   "enforced-unverified",
+   "deploy_gate build gate runs; symbol closure not proven."
+  ],
+  [
+   "D6",
+   "Storage type read from the live namespace before deploy",
+   "enforced-unverified",
+   "container_restore_gate (2026-09-30) reads live state."
+  ],
+  [
+   "D7",
+   "Build verification and conflict-marker sweep before push",
+   "enforced-verified",
+   "deploy-gate + workflow-lint in CI."
+  ],
+  [
+   "D8",
+   "Re-probe after delay before declaring a broken index",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "E1",
+   "Blockers must survive a credentialed falsification",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "E2",
+   "Secrets read from their file stores",
+   "local-only",
+   ""
+  ],
+  [
+   "E3",
+   "Auth-gated probes carry credentials",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "E4",
+   "Counts cross-checked against a live call",
+   "enforced-partial",
+   "Dashboard now renders live; several registries still carry stored labels."
+  ],
+  [
+   "F1",
+   "Prove no live consumer before retirement",
+   "enforced-verified",
+   "worker_consolidation BLOCKED-PROOF rows."
+  ],
+  [
+   "F2",
+   "Traffic analytics before retirement",
+   "violated",
+   "RETIREMENT-USAGE-SIGNAL-DEGENERATE-1."
+  ],
+  [
+   "F3",
+   "Consolidate toward a verified core",
+   "open",
+   "39 live vs target 36 vs survival gate <= 28."
+  ],
+  [
+   "G1",
+   "Closure carries a passing re-probe or owned deferral",
+   "enforced-partial",
+   "issue_close_evidence_required trigger enforces evidence text, not a probe."
+  ],
+  [
+   "G2",
+   "Every register has an owned disposition actor",
+   "violated",
+   "#1634 metric triggers inert; #1635 dispatch handlers unverified."
+  ],
+  [
+   "G3",
+   "Detection triggers a verified action; re-filing is open-dedup",
+   "enforced-verified",
+   "issue_refile_guard + unique open-title index."
+  ],
+  [
+   "G4",
+   "A guard not wired into the gate that runs is not a gate",
+   "violated",
+   "#1548, #1629."
+  ],
+  [
+   "H1",
+   "Independent purge sweeps for backup orphans",
+   "local-only",
+   ""
+  ],
+  [
+   "H2",
+   "Skill registry membership verified before reliance",
+   "local-only",
+   ""
+  ],
+  [
+   "H3",
+   "Junction/hardlink probe before any dedupe deletion",
+   "local-only",
+   ""
+  ],
+  [
+   "H4",
+   "Parity audits read the last occurrence",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "H5",
+   "Runtime state reconciled in-session",
+   "local-only",
+   ""
+  ],
+  [
+   "I1",
+   "Model references provider-qualified and route-checked",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "I2",
+   "Effective answer caps floored in chat and workflow paths",
+   "enforced-partial",
+   "#1271 fixed 2026-09-30; #1531 output-cap clamp open."
+  ],
+  [
+   "I3",
+   "Get-then-put full-object config updates",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "I4",
+   "Platform array shape on schedule re-register",
+   "enforced-verified",
+   "apply-schedules-body-1498."
+  ],
+  [
+   "I5",
+   "Exact-value secret writes",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "I6",
+   "Scoped routes above module-wide gates",
+   "enforced-unverified",
+   "fleet-control /state/summary ordered before auth (2026-09-30)."
+  ],
+  [
+   "I7",
+   "Case-insensitive MIME parsing; owner never suppressed",
+   "violated",
+   "#1480 raw MIME in owner command body."
+  ],
+  [
+   "I8",
+   "Versions fill only missing values, live health first, semver gate",
+   "enforced-unverified",
+   ""
+  ],
+  [
+   "I9",
+   "Idempotent patching with marker-count sweep",
+   "enforced-partial",
+   "apply-* LANDED_MARKERS (2026-09-30); #1673 applier rot."
+  ],
+  [
+   "I10",
+   "Repository state verified through the uncached API",
+   "enforced-unverified",
+   ""
+  ]
+ ],
+ "filed_issue_ids": {
+  "SEC-EXPOSED-CREDENTIALS-UNROTATED-1": 1676,
+  "SEC-CONTAINERS-PILOT-SHELL-STATIC-TOKEN-1": 1677,
+  "SEC-MEMORY-MCP-UNAUTHENTICATED-1": 1678,
+  "AUTONOMY-SCORES-NOT-PERIODIC-1": 1679,
+  "OPS-AGENT-TOOL-BUDGET-INCOMPLETE-1": 1680,
+  "WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1": 1681,
+  "AI-HEALTH-PROBER-PING-COST-1": 1682,
+  "AI-SPEND-OVER-CAP-ALL-PROVIDERS-1": 1683,
+  "DEEPSEEK-FLASH-CALLER-UNKNOWN-1": 1684,
+  "EMAIL-CALENDAR-INTAKE-UNPROVEN-1": 1685,
+  "GUARDS-LOCAL-ONLY-1": 1686,
+  "LOCAL-MAINTENANCE-RESIDUE-1": 1687,
+  "RETIREMENT-USAGE-SIGNAL-DEGENERATE-1": 1688,
+  "IDEA-TRIAGE-CONSUMER-ABSENT-1": 1689,
+  "SURVIVAL-STATE-SAI-NULL-1": 1690,
+  "CRON-DECLARED-EXCEEDS-PLATFORM-1": 1691,
+  "DISTRIBUTION-VOLUME-COLLAPSE-1": 1692,
+  "PATCH-ARTIFACTS-UNRECONCILED-1": 1693,
+  "LEGACY-PM-TASKS-UNRECONCILED-1": 1694,
+  "CAPABILITY-CATALOG-STATUS-WRONG-1": 1695
+ },
+ "existing_open_snapshot": [
+  {
+   "id": "935",
+   "category": "reliability",
+   "key": "PERSONAL-MEMORY-MAINTAIN-NOOP-POST-909"
+  },
+  {
+   "id": "938",
+   "category": "observability",
+   "key": "PERSONAL-TELEMETRY-PLANES-INERT"
+  },
+  {
+   "id": "970",
+   "category": "correctness",
+   "key": "EVENT-REC-NO-PROFILE-FILTER-JOIN-1"
+  },
+  {
+   "id": "1049",
+   "category": "email",
+   "key": "EMAIL-HANDOFF-AFTER-1-2-AUTOREPLIES"
+  },
+  {
+   "id": "1091",
+   "category": "publication",
+   "key": "DLF-ZENODO-PUBLISH-BLOCKED-1"
+  },
+  {
+   "id": "1111",
+   "category": "content-integrity",
+   "key": "PUBLIC-COUNTS-COVERAGE-DRIFT-1"
+  },
+  {
+   "id": "1118",
+   "category": "procedure",
+   "key": "OPS-PUBLICATION-PROCEDURE-GAP-20260926"
+  },
+  {
+   "id": "1152",
+   "category": "procedure",
+   "key": "DISSEMINATION-CHANNEL-CARRIES-Q08-NOT-PAPERS-1"
+  },
+  {
+   "id": "1158",
+   "category": "email",
+   "key": "EMAIL-REPLY-QUEUE-TERMINAL-PARENT-CASCADE-1"
+  },
+  {
+   "id": "1160",
+   "category": "compliance",
+   "key": "EMAIL-ULA-MISREPRESENTATION-835-1"
+  },
+  {
+   "id": "1163",
+   "category": "optimization",
+   "key": "Q08-CURATED-ARTICLE-UNPUBLISHED-20260926"
+  },
+  {
+   "id": "1164",
+   "category": "content-integrity",
+   "key": "CONTENT-INTEGRITY-NO-INTERNAL-ERRATA-PATH-1"
+  },
+  {
+   "id": "1181",
+   "category": "integrity",
+   "key": "ERRATA-ACTIONS-DEAD-1"
+  },
+  {
+   "id": "1182",
+   "category": "integrity",
+   "key": "CONTENT-ACCURACY-NOT-A-GATE-1"
+  },
+  {
+   "id": "1189",
+   "category": "reliability",
+   "key": "RESEARCH-QUEUE-TRANSIENT-EXPRESS-ABORT-MISLEADING-OK-1"
+  },
+  {
+   "id": "1194",
+   "category": "dissemination",
+   "key": "DISSEMINATION-DISTINCTION-FAMILY-NEVER-POSTED-1"
+  },
+  {
+   "id": "1223",
+   "category": "observability",
+   "key": "WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1"
+  },
+  {
+   "id": "1271",
+   "category": "reliability",
+   "key": "OPS-AGENT-TOOLS-EMPTY-500-1 (fix deployed 2026-09-30, qnfo-ops 2.38.13)"
+  },
+  {
+   "id": "1277",
+   "category": "security",
+   "key": "CF-ONE-ACCESS-NOT-DEPLOYED-1"
+  },
+  {
+   "id": "1279",
+   "category": "integration",
+   "key": "CASB-GITHUB-NOT-CONFIGURED-1"
+  },
+  {
+   "id": "1285",
+   "category": "remediation",
+   "key": "ACT-HALF-UNVERIFIED-PREDICATE-WEAK-1"
+  },
+  {
+   "id": "1290",
+   "category": "data-integrity",
+   "key": "OUTREACH-RESPONSE-TYPE-POSITIVE-MISCLASSIFIED-1"
+  },
+  {
+   "id": "1293",
+   "category": "data-integrity",
+   "key": "ROUTER-CALIB-AGENT-CLASS-ZERO-SUCCESS-1"
+  },
+  {
+   "id": "1461",
+   "category": "self-heal",
+   "key": "SELF-AUDIT-TOOLERR: exec_python"
+  },
+  {
+   "id": "1468",
+   "category": "reliability",
+   "key": "CLOUD-OPS-BINDINGS-MISSING-1"
+  },
+  {
+   "id": "1472",
+   "category": "email",
+   "key": "OWNER-CMD-QUEUE-522-ALL-FAIL-1"
+  },
+  {
+   "id": "1474",
+   "category": "data-integrity",
+   "key": "EMAIL-CLASSIFICATION-PERSONAL-CATCHALL-1"
+  },
+  {
+   "id": "1477",
+   "category": "email",
+   "key": "ALERTS-ADDRESS-NEVER-PROVISIONED-1"
+  },
+  {
+   "id": "1480",
+   "category": "email",
+   "key": "EMAIL-CMD-BODY-RAW-MIME-1"
+  },
+  {
+   "id": "1504",
+   "category": "observability",
+   "key": "RESEARCH-REVISE-ABORT-1"
+  },
+  {
+   "id": "1512",
+   "category": "reliability",
+   "key": "PERSONAL-VAULT-INDEXER-ERROR-SURGE-1"
+  },
+  {
+   "id": "1517",
+   "category": "bug",
+   "key": "LIFECYCLE-CUSTOM-DOMAIN-530-1"
+  },
+  {
+   "id": "1531",
+   "category": "reliability",
+   "key": "OPS-OUTPUT-CAP-CLAMP-1"
+  },
+  {
+   "id": "1543",
+   "category": "observability",
+   "key": "TOOL-ERROR-RATE-web_fetch-1"
+  },
+  {
+   "id": "1547",
+   "category": "governance",
+   "key": "GITHUB-PUSH-AVAILABLE-1"
+  },
+  {
+   "id": "1548",
+   "category": "governance",
+   "key": "GATES-DOCUMENTED-NOT-ENFORCED-1"
+  },
+  {
+   "id": "1615",
+   "category": "governance",
+   "key": "SHUTDOWN-GATE-METRIC-STALE-REGRESSION-1"
+  },
+  {
+   "id": "1616",
+   "category": "governance",
+   "key": "NO-PAYMENT-RAIL-1"
+  },
+  {
+   "id": "1618",
+   "category": "observability",
+   "key": "WORKER-CENSUS-VERDICT-SATURATED-1"
+  },
+  {
+   "id": "1619",
+   "category": "governance",
+   "key": "SLA-BREACHES-18-OVERDUE-NONE-REMEDIATED-1"
+  },
+  {
+   "id": "1620",
+   "category": "research",
+   "key": "RESEARCH-QUEUE-PUBLISH-STALL-22D-1"
+  },
+  {
+   "id": "1621",
+   "category": "publication",
+   "key": "ZENODO-VERSIONS-PER-FLAGSHIP-1"
+  },
+  {
+   "id": "1622",
+   "category": "research",
+   "key": "RESEARCH-PLANS-TABLE-EMPTY-1"
+  },
+  {
+   "id": "1623",
+   "category": "governance",
+   "key": "REGISTER-TAXONOMY-SWEEP-NEVER-EXECUTED-1"
+  },
+  {
+   "id": "1624",
+   "category": "reliability",
+   "key": "OPS-JOBS-CANCELLED-DOMINANT-1"
+  },
+  {
+   "id": "1625",
+   "category": "observability",
+   "key": "UNIFIED-OPEN-ISSUES-UNCONSUMED-1"
+  },
+  {
+   "id": "1626",
+   "category": "observability",
+   "key": "METRIC-REGISTRY-UNDEFINED-DEFS-1"
+  },
+  {
+   "id": "1627",
+   "category": "governance",
+   "key": "WORKER-CAP-NUMBER-DRIFT-1"
+  },
+  {
+   "id": "1628",
+   "category": "observability",
+   "key": "CAPABILITY-CONTRACT-CONFORMANCE-UNMEASURED-1"
+  },
+  {
+   "id": "1629",
+   "category": "governance",
+   "key": "GUARD-REGISTRY-36-UNVERIFIED-1"
+  },
+  {
+   "id": "1630",
+   "category": "governance",
+   "key": "WORKER-CONSOLIDATION-COUNT-MISMATCH-1"
+  },
+  {
+   "id": "1633",
+   "category": "governance",
+   "key": "ADR-012-FK-CONSTRAINTS-NEVER-IMPLEMENTED-1"
+  },
+  {
+   "id": "1634",
+   "category": "observability",
+   "key": "METRIC-TRIGGER-ACTION-LOOP-INERT-1"
+  },
+  {
+   "id": "1635",
+   "category": "observability",
+   "key": "DISPATCH-HANDLER-CAPABILITY-UNVERIFIED-1"
+  },
+  {
+   "id": "1636",
+   "category": "governance",
+   "key": "CALIBRATION-REGISTER-NO-RECHECK-CONSUMER-1"
+  },
+  {
+   "id": "1637",
+   "category": "reliability",
+   "key": "DEVICE-PLANE-FROZEN-1"
+  },
+  {
+   "id": "1638",
+   "category": "integration",
+   "key": "QACP-PROTOCOL-UNBUILT-1"
+  },
+  {
+   "id": "1639",
+   "category": "reliability",
+   "key": "NOTES-INTAKE-STOPPED-1"
+  },
+  {
+   "id": "1640",
+   "category": "reliability",
+   "key": "SELF-EVOLUTION-LOOP-STOPPED-1"
+  },
+  {
+   "id": "1641",
+   "category": "observability",
+   "key": "EXTERNAL-MENTION-MONITOR-EMPTY-1"
+  },
+  {
+   "id": "1642",
+   "category": "observability",
+   "key": "VENUE-RADAR-DORMANT-1"
+  },
+  {
+   "id": "1643",
+   "category": "dissemination",
+   "key": "PAPER-EXPLAIN-DEAD-1"
+  },
+  {
+   "id": "1644",
+   "category": "integrity",
+   "key": "PROOF-SUBSYSTEM-DEAD-1"
+  },
+  {
+   "id": "1645",
+   "category": "observability",
+   "key": "EXPERIMENTS-FRAMEWORK-INERT-1"
+  },
+  {
+   "id": "1647",
+   "category": "dissemination",
+   "key": "SOCIAL-ENGAGEMENT-COLLECTION-STOPPED-1"
+  },
+  {
+   "id": "1648",
+   "category": "observability",
+   "key": "IPATENT-APP-ZERO-DATA-1"
+  },
+  {
+   "id": "1649",
+   "category": "reliability",
+   "key": "PERSONAL-PLANE-EMPTY-TABLES-1"
+  },
+  {
+   "id": "1650",
+   "category": "observability",
+   "key": "PORTFOLIO-PIPELINE-RUNS-INERT-1"
+  },
+  {
+   "id": "1651",
+   "category": "content-integrity",
+   "key": "LIVING-CITATION-GRAPH-UNBUILT-1"
+  },
+  {
+   "id": "1652",
+   "category": "observability",
+   "key": "FLEET-AGENTS-REGISTRY-STALE-1"
+  },
+  {
+   "id": "1653",
+   "category": "observability",
+   "key": "RADAR-FAMILY-DORMANT-1"
+  },
+  {
+   "id": "1654",
+   "category": "observability",
+   "key": "SIGNALS-TRIAGE-GAP-1"
+  },
+  {
+   "id": "1655",
+   "category": "observability",
+   "key": "REPORT-CARD-INPUTS-STALE-1"
+  },
+  {
+   "id": "1656",
+   "category": "governance",
+   "key": "PROMPT-PROVENANCE-UNBUILT-1"
+  },
+  {
+   "id": "1657",
+   "category": "observability",
+   "key": "CMS-CONTENT-TABLE-DEAD-1"
+  },
+  {
+   "id": "1658",
+   "category": "observability",
+   "key": "WORKER-OUTPUT-CONTRACTS-STALE-1"
+  },
+  {
+   "id": "1659",
+   "category": "governance",
+   "key": "GOVERNANCE-KERNEL-SPARSE-1"
+  },
+  {
+   "id": "1660",
+   "category": "observability",
+   "key": "FLEET-TASK-ENGINE-PARTIAL-COVERAGE-1"
+  },
+  {
+   "id": "1664",
+   "category": "observability",
+   "key": "TOOL-ERROR-RATE-shell_exec-1"
+  },
+  {
+   "id": "1670",
+   "category": "reliability",
+   "key": "Q08-STUCK-RUN-ROWS-1"
+  },
+  {
+   "id": "1671",
+   "category": "monitoring",
+   "key": "Q08-GATE-OUTAGE-UNMONITORED-1"
+  },
+  {
+   "id": "1673",
+   "category": "self-heal",
+   "key": "APPLIER-ROT-1"
+  },
+  {
+   "id": "1674",
+   "category": "self-heal",
+   "key": "REMOVAL-LEDGER-WRITE-PATH-1"
+  },
+  {
+   "id": "1675",
+   "category": "observability",
+   "key": "CAPABILITY-PRODUCT-LOOP-INCOMPLETE-1"
+  }
+ ],
+ "concurrent_compilation": {
+  "path": "audits/2026-10-01-master-build-out-backlog-v2.md",
+  "note": "Compiled by a parallel session on 2026-10-01 (~00:0xZ). Its sections 2-8 were reconciled into this backlog: 10 build-outs unique to it were added (RM-IDEA-STREAM-UI-1 .. RM-COST-FLOOR-40-1); the rest map to existing issues or roadmap rows. Correction: its s2.1 states cloudflare_capability_catalog does not exist; the table exists (32 rows, 2026-09-30) and its wrong statuses are CAPABILITY-CATALOG-STATUS-WRONG-1 (#1695)."
+ }
+}

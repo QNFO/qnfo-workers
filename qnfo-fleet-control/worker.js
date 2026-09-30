@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.44-uncached-crons-json";
+var VERSION = "0.4.45-wai-cost-writer";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2813,6 +2813,27 @@ async function refreshOwnedMetrics(env) {
     else out.skipped.gateway_cap_30d_usd = "gateway spend_limits unreadable";
   } catch (e) {
     out.skipped.gateway_cap_30d_usd = String(e && e.message || e).slice(0, 160);
+  }
+  // WAI-COST-WRITER-1 (2026-09-30): workers_ai_cost_30d_usd had no automated writer; its formula named
+  // workersInvocationsAdaptive.neurons, a field that does not exist, and the row carried a hand-set 15.6.
+  // Workers AI usage lives in aiInferenceAdaptiveGroups.sum.totalNeurons; cost at the published rate
+  // ($0.011 per 1k neurons after 10k/day free). Measured 2026-09-30: 5.57M neurons/30d (~$58 list).
+  try {
+    var since = new Date(Date.now() - 30 * 864e5).toISOString();
+    var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + since + '", datetime_leq: "' + nowIso + '" }) { sum { totalNeurons } } } } }';
+    var qr = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(2e4) });
+    var qj = await qr.json().catch(function () { return null; });
+    var rows = qj && !qj.errors && qj.data && qj.data.viewer && qj.data.viewer.accounts && qj.data.viewer.accounts[0] ? qj.data.viewer.accounts[0].aiInferenceAdaptiveGroups : null;
+    if (Array.isArray(rows)) {
+      var neurons = rows.reduce(function (a, x) { return a + (x && x.sum && Number(x.sum.totalNeurons) || 0); }, 0);
+      var usd = Math.max(0, neurons - 1e4 * 30) / 1e3 * 0.011;
+      await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='workers_ai_cost_30d_usd'").bind(usd.toFixed(2), nowIso, "max(0, SUM(aiInferenceAdaptiveGroups.sum.totalNeurons over 30d) - 10k/day free) / 1000 * $0.011 (published Workers AI rate); refreshed hourly by qnfo-fleet-control", "CF GraphQL aiInferenceAdaptiveGroups (" + Math.round(neurons) + " neurons at refresh)").run();
+      out.written.push("workers_ai_cost_30d_usd=" + usd.toFixed(2));
+    } else {
+      out.skipped.workers_ai_cost_30d_usd = "aiInferenceAdaptiveGroups unreadable" + (qj && qj.errors ? ": " + JSON.stringify(qj.errors).slice(0, 120) : "");
+    }
+  } catch (e) {
+    out.skipped.workers_ai_cost_30d_usd = String(e && e.message || e).slice(0, 160);
   }
   return out;
 }
