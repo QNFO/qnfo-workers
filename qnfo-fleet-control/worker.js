@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.39-selfstate-obs2";
+var VERSION = "0.4.39-selfstate-obs3";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2471,7 +2471,7 @@ var worker_default2 = {
   },
   async scheduled(event, env, ctx) {
     const cron = event.cron;
-    if (cron === "*/20 * * * *") return advisorMod.default.scheduled(event, env, ctx);
+    if (cron === "*/20 * * * *") { ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e))); return advisorMod.default.scheduled(event, env, ctx); }
     if (cron === "0 3 * * *") {
       ctx.waitUntil(disposeRetired(env));
       ctx.waitUntil(costImpactGuard(env).catch((e) => console.error("costImpactGuard error:", e && e.message || e)));
@@ -2695,6 +2695,7 @@ async function reassertObservability(env) {
         if (po && po.enabled === true) patched++;
       } catch (e2) {}
     }
+    if (patched > 0) { try { await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-reassert', 'qnfo-fleet-control', ?)").bind("patched=" + patched + " skipped=" + skipped).run(); } catch (e3) {} }
     return { ok: true, patched: patched, skipped: skipped };
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
