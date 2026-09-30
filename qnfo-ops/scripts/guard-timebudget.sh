@@ -143,5 +143,28 @@ if [ -n "$LIVE_VER" ] && [ -n "$REPO_VER" ] && [ "$LIVE_VER" != "$REPO_VER" ]; t
   echo "WARN: live version $LIVE_VER != repo $REPO_VER (deploy drift; gated by deploy-drift-guard.py)"
 fi
 
+# GUARD-TIMEBUDGET-COVERAGE-GAP-1 (2026-09-30, issue #1515): the guard asserted only the deadline default and the
+# absence of the old panic stub, so 3 of the 4 landed tool-budget fixes could regress with
+# CI still green. Assert every invariant TOOLBUDGET-CANONICAL-1 relies on.
+for f in worker.js deployed-current.worker.js; do
+  if ! grep -q 'var MAX_TOOL_ITERS = 40;' "$DIR/$f"; then
+    echo "FAIL: MAX_TOOL_ITERS is not the canonical 40 in $f (TOOLBUDGET-CANONICAL-1)"; FAIL=1
+  fi
+  if ! grep -q 'BUDGET_EXHAUSTED_DIRECTIVE' "$DIR/$f"; then
+    echo "FAIL: BUDGET_EXHAUSTED_DIRECTIVE missing from $f (final-round directive)"; FAIL=1
+  fi
+  if ! grep -q 'CONTINUE_DIRECTIVE' "$DIR/$f"; then
+    echo "FAIL: CONTINUE_DIRECTIVE missing from $f (BUDGET-AUTO-CONTINUE-1)"; FAIL=1
+  fi
+  if ! grep -q 'FUTURE_WORK_RE' "$DIR/$f"; then
+    echo "FAIL: FUTURE_WORK_RE missing from $f (future-work prose detector)"; FAIL=1
+  fi
+  if ! grep -q 'const withTools = iter < maxIters && !deadlineHit;' "$DIR/$f"; then
+    echo "FAIL: withTools budget predicate missing from $f (chat tool loop)"; FAIL=1
+  fi
+  if ! grep -q 'ops_tool_budget_bail' "$DIR/$f"; then
+    echo "FAIL: ops_tool_budget_bail event missing from $f (budget-bail observability)"; FAIL=1
+  fi
+done
 if [ "$FAIL" -eq 0 ]; then echo "GUARD PASS"; else echo "GUARD FAIL"; fi
 exit $FAIL
