@@ -62,6 +62,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -208,6 +209,7 @@ SCHEDULES_API = ("https://api.cloudflare.com/client/v4/accounts/{acct}"
 CRON_BLOCK_RE = re.compile(r'^\s*crons\s*=\s*\[(.*?)\]', re.M | re.S)
 CRON_STR_RE = re.compile(r'"([^"]*)"')
 CF_MAX_CRONS = 3
+SCHED_LAST_ERROR = ""  # SCHEDULES-DIAG-LEGIBLE-1
 
 
 def declared_crons(artifact_path):
@@ -265,13 +267,28 @@ def schedules_put(worker, crons, tok):
     req = urllib.request.Request(url, data=data, method="PUT", headers={
         "Authorization": "Bearer " + tok, "Content-Type": "application/json",
         "User-Agent": FLEET_UA})
-    try:
-        with urllib.request.urlopen(req, timeout=90) as r:
-            return r.status, r.read().decode()[:200]
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode()[:200]
-    except Exception as e:
-        return 0, "ERR " + str(e)
+    # SCHEDULES-DIAG-LEGIBLE-1: this call used to fail with a bare ledger note
+    # and no error code, so the cause of the fleet-wide schedules outage was
+    # unattributable. Retry the transient and client-id class and record the
+    # last error verbatim so the ledger carries the real cause.
+    global SCHED_LAST_ERROR
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(req, timeout=90) as r:
+                SCHED_LAST_ERROR = ""
+                return r.status, r.read().decode("utf-8", "replace")[:600]
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:600]
+            SCHED_LAST_ERROR = "HTTP %s %s" % (e.code, body)
+            if e.code in (403, 429) or e.code >= 500:
+                time.sleep(2 * attempt)
+                continue
+            return e.code, body
+        except Exception as e:
+            SCHED_LAST_ERROR = "ERR " + str(e)
+            time.sleep(2 * attempt)
+            continue
+    return 0, SCHED_LAST_ERROR
 
 
 def schedules_apply(worker, artifact_path, tok):
@@ -484,7 +501,11 @@ def main(argv):
               "Set SCHEDULES_STRICT=1 to make this fatal.")
 
     ver = artifact_version(code)
-    sched_note = "schedules=applied" if sched_ok else "schedules=FAILED"
+    if sched_ok:
+        sched_note = "schedules=applied"
+    else:
+        _err = (SCHED_LAST_ERROR or "no-error-captured").replace(";", ",")
+        sched_note = "schedules=FAILED(" + _err[:170] + ")"
     notes = (f"raw_put.py /content deploy; compatibility_date={got_date}; "
              f"flags={len(got_flags)}; {sched_note}; DEPLOY-LEDGER-1")
     if not ledger_write(worker, ver, tok, notes):

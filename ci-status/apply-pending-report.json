@@ -1,14 +1,17 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "9bd1071e7a9b946c97ead6bed7ebbe8bcf48f8c6",
-  "total": 84,
+  "head": "7f60b25e1be4a8f29144e22c648365cb76a56910",
+  "total": 85,
   "summary": {
     "already-applied": 53,
     "error": 10,
-    "stale-anchor": 21
+    "stale-anchor": 21,
+    "landed": 1
   },
-  "landed": [],
+  "landed": [
+    "schedules-diag-legible-patch.py"
+  ],
   "reverted": [
     {
       "script": "container-restore5-repair-bindings-patch.py",
@@ -84,7 +87,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "APPLIER-CLASSIFY-UNMASKED-1: nothing to do (all edits already applied)"
     },
     {
@@ -93,7 +96,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "FAIL-CLOSED: anchor DOC matched 0 times (expected 1) - nothing written"
     },
     {
@@ -102,7 +105,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: A1 anchor not found in /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -111,7 +114,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.05,
+      "seconds": 0.06,
       "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -120,7 +123,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.06,
+      "seconds": 0.05,
       "tail": "FAIL(3): anchor count != 1 -> {ci-status key tuple: 0} for ci-status key tuple"
     },
     {
@@ -156,7 +159,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "OK applied=0"
     },
     {
@@ -201,7 +204,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "[done] changes: none (already applied)"
     },
     {
@@ -210,7 +213,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -239,7 +242,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -257,7 +260,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: edit 'version-bump' matched 0 times in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-dashboard/worker.js"
     },
     {
@@ -367,7 +370,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "SUMMARY S1=OK S2=OK S3=OK"
     },
     {
@@ -376,7 +379,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.14,
+      "seconds": 0.15,
       "tail": "CHANGED=0"
     },
     {
@@ -520,7 +523,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "FAIL (fail-closed): anchor 'sqlite_exp list anchor' matched 0 times, expected exactly 1 -- aborting WITHOUT writing"
     },
     {
@@ -574,7 +577,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "ALREADY APPLIED: OPS-D1-SCHEMA-HINT-FULL-1 present; nothing to do"
     },
     {
@@ -655,7 +658,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.08,
+      "seconds": 0.07,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
@@ -713,6 +716,15 @@
       "tail": "nothing to do"
     },
     {
+      "script": "schedules-diag-legible-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "reverted": [],
+      "seconds": 0.02,
+      "tail": "LANDED SCHEDULES-DIAG-LEGIBLE-1"
+    },
+    {
       "script": "self-fetch-guard-patch.py",
       "rc": 0,
       "verdict": "already-applied",
@@ -727,7 +739,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "already patched (SELFHEAL-EXTRACTOR-BARE-NAME-1 present); no change"
     },
     {
@@ -736,7 +748,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "already patched (SELFHEAL-METRIC-TABLE-MISMATCH-1 present); no change"
     },
     {
@@ -745,7 +757,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: qnfo-ops/worker.js anchor A1 matched 0 times (expected 1)"
     },
     {
@@ -754,7 +766,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED [A/rate-gate-volfloor]: expected exactly 1 anchor match, found 0. Artifact does not match the expected pre-patch state; nothing written."
     },
     {
@@ -785,5 +797,5 @@
       "tail": "  count=0          after = snapshot(root)"
     }
   ],
-  "ts": "2026-09-29T20:37:58Z"
+  "ts": "2026-09-30T07:13:24Z"
 }
