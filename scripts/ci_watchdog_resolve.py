@@ -89,16 +89,86 @@ def _subject_candidates(subject: str) -> list[str]:
     return cands
 
 
-def latest_green(subject: str, since_iso: str | None):
+def list_workflows() -> list[dict]:
+    """Every workflow the Actions API knows, INCLUDING state=deleted ones.
+
+    RETIRED-WORKFLOW-1: this used to read only page 1 (per_page=100). The repo has ~96
+    active workflows, and retired ones stay listed as state=deleted, so a single page
+    silently truncates as soon as the total passes 100 and a workflow past the cut is
+    reported as "no such workflow". Read up to 5 pages (500 entries) instead.
+    """
+    out: list[dict] = []
+    for page in range(1, 6):
+        st, d = gh(f"/repos/{REPO}/actions/workflows?per_page=100&page={page}")
+        if st != 200 or not d:
+            break
+        batch = d.get("workflows", [])
+        out.extend(batch)
+        if len(batch) < 100:
+            break
+    return out
+
+
+def _wf_keys(w: dict) -> set[str]:
+    """Names a workflow can be referred to by: its `name` and the stem of its file path."""
+    keys = {w.get("name") or ""}
+    p = (w.get("path") or "").rsplit("/", 1)[-1]
+    for suf in (".yml", ".yaml"):
+        if p.endswith(suf):
+            p = p[: -len(suf)]
+            break
+    keys.add(p)
+    keys.discard("")
+    return keys
+
+
+def retired_workflow(subject: str, workflows: list[dict] | None = None):
+    """The state=deleted workflow `subject` refers to, or None.
+
+    RETIRED-WORKFLOW-1: a finding about a workflow that has since been deleted can never
+    be closed by the green-run rule (no run will ever come), so it re-alerts forever.
+    The deletion is itself positive evidence that the failing thing no longer exists.
+    Fail-closed on every ambiguity: a workflow with the same name or file stem that is
+    still ACTIVE (a rename, or a deleted-then-restored file) means it is NOT retired.
+    """
+    cands = set(_subject_candidates(subject))
+    ws = workflows if workflows is not None else list_workflows()
+    match = [w for w in ws if cands & _wf_keys(w)]
+    if not match:
+        return None
+    if any(w.get("state") != "deleted" for w in match):
+        return None
+    return sorted(match, key=lambda w: w.get("updated_at") or "")[-1]
+
+
+def retired_by_id(workflow_id, workflows: list[dict]):
+    """Deleted workflow looked up by the id its failing run carries, or None.
+
+    RETIRED-WORKFLOW-1: `GET /actions/workflows/{id}` keeps returning a deleted workflow with
+    state=deleted and its name/path intact (verified 2026-09-30 on a workflow deleted minutes
+    earlier), so this does not depend on the list endpoint still including deleted entries.
+    Same fail-closed rule as retired_workflow(): an ACTIVE workflow sharing its name or file
+    stem (a rename, or a restore) means it is not retired.
+    """
+    if not workflow_id:
+        return None
+    st, w = gh(f"/repos/{REPO}/actions/workflows/{workflow_id}")
+    if st != 200 or not w or w.get("state") != "deleted":
+        return None
+    keys = _wf_keys(w)
+    if any(x.get("state") != "deleted" and keys & _wf_keys(x) for x in workflows):
+        return None
+    return w
+
+
+def latest_green(subject: str, since_iso: str | None, workflows: list[dict] | None = None):
     """Newest successful run of workflow `subject` created strictly after since_iso."""
     cands = _subject_candidates(subject)
-    st, d = gh(f"/repos/{REPO}/actions/workflows?per_page=100")
     wf_id = None
-    if st == 200 and d:
-        for w in d.get("workflows", []):
-            if w.get("name") in cands:
-                wf_id = w["id"]
-                break
+    for w in (workflows if workflows is not None else list_workflows()):
+        if w.get("name") in cands:
+            wf_id = w["id"]
+            break
     if wf_id:
         st, d = gh(f"/repos/{REPO}/actions/workflows/{wf_id}/runs?per_page=50")
         rs = (d.get("workflow_runs", []) if st == 200 and d else [])
@@ -125,6 +195,7 @@ def main() -> int:
         return 0
     print(f"ci-watchdog-resolve: repo={REPO} open[{LABEL}]={len(items)} dry={DRY}")
     closed = kept = 0
+    all_wfs = list_workflows()
     for it in items:
         if it.get("pull_request"):
             continue
@@ -139,13 +210,40 @@ def main() -> int:
         klass, subj = [x.strip() for x in rest.split(":", 1)]
         num = it.get("number")
         m = re.search(r"run=(\d+)", it.get("body") or "")
-        fail_run, fail_created = (m.group(1) if m else None), None
+        fail_run, fail_created, fail_wf_id = (m.group(1) if m else None), None, None
         if fail_run:
             stx, rx = gh(f"/repos/{REPO}/actions/runs/{fail_run}")
             if stx == 200 and rx:
                 fail_created = rx.get("created_at")
-        g = latest_green(subj, fail_created)
+                fail_wf_id = rx.get("workflow_id")
+        g = latest_green(subj, fail_created, all_wfs)
         if not g:
+            rw = retired_by_id(fail_wf_id, all_wfs) or retired_workflow(subj, all_wfs)
+            if rw:
+                comment = (
+                    f"Auto-closed by `scripts/ci_watchdog_resolve.py` (workflow retired).\n\n"
+                    f"**{klass} / {subj}** can no longer fail: the workflow "
+                    f"[`{rw.get('path')}`]({rw.get('html_url')}) has been deleted from the repository "
+                    f"(Actions state `deleted`, last updated {rw.get('updated_at')}), and no active "
+                    f"workflow carries the same name.\n\n"
+                    f"- failing run: `{fail_run}` created {fail_created}\n"
+                    f"- rule: a deleted workflow with no active namesake. The deletion went through "
+                    f"review and git history keeps the file, so this is reversible; if the workflow "
+                    f"is restored and fails again the watchdog will open a new finding.\n"
+                )
+                if DRY:
+                    print(f"  - #{num} {klass}/{subj}: WOULD CLOSE (workflow retired: {rw.get('path')})")
+                    closed += 1
+                    continue
+                cst, _ = gh(f"/repos/{REPO}/issues/{num}/comments", "POST", {"body": comment})
+                pst, _ = gh(f"/repos/{REPO}/issues/{num}", "PATCH",
+                            {"state": "closed", "state_reason": "not_planned"})
+                ok = pst in (200, 201)
+                print(f"  - #{num} {klass}/{subj}: {'CLOSED (retired)' if ok else f'FAILED http-{pst}'} "
+                      f"(comment http-{cst}, workflow {rw.get('path')})")
+                closed += 1 if ok else 0
+                kept += 0 if ok else 1
+                continue
             print(f"  - #{num} {klass}/{subj}: NO green run after the failure "
                   f"(fail_run={fail_run} at {fail_created}, "
                   f"names={_subject_candidates(subj)}); left open")
