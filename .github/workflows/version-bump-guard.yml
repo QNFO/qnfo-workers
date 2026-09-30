@@ -110,6 +110,23 @@ jobs:
               BEFORE="$MB"
             fi
           fi
+          # GUARD-RANGE-MERGE-1 (2026-09-30): a pull_request `synchronize` event carries
+          # event.before = the previous PR head, and a push of a "merge main into branch" commit
+          # carries event.before = the previous branch tip. Either way before..after then spans
+          # every bundle main changed since the branch last synced, so runs 36792109129 and
+          # 36792106197 (PR 161) blamed fleet-exec/memory-mcp/qnfo-memory-mcp - main's commits,
+          # not the PR's. For a pull_request, or when AFTER is a merge commit, validate what the
+          # change adds beyond its base branch instead (merge-base with the base ref).
+          BASE_REF='${{ github.base_ref }}'
+          BASE_REF="${BASE_REF:-main}"
+          PARENTS=$(git rev-list --parents -n 1 "$AFTER" | wc -w)
+          if [ '${{ github.event_name }}' = 'pull_request' ] || [ "$PARENTS" -gt 2 ]; then
+            MB=$(git merge-base "origin/$BASE_REF" "$AFTER" 2>/dev/null || true)
+            if [ -n "$MB" ] && [ "$MB" != "$(git rev-parse "$AFTER")" ]; then
+              echo "pull_request or merge commit; validating merge-base with origin/$BASE_REF: $MB"
+              BEFORE="$MB"
+            fi
+          fi
           echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
           echo "after=$AFTER" >> "$GITHUB_OUTPUT"
           echo "range $BEFORE..$AFTER"
