@@ -16,6 +16,15 @@ WHY IT IS NOT "close anything the watchdog did not report this run"
   strictly AFTER the failing run recorded in the issue body. No green run, no
   close. Every other outcome leaves the issue open (fail-closed).
 
+SUBJECT-SHAPE-1 (2026-09-30)
+  The reaper matched `subject` against the Actions API's workflow `name` only.
+  For `invalid-workflow` findings the watchdog records the FILE PATH as the
+  subject, while a valid workflow is registered under its bare name, so those
+  findings could not be closed by any amount of green CI. Measured on
+  QNFO/qnfo-workers: 8 open findings (#43, #44, #45, #46, #47, #68, #69, #70)
+  sat in exactly that state. `_subject_candidates()` now accepts both shapes.
+  The change is inert for subjects that are already bare names.
+
 Exit: always 0 - this is a reaper, not a gate. Its failures must never turn CI
       red, or the reaper becomes a finding of the thing it reaps.
 
@@ -58,13 +67,36 @@ def gh(path: str, method: str = "GET", body: dict | None = None):
         return 0, None
 
 
+def _subject_candidates(subject: str) -> list[str]:
+    """Every workflow-name shape `subject` could refer to.
+
+    SUBJECT-SHAPE-1: `invalid-workflow` findings carry a FILE PATH as their
+    subject ('.github/workflows/x.yml') while the Actions API reports a
+    workflow's `name` ('x'). Matching the raw subject finds no workflow for
+    that shape, so the finding is unclosable no matter how green CI gets.
+    Both shapes are therefore accepted. Order matters: the raw subject is
+    tried first, so subjects that are already bare names behave exactly as
+    before (no regression).
+    """
+    cands = [subject]
+    base = subject.rsplit("/", 1)[-1]
+    for suf in (".yml", ".yaml"):
+        if base.endswith(suf):
+            base = base[: -len(suf)]
+            break
+    if base and base != subject:
+        cands.append(base)
+    return cands
+
+
 def latest_green(subject: str, since_iso: str | None):
     """Newest successful run of workflow `subject` created strictly after since_iso."""
+    cands = _subject_candidates(subject)
     st, d = gh(f"/repos/{REPO}/actions/workflows?per_page=100")
     wf_id = None
     if st == 200 and d:
         for w in d.get("workflows", []):
-            if w.get("name") == subject:
+            if w.get("name") in cands:
                 wf_id = w["id"]
                 break
     if wf_id:
@@ -73,7 +105,7 @@ def latest_green(subject: str, since_iso: str | None):
     else:
         st, d = gh(f"/repos/{REPO}/actions/runs?per_page=100")
         rs = [r for r in (d.get("workflow_runs", []) if st == 200 and d else [])
-              if (r.get("name") or "") == subject]
+              if (r.get("name") or "") in cands]
     for r in rs:  # newest first
         if r.get("conclusion") != "success":
             continue
@@ -115,7 +147,8 @@ def main() -> int:
         g = latest_green(subj, fail_created)
         if not g:
             print(f"  - #{num} {klass}/{subj}: NO green run after the failure "
-                  f"(fail_run={fail_run} at {fail_created}); left open")
+                  f"(fail_run={fail_run} at {fail_created}, "
+                  f"names={_subject_candidates(subj)}); left open")
             kept += 1
             continue
         comment = (
