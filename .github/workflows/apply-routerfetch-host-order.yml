@@ -1,0 +1,89 @@
+name: apply-routerfetch-host-order
+
+# ROUTER-HOST-ORDER-1 + GW-FALLBACK-BODY-1 (2026-09-29)
+# Runs scripts/routerfetch-host-order-body-patch.py against qnfo-research-exec/worker.js
+# and commits the result to the triggering branch. The patch script is idempotent and
+# fail-closed: if any anchor does not match exactly once it exits non-zero and writes
+# nothing, so this workflow can never half-apply.
+#
+# 2026-09-29 correction: the "Verify effect present" step previously hard-asserted the
+# host order `qnfo-ai.q08.workers.dev` FIRST. That order was itself corrected later the
+# same day by ROUTER-HOST-ORDER-CORRECTION-1 (see
+# .github/workflows/apply-routerfetch-host-order-correction.yml), which restored
+# ai.qnfo.org first. An order-asserting check therefore turns any re-run of this
+# workflow into a guaranteed red job (#1383 ANCHOR-INVALIDATION-RED-JOB-1). The check
+# below is now ORDER-AGNOSTIC: it asserts that both hosts are present and that exactly
+# one host order is declared, and leaves the ordering decision to the correction patch.
+
+on:
+  push:
+    paths:
+      - "scripts/routerfetch-host-order-body-patch.py"
+      - ".github/workflows/apply-routerfetch-host-order.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-routerfetch-host-order
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Apply patch
+        run: python3 scripts/routerfetch-host-order-body-patch.py
+
+      - name: Verify effect present
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          src = pathlib.Path("qnfo-research-exec/worker.js").read_text(encoding="utf-8")
+          checks = [
+              ("host tracker", 'var _lastRouterHost = "";'),
+              ("body capture", 'host=" + _lastRouterHost + " body=" + _eb'),
+              ("ai host present", '"https://ai.qnfo.org"'),
+              ("workers.dev host present", '"https://qnfo-ai.q08.workers.dev"'),
+          ]
+          bad = [n for n, s in checks if s not in src]
+          if bad:
+              print("FAIL: effect missing: " + ", ".join(bad)); sys.exit(1)
+          # exactly one ROUTER_HOSTS declaration (no duplicate/partial host lists)
+          n_decl = src.count("var ROUTER_HOSTS = [")
+          if n_decl != 1:
+              print(f"FAIL: expected exactly 1 ROUTER_HOSTS declaration, found {n_decl}")
+              sys.exit(1)
+          print("OK: all 4 effects present, 1 ROUTER_HOSTS declaration (order not asserted)")
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "qnfo-applier-bot"
+          git config user.email "applier@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(research-exec): ROUTER-HOST-ORDER-1 + GW-FALLBACK-BODY-1"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt ${i}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FAIL: push rejected after 5 attempts"
+          exit 1

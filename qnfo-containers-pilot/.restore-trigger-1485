@@ -1,0 +1,21 @@
+RESTORE-7 (2026-09-29, qnfo-ops session, issue #1485) — path-matching trigger file.
+
+MEASURED TRIGGER STATE (not inference):
+  * ci-status/deploy-containers-pilot.json was authored by "qnfo-ci" at 2026-09-29T19:37:35Z
+    (git log -- ci-status/deploy-containers-pilot.json -> 98e03a21), so GitHub Actions DOES
+    execute in this repository.
+  * ci-status/restore-container-config.json       -> 0 commits
+    ci-status/restore-container-config-1485.json  -> 0 commits
+    ci-status/container-config-restore-2.json     -> 0 commits
+    i.e. the /content-metadata restore path (the only path that can ADD [[containers]]
+    back) has never completed a single run.
+  * Current live state: GET /bindings returns 3 bindings with no containers block, and
+    /status returns {"ok":false,"error":"Cannot read properties of undefined (reading
+    'running')"} - every ctx.container exec path is down.
+
+WHY THIS FILE EXISTS: deploy-containers-pilot.yml triggers on paths 'qnfo-containers-pilot/**'
+and '.github/workflows/deploy-containers-pilot.yml'. This file matches the first glob, so
+committing it re-fires that workflow WITHOUT touching worker.js, wrangler.toml, or any
+deployable artifact - the trigger is isolated from the payload.
+
+No skip token in the commit message (CI-TRIGGER-SKIP-1).

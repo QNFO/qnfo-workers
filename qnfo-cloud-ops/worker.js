@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.14.4";
+var VERSION = "1.15.3-schedules-live-1"; /* SCHEDULES-LIVE-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -185,6 +185,23 @@ var AMS_SCHEDULE = {
   "quality-score": { times: ["06:20"], days: "*", fixed: null },
   "overdue-guard": { times: ["05:10"], days: "*", fixed: null }
 };
+function isoDowToCf(spec) {
+  const s = String(spec == null ? "*" : spec).trim();
+  if (s === "*" || s === "") return "*";
+  const conv = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return n;
+    return String((v % 7 + 7) % 7 + 1);
+  };
+  return s.split(",").map((part) => {
+    const p = part.trim();
+    const m = /^(\d+)-(\d+)$/.exec(p);
+    if (m) return conv(m[1]) + "-" + conv(m[2]);
+    if (/^\d+$/.test(p)) return conv(p);
+    return p;
+  }).join(",");
+}
+__name(isoDowToCf, "isoDowToCf");
 function buildCrons(offset) {
   const crons = [];
   for (const [job, s] of Object.entries(AMS_SCHEDULE)) {
@@ -203,13 +220,14 @@ function buildCrons(offset) {
       }
       for (const [mm, hours] of Object.entries(byMinute)) {
         const hs = [...new Set(hours)].sort((a, b) => a - b).join(",");
-        crons.push({ job, cron: mm + " " + hs + " * * " + s.days });
+        crons.push({ job, cron: mm + " " + hs + " * * " + isoDowToCf(s.days) });
       }
     }
   }
   return crons;
 }
 __name(buildCrons, "buildCrons");
+/* CF-DOW-1 */
 function amsOffset(instant) {
   try {
     const dtf = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Amsterdam", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -227,13 +245,21 @@ function amsOffset(instant) {
 __name(amsOffset, "amsOffset");
 async function syncSchedules(env, force) {
   const off = amsOffset(/* @__PURE__ */ new Date());
-  const stored = await stateGet(env, "cron_offset", String(off));
-  if (!force && String(off) === String(stored)) return { changed: false, offset: off };
   const crons = buildCrons(off);
-  const r = await cfApi(env, "/workers/scripts/" + WORKER_NAME + "/schedules", "PUT", crons.map((c) => ({ cron: c.cron })));
+  const list = crons.map((c) => c.cron);
+  const fp = list.slice().sort().join("|");
+  const stored = await stateGet(env, "cron_offset", "");
+  const storedFp = await stateGet(env, "cron_fingerprint", "");
+  if (!force && String(off) === String(stored) && fp === storedFp) {
+    return { changed: false, offset: off, count: list.length };
+  }
+  const r = await cfApi(env, "/workers/scripts/" + WORKER_NAME + "/schedules", "PUT", list.map((cron) => ({ cron })));
   const ok = r.status === 200 && r.body && r.body.success;
-  if (ok) await stateSet(env, "cron_offset", String(off));
-  return { changed: true, ok, offset: off, crons: crons.map((c) => c.cron), status: r.status };
+  if (ok) {
+    await stateSet(env, "cron_offset", String(off));
+    await stateSet(env, "cron_fingerprint", fp);
+  }
+  return { changed: true, ok, offset: off, count: list.length, crons: list, status: r.status };
 }
 __name(syncSchedules, "syncSchedules");
 function decodeHeader(s) {
@@ -1015,7 +1041,7 @@ async function jobWeeklyOps(env) {
   if (dst.changed) {
     L.push("DST re-sync: offset=" + dst.offset + ", schedules " + (dst.ok ? "updated" : "UPDATE FAILED (status " + dst.status + ")"));
   } else {
-    L.push("Schedules: 11 cron triggers, Amsterdam offset +" + dst.offset + ".");
+    L.push("Schedules: " + (dst.count || buildCrons(dst.offset).length) + " cron triggers, Amsterdam offset +" + dst.offset + ".");
   }
   try {
     if (env.QNFO_INFRA) {
@@ -1544,10 +1570,22 @@ async function jobOutreach(env) {
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) {
         out.skipped_dupe++;
+        /* OUTREACH-TERMINAL-STATUS-1 (#1294/#1508): a duplicate must leave the
+           work set. It used to `continue` with no status write, so the
+           ORDER BY created_at ASC LIMIT 10 window re-selected it on every run
+           and starved every row behind it. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-dup', error='duplicate contact (contact_ledger/outreach_log)' WHERE id=?1").bind(r.id).run().catch(function() {
+        });
         continue;
       }
       if (!validEmail(email)) {
         out.errors.push({ id: r.id, error: "invalid email " + email });
+        /* OUTREACH-TERMINAL-STATUS-1 (#1294/#1508): an un-sendable address must
+           leave the work set, not be re-selected forever. This is the same
+           class that sent a malformed address twice (#1479); the row is now
+           parked instead of re-queued. */
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-invalid', error=?2 WHERE id=?1").bind(r.id, "invalid email " + email).run().catch(function() {
+        });
         continue;
       }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
@@ -2030,9 +2068,40 @@ var JOBS = {
   "engagement": jobEngagement,
   "radar": jobRadar
 };
+function cfDowToIso(spec) {
+  const s = String(spec == null ? "*" : spec).trim();
+  if (s === "*" || s === "") return "*";
+  const conv = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return n;
+    return String((v - 2 + 7) % 7 + 1);
+  };
+  return s.split(",").map((part) => {
+    const p = part.trim();
+    const m = /^(\d+)-(\d+)$/.exec(p);
+    if (m) return conv(m[1]) + "-" + conv(m[2]);
+    if (/^\d+$/.test(p)) return conv(p);
+    return p;
+  }).join(",");
+}
+__name(cfDowToIso, "cfDowToIso");
 function dispatchMap(offset) {
   const map = {};
-  for (const c of buildCrons(offset)) map[c.cron] = c.job;
+  const all = buildCrons(offset);
+  for (const c of all) map[c.cron] = c.job;
+  /* CRON-ALIAS-DISPATCH-1 (#1500): a trigger list written before the #1473
+     ISO->CF day-of-week fix still fires ISO-spelled crons (e.g. "30 5 * * 1").
+     Register that spelling as an alias so a stale registration dispatches its
+     job instead of silently returning "no job for cron". */
+  for (const c of all) {
+    const p = String(c.cron).split(" ");
+    if (p.length === 5 && p[4] !== "*") {
+      const iso = p.slice();
+      iso[4] = cfDowToIso(p[4]);
+      const alt = iso.join(" ");
+      if (alt && !(alt in map)) map[alt] = c.job;
+    }
+  }
   return map;
 }
 __name(dispatchMap, "dispatchMap");
@@ -2107,9 +2176,23 @@ var worker_default = {
     const cron = event.cron;
     const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
     const map = dispatchMap(off);
+    try {
+      const sr = await syncSchedules(env, false);
+      if (sr && sr.changed) {
+        await stateSet(env, "cron_sync_error", sr.ok ? "" : "PUT failed status=" + sr.status + " at " + (/* @__PURE__ */ new Date()).toISOString());
+      }
+    } catch (e) {
+      console.log("schedule self-repair err", e && e.message || e);
+      try {
+        await stateSet(env, "cron_sync_error", "threw: " + String(e && e.message || e).slice(0, 200));
+      } catch (e2) {}
+    }
     const job = map[cron];
     if (!job || !JOBS[job]) {
       console.log("no job for cron", cron, "offset", off);
+      try {
+        await recordEvent(env, "cron-noop", "cn-" + String(cron).replace(/[^0-9a-z]/gi, "") + "-" + Date.now().toString(36), "CRON-DISPATCH-NOOP-1: no job mapped for registered cron " + cron + " (offset " + off + ")", { cron, offset: off });
+      } catch (e) {}
       return;
     }
     try {
@@ -2135,12 +2218,19 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((err) => console.log("self-register err", err && err.message || err)));
       }
+      // CLOUD-OPS-HEALTH-AUTH-1 (#1471): this route is handled before the auth
+      // gate below, so it used to disclose binding/secret presence and the
+      // full cron map to anonymous callers. Serve a minimal public body; the
+      // detailed body requires a valid bearer token.
+      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION };
+      const healthToken = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      if (!auth(healthToken, env)) {
+        return new Response(JSON.stringify(publicBody), { headers: { "Content-Type": "application/json", ...CORS } });
+      }
       const off = amsOffset(/* @__PURE__ */ new Date());
       const crons = buildCrons(off).map((c) => c.cron + " -> " + c.job);
       return new Response(JSON.stringify({
-        ok: true,
-        worker: WORKER_NAME,
-        version: VERSION,
+        ...publicBody,
         jobs: Object.keys(JOBS),
         ams_offset: off,
         crons,

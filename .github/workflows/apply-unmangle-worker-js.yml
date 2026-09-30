@@ -1,0 +1,133 @@
+name: apply-unmangle-worker-js
+
+# UNMANGLE-WORKER-JS-1 (2026-09-29).
+#
+# Repairs `*/worker.js` files that were committed as raw Cloudflare Workers
+# API multipart/form-data responses instead of as extracted script payloads.
+# Known instance: qnfo-errata-publish/worker.js (mangled 2026-09-08 by
+# commit 7046ce02) -- 738236-byte envelope wrapping a 738040-byte bundle.
+#
+# Two systemic defects fixed here on 2026-09-29 (both observed, not theorised):
+#
+# COMMITBACK-PUSH-RACE-1
+#   The previous commit-back step ran a bare `git push origin HEAD:main` against a
+#   repository where other fleet agents push every few minutes. A non-fast-forward
+#   rejection aborts the job AFTER the repair has been computed, so the repair is
+#   silently lost and the file stays mangled -- which is exactly the observed state
+#   (worker.js still 738236 bytes) while the deploy workflow, which pushes nothing,
+#   succeeded and moved live qnfo-ops to 2.37.19. The commit-back is now
+#   pull --rebase --autostash + a bounded retry loop, so a concurrent writer causes
+#   a retry instead of a lost repair.
+#
+# SCHEDULE-EVENT-NEVER-FIRES-1
+#   On this repository the GitHub `schedule` event has NEVER fired: there are zero
+#   schedule-event runs in the entire run history, including the 06:17 deploy-drift
+#   and 06:23 indexnow-submit slots (established in ci-watchdog.yml's own header).
+#   A daily cron here is therefore dead on arrival. `repository_dispatch` is added so
+#   the Cloudflare side can fire this repair on its own cron, and the schedule entry
+#   is kept only as a harmless declaration.
+#
+# A machine-readable status file (ci-status/unmangle-worker-js.json) is committed in
+# the same commit so the ops endpoint can verify the outcome through the GitHub
+# contents API without needing the Actions API (which qnfo-ops cannot reach).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/worker.js"
+      - "scripts/unmangle-worker-js.py"
+      - ".github/workflows/apply-unmangle-worker-js.yml"
+  repository_dispatch:
+    types: [unmangle-worker-js, self-audit]
+  schedule:
+    # daily, offset from deploy-drift (06:17) and mirror-sync. DECLARATION ONLY --
+    # schedule events do not fire on this repository (SCHEDULE-EVENT-NEVER-FIRES-1).
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-unmangle-worker-js
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  unmangle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Detect MIME-mangled worker.js (fail-closed guard)
+        id: guard
+        continue-on-error: true
+        run: python scripts/unmangle-worker-js.py --check
+
+      - name: Repair MIME-mangled worker.js
+        id: repair
+        run: python scripts/unmangle-worker-js.py
+
+      - name: Verify every repaired worker.js parses as an ES module
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            cp "$f" /tmp/check.mjs
+            if ! node --check /tmp/check.mjs 2>/tmp/err; then
+              echo "::error file=$f::syntax error: $(head -1 /tmp/err)"
+              fail=1
+            fi
+          done < <(find . -name worker.js -not -path "./.git/*")
+          if [ "$fail" -ne 0 ]; then
+            echo "SYNTAX GATE FAILED"
+            exit 1
+          fi
+          echo "syntax gate: all worker.js parse as ESM"
+
+      - name: Write machine-readable status
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-status
+          python -c "import json,os,datetime;json.dump({'workflow':'apply-unmangle-worker-js','head':os.environ.get('GITHUB_SHA',''),'guard_exit':os.environ.get('GUARD_EXIT',''),'repair_exit':os.environ.get('REPAIR_EXIT',''),'actor':os.environ.get('GITHUB_ACTOR',''),'ts':datetime.datetime.utcnow().isoformat()+'Z'},open('ci-status/unmangle-worker-js.json','w'),indent=1,sort_keys=True)"
+        env:
+          GUARD_EXIT: ${{ steps.guard.outcome }}
+          REPAIR_EXIT: ${{ steps.repair.outcome }}
+
+      - name: Commit repaired sources (race-safe, bounded retry)
+        if: github.actor != 'github-actions[bot]'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -- '*/worker.js' || true
+          git add -- ci-status/unmangle-worker-js.json || true
+          if git diff --cached --quiet; then
+            echo "no mangled sources and no status change to commit"
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "fix(fleet): UNMANGLE-WORKER-JS-1 extract MIME payload from worker.js [skip ci]"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i rejected by a concurrent writer; retrying"
+            sleep $((i * 5))
+          done
+          echo "PUSH FAILED after 5 attempts -- COMMITBACK-PUSH-RACE-1"
+          exit 1

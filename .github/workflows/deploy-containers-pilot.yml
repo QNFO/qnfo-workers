@@ -1,0 +1,210 @@
+name: deploy-containers-pilot
+
+# CONTAINER-DEPLOY-WORKFLOW-MISSING-1 (2026-09-29). This file did not exist; it is the
+# workflow qnfo-containers-pilot/wrangler.toml references as the only path that transmits
+# [[containers]].
+#
+# CONTAINER-CONFIG-DROPPED-1 (2026-09-29, issue #1485) — REMAINING GAP this revision closes.
+# Live incident: qnfo-ops:cf_worker_deploy PUT /content with metadata. GET /bindings returns
+# ONLY {d1 AUDIT, secret PILOT_TOKEN, durable_object_namespace SHELL_CONTAINER}, so the
+# [[containers]] block was NOT preserved and every exec path now dies with
+# "Cannot read properties of undefined (reading 'running')" (shell_exec, exec_python,
+# exec_node, container_install, git_clone_exec, container_workspace_exec, shell_pipeline).
+#
+# The first revision of THIS file ran `wrangler deploy` with no fallback and published no
+# artifact, so a migration-related failure (see DO-MIGRATION-NOTE-1 in wrangler.toml: a
+# creating migration for an already-depended-on class can fail closed) was invisible.
+# The sibling apply-container-binding-guard-1 run proved it: its ci-status artifact recorded
+# wrangler_outcome="skipped" and post_version="" -- the deploy never happened and nothing
+# said so.
+#
+# CI-ARTIFACT-NO-FAILURE-TEXT-1 + VERIFY-FALSE-GREEN-1 (2026-09-29, measured on the
+# 19:37:34Z run). That run published wrangler_outcome=failure nomig_outcome=failure
+# verify_outcome=success. Both deploys failed and the artifact carried NO wrangler output,
+# so the failure reason was unrecoverable from outside the runner; and verify_outcome=success
+# was a FALSE GREEN, because the verify step exits 0 with only a warning when PILOT_TOKEN is
+# absent. Ground truth at the time of writing: GET /status on the pilot returns
+# {"ok":false,"error":"Cannot read properties of undefined (reading 'running')"} -- #1485
+# open. This revision therefore:
+#   (a) restores the wrangler log tail (the earlier revision had it; the rewrite dropped it)
+#       and adds the no-migration retry log tail, so a red run is diagnosable from the repo;
+#   (b) replaces the misleading verify_outcome with an explicit verify_rc output
+#       (ok | skipped-no-token | ctx-container-undefined | probe-http-<code>), so "skipped"
+#       can never be read as "verified".
+# It never uses [skip ci] in its own commits -- a deploy trigger must never carry a skip
+# token (CI-TRIGGER-SKIP-1).
+#
+# Trigger surface is deliberately broad (push to main + the pilot dir + dispatch) because
+# the failure mode being fixed is a trigger that never fired.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'qnfo-containers-pilot/**'
+      - '.github/workflows/deploy-containers-pilot.yml'
+  workflow_dispatch:
+    inputs:
+      verify_only:
+        description: "true = skip deploy, only run the container verification probe"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-containers-pilot
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: assert the containers block is present in wrangler.toml
+        run: |
+          set -euo pipefail
+          f=qnfo-containers-pilot/wrangler.toml
+          for key in '\[\[containers\]\]' 'class_name = "ShellContainer"' 'image = ' 'instance_type = ' 'max_instances = '; do
+            if ! grep -Eq "$key" "$f"; then
+              echo "::error::wrangler.toml is missing required key: $key -- refusing to deploy"
+              exit 1
+            fi
+          done
+          echo "containers block present:"
+          sed -n '/\[\[containers\]\]/,/^$/p' "$f"
+
+      - name: wrangler deploy (primary - transmits [[containers]])
+        id: wrangler
+        if: ${{ github.event.inputs.verify_only != 'true' }}
+        continue-on-error: true
+        working-directory: qnfo-containers-pilot
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler.log
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: retry wrangler without the DO migration block
+        id: nomig
+        if: ${{ github.event.inputs.verify_only != 'true' && steps.wrangler.outcome != 'success' }}
+        continue-on-error: true
+        working-directory: qnfo-containers-pilot
+        run: |
+          set -o pipefail
+          echo "--- primary wrangler deploy failed; stripping [[migrations]] and retrying ---"
+          echo "--- rationale: the ShellContainer class already exists (created via the API), so a"
+          echo "--- creating migration may be rejected (DO-MIGRATION-NOTE-1). The class is not"
+          echo "--- recreated by omitting the block; the container config still ships. ---"
+          cp wrangler.toml /tmp/wrangler.toml.orig
+          sed -i '/^\[\[migrations\]\]/,/^$/d' wrangler.toml
+          cat wrangler.toml
+          npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler_nomig.log
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: wait for propagation
+        if: ${{ github.event.inputs.verify_only != 'true' }}
+        run: sleep 20
+
+      - name: verify container config is live (closes #1485)
+        id: verify
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          base="https://qnfo-containers-pilot.q08.workers.dev"
+          hcode="$(curl -s -o /tmp/health.json -w '%{http_code}' "$base/health" || true)"
+          echo "GET /health -> $hcode"
+          cat /tmp/health.json || true
+          echo
+          if [ -z "${PILOT_TOKEN:-}" ]; then
+            echo "rc=skipped-no-token" >> "$GITHUB_OUTPUT"
+            echo "::warning::PILOT_TOKEN not available to this workflow - container verification SKIPPED, #1485 NOT closed by this run"
+            exit 0
+          fi
+          scode="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
+          echo "GET /status -> $scode"
+          cat /tmp/status.json || true
+          echo
+          if grep -q "Cannot read properties of undefined" /tmp/status.json 2>/dev/null; then
+            echo "rc=ctx-container-undefined" >> "$GITHUB_OUTPUT"
+            echo "::error::/status reports the ctx.container-undefined signature - #1485 still open"
+            exit 1
+          fi
+          if [ "$scode" != "200" ]; then
+            echo "rc=probe-http-$scode" >> "$GITHUB_OUTPUT"
+            echo "::error::/status returned $scode - container config not confirmed live (#1485 open)"
+            exit 1
+          fi
+          echo "rc=ok" >> "$GITHUB_OUTPUT"
+          echo "container config verified live"
+        env:
+          PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+
+      - name: publish outcome artifact (with failure text)
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          wtail="$(tail -c 6000 /tmp/wrangler.log 2>/dev/null | tr -d '\r' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' || echo '""')"
+          ntail="$(tail -c 6000 /tmp/wrangler_nomig.log 2>/dev/null | tr -d '\r' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' || echo '""')"
+          hcode="$(curl -s -o /dev/null -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/health || true)"
+          cat > ci-status/deploy-containers-pilot.json <<JSON
+          {
+            "workflow": "deploy-containers-pilot",
+            "issue": 1485,
+            "wrangler_outcome": "${{ steps.wrangler.outcome }}",
+            "nomig_outcome": "${{ steps.nomig.outcome }}",
+            "verify_rc": "${{ steps.verify.outputs.rc }}",
+            "health_http": "$hcode",
+            "head": "$GITHUB_SHA",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "wrangler_tail": $wtail,
+            "nomig_tail": $ntail
+          }
+          JSON
+          python3 -c "import json;json.load(open('ci-status/deploy-containers-pilot.json'))" \
+            && echo "artifact is valid JSON" \
+            || { echo "::error::artifact is not valid JSON"; exit 1; }
+          cat ci-status/deploy-containers-pilot.json
+
+      - name: commit outcome artifact
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add ci-status/deploy-containers-pilot.json || true
+          git commit -m "chore(ci): deploy-containers-pilot outcome" || true
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main || true
+            if git push origin HEAD:main; then echo "PUSH OK"; exit 0; fi
+            sleep $((i*3))
+          done
+          echo "::warning::outcome artifact not pushed after retries"
+          exit 0
+
+      - name: summarize outcome
+        if: always()
+        run: |
+          {
+            echo "## deploy-containers-pilot"
+            echo ""
+            echo "Closes: CONTAINER-CONFIG-DROPPED-1 / issue #1485"
+            echo ""
+            echo "wrangler=\`${{ steps.wrangler.outcome }}\` nomig=\`${{ steps.nomig.outcome }}\` verify_rc=\`${{ steps.verify.outputs.rc }}\`"
+            echo ""
+            echo "A green run means \`wrangler deploy\` transmitted the [[containers]] block AND"
+            echo "the authenticated /status probe came back 200 without the"
+            echo "\`ctx.container\`-undefined signature. A red run is fail-closed and wipes nothing."
+          } >> "$GITHUB_STEP_SUMMARY"

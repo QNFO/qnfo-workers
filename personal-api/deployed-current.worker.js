@@ -2653,7 +2653,7 @@ var PersonalTwinAgent = class {
       const [client, server] = Object.values(pair);
       this.ctx.acceptWebSocket(server, [sid]);
       this._getOrCreateSession(sid);
-      server.send(JSON.stringify({ type: "connected", sessionId: sid, worker: "PersonalTwinAgent", version: "3.8.0", ts: (/* @__PURE__ */ new Date()).toISOString() }));
+      server.send(JSON.stringify({ type: "connected", sessionId: sid, worker: "PersonalTwinAgent", version: VERSION, ts: (/* @__PURE__ */ new Date()).toISOString() }));
       return new Response(null, { status: 101, webSocket: client });
     }
     const method = request.method;
@@ -2670,7 +2670,7 @@ var PersonalTwinAgent = class {
       const fresh = await this._buildBrief();
       return Response.json({ ok: true, brief: fresh, served: "fresh" });
     }
-    if (method === "GET") return Response.json({ ok: true, worker: "PersonalTwinAgent", version: "3.8.0", sessions: sc, messages: mc, last_brief: this._getState("last_brief"), capabilities: ["durable-state", "websocket-hibernation", "morning-brief-scheduling", "memory-consolidation", "conversation-memory"] });
+    if (method === "GET") return Response.json({ ok: true, worker: "PersonalTwinAgent", version: VERSION, sessions: sc, messages: mc, last_brief: this._getState("last_brief"), capabilities: ["durable-state", "websocket-hibernation", "morning-brief-scheduling", "memory-consolidation", "conversation-memory"] });
     if (method === "POST") {
       let body;
       try {

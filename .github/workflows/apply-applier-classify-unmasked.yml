@@ -1,0 +1,126 @@
+name: apply-applier-classify-unmasked
+
+# APPLIER-CLASSIFY-MASKED-A-REAL-BUG-1 (issue #1466, 2026-09-29).
+#
+# Closes the detect -> remediate gap for two defects that mask each other:
+#
+#   1. scripts/apply-pending-patches.py classify() matched the BARE substring
+#      "anchor", so scripts/version-anchor-normalize-patch.py crashing with
+#      `NameError: name 'Path' is not defined` was filed as `stale-anchor`
+#      instead of `error` -- the applier written to fix version-anchor rot was
+#      reported AS that rot, and never ran.
+#   2. scripts/version-anchor-normalize-patch.py imports only `os` and `sys`
+#      yet calls Path() in main(), so it cannot execute at all.
+#
+# This workflow runs the fail-closed applier that fixes both, gates on
+# py_compile + both markers, then commits race-safely.
+#
+# IT DOES NOT DEPLOY. The only writes are to scripts/, so no worker changes.
+# The commit touches scripts/apply-pending-patches.py and
+# scripts/version-anchor-normalize-patch.py, neither of which is in this
+# workflow's own push paths -- no self-retrigger loop is possible.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-applier-classify-unmasked.yml'
+      - 'scripts/applier-classify-unmasked-patch.py'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [apply-applier-classify-unmasked]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-applier-classify-unmasked
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply the fix (fail-closed)
+        id: ap
+        run: |
+          set +e
+          REPO_ROOT="$PWD" python3 scripts/applier-classify-unmasked-patch.py 2>&1 | tee /tmp/ap.log
+          rc=${PIPESTATUS[0]}
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Gate on syntax + markers
+        if: steps.ap.outputs.rc == '0'
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/apply-pending-patches.py scripts/version-anchor-normalize-patch.py
+          echo "PY_COMPILE_OK"
+          grep -q 'APPLIER-CLASSIFY-UNMASKED-1' scripts/apply-pending-patches.py
+          grep -q 'from pathlib import Path' scripts/version-anchor-normalize-patch.py
+          echo "MARKERS_OK"
+
+      - name: Behavioural probe - the crash must now classify as error
+        if: steps.ap.outputs.rc == '0'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util, sys, pathlib
+          spec = importlib.util.spec_from_file_location("app", "scripts/apply-pending-patches.py")
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          crash = "Traceback (most recent call last):\n  File \"scripts/version-anchor-normalize-patch.py\", line 1\nNameError: name 'Path' is not defined\n"
+          drift = "FAIL (fail-closed): anchor occurrence != 1 in qnfo-ops/worker.js\n  count=0\n"
+          a = mod.classify(crash, 1)
+          b = mod.classify(drift, 1)
+          print("crash ->", a)
+          print("drift ->", b)
+          assert a == "error", f"crash misclassified as {a}"
+          assert b == "stale-anchor", f"drift misclassified as {b}"
+          print("CLASSIFY_BEHAVIOUR_OK")
+          PY
+
+      - name: Commit and push (race-safe, rebase + retry)
+        if: steps.ap.outputs.rc == '0'
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "selfheal-bot@qnfo.org"
+          if git diff --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git add -A
+          git commit -m "fix(ci): #1466 classify() no longer masks a real crash as stale-anchor; add missing Path import"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main || true
+            if git push origin HEAD:main; then
+              echo "PUSHED on attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i lost a race; retrying"
+            sleep 3
+          done
+          echo "::error::push failed after 5 attempts"
+          exit 1
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### apply-applier-classify-unmasked (issue #1466)"
+            echo ""
+            echo "rc=${{ steps.ap.outputs.rc }}"
+            echo '```'
+            tail -n 60 /tmp/ap.log 2>/dev/null || echo "no log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

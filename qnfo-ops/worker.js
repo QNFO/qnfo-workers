@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.37.12-fm-stream-reasoning";
+var VERSION = "2.38.3-schema-first";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -99,11 +99,53 @@ var OPS_EXEC_MODELS = {
 };
 var OPS_EXEC_ALIASES = { "ops-frontier": true, "ops-frontier-mini": true, "ops-frontier-reason": true };
 var GW_MAX_OUT = 32768;
+// OPS-OUTPUT-CAP-DECOUPLE-1 (issue #1531): the effective gateway ceiling. This was a bare
+// literal, so the advertised /v1/models max_output and the delivered ceiling disagreed by
+// 12x with no way to reconcile them. The DEFAULT IS UNCHANGED -- this only makes the
+// ceiling readable from OPS_GW_MAX_OUT so it can be raised once the upstream's true limit
+// is measured. Do NOT raise the default speculatively: a non-auth 4xx from the provider is
+// fatal on this path (only auth 4xx free-falls).
+function gwMaxOut(env) {
+  try {
+    var v = envInt(env, "OPS_GW_MAX_OUT", 0);
+    return v > 0 ? v : GW_MAX_OUT;
+  } catch (e) {
+    return GW_MAX_OUT;
+  }
+}
 var CODE_MODEL_CTX = 262144;
 var DEFAULT_MAX_OUT = 393216;
-var MAX_TOOL_ITERS = 12;
+var MAX_TOOL_ITERS = 40;
+// TOOL-BUDGET-PENDING-1 (2026-09-30): final-round tool calls are RECORDED, never dropped.
+var PENDING_TOOLCALLS_NOTE = "\n\n[tool-budget-exhausted] {n} tool call(s) were NOT executed this turn because the tool budget (iteration cap or wall-clock deadline) was exhausted. They are listed in the pending_tool_calls field of this response and can be replayed on the next turn.";
+function summarizePendingToolCalls(toolCalls) {
+  try {
+    return (toolCalls || []).map(function(tc) {
+      const fn = tc && tc.function || {};
+      let args = fn.arguments;
+      if (typeof args !== "string") {
+        try { args = JSON.stringify(args); } catch (e) { args = String(args); }
+      }
+      return { name: String(fn.name || ""), arguments: String(args == null ? "" : args).slice(0, 4e3) };
+    }).filter(function(x) { return x.name; });
+  } catch (e) {
+    return [];
+  }
+}
 var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
+
+// TOOLBUDGET-BAIL-RECORD-1 (2026-09-30): budget-bail observability. The tool
+// loop is forced into its final round when the round cap or the wall-clock
+// deadline is hit. Before this recorder existed that event left no trace in
+// qnfo-audit, so a caller-visible "tool budget exhausted before these could
+// run" could not be diagnosed from the fleet's own logs.
+function opsToolBudgetBail(env, scope, iter, maxIters, deadlineHit) {
+  try {
+    return env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_tool_budget_bail", scope, snippet({ iter: iter, maxIters: maxIters, deadlineHit: !!deadlineHit, version: VERSION }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { return null; }
+}
+__name(opsToolBudgetBail, "opsToolBudgetBail");
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
@@ -272,6 +314,17 @@ async function logEscalation(env, taskClass, fromModel, toModel, kind, reason) {
   } catch (e) { console.log("model_ladder_escalations insert failed:", e && e.message || e); }
 }
 __name(logEscalation, "logEscalation");
+// TOOLBUDGET-BAIL-1 (2026-09-30): D3a machine-readable bail record. The bail path
+// already writes a model_ladder_escalations row (kind='tool-budget-exhausted'); this
+// adds the cloud_ops_events row so a bail is countable in the fleet event stream
+// instead of only being visible as the user-facing 'tool budget exhausted' symptom.
+async function logToolBudgetBail(env, strategy, n, names, maxIters, deadlineHit) {
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+      .bind(randId("evt-"), iso(), "ops_tool_budget_bail", "tool-budget-exhausted", snippet({ strategy, pending: n, tools: names, maxIters, deadlineHit: !!deadlineHit }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { console.log("ops_tool_budget_bail insert failed:", e && e.message || e); }
+}
+__name(logToolBudgetBail, "logToolBudgetBail");
 // L0 DETERMINISTIC-FIRST: answer well-known single-turn ops intents with zero model calls.
 // Patterns are deliberately tight so agent-loop canaries ("Reply exactly: ...", tool directives) never match.
 async function deterministicOpsAnswer(env, text) {
@@ -574,7 +627,7 @@ var OPS_TOOLS = [
   { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-email-orchestrator, qnfo-paper-indexer, qnfo-kaizen, qnfo-gateway, qnfo-archive, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-skill-sync, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_issues_list", description: "List agent issues from qnfo-audit agent_issues (the ops backlog). Default: open issues, newest first.", parameters: { type: "object", properties: { status: { type: "string", enum: ["open", "closed", "all"], description: "issue status filter (default open)" }, priority: { type: "string", enum: ["high", "medium", "low"], description: "optional priority filter" }, limit: { type: "number", description: "max rows 1-50 (default 20)" } }, additionalProperties: false } },
   { name: "ops_issue_run", description: "Trigger the qnfo-backlog-exec drain on open agent_issues (safe by design: it only auto-closes health-availability rows whose re-probe PASSes; failures are escalated to alerts). confirm must be true to execute; otherwise returns the plan.", parameters: { type: "object", properties: { confirm: { type: "boolean", description: "must be true to trigger the drain" } }, additionalProperties: false } },
-  { name: "ops_d1_query", description: "READ-ONLY SQL (SELECT/WITH) across the bound D1 databases. db selects the target: audit (default) | living | graph | portfolio | outreach | cms | ipatent | personal. Aggregates exempt from LIMIT; plain selects need LIMIT. Returns up to 100 rows.", parameters: { type: "object", properties: { db: { type: "string", enum: ["audit", "living", "graph", "portfolio", "outreach", "cms", "ipatent", "personal"], description: "target database (default audit)" }, sql: { type: "string", description: "read-only SQL (SELECT/WITH)" } }, required: ["sql"], additionalProperties: false } },
+  { name: "ops_d1_query", description: "SCHEMA-FIRST (mandatory, issue #1530): before writing SQL, discover exact table and column names via ops_d1_query on db=audit - SELECT tbl,col,cols FROM d1_schema_index WHERE db=<target> [AND tbl=<table>]. NEVER guess column names; guessed schemas are the top tool-failure class (819 failures/24h). d1_schema_index.refreshed_at gives freshness. READ-ONLY SQL (SELECT/WITH) across the bound D1 databases. db selects the target: audit (default) | living | graph | portfolio | outreach | cms | ipatent | personal. Aggregates exempt from LIMIT; plain selects need LIMIT. Returns up to 100 rows.", parameters: { type: "object", properties: { db: { type: "string", enum: ["audit", "living", "graph", "portfolio", "outreach", "cms", "ipatent", "personal"], description: "target database (default audit)" }, sql: { type: "string", description: "read-only SQL (SELECT/WITH)" } }, required: ["sql"], additionalProperties: false } },
   { name: "vectorize_query", description: "Semantic search a bound Vectorize index: research (qwav-research-v2 corpus), notes (qnfo-notes), tasks (qnfo-tasks), handoffs (qnfo-handoffs), ailog (qnfo-ai-log). Returns top matches with scores + ids + metadata.", parameters: { type: "object", properties: { index: { type: "string", enum: ["research", "notes", "tasks", "handoffs", "ailog"], description: "index to query (default research)" }, q: { type: "string", description: "query text" }, topK: { type: "number", description: "1-20 (default 5)" } }, required: ["q"], additionalProperties: false } },
   { name: "r2_list", description: "List objects in a bound R2 bucket: releases (qnfo-releases = published papers), audit (qnfo-audit), backups (qnfo-backups), skills (qnfo-skills). Optional prefix + limit.", parameters: { type: "object", properties: { bucket: { type: "string", enum: ["releases", "audit", "backups", "skills"], description: "bucket (default releases)" }, prefix: { type: "string", description: "object key prefix" }, limit: { type: "number", description: "max keys 1-500 (default 50)" } }, additionalProperties: false } },
   { name: "r2_get", description: "Fetch one object's text content from a bound R2 bucket by key (releases/audit/backups/skills).", parameters: { type: "object", properties: { bucket: { type: "string", enum: ["releases", "audit", "backups", "skills"], description: "bucket (default releases)" }, key: { type: "string", description: "object key" }, maxChars: { type: "number", description: "max chars to return (default 4000)" } }, required: ["key"], additionalProperties: false } },
@@ -826,7 +879,26 @@ __name22222(listIssues, "listIssues");
 __name222222(listIssues, "listIssues");
 async function triggerBacklog(env, args, userText) {
   function userAffirmative(t2) {
-    return /\b(yes|yep|yeah|confirm|confirmed|go ahead|do it|run it|proceed|drain|execute|exec|run|trigger|fix|start|please|remediate|remediation|resolve|close|clear|backlog)\b/i.test(String(t2 || ""));
+    var __s = String(t2 || "");
+    // AFFIRM-GUARD-VETO-1 (2026-09-29) -- closes #1481 (false negative) AND #1482
+    // (vacuous gate). This is an ACCIDENT-PREVENTION gate, NOT an auth boundary.
+    // 1. Refusal polarity, adjacency-scoped: a negation that targets the drain
+    //    action can never authorize it. Scoped deliberately -- a global negation
+    //    check would refuse the owner's own standing instruction
+    //    "Do not stop, do not terminate, do not interrupt execution. Drain ...".
+    //    `execut\w*` is NOT a veto target for that same reason.
+    var __segs = __s.split(/[.!?;\n]+/);
+    for (var __i = 0; __i < __segs.length; __i++) {
+      // AFFIRM-VETO-CLAUSE-TARGETS-1 (2026-09-29): veto scoped to its OWN clause; the
+      // same-clause target list excludes run/fix/close/clear so status prose
+      // such as "not yet run" in a neighbouring sentence cannot veto the drain.
+      if (/(?:do\s+not|don'?t|never|no|stop|cancel|abort|hold\s+off|not\s+yet)\s+(?:the\s+|a\s+|any\s+)?(?:drain|run|execute|proceed|trigger|remediate|fix|close|clear)\b/i.test(__segs[__i]) && /\b(?:drain|execute|proceed|trigger|remediate)\b/i.test(__segs[__i])) return false;
+    }
+    // 2. Intent-bearing affirmatives only. The vague tokens that made the gate
+    //    vacuous ('please'/'backlog'/'fix'/'close'/'clear'/'start'/'run') are gone;
+    //    every legitimate drain instruction contains `drain`, so nothing that
+    //    should authorize stops authorizing.
+    return /\b(?:yes|yep|yeah|confirm|confirmed|approve|approved|authorized|authorised|go\s+ahead|do\s+it|run\s+it|proceed|drain)\b/i.test(__s);
   }
   __name(userAffirmative, "userAffirmative");
   __name2(userAffirmative, "userAffirmative");
@@ -873,12 +945,68 @@ __name222(triggerBacklog, "triggerBacklog");
 __name2222(triggerBacklog, "triggerBacklog");
 __name22222(triggerBacklog, "triggerBacklog");
 __name222222(triggerBacklog, "triggerBacklog");
+// D1-GUARD-LITERAL-AWARE-1 (2026-09-29). See scripts/d1guard-literal-aware-patch.py.
+// The pre-2.37.18 guard scanned the RAW statement, so a mutation keyword inside a
+// string literal was refused (e.g. WHERE title LIKE '%delete%'). The scan now runs on
+// a literal/comment-STRIPPED copy; the original text is what gets prepared. Rejections
+// name the offending token and carry a hint.
+var D1_READONLY_PRAGMAS = { table_info: 1, table_xinfo: 1, table_list: 1, index_list: 1, index_info: 1, index_xinfo: 1, foreign_key_list: 1, foreign_key_check: 1, database_list: 1, collation_list: 1, function_list: 1, module_list: 1, pragma_list: 1, compile_options: 1, freelist_count: 1, page_count: 1, page_size: 1, encoding: 1, user_version: 1, application_id: 1, integrity_check: 1, quick_check: 1, stats: 1 };
+
+function d1StripLiterals(s) {
+  var out = "";
+  var i = 0;
+  var n = s.length;
+  while (i < n) {
+    var c = s.charAt(i);
+    var d = s.charAt(i + 1);
+    if (c === "'" || c === '"' || c === "`") {
+      i++;
+      while (i < n) {
+        if (s.charAt(i) === c) {
+          if (s.charAt(i + 1) === c) { i += 2; continue; }
+          i++;
+          break;
+        }
+        i++;
+      }
+      out += " ";
+      continue;
+    }
+    if (c === "-" && d === "-") { while (i < n && s.charAt(i) !== "\n") i++; continue; }
+    if (c === "/" && d === "*") { i += 2; while (i < n && !(s.charAt(i) === "*" && s.charAt(i + 1) === "/")) i++; i += 2; continue; }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+function d1ReadOnlyGuard(sql) {
+  var stripped = d1StripLiterals(sql);
+  if (!/^\s*(select|with)\b/i.test(stripped)) {
+    var pm = /^\s*pragma\s+([A-Za-z0-9_]+)/i.exec(sql);
+    if (pm) {
+      var pn = pm[1].toLowerCase();
+      if (D1_READONLY_PRAGMAS[pn]) {
+        var argm = /^\s*pragma\s+[A-Za-z0-9_]+\s*\(\s*['"]?([A-Za-z0-9_]+)['"]?\s*\)/i.exec(sql);
+        return { ok: true, sql: "SELECT * FROM pragma_" + pn + (argm ? "('" + argm[1] + "')" : "") + " LIMIT 100" };
+      }
+      return { ok: false, rejected: true, error: "PRAGMA " + pn + " is not on the read-only allowlist (it can change connection state). Use SELECT * FROM pragma_<name>(...) instead.", hint: "read-only PRAGMAs: " + Object.keys(D1_READONLY_PRAGMAS).join(", ") };
+    }
+    return { ok: false, rejected: true, error: "read-only SELECT/WITH only - this tool can never write. First token seen: " + (stripped.trim().split(/\s+/)[0] || "(empty)").slice(0, 24), hint: "start the statement with SELECT or WITH; use ops_d1_write for mutations" };
+  }
+  if (stripped.indexOf(";") >= 0) return { ok: false, rejected: true, error: "single read statement only - an interior ';' was found outside string literals", hint: "send exactly one SELECT/WITH statement" };
+  var mm = /\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|truncate)\b/i.exec(stripped);
+  if (/\breplace\s+into\b/i.test(stripped)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - 'REPLACE INTO' is a mutation statement", hint: "use ops_d1_write for REPLACE INTO; the replace() scalar function is allowed in reads" };
+  if (mm) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keyword '" + mm[1].toLowerCase() + "' appears as SQL, not inside a string literal", hint: "a keyword inside a quoted literal is now allowed; this rejection means it was real SQL" };
+  return { ok: true, sql: sql };
+}
+
 async function d1Query(env, args) {
   const raw = String(args && args.sql || "").trim();
-  const sql = raw.replace(/;\s*$/, "");
-  if (!/^(select|with)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only" };
-  if (/;\s*(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)/i.test(sql)) return { ok: false, rejected: true, error: "single read statement only" };
-  if (/\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|replace|truncate)\b/i.test(sql)) return { ok: false, rejected: true, error: "read-only SELECT/WITH only - mutation keywords are rejected anywhere in the statement" };
+  let sql = raw.replace(/;\s*$/, "");
+  const _g = d1ReadOnlyGuard(sql);
+  if (!_g.ok) return _g;
+  sql = _g.sql;
   let sqlEff = sql;
   var _lo = sqlEff.toLowerCase();
   var _agg = _lo.indexOf("count(") >= 0 || _lo.indexOf("sum(") >= 0 || _lo.indexOf("avg(") >= 0 || _lo.indexOf("min(") >= 0 || _lo.indexOf("max(") >= 0 || _lo.indexOf("group_concat(") >= 0 || _lo.indexOf("group by") >= 0;
@@ -891,7 +1019,40 @@ async function d1Query(env, args) {
     const rows = (res.results || []).slice(0, 100);
     return { ok: true, db: bind, rowCount: rows.length, rows };
   } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : String(e) };
+    const msg = e && e.message ? e.message : String(e);
+    const out = { ok: false, db: bind, error: msg };
+    // D1-SCHEMA-HINT-1 (issue #1162 OPS-D1-QUERY-SCHEMA-GUESSING): on "no such
+    // column/table", return the ACTUAL columns from d1_schema_index so agents stop
+    // guessing. 75/223 tool failures were ops_d1_query errors from guessed columns.
+    try {
+      if (/no such (column|table)/i.test(msg) && env.QNFO_AUDIT) {
+        const tm = sqlEff.match(/\bfrom\s+([A-Za-z0-9_]+)/i);
+        const want = tm ? tm[1].toLowerCase() : null;
+        const dbName = String(args && args.db || "audit");
+        const sr = await env.QNFO_AUDIT.prepare("SELECT tbl, group_concat(col, ', ') AS cols FROM d1_schema_index WHERE lower(db)=lower(?1) GROUP BY tbl").bind(dbName).all();
+        const rows2 = sr.results || [];
+        if (want) {
+          const hit = rows2.find(function(r) { return String(r.tbl || "").toLowerCase() === want; });
+          if (hit) { out.available_columns = hit.cols; out.hint = "use a column from available_columns for table " + hit.tbl; }
+        }
+        if (!out.available_columns) {
+          // OPS-D1-SCHEMA-HINT-FULL-1 (issue #1490): this list was capped at 80 entries in
+          // ALPHABETICAL order. MEASURED 2026-09-29: QNFO_AUDIT holds 306 tables, so every
+          // table sorting after "email_commands" was INVISIBLE and agents kept guessing names
+          // (166 agent-schema-guess tool failures in the preceding 24h). Never truncate
+          // silently again: report the total, flag truncation, and name the enumerator.
+          const _tblAll = rows2.map(function(r) { return r.tbl; })
+            .filter(function(t) { return !!t; });
+          out.schema_tables = _tblAll.slice(0, 400);
+          out.schema_tables_total = _tblAll.length;
+          out.schema_tables_truncated = _tblAll.length > out.schema_tables.length;
+          out.hint = "table not found. schema_tables lists " + out.schema_tables.length +
+            " of " + out.schema_tables_total + " tables; enumerate all with: " +
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
+        }
+      }
+    } catch (e2) {}
+    return out;
   }
 }
 __name(d1Query, "d1Query");
@@ -970,7 +1131,11 @@ __name22222(recentOpsLog, "recentOpsLog");
 __name222222(recentOpsLog, "recentOpsLog");
 function userSaysAffirm(t) {
   const s = String(t || "");
-  if (/\b(do not|dont|don.t|never|hold off|without sending|no thanks|not send|not reply)\b/i.test(s)) return false;
+  // EMAIL-RESPOND-NEGATION-VETO-1 (#1248): anchor the negation veto to the SEND/
+  // REPLY action itself. A bare "never"/"do not" elsewhere in the message (e.g.
+  // "YOU SHALL NEVER REQUIRE me to open a browser") must NOT veto a valid
+  // "send it!" affirmation. Only veto when the negation targets send/reply.
+  if (/\b(do not|dont|don\.?t|never|hold off|without|no thanks|not)\s+(send\w*|repl\w*|respond\w*|email\w*|draft\w*|compos\w*|post\w*)\b/i.test(s)) return false;
   return /\b(yes|yep|yeah|please|go ahead|confirm|do it|send it|send the|send a reply|reply to|respond to)\b/i.test(s);
 }
 __name(userSaysAffirm, "userSaysAffirm");
@@ -1313,21 +1478,53 @@ async function telemetryAnalyze(env, hours) {
   if (!env.QNFO_AUDIT) return { ok: false, error: "audit db not bound" };
   const h = Math.min(Math.max(parseInt(hours, 10) || 6, 1), 168);
   const since = new Date(Date.now() - h * 3600 * 1e3).toISOString();
-  const out = { ok: true, windowHours: h, scanned: 0, persistent: [], recovered: 0, autoResolved: 0, filed: 0, alreadyOpen: 0, ts: iso() };
+  const out = { ok: true, windowHours: h, scanned: 0, persistent: [], recovered: 0, autoResolved: 0, filed: 0, alreadyOpen: 0, rates: {}, ts: iso() };
   try {
     const rows = await env.QNFO_AUDIT.prepare("SELECT text, MAX(ts) last_ts, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text IS NOT NULL GROUP BY text ORDER BY n DESC LIMIT 100").bind(since).all();
     out.scanned = (rows.results || []).length;
     for (const r of rows.results || []) {
-      if ((r.n || 0) < 2) continue;
-      const _tm = String(r.text).match(/(?:tool|tool_name|called)[=: ]+([A-Za-z0-9_.-]+)/i);
+      if ((r.n || 0) < 3) continue;
+      // SELFHEAL-EXTRACTOR-BARE-NAME-1 (issue 1165): cloud_ops_events.text holds the BARE
+      // tool name ("ops_d1_query"), not a "tool=NAME" pair. The previous extractor required
+      // the latter, so toolKey was "" for 15 of 15 real values and every row was discarded
+      // by the guard below -- the self-heal loop filed 0 tickets permanently.
+      const _raw = String(r.text).trim();
+      const _bm = /^[A-Za-z0-9_.-]+$/.test(_raw) ? [_raw, _raw] : null;
+      const _tm = _bm || _raw.match(/(?:tool|tool_name|called)[=: ]+([A-Za-z0-9_.-]+)/i);
       const toolKey = _tm ? _tm[1] : "";
       if (!toolKey) continue;
+      let _errs = r.n || 0;
+      let _oks = 0;
+      let _rate = 1;
+      let _fresh = true;
       try {
-        const okRow = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts > ?1 AND status = 'ok' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text LIKE ('%' || ?2 || '%')").bind(r.last_ts, toolKey).first();
-        if (okRow && okRow.c > 0) {
+        // SELFHEAL-RATE-NOT-ABSENCE-1 (issue 1165): the previous gate treated ONE success
+        // after the last error as full recovery, so a tool failing hundreds of times a day
+        // alongside thousands of successes could never file. File on a FAILURE RATE.
+        // SELFHEAL-CENSUS-COUNTS-AGENT-MISTAKES-1 (issues 1165, 1353): the census summed every
+        // status='error' row. Verified live 2026-09-29: all 8 distinct recent ops_d1_query
+        // errors are meta.resultOk=false with a REAL D1 error such as
+        // {"error":"D1_ERROR: no such column: worker at offset 7"} -- malformed SQL authored
+        // by the CALLING AGENT while probing an unknown schema, not a malfunction of the tool.
+        // Those are excluded so the loop measures tool health, not agent mistakes.
+        const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2 /* SELFHEAL-EXCLUSION-TABLE-1 */ AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(meta,''), x.pattern) > 0 OR instr(COALESCE(text,''), x.pattern) > 0)").bind(since, toolKey).first();
+        _errs = (okRow && okRow.e) || r.n || 0;
+        _oks = (okRow && okRow.s) || 0;
+        _rate = _errs / Math.max(1, _errs + _oks);
+        _fresh = String(r.last_ts || "") >= new Date(Date.now() - h * 1800 * 1e3).toISOString();
+        out.rates = out.rates || {};
+        out.rates[toolKey] = { errors: _errs, successes: _oks, failureRate: Number(_rate.toFixed(4)), recent: _fresh };
+        // SELFHEAL-RATE-OR-ABSOLUTE-1 (issue 1165): a rate-only gate is blind to a high-volume
+        // tool whose large success denominator keeps the rate low. File on rate OR on an
+        // absolute error count in the window. Symmetric: the same predicate drives
+        // auto-resolve below, so a tool cannot be filed and un-resolvable at once.
+        if (!((_rate >= 0.15 || _errs >= 25) && _fresh)) {
           out.recovered++;
           try {
-            const _fp = "selfheal:" + fnv32("[self-heal] tool " + String(r.text).slice(0, 60));
+            // SELFHEAL-FINGERPRINT-MISMATCH-1: this used String(r.text).slice(0,60) while
+            // the file path below used toolKey, so the two fingerprints could never match
+            // and a recovered tool's ticket could never be auto-resolved.
+            const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey);
             const openRow = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1 AND status = 'open' LIMIT 1").bind(_fp).first();
             if (openRow) {
               await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET status = 'resolved', resolved_at = ?1, updated_at = ?1 WHERE fingerprint = ?2").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "), openRow.fingerprint).run();
@@ -1339,7 +1536,7 @@ async function telemetryAnalyze(env, hours) {
         }
       } catch (e2) {
       }
-      const title = "[self-heal] tool " + toolKey + " failing x" + r.n + " (" + h + "h no recovery)";
+      const title = "[self-heal] tool " + toolKey + " failing x" + _errs + " (" + (100 * _rate).toFixed(1) + "% of " + (_errs + _oks) + " calls in " + h + "h)";
       try {
         const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey);
         const dup = await env.QNFO_AUDIT.prepare("SELECT fingerprint FROM issue_ledger WHERE fingerprint = ?1").bind(_fp).first();
@@ -1377,7 +1574,11 @@ async function telemetryReport(env, hours) {
     const fails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool'").bind(since).first();
     const chats = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1").bind(since).first();
     const chatFails = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM ops_ai_log WHERE ts >= ?1 AND ok = 0").bind(since).first();
-    const openIssues = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM agent_issues WHERE status = 'open' AND category = 'telemetry-self-heal'").first();
+    // SELFHEAL-METRIC-TABLE-MISMATCH-1 (issue 1370): telemetry_analyze() INSERTs into
+    // issue_ledger, but this counter read agent_issues -- verified live 2026-09-29:
+    // agent_issues/telemetry-self-heal = 0 while issue_ledger/telemetry-self-heal = 8 open.
+    // The report advertised open_self_heal_issues=0 against 8 genuinely open tickets.
+    const openIssues = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) c FROM issue_ledger WHERE status = 'open' AND category = 'telemetry-self-heal'").first();
     const top = await env.QNFO_AUDIT.prepare("SELECT text, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' GROUP BY text ORDER BY n DESC LIMIT 5").bind(since).all();
     out.tool_calls = calls && calls.c || 0;
     out.tool_failures = fails && fails.c || 0;
@@ -1505,6 +1706,65 @@ __name222(githubApi, "githubApi");
 __name2222(githubApi, "githubApi");
 __name22222(githubApi, "githubApi");
 __name222222(githubApi, "githubApi");
+// SAME-ZONE-FETCH-FALLBACK-1 (2026-09-29): a Worker fetching a same-zone custom
+// domain that is fronted by another Worker gets HTTP 522 (there is no origin server
+// to reach). Resolve the fleet hostname back to its *.q08.workers.dev origin, which
+// IS reachable from Worker context, and retry there.
+function fleetWorkerNamesForHost(host) {
+  const out = [];
+  const h = String(host || "").toLowerCase();
+  if (!h) return out;
+  try {
+    for (const k in CANON_BASE) {
+      const raw = String(CANON_BASE[k] || "");
+      let hh = raw;
+      const i = hh.indexOf("://");
+      if (i >= 0) hh = hh.slice(i + 3);
+      const j = hh.indexOf("/");
+      if (j >= 0) hh = hh.slice(0, j);
+      hh = hh.toLowerCase();
+      if (hh === h && out.indexOf(k) < 0) out.push(k);
+    }
+  } catch (e) {}
+  return out;
+}
+
+// SELF-FETCH-GUARD-1 (2026-09-29): a Worker cannot fetch its own hostname. The
+// subrequest re-enters the zone, terminates at this worker, waits on itself, and
+// surfaces as HTTP 522 -- indistinguishable from a genuine fleet outage. Resolve
+// self-identity from WORKER + CANON_BASE so the refusal can be labelled.
+function isSelfFetchHost(host) {
+  try {
+    const h = String(host || "").toLowerCase();
+    if (!h) return false;
+    if (h === WORKER + ".q08.workers.dev") return true;
+    const names = fleetWorkerNamesForHost(h);
+    for (let i = 0; i < names.length; i++) {
+      if (names[i] === WORKER) return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+function fleetWorkersDevFallback(u) {
+  try {
+    const host = String(u && u.hostname || "").toLowerCase();
+    if (!host || host.endsWith(".workers.dev")) return null;
+    if (isSelfFetchHost(host)) return null; /* SELF-FETCH-GUARD-1: never fall back to self */
+    const names = fleetWorkerNamesForHost(host);
+    if (!names.length) return null;
+    const alt = new URL(String(u && u.href || ""));
+    alt.protocol = "https:";
+    alt.hostname = names[0] + ".q08.workers.dev";
+    alt.port = "";
+    return alt.href;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function webFetchTool(env, args) {
   const url = String(args && args.url || "").trim();
   if (!url) return { ok: false, error: "url required" };
@@ -1516,18 +1776,53 @@ async function webFetchTool(env, args) {
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "only http/https supported" };
   if (isPrivateHost(u.hostname)) return { ok: false, error: "blocked host (private/internal): " + u.hostname };
-  const max = Math.max(500, Math.min(parseInt(args && args.maxChars, 10) || 8e3, 3e4));
-  try {
-    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-ops/2.4)" }, redirect: "follow" });
-    const ct = String(r.headers.get("Content-Type") || "");
-    if (!r.ok) return { ok: false, error: "HTTP " + r.status };
-    const text = await r.text();
-    const isHtml = ct.indexOf("html") >= 0 || text.slice(0, 200).toLowerCase().indexOf("<html") >= 0 || text.indexOf("<") >= 0 && text.indexOf(">") >= 0;
-    const out = isHtml ? stripHtml(text) : text;
-    return { ok: true, url, status: r.status, text: out.slice(0, max) };
-  } catch (e) {
-    return { ok: false, error: "fetch failed: " + (e && e.message || String(e)) };
+  // SELF-FETCH-GUARD-1 (2026-09-29): refuse a self-fetch before any network call.
+  // Without this the call burns two 522 subrequests and reports the result as a fleet
+  // outage, which is how "ops.qnfo.org is down" readings from inside qnfo-ops arise.
+  if (isSelfFetchHost(u.hostname)) {
+    return {
+      ok: false,
+      error: "self-fetch blocked: " + WORKER + " cannot fetch its own hostname (" + u.hostname + ")",
+      url,
+      self_fetch: true,
+      hint: "use fleet_status for in-fleet health, or the *.q08.workers.dev origin of a DIFFERENT worker"
+    };
   }
+  const max = Math.max(500, Math.min(parseInt(args && args.maxChars, 10) || 8e3, 3e4));
+  // SAME-ZONE-FETCH-FALLBACK-1: a same-zone custom domain fronted by another Worker
+  // returns 522 from Worker context. Retry the identical request against the target's
+  // *.q08.workers.dev origin, which is reachable from Worker context.
+  const _fb = fleetWorkersDevFallback(u);
+  const _attempts = _fb && _fb !== url ? [url, _fb] : [url];
+  let _primaryErr = null;
+  let _lastErr = null;
+  for (let _i = 0; _i < _attempts.length; _i++) {
+    try {
+      const r = await fetch(_attempts[_i], { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-ops/2.4)" }, redirect: "follow" });
+      const ct = String(r.headers.get("Content-Type") || "");
+      if (!r.ok) {
+        _lastErr = "HTTP " + r.status;
+        if (_i === 0) _primaryErr = _lastErr;
+        if (_i + 1 < _attempts.length && r.status >= 500) continue;
+        return { ok: false, error: _primaryErr || _lastErr, url, tried: _attempts };
+      }
+      const text = await r.text();
+      const isHtml = ct.indexOf("html") >= 0 || text.slice(0, 200).toLowerCase().indexOf("<html") >= 0 || text.indexOf("<") >= 0 && text.indexOf(">") >= 0;
+      const out = isHtml ? stripHtml(text) : text;
+      const res = { ok: true, url, status: r.status, text: out.slice(0, max) };
+      if (_i > 0) {
+        res.served_via = "workers.dev-fallback";
+        res.primary_error = _primaryErr;
+      }
+      return res;
+    } catch (e) {
+      _lastErr = "fetch failed: " + (e && e.message || String(e));
+      if (_i === 0) _primaryErr = _lastErr;
+      if (_i + 1 < _attempts.length) continue;
+      return { ok: false, error: _primaryErr || _lastErr, url, tried: _attempts };
+    }
+  }
+  return { ok: false, error: _primaryErr || _lastErr || "fetch failed", url, tried: _attempts };
 }
 __name(webFetchTool, "webFetchTool");
 __name2(webFetchTool, "webFetchTool");
@@ -1584,7 +1879,32 @@ async function githubRepoRead(env, args) {
   if (!repo || repo.indexOf("/") <= 0) return { ok: false, error: "repo must be owner/name" };
   const qp = ref ? "?ref=" + encodeURIComponent(ref) : "";
   const res = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/contents/" + encPath(path) + qp);
-  if (res.status === 404) return { ok: false, error: "path not found: " + path };
+  if (res.status === 404) {
+    /* GITHUB-READ-404-HINT-1: on a miss, enumerate what actually exists so an
+       agent that guessed a path gets the real names back (issue #1391). */
+    var _p = String(path || "").split("/").filter(Boolean);
+    var _base = _p.length ? _p[_p.length - 1] : "";
+    var _parent = _p.slice(0, -1).join("/");
+    var _hint = "";
+    try {
+      var _pr = await githubApi(env, "GET", "/repos/" + encPath(repo) + "/contents/" + encPath(_parent) + qp);
+      if (_pr && _pr.status === 200 && Array.isArray(_pr.json)) {
+        var _names = _pr.json.map(function (e) {
+          return e.name;
+        }).slice(0, 40);
+        var _lb = _base.toLowerCase();
+        var _near = _names.filter(function (n) {
+          var _ln = String(n).toLowerCase();
+          return _lb && (_ln.indexOf(_lb) >= 0 || _lb.indexOf(_ln) >= 0);
+        }).slice(0, 8);
+        _hint = " - " + (_parent ? "dir '" + _parent + "' contains: " : "repo root contains: ") + _names.join(", ");
+        if (_near.length) _hint += " (nearest match: " + _near.join(", ") + ")";
+      } else if (_pr && _pr.status === 404) {
+        _hint = " - parent dir '" + _parent + "' also not found; repo root may be the right starting point";
+      }
+    } catch (_e) {}
+    return { ok: false, error: "path not found: " + path + _hint };
+  }
   if (res.status === 403 && !env.GITHUB_TOKEN) return { ok: false, error: "GitHub rate-limited (unauthenticated); set GITHUB_TOKEN secret" };
   if (res.status !== 200) return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300) };
   if (Array.isArray(res.json)) return { ok: true, repo, path, type: "dir", entries: res.json.map(function(e) {
@@ -1622,9 +1942,28 @@ async function githubFileWrite(env, args) {
   const body = { message, content: b64encode(content) };
   if (branch) body.branch = branch;
   if (sha) body.sha = sha;
-  const res = await githubApi(env, "PUT", "/repos/" + encPath(repo) + "/contents/" + encPath(path), body);
-  if (res.status === 201 || res.status === 200) return { ok: true, repo, path, commit: res.json && res.json.commit && res.json.commit.sha, url: res.json && res.json.content && res.json.content.html_url };
-  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300) };
+  const apiPath = "/repos/" + encPath(repo) + "/contents/" + encPath(path);
+  // GITHUB-409-RETRY-1 (issue 1372, 2026-09-29): a bare PUT returns 409/422 the moment a
+  // concurrent writer advances the branch, and this tool used to surface that as a hard
+  // failure (measured 17.5% of github_file_write calls fleet-wide). Re-read the head sha
+  // and retry, bounded, before giving up. The sha is only re-read when the file already
+  // exists, so a genuine create/create race still fails loudly instead of being silently
+  // converted into an overwrite.
+  let res = await githubApi(env, "PUT", apiPath, body);
+  let attempts = 1;
+  let conflictStatus = null;
+  while (attempts < 4 && res && (res.status === 409 || res.status === 422)) {
+    conflictStatus = res.status;
+    const cur = await githubApi(env, "GET", apiPath + "?ref=" + encodeURIComponent(branch || "main"), void 0);
+    const curSha = cur && cur.json && cur.json.sha ? String(cur.json.sha) : null;
+    if (!curSha) break;
+    body.sha = curSha;
+    await new Promise(function (r) { return setTimeout(r, 250 * attempts); });
+    res = await githubApi(env, "PUT", apiPath, body);
+    attempts++;
+  }
+  if (res.status === 201 || res.status === 200) return { ok: true, repo, path, commit: res.json && res.json.commit && res.json.commit.sha, url: res.json && res.json.content && res.json.content.html_url, attempts, sha_retried: attempts > 1 };
+  return { ok: false, error: "GitHub " + res.status + ": " + String(res.json && res.json.message || res.text).slice(0, 300), attempts, conflict_status: conflictStatus };
 }
 __name(githubFileWrite, "githubFileWrite");
 __name2(githubFileWrite, "githubFileWrite");
@@ -1886,7 +2225,33 @@ async function cfWorkerRead(env, args) {
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/content/v2",
       { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Accept": "application/javascript" } }
     );
-    if (!srcR.ok) return { ok: false, error: "CF API " + srcR.status + " reading " + worker };
+    if (!srcR.ok) {
+      // CF-WORKER-READ-404-HINT-1: a bare 404 is unactionable - callers guess
+      // worker names and burn calls. Return the real names instead.
+      var _wrh = "";
+      if (srcR.status === 404) {
+        try {
+          var _wlr = await fetch(
+            "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts?per_page=200",
+            { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
+          );
+          if (_wlr.ok) {
+            var _wlj = await _wlr.json();
+            var _names = (((_wlj || {}).result) || []).map(function (x) { return x && x.id; }).filter(Boolean);
+            var _wl = worker.toLowerCase();
+            var _near = _names.filter(function (n) {
+              var m = String(n).toLowerCase();
+              return m.indexOf(_wl) >= 0 || _wl.indexOf(m) >= 0;
+            }).slice(0, 8);
+            // CF-WORKER-READ-404-HINT-LIST-1: always emit real names, never promise a list we do not send
+            _wrh = " - not a deployed worker. " + _names.length + " workers exist" +
+              (_near.length ? "; similar: " + _near.join(", ") : "; e.g. " + _names.slice(0, 10).join(", ")) +
+              ". Pass an exact name from this list.";
+          }
+        } catch (_wrhE) { _wrh = ""; }
+      }
+      return { ok: false, error: "CF API " + srcR.status + " reading " + worker + _wrh };
+    }
     const ct = srcR.headers.get("Content-Type") || "";
     let src = "";
     if (ct.indexOf("multipart") >= 0) {
@@ -1989,6 +2354,37 @@ async function installDeclaredBindings(env, worker) {
 __name(installDeclaredBindings, "installDeclaredBindings");
 __name2(installDeclaredBindings, "installDeclaredBindings");
 __name22(installDeclaredBindings, "installDeclaredBindings");
+// OPS-DEPLOY-LEDGER-1 (2026-09-29, issue #1373): cf_worker_deploy is this
+// endpoint's OWN deploy tool and it had NO deployment_history writer, so the
+// fleet deploy ledger could not see deploys made through this endpoint at all
+// (verified: zero occurrences of "deployment_history" in this file). Every
+// deploy attempt now records a row. FAIL-OPEN by design: a ledger failure must
+// never fail a deploy. `notes` is always non-empty because qnfo-audit carries a
+// BEFORE INSERT trigger `deployment_history_provenance_required_ins` that
+// ABORTs with 'deploy-ledger-row-without-provenance' on a blank note.
+async function recordDeployLedger(env, row) {
+  try {
+    if (!env || !env.QNFO_AUDIT) return { ok: false, error: "no QNFO_AUDIT binding" };
+    const _n = row && row.notes != null && String(row.notes).trim() ? String(row.notes) : "cf_worker_deploy: no note supplied";
+    const _r = await env.QNFO_AUDIT.prepare(
+      "INSERT INTO deployment_history (resource_type, resource_name, action, version_id, deployed_by, deployed_at, status, notes, _version) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)"
+    ).bind(
+      String(row && row.resource_type || "worker"),
+      String(row && row.resource_name || ""),
+      String(row && row.action || "deploy"),
+      row && row.version_id != null ? String(row.version_id) : null,
+      String(row && row.deployed_by || "qnfo-ops:cf_worker_deploy"),
+      iso(),
+      String(row && row.status || "success"),
+      _n.slice(0, 500),
+      1
+    ).run();
+    return { ok: true, changes: _r && _r.meta ? _r.meta.changes : null };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 200) };
+  }
+}
+
 async function cfWorkerDeploy(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
   const worker = String(args && args.worker || "").trim();
@@ -1996,6 +2392,23 @@ async function cfWorkerDeploy(env, args) {
   const versionNote = String(args && args.version || "").trim();
   if (!worker) return { ok: false, error: "worker name required" };
   if (!content) return { ok: false, error: "content (JS source) required" };
+  // CONTAINER-CONFIG-DROPPED-1 (2026-09-29, issue #1485): refuse to deploy a worker
+  // that declares [[containers]]. Cloudflare stores that block as script-level config,
+  // NOT as a binding, so it never appears in GET /bindings -- and BINDING-PRESERVE-1
+  // rebuilds the script from exactly that list, which therefore DROPS it. Measured:
+  // deployment_history id 172 (19:30:35.100Z) and id 175 (19:34:11.789Z) each dropped
+  // qnfo-containers-pilot's container config; the first container.error row landed at
+  // 19:30:43.591Z, 8s after id 172. Use wrangler deploy instead
+  // (.github/workflows/deploy-containers-pilot.yml).
+  // ADVERSARIAL: this is a name list, not detection -- a NEW container worker added
+  // without extending it is still exposed. Detection would require reading the
+  // worker's wrangler.toml, which this endpoint has no binding for.
+  const _CONTAINER_WORKERS = ["qnfo-containers-pilot"];
+  // CONTAINER-GUARD-AFTER-READ-1 (issues #1485/#1487): the decision moved BELOW the live
+  // /settings read. A name check evaluated before the read can never distinguish
+  // "container config unreadable" from "container config absent", and it refuses the very
+  // deploy that would restore the config.
+  const _isContainerWorker = _CONTAINER_WORKERS.indexOf(worker) !== -1;
   // FM8-VERSION-DOWNGRADE (2026-09-26): refuse a SEMVER DOWNGRADE by default. A stale
   // WORKTREE-GRAFT-PUSH-1 reverts the repo to OLD versions (canonical: qnfo-gateway 3.7.4 to
   // 3.6.1, qnfo-ops 2.37.6 to 2.36.47) and, because GitHub main is the deploy source, the
@@ -2043,12 +2456,30 @@ async function cfWorkerDeploy(env, args) {
   });
   let bindingsInstalled = 0;
   let bindingInstallNote = null;
-  if (bindingsOut.length === 0) {
+  // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
+  // bindingsOut.length === 0, so a worker that already carried any non-secret binding
+  // could NEVER gain a newly declared one. Canonical victim: qnfo-research-exec never
+  // received its declared QNFO_AI service binding (609 gw-fallback 404s from 2026-09-16),
+  // the revise stage's >=10000-char gate then failed on the short fallback output, and the
+  // pipeline terminalised. Always install, then UNION the declared non-secret bindings
+  // into the live set. Live wins on (type,name): nothing existing is overwritten or
+  // removed, and the installer emits non-secret types only, so secrets are untouched.
+  {
     const _ins = await installDeclaredBindings(env, worker);
     bindingInstallNote = _ins.note || null;
-    if (_ins.bindings && _ins.bindings.length) {
-      bindingsOut = _ins.bindings;
-      bindingsInstalled = _ins.installed;
+    const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];
+    if (bindingsOut.length === 0 && _decl.length) {
+      bindingsOut = _decl;
+      bindingsInstalled = _decl.length;
+    } else if (_decl.length) {
+      const _seen = new Set(bindingsOut.map(function(b) { return b.type + ":" + b.name; }));
+      for (const _b of _decl) {
+        const _k = _b.type + ":" + _b.name;
+        if (_seen.has(_k)) continue;
+        bindingsOut.push(_b);
+        _seen.add(_k);
+        bindingsInstalled++;
+      }
     }
   }
   try {
@@ -2060,6 +2491,12 @@ async function cfWorkerDeploy(env, args) {
     }
     let _compatDate = "2026-08-01";
     let _compatFlags = [];
+    // PRESERVE-WORKER-METADATA-2 (issues #1485/#1487): [[containers]] is SCRIPT-LEVEL
+    // config, not a binding, so BINDING-PRESERVE-1 never carried it and every /content PUT
+    // silently dropped it (MEASURED: deployment_history id 172 at 19:30:35.100Z, first
+    // container.error at 19:30:43.591Z -- 8s later). Read it from the SAME GET /settings
+    // call already used for compatibility_date.
+    let _containers = [];
     try {
       const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
       if (_sResp.ok) {
@@ -2067,11 +2504,24 @@ async function cfWorkerDeploy(env, args) {
         const _sr = _sj && _sj.result;
         if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
         if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
+        if (_sr && Array.isArray(_sr.containers)) _containers = _sr.containers.slice();
       }
     } catch (_e) {
     }
     if (!_compatDate) _compatDate = "2026-08-01";
-    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}));
+    if (_isContainerWorker && !_containers.length &&
+        !(args && args.allow_container_config_drop)) {
+      return {
+        ok: false,
+        rejected: true,
+        error: "CONTAINER-CONFIG-DROPPED-1: " + worker + " is a container worker and "
+          + "GET /settings returned NO containers array, so this PUT would leave the "
+          + "container config absent (the measured #1485 failure). Restore it with "
+          + "scripts/restore_container_config_v5.py (versions API). Pass "
+          + "allow_container_config_drop:true only for a deliberate teardown."
+      };
+    }
+    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     // FM7-HEALTH-VERSION-PARITY-1 (2026-09-26, FATAL): refuse a deploy whose source /health
     // returns a HARDCODED literal version instead of its single VERSION const. A lying /health is
@@ -2094,8 +2544,12 @@ async function cfWorkerDeploy(env, args) {
       { method: "PUT", headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary }, body }
     );
     const j = await resp.json().catch(() => ({}));
-    if (!resp.ok) return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400) };
-    return { ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    if (!resp.ok) {
+      const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
+      return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
+    }
+    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -2763,11 +3217,23 @@ async function gitCloneExec(env, args) {
   const name = args && args.name ? String(args.name) : url2.split("/").pop().replace(/\.git$/, "");
   const timeout = Math.min(Math.max(parseInt(args && args.timeout_ms, 10) || 12e4, 1e4), 3e5);
   if (!url2) return { ok: false, error: "url required" };
-  const cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name }, timeout);
-  if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result };
-  if (!cmd) return { ok: true, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ) };
-  const execJ = await containerDispatch(env, "/workspace/exec", { dir: name, cmd }, timeout);
-  return { ok: (execJ.result || {}).exitCode === 0, cloned: true, path: "/workspace/" + name, clone_result: fmtContainer(cloneJ), exec_result: fmtContainer(execJ) };
+  // GITCLONE-WARM-RETRY-1 (issue #1465): warm the container, then retry once on
+  // a timeout-class failure. Without this a cold start consumes the whole budget
+  // and every clone reports "container timeout after Nms".
+  try { await containerDispatch(env, "/health", {}, 2e4); } catch (e) { }
+  let effName = name;
+  let cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
+  let warmRetried = false;
+  if (!cloneJ.ok && /timeout|timed out|ETIMEDOUT/i.test(String(cloneJ.error || "") + " " + String((cloneJ.result || {}).stderr || ""))) {
+    warmRetried = true;
+    effName = name + "-r" + Math.random().toString(36).slice(2, 6);
+    try { await containerDispatch(env, "/health", {}, 3e4); } catch (e) { }
+    cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
+  }
+  if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result, warm_retry: warmRetried };
+  if (!cmd) return { ok: true, cloned: true, path: "/workspace/" + effName, clone_result: fmtContainer(cloneJ), warm_retry: warmRetried };
+  const execJ = await containerDispatch(env, "/workspace/exec", { dir: effName, cmd }, timeout);
+  return { ok: (execJ.result || {}).exitCode === 0, cloned: true, path: "/workspace/" + effName, clone_result: fmtContainer(cloneJ), exec_result: fmtContainer(execJ), warm_retry: warmRetried };
 }
 __name(gitCloneExec, "gitCloneExec");
 __name2(gitCloneExec, "gitCloneExec");
@@ -2860,7 +3326,7 @@ async function execTool(env, name, rawArgs, userText, resultCap) {
     else if (name === "service_discover") res = await serviceDiscover(env, args);
     else if (name === "backlog_status") res = await backlogStatus(env);
     else if (name === "cf_analytics") res = await cfAnalytics(env);
-    else if (name === "telemetry_report") res = await telemetryReport(env, args);
+    else if (name === "telemetry_report") res = await telemetryReport(env, args && args.hours);
     else if (name === "telemetry_analyze") res = await telemetryAnalyze(env, args && args.hours);
     else if (name === "email_check") res = await emailRecent(env, args);
     else if (name === "email_stats") res = await emailStats(env);
@@ -2927,7 +3393,7 @@ __name222222(execTool, "execTool");
 async function logToolEvent(env, name, args, res, ms) {
   if (!env.QNFO_AUDIT) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ args, resultOk: !!(res && res.ok), error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, ms }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ /* OPS-TOOL-META-ERROR-FIRST-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
   } catch (e) {
   }
 }
@@ -3029,8 +3495,17 @@ async function callGLM(env, messages, maxTokens, tools, opts) {
     if (o.toolChoice) inputs.tool_choice = o.toolChoice;
   }
   const res = await env.WAI.run(UPSTREAM_GLM_MODEL, inputs);
-  if (res && Array.isArray(res.choices)) return res;
-  const txt = res && (res.response != null ? res.response : res.answer) || "";
+  if (res && Array.isArray(res.choices)) {
+    // FM-GLM-REASONING (2026-09-27): mirror budgetFallback — a reasoning-only free-model reply must
+    // never surface as empty content on this free-first reader path (OPS-STREAM-EDGE-20260927: 3 live
+    // ok=0 streamed agent-tools rows via @cf/glm-5.3-flash). Merge reasoning_content when content is empty.
+    const _g0 = res.choices[0] && res.choices[0].message;
+    if (_g0 && !String(_g0.content || "").trim() && _g0.reasoning_content && !(_g0.tool_calls && _g0.tool_calls.length)) _g0.content = String(_g0.reasoning_content);
+    return res;
+  }
+  let txt = res && (res.response != null ? res.response : res.answer) || "";
+  if (!String(txt || "").trim() && res && res.reasoning_content) txt = String(res.reasoning_content);
+  if (!String(txt || "").trim()) txt = "Upstream model returned no content; please re-send your request.";
   return { choices: [{ index: 0, message: { role: "assistant", content: String(txt) }, finish_reason: "stop" }], usage: res && res.usage || {} };
 }
 __name(callGLM, "callGLM");
@@ -3108,7 +3583,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
-  let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
+  let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -3182,7 +3657,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
   const _isOAI = isOAIUpstream(modelToUse);
-  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, GW_MAX_OUT), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, GW_MAX_OUT), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
+  const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = o.toolChoice || "auto";
@@ -3264,10 +3739,38 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
 __name(callDeepSeekStream, "callDeepSeekStream");
 __name2(callDeepSeekStream, "callDeepSeekStream");
 __name22(callDeepSeekStream, "callDeepSeekStream");
+function attachmentGuardXml(text) {
+  var m = String(text || "");
+  var maxSize = 0, sp = 0;
+  while ((sp = m.indexOf("<FILE_SIZE>", sp)) >= 0) {
+    sp += 11;
+    var sj = sp;
+    while (sj < m.length && m.charAt(sj) !== "<") sj++;
+    var sn = parseFloat(m.slice(sp, sj));
+    if (sn > maxSize) maxSize = sn;
+  }
+  if (maxSize <= 0) return "";
+  var ws = String.fromCharCode(32, 9, 13, 10);
+  var openTag = "<FILE_CONTENT>", closeTag = "</FILE_CONTENT>";
+  var idx = 0;
+  while ((idx = m.indexOf(openTag, idx)) >= 0) {
+    var cs = idx + openTag.length;
+    var ce = m.indexOf(closeTag, cs);
+    if (ce < 0) break;
+    var inner = m.slice(cs, ce);
+    var onlyWs = true;
+    for (var w = 0; w < inner.length; w++) {
+      if (ws.indexOf(inner.charAt(w)) < 0) { onlyWs = false; break; }
+    }
+    if (onlyWs) return "OPS-ATTACHMENT-GUARD: one or more attachments arrived with a nonzero FILE_SIZE but EMPTY FILE_CONTENT. The file bytes are missing and CANNOT be read. Do NOT invent, guess, or reconstruct file contents. Tell the user the attachment could not be read and ask them to re-send it.";
+    idx = ce + closeTag.length;
+  }
+  return "";
+}
 function attachmentGuard(text) {
   var m = String(text || "");
   var ki = m.indexOf("FILE_CONTENT=");
-  if (ki < 0) return "";
+  if (ki < 0) return attachmentGuardXml(m);
   var maxSize = 0, p = 0;
   while ((p = m.indexOf("FILE_SIZE=", p)) >= 0) {
     p += 10;
@@ -3286,11 +3789,44 @@ function attachmentGuard(text) {
 }
 __name(attachmentGuard, "attachmentGuard");
 __name2(attachmentGuard, "attachmentGuard");
+function contentToText(c) {
+  if (c == null) return "";
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    var out = [];
+    for (var i = 0; i < c.length; i++) {
+      var p = c[i];
+      if (typeof p === "string") out.push(p);
+      else if (p && typeof p === "object") out.push(typeof p.text === "string" ? p.text : JSON.stringify(p));
+      else out.push(String(p));
+    }
+    return out.join("\n");
+  }
+  if (typeof c === "object") return typeof c.text === "string" ? c.text : JSON.stringify(c);
+  return String(c);
+}
+__name(contentToText, "contentToText");
+function isContinuationDirective(s) {
+  // CONTINUATION-INHERIT-GUARD-1 (2026-09-29): the client appends an auto-continue
+  // directive as the last user-role message on continuation turns. It carries no
+  // authorization intent, so the confirm gate must not evaluate it as if it were
+  // the operator's instruction -- that is the #1481 root cause.
+  const t = String(s || "").trim();
+  if (!t || t.length > 400) return false;
+  if (/^\s*continue\s*[.!]?\s*$/i.test(t)) return true;
+  if (/^\s*continue\b/i.test(t) && /(definition-of-done|\bDoD\b|closeout)/i.test(t)) return true;
+  return false;
+}
+__name(isContinuationDirective, "isContinuationDirective");
 function lastUserText(messages) {
   const arr = messages || [];
+  let _fallback = "";
   for (let i = arr.length - 1; i >= 0; i--) {
     if (arr[i] && arr[i].role === "user") {
-      const _c = String(arr[i].content || "");
+      const _c = contentToText(arr[i].content);
+      if (!_fallback) _fallback = _c;
+      // Inherit the last SUBSTANTIVE turn; a bare auto-continue directive is not one.
+      if (isContinuationDirective(_c)) continue;
       const _g = attachmentGuard(_c);
       if (_g) {
         const _nc = _c + "\n\n[" + _g + "]";
@@ -3300,7 +3836,7 @@ function lastUserText(messages) {
       return _c;
     }
   }
-  return "";
+  return _fallback;
 }
 __name(lastUserText, "lastUserText");
 __name2(lastUserText, "lastUserText");
@@ -3515,7 +4051,7 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
   try {
     if (isStream) {
       const _relayIsOAI = isOAIUpstream(relayUp);
-      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, GW_MAX_OUT), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, GW_MAX_OUT), temperature: relayTemp, top_p: relayTopP, stream: true };
+      const upBody = _relayIsOAI ? { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_completion_tokens: Math.min(maxOut, gwMaxOut(env)), stream: true } : { model: relayUp, messages: truncateToContext(norm, MODEL_CTX - maxOut - 8192), max_tokens: Math.min(maxOut, gwMaxOut(env)), temperature: relayTemp, top_p: relayTopP, stream: true };
       if (clientTools) {
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
@@ -3722,7 +4258,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
-  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e4);
+  const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5);
   const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
@@ -3866,7 +4402,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     }
     const _streamModel = execUpstream || UPSTREAM_MODEL;
     const _streamIsOAI = isOAIUpstream(_streamModel);
-    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, GW_MAX_OUT), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, GW_MAX_OUT), temperature, top_p: topP, stream: true };
+    const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, gwMaxOut(env)), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, gwMaxOut(env)), temperature, top_p: topP, stream: true };
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
@@ -3927,6 +4463,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     return await finalize();
   }, "streamFinalAnswer");
   let finalized = false;
+  var pendingToolCalls = [];
   const finalize = /* @__PURE__ */ __name222222(async function() {
     if (finalized) return null;
     finalized = true;
@@ -3956,6 +4493,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         emitChunk({}, "tool_calls");
       } else {
         if (!streamedTokens) emitChunk({ role: "assistant", content }, null);
+        if (pendingToolCalls && pendingToolCalls.length) emitChunk({ role: "assistant", content: "", pending_tool_calls: pendingToolCalls }, null);
         emitChunk({}, finishReason || "stop");
       }
       emitDone();
@@ -3964,7 +4502,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (clientHandoff) {
       return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: clientHandoff, finish_reason: "tool_calls" }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
     }
-    return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason || "stop" }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
+    return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason || "stop" }], pending_tool_calls: pendingToolCalls && pendingToolCalls.length ? pendingToolCalls : void 0, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } });
   }, "finalize");
   const runner = /* @__PURE__ */ __name222222(async function() {
     if (isStream) emitProgress();
@@ -3991,7 +4529,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
-        if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+        if (!withTools) {
+          if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
+          work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+        }
         const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
         if (isStream) {
@@ -4030,7 +4571,16 @@ async function handleChat(env, body, authHeader, ua, ctx) {
             ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, servedBy || UPSTREAM_MODEL, "tool-call-invalid", _bad + " invalid tool call(s) in model response"));
           }
         }
-        if (toolCalls && iter < maxIters) {
+        if (toolCalls && !withTools) {
+          // TOOL-BUDGET-PENDING-1: budget spent, model still emitted tool calls. Do NOT execute
+          // them (the budget is spent) and do NOT drop them silently (the old defect).
+          pendingToolCalls = summarizePendingToolCalls(toolCalls);
+          escalations += pendingToolCalls.length;
+          toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + pendingToolCalls.map(function(p) { return p.name; }).join(",") });
+          ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "tool-budget-exhausted", pendingToolCalls.length + " tool call(s) not executed (budget spent): " + pendingToolCalls.map(function(p) { return p.name; }).join(",")));
+          // TOOLBUDGET-BAIL-1: emit the D3a bail record (cloud_ops_events kind=ops_tool_budget_bail).
+          ctx.waitUntil(logToolBudgetBail(env, strategy, pendingToolCalls.length, pendingToolCalls.map(function(p) { return p.name; }).join(","), maxIters, !!deadlineHit));
+        } else if (toolCalls && withTools) {
           streamedTokens = false;
           const serverCalls = toolCalls.filter(function(tc) {
             return tc && tc.function && _opsToolNames.has(tc.function.name);
@@ -4062,6 +4612,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           continue;
         }
         content = String(msg0 && msg0.content || "");
+        if (pendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(pendingToolCalls.length))).trim();
         if (!String(content || "").trim() && !toolCalls && withTools && !cacheHit) {
           escalations++;
           ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "empty-content-with-tools", "model returned empty content while tools were available"));
@@ -4889,7 +5440,10 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       }
       const withTools = turn < maxTurns;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
-      if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+      if (!withTools) {
+        if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "job-workflow", turn, maxTurns, false);
+        work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+      }
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "20 seconds", backoff: "exponential" }, timeout: "15 minutes" }, async function() {
@@ -4905,7 +5459,11 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       const choice = resp && resp.choices && resp.choices[0];
       const msg0 = choice && choice.message;
       const toolCalls = msg0 && Array.isArray(msg0.tool_calls) && msg0.tool_calls.length ? msg0.tool_calls : null;
-      if (toolCalls && withTools) {
+      if (toolCalls && !withTools) {
+        // TOOL-BUDGET-PENDING-1: record the unexecuted final-round calls, never drop them.
+        var jobPendingToolCalls = summarizePendingToolCalls(toolCalls);
+        toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + jobPendingToolCalls.map(function(p) { return p.name; }).join(",") });
+      } else if (toolCalls && withTools) {
         const serverCalls = toolCalls.filter(function(tc) {
           return tc && tc.function && opsToolNames.has(String(tc.function.name));
         });
@@ -4935,6 +5493,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       }
       content = String(msg0 && msg0.content || "");
       finishReason = choice && choice.finish_reason || "stop";
+      if (typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(jobPendingToolCalls.length))).trim();
       if (withTools && finishReason === "length") {
         try {
           const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
@@ -4948,7 +5507,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
         }
         if (!content || !String(content).trim()) content = "The answer was truncated by the token budget after a retry. Split the request or re-POST /v1/jobs for another attempt.";
       }
-      final = { status: "succeeded", response: content, finishReason };
+      final = { status: "succeeded", response: content, finishReason, pending_tool_calls: typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length ? jobPendingToolCalls : void 0 };
       break;
     }
     if (!final) final = { status: "succeeded", response: String(content || "(iteration cap reached with no final answer)"), finishReason };
@@ -5571,3 +6130,4 @@ export {
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
+// TOOLBUDGET-RELOCK-1 (2026-09-30): re-landed MAX_TOOL_ITERS=40 and OPS_NONSTREAM_DEADLINE_MS=3e5 after an applier revert. See qnfo-ops/scripts/guard-timebudget.sh.

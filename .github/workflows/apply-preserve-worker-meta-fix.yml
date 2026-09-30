@@ -1,0 +1,208 @@
+name: apply-preserve-worker-meta-fix
+
+# PRESERVE-WORKER-METADATA-1 applier + deploy runner (issue #1487).
+#
+# ROOT CAUSE: qnfo-ops cfWorkerDeploy() rebuilt deploy metadata from GET /bindings
+# only, so worker-LEVEL metadata (containers, migrations, limits, observability,
+# logpush, placement, tail_consumers, assets) was silently STRIPPED on every deploy
+# through that path. Observed 2026-09-29: deployment_history id 172 redeployed
+# qnfo-containers-pilot at 19:30:35Z; the first
+# "Cannot read properties of undefined (reading 'running')" row landed 19:30:43Z,
+# 8 seconds later, and every container tool returned HTTP 500 (outage #1485).
+#
+# DEPLOY PATH IS DELIBERATE: scripts/raw_put.py uses PUT /content, which replaces
+# the module while PRESERVING settings/metadata. cf_worker_deploy is the stripper.
+# This workflow therefore deploys via raw_put.py and NEVER via cf_worker_deploy.
+#
+# GATE STYLE (fixed 2026-09-29, v2): gates are PROPERTY-based, never literal-pinned.
+# v1 pinned the exact literal "2.37.29-preserve-worker-meta", but the applier
+# derives the bump FROM SOURCE (2.37.30 -> 2.37.31), so v1 was guaranteed to fail
+# and never apply -- the STALE-PREFLIGHT-1 class, self-inflicted. Assert the
+# property (marker present + version advanced + stripper form gone), not a literal.
+
+on:
+  push:
+    paths:
+      - 'scripts/cf-worker-deploy-preserve-meta-patch.py'
+      - '.github/workflows/apply-preserve-worker-meta-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-preserve-worker-meta-fix
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+      applied: ${{ steps.push.outputs.applied }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Show pre-state
+        id: pre
+        run: |
+          set -euo pipefail
+          echo "head=$(git rev-parse --short HEAD)"
+          grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js || true
+          PRE_VER=$(grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "pre_version=$PRE_VER" >> "$GITHUB_OUTPUT"
+          echo "marker_count=$(grep -c 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js || true)"
+
+      - name: Apply
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python3 scripts/cf-worker-deploy-preserve-meta-patch.py
+
+      - name: Syntax gate (real ESM check)
+        run: |
+          set -euo pipefail
+          cp qnfo-ops/worker.js /tmp/w.mjs
+          node --check /tmp/w.mjs
+          echo "ESM_OK"
+
+      - name: Content gate (property-based, no literal pinning)
+        env:
+          PRE_VERSION: ${{ steps.pre.outputs.pre_version }}
+        run: |
+          set -euo pipefail
+          # 1. marker present
+          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js \
+            || { echo "::error::marker missing"; exit 1; }
+          # 2. version ADVANCED past the pre-state (never pin an exact literal)
+          POST_VER=$(grep -o 'var VERSION = "[^"]*"' qnfo-ops/worker.js | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "pre=$PRE_VERSION post=$POST_VER"
+          if [ "$POST_VER" = "$PRE_VERSION" ]; then
+            echo "::error::version not bumped (still $PRE_VERSION)"; exit 1
+          fi
+          echo "$POST_VER" | grep -Eq '^2\.37\.[0-9]+' \
+            || { echo "::error::unexpected version shape: $POST_VER"; exit 1; }
+          # 3. preserved-meta plumbing present
+          grep -q '_preservedMeta' qnfo-ops/worker.js \
+            || { echo "::error::preserved-meta plumbing missing"; exit 1; }
+          # 4. fail-closed container guard present
+          grep -q 'PRESERVE-WORKER-METADATA-1: source references ctx.container' qnfo-ops/worker.js \
+            || { echo "::error::fail-closed container guard missing"; exit 1; }
+          # 5. the stripper form must be GONE (metadataPart now spreads _preservedMeta)
+          grep -q '_exports } : {}, _preservedMeta));' qnfo-ops/worker.js \
+            || { echo "::error::metadataPart still strips worker-level metadata"; exit 1; }
+          echo "CONTENT_GATE_OK version=$POST_VER"
+
+      - name: Mirror gate
+        run: |
+          set -euo pipefail
+          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/deployed-current.worker.js \
+            || { echo "::error::mirror not patched"; exit 1; }
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js && echo "MIRROR_PARITY_OK"
+
+      - name: Commit and push (race-safe)
+        id: push
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          if git diff --cached --quiet; then
+            echo "nothing to commit - already applied"
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "fix(qnfo-ops): #1487 cf_worker_deploy no longer strips worker-level metadata (PRESERVE-WORKER-METADATA-1)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "PUSH_OK attempt=$i"
+              echo "applied=true" >> "$GITHUB_OUTPUT"
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep $((i * 3))
+          done
+          echo "::error::push failed after 5 attempts"
+          exit 1
+
+      - name: Record apply outcome
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-status
+          python3 - "${{ steps.pre.outputs.pre_version }}" "${{ steps.push.outputs.applied }}" "${{ steps.push.outputs.sha }}" <<'PY'
+          import json, sys, datetime
+          pre, applied, sha = (sys.argv[1], sys.argv[2], sys.argv[3])
+          json.dump({
+            "workflow": "apply-preserve-worker-meta-fix",
+            "issue": 1487,
+            "marker": "PRESERVE-WORKER-METADATA-1",
+            "gate_style": "property-based",
+            "pre_version": pre,
+            "applied": applied,
+            "applied_sha": sha,
+            "ts": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }, open("ci-status/preserve-worker-meta.json", "w"), indent=2)
+          PY
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/preserve-worker-meta.json
+          git diff --cached --quiet || {
+            git commit -m "chore(ci-status): record PRESERVE-WORKER-METADATA-1 apply outcome [skip ci]"
+            for i in 1 2 3; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+              git push origin "HEAD:${GITHUB_REF_NAME}" && break
+              sleep $((i * 3))
+            done
+          }
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ needs.apply.outputs.sha }}
+
+      - name: Confirm deployed revision carries the fix
+        run: |
+          set -euo pipefail
+          echo "deploying sha=${{ needs.apply.outputs.sha }}"
+          grep -q 'PRESERVE-WORKER-METADATA-1' qnfo-ops/worker.js \
+            || { echo "::error::checked-out revision lacks the fix"; exit 1; }
+
+      - name: Deploy via SAFE path (raw_put.py -> PUT /content)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
+
+      - name: Live readback gate (property-based)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6; do
+            curl -sS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/qnfo-ops/content" \
+              -o /tmp/live.js
+            if grep -q 'PRESERVE-WORKER-METADATA-1' /tmp/live.js; then
+              echo "LIVE_VERIFIED marker=PRESERVE-WORKER-METADATA-1 attempt=$i bytes=$(wc -c < /tmp/live.js)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::live qnfo-ops does not carry PRESERVE-WORKER-METADATA-1"
+          exit 1

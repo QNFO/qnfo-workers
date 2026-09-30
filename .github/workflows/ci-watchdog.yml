@@ -1,0 +1,114 @@
+name: ci-watchdog
+
+# CI-WATCHDOG-1 (2026-09-27) -- catch and remediate the qnfo-workers CI failure
+# modes, across GitHub and (via the ops endpoint) the Cloudflare fleet ledger.
+#
+# WHY workflow_run AND NOT `on: schedule`
+#   On this repository the GitHub `schedule` event has NEVER fired. Across the
+#   entire run history there are ZERO runs with event=schedule, including the
+#   06:17 UTC (deploy-drift) and 06:23 UTC (indexnow-submit) slots that the two
+#   schedule-only workflows exist for. A monitor built on a cron expression here
+#   is dead on arrival. Every push and every workflow_run, by contrast, fires.
+#   So this watchdog hangs off workflow_run + workflow_dispatch, and performs its
+#   own time-gated periodic sweep so it also covers quiet periods.
+#
+# WHAT IT DOES
+#   scripts/ci_watchdog.py
+#     1. silent-schedule  a workflow declares `schedule` but has ZERO
+#                         schedule-event runs  -> DISPATCH it so it actually runs
+#     2. mirror-lag       mirror-guard red       -> DISPATCH mirror-sync.yml
+#     3. codeql-config    default-setup != configured -> PATCH it to configured
+#     4. build-gate       WORKER-BUILD-GATE-1    -> file/refresh one deduped issue
+#     5. invalid-workflow a run with ZERO jobs   -> file/refresh
+#     6. missing-module   MODULE_NOT_FOUND       -> file/refresh
+#     7. unknown          anything else          -> file/refresh with the evidence
+#   Retired workflows (file no longer on the ref) are recorded, never re-run.
+#
+#   detect -> act -> verify. It is a GATE: exit 1 while any finding is
+#   unactionable AND untracked, so a silent regression cannot pass unnoticed.
+#
+# Ledger: the job summary and ci-watchdog-summary.json are always produced; when
+# OPS_ROUTER_AUTH_KEY is configured the summary is also POSTed to the fleet
+# ledger so the Cloudflare side sees the same rows.
+
+on:
+  workflow_run:
+    workflows:
+      - mirror-guard
+      - version-compare
+      - deploy-gate
+      - mirror-sync
+      - deploy-drift
+      - indexnow-submit
+    types: [completed]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ci-watchdog]
+
+permissions:
+  actions: write        # dispatch a stuck workflow, re-run the healer
+  issues: write         # file/refresh the deduped finding
+  contents: read
+  # Required so the CodeQL default-setup probe observes instead of 403ing.
+  # Without it the watchdog reported an authz error as drift and could
+  # never pass: an unauthorized probe is not evidence.
+  security-events: read
+
+concurrency:
+  group: ci-watchdog-${{ github.event.workflow_run.head_branch || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run the watchdog
+        id: wd
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          # Cross-platform ledger: the script mirrors its summary into the QNFO
+          # fleet ledger when the ops key is present, and no-ops when it is not,
+          # so the watchdog still gates on its own exit code either way.
+          OPS_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set +e
+          python scripts/ci_watchdog.py | tee /tmp/wd.log
+          rc=${PIPESTATUS[0]}
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### ci-watchdog"
+            echo ""
+            echo '```'
+            tail -n 60 /tmp/wd.log 2>/dev/null || echo "no log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the chain-of-custody payload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-watchdog-summary
+          path: ci-watchdog-summary.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Fail closed on an unactionable, untracked finding
+        if: steps.wd.outputs.rc != '0'
+        run: |
+          echo "::error::ci-watchdog exited ${{ steps.wd.outputs.rc }}: a finding is unactionable and untracked"
+          exit 1

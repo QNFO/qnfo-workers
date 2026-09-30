@@ -1,0 +1,191 @@
+name: container-config-restore-2
+
+# CONTAINER-CONFIG-DROPPED-1 / CONTAINER-RESTORE-DIAGNOSABLE-1 (2026-09-29, issue #1485).
+#
+# MEASURED STATE, NOT INFERENCE
+#   * ci-status/deploy-containers-pilot.json (run 2026-09-29T19:37:34Z) records
+#       wrangler_outcome=failure  nomig_outcome=failure  verify_outcome=success
+#     i.e. BOTH wrangler deploys failed, the artifact carried no failure text, and the
+#     verify step reported success while the container was still dead (VERIFY-FALSE-GREEN-1).
+#   * A live probe from qnfo-ops at 2026-09-29T19:4xZ still returns
+#       {"ok":false,"error":"Cannot read properties of undefined (reading 'running')"}
+#     and GET /bindings returns 3 bindings with no [[containers]] block.
+#   * Every exec path that depends on ctx.container is down with it (shell_exec,
+#     exec_python, exec_node, container_install, git_clone_exec,
+#     container_workspace_exec, shell_pipeline).
+#
+# HYPOTHESIS THIS WORKFLOW TESTS (falsifiable, one variable)
+#   deploy-containers-pilot.yml exports CLOUDFLARE_ACCOUNT_ID from
+#   secrets.CLOUDFLARE_ACCOUNT_ID, while every other workflow in this repo uses
+#   secrets.CF_ACCOUNT_ID (canonical-deploy.yml, apply-dashboard-gate-failopen.yml).
+#   If secrets.CLOUDFLARE_ACCOUNT_ID does not exist, the variable is empty and wrangler
+#   fails immediately on account selection - which matches "both deploys failed, no text".
+#   This workflow therefore exports BOTH names, with CF_ACCOUNT_ID taking precedence,
+#   and fails closed with an explicit message when neither is set.
+#
+# WHY A SEPARATE FILE
+#   The existing workflow is left untouched so this one is a single-variable experiment;
+#   if it succeeds the fix is the account-id wiring, if it fails the log tail in the
+#   artifact is the first diagnosable failure text this class has ever produced.
+#
+# It never uses a skip token in its commits (CI-TRIGGER-SKIP-1).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/container-config-restore-2.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-containers-pilot
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Preflight - containers block present and account id resolvable
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_ACCOUNT_ID_ALT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          f=qnfo-containers-pilot/wrangler.toml
+          for key in '\[\[containers\]\]' 'class_name = "ShellContainer"' 'instance_code\|instance_type = ' 'max_instances = '; do
+            if ! grep -Eq "$key" "$f"; then
+              echo "::error::wrangler.toml missing required key $key - refusing to deploy"
+              exit 1
+            fi
+          done
+          echo "containers block present"
+          if [ -n "${CF_ACCOUNT_ID:-}" ]; then
+            echo "account_id_source=CF_ACCOUNT_ID len=${#CF_ACCOUNT_ID}"
+          elif [ -n "${CF_ACCOUNT_ID_ALT:-}" ]; then
+            echo "account_id_source=CLOUDFLARE_ACCOUNT_ID len=${#CF_ACCOUNT_ID_ALT}"
+          else
+            echo "::error::neither secrets.CF_ACCOUNT_ID nor secrets.CLOUDFLARE_ACCOUNT_ID is set - this is the hypothesised root cause of both earlier wrangler failures"
+            exit 1
+          fi
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::error::secrets.CLOUDFLARE_API_TOKEN is not set"
+            exit 1
+          fi
+
+      - name: wrangler deploy with the canonical account id
+        id: wrangler
+        continue-on-error: true
+        working-directory: qnfo-containers-pilot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -o pipefail
+          echo "account_id_len=${#CLOUDFLARE_ACCOUNT_ID}"
+          npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler.log
+
+      - name: retry without the DO migration block
+        id: nomig
+        if: ${{ steps.wrangler.outcome != 'success' }}
+        continue-on-error: true
+        working-directory: qnfo-containers-pilot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -o pipefail
+          echo "primary wrangler deploy failed, stripping [[migrations]] and retrying"
+          cp wrangler.toml /tmp/wrangler.toml.orig
+          sed -i '/^\[\[migrations\]\]/,/^$/d' wrangler.toml
+          npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler_nomig.log
+
+      - name: wait for propagation
+        run: sleep 20
+
+      - name: verify the container config is live
+        id: verify
+        continue-on-error: true
+        env:
+          PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+        run: |
+          set -uo pipefail
+          base="https://qnfo-containers-pilot.q08.workers.dev"
+          hcode="$(curl -s -o /tmp/health.json -w '%{http_code}' "$base/health" || true)"
+          echo "GET /health -> $hcode"
+          cat /tmp/health.json || true
+          echo
+          if [ -z "${PILOT_TOKEN:-}" ]; then
+            echo "rc=skipped-no-token" >> "$GITHUB_OUTPUT"
+            echo "::error::PILOT_TOKEN is not available to this workflow, so the container state CANNOT be verified - this run does NOT close issue 1485"
+            exit 1
+          fi
+          scode="$(curl -s -o /tmp/status.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
+          echo "GET /status -> $scode"
+          cat /tmp/status.json || true
+          echo
+          if grep -q "Cannot read properties of undefined" /tmp/status.json 2>/dev/null; then
+            echo "rc=ctx-container-undefined" >> "$GITHUB_OUTPUT"
+            echo "::error::status reports the ctx.container-undefined signature - issue 1485 still open"
+            exit 1
+          fi
+          if [ "$scode" != "200" ]; then
+            echo "rc=probe-http-$scode" >> "$GITHUB_OUTPUT"
+            echo "::error::status returned $scode - container config not confirmed live"
+            exit 1
+          fi
+          echo "rc=ok" >> "$GITHUB_OUTPUT"
+          echo "container config verified live"
+
+      - name: publish the outcome artifact with the failure text
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          wt=$(tail -c 1200 /tmp/wrangler.log 2>/dev/null | tr -d '\r' | sed 's/"/\\"/g' | tr '\n' ' ' || true)
+          nt=$(tail -c 1200 /tmp/wrangler_nomig.log 2>/dev/null | tr -d '\r' | sed 's/"/\\"/g' | tr '\n' ' ' || true)
+          printf '{"workflow":"container-config-restore-2","issue":1485,"wrangler_outcome":"%s","nomig_outcome":"%s","verify_rc":"%s","wrangler_log_tail":"%s","nomig_log_tail":"%s","head":"%s","ts":"%s"}\n' \
+            "${{ steps.wrangler.outcome }}" \
+            "${{ steps.nomig.outcome }}" \
+            "${{ steps.verify.outputs.rc }}" \
+            "$wt" "$nt" \
+            "${GITHUB_SHA}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/container-config-restore-2.json
+          head -c 4000 ci-status/container-config-restore-2.json
+          echo
+
+      - name: commit the artifact
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-fleet-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A ci-status/container-config-restore-2.json || true
+          if git diff --cached --quiet; then
+            echo "no artifact change"
+            exit 0
+          fi
+          git commit -m "ci(containers): container-config-restore-2 outcome for issue 1485"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "ARTIFACT_PUSH_OK attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i failed, retrying in 20s"
+            sleep 20
+          done
+          echo "artifact push failed after 3 attempts"
+          exit 1

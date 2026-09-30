@@ -1,0 +1,28 @@
+{
+ "ok": true,
+ "marker": "REMEDIATION-CONSUMER-1",
+ "verifier": "remediation-consumer@6cf850d0d22d",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
+ "trusted_transports": [
+  "binding-http",
+  "cf-api",
+  "code-read",
+  "container",
+  "curl",
+  "d1-query",
+  "dns",
+  "edge-ext",
+  "external",
+  "external-curl",
+  "external-http",
+  "external-https",
+  "http"
+ ],
+ "spent_ms": 1836,
+ "head": "6cf850d0d22dab2bccf5435f3e1c7daaec401c2c",
+ "job_status": "success"
+}

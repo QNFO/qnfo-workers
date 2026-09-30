@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.24-gate-aware";
+var VERSION = "1.7.34-panel6-mediated-count-writeback1";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1017,7 +1017,7 @@ function execTargetFor(category, resource, env) {
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: false, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "observability worker retired (wave-A consolidation) - fail-closed to manual disposition" };
     if (r.indexOf("outreach") >= 0) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
-    return { safe: false, noAction: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
+    return { safe: false, noAction: true, escalate: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
   }
   if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
   if (category === "probe") return { safe: false, noAction: true, note: "probe is re-verified automatically next cycle; no action" };
@@ -1025,7 +1025,7 @@ function execTargetFor(category, resource, env) {
   if (category === "model-health") return { safe: false, noAction: true, note: "degraded ids reconciled by ai-health-prober (hourly) + calibration guard; no human gate" };
   if (category === "worker-errors") return { safe: false, noAction: true, note: "24h error window rolls; fleet-control scan re-probes each cycle; no human gate" };
   if (category === "analytics") return { safe: false, noAction: true, note: "analytics scope checked by qnfo-cloud-ops weekly; no human gate" };
-  return { safe: false, noAction: true, note: "unmapped category recorded for the fleet loop; no human gate (NEVER-HUMAN-1)" };
+  return { safe: false, noAction: true, escalate: true, note: "unmapped category recorded for the fleet loop; no human gate (NEVER-HUMAN-1)" };
 }
 __name(execTargetFor, "execTargetFor");
 __name2(execTargetFor, "execTargetFor");
@@ -1043,11 +1043,27 @@ async function execOne(env, row, prevState) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const prior = prevState || null;
   if (!spec || !spec.safe) {
-    const state2 = "no-action";
+    const escalate = !!(spec && spec.escalate);
+    const state2 = escalate ? "needs-human" : "no-action";
     await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, spec && spec.note || "no safe auto-action", row.fingerprint).run();
+    // ESCALATE-NO-HANDLER-1 (2026-09-27): an unmapped/no-safe-producer category MUST escalate to an
+    // OWNED disposition (reorg_work_queue) instead of silently closing as terminal 'no-action'. The old
+    // detect-not-fix behavior dropped 82/93 issues as no-handler-superseded/closed-no-action with no
+    // owner, no due, no actor. Now every no-handler dispatch files one OWNED OPEN queue item (deduped).
+    if (escalate) {
+      try {
+        const qitem = "issue-no-handler:" + row.fingerprint;
+        const ex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(qitem).first();
+        if (!ex) {
+          await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'qnfo-fleet-control',date('now','+7 day'),'OPEN',datetime('now'))").bind(qitem, "category=" + row.category + " resource=" + String(payload.resource || payload.title || "").slice(0, 120) + " :: " + (spec && spec.note || "")).run();
+        }
+      } catch (e) {
+      }
+    }
     if (state2 !== prior) {
       try {
         await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + (spec && spec.note || ""), now, state2, now).run();
+        await env.AUDIT.prepare("UPDATE self_heal_actions SET status=?1, verified_at=?2, claim=COALESCE(claim,?3), confidence=COALESCE(confidence,'high') WHERE kind='fleet-issue' AND ref=?4 AND status='dispatched'").bind(state2, now, "SELFHEAL-WRITEBACK-CLOSE-1: closed by paired fleet-execute receipt", row.fingerprint).run();
       } catch (e) {
       }
       if (row.gh_number && state2 === "needs-human") await ghComment(env, row.gh_number, "**Execution receipt:** needs-human - " + (spec && spec.note || "no safe autonomous action") + ". Owner " + (row.owner || "fleet") + " must act.");
@@ -1075,6 +1091,7 @@ async function execOne(env, row, prevState) {
   if (state !== prior) {
     try {
       await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state + "] " + spec.note + " :: " + body.slice(0, 200), now, state, now).run();
+      await env.AUDIT.prepare("UPDATE self_heal_actions SET status=?1, verified_at=?2, claim=COALESCE(claim,?3), confidence=COALESCE(confidence,'high') WHERE kind='fleet-issue' AND ref=?4 AND status='dispatched'").bind(state, now, "SELFHEAL-WRITEBACK-CLOSE-1: closed by paired fleet-execute receipt", row.fingerprint).run();
     } catch (e) {
     }
     if (row.gh_number) await ghComment(env, row.gh_number, "**Execution receipt:** " + state + " - " + spec.note + " (HTTP " + status + ", " + ms + "ms). Evidence: " + body.slice(0, 200));
@@ -1468,7 +1485,7 @@ async function buildState(env, ctx) {
     }
   }, "qlook");
   await safeAudit("queue_research", "Queue research_queue (open+failed)", async function() {
-    const o = await qlook(env.AUDIT, "SELECT COUNT(*) AS open, MAX(created_at) AS mx FROM research_queue WHERE status IN ('pending','ensemble-draft','claimed')");
+    const o = await qlook(env.AUDIT, "SELECT COUNT(*) AS open, MAX(created_at) AS mx FROM research_queue WHERE status IN ('pending','queued','researching','ensemble-draft','claimed')");
     const f = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, COALESCE(SUM(CASE WHEN COALESCE(recover_count,0) >= 2 OR COALESCE(terminal_rearms,0) >= 3 THEN 1 ELSE 0 END),0) AS terminal FROM research_queue WHERE status='failed'");
     if (o.__err || f.__err) {
       push({ key: "queue_research", label: "Queue research_queue", state: "warn", detail: "probe error " + (o.__err || f.__err), ts: null });
@@ -2377,6 +2394,16 @@ async function persistWeeklyReportCard(env, st) {
     } catch (e) {
     }
     const sai = computeSai(st, bench, await loadSaiConfig(env), await liveSaiInputs(env));
+    // REPORT-CARD-FAIL-CLOSED-1 (2026-09-27, red-team F4): never persist a NULL SAI as if it were a
+    // measurement. A missing weight (config_missing) or a null decision must FAIL CLOSED: emit a
+    // visible warning event and skip the history row, so the latest report card is never a fake null.
+    if (sai.sai == null) {
+      try {
+        await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'report-card-weekly', ?3, ?4, 'qnfo-fleet-dashboard', 'warn')").bind("rc-weekly-SKIP-" + iso, now.toISOString(), "SKIPPED: SAI null (config_missing=" + JSON.stringify(sai.config_missing) + ", decision=" + sai.decision_source + ")", JSON.stringify(sai)).run();
+      } catch (e) {
+      }
+      return { weekly: false, skipped: true, sai_null: true, config_missing: sai.config_missing };
+    }
     const grade = sai.sai >= 85 ? "A" : sai.sai >= 75 ? "B" : sai.sai >= 65 ? "C" : sai.sai >= 55 ? "D" : "F";
     await env.AUDIT.prepare("INSERT INTO report_card_history (ts, sai, grade, scores_json, signals_json) VALUES (?1, ?2, ?3, ?4, ?5)").bind(now.toISOString(), sai.sai, grade, JSON.stringify(sai.scores), JSON.stringify(sai.signals)).run();
     try {
@@ -2653,7 +2680,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    dodByOwner = await d1all(env.AUDIT, "SELECT owner, COUNT(*) AS n FROM task_dod_register WHERE status NOT IN ('done','cancelled','cancelled-with-monitor') GROUP BY owner ORDER BY n DESC") || [];
+    dodByOwner = await d1all(env.AUDIT, "SELECT owner, COUNT(*) AS n FROM task_dod_register WHERE status NOT IN ('done','closed','resolved','cancelled','cancelled-with-monitor') GROUP BY owner ORDER BY n DESC") || [];
   } catch (e) {
   }
   try {
@@ -2661,7 +2688,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    dispatch = await d1all(env.AUDIT, "SELECT exec_state, COUNT(*) AS n FROM fleet_issue_dispatch WHERE state='queued' GROUP BY exec_state ORDER BY n DESC") || [];
+    dispatch = await d1all(env.AUDIT, "SELECT exec_state, COUNT(*) AS n FROM fleet_issue_dispatch WHERE state='queued' AND COALESCE(exec_state,'') NOT IN ('executed','verified-done','closed-failed','closed-no-action','no-action','dedupe-superseded','no-handler-superseded') GROUP BY exec_state ORDER BY n DESC") || [];
   } catch (e) {
   }
   try {
@@ -2691,6 +2718,35 @@ async function redHtml(env) {
     return (x.exec_state || "undispatched") + ":" + x.n;
   }).join(", ")) + "</td></tr>");
   H.push("<tr><td>issue_ledger (open)</td><td>" + (ilOpen != null ? ilOpen : "?") + "</td><td>fingerprinted signals not yet resolved</td></tr>");
+  // REGISTER-INVENTORY-COMPLETE-2 (2026-09-28): panel 4 must COVER every register panel 6
+  // surfaces, so the operational lanes are listed here too -- ONE complete inventory.
+  const _n = async (sql, db) => { try { const r = await d1all(db || env.AUDIT, sql); return (r && r.length) ? Number(r[0].n != null ? r[0].n : 0) : 0; } catch (e) { return null; } };
+  const _elq = await _n("SELECT COUNT(*) AS n FROM email_loop_quarantine WHERE status NOT IN ('processed','archived','spam')");
+  const _agf = await _n("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE ts >= ((strftime('%s','now')-86400)*1000)");
+  const _vq = await _n("SELECT COUNT(*) AS n FROM version_queue WHERE status NOT IN ('published','wontfix')");
+  const _dl = await _n("SELECT COUNT(*) AS n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)");
+  const _epf = await _n("SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
+  const _esv = await _n("SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
+  const _dln = await _n("SELECT COUNT(*) AS n FROM dead_links WHERE resolved_at IS NULL");
+  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','cancelled','rejected')");
+  const _opsRows = [
+    ["email_loop_quarantine", _elq, "quarantine", "qnfo-email loop classifier"],
+    ["ai_gateway_failures (24h)", _agf, "event-plane", "qnfo-ai-calibration (not drainable)"],
+    ["version_queue", _vq, "pipeline", "qnfo-paper-reviser / zenodo depositor"],
+    ["deploy_locks (active)", _dl, "lock", "qnfo-deploy-guard reap"],
+    ["email_parse_failures", _epf, "issue", "qnfo-email parse-failure resolver"],
+    ["email_send_violations", _esv, "issue", "qnfo-email send policy"],
+    ["dead_links", _dln, "issue", "link checker"],
+    ["outreach_queue", _oq2, "queue", "qnfo-outreach drain"]
+  ];
+  let _opsOpen = 0;
+  for (const row of _opsRows) {
+    const bad = row[1] != null && row[1] > 0 && row[2] !== "event-plane" && row[2] !== "lock";
+    H.push("<tr><td>" + esc(row[0]) + '</td><td class="' + (bad ? "bad" : "ok") + '">' + (row[1] != null ? row[1] : "?") + "</td><td>" + esc(row[2] + " \u00b7 " + row[3]) + "</td></tr>");
+    if (bad) _opsOpen += row[1];
+  }
+  const invTotal = (ghTotal != null ? ghTotal : 0) + dodOpen + (gtdOpen != null ? gtdOpen : 0) + agOpen.length + dispOpen + (ilOpen != null ? ilOpen : 0) + _opsOpen;
+  H.push('<tr><td><b>TOTAL open-issue inventory</b></td><td class="' + (invTotal > 0 ? "bad" : "ok") + '"><b>' + invTotal + "</b></td><td>union of ALL 14 registers the failures inventory surfaces (panel 4 issue lanes + panel 6 operational lanes); every lane names a disposition actor</td></tr>");
   H.push("</table>");
   if (ghIssues && ghIssues.length) {
     H.push('<div style="margin-top:8px"><b>GitHub open issues:</b></div><table style="margin-top:4px"><tr><th>repo</th><th>#</th><th>title</th></tr>');
@@ -2711,7 +2767,10 @@ async function redHtml(env) {
     H.push("</table>");
   }
   const ig = st.integration || {};
-  const driftBad = (ig.drift && ig.drift.ghost || 0) + (ig.drift && ig.drift.unregistered || 0) + (ig.drift && ig.drift.unversioned || 0);
+  // DRIFT-FAILCLOSED-1 (issue #1301 residual): a FAILED integration read must not
+  // coalesce to 0. driftBad == null means "no readable drift signal"; every consumer
+  // below then treats it as FAIL-CLOSED (head 0), never as perfect headroom.
+  const driftBad = ig.drift ? ((ig.drift.ghost || 0) + (ig.drift.unregistered || 0) + (ig.drift.unversioned || 0)) : null;
   const sched = st.scheduled || [];
   const noRun = sched.filter(function(x) {
     return x.status === "NO-RUN";
@@ -2742,8 +2801,9 @@ async function redHtml(env) {
   H.push("</div>");
   let qu = null, gwf = null, vq = [], dl = null, pr = null, sv = null, er = null;
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_loop_quarantine");
-    qu = r && r.length ? r[0].n : null;
+    // PANEL6-MEDIATED-COUNT-1 issue #1486 - reuse panel 4 mediated count.  An unfiltered
+    // COUNT(*) here displayed 105 already-remediated rows as UNREMEDIATED.
+    qu = (typeof _elq === "number") ? _elq : null;
   } catch (e) {
   }
   try {
@@ -2756,17 +2816,17 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM deploy_locks WHERE expires_at > CAST(strftime('%s','now') AS INTEGER)");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)");
     dl = r && r.length ? r[0].n : null;
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_parse_failures WHERE status='open'");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
     pr = r && r.length ? r[0].n : null;
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_send_violations WHERE resolved=0");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
     sv = r && r.length ? r[0].n : null;
   } catch (e) {
   }
@@ -2776,7 +2836,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   H.push('<div class="panel"><h2>6 &middot; UNREMEDIATED REGISTERS</h2><table><tr><th>register</th><th>count</th><th>meaning</th></tr>');
-  H.push('<tr><td>email_loop_quarantine</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops held in quarantine</td></tr>");
+  H.push('<tr><td>email_loop_quarantine (open)</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops not yet processed/archived/spam</td></tr>");
   H.push('<tr><td>ai_gateway_failures</td><td class="' + (gwf && gwf.total > 0 ? "bad" : "ok") + '">' + (gwf ? gwf.total.toLocaleString() : "?") + "</td><td>gateway error events (all-time; latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + ")</td></tr>");
   H.push("<tr><td>version_queue</td><td>" + esc(vq.map(function(x) {
     return x.status + ":" + x.n;
@@ -2787,7 +2847,7 @@ async function redHtml(env) {
   H.push("<tr><td>dead_links (open)</td><td>" + (er != null ? er : "?") + "</td><td>checked links still failing</td></tr>");
   let oq = null;
   try {
-    const r = await d1all(env.OUTREACH, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled')");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled','rejected')");
     oq = r && r.length ? r[0].n : null;
   } catch (e) {
   }
@@ -2825,10 +2885,10 @@ async function redHtml(env) {
   H.push("<tr><td>Pageviews MoM (snapshots)</td><td>" + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("</table>");
   let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (growth != null && growth >= 30 && rep30 != null && rep30 >= 2) {
+  if (trueMoM != null && trueMoM >= 30 && rep30 != null && rep30 >= 2) {
     verdict = "GATES ON TRACK";
     vcls = "ok";
-  } else if (growth != null && growth > 0 || rep30 >= 1) {
+  } else if (trueMoM != null && trueMoM > 0 || rep30 >= 1) {
     verdict = "PARTIAL \u2014 WATCH (impressions gate failing)";
     vcls = "warn";
   }
@@ -2841,7 +2901,7 @@ async function redHtml(env) {
   // 9. SURVIVAL METERS (metric_registry + leading->lagging survival model; WS-SURVIVAL 2026-09-26)
   let mr = [];
   try {
-    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value FROM metric_registry ORDER BY kind DESC, layer, metric");
+    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value, last_refreshed, refresh_cadence FROM metric_registry ORDER BY kind DESC, layer, metric");
   } catch (e) {
   }
   let subsTotal = null;
@@ -2852,30 +2912,64 @@ async function redHtml(env) {
   }
   const wc = (st.fleet && st.fleet.workers) || null;
   const c01 = function(x) { return Math.max(0, Math.min(1, x)); };
+  // STALE-GATE-FAILCLOSED-1 (#1301, mitigates #1411): a metric whose last_refreshed
+  // exceeds its declared refresh_cadence is UNKNOWN, not passing. Unknown is scored
+  // worst-case below, never silently dropped.
+  const cadenceMs = function(c) {
+    const s = String(c == null ? "" : c).trim().toLowerCase();
+    if (!s) return null;
+    if (s === "daily") return 24 * 60 * 60 * 1e3;
+    if (s === "hourly") return 60 * 60 * 1e3;
+    if (s === "weekly") return 7 * 24 * 60 * 60 * 1e3;
+    const every = s.match(/^\*\/(\d+)/);
+    if (every) return Math.max(1, parseInt(every[1], 10)) * 60 * 1e3;
+    if (/^\d+ \* \* \* \*$/.test(s)) return parseInt(s, 10) * 60 * 60 * 1e3;
+    return null;
+  };
+  const staleOf = function(mm) {
+    if (!mm) return true;
+    if (mm.last_refreshed == null) return true;
+    const base = cadenceMs(mm.refresh_cadence);
+    if (base == null) return true;
+    const t = Date.parse(String(mm.last_refreshed).replace(" ", "T"));
+    if (isNaN(t)) return true;
+    return Date.now() - t > 2 * base + 5 * 60 * 1e3;
+  };
+  const staleN = (mr || []).filter(function(x) { return staleOf(x); }).length;
   const regVal = function(name) {
     const mm = (mr || []).filter(function(x) { return x.metric === name; })[0];
     if (!mm || mm.last_value == null) return null;
+    if (staleOf(mm)) return null;
     const n = Number(String(mm.last_value).replace(/[^0-9.]/g, ""));
     return isNaN(n) ? null : n;
   };
   const waiCost = regVal("workers_ai_cost_30d_usd");
   const costUsd = regVal("cost_usd_30d");
   const gateRows = [
-    { m: "impressions_growth_30d", live: (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a"), head: growth != null ? c01(growth / 30) : null },
+    { m: "impressions_growth_30d", live: (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a"), head: trueMoM != null ? c01(trueMoM / 30) : null },
     { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
     { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
     { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
     { m: "workers_ai_cost_30d_usd", live: (waiCost != null ? "$" + waiCost.toFixed(2) + "/30d" : (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a")), head: waiCost != null ? c01((15.03 - waiCost) / (15.03 - 7.5)) : (aiN != null ? c01((1500000 - aiN) / 800000) : null) },
-    { m: "drift_total", live: String(driftBad || 0), head: c01(1 - (driftBad || 0)) }
+    { m: "drift_total", live: driftBad == null ? "n/a" : String(driftBad), head: driftBad == null ? 0 : c01(1 - driftBad) }
   ];
   const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.20, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.10, worker_count: 0.05, drift_total: 0.05 };
-  let wnum = 0, wsum = 0;
-  gateRows.forEach(function(x) { if (typeof x.head === "number") { const w = gateW[x.m] != null ? gateW[x.m] : 0.1; wnum += w * x.head; wsum += w; } });
+  // GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301): a gate with NO readable value
+  // was SKIPPED, dropping its weight from wsum, so MISSING DATA RAISED the reported
+  // headroom. A null gate is now counted as head 0: absent evidence is not health.
+  let wnum = 0, wsum = 0, nullGates = 0;
+  gateRows.forEach(function(x) {
+    const w = gateW[x.m] != null ? gateW[x.m] : 0.1;
+    const rmm = (mr || []).filter(function(y) { return y.metric === x.m; })[0];
+    if (staleOf(rmm)) { wsum += w; return; }
+    if (typeof x.head === "number") { wnum += w * x.head; wsum += w; }
+    else { nullGates += 1; wsum += w; }
+  });
   const surv = wsum > 0 ? wnum / wsum : null;
   const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
   const extImpact = surv != null ? surv * costEff : null;
   H.push('<div class="panel"><h2>9 &middot; SURVIVAL METERS &mdash; registry + leading&rarr;lagging model</h2>');
-  H.push('<div class="sub">' + mr.length + ' registry metrics (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
+  H.push('<div class="sub">' + mr.length + ' registry metrics (' + staleN + ' STALE beyond cadence) (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
   H.push('<table><tr><th>kind</th><th>metric</th><th>layer</th><th>live</th><th>headroom</th><th>target</th><th>warn / kill</th><th>owner</th></tr>');
   for (const gg of gateRows) {
     const mm = mr.filter(function(x) { return x.metric === gg.m; })[0] || {};
@@ -2884,10 +2978,10 @@ async function redHtml(env) {
   H.push("</table>");
   H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + " (weighted, x cost-eff " + (costEff != null ? Math.round(costEff * 100) + "%" : "n/a") + " = SAI external_impact " + (extImpact != null ? extImpact.toFixed(3) : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; drives the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
   try {
-    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2)").run();
+    await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2); FAIL-CLOSED #1301 null_gates=" + nullGates).run();
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad || 0) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
+  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad == null ? "n/a" : String(driftBad)) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
   H.push("</body></html>");
   return H.join("");
 }

@@ -136,7 +136,7 @@ var advisorMod = (function() {
   async function runAudit(env) {
     const ts = nowIso();
     const findings = [];
-    const PROBES = (env.PROBE_WORKERS || "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-cloud-ops,qnfo-infra,qnfo-auditor").split(",").map((s) => s.trim()).filter(Boolean);
+    const PROBES = (env.PROBE_WORKERS || "qnfo-ai,qnfo-ops,qnfo-kaizen,qnfo-cloud-ops,qnfo-infra,qnfo-observability").split(",").map((s) => s.trim()).filter(Boolean);
     const workerNames = await workerNameSet(env);
     const results = await Promise.all(PROBES.map((n) => probeHealth(n, workerNames)));
     const down = [];
@@ -362,7 +362,7 @@ var calibratorMod = (function() {
     { id: "qnfo-ai-health", kind: "http", url: "https://qnfo-ai.q08.workers.dev/health", binding: "SVC_QNFO_AI", expect: 200 },
     { id: "qnfo-ai-models", kind: "http", url: "https://qnfo-ai.q08.workers.dev/v1/models", binding: "SVC_QNFO_AI", expect: 200 },
     { id: "qnfo-infra-health", kind: "http", url: "https://qnfo-infra.q08.workers.dev/health", binding: "SVC_QNFO_INFRA", expect: 200 },
-    { id: "qnfo-auditor-health", kind: "http", url: "https://qnfo-auditor.q08.workers.dev/health", binding: "SVC_QNFO_AUDITOR", expect: 200 },
+    { id: "qnfo-ops-health", kind: "http", url: "https://qnfo-ops.q08.workers.dev/health", expect: 200 },
     { id: "personal-api-health", kind: "http", url: "https://personal-api.q08.workers.dev/health", binding: "SVC_PERSONAL_API", expect: 200, soft: true },
     { id: "qnfo-intent-health", kind: "http", url: "https://qnfo-intent-orchestrator.q08.workers.dev/health", binding: "SVC_QNFO_INTENT", expect: 200, soft: true },
     { id: "papers-home", kind: "http", url: "https://papers.qnfo.org/", expect: 200, soft: true },
@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.28-budgetgate";
+var VERSION = "0.4.38-reorg-dispose-guards1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1049,6 +1049,15 @@ function versionOf(code) {
   var cands = [];
   var i = code.indexOf("VERSION");
   while (i >= 0 && i < code.length && cands.length < 24) {
+    // VERSION-WORD-BOUNDARY-1 (2026-09-27): a "VERSION" that is a prefix of a longer
+    // identifier (VERSION2, VERSION_INFO, ...) is NOT the version constant. Without this,
+    // a merged worker (advisor VERSION2="0.3.3" before the real VERSION) parsed to 0.3.3 and
+    // became DRIFT-BLIND to its own deploy version -- the root cause of "no job lands fixes".
+    var nx = code.charAt(i + 7);
+    if (nx && /[A-Za-z0-9_]/.test(nx)) {
+      i = code.indexOf("VERSION", i + 1);
+      continue;
+    }
     var j = code.indexOf("=", i);
     if (j < 0 || j - i > 15) {
       i = code.indexOf("VERSION", i + 1);
@@ -1134,6 +1143,16 @@ async function sha256(str) {
 __name(sha256, "sha256");
 __name2(sha256, "sha256");
 __name22(sha256, "sha256");
+// UTF-8-safe base64 for the GitHub Contents API (btoa alone throws on non-Latin-1).
+function b64encode(s) {
+  var bytes = new TextEncoder().encode(String(s));
+  var bin = "";
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+__name(b64encode, "b64encode");
+__name2(b64encode, "b64encode");
+__name22(b64encode, "b64encode");
 async function stateGet(env, key, fb) {
   try {
     var r = await env.AUDIT.prepare("SELECT value FROM fleet_deploy_state WHERE key=?1").bind(key).first();
@@ -1595,6 +1614,162 @@ async function redeploy(env, worker) {
 __name(redeploy, "redeploy");
 __name2(redeploy, "redeploy");
 __name22(redeploy, "redeploy");
+// LAND-CODE-FIX-1 (2026-09-27): the fleet lacked a recurring server-side job that lands
+// code fixes. When a worker's deployed code is AHEAD of the repo (an out-of-band edit that
+// was never committed), scan() only REPORTED it -- so the next canonical redeploy silently
+// reverted the fix (REPO-IS-DEPLOY-SOURCE-1: "the ONLY durable fix is a commit to main").
+// This job closes drift->fetch->write->commit->close_evidence: it commits the deployed
+// artifact back to the source repo (both the durable worker.js and the deployed-current
+// mirror), then records a verified self_heal_actions row (close evidence).
+// /content/v2 returns module workers MULTIPART-wrapped; land the raw JS, not the wrapper.
+function extractModuleCode(content) {
+  content = String(content || "");
+  if (content.indexOf("Content-Disposition") < 0) return content;
+  var m = content.match(/^--([^\r\n]+)/);
+  if (!m) return content;
+  var parts = content.split("--" + m[1]);
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    if (part.indexOf('name="worker.js"') < 0) continue;
+    var sep = part.indexOf("\r\n\r\n");
+    var body = sep >= 0 ? part.slice(sep + 4) : part;
+    return body.replace(/\r?\n$/, "");
+  }
+  return content;
+}
+__name(extractModuleCode, "extractModuleCode");
+__name2(extractModuleCode, "extractModuleCode");
+__name22(extractModuleCode, "extractModuleCode");
+async function landFix(env, worker, depCode, depV, canV, srcPath) {
+  if (!env.GITHUB_TOKEN) return { ok: false, status: 403, note: "GITHUB_TOKEN missing - cannot land fix" };
+  if (!/^[a-zA-Z0-9-]+$/.test(worker)) return { ok: false, status: 400, note: "invalid worker name" };
+  if (!depV) return { ok: false, status: 422, note: "deployed code has no VERSION marker - refused" };
+  var raw = extractModuleCode(depCode);
+  if (!raw || raw.length < 40) return { ok: false, status: 422, note: "deployed code unreadable after multipart extract" };
+  // SOURCE-ONLY guard (2026-09-27, replaces scan's over-broad !usedHealth gate): land only
+  // real JS source carrying a VERSION marker. A bundled/minified artifact (no marker) is
+  // refused rather than committed, so a health-sourced deployed version can still be landed
+  // safely -- the guard that previously blocked the fleet's only real case (idea-hub).
+  if (versionOf(raw) === null) return { ok: false, status: 422, note: "extracted source has no VERSION marker - refused (bundled/minified?)" };
+  // Repo + dir: prefer the GitHub canonical path ("qnfo-workers/main/<dir>/worker.js"); when
+  // canonical() served the R2 cache the path is "r2:qnfo-canonical/<w>.js" (NOT a repo name),
+  // so fall back to probing the repo for an existing <dir>/worker.js.
+  var ghHeaders = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/landFix", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  var repo = "qnfo-workers";
+  var dir = worker;
+  var seg = srcPath ? String(srcPath).split("/") : [];
+  if (seg.length > 2 && /^[A-Za-z0-9._-]+$/.test(seg[0])) {
+    repo = seg[0];
+    var d2 = seg.slice(2).slice(0, -1).join("/");
+    if (d2) dir = d2;
+  } else {
+    var cands = [worker];
+    if (worker.indexOf("qnfo-") === 0) cands.push(worker.slice(5));
+    for (var ci = 0; ci < cands.length; ci++) {
+      var pr = await timedFetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + cands[ci] + "/worker.js?ref=main", { headers: ghHeaders }, 8e3);
+      if (pr.status === 200) { dir = cands[ci]; break; }
+    }
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(repo) || repo.indexOf("..") >= 0) return { ok: false, status: 400, note: "unsafe repo" };
+  if (dir.indexOf("..") >= 0) return { ok: false, status: 400, note: "unsafe path" };
+  // SOURCE-FIRST + ATOMIC (2026-09-27): a two-commit landing (mirror then source) let the
+  // mirror-sync workflow regenerate the mirror from the STILL-STALE source (it checks out the
+  // commit that triggered it) and clobber the landing. Commit BOTH files in ONE Git Data API
+  // commit so no transient inconsistency exists for any concurrent actor to react to.
+  var paths = [dir + "/worker.js", dir + "/deployed-current.worker.js"];
+  var commitMsg = "chore(" + worker + "): land deployed " + depV + " to main (LAND-CODE-FIX-1: repo was " + canV + ")";
+  var landed = [];
+  var errors = [];
+  try {
+    var refR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/ref/heads/main", { headers: ghHeaders }, 8e3);
+    var refJ = refR.status === 200 ? await refR.json().catch(function() { return null; }) : null;
+    var headSha = refJ && refJ.object && refJ.object.sha;
+    if (!headSha) { errors.push("ref:HTTP " + refR.status); }
+    else {
+      var cmR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/commits/" + headSha, { headers: ghHeaders }, 8e3);
+      var cmJ = cmR.status === 200 ? await cmR.json().catch(function() { return null; }) : null;
+      var baseTree = cmJ && cmJ.tree && cmJ.tree.sha;
+      var toWrite = [];
+      for (var pi = 0; pi < paths.length; pi++) {
+        var encI = paths[pi].split("/").map(encodeURIComponent).join("/");
+        var gI = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + encI + "?ref=main", { headers: ghHeaders }, 8e3);
+        var same = false;
+        if (gI.status === 200) {
+          var gjI = await gI.json().catch(function() { return null; });
+          if (gjI && gjI.content) {
+            try { var dec = new TextDecoder().decode(Uint8Array.from(atob(gjI.content.replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); if (dec === raw) same = true; } catch (e) {}
+          }
+        }
+        if (same) landed.push(paths[pi] + ":no-op"); else toWrite.push(paths[pi]);
+      }
+      if (toWrite.length && baseTree) {
+        var entries = [];
+        for (var w = 0; w < toWrite.length; w++) {
+          var blR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/blobs", { method: "POST", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ content: b64encode(raw), encoding: "base64" }) }, 12e3);
+          var blJ = blR.status === 201 ? await blR.json().catch(function() { return null; }) : null;
+          if (!blJ || !blJ.sha) { errors.push(toWrite[w] + ":blob HTTP " + blR.status); continue; }
+          entries.push({ path: toWrite[w], mode: "100644", type: "blob", sha: blJ.sha });
+        }
+        if (entries.length === toWrite.length) {
+          var trR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/trees", { method: "POST", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ base_tree: baseTree, tree: entries }) }, 12e3);
+          var trJ = trR.status === 201 ? await trR.json().catch(function() { return null; }) : null;
+          if (trJ && trJ.sha) {
+            var coR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/commits", { method: "POST", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ message: commitMsg, tree: trJ.sha, parents: [headSha] }) }, 12e3);
+            var coJ = coR.status === 201 ? await coR.json().catch(function() { return null; }) : null;
+            if (coJ && coJ.sha) {
+              var upR = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/refs/heads/main", { method: "PATCH", headers: Object.assign({}, ghHeaders, { "Content-Type": "application/json" }), body: JSON.stringify({ sha: coJ.sha, force: false }) }, 12e3);
+              if (upR.status === 200) { for (var w2 = 0; w2 < toWrite.length; w2++) landed.push(toWrite[w2]); }
+              else errors.push("ref-update HTTP " + upR.status);
+            } else errors.push("commit HTTP " + coR.status);
+          } else errors.push("tree HTTP " + trR.status);
+        }
+      }
+    }
+  } catch (e) { errors.push("atomic:" + String(e && e.message || e).slice(0, 80)); }
+  var ok = landed.length > 0 && errors.length === 0;
+  var note = ok ? "landed " + landed.join(", ") : "land-failed " + errors.join(";");
+  // close evidence: verified self-heal row (detect -> act -> verify).
+  try {
+    await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('code-fix-land','" + worker + "',?1,datetime('now'),?2,?3,?4,?5)").bind(String(note).slice(0, 400), ok ? "verified" : "failed", ok ? new Date().toISOString() : null, "LAND-CODE-FIX-1: deployed-ahead " + depV + " > repo " + canV + " committed to main", ok ? "high" : "low").run();
+  } catch (e) {}
+  return { ok, status: ok ? 200 : 502, note, landed: landed.length, errors: errors.length };
+}
+__name(landFix, "landFix");
+__name2(landFix, "landFix");
+__name22(landFix, "landFix");
+// GIT-SELFTEST-1 (2026-09-27): the CMD RED TEAM rated LAND-CODE-FIX-1 FAIL because its
+// in-worker GitHub WRITE leg had never been exercised. This commits a fixed probe to a
+// THROWAWAY branch (zero main-branch impact) and returns the commit sha, proving the exact
+// runtime path landFix uses (b64encode + timedFetch + GitHub Contents PUT + sha + auth).
+// Reusable as a live DoD-9 re-probe; delete the branch afterwards.
+async function gitSelftest(env) {
+  if (!env.GITHUB_TOKEN) return { ok: false, error: "no GITHUB_TOKEN" };
+  var repo = "qnfo-workers", branch = "_landfix-selftest", probe = "_selftest/landfix-probe.json";
+  var gh = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/selftest", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  var base = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/ref/heads/main", { headers: gh }, 8e3);
+  if (base.status !== 200) return { ok: false, error: "base ref HTTP " + base.status };
+  var bj = await base.json().catch(function() { return null; });
+  var baseSha = bj && bj.object && bj.object.sha;
+  var chk = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/ref/heads/" + branch, { headers: gh }, 8e3);
+  if (chk.status === 404) {
+    var cr = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/git/refs", { method: "POST", headers: Object.assign({}, gh, { "Content-Type": "application/json" }), body: JSON.stringify({ ref: "refs/heads/" + branch, sha: baseSha }) }, 8e3);
+    if (cr.status !== 201) return { ok: false, error: "branch create HTTP " + cr.status };
+  }
+  var cur = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + probe + "?ref=" + branch, { headers: gh }, 8e3);
+  var fileSha = null;
+  if (cur.status === 200) { var cj = await cur.json().catch(function() { return null; }); fileSha = cj && cj.sha; }
+  var content = JSON.stringify({ probe: "LAND-CODE-FIX-1-write-path", worker: "qnfo-fleet-control", version: VERSION, ts: new Date().toISOString() });
+  var putBody = { message: "chore(selftest): LAND-CODE-FIX-1 in-worker write-path probe", content: b64encode(content), branch: branch };
+  if (fileSha) putBody.sha = fileSha;
+  var pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + probe, { method: "PUT", headers: Object.assign({}, gh, { "Content-Type": "application/json" }), body: JSON.stringify(putBody) }, 12e3);
+  var pj = null;
+  try { pj = await pu.json(); } catch (e) {}
+  var ok = pu.status === 200 || pu.status === 201;
+  return { ok, status: pu.status, branch: branch, commit: ok && pj && pj.commit ? pj.commit.sha : null, content_sha: ok && pj && pj.content ? pj.content.sha : null, note: ok ? "in-worker GitHub write path verified end-to-end" : String(pj && pj.message || "").slice(0, 160) };
+}
+__name(gitSelftest, "gitSelftest");
+__name2(gitSelftest, "gitSelftest");
+__name22(gitSelftest, "gitSelftest");
 function tomlCrons(t) {
   var LF = String.fromCharCode(10);
   var body = t.split(LF).filter(function(l) {
@@ -1715,15 +1890,52 @@ async function budgetAudit(env, names) {
         out.over.push(r.node_class + " cur=" + r.current + " cap=" + r.cap);
       }
     }
+    if (!out.over.length) {
+      try {
+        await env.AUDIT.prepare("UPDATE self_heal_actions SET status='resolved', verified_at=datetime('now'), claim=COALESCE(claim,'SELFHEAL-WRITEBACK-CLOSE-1: budget back under cap, detection resolved'), confidence=COALESCE(confidence,'high') WHERE kind='node-budget' AND status='detected'").run();
+      } catch (e) {
+      }
+    }
     if (out.over.length) {
       out.note = "BUDGET-OVER " + out.over.join("; ");
       try {
+        await env.AUDIT.prepare("UPDATE self_heal_actions SET status='resolved', verified_at=datetime('now'), claim=COALESCE(claim,'SELFHEAL-WRITEBACK-CLOSE-1: superseded by a newer budget detection cycle'), confidence=COALESCE(confidence,'high') WHERE kind='node-budget' AND status='detected'").run();
         var recent = await env.AUDIT.prepare("SELECT COUNT(*) n FROM self_heal_actions WHERE kind='node-budget' AND ts > datetime('now','-30 minutes')").first();
         if (!recent || Number(recent.n || 0) === 0) {
           await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES ('node-budget','fleet-budget',?1,datetime('now'),'detected')").bind(out.note).run();
         }
       } catch (e) {
       }
+      // BUDGET-DISCHARGE-WIRE-1 (2026-09-27, red-team F1): an over-cap class must have a DISCHARGE PATH,
+      // not detect-only. (a) file an OWNED work-queue item (CLOSED-LOOP-DISPOSITION-1); (b) file
+      // NET-ZERO delete-worker candidates for workers with an explicit retirement intent AND zero 24h
+      // traffic (disposeRetired re-checks bindings + protectedNames + output-contract before deleting).
+      try {
+        // handoff 29754 P4: the dedupe key must be STABLE. out.over carries the live count
+        // (e.g. "workers live=42 cap=36 (+6)"), so a count change produced a NEW work-queue row
+        // every cycle. Normalize digits out of the KEY; the live text stays in evidence (out.note).
+        var oitem = "node-budget-overage:" + out.over.map(function(s) { return String(s).replace(/[0-9]+/g, "#"); }).join("; ");
+        var oex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(oitem).first();
+        if (!oex) {
+          await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'deepchat-reorg',date('now','+14 day'),'OPEN',datetime('now'))").bind(oitem, out.note).run();
+        }
+        var cand = await env.AUDIT.prepare("SELECT DISTINCT worker FROM worker_consolidation WHERE action='RETIRE' AND status IN ('PLANNED','APPROVED')").all();
+        var cr = (cand && cand.results) || [];
+        for (var ci = 0; ci < cr.length; ci++) {
+          var cn = cr[ci].worker;
+          if (!cn) continue;
+          if (Array.isArray(names) && names.indexOf(cn) < 0) continue; // F1b: only LIVE workers are dischargeable
+          var inv = await env.AUDIT.prepare("SELECT COUNT(*) n FROM worker_invocations WHERE worker_name=?1 AND created_at > datetime('now','-1 day')").bind(cn).first();
+          if (inv && Number(inv.n || 0) > 0) continue;
+          var di = "delete-worker:" + cn;
+          var dex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(di).first();
+          if (!dex) {
+            await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'qnfo-fleet-control',date('now','+7 day'),'OPEN',datetime('now'))").bind(di, "NET-ZERO discharge candidate: explicit retirement intent + 0 invocations/24h; disposeRetired re-checks bindings/protected/output-contract").run();
+          }
+        }
+      } catch (e) {
+      }
+
       try {
         await report(env, "BUDGET", "", "", "", out.note);
       } catch (e) {
@@ -1742,7 +1954,7 @@ async function budgetAudit(env, names) {
 }
 
 async function scan(env, heal) {
-  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
+  var out = { scanned: 0, clean: 0, drifted: 0, ahead: 0, healed: 0, landed: 0, errors: 0, staleCanon: 0, healthVer: 0, errKinds: {}, details: [] };
   try {
     var lr = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 2e4);
     var lj = await lr.json();
@@ -1826,7 +2038,13 @@ async function scan(env, heal) {
         out.ahead++;
         out.details.push(n + ":ahead " + depV + ">" + canV);
         await clearScanErr(env, n);
-        await report(env, n, depV, canV, c.path, "deployed-ahead");
+        if (heal) {
+          var lf = await landFix(env, n, dep, depV, canV, c.path);
+          if (lf.ok) out.landed++;
+          await report(env, n, depV, canV, c.path, lf.ok ? "deployed-ahead:landed " + lf.note : "deployed-ahead:skip " + String(lf && lf.note || "").slice(0, 120));
+        } else {
+          await report(env, n, depV, canV, c.path, "deployed-ahead");
+        }
         continue;
       }
       out.drifted++;
@@ -2086,15 +2304,31 @@ var worker_default = {
     }
     if (p === "/drift" && request.method === "POST" && admin) {
       var res = await scan(env, false);
-      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds));
+      await report(env, "SCAN", "", "", "", "manual-drift: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " landed=" + res.landed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds));
       var rw = await registerWatch(env, 7);
       return json({ ok: true, scan: res, register: rw });
     }
     if (p === "/scan-heal" && request.method === "POST" && admin) {
       var res2 = await scan(env, true);
-      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
+      await report(env, "SCAN", "", "", "", "manual-scan-heal: scanned=" + res2.scanned + " clean=" + res2.clean + " drifted=" + res2.drifted + " ahead=" + res2.ahead + " healed=" + res2.healed + " landed=" + res2.landed + " errors=" + res2.errors + " staleCanon=" + res2.staleCanon + " healthVer=" + res2.healthVer + " errKinds=" + JSON.stringify(res2.errKinds));
       var rw2 = await registerWatch(env, 7);
       return json({ ok: true, scan: res2, register: rw2 });
+    }
+    if (p === "/git-selftest" && request.method === "POST" && admin) {
+      return json(await gitSelftest(env));
+    }
+    if (p === "/landfix" && request.method === "POST" && admin) {
+      var lb = {};
+      try { lb = await request.json(); } catch (e) {}
+      var wn = String(lb.worker || "");
+      if (!wn) return json({ error: "worker required" }, 400);
+      var cc = await canonical(env, wn);
+      var dd = await deployedContent(env, wn);
+      var dv = dd ? versionOf(dd) : null;
+      var cv = cc ? versionOf(cc.code) : null;
+      var lfr = await landFix(env, wn, dd, dv, cv, cc ? cc.path : "");
+      await report(env, wn, dv, cv, cc ? cc.path : "", lfr.ok ? "manual-landfix:landed " + lfr.note : "manual-landfix:" + lfr.note);
+      return json({ ok: lfr.ok, worker: wn, deployed: dv, canonical: cv, path: cc ? cc.path : null, result: lfr });
     }
     return json({ error: "not found" }, 404);
   },
@@ -2103,7 +2337,7 @@ var worker_default = {
     var res = await scan(env, heal);
     var opt = await optimizeFleet(env);
     var rw = await registerWatch(env, 7);
-    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
+    await report(env, "SCAN", "", "", "", "cron: scanned=" + res.scanned + " clean=" + res.clean + " drifted=" + res.drifted + " ahead=" + res.ahead + " healed=" + res.healed + " landed=" + res.landed + " errors=" + res.errors + " staleCanon=" + res.staleCanon + " healthVer=" + res.healthVer + " cronDrift=" + res.cronDrift + " errKinds=" + JSON.stringify(res.errKinds) + " regOpen=" + rw.open + " regOverdue=" + rw.overdue + " regDue7=" + rw.dueSoon + " regEscalated=" + rw.escalated);
   }
 };
 var deployDefault = worker_default;
@@ -2200,7 +2434,24 @@ async function disposeRetired(env) {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
     var token = env.CF_API_TOKEN;
     if (!token) return;
-    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1, "qnfo-goal-author": 1, "qnfo-cloud-ops": 1, "qnfo-outreach": 1, "qnfo-kaizen": 1, "qnfo-lifecycle": 1, "qnfo-intent-orchestrator": 1, "qnfo-backlog-exec": 1, "qnfo-research-exec": 1, "qnfo-paper-indexer": 1, "qnfo-infra": 1, "qnfo-fleet-dashboard": 1, "qnfo-paper-reviser": 1 };
+    // DEGENERATE-DETECTION-SOURCE-1 (2026-09-30, handoff 29754 P4): worker_invocations is the ONLY
+    // usage signal used to justify a destructive retire, and it has held ~1 row fleet-wide, so an
+    // "0 invocations/24h" read is VACUOUS (it would make every worker look unused). Prove the source
+    // is non-degenerate BEFORE acting: a degenerate source yields UNKNOWN, never a delete verdict.
+    // Fail closed: skip disposal this cycle and log once per day.
+    var srcHealth = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN created_at > datetime('now','-2 day') THEN 1 ELSE 0 END) AS recent FROM worker_invocations").first();
+    var srcRecent = srcHealth ? Number(srcHealth.recent || 0) : 0;
+    if (srcRecent < 10) {
+      try {
+        var sdup = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE 'DEGENERATE-DETECTION-SOURCE-1:%' AND ts > datetime('now','-1 day')").first();
+        if (!sdup || Number(sdup.n || 0) === 0) {
+          await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind("DEGENERATE-DETECTION-SOURCE-1: worker_invocations recent=" + srcRecent + " (<10) -> usage UNKNOWN, disposal skipped").run();
+        }
+      } catch (e) {
+      }
+      return;
+    }
+    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1, "qnfo-cloud-ops": 1, "qnfo-outreach": 1, "qnfo-kaizen": 1, "qnfo-lifecycle": 1, "qnfo-intent-orchestrator": 1, "qnfo-backlog-exec": 1, "qnfo-research-exec": 1, "qnfo-paper-indexer": 1, "qnfo-infra": 1, "qnfo-fleet-dashboard": 1, "qnfo-paper-reviser": 1 };
     var q = await env.AUDIT_DB.prepare("SELECT id, item FROM reorg_work_queue WHERE state='OPEN' AND item LIKE 'delete-worker:%'").all();
     var targets = {};
     for (var i = 0; i < (q.results || []).length; i++) {

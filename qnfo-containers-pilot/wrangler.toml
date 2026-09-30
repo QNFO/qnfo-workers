@@ -1,8 +1,35 @@
-# DO-MIGRATION-NOTE-1 2026-09-22 (R3/F2): a `wrangler deploy --dry-run` validates
-# client-side structure ONLY - it cannot prove the server accepts this migration. The
-# class already exists (created via the API), so a real wrangler deploy may FAIL CLOSED
-# (Cloudflare rejects a creating migration for an already-depended-on class). It never
-# wipes. The operative deploy path remains scripts/raw_put.py (binding-preserving).
+# qnfo-containers-pilot — Cloudflare Containers pilot (bash / python3.12 / node22 on Firecracker)
+#
+# RETRIGGER-5 (2026-09-29, qnfo-ops autonomous session; issues #1485 / #1487 / #1493).
+# MEASURED STATE AT THIS COMMIT (live reads, not inference):
+#   - GET /bindings -> exactly ONE binding: secret PILOT_TOKEN. The `AUDIT` d1 binding and the
+#     `SHELL_CONTAINER` durable-object binding were DESTROYED at 2026-09-29T19:45:02Z by the
+#     CONTAINER-CONFIG-RESTORE-4 /content PUT, which omitted `bindings` entirely. Falsification
+#     recorded in scripts/restore_container_config.py (RESTORE-5 docstring): omitting `bindings`
+#     is binding-DESTROYING, not binding-preserving; only secret_text survives (it lives
+#     outside the upload metadata).
+#   - GET /status -> {"ok":false,"error":"Cannot read properties of undefined (reading 'running')"}
+#     i.e. ctx.container is undefined => the [[containers]] block is absent from script metadata.
+#   - shell_exec / exec_python / exec_node / shell_pipeline / git_clone_exec / container_install
+#     all fail: the pilot calls env.SHELL_CONTAINER.idFromName and the DO binding is gone.
+#   - wrangler deploy fails closed with [provisioned_class_missing_from_config]: class
+#     'ShellContainer' has a provisioned DO namespace (f3e32894405c49f9b33e8612c6d27861) but is
+#     not declared in `exports`. The /content path must therefore send `exports` explicitly as
+#     {"ShellContainer": {"type": "durable-object", "storage": "sqlite"}} — that shape returned
+#     HTTP 200 at 19:45:02Z (named_handlers: [{"name":"ShellContainer","handlers":["class"]}]).
+#
+# This commit re-fires BOTH workflows whose trigger paths cover this file:
+#   .github/workflows/deploy-containers-pilot.yml        (wrangler path, transmits [[containers]])
+#   .github/workflows/restore-container-config-1485.yml  (/content-metadata path, RESTORE-5)
+# Decisive artifact: ci-status/restore-container-config-1485.json with marker
+# CONTAINER-CONFIG-RESTORE-5 and post_settings.bindings == [AUDIT, PILOT_TOKEN, SHELL_CONTAINER].
+#
+# CI-TRIGGER-SKIP-1: this commit deliberately carries NO skip token — a deploy trigger must
+# never disable the workflow that would apply the fix.
+#
+# This revision condenses the accumulated comment history (CONTAINER-CONFIG-RESTORE-1,
+# RETRIGGER-1..4, DO-MIGRATION-NOTE-1, CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1) into this
+# header. All OPERATIVE config below is preserved verbatim.
 
 name = "qnfo-containers-pilot"
 main = "worker.js"
@@ -10,26 +37,27 @@ compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-# qnfo-containers-pilot v1.0.0 — Full-stack shell execution on Cloudflare Containers
-# Image: nikolaik/python-nodejs:python3.12-nodejs22 (Python 3.12 + Node.js 22 + npm)
-# Startup: installs git + ripgrep + curl via apt-get on first cold start (~10-15s)
-# Scale-to-zero: idle containers shut down automatically (cost = $0 when idle)
-# Cost: $0.00002/vCPU-sec + $0.0000025/GiB-sec (utilization-based, Firecracker VM)
-# BINDING-PRESERVATION-1: bindings verified from live CF API 2026-09-13
-
+# CONTAINER-ROOTFS-CAPACITY-STRUCTURAL-1 (issue #1456): lite = 1/16 vCPU, 256 MiB RAM, 2 GB
+# disk (94% full) — the source of transient container errors. basic = 1/4 vCPU, 1 GiB RAM, 4 GB.
 [[containers]]
 class_name = "ShellContainer"
 image = "docker.io/nikolaik/python-nodejs:python3.12-nodejs22"
-instance_type = "lite"
+instance_type = "basic"
 max_instances = 3
 
 [[durable_objects.bindings]]
 name = "SHELL_CONTAINER"
 class_name = "ShellContainer"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["ShellContainer"]
+# EXPORTS-DECLARATIVE-1 (issue #1485): this Worker was last deployed through the declarative
+# `exports` flow, and Cloudflare rejects reverting to `migrations` (error 100403). `wrangler
+# deploy` therefore failed with [provisioned_class_missing_from_config] / [container_class_not_
+# durable_object] because ShellContainer had no `exports` entry. `exports` and `migrations` cannot
+# coexist in one config, so the v1 migration is replaced by the live-class declaration below.
+# https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/
+[exports.ShellContainer]
+type = "durable-object"
+storage = "sqlite"
 
 [[d1_databases]]
 binding = "AUDIT"

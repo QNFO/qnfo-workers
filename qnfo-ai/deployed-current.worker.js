@@ -6,8 +6,8 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.1";
-var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
+var VERSION = "5.29.5-anthropic-relay";
+var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/messages", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var VISION_FALLBACK = "glm-5.3-flash";
@@ -28,13 +28,13 @@ async function loadModelHealth(env) {
 __name(loadModelHealth, "loadModelHealth");
 __name2(loadModelHealth, "loadModelHealth");
 var MODELS = {
-  // Workers AI free â original three
-  // Workers AI free â directive substitutes (small coder/validator/reviewer class)
+  // Workers AI free Ã¢ÂÂ original three
+  // Workers AI free Ã¢ÂÂ directive substitutes (small coder/validator/reviewer class)
   // v4.4.0: Tier B science models per LLM audit 2026-08-13 (verified free tier-0, direct AI 200)
   "kimi-k2.6": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.6", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.6, topP: 0.95, tools: true, vision: true },
   // v5.4.0: best-value PAID Workers AI models. User directive 2026-08-28: "best, most
-  // capable models for lowest cost â paid OK if best value". All postpaid; $/M input noted.
-  // $0.06/M â cheap general default (131k ctx, reasoning)
+  // capable models for lowest cost Ã¢ÂÂ paid OK if best value". All postpaid; $/M input noted.
+  // $0.06/M Ã¢ÂÂ cheap general default (131k ctx, reasoning)
   // $0.10/M
   "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
@@ -48,22 +48,22 @@ var MODELS = {
   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
   "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.40/M 1M-ctx agentic coding
-  // v5.0.0: vision (image-to-text + OCR) â free tier-0. Routed automatically when any
+  // v5.0.0: vision (image-to-text + OCR) Ã¢ÂÂ free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
-  // this model behind a one-time Community License "agree" â ACCEPTED 2026-08-28 on the
+  // this model behind a one-time Community License "agree" Ã¢ÂÂ ACCEPTED 2026-08-28 on the
   // account owner's behalf (explicit user directive "accept all terms").
   // DeepSeek API (1M context)
   "deepseek-v4-flash": { tier: 1, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   "deepseek-v4-flash-thinking": { tier: 1, family: "deepseek", api: "deepseek-reasoner", maxOut: 131072, ctx: 1048576, temp: 0.6, topP: 0.9, tools: false, vision: false },
   "deepseek-v4-pro": { tier: 2, family: "deepseek", api: "deepseek-chat", maxOut: 131072, ctx: 1048576, temp: 0.4, topP: 0.9, tools: true, vision: false }
-  // v4.3.7: tier-3 AI Gateway models REMOVED â the compat endpoint returns 400
+  // v4.3.7: tier-3 AI Gateway models REMOVED Ã¢ÂÂ the compat endpoint returns 400
   // "Chat completion bad format" (2019) for every one of them, surfacing as router
   // 502 + the app's Model Check 5s timeout. Advertising models that cannot respond
   // is worse than not advertising them. Explicit requests for unknown models fall
   // back to deepseek-v4-flash (existing behavior).
 };
 var MAX_OUT = {
-  // Workers AI (tier-0) â output token caps, keyed by Workers AI model id.
+  // Workers AI (tier-0) Ã¢ÂÂ output token caps, keyed by Workers AI model id.
   // Kept well under each model's max_total_tokens so an oversized client max_tokens
   // can never surface as an upstream 400 -> router 502.
   "@cf/moonshotai/kimi-k2.6": 32768,
@@ -471,7 +471,7 @@ var ENSEMBLE = {
   validator: { wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", ctx: 65536 },
   // fast flash judgment (~0.3s small-prompt; proven fallback model)
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
-  // 1M-ctx reasoning refinement ($1.32/M) â LAZY: runs only on validator FAIL
+  // 1M-ctx reasoning refinement ($1.32/M) Ã¢ÂÂ LAZY: runs only on validator FAIL
 };
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
@@ -1132,7 +1132,16 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   // "unresponsive" on model=auto for science/high-complexity queries. Each stage now takes at
   // most min(stageCap, remaining); stages are skipped once the budget is spent, falling back to
   // whatever text we already have.
-  const ENSEMBLE_BUDGET_MS = 45e3;
+  // ENSEMBLE-BUDGET-3 (2026-09-29): the 45e3 total deadline was smaller than the real leg
+  // latencies (measured 31 s - 145 s per leg), so every stage was cut off and the ensemble
+  // always returned FALLBACK_TEXT. 120e3 fits inside the caller's 24e4 ms abort.
+  const ENSEMBLE_BUDGET_MS = 120e3;
+  // ENSEMBLE-BUDGET-2 (2026-09-29): stage-share caps. Previously every stage took
+  // Math.min(<cap>, _remaining()) with the primary capped at 4e4 inside a 45e3 budget, so a
+  // slow primary left ~0 ms for each fallback and the ensemble was guaranteed to return
+  // FALLBACK_TEXT (measured 24/24 canned on 2026-09-29, avg latency 50034 ms). Each stage now
+  // keeps a real slice of the same deadline instead of racing the whole budget.
+  const _stageCap = (share, floorMs) => Math.max(floorMs, Math.min(Math.floor(ENSEMBLE_BUDGET_MS * share), _remaining()));
   const _deadline = t0 + ENSEMBLE_BUDGET_MS;
   const _remaining = () => Math.max(0, _deadline - Date.now());
   let primaryText = "";
@@ -1150,14 +1159,14 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
-    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-primary");
+    const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), _stageCap(0.5, 2e4), "ensemble-primary");
     primaryText = extractWAContent(primary);
   } catch (e) {
     primaryText = "";
   }
   if (!primaryText) {
     try {
-      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), Math.min(4e4, _remaining()), "ensemble-fallback");
+      const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), _stageCap(0.3, 1.5e4), "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
     } catch (e2) {
@@ -1168,7 +1177,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   if (!primaryText) {
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
-      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), Math.min(25e3, _remaining()), "ensemble-primary-retry");
+      const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), _stageCap(0.15, 8e3), "ensemble-primary-retry");
       const rt = extractWAContent(retry);
       if (rt && String(rt).trim()) {
         primaryText = rt;
@@ -2338,6 +2347,265 @@ var SHORT = "QNFO Notes";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';
 var SW_JS = "self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));";
 var ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#0b57d0"/><text x="96" y="122" font-size="84" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold">Q</text></svg>';
+// ===================== ANTHROPIC-COMPAT-1 (2026-09-30) =====================
+// /v1/messages adapter so Anthropic-protocol clients (Claude Code, Claude SDK)
+// can use the Quniverse router. Maps Anthropic Messages <-> OpenAI Chat, then
+// delegates to handleChat (same auth, routing, logging, free-fallback, tools).
+function anthTextOf(content) {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map(function (b) {
+      if (typeof b === "string") return b;
+      if (b && b.type === "text") return b.text || "";
+      if (b && b.type === "tool_result") return anthTextOf(b.content);
+      return "";
+    }).join("");
+  }
+  return "";
+}
+function anthToOpenAI(body) {
+  var out = { model: String(body && body.model || "qnfo"), messages: [], stream: !!(body && body.stream) };
+  if (body && Number.isFinite(body.max_tokens)) out.max_tokens = body.max_tokens;
+  if (body && Number.isFinite(body.temperature)) out.temperature = body.temperature;
+  if (body && Number.isFinite(body.top_p)) out.top_p = body.top_p;
+  var sys = anthTextOf(body && body.system);
+  if (sys) out.messages.push({ role: "system", content: sys });
+  var msgs = Array.isArray(body && body.messages) ? body.messages : [];
+  for (var i = 0; i < msgs.length; i++) {
+    var m = msgs[i] || {};
+    var content = m.content;
+    if (m.role === "assistant") {
+      var text = "";
+      var tool_calls = [];
+      if (Array.isArray(content)) {
+        for (var j = 0; j < content.length; j++) {
+          var b = content[j];
+          if (!b) continue;
+          if (b.type === "text") text += (b.text || "");
+          else if (b.type === "tool_use") tool_calls.push({ id: b.id || ("call_" + Math.random().toString(16).slice(2, 10)), type: "function", function: { name: b.name, arguments: JSON.stringify(b.input || {}) } });
+        }
+      } else if (typeof content === "string") text = content;
+      var am = { role: "assistant", content: text };
+      if (tool_calls.length) am.tool_calls = tool_calls;
+      out.messages.push(am);
+    } else {
+      var blocks = Array.isArray(content) ? content : [{ type: "text", text: typeof content === "string" ? content : "" }];
+      var userText = "";
+      var parts = [];
+      for (var k = 0; k < blocks.length; k++) {
+        var bl = blocks[k];
+        if (!bl) continue;
+        if (bl.type === "text") { userText += (bl.text || ""); parts.push({ type: "text", text: bl.text || "" }); }
+        else if (bl.type === "image" && bl.source) {
+          var url = bl.source.type === "base64" ? ("data:" + (bl.source.media_type || "image/png") + ";base64," + bl.source.data) : (bl.source.url || "");
+          if (url) parts.push({ type: "image_url", image_url: { url: url } });
+        } else if (bl.type === "tool_result") {
+          var tr = typeof bl.content === "string" ? bl.content : (anthTextOf(bl.content) || JSON.stringify(bl.content == null ? "" : bl.content));
+          out.messages.push({ role: "tool", tool_call_id: bl.tool_use_id, content: tr || "" });
+        }
+      }
+      var hasImg = false;
+      for (var p = 0; p < parts.length; p++) if (parts[p].type === "image_url") hasImg = true;
+      if (hasImg) out.messages.push({ role: "user", content: parts });
+      else if (userText) out.messages.push({ role: "user", content: userText });
+    }
+  }
+  if (Array.isArray(body && body.tools) && body.tools.length) {
+    out.tools = body.tools.filter(function (t) { return t && t.name; }).map(function (t) { return { type: "function", function: { name: t.name, description: t.description || "", parameters: t.input_schema || { type: "object", properties: {} } } }; });
+    var tc = body.tool_choice;
+    if (tc && tc.type === "any") out.tool_choice = "required";
+    else if (tc && tc.type === "tool" && tc.name) out.tool_choice = { type: "function", function: { name: tc.name } };
+    else if (tc && tc.type === "none") out.tool_choice = "none";
+    else if (tc && tc.type === "auto") out.tool_choice = "auto";
+  }
+  return out;
+}
+function anthStopReason(fr) {
+  if (fr === "length") return "max_tokens";
+  if (fr === "tool_calls" || fr === "function_call") return "tool_use";
+  return "end_turn";
+}
+function anthFromOpenAI(oai, model) {
+  var ch = (oai && oai.choices && oai.choices[0]) || {};
+  var msg = ch.message || {};
+  var content = [];
+  if (msg.content) content.push({ type: "text", text: String(msg.content) });
+  if (Array.isArray(msg.tool_calls)) {
+    for (var i = 0; i < msg.tool_calls.length; i++) {
+      var tc = msg.tool_calls[i] || {};
+      var input = {};
+      try { input = JSON.parse((tc.function && tc.function.arguments) || "{}"); } catch (e) { input = {}; }
+      content.push({ type: "tool_use", id: tc.id || ("toolu_" + Math.random().toString(16).slice(2, 10)), name: tc.function && tc.function.name, input: input });
+    }
+  }
+  if (!content.length) content.push({ type: "text", text: "" });
+  var usage = (oai && oai.usage) || {};
+  return {
+    id: "msg_" + Math.random().toString(16).slice(2, 12),
+    type: "message",
+    role: "assistant",
+    model: model,
+    content: content,
+    stop_reason: anthStopReason(ch.finish_reason),
+    stop_sequence: null,
+    usage: { input_tokens: usage.prompt_tokens || usage.input_tokens || 0, output_tokens: usage.completion_tokens || usage.output_tokens || 0 }
+  };
+}
+function anthSSE(events) {
+  var enc = new TextEncoder();
+  return new ReadableStream({
+    start: function (controller) {
+      for (var i = 0; i < events.length; i++) controller.enqueue(enc.encode("event: " + events[i][0] + "\ndata: " + JSON.stringify(events[i][1]) + "\n\n"));
+      controller.close();
+    }
+  });
+}
+function anthStreamFromOpenAI(upstream, model) {
+  var enc = new TextEncoder();
+  var dec = new TextDecoder();
+  var msgId = "msg_" + Math.random().toString(16).slice(2, 12);
+  var started = false, textOpen = false, textIdx = 0, blockCounter = 0, stopReason = "end_turn", outTok = 0, inTok = 0, buffer = "";
+  var toolBlocks = {};
+  function emit(controller, name, obj) { controller.enqueue(enc.encode("event: " + name + "\ndata: " + JSON.stringify(obj) + "\n\n")); }
+  function start(controller) {
+    if (started) return;
+    started = true;
+    emit(controller, "message_start", { type: "message_start", message: { id: msgId, type: "message", role: "assistant", model: model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } });
+    emit(controller, "ping", { type: "ping" });
+  }
+  function handleChunk(controller, j) {
+    var ch = (j.choices && j.choices[0]) || {};
+    var d = ch.delta || {};
+    if (j.usage) { inTok = j.usage.prompt_tokens || inTok; outTok = j.usage.completion_tokens || outTok; }
+    if (typeof d.content === "string" && d.content.length) {
+      if (!textOpen) { textOpen = true; textIdx = blockCounter++; emit(controller, "content_block_start", { type: "content_block_start", index: textIdx, content_block: { type: "text", text: "" } }); }
+      emit(controller, "content_block_delta", { type: "content_block_delta", index: textIdx, delta: { type: "text_delta", text: d.content } });
+    }
+    if (Array.isArray(d.tool_calls)) {
+      for (var i = 0; i < d.tool_calls.length; i++) {
+        var tc = d.tool_calls[i] || {};
+        var oi = tc.index != null ? tc.index : 0;
+        if (toolBlocks[oi] == null) {
+          if (textOpen) { emit(controller, "content_block_stop", { type: "content_block_stop", index: textIdx }); textOpen = false; }
+          toolBlocks[oi] = blockCounter++;
+          emit(controller, "content_block_start", { type: "content_block_start", index: toolBlocks[oi], content_block: { type: "tool_use", id: tc.id || ("toolu_" + Math.random().toString(16).slice(2, 10)), name: (tc.function && tc.function.name) || "", input: {} } });
+        }
+        var args = tc.function && tc.function.arguments;
+        if (args) emit(controller, "content_block_delta", { type: "content_block_delta", index: toolBlocks[oi], delta: { type: "input_json_delta", partial_json: args } });
+      }
+    }
+    if (ch.finish_reason) stopReason = anthStopReason(ch.finish_reason);
+  }
+  return new ReadableStream({
+    start: async function (controller) {
+      start(controller);
+      var reader = upstream.body.getReader();
+      try {
+        while (true) {
+          var r = await reader.read();
+          if (r.done) break;
+          buffer += dec.decode(r.value, { stream: true });
+          var idx;
+          while ((idx = buffer.indexOf("\n")) >= 0) {
+            var line = buffer.slice(0, idx).trim();
+            buffer = buffer.slice(idx + 1);
+            if (!line || line.indexOf("data:") !== 0) continue;
+            var payload = line.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            try { handleChunk(controller, JSON.parse(payload)); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      if (textOpen) emit(controller, "content_block_stop", { type: "content_block_stop", index: textIdx });
+      for (var oi in toolBlocks) emit(controller, "content_block_stop", { type: "content_block_stop", index: toolBlocks[oi] });
+      emit(controller, "message_delta", { type: "message_delta", delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: outTok } });
+      emit(controller, "message_stop", { type: "message_stop" });
+      controller.close();
+    }
+  });
+}
+function anthTokenOf(request) {
+  var xk = request.headers.get("x-api-key");
+  if (xk && xk.trim()) return xk.trim();
+  var au = request.headers.get("Authorization") || "";
+  if (/^Bearer\s+/i.test(au)) return au.replace(/^Bearer\s+/i, "").trim();
+  return "";
+}
+async function anthRelay(env, oai) {
+  // Clean tool-faithful relay: NO research/RAG/ensemble injection. The Anthropic
+  // client (Claude Code) owns its own system prompt + tool loop; we just need a
+  // raw, tool-capable model leg. Paid DeepSeek first (tools:true), free on error.
+  var maxT = oai.max_tokens || 8192;
+  var apiModel = "deepseek-chat";
+  try {
+    var up = await callDeepSeek(env, apiModel, oai.messages, maxT, oai.stream, oai.tools, { temperature: oai.temperature, top_p: oai.top_p, tool_choice: oai.tool_choice });
+    if (oai.stream) return up;
+    return new Response(JSON.stringify({ id: "chatcmpl-" + Math.random().toString(16).slice(2, 10), object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: (up && up.choices) || [], usage: (up && up.usage) || {} }), { headers: { "Content-Type": "application/json" } });
+  } catch (e) {
+    var errMsg = "relay error: " + ((e && e.message) || e);
+    var ft = null;
+    try { ft = await qnfoAiFreeFallback(env, oai.messages, Math.min(maxT, 8192)); } catch (e2) {}
+    if (oai.stream) {
+      var enc = new TextEncoder();
+      var nl = String.fromCharCode(10, 10);
+      var st = new ReadableStream({ start: function (c) {
+        c.enqueue(enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, delta: { role: "assistant", content: ft || errMsg }, finish_reason: null }] }) + nl));
+        c.enqueue(enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb2", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + nl));
+        c.enqueue(enc.encode("data: [DONE]" + nl));
+        c.close();
+      } });
+      return new Response(st, { headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+    }
+    return new Response(JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: oai.model, choices: [{ index: 0, message: { role: "assistant", content: ft || errMsg }, finish_reason: "stop" }], usage: {} }), { headers: { "Content-Type": "application/json" } });
+  }
+}
+async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
+  var expected = env.ROUTER_AUTH_KEY;
+  if (!authHeader || authHeader.indexOf("Bearer ") !== 0 || !expected) return json({ type: "error", error: { type: "authentication_error", message: "Unauthorized" } }, 401);
+  var provided = authHeader.slice("Bearer ".length);
+  var enc = new TextEncoder();
+  var a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
+  var b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
+  if (!timingSafeEqual(a, b) && !(env.ROUTER_AUTH_KEY_2 && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(env.ROUTER_AUTH_KEY_2))))) {
+    return json({ type: "error", error: { type: "authentication_error", message: "Unauthorized" } }, 401);
+  }
+  var wantStream = !!(body && body.stream);
+  var oai = anthToOpenAI(body);
+  if (!oai.messages.length) return json({ type: "error", error: { type: "invalid_request_error", message: "messages required" } }, 400);
+  var resp = await anthRelay(env, oai);
+  var ctype = resp.headers.get("content-type") || "";
+  if (ctype.indexOf("text/event-stream") >= 0) {
+    if (wantStream) return new Response(anthStreamFromOpenAI(resp, oai.model), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
+    await resp.text();
+    var empty = anthFromOpenAI({}, oai.model);
+    return new Response(JSON.stringify(empty), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  }
+  var oaiJson = {};
+  try { oaiJson = await resp.json(); } catch (e) { oaiJson = {}; }
+  var msg = anthFromOpenAI(oaiJson, oai.model);
+  if (!wantStream) return new Response(JSON.stringify(msg), { status: resp.status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+  var events = [];
+  events.push(["message_start", { type: "message_start", message: { id: msg.id, type: "message", role: "assistant", model: oai.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: msg.usage.input_tokens, output_tokens: 0 } } }]);
+  var bi = 0;
+  for (var ci = 0; ci < msg.content.length; ci++) {
+    var cb = msg.content[ci];
+    if (cb.type === "text") {
+      events.push(["content_block_start", { type: "content_block_start", index: bi, content_block: { type: "text", text: "" } }]);
+      events.push(["content_block_delta", { type: "content_block_delta", index: bi, delta: { type: "text_delta", text: cb.text } }]);
+      events.push(["content_block_stop", { type: "content_block_stop", index: bi }]);
+    } else if (cb.type === "tool_use") {
+      events.push(["content_block_start", { type: "content_block_start", index: bi, content_block: { type: "tool_use", id: cb.id, name: cb.name, input: {} } }]);
+      events.push(["content_block_delta", { type: "content_block_delta", index: bi, delta: { type: "input_json_delta", partial_json: JSON.stringify(cb.input) } }]);
+      events.push(["content_block_stop", { type: "content_block_stop", index: bi }]);
+    }
+    bi++;
+  }
+  events.push(["message_delta", { type: "message_delta", delta: { stop_reason: msg.stop_reason, stop_sequence: null }, usage: { output_tokens: msg.usage.output_tokens } }]);
+  events.push(["message_stop", { type: "message_stop" }]);
+  return new Response(anthSSE(events), { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
+}
+// =================== end ANTHROPIC-COMPAT-1 ===================
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -2419,6 +2687,9 @@ var worker_default = {
           }
         };
       });
+      // CAL-ROSTER-INTERNAL-1 (2026-09-27): the calibration roster audit reads the internal roster
+      // (with _router metadata) when called with the router key; public callers still get ONE model.
+      if ((request.headers.get("Authorization") || "") === "Bearer " + ((env.ROUTER_AUTH_KEY || env.QNFO_ROUTER_KEY) || "\u0000")) return json({ object: "list", data });
       // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
       return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }
@@ -2435,6 +2706,17 @@ var worker_default = {
       }
       const auth = request.headers.get("Authorization") || "";
       return handleChat(env, body, auth, ctx, request.headers.get("User-Agent") || "");
+    }
+    if (path === "/v1/messages" && method === "POST") {
+      let abody;
+      try {
+        abody = await request.json();
+      } catch {
+        return json({ type: "error", error: { type: "invalid_request_error", message: "invalid JSON" } }, 400);
+      }
+      const atok = anthTokenOf(request);
+      const aauth = atok ? ("Bearer " + atok) : "";
+      return handleAnthropicMessages(env, abody, aauth, ctx, request.headers.get("User-Agent") || "");
     }
     if (path === "/v1/responses" && method === "POST") {
       let body;

@@ -1,0 +1,54 @@
+name: pages-project-audit
+
+# ARCHIVE-PAGES-UNDEPLOYABLE-1 (#1393) -- pre-flight inventory for the FIRST
+# gated qnfo-publications Pages deploy.
+#
+# `wrangler pages deploy` REPLACES the project's file set. Before that can be
+# run safely, the repo must know what the project currently holds. This workflow
+# performs that inventory from the CF API and persists it to qnfo-audit D1
+# (table pages_project_audit) so the gate can be evaluated from ops tooling
+# without needing Actions log access.
+#
+# THIS WORKFLOW NEVER DEPLOYS. It is read-only against Pages. The deploy path
+# lives in .github/workflows/deploy-pages-qnfo-publications.yml and stays
+# workflow_dispatch + confirm=DEPLOY gated.
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "Pages project name"
+        required: true
+        default: "qnfo-publications"
+  push:
+    paths:
+      - ".github/workflows/pages-project-audit.yml"
+      - "scripts/pages_project_audit.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-project-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax gate
+        run: python3 -m py_compile scripts/pages_project_audit.py && echo "PY_COMPILE_OK"
+
+      - name: List Pages project + deployments (read-only)
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          python3 scripts/pages_project_audit.py "${{ github.event.inputs.project || 'qnfo-publications' }}"

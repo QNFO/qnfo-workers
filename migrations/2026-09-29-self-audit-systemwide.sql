@@ -1,0 +1,62 @@
+-- SELF-AUDIT-SYSTEMWIDE-1  (applied live 2026-09-29T15:35Z by qnfo-ops, verified same turn)
+--
+-- WHY THIS IS DATA AND NOT CODE
+-- The audit DB already ships a dispatcher: `fleet_crons.task_id -> fleet_tasks.id`,
+-- with `fleet_tasks.type = 'workflow'` executing SQL steps and `type = 'http'` hitting a URL.
+-- `recurrence-guard` proves the pattern works (task id `recurrence-guard`, cron
+-- `0 * * * *`, firing normally per cron_fire_log). So an automatic self-audit needs
+-- NO worker deploy, NO GitHub API call, and NO token: it is two rows.
+--
+-- Verified live state after applying this file:
+--   fleet_tasks.id='self-audit-systemwide'  version=2  enabled=1  json_valid(definition)=1
+--   fleet_crons.id=17  name='self-audit-systemwide-every-6h'  expr='30 */6 * * *'
+--                      task_id='self-audit-systemwide'  enabled=1
+--                      next_fire='2026-09-29T18:30:00.000Z'
+-- Predicate dry-runs (run as SELECT before scheduling; no false positives):
+--   tool-error predicate returned 15 rows, 3 over threshold:
+--     web_fetch 34/82 = 41.5%, github_file_write 10/49 = 20.4%, ops_issue_run 7/41 = 17.1%
+--     (ops_d1_query 269/3180 = 8.5%, below the 15% threshold)
+--   cron-staleness predicate returned 0 rows (all sub-daily crons fresh).
+--
+-- WHAT IT DETECTS
+--   (1) TOOLERR   - any ops_ai_tool with >=20 calls/24h and >15% error rate -> files a
+--                   deduped issue. Deliberately does NOT classify: agent misuse
+--                   (schema/path guessing) and tool defects must be separated by a human
+--                   or agent reading the error text, because the same error rate is
+--                   produced by both (see the 489x `no such column` class, which was
+--                   agent misuse, vs the 1359 activation gap, which was a real defect).
+--   (2) CRONSTALE - an enabled sub-daily cron whose last_fired is >3h old, OR which has
+--                   NEVER fired and is >3h old. The second arm exists specifically to
+--                   catch the DISPATCH-FIRER-MISSING class: a declared schedule with no
+--                   firer (see below). Without it, a never-fired cron is invisible
+--                   because julianday(NULL) makes the comparison NULL, not true.
+--
+-- KNOWN LIMITATIONS (adversarial, not hidden)
+--   * Thresholds are static (20 calls, 15%, 3h). A tool that fails 100% but is called 19
+--     times is never filed; a burst can file a one-off. Tune deliberately, do not assume.
+--   * The staleness arm covers only sub-daily crons (expr '0 * * * *' or '*/%'). A weekly
+--     cron that silently stops is NOT detected by this task.
+--   * The tool-error arm counts `status='error'` only. Guard refusals that are logged with
+--     a non-error status are invisible, so this undercounts real friction.
+--   * Both steps INSERT into agent_issues, so they inherit agent_issues_enum_guard_ins
+--     (status/priority must exist in status_canon/priority_canon) and
+--     agent_issues_evidence_must_exist_ins (source must not be 'cloud_ops_events:<missing id>').
+--     source is 'self-audit-systemwide', so the referential trigger does not apply.
+--
+-- RELATED DEFECT FILED THE SAME TURN
+--   DISPATCH-FIRER-MISSING-1 (agent_issues id 1367, high, open):
+--   .github/workflows/apply-unmangle-worker-js.yml documents SCHEDULE-EVENT-NEVER-FIRES-1
+--   (the GitHub `schedule` event has NEVER fired on this repo) and adds
+--   `repository_dispatch: [unmangle-worker-js, self-audit]` as the replacement, on the
+--   stated assumption that "the Cloudflare side can fire this repair on its own cron".
+--   That assumption is FALSE as of 2026-09-29: cloud_ops_events has 0 rows mentioning
+--   repository_dispatch across 47,686 tool events, and no fleet_tasks row dispatches to
+--   GitHub. So the workflow has no firer and the `self-audit` dispatch type is inert.
+--   This file does NOT fix that (a GitHub dispatch needs a token, which a SQL step has no
+--   access to); it makes the gap *detectable* and schedules the detection.
+
+INSERT OR IGNORE INTO fleet_tasks (id, name, type, definition, timeout_ms, retries, version, enabled, updated_at) VALUES ('self-audit-systemwide','SELF-AUDIT-SYSTEMWIDE-1: automatic fleet self-audit (tool error-rate breach + sub-daily cron staleness), files deduped issues','workflow','{"steps":[{"type":"sql","db":"AUDIT","sql":"INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at) SELECT ''SELF-AUDIT-TOOLERR: '' || text, ''AUTO-FILED by self-audit-systemwide (SELF-AUDIT-SYSTEMWIDE-1). 24h tool error-rate breach for tool '' || text || '': '' || SUM(CASE WHEN status=''error'' THEN 1 ELSE 0 END) || '' errors out of '' || COUNT(*) || '' calls. Classify as agent misuse vs tool defect before fixing.'', ''self-audit-systemwide'',''self-heal'',''medium'',''open'',CAST(strftime(''%s'',''now'') AS INTEGER)*1000,CAST(strftime(''%s'',''now'') AS INTEGER)*1000 FROM cloud_ops_events WHERE kind=''ops_ai_tool'' AND ts > datetime(''now'',''-24 hours'') GROUP BY text HAVING COUNT(*) >= 20 AND 1.0*SUM(CASE WHEN status=''error'' THEN 1 ELSE 0 END)/COUNT(*) > 0.15 AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.title = ''SELF-AUDIT-TOOLERR: '' || cloud_ops_events.text AND a.status=''open'')"},{"type":"sql","db":"AUDIT","sql":"INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at) SELECT ''SELF-AUDIT-CRONSTALE: '' || name, ''AUTO-FILED by self-audit-systemwide (SELF-AUDIT-SYSTEMWIDE-1). Sub-daily cron '' || name || '' (task_id '' || task_id || '', expr '' || cron_expr || '') last fired '' || COALESCE(last_fired,''never'') || '', which is older than 3h, or the cron has never fired since it was created. This predicate covers the DISPATCH-FIRER-MISSING class (a declared schedule with no firer). Check cron_fire_log and the owning worker trigger.'', ''self-audit-systemwide'',''self-heal'',''high'',''open'',CAST(strftime(''%s'',''now'') AS INTEGER)*1000,CAST(strftime(''%s'',''now'') AS INTEGER)*1000 FROM fleet_crons WHERE enabled=1 AND (cron_expr=''0 * * * *'' OR cron_expr LIKE ''*/%'') AND ((last_fired IS NOT NULL AND julianday(''now'') - julianday(replace(last_fired,''T'','' '')) > 0.125) OR (last_fired IS NULL AND julianday(''now'') - julianday(updated_at) > 0.125)) AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.title = ''SELF-AUDIT-CRONSTALE: '' || fleet_crons.name AND a.status=''open'')"}]}',30000,1,2,1,datetime('now'));
+
+INSERT INTO fleet_crons (name, cron_expr, task_id, enabled, timezone, updated_at) SELECT 'self-audit-systemwide-every-6h','30 */6 * * *','self-audit-systemwide',1,'UTC',datetime('now') WHERE NOT EXISTS (SELECT 1 FROM fleet_crons WHERE task_id='self-audit-systemwide');
+
+UPDATE fleet_crons SET next_fire='2026-09-29T18:30:00.000Z' WHERE task_id='self-audit-systemwide' AND next_fire IS NULL;

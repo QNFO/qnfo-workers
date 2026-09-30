@@ -1,0 +1,134 @@
+name: apply-ci-watchdog-logfetch
+
+# CI-WATCHDOG-LOGFETCH-1 (2026-09-29).
+#
+# Applies scripts/ci-watchdog-logfetch-patch.py to scripts/ci_watchdog.py, proves the
+# result with scripts/ci-watchdog-selftest.py, then commits to the branch that triggered
+# the run. Modelled on apply-d1guard-literal-aware.yml, the repo's sanctioned
+# commit-capable repair actor.
+#
+# WHY THIS FILE EXISTS: scripts/ci-watchdog-logfetch-patch.py was committed on 2026-09-29
+# (09cec809) WITHOUT an applier workflow, so the patch never ran -- the same
+# "patch script with no actor" gap that left the D1-guard fix stranded for hours. A patch
+# script with no workflow is a patch that does not exist.
+#
+# THE DEFECT: ci_watchdog.py fetched job logs through gh(), which always attaches
+# Authorization. The job-log endpoint 302s to a pre-signed object-store URL that rejects
+# any request carrying Authorization, and urllib's default redirect handler REPLAYS the
+# original headers on the follow-up -- so in CI every log fetch returned nothing
+# (curl probe: http=403 size=180) and unclassifiable findings degraded to `unknown`.
+# A watchdog that cannot read evidence cannot name a failure mode.
+#
+# NOTE the commit message is passed as single-line -m flags and never as an inline
+# multi-line string: a multi-line `git commit -m "..."` inside a `run: |` block scalar
+# puts its continuation lines at column 1, terminates the scalar, and makes the whole
+# workflow file invalid YAML -- the WORKFLOW-YAML-LINT-1 class that made
+# deploy-qnfo-ops.yml create runs with ZERO jobs. Step names below also avoid ':'.
+#
+# PUSH-RACE-RETRY-1 (2026-09-29): run 36592518561 applied the patch, byte-compiled it,
+# passed the selftest and asserted the markers -- steps 4-7 ALL SUCCESS -- and then failed
+# at step 8 "Commit and push". Three commits landed on main inside that run window
+# (15:45:03, 15:45:07, 15:45:37), so `git push` was rejected as non-fast-forward and the
+# fully verified patch was discarded. A gate that passes and then throws the work away is
+# worse than no gate: it reports red for a correct patch and hides the real state.
+# The commit step now re-fetches, rebases onto the moved head and retries with a bounded
+# budget, so a concurrent writer can no longer discard a verified repair.
+
+on:
+  push:
+    paths:
+      - 'scripts/ci-watchdog-logfetch-patch.py'
+      - 'scripts/ci-watchdog-selftest.py'
+      - '.github/workflows/apply-ci-watchdog-logfetch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-ci-watchdog-logfetch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed, idempotent)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/ci-watchdog-logfetch-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced (already patched)"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: Byte-compile the patched watchdog
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci_watchdog.py
+          echo "py_compile OK"
+
+      - name: Acceptance gate (selftest must pass before any commit)
+        run: |
+          set -euo pipefail
+          python3 scripts/ci-watchdog-selftest.py
+
+      - name: Assert the auth-header log fetch is gone
+        run: |
+          set -euo pipefail
+          if grep -q "jobs/{j\['id'\]}/logs" scripts/ci_watchdog.py; then
+            echo "FAIL - legacy Authorization-carrying log fetch still present"
+            exit 1
+          fi
+          grep -q "_raw_log" scripts/ci_watchdog.py
+          grep -q "invalid-workflow" scripts/ci_watchdog.py
+          echo "CI-WATCHDOG-LOGFETCH-1 markers present"
+
+      - name: Commit and push to the triggering branch (race-safe, rebase and retry)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-ci-watchdog-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(ci-watchdog) follow the job-log 302 WITHOUT replaying Authorization"
+          BODY="CI-WATCHDOG-LOGFETCH-1. gh() always attaches Authorization Bearer; the job-log endpoint answers 302 to a pre-signed object-store URL, and urllib's default redirect handler replays the original headers on the follow-up, so the signed URL rejects it and the body came back empty (curl probe http=403 size=180). Consequence: in CI every log fetch returned nothing and findings the structural classifier could not name degraded to unknown (the classifier docstring records 19 of 22 lost). Fix part 1 adds _raw_log(): hop 1 asks the API WITH auth and with redirect-following DISABLED and reads the 302 Location, hop 2 fetches that pre-signed URL with NO Authorization header -- the signed URL is itself the credential -- capped at 200 KB. job_logs() and the inline fetch in main() both route through it. Fix part 2 makes classify_structural() name a run whose display NAME is the workflow FILE PATH as invalid-workflow: that means GitHub could not parse the YAML, the run was created with ZERO jobs, and no log exists to fetch -- the deploy-qnfo-ops.yml class of 2026-09-29. Verified by scripts/ci-watchdog-selftest.py, which runs a local 302 server and asserts hop 1 carries Authorization, hop 2 does not, the body returns intact, and a 403 degrades to an empty string without crashing."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          BRANCH="${{ github.ref_name }}"
+          ok=0
+          for i in 1 2 3 4 5 6 7 8; do
+            git fetch origin "$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              echo "rebase conflict on attempt $i; aborting rebase and retrying"
+              git rebase --abort || true
+              sleep 10
+              continue
+            fi
+            if git push origin "HEAD:$BRANCH"; then ok=1; break; fi
+            echo "push rejected on attempt $i (concurrent commit); retrying"
+            sleep 10
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::PUSH-RACE-EXHAUSTED - could not land the verified patch on $BRANCH after 8 attempts"
+            exit 1
+          fi
+          echo "landed $(git rev-parse --short HEAD) on $BRANCH"

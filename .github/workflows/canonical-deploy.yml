@@ -1,0 +1,189 @@
+name: canonical-deploy
+
+# CANONICAL-DEPLOY-AUTO-1 (2026-09-29). Issues #1406, #1442, #1443, #1390, #1448.
+#
+# WHY THIS WORKFLOW EXISTS
+#   Every automated deploy in this repo went through scripts/raw_put.py, which
+#   performs exactly ONE Cloudflare call (PUT /content) and therefore:
+#     1. never acquires the deploy-guard lock  -> the mutation is classified
+#        DEPLOY-UNCOORDINATED-DEPLOY (issues #1442, #1443, #1340-#1343)
+#     2. never writes a fleet_deploys ledger row -> DEPLOY-UNLOGGED-MUTATION
+#     3. never PUTs /schedules -> crons declared in wrangler.toml are INERT
+#        (ledger notes read "schedules=FAILED" on nearly every raw_put.py row)
+#   scripts/canonical_deploy.py is the repo's own canonical path: it calls
+#   POST https://ops.qnfo.org/ops/deploy, which performs the ordered sequence
+#   lock acquire -> PUT /content -> live verify -> guard /ledger -> PUT /schedules.
+#   Nothing in .github/workflows invoked it. This workflow does.
+#
+# WHAT IT DOES
+#   On a push to main that touches any worker source or wrangler config, it
+#   resolves the set of CHANGED worker directories, maps each to its declared
+#   worker name, and canonical-deploys exactly those workers. Blast radius is
+#   one push diff; it never sweeps the whole fleet unless explicitly asked.
+#
+# FAIL-CLOSED
+#   * an empty OPS_ROUTER_AUTH_KEY is an ERROR, not a silent skip
+#   * any per-worker non-zero exit sets the job exit code to 1
+#   * a duplicate-name directory (name ending -legacy-dup, issue #1384) is
+#     refused rather than deployed, because two configs resolving to one
+#     Cloudflare script is exactly how the canonical worker gets clobbered
+#
+# STYLE CONSTRAINTS (the classes this file must not join)
+#   * WORKFLOW-YAML-LINT-1: every step name below is colon-free, because an
+#     unquoted colon in a step name made a sibling workflow unparseable and
+#     GitHub created zero-job runs with no log.
+#   * No heredocs and no inline python inside run blocks, so YAML indentation
+#     can never be read as script indentation.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/worker.js"
+      - "**/wrangler.toml"
+      - "deploy-targets.txt"
+      - ".github/workflows/canonical-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: "space separated worker names to deploy (empty means only workers changed in this push)"
+        required: false
+        default: ""
+      all:
+        description: "set true to deploy every worker listed in deploy-targets.txt"
+        required: false
+        default: "false"
+      dry_run:
+        description: "set true to print the plan without calling Cloudflare"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: canonical-deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve the target worker set
+        id: targets
+        env:
+          IN_ALL: ${{ github.event.inputs.all }}
+          IN_WORKERS: ${{ github.event.inputs.workers }}
+          IN_DRY: ${{ github.event.inputs.dry_run }}
+          EV_BEFORE: ${{ github.event.before }}
+          EV_AFTER: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          : > /tmp/targets.txt
+          if [ "${IN_ALL:-false}" = "true" ]; then
+            echo "mode=manifest"
+            awk 'NF && $1 !~ /^#/ {print $1" "$2}' deploy-targets.txt >> /tmp/targets.txt
+          elif [ -n "${IN_WORKERS:-}" ]; then
+            echo "mode=explicit"
+            for w in $IN_WORKERS; do echo "$w $w/worker.js" >> /tmp/targets.txt; done
+          else
+            echo "mode=push-diff"
+            if [ -z "${EV_BEFORE:-}" ] || [ "$EV_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "no usable push base commit, nothing to resolve"
+            else
+              git diff --name-only "$EV_BEFORE" "$EV_AFTER" > /tmp/changed.txt || true
+              awk -F/ '/\/worker\.js$/ || /\/wrangler\.toml$/ {print $1}' /tmp/changed.txt | sort -u > /tmp/dirs.txt
+              while read -r d; do
+                [ -z "$d" ] && continue
+                [ -f "$d/worker.js" ] || continue
+                [ -f "$d/wrangler.toml" ] || continue
+                n=$(grep -m1 -E '^[[:space:]]*name[[:space:]]*=' "$d/wrangler.toml" | sed -E 's/.*"([^"]+)".*/\1/')
+                if [ -z "$n" ]; then echo "skip $d (no declared name)"; continue; fi
+                case "$n" in *-legacy-dup) echo "refuse $d (duplicate-name directory, issue 1384)"; continue;; esac
+                echo "$n $d/worker.js" >> /tmp/targets.txt
+              done < /tmp/dirs.txt
+            fi
+          fi
+          sort -u /tmp/targets.txt -o /tmp/targets.txt || true
+          echo "--- resolved targets ---"
+          cat /tmp/targets.txt || true
+          echo "count=$(wc -l < /tmp/targets.txt | tr -d ' ')"
+
+      - name: Deploy through the canonical path
+        id: deploy
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+          IN_DRY: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -uo pipefail
+          if [ ! -s /tmp/targets.txt ]; then
+            echo "NO_TARGETS nothing to deploy"
+            exit 0
+          fi
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "::error::OPS_ROUTER_AUTH_KEY is not configured - the canonical path cannot run and this gate refuses to no-op"
+            exit 1
+          fi
+          DRY=""
+          if [ "${IN_DRY:-false}" = "true" ]; then DRY="--dry-run"; fi
+          fail=0
+          while read -r name path; do
+            [ -z "$name" ] && continue
+            echo "=== canonical deploy $name from $path $DRY"
+            if python3 scripts/canonical_deploy.py --worker "$name" --path "$path" $DRY; then
+              echo "OK $name"
+            else
+              echo "::error::canonical deploy failed for $name"
+              fail=1
+            fi
+          done < /tmp/targets.txt
+          echo "deploy_fail=$fail"
+          exit $fail
+
+      - name: Write the ci-status artifact
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          printf '{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","head":"%s","ts":"%s"}\n' \
+            "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/canonical-deploy.json
+          cat ci-status/canonical-deploy.json
+
+      - name: Upload the ci-status artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-deploy-status
+          path: ci-status/canonical-deploy.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Commit the ci-status artifact back
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/canonical-deploy.json
+          if git diff --cached --quiet; then echo "no status change"; exit 0; fi
+          git commit -m "ci(status): canonical-deploy [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "status pushed on attempt $i"
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "status push failed after 3 attempts"
+          exit 0

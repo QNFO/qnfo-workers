@@ -1,0 +1,22 @@
+{
+  "workflow": "container-config-autoverify",
+  "marker": "CONTAINER-CONFIG-AUTOVERIFY-1",
+  "issue": 1485,
+  "worker": "qnfo-containers-pilot",
+  "pre_containers": null,
+  "pre_error": null,
+  "restore": {
+    "attempted": true,
+    "rc": 0,
+    "tail": "declared containers: [{\"class_name\": \"ShellContainer\", \"image\": \"docker.io/nikolaik/python-nodejs:python3.12-nodejs22\", \"instance_type\": \"basic\", \"max_instances\": 3}]\ndeclaring DO class=ShellContainer binding=SHELL_CONTAINER\npre /settings containers: null\nlive compatibility_date=2026-08-01 flags=['nodejs_compat']\npre live bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\n[S1-exports-dict-sqlite] PUT /content -> HTTP 200\n  post /settings bindings: [\"AUDIT\", \"PILOT_TOKEN\", \"SHELL_CONTAINER\"]\n  post /settings containers: null\n  UNVERIFIED-AT-SETTINGS: 200 accepted but /settings.containers is null\n  -> /status probe below is the authoritative signal\n  NOTE: PILOT_TOKEN not set -- /status probe skipped\nPUT-ACCEPTED: qnfo-containers-pilot upload succeeded via S1-exports-dict-sqlite\nSTRATEGY RESULT: [\"S1-exports-dict-sqlite=ACCEPTED\", \"S1-exports-dict-sqlite=containers-null-at-settings\"]\n"
+  },
+  "post_containers": null,
+  "post_bindings": [
+    "AUDIT",
+    "PILOT_TOKEN",
+    "SHELL_CONTAINER"
+  ],
+  "closed": false,
+  "head": "5fe5783aad5e1dd71a45498f742dddfe66dd201e",
+  "ts": "2026-09-30T14:52:10Z"
+}

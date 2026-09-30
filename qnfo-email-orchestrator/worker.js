@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.0";
+var VERSION = "0.4.1-escalate-deadend-fix";
 var NAMESPACE = "email-orchestrator";
 var DAY_ACTIONS = ["wednesday-response-check"];
 var DOC = {
@@ -104,7 +104,10 @@ var worker_default = {
     catch (e) { console.error("reply-draft failed:", String(e && e.message || e)); }
   },
   async runRepliesInternal(env, dry) {
-    var rows = await env.AUDIT_DB.prepare("SELECT q.id AS qid, q.email_id, q.sender, q.subject, e.body_text FROM email_reply_queue q LEFT JOIN emails e ON e.id = q.email_id WHERE q.decision = 'pending' ORDER BY q.id ASC LIMIT 25").all();
+    // EMAIL-PIPELINE-ESCALATE-DEADEND-1 (#1251): also scan escalated rows that a
+    // human/agent has CLEARED for auto-send, so a reviewed-and-cleared escalation
+    // is not a permanent dead-end. Cleared rows carry the marker in skip_reason.
+    var rows = await env.AUDIT_DB.prepare("SELECT q.id AS qid, q.email_id, q.sender, q.subject, e.body_text, q.draft_text, q.decision, q.skip_reason FROM email_reply_queue q LEFT JOIN emails e ON e.id = q.email_id WHERE q.decision = 'pending' OR (q.decision = 'escalate' AND q.skip_reason LIKE '%cleared for auto-send%') ORDER BY q.id ASC LIMIT 25").all();
     var list = rows.results || [];
     var out = { scanned: list.length, dry: dry, sent: 0, escalated: 0, skipped: 0, items: [] };
     for (var i = 0; i < list.length; i++) {
@@ -119,6 +122,18 @@ var worker_default = {
   async draftOne(env, row, dry) {
     var qid = row.qid;
     try {
+      // EMAIL-PIPELINE-ESCALATE-DEADEND-1 (#1251): a cleared escalation carries a
+      // pre-authored draft in draft_text. Send it directly without re-classifying
+      // (cheapClassify would escalate it again, recreating the dead-end loop).
+      if (row.decision === "escalate" && String(row.skip_reason || "").indexOf("cleared for auto-send") >= 0) {
+        var authored = String(row.draft_text || "").trim();
+        if (!authored) { await this.setDecision(env, qid, "escalate", "cleared-but-empty-draft"); return { qid: qid, action: "escalate", reason: "cleared-but-empty-draft" }; }
+        if (dry) return { qid: qid, action: "would-send", draft: authored };
+        var cr = await env.EMAIL.fetch("https://email/send", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") }, body: JSON.stringify({ to: row.sender, from: "qnfo@qnfo.org", subject: "Re: " + (row.subject || "(no subject)"), body: authored, reply_to_id: row.email_id }) });
+        if (cr && cr.ok) { await this.setDecision(env, qid, "sent", "cleared-draft-sent", authored); return { qid: qid, action: "sent", via: "cleared-draft" }; }
+        await this.setDecision(env, qid, "escalate", "cleared-send-failed:" + (cr ? cr.status : "no-resp"));
+        return { qid: qid, action: "escalate", reason: "cleared-send-failed" };
+      }
       var prior = await env.AUDIT_DB.prepare("SELECT id FROM email_reply_queue WHERE lower(sender)=?1 AND id < ?2 AND decision IN ('sent','drafted')").bind(String(row.sender || "").toLowerCase(), qid).first();
       if (prior) { await this.setDecision(env, qid, "skip", "no-repeat"); return { qid: qid, action: "skip", reason: "no-repeat" }; }
       var cls = await this.cheapClassify(env, row);

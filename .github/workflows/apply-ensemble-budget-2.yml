@@ -1,0 +1,172 @@
+name: apply-ensemble-budget-2
+
+# ENSEMBLE-BUDGET-2 + GW-CANNED-DETECT-1 driver (2026-09-29).
+#
+# ROOT CAUSE: qnfo-ai runEnsemble() gave one stage Math.min(4e4, _remaining()) inside a single
+# 45e3 deadline, so a slow primary left ~0 ms for every fallback; primaryText stayed empty and
+# the handler returned FALLBACK_TEXT. MEASURED (ai_queries, model=ensemble): 2026-09-29 n=24,
+# canned=24, max completion_tokens=112, avg latency 50034 ms; 2026-09-26 n=6, canned=0, max
+# completion_tokens=2488. qnfo-research-exec gwCall() then accepted that HTTP-200 canned text as
+# a real answer, so stageReconcile/stageRevise (>= 10000 chars) terminalised every row.
+#
+# FIX: stage-share caps in qnfo-ai, plus canned-signature detection in gwCall.
+#
+# NO-CRON-NOTE: this repository's GitHub `schedule` event has never fired
+# (SCHEDULE-EVENT-NEVER-FIRES-1), so this workflow declares no cron. It fires on push to itself
+# or on manual dispatch.
+#
+# WORKFLOW-YAML-LINT-1: no step name in this file contains an unquoted colon-space.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-ensemble-budget-2.yml'
+      - 'scripts/patch-ensemble-budget-2.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-ensemble-budget-2
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: "Run the applier (idempotent, fail-closed)"
+        id: apply
+        run: |
+          set -uo pipefail
+          python3 scripts/patch-ensemble-budget-2.py 2>&1 | tee /tmp/apply.log
+          rc=${PIPESTATUS[0]}
+          echo "applier_exit=$rc" >> "$GITHUB_OUTPUT"
+          test "$rc" -eq 0 || exit "$rc"
+
+      - name: "Verify markers and parse both patched bundles as ES modules"
+        id: verify
+        run: |
+          set -uo pipefail
+          fail=0
+          for pair in "qnfo-ai/worker.js:ENSEMBLE-BUDGET-2" "qnfo-research-exec/worker.js:GW-CANNED-DETECT-1"; do
+            f="${pair%%:*}"
+            m="${pair##*:}"
+            if grep -qF "$m" "$f"; then
+              echo "MARKER OK $m in $f"
+            else
+              echo "MARKER MISSING $m in $f"
+              fail=1
+            fi
+            cp "$f" /tmp/check.mjs
+            if node --check /tmp/check.mjs; then
+              echo "SYNTAX OK $f"
+            else
+              echo "SYNTAX FAIL $f"
+              fail=1
+            fi
+          done
+          if grep -qF 'Math.min(4e4, _remaining())' qnfo-ai/worker.js; then
+            echo "LEGACY GATE STILL PRESENT in qnfo-ai/worker.js"
+            fail=1
+          else
+            echo "LEGACY GATE REMOVED in qnfo-ai/worker.js"
+          fi
+          echo "verify_fail=$fail" >> "$GITHUB_OUTPUT"
+          test "$fail" -eq 0
+
+      - name: "Commit the patch back to main (race-safe)"
+        id: commit
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          if git diff --quiet; then
+            echo "commit_outcome=no-op"
+            echo "commit_outcome=no-op" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git add -A
+          git commit -m "fix(ensemble): ENSEMBLE-BUDGET-2 stage-share caps + GW-CANNED-DETECT-1 canned detection" || true
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "commit_outcome=pushed"
+              echo "commit_outcome=pushed" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "push attempt $i failed, rebasing"
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "commit_outcome=push-failed"
+          echo "commit_outcome=push-failed" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: "Canonical deploy qnfo-ai"
+        id: deploy_ai
+        continue-on-error: true
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "SKIP qnfo-ai deploy (OPS_ROUTER_AUTH_KEY not configured)"
+            exit 0
+          fi
+          python3 scripts/canonical_deploy.py --worker qnfo-ai --path qnfo-ai/worker.js 2>&1 | tee /tmp/deploy-ai.log
+          echo "deploy_ai_exit=${PIPESTATUS[0]}"
+
+      - name: "Canonical deploy qnfo-research-exec"
+        id: deploy_re
+        continue-on-error: true
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "SKIP qnfo-research-exec deploy (OPS_ROUTER_AUTH_KEY not configured)"
+            exit 0
+          fi
+          python3 scripts/canonical_deploy.py --worker qnfo-research-exec --path qnfo-research-exec/worker.js 2>&1 | tee /tmp/deploy-re.log
+          echo "deploy_re_exit=${PIPESTATUS[0]}"
+
+      - name: "Publish machine-readable status"
+        if: always()
+        run: |
+          mkdir -p ci-status
+          printf '{"marker_a":"ENSEMBLE-BUDGET-2","marker_b":"GW-CANNED-DETECT-1","applier_exit":"%s","verify_fail":"%s","commit_outcome":"%s","ts":"%s"}\n' \
+            "${{ steps.apply.outputs.applier_exit }}" \
+            "${{ steps.verify.outputs.verify_fail }}" \
+            "${{ steps.commit.outputs.commit_outcome }}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/ensemble-budget-2.json
+          cat ci-status/ensemble-budget-2.json
+
+      - name: "Commit status artifact (race-safe)"
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add -f ci-status/ensemble-budget-2.json
+          git commit -m "ci(ensemble): status artifact [skip ci]" || exit 0
+          for i in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          exit 0

@@ -1,0 +1,14 @@
+{
+  "check": "research-exec-terminal-rescue-1",
+  "worker": "qnfo-research-exec",
+  "version": "0.9.22-terminal-rescue",
+  "markers": [
+    "TERMINAL-RESCUE-1",
+    "REVISE-RETRY-1",
+    "RECONCILE-RETRY-1"
+  ],
+  "patch_exit": "",
+  "deploy_outcome": "",
+  "binding_present": "",
+  "ts": "2026-09-29T19:05:37Z"
+}

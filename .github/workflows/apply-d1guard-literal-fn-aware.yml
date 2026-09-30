@@ -1,0 +1,180 @@
+name: apply-d1guard-literal-fn-aware
+
+# D1-GUARD-LITERAL-AND-FN-AWARE-1 (issue 1349, 2026-09-29).
+#
+# WHY THIS WORKFLOW EXISTS: scripts/d1guard-literal-aware-patch.py was committed on
+# 2026-09-29 but NO workflow ever invoked it, so the applier was orphaned and the live
+# qnfo-ops bundle stayed at 2.37.17-d1-schema-hint with the defective guard. This is
+# the ORPHANED-APPLIER-1 failure mode: a fix that exists in the repo but has no
+# execution path to live. The workflow below is that execution path.
+#
+# VERSION-PIN-AGNOSTIC-1 (issue 1355, 2026-09-29): the deploy preflight previously
+# hard-pinned
+#     var VERSION = "2.37.18-d1-guard-literal-fn-aware";
+# while the artifact on main had already advanced to 2.37.19-d1-guard-literal-fn-aware.
+# grep -cF therefore returned 0, `test 0 = 1` failed, and the deploy job NEVER RAN: the
+# fix was committed to main at 12:28Z and live stayed at 2.37.17 for the rest of the
+# day. This is STALE-PREFLIGHT-1 recurring exactly one commit later. The preflight now
+# derives the version from the artifact and asserts the GUARD PROPERTY -- the
+# literal-stripping scanner is present, the REPLACE INTO re-check is present, the legacy
+# blanket-rejection message is gone, and source/mirror are byte-identical -- instead of
+# matching a frozen version literal. A version pin can no longer block a real fix.
+#
+# WHAT IT FIXES (issue 1349, reproduced live before the patch):
+#   ops_d1_query  SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE '%delete%'
+#     -> {"ok":false,"rejected":true,"error":"read-only SELECT/WITH only - mutation
+#         keywords are rejected anywhere in the statement"}
+#   ops_d1_query  SELECT replace(title,'TOOL-FAILURE','TF') AS t, id FROM agent_issues LIMIT 3
+#     -> the same rejection: `replace` is both a SQLite scalar function and the
+#        REPLACE INTO statement keyword, and a bare-word scan cannot tell them apart.
+# After the patch the scan runs on a literal/comment-stripped copy, `replace` is
+# checked only as REPLACE INTO, and an interior ';' surviving stripping is REJECTED
+# (the pre-patch guard accepted "SELECT 1; SELECT 2"), so the guard is strictly
+# stronger where it matters.
+#
+# DEPLOY: scripts/raw_put.py PUTs to the CF API /content endpoint, which updates the
+# CODE ONLY and preserves all live bindings (BINDING-PRESERVATION-1). raw_put.py is
+# fail-closed (exit 3, deploys nothing on error). The applier writes worker.js AND its
+# deployed-current mirror in the same commit so mirror-guard stays green and the
+# qnfo-fleet-control redeploy cron cannot revert the fix.
+#
+# NOTE the commit message is passed as single-line -m flags and never as an inline
+# multi-line string: a multi-line git commit -m inside a run: | block scalar puts its
+# continuation lines at column 1, terminates the scalar, and makes the whole workflow
+# file invalid YAML -- the documented defect that made an earlier apply workflow create
+# runs with zero jobs.
+
+on:
+  push:
+    paths:
+      - 'scripts/d1guard-literal-aware-patch.py'
+      - '.github/workflows/apply-d1guard-literal-fn-aware.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-d1guard-literal-fn-aware
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch (fail-closed)
+        id: apply
+        run: |
+          set -euo pipefail
+          python3 scripts/d1guard-literal-aware-patch.py
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change produced (already applied)"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat
+          fi
+
+      - name: Mirror parity for the patched pair (blocking)
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "qnfo-ops source and mirror are byte-identical"
+
+      - name: Fleet mirror-guard report (non-blocking)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 scripts/mirror-guard.py || true
+
+      - name: Cron rate ceiling gate (CRON-RATE-CEILING-1, non-blocking)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 scripts/cron_rate_guard.py || true
+
+      - name: Commit and push to the triggering branch
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-d1guard-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="fix(qnfo-ops): #1349 D1 read-only guard is now literal-aware AND function-aware"
+          BODY="Issue 1349: the read-only guard scanned the raw statement for mutation keywords anywhere in the text, so a keyword inside a string literal and the SQLite scalar function replace(...) were both refused. The scan now runs on a literal and comment stripped copy; replace is removed from the bare-word scan and re-checked only as REPLACE INTO; an interior semicolon surviving stripping is now rejected, which the old guard accepted. Every rejection names the offending token and carries a hint. The applier writes both worker.js and its deployed-current mirror so the fleet redeploy cron cannot revert the fix."
+          FOOT="Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preflight - artifact must carry the guard fix (version-pin-agnostic)
+        id: pre
+        run: |
+          set -euo pipefail
+          VER="$(grep -o 'var VERSION = "[^"]*";' qnfo-ops/worker.js | head -1 | sed 's/^var VERSION = "//; s/";$//')"
+          echo "artifact_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "artifact VERSION=$VER"
+          case "$VER" in
+            *d1-guard-literal*) echo "version is a d1-guard-literal revision" ;;
+            *) echo "REFUSING: artifact is not a d1-guard-literal revision ($VER)"; exit 1 ;;
+          esac
+          test "$(grep -cF 'd1StripLiterals' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'd1ReadOnlyGuard' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'replace\s+into' qnfo-ops/worker.js || true)" -ge 1
+          test "$(grep -cF 'mutation keywords are rejected anywhere' qnfo-ops/worker.js || true)" = "0"
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          echo "preflight OK: literal-aware guard present, legacy blanket message gone, mirrors byte-identical"
+
+      - name: Deploy qnfo-ops (binding-preserving CF API /content PUT)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/raw_put.py qnfo-ops qnfo-ops/worker.js
+
+      - name: Verify LIVE bundle carries the guard fix
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECT_VER: ${{ steps.pre.outputs.artifact_version }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-ops/content" \
+            -o /tmp/live.js
+          echo "live-bytes=$(wc -c < /tmp/live.js)"
+          echo "expected-version=$EXPECT_VER"
+          test "$(grep -cF "$EXPECT_VER" /tmp/live.js || true)" -ge 1
+          test "$(grep -cF 'd1StripLiterals' /tmp/live.js || true)" -ge 1
+          test "$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js || true)" = "0"
+          echo "VERIFIED: live qnfo-ops carries the literal+function-aware D1 read-only guard"

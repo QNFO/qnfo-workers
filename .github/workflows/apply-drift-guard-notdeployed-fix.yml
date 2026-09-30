@@ -1,0 +1,77 @@
+name: apply-drift-guard-notdeployed-fix
+
+# NOT-DEPLOYED-IDENTITY-1 + DUP-WORKER-1 (2026-09-29).
+#
+# Applies scripts/drift-guard-notdeployed-worker-patch.py to scripts/deploy-drift-guard.py,
+# gates on py_compile, commits, and pushes with a rebase + retry loop so the commit cannot
+# lose a race against the concurrent writers landing on this repo every few minutes.
+#
+# WHY THIS CLOSES THE LOOP: scripts/deploy-drift-guard.py IS in the push.paths of
+# .github/workflows/fleet-autodeploy.yml, so this commit re-triggers a full fleet self-audit
+# that runs with the FIXED guard and rewrites worker_live_audit with consistent identifiers.
+# The commit is therefore deliberately NOT marked [skip ci]. No loop is possible: this
+# workflow triggers only on its own two paths, neither of which is deploy-drift-guard.py.
+#
+# ADVERSARIAL: this ships a SCRIPT, not a worker. There is no live deploy step and no
+# /health verification, because scripts/deploy-drift-guard.py is only ever executed by CI.
+# A green run proves the anchors were unique and the patched file compiles. It does NOT
+# prove the next audit pass classifies correctly, and it does not prove any worker is
+# healthy. The classification change is verified separately by reading worker_live_audit
+# after the next fleet-autodeploy run.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/drift-guard-notdeployed-worker-patch.py'
+      - '.github/workflows/apply-drift-guard-notdeployed-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-drift-guard-notdeployed-fix
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: apply fail-closed patch
+        run: python scripts/drift-guard-notdeployed-worker-patch.py
+
+      - name: gate on py_compile
+        run: python -m py_compile scripts/deploy-drift-guard.py
+
+      - name: commit and push (rebase + retry)
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-selfheal-bot"
+          git config user.email "selfheal-bot@qnfo.org"
+          if git diff --quiet; then
+            echo "no change to commit"
+            exit 0
+          fi
+          git add scripts/deploy-drift-guard.py
+          git commit -m "fix(drift-guard): NOT-DEPLOYED-IDENTITY-1 emits resolved worker; DUP-WORKER-1 dedupes"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i; rebasing"
+            git pull --rebase --autostash origin main
+            sleep $((i * 3))
+          done
+          echo "::error::push failed after 5 attempts"
+          exit 1

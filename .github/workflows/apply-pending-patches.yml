@@ -1,0 +1,229 @@
+name: apply-pending-patches
+
+# APPLY-PENDING-1 -- lands every scripts/*patch*.py whose anchors still match,
+# then deploys only the workers that actually changed.
+#
+# Closes three measured defect classes:
+#   * #1395 CI-APPLIER-NEVER-APPLIES-1 -- the doctor measured 2 scripts that
+#     apply cleanly to main but were never landed (applied-now).
+#   * #1381 FAILURE-ARTIFACT-LOSS-1 -- this workflow ALWAYS publishes a
+#     machine-readable artifact, so a run that lands nothing is still visible
+#     through the GitHub contents API without the Actions API.
+#   * PARTIAL-APPLY-1 -- the applier reverts a failed patcher's writes, so a
+#     half-patched tree can never be committed.
+#
+# WHY IT IS WRITTEN THIS WAY (the classes it must not join):
+#   * WORKFLOW-YAML-LINT-1 -- an unquoted colon inside a step NAME made
+#     deploy-qnfo-ops.yml unparseable, producing zero-job runs with no log.
+#     Every step name below is colon-free; workflow-lint.yml gates it.
+#   * SCHEDULE-EVENT-NEVER-FIRES-1 -- the GitHub `schedule` event has never
+#     fired in this repo, so this workflow is push-triggered plus
+#     workflow_dispatch, never schedule-only.
+#   * COMMITBACK-PUSH-RACE-1 / the 409 class -- commit-back retries with
+#     pull --rebase --autostash because fleet agents push every few minutes.
+#   * BINDING-PRESERVATION-1 + COMPAT-PRESERVE-1 -- deploys go through
+#     scripts/raw_put.py (CF API /content PUT, binding-preserving), never
+#     wrangler deploy, which would drop live bindings.
+#   * DEPLOY-VERIFY-RACE-1 -- /content is eventually consistent; verification
+#     is marker-based with bounded retry, not exact-VERSION equality (exact
+#     equality produces false-negative CI failures when a concurrent agent
+#     deploys a newer version).
+#   * SILENT-LANDING-LOSS-1 (added 2026-09-30 by qnfo-ops) -- every step used
+#     to carry continue-on-error, so a commit-back PUSH_FAILED still reported
+#     job success and a lost landing left nothing red. The commit-back step is
+#     now fail-loud and its outcome is recorded as push_ok in the artifact.
+#   * CI-STATUS-PATH-GUESS-1 (added 2026-09-30 by qnfo-ops) -- measured this
+#     day, the largest bucket of unfiled ops tool errors was github_repo_read
+#     404s on ci-status/<name>.json paths no workflow ever wrote
+#     (restore-container-config-1485.json, ensemble-budget-3.json,
+#     deploy-containers-pilot.json, fix-pilot-container-class.json, ...).
+#     ci-status/index.json now lists every artifact a run actually published,
+#     so a reader never guesses a filename again.
+#   * COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1 (added 2026-09-30 by
+#     qnfo-ops) -- the commit-back step staged
+#       git add -A scripts/ '*worker.js' ci-status/
+#     a pathspec that CANNOT match qnfo-ops/scripts/*.sh or
+#     .github/workflows/*.yml. Any patch that touched a file outside those
+#     three paths was written into this ephemeral worktree and then silently
+#     discarded at commit time, while the applier still reported it "landed"
+#     and PARTIAL-APPLY-1's revert stayed quiet (nothing failed). Measured
+#     consequence: the TOOLBUDGET-CANONICAL-1 rewrite of
+#     qnfo-ops/scripts/guard-timebudget.sh was dropped on every run, so the
+#     guard stayed old AND orphaned and the OPS-SETTINGS-IMMUTABLE-1 tool-loop
+#     budget drift gate never fired. Staging is now tree-wide.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/apply-pending-patches.py"
+      - "scripts/*patch*.py"
+      - ".github/workflows/apply-pending-patches.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apply-pending-patches
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "Run the transactional applier (fail-closed, reverts partial writes)"
+        id: apply
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          export REPO_ROOT="$GITHUB_WORKSPACE"
+          export APPLIER_DOCTOR_TIMEOUT=45
+          rc=0
+          python3 scripts/apply-pending-patches.py || rc=$?
+          echo "apply_rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "--- changed worker bundles ---"
+          git status --porcelain -- '*/worker.js' || true
+          exit 0
+
+      - name: Syntax check every changed worker bundle
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          found=0
+          for f in $(git status --porcelain -- '*/worker.js' | awk '{print $2}'); do
+            found=1
+            echo "checking $f"
+            cp "$f" /tmp/chk.mjs
+            node --check /tmp/chk.mjs && echo "OK $f" || echo "SYNTAX-FAIL $f"
+          done
+          if [ "$found" = "0" ]; then echo "no worker bundles changed"; fi
+
+      - name: "Commit landed patches (race-safe: pull --rebase + bounded retry)"
+        id: commitback
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          # COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1: this was
+          #   git add -A scripts/ '*worker.js' ci-status/
+          # which silently dropped qnfo-ops/scripts/*.sh and .github/workflows/*.yml
+          # written by patchers. Stage the whole tree. This cannot resurrect a
+          # half-applied patch: the applier already reverts the exact paths a failing
+          # patcher touched (PARTIAL-APPLY-1 / REVERT-COLLATERAL-1), so anything left
+          # dirty at this point is a deliberate, successful write.
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit (main already current)"
+            exit 0
+          fi
+          git commit -m "fix(fleet): APPLY-PENDING-1 land pending patch scripts [skip ci]"
+          for i in 1 2 3 4 5; do
+            echo "commit-back attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "PUSH_FAILED after 5 attempts"
+          exit 1
+
+      - name: "Deploy each changed worker (binding-preserving /content PUT)"
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          deployed=""
+          for f in $(git show --stat --name-only --pretty=format: HEAD~1..HEAD 2>/dev/null | grep '^[^/]*/worker.js$' || true); do
+            w=$(echo "$f" | cut -d/ -f1)
+            echo "deploying $w from $f"
+            if python3 scripts/raw_put.py "$w" "$f"; then
+              deployed="$deployed $w"
+            else
+              echo "DEPLOY-FAILED $w"
+            fi
+          done
+          echo "deployed=$deployed"
+          echo "deployed=$deployed" >> "$GITHUB_ENV"
+
+      - name: "Publish machine-readable status (always)"
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          cat > ci-status/apply-pending.json <<EOF
+          {
+            "workflow": "apply-pending-patches",
+            "marker": "APPLY-PENDING-1",
+            "apply_rc": "${{ steps.apply.outputs.apply_rc }}",
+            "push_ok": "${{ steps.commitback.outcome }}",
+            "job_status": "${{ job.status }}",
+            "head": "${{ github.sha }}",
+            "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          }
+          EOF
+          cat ci-status/apply-pending.json
+          if [ -f ci-status/applier-doctor.json ]; then
+            echo "--- applier-doctor.json ---"
+            head -c 2000 ci-status/applier-doctor.json
+          fi
+
+      - name: "Publish the artifact index for ci-status"
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, pathlib
+          d = pathlib.Path("ci-status")
+          files = sorted(p.name for p in d.glob("*") if p.is_file() and p.name != "index.json")
+          idx = {
+              "marker": "CI-STATUS-INDEX-1",
+              "workflow": "apply-pending-patches",
+              "artifacts": files,
+              "count": len(files),
+              "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it.",
+          }
+          (d / "index.json").write_text(json.dumps(idx, indent=2))
+          print(json.dumps(idx))
+          PY
+
+      - name: "Commit the status artifact"
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "no status change"
+            exit 0
+          fi
+          git commit -m "ci(status): apply-pending report [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "STATUS_PUSH_OK attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "status push failed"
+          exit 0

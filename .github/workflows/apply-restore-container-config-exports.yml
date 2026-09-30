@@ -1,0 +1,163 @@
+name: apply-restore-container-config-exports
+
+# CONTAINER-CONFIG-RESTORE-4-EXPORTS (2026-09-29, issue #1485 / #1487).
+#
+# WHY THIS WORKFLOW EXISTS -- the last mile that three prior attempts never reached.
+#   The container config for qnfo-containers-pilot was destroyed at
+#   2026-09-29T19:30:35.100Z by qnfo-ops:cf_worker_deploy (deployment_history id 172),
+#   which rebuilds upload metadata from GET /bindings; [[containers]] is SCRIPT-LEVEL
+#   metadata, not a binding, so it was silently dropped. First container.error landed
+#   8 seconds later (19:30:43.591Z): "Cannot read properties of undefined (reading
+#   'running')" -- ctx.container is undefined, so shell_exec, exec_python, exec_node,
+#   container_install, git_clone_exec, container_workspace_exec, shell_pipeline and
+#   container_status all return HTTP 500.
+#
+#   MEASURED, NOT INFERRED -- why every previous restore failed:
+#     ci-status/restore-container-config.json (19:43:35Z) log_tail:
+#       PUT /content -> HTTP 400
+#       errors[0].code 100402 "Durable Object exports reconciliation failed:
+#       [provisioned_class_missing_from_config] class 'ShellContainer' has a
+#       provisioned Durable Object namespace (f3e32894405c49f9b33e8612c6d27861) but
+#       is not declared in `exports`."
+#     scripts/restore_container_config.py sent {main_module, containers,
+#     compatibility_date[, flags]} with NO `exports`. Every attempt was rejected on
+#     that one missing field. HTTP 400 (not 401/403) also proves the CI Cloudflare
+#     token authenticates correctly -- the blocker was the request body.
+#     wrangler paths (deploy-containers-pilot.yml, apply-container-binding-guard-1.yml)
+#     are separately dead: wrangler_outcome=failure / nomig_outcome=failure.
+#
+# WHAT THIS WORKFLOW DOES
+#   Runs scripts/restore_container_config_exports.py, which PUTs /content with
+#   metadata {main_module, containers, exports, compatibility_date[, compatibility_flags]}
+#   -- `exports` declaring ShellContainer as {"type":"durable-object","storage":"sqlite"},
+#   which is exactly the remediation the API error prescribed. `bindings` stays omitted
+#   (BINDING-PRESERVATION-1 by omission). It then re-reads /settings and fails closed
+#   unless containers, AUDIT and SHELL_CONTAINER are all present.
+#
+# AUTHORITATIVE VERIFICATION
+#   /health cannot detect this outage class at all (it is served by the top-level fetch
+#   and never touches ctx.container) -- that false green is why earlier runs looked
+#   successful. The real signal is /status, which reaches the Durable Object. This
+#   workflow probes it when PILOT_TOKEN is configured, and always publishes a
+#   ci-status artifact with the restore log tail so "ran and failed" is distinguishable
+#   from "never ran".
+#
+# This workflow never writes [skip ci] in its own commits -- a deploy trigger must never
+# carry a skip token (CI-TRIGGER-SKIP-1).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-restore-container-config-exports.yml'
+      - 'scripts/restore_container_config_exports.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-restore-container-config-exports
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PILOT_TOKEN: ${{ secrets.PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: assert the containers block is present in wrangler.toml
+        run: |
+          set -euo pipefail
+          f=qnfo-containers-pilot/wrangler.toml
+          for key in '\[\[containers\]\]' 'class_name = "ShellContainer"' 'image = ' 'instance_type = ' 'max_instances = '; do
+            if ! grep -Eq "$key" "$f"; then
+              echo "::error::wrangler.toml is missing required key: $key -- refusing to restore"
+              exit 1
+            fi
+          done
+          echo "containers block present:"
+          sed -n '/\[\[containers\]\]/,/^$/p' "$f"
+
+      - name: restore [[containers]] via /content metadata with exports
+        id: restore
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/restore_container_config_exports.py 2>&1 | tee /tmp/restore4.log
+          rc=${PIPESTATUS[0]}
+          echo "restore rc=$rc"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: probe the authoritative signal (/status reaches the Durable Object)
+        id: probe
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          base="https://qnfo-containers-pilot.q08.workers.dev"
+          if [ -z "${PILOT_TOKEN:-}" ]; then
+            echo "::warning::PILOT_TOKEN unavailable - /status probe skipped"
+            echo "signature=probe-skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code="$(curl -s -o /tmp/s.json -w '%{http_code}' -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
+          echo "GET /status -> $code"
+          cat /tmp/s.json || true
+          echo
+          if grep -q "Cannot read properties of undefined" /tmp/s.json 2>/dev/null; then
+            echo "signature=ctx-container-undefined" >> "$GITHUB_OUTPUT"
+            echo "::error::/status still reports ctx.container undefined - #1485 OPEN"
+            exit 1
+          fi
+          echo "signature=clean" >> "$GITHUB_OUTPUT"
+          echo "container config verified live - #1485 closable"
+
+      - name: publish outcome artifact
+        if: always()
+        env:
+          RESTORE_RC: ${{ steps.restore.outputs.rc }}
+          PROBE_SIG: ${{ steps.probe.outputs.signature }}
+        run: |
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, os, time
+          try:
+              log = open("/tmp/restore4.log", encoding="utf-8", errors="replace").read()[-4000:]
+          except OSError:
+              log = ""
+          out = {
+              "workflow": "apply-restore-container-config-exports",
+              "marker": "CONTAINER-CONFIG-RESTORE-4-EXPORTS",
+              "restore_rc": os.environ.get("RESTORE_RC", ""),
+              "status_signature": os.environ.get("PROBE_SIG", ""),
+              "log_tail": log,
+              "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+          }
+          with open("ci-status/restore-container-config-exports.json", "w") as fh:
+              json.dump(out, fh, indent=2)
+          print(json.dumps({k: v for k, v in out.items() if k != "log_tail"}, indent=2))
+          PY
+
+      - name: commit outcome artifact
+        if: always()
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add ci-status/restore-container-config-exports.json
+          if git diff --cached --quiet; then
+            echo "no artifact change to commit"
+            exit 0
+          fi
+          git commit -m "chore(ci): apply-restore-container-config-exports outcome [skip ci]"
+          for i in 1 2 3; do
+            if git push; then echo "pushed"; exit 0; fi
+            git pull --rebase --autostash || true
+          done
+          echo "::error::artifact push failed after 3 attempts"

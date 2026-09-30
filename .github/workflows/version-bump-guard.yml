@@ -1,0 +1,102 @@
+name: version-bump-guard
+
+# VERSION-BUMP-GUARD-1 (2026-09-29, issue 1371).
+#
+# Closes the silent never-deploys class: a worker fix committed WITHOUT a VERSION bump is
+# invisible to fleet-autoaudit.py --apply (strictly-ahead numeric version), to deploy-drift.yml
+# (VERSION string comparison) and to mirror-guard.py (source vs mirror). All three stay green
+# while the fix stays on main forever.
+#
+# Verified live instances at the time of writing
+#   * qnfo-backlog-exec - HEALTH-PROBE-BUDGET-1 (#1368) committed with VERSION unchanged at
+#     2.0.0-full-register-inventory; repo bundle 33,159 B vs live script 33,161 B.
+#   * worker_live_audit recorded qnfo-ops at 2.37.14-callglm-reasoning while live had advanced
+#     to 2.37.20-selfheal-analyzer-live (six-version lag).
+#
+# ADVERSARIAL - a green run proves only that a VERSION string changed with the bytes. It does
+# NOT prove the change is correct, that the bump went in the right direction, or that the worker
+# deployed. Version parity is not behaviour parity.
+#
+# CI-DEP-MISSING-1 (2026-09-29, fix): the lint step below calls scripts/workflow-lint.py, which
+# hard-depends on PyYAML. setup-python@v5 does NOT provide it, so the lint exited 2 and the two
+# substantive steps were skipped - the guard was red for a missing dependency, not for a version
+# violation, and never evaluated a diff. The install step is REQUIRED, not cosmetic.
+
+on:
+  push:
+    paths:
+      - '*/worker.js'
+      - '*/deployed-current.worker.js'
+      - 'scripts/version-bump-guard.py'
+      - 'scripts/cf-import-guard.py'
+      - '.github/workflows/version-bump-guard.yml'
+  pull_request:
+    paths:
+      - '*/worker.js'
+      - '*/deployed-current.worker.js'
+      - 'scripts/cf-import-guard.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: version-bump-guard
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch-depth 0 is REQUIRED: the guard diffs two refs and fails closed (exit 3)
+          # rather than guessing when a ref is unavailable in a shallow clone.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # REQUIRED: workflow-lint.py imports yaml and fails closed when it is absent.
+      - name: Install lint dependency (PyYAML)
+        run: python -m pip install --quiet pyyaml
+
+      - name: Lint the workflow YAML class repo-wide
+        run: |
+          set -euo pipefail
+          if [ -f scripts/workflow-lint.py ]; then
+            python3 scripts/workflow-lint.py
+          else
+            echo "no workflow-lint.py in this revision; skipping"
+          fi
+
+      # CF-IMPORT-GUARD-1: a worker bundle must not import a name the runtime does not provide.
+      # `import { Container } from "cloudflare:workers"` (written by the now-retired
+      # fix-pilot-container-class workflow) made every upload of qnfo-containers-pilot fail with
+      # Cloudflare error 10021 while the live worker kept serving; see scripts/cf-import-guard.py.
+      - name: Forbidden Cloudflare module imports
+        run: |
+          set -euo pipefail
+          python3 scripts/cf-import-guard.py
+
+      - name: Resolve the diff range
+        id: range
+        run: |
+          set -euo pipefail
+          BEFORE='${{ github.event.before }}'
+          AFTER='${{ github.sha }}'
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
+          fi
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+          echo "range $BEFORE..$AFTER"
+
+      - name: Version bump guard
+        run: |
+          set -euo pipefail
+          python3 scripts/version-bump-guard.py \
+            "${{ steps.range.outputs.before }}" \
+            "${{ steps.range.outputs.after }}"

@@ -1,0 +1,55 @@
+# CI-WATCHDOG-RESOLVE (close-on-green)
+#
+# WHY: scripts/ci_watchdog.py files a deduped issue per (class, subject) failure
+# but has NO close path (grep for closed|resolve in that file returns only
+# classification strings). A finding therefore outlives its own fix: issue #36
+# ([ci-watchdog] build-gate: deploy-gate) stayed open after repair commit
+# 0c028255 produced a GREEN deploy-gate run. Detect-and-file without
+# verify-and-close is a one-way ratchet - the backlog can only grow.
+#
+# WHY push AND NOT schedule: on this repository the GitHub `schedule` event has
+# NEVER fired (zero runs with event=schedule across the whole history, as
+# documented at the head of ci-watchdog.yml). A reaper built on a cron
+# expression here would be dead on arrival. Every push fires, so this hangs off
+# push to main.
+#
+# SAFETY: the reaper closes ONLY on positive evidence - a successful run of the
+# SAME workflow, strictly newer than the failing run cited in the issue body.
+# Absence from the watchdog's 6h window never closes anything, because an
+# aged-out failure is not a fixed failure. The script always exits 0: a reaper
+# that can turn CI red becomes a finding of the thing it reaps.
+
+name: ci-watchdog-resolve
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write        # close the resolved finding
+  actions: read        # read run conclusions - this is the green evidence
+
+concurrency:
+  group: ci-watchdog-resolve-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Close ci-watchdog findings whose failure is provably cleared
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: python3 scripts/ci_watchdog_resolve.py

@@ -1,0 +1,40 @@
+{
+  "attempts": [],
+  "containers": [
+    {
+      "class_name": "ShellContainer",
+      "image": "docker.io/nikolaik/python-nodejs:python3.12-nodejs22",
+      "instance_type": "basic",
+      "max_instances": 3
+    }
+  ],
+  "d1_binding": {
+    "id": "35e2e573-92f3-46ac-83c6-22f6429fc5e5",
+    "name": "AUDIT",
+    "type": "d1"
+  },
+  "degraded_signature": null,
+  "do_binding": {
+    "class_name": "ShellContainer",
+    "name": "SHELL_CONTAINER"
+  },
+  "health_http": 200,
+  "health_version": "1.0.4-container-ctx-guard",
+  "issues": [
+    1485,
+    1487,
+    1493
+  ],
+  "marker": "CONTAINER-CONFIG-RESTORE-8",
+  "missing_bindings": [],
+  "mode": "assert-only",
+  "pre_bindings": [
+    "AUDIT",
+    "PILOT_TOKEN",
+    "SHELL_CONTAINER"
+  ],
+  "pre_compatibility_date": "2026-08-01",
+  "status": "skipped (no PILOT_TOKEN in env)",
+  "verdict": "OK",
+  "worker": "qnfo-containers-pilot"
+}

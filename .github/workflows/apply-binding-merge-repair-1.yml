@@ -1,0 +1,155 @@
+name: apply-binding-merge-repair-1
+
+# BINDING-INSTALL-MERGE-1 repair driver (2026-09-29). See issue #1448.
+#
+# ROOT CAUSE: qnfo-ops cfWorkerDeploy installed wrangler.toml bindings ONLY when the target
+# worker carried ZERO non-secret bindings. qnfo-research-exec already carried 6 non-secret
+# bindings (AI, GRAPH_DB, LIVING_PAPER, MIRROR, PDF_SVC, QNFO_AUDIT), so its declared QNFO_AI
+# service binding could never be installed. routerFetch() then fell back to a PUBLIC fetch of a
+# same-account workers.dev hostname, which is blocked from Worker context, so every gateway call
+# degraded to the Workers AI fallback (cloud_ops_events kind=gw-fallback, n=609,
+# 2026-09-16 -> 2026-09-29). The fallback output is short, stageRevise() requires >= 10000 chars,
+# so the pipeline terminalised (the RESEARCH-TERMINAL cluster).
+#
+# THE FIX is in qnfo-ops/worker.js (cfWorkerDeploy -> union declared non-secret bindings into the
+# live set, live wins on (type,name), secrets untouched). The canonical /ops/deploy route calls
+# cfWorkerDeploy, so ONE canonical deploy of qnfo-research-exec must now install QNFO_AI.
+#
+# NO-CRON-NOTE: this repository's GitHub `schedule` event has never fired
+# (SCHEDULE-EVENT-NEVER-FIRES-1), so this workflow declares no cron. It fires on push to itself
+# or on manual dispatch.
+#
+# WORKFLOW-YAML-LINT-1: no step name in this file contains an unquoted colon-space.
+#
+# ARTIFACT-NOT-COMMITTED-1 (fixed here): the first revision wrote the status JSON into the
+# runner workspace under `permissions: contents: read`, so a run left no repo trace and was
+# indistinguishable from "never ran". The status step now commits it back race-safely.
+#
+# BINDING-LOSS-ASSERT-1 (added here): verification asserted only that QNFO_AI is present. A
+# deploy that installs QNFO_AI while dropping an existing binding would have passed. The verify
+# step now asserts the FULL expected binding set.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-binding-merge-repair-1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-binding-merge-repair-1
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: "Canonical deploy of qnfo-research-exec via the binding-merging deployer"
+        id: deploy
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPS_ROUTER_AUTH_KEY:-}" ]; then
+            echo "FAIL: OPS_ROUTER_AUTH_KEY secret is not configured"
+            echo "deploy_outcome=no-secret" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
+          python3 scripts/canonical_deploy.py --worker qnfo-research-exec --path qnfo-research-exec/worker.js 2>&1 | tee /tmp/canonical-deploy.log
+          rc=${PIPESTATUS[0]}
+          echo "canonical_deploy_exit=$rc"
+          echo "deploy_outcome=$rc" >> "$GITHUB_OUTPUT"
+          test "$rc" -eq 0 || exit "$rc"
+
+      - name: "Verify QNFO_AI present and that no existing binding was lost"
+        id: verify
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CF_ACCOUNT_ID:-}" ]; then
+            echo "binding_present=unknown-no-cf-secret" >> "$GITHUB_OUTPUT"
+            echo "SKIP: CF API secrets unavailable in this repo; verify with cf_worker_bindings"
+            exit 0
+          fi
+          for i in 1 2 3 4 5 6; do
+            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/qnfo-research-exec/settings" \
+              -o /tmp/settings.json || true
+            if grep -q '"QNFO_AI"' /tmp/settings.json 2>/dev/null; then
+              echo "attempt $i: QNFO_AI observed"
+              break
+            fi
+            echo "attempt $i: QNFO_AI not present yet"
+            sleep 10
+          done
+          python3 - <<'PY'
+          import json
+          d = json.load(open('/tmp/settings.json'))
+          names = sorted(b.get('name') for b in d.get('result', {}).get('bindings', []))
+          expected = {
+              'AI', 'GITHUB_TOKEN', 'GRAPH_DB', 'LIVING_PAPER', 'MIRROR', 'PDF_SVC',
+              'PILOT_TOKEN', 'QNFO_AUDIT', 'RESEARCH_HALT', 'ROUTER_TOKEN', 'ZENODO_TOKEN',
+              'QNFO_AI',
+          }
+          print('live_binding_names=' + json.dumps(names))
+          missing = sorted(expected - set(names))
+          if missing:
+              print('FAIL: expected bindings missing after deploy: ' + json.dumps(missing))
+              raise SystemExit(1)
+          print('ALL EXPECTED BINDINGS PRESENT (including QNFO_AI)')
+          PY
+          echo "binding_present=1" >> "$GITHUB_OUTPUT"
+
+      - name: "Publish and commit the machine-readable status"
+        if: always()
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outputs.deploy_outcome }}
+          BINDING_PRESENT: ${{ steps.verify.outputs.binding_present }}
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, os, time
+          rec = {
+              "check": "binding-merge-repair-1",
+              "issue": 1448,
+              "worker": "qnfo-research-exec",
+              "binding": "QNFO_AI",
+              "deploy_outcome": os.environ.get("DEPLOY_OUTCOME", "unknown"),
+              "binding_present": os.environ.get("BINDING_PRESENT", "unknown"),
+              "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+          }
+          json.dump(rec, open("ci-status/binding-merge-repair-1.json", "w"), indent=2)
+          print(json.dumps(rec))
+          PY
+          git config user.name "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add ci-status/binding-merge-repair-1.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "ci(binding): record binding-merge-repair-1 outcome (issue 1448)"
+          for i in 1 2 3 4 5; do
+            echo "commit-back attempt $i"
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "commit-back OK on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::status commit-back failed after 5 attempts"
+          exit 0

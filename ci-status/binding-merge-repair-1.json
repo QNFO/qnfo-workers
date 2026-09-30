@@ -1,0 +1,9 @@
+{
+  "check": "binding-merge-repair-1",
+  "issue": 1448,
+  "worker": "qnfo-research-exec",
+  "binding": "QNFO_AI",
+  "deploy_outcome": "0",
+  "binding_present": "1",
+  "ts": "2026-09-29T17:09:58Z"
+}

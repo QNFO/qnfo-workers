@@ -1,0 +1,9 @@
+{
+  "workflow": "apply-binding-install-gate-1",
+  "defects": ["BINDING-INSTALL-MERGE-1"],
+  "issue": 1448,
+  "patch_step": "success",
+  "job_status": "success",
+  "head": "69ec3937644e1c6cd5b79939d9cbd20f30ded9fc",
+  "ts": "2026-09-29T17:09:47.078Z"
+}

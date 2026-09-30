@@ -1,0 +1,218 @@
+name: fleet-autodeploy
+
+# FLEET-AUTODEPLOY-1 / FLEET-AUTOAUDIT-1 (2026-09-29).
+#
+# The automatic half of "automatic self-audits + automatic worker updates systemwide".
+#
+# WHAT IT CLOSES
+#   * #1351 WORKER-LIVE-AUDIT-STALE-1 — worker_live_audit had NO scheduled writer and had
+#     frozen at 2026-09-27T17:23Z. scripts/fleet-autoaudit.py UPSERTs one row per worker
+#     on every run, so the audit can no longer silently go stale.
+#   * #1229 DEPLOY-DRIFT-GUARD-VERSION-ONLY-AND-REPORT-ONLY-1 — the guard is now
+#     content-aware (--content compares a normalised bundle sha256) and the fleet-wide
+#     run is BLOCKING here instead of continue-on-error.
+#   * Repo-ahead workers now have an automatic, verified path to live via the repo's own
+#     binding-preserving deployer (scripts/raw_put.py -> CF /content PUT).
+#
+# TRIGGER-DEAD-1 (2026-09-29) — WHY `schedule` ALONE WAS NOT A WRITER.
+#   This workflow's ONLY trigger was `schedule: cron "43 */2 * * *"`. The GitHub
+#   `schedule` event has never fired on this repository (SCHEDULE-EVENT-NEVER-FIRES-1,
+#   already documented in apply-backlog-health-cheap.yml, which is why that workflow
+#   deliberately declares no cron). Measured consequence after FLEET-AUTOAUDIT-1 landed:
+#   worker_live_audit still held 36 rows, ALL stamped `2026-09-27 17:23:22` (MIN = MAX,
+#   0 rows after 2026-09-28), and audits/ contained no fleet-autoaudit-<date>.json.
+#   A writer that is only reachable from an event that never fires is not a writer.
+#   The audit is therefore now ALSO driven by events that provably fire on this repo:
+#     * `push` — the mechanism deploy-qnfo-ops.yml and the whole apply-*.yml family
+#       already depend on;
+#     * `workflow_run` — chained off mirror-sync (on: push, i.e. every push to main),
+#       deploy-qnfo-ops and apply-backlog-health-cheap, giving a continuous audit cadence
+#       without depending on any cron.
+#   The cron is kept: if GitHub schedules ever start firing here it simply adds a run.
+#   The `[skip ci]` on the audit-artifact commit means that commit cannot re-trigger this
+#   workflow, so the push/workflow_run chain is acyclic.
+#
+# AUDIT-CADENCE-PATHLOCK-1 (2026-09-29) — WHY THE FILE FILTER IS GONE.
+#   The push trigger above was narrowed to three files. Measured consequence: a
+#   fleet-wide run landed at 2026-09-29 16:00:58, and then the audit froze again even
+#   though main received pushes at 16:02:50, 16:03:02, 16:04:05 and 16:04:09 — none of
+#   which touched one of the three filtered paths, so no run was created. Combined with
+#   a `schedule` event that never fires here, the audit's cadence was being decided by
+#   *which files a commit happens to touch*. An audit that silently stops when unrelated
+#   files change is the exact staleness class FLEET-AUTOAUDIT-1 exists to remove.
+#   The `paths:` filter is therefore removed: every push to main runs the audit.
+#   Loop safety is unchanged — the audit's own artifact commit carries `[skip ci]`, and
+#   the apply step remains gated on the strictly-ahead rule in the script.
+#
+# CI-RUNAWAY-LOOP-1 (2026-09-30, qnfo-ops) — WHY `paths-ignore` IS NOW REQUIRED.
+#   Removing the `paths:` filter removed the ONLY thing that kept the push trigger from
+#   firing on pure-artifact commits, and that silently created a live runaway loop:
+#
+#     container-config-selfheal-cron commits ci-status/<its artifact>.json
+#       (deliberately WITHOUT `[skip ci]` — CI-TRIGGER-SKIP-1)
+#         -> this workflow fires, because `on: push` now matches ANY push
+#           -> this workflow completes
+#             -> container-config-selfheal-cron is chained off
+#                `workflow_run: workflows: [fleet-autodeploy, ...]`
+#                  -> it runs again and commits again -> GOTO 1
+#
+#   MEASURED 2026-09-30 between 13:57:24Z and 14:00:10Z: five commits, all titled
+#   `chore(ci): container-config-selfheal-cron outcome (issue #1485)`, at 13:57:24,
+#   13:58:40, 13:58:58, 13:59:25 and 14:00:10 — a ~20-45s period, still running.
+#   The self-heal's own header asserted this chain was acyclic because "this workflow's
+#   own artifact commit touches ci-status/ only and therefore matches none of the chained
+#   workflows' triggers". That assertion was FALSE for exactly the two workflows whose
+#   push trigger carries no filter at all (this one and mirror-sync), and it is the
+#   DOC-CODE-PARITY-1 class: a comment describing a safety property the code does not have.
+#
+#   CONSEQUENCE BEYOND MINUTE BURN: the loop saturates the Actions queue. Measured the
+#   same window, `apply-pending-patches` did not create a run for two consecutive pushes
+#   to main (13:58:04 baf8dc53, 13:58:25 34ea87cc) whose paths match its trigger exactly,
+#   and `applier-doctor` did not re-run either — so a patch that was committed and
+#   verified in a real container still had no path to live. A runaway artifact loop does
+#   not just cost money; it starves the deploy pipeline it runs beside.
+#
+#   FIX: `paths-ignore` on the push trigger for the pure-artifact trees. Every push that
+#   carries CODE still runs the audit (AUDIT-CADENCE-PATHLOCK-1 is preserved — this is a
+#   narrower exclusion than the file allow-list it replaced, and it excludes only commits
+#   that contain no worker source). The cycle is broken at the cheapest point, and the
+#   self-heal's acyclicity claim becomes true instead of merely asserted.
+#   ADVERSARIAL: a commit that touches BOTH ci-status/ and a worker.js still runs the
+#   audit (paths-ignore requires every changed path to match), so no real code change is
+#   ever silently skipped.
+#
+# FLEET-AUTODEPLOY-DEFAULT-ON-1 (2026-09-29) — AUTO-UPDATE IS NOW ON BY DEFAULT.
+#   Owner standing instruction, repeated across sessions: "implement automatic
+#   self-audits, automatic worker updates systemwide". The previous gate
+#   (`vars.FLEET_AUTODEPLOY == 'true'`) was opt-IN and the variable was never set, so the
+#   apply step could never run on any trigger — the audit was a writer, the update path
+#   was not. This is now opt-OUT: set repository variable FLEET_AUTODEPLOY=false to
+#   disable, or dispatch with mode=audit for a one-off report.
+#
+#   THE SAFETY INVARIANT IS UNCHANGED, AND IT LIVES IN THE SCRIPT, NOT IN THE GATE.
+#   scripts/fleet-autoaudit.py --apply redeploys ONLY workers whose repo artifact is
+#   STRICTLY AHEAD of live by NUMERIC version comparison. Repo-BEHIND (live-ahead)
+#   workers, content-drift-only workers, workers with no version constant, and
+#   unreachable workers are NEVER overwritten -- they stay report-only.
+#   mirror-autosync.yml documents the regression class where an unattended copy reverted
+#   a live fix (qnfo-lifecycle live 1.6.2-cronconsolidate vs repo 1.6.2); the
+#   strictly-ahead rule is what excludes that class, and it is not loosened here.
+#
+#   ADVERSARIAL: default-on raises the blast radius of a bad commit. A worker whose repo
+#   artifact carries a higher version string but broken code WILL now reach live without a
+#   human. Mitigations in place: d1guard-battery.mjs runs blocking before the apply step,
+#   mirror-guard.py runs blocking before it, and the deployer is binding-preserving.
+#   Residual risk that remains: the battery covers the D1 guard, not arbitrary worker
+#   behaviour; a syntactically valid but semantically broken bump still ships.
+#
+# ADVERSARIAL: a green run proves version parity (and, in --content mode, bundle-hash
+# parity). It does NOT prove the fleet works: a worker can answer /health and still 500 on
+# its real routes, and content hashing masks formatting-only differences. It also cannot
+# see a worker whose live artifact is a DIFFERENT FILE from the repo artifact but carries
+# the same VERSION string — version parity is not content parity.
+
+on:
+  schedule:
+    - cron: "43 */2 * * *"
+  push:
+    branches: [main]
+    # CI-RUNAWAY-LOOP-1 (2026-09-30): pure-artifact commits must not start the
+    # fleet-autodeploy -> container-config-selfheal-cron -> commit -> fleet-autodeploy
+    # cycle. See the CI-RUNAWAY-LOOP-1 note above for the measured five-commit burst.
+    paths-ignore:
+      - "ci-status/**"
+      - "audits/**"
+  workflow_run:
+    workflows: ["mirror-sync", "deploy-qnfo-ops", "apply-backlog-health-cheap"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "audit = report only; apply = also redeploy repo-ahead workers"
+        required: false
+        default: audit
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: fleet-autodeploy
+  cancel-in-progress: false
+
+jobs:
+  fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: repo-internal mirror parity (fail-closed)
+        run: python scripts/mirror-guard.py
+
+      - name: D1-GUARD-BATTERY-1 self-audit (blocking when the battery exists)
+        run: |
+          set -euo pipefail
+          if [ -f scripts/d1guard-battery.mjs ]; then
+            node scripts/d1guard-battery.mjs
+          else
+            echo "no d1guard battery in this revision; skipping"
+          fi
+
+      - name: fleet self-audit (all workers, version + content) -> worker_live_audit
+        run: python scripts/fleet-autoaudit.py --audit
+
+      - name: auto-deploy repo-ahead workers (default ON; opt out with FLEET_AUTODEPLOY=false)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'audit') && vars.FLEET_AUTODEPLOY != 'false' }}
+        run: python scripts/fleet-autoaudit.py --apply
+
+      # COMMITBACK-PUSH-RACE-1 (#1386, 2026-09-29): the artifact commit used a single
+      # unconditional `git push`, so any concurrent push to main (this repo receives one
+      # every few minutes) made the push non-fast-forward and the step failed AFTER the
+      # artifact had been written to the runner filesystem. Measured consequence: the
+      # audit ran (worker_live_audit is a clean 110-row snapshot) but
+      # audits/fleet-autoaudit-<date>.json never reached main, so "the automatic
+      # self-audit ran" was verifiable only from D1, never from the repo.
+      # Fix: the same rebase + bounded-retry push loop already used by mirror-sync.yml,
+      # apply-unmangle-worker-js.yml and apply-drift-guard-notdeployed-fix.yml.
+      # `if: always()` makes the artifact independent of the outcome of the preceding
+      # steps: a failed apply step must not also destroy the audit evidence.
+      # ADVERSARIAL: the retry loop cannot make a push succeed, it only removes the
+      # one-shot race; if main is being written continuously the loop can still exhaust.
+      # In that case the step FAILS LOUDLY (exit 1) rather than reporting success —
+      # the D1 worker_live_audit rows remain the authoritative record either way.
+      - name: commit self-audit artifact (rebase + retry)
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-fleet-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add audits/ || true
+          if git diff --cached --quiet; then
+            echo "no audit artifact change"
+            exit 0
+          fi
+          git commit -m "chore(fleet-autoaudit): scheduled self-audit artifact [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "artifact pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i; rebasing onto origin/main"
+            git pull --rebase --autostash origin main
+            sleep $((i * 3))
+          done
+          echo "::error::audit artifact push failed after 5 attempts (concurrent writers)"
+          exit 1

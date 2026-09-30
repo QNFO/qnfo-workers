@@ -35,6 +35,26 @@ database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 binding = "PDF_SVC"
 service = "qnfo-pdf"
 
+# Service: qnfo-ai (research gateway / model router) - ROUTER-EGRESS-BINDING-ABSENT-1.
+# routerFetch() in worker.js prefers env.QNFO_AI and otherwise falls back to a PUBLIC fetch.
+# A public fetch to a same-account workers.dev hostname does not work from Worker context
+# (the repo already records this class on the qnfo-autopilot wrangler: a missing binding made
+# expressIdea fall back to a public workers.dev fetch, which returns 404 from a Worker), so
+# every gwCall silently degraded to the Workers AI fallback model:
+#   cloud_ops_events kind=gw-fallback n=608, first 2026-09-16T10:41:55Z, last 2026-09-29T16:17:23Z
+# See agent_issues 1406 (ROUTER-EGRESS-BINDING-ABSENT-1) and the reopened 1222.
+#
+# IMPORTANT: adding the binding here is necessary but not sufficient on its own. The two
+# automated deployers in this repo are BINDING-PRESERVING (scripts/raw_put.py and the
+# canonical /ops/deploy sequence both PUT /content and re-send the EXISTING binding set), so
+# they can never ADD a binding. Only a deployer that installs from this file (cf_worker_deploy)
+# or a wrangler deploy applies it. scripts/router-transport-failover-patch.py therefore also
+# adds an ordered public-host failover in code, so the pipeline stops degrading even before the
+# binding is installed.
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+
 # Cron: research pipeline drain (10-min cadence, matches prior API schedule)
 [triggers]
 crons = ["0 * * * *"]
@@ -42,3 +62,11 @@ crons = ["0 * * * *"]
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+# CANONICAL-DEPLOY-AUTO-1 (2026-09-29, issue #1406): comment-only touch so that
+# .github/workflows/canonical-deploy.yml fires for this worker. That workflow deploys
+# through scripts/canonical_deploy.py, which acquires the deploy-guard lock, writes the
+# fleet ledger row, installs declared bindings where the live ops deployer supports it
+# (BINDING-INSTALL-MERGE-1, issue #1448), and PUTs the [triggers] crons above so they
+# stop being inert. Deployed artifact is unchanged by this comment; only the deploy
+# PATH changes, which is the actual defect.

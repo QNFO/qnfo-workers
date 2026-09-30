@@ -1,4 +1,20 @@
-name = "qnfo-agent-orchestrator"
+# DUP-WORKER-NAME-DIR-1 (2026-09-29, issue #1384): SUPERSEDED DUPLICATE.
+#
+# This directory is a stale copy of the canonical qnfo-agent-orchestrator/
+# source. It previously declared name = "qnfo-agent-orchestrator", so TWO repo
+# configs resolved to ONE Cloudflare script: the deploy/drift guards classified
+# the worker twice, and a deploy run from this directory would silently clobber
+# the canonical worker.
+#
+# Commit a9b9a83c (2026-09-27) deleted this file to fix exactly that; commit
+# 07743499 re-touched the path and restored it, so the duplicate name was live
+# again by 2026-09-29. Hence the name below is deliberately non-colliding and the
+# repo now carries scripts/dup-worker-name-gate.py, which fails CI if any two
+# configs declare the same worker name.
+#
+# DO NOT restore name = "qnfo-agent-orchestrator" here. Canonical source:
+# qnfo-agent-orchestrator/wrangler.toml
+name = "qnfo-agent-orchestrator-legacy-dup"
 main = "worker.js"
 compatibility_date = "2026-08-10"
 compatibility_flags = ["nodejs_compat"]

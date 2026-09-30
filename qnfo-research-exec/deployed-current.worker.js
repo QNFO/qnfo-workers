@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.15-noblankpublish";
+var VERSION = "0.9.22-terminal-rescue";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -20,17 +20,57 @@ var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
 var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
-function routerFetch(env, url, opts) {
+// ROUTER-TRANSPORT-FAILOVER-1: env.QNFO_AI is preferred, but when that service binding is
+// absent the old code fell straight through to a public workers.dev fetch, which does not
+// work from Worker context. Try the custom domain first, then workers.dev, and keep the
+// response contract identical (return the last Response when none is ok).
+// ROUTER-HOST-ORDER-CORRECTION-1 (2026-09-29): an earlier patch today put
+// qnfo-ai.q08.workers.dev first on the strength of a synthetic probe. The incident
+// history contradicts it: BEFORE 16:36:06Z the workers.dev host was the ONLY host
+// and produced 101 gw-fallback "gateway HTTP 404" events in one day; AFTER the
+// failover deploy added ai.qnfo.org first, those events stopped (last 16:32:28Z).
+// workers.dev is therefore the failing host. Keep ai.qnfo.org first.
+var ROUTER_HOSTS = [
+  "https://ai.qnfo.org",
+  "https://qnfo-ai.q08.workers.dev"
+];
+var _routerBindingWarned = false;
+// GW-FALLBACK-BODY-1: record which router host produced the response we return.
+var _lastRouterHost = "";
+async function routerFetch(env, url, opts) {
   if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
     return env.QNFO_AI.fetch(url, opts);
   }
-  return fetch(url, opts);
+  if (!_routerBindingWarned) {
+    _routerBindingWarned = true;
+    if (typeof logEvent === "function") {
+      try {
+        await logEvent(env, "gw-transport", "QNFO_AI service binding absent; routerFetch is using public host failover over " + ROUTER_HOSTS.join(", "), "warn");
+      } catch (e) {
+      }
+    }
+  }
+  var path = String(url).replace(/^https?:\/\/[^/]+/, "");
+  var last = null;
+  var lastErr = null;
+  for (var i = 0; i < ROUTER_HOSTS.length; i++) {
+    try {
+      var r = await fetch(ROUTER_HOSTS[i] + path, opts);
+      _lastRouterHost = ROUTER_HOSTS[i];
+      if (r && r.ok) return r;
+      last = r;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (last) return last;
+  throw lastErr || new Error("routerFetch: no router host reachable");
 }
 __name(routerFetch, "routerFetch");
 __name2(routerFetch, "routerFetch");
 __name22(routerFetch, "routerFetch");
 __name222(routerFetch, "routerFetch");
-var GATEWAY_MODEL = "deepseek-v4-flash";
+var GATEWAY_MODEL = "qnfo";
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
@@ -179,6 +219,12 @@ async function markError(env, row, msg) {
       "UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=recover_count+1, attempt=0, claimed_at=NULL WHERE id=?"
     ).bind(String(msg).slice(0, 300), row.id).run();
   } else {
+    var _trArm = Number(row.terminal_rearms || 0);
+    if (_trArm < 2) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=0, attempt=0, terminal_rearms=terminal_rearms+1, claimed_at=NULL WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
+      try { await logEvent(env, "terminal-rearm", "TERMINAL-RESCUE-1 re-armed terminal row " + String(row.id).slice(0, 8) + " terminal_rearms=" + (_trArm + 1), "ok"); } catch (eTR) {}
+      return;
+    }
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
     try {
       var _rid = String(row.id).slice(0, 8);
@@ -921,8 +967,55 @@ async function publishV2(env, row) {
   }
   var recId = String(row.paper_doi || "").split("zenodo.").pop() || "";
   if (!recId) {
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-    return { ok: false, stage: "v2", error: "bad doi" };
+    // FIRST-DEPOSIT-1 (2026-09-27): a revision queued for a paper with no existing Zenodo record
+    // (empty paper_doi) previously errored with "bad doi", so first-time deposits had no automated
+    // path. Now they deposit through publishToZenodo, honoring the living-paper floor: status='published'
+    // requires >= 20000 chars (MIN-PAPER-LENGTH-3), enforced here before the D1 trigger fires.
+    var fdBody = String(row.corrected_md || "");
+    if (fdBody.length < 20000) {
+      await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'first-deposit', 'BLOCK', ?, 'MIN-PAPER-LENGTH-3', 'qnfo-research-exec', 'P1')").bind(("first deposit requires >= 20000 chars; " + fdBody.length + " provided").slice(0, 300)).run();
+      } catch (eG2) {
+      }
+      return { ok: false, stage: "gate", error: "first deposit requires >= 20000 chars; " + fdBody.length + " provided" };
+    }
+    var fdTitle = extractTitle(fdBody, row.title);
+    var fdAbstract = "";
+    var fdAbsM = fdBody.match(/abstract:\s*\|\r?\n((?:\s{1,4}.*\r?\n?)+)/);
+    if (fdAbsM) fdAbstract = fdAbsM[1].replace(/^\s{1,4}/gm, "").replace(/\s+/g, " ").trim();
+    if (!fdAbstract) {
+      var fdAbsM2 = fdBody.match(/abstract:\s*["']?([^"'\n]{40,600})["']?/i);
+      if (fdAbsM2) fdAbstract = String(fdAbsM2[1]).trim();
+    }
+    if (!fdAbstract) fdAbstract = String(row.title || "QNFO research paper");
+    var fd = await publishToZenodo(env, fdTitle, fdAbstract, fdBody, String(row.slug || "paper"));
+    if (!fd.ok) {
+      await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+      return { ok: false, stage: "first-deposit", error: fd.error };
+    }
+    var fdUpd = await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, zenodo_url=?, status='published', updated_at=datetime('now') WHERE slug=?").bind(fdTitle, fdBody, row.version_to || "1.0.0", fd.doi, fd.doi, fd.record, String(row.slug || "")).run();
+    if (!fdUpd || !fdUpd.meta || !fdUpd.meta.changes) {
+      try {
+        await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, doi, version, zenodo_doi, zenodo_url, status, body_md, license, language, paper_type, slug, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'published',?,?,?,?,?,datetime('now'),datetime('now'))").bind("vq-" + row.id, fdTitle, '["Rowan Brad Quni-Gudzinas"]', fdAbstract, fd.doi, row.version_to || "1.0.0", fd.doi, fd.record, fdBody, "CC BY 4.0", "en", "preprint", String(row.slug || "")).run();
+      } catch (eIns) {
+      }
+    }
+    try {
+      await env.MIRROR.put("papers/" + String(row.slug || "paper") + ".md", fdBody);
+    } catch (eMir) {
+    }
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), String(row.slug || ""), fd.doi, fdTitle, "bluesky", "queued", "auto", 0, fd.record, "https://papers.qnfo.org/papers/" + String(row.slug || "") + "/").run();
+    } catch (eDiss) {
+    }
+    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(fd.doi, row.id).run();
+    try {
+      await env.QNFO_AUDIT.prepare("UPDATE paper_revision_log SET status='published', new_doi=?, updated_at=datetime('now') WHERE slug=? AND status='queued'").bind(fd.doi, String(row.slug || "")).run();
+    } catch (ePrl2) {
+    }
+    await depositToGithub(env, String(row.slug || "paper"), fdTitle, fdBody, fd.doi);
+    return { ok: true, stage: "first-deposit", doi: fd.doi };
   }
   var latest = await latestRecord(env, recId);
   if (latest && latest.metadata && String(latest.metadata.version || "") === String(row.version_to || "")) {
@@ -1037,14 +1130,24 @@ async function publishV2(env, row) {
     return { ok: false, stage: "v2", error: "newversion failed: " + JSON.stringify(nv).slice(0, 200) };
   }
   var slug = row.slug || "paper";
+  // ZENODO-V2-DEPOSIT-CONTAMINATION FIX (C1, 2026-09-27, agent_issues 979): the POST
+  // /actions/newversion response does NOT enumerate the inherited draft files (nv.files is
+  // empty), so the old DELETE loop removed nothing and every v2 inherited the full v1 file
+  // set (54 files of which 44 were v1 fragments). Fetch the DRAFT's OWN file listing
+  // (GET /deposit/depositions/<id>/files) and DELETE each file before uploading the manifest.
   var files = nv.files || [];
+  try {
+    if ((!files || !files.length) && nv.id) {
+      var dl = await zenodo(env, "GET", "/" + nv.id + "/files");
+      if (Array.isArray(dl)) files = dl;
+    }
+  } catch (e) {
+  }
   for (var i = 0; i < files.length; i++) {
-    var fname = files[i].filename || "";
-    if (true) {
-      try {
-        await fetch(files[i].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-      } catch (e) {
-      }
+    if (!files[i] || !files[i].links || !files[i].links.self) continue;
+    try {
+      await fetch(files[i].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
+    } catch (e) {
     }
   }
   var bucket = nv.links && nv.links.bucket;
@@ -1137,6 +1240,15 @@ async function publishV2(env, row) {
   var newDoi = pub.doi;
   var newTitle = extractTitle(row.corrected_md || "", row.title);
   await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, updated_at=datetime('now') WHERE slug=?").bind(newTitle, row.corrected_md || "", row.version_to || "2.0.0", newDoi, newDoi, slug).run();
+  try {
+    // REV-DISSEMINATION-1 (2026-09-27): a revision (newversion) path wrote NO dissemination row, so
+    // pipeline revisions never auto-posted (canonical: 'Operating the Quniverse Fleet' v1.3,
+    // 10.5281/zenodo.23001088, had to be posted by hand). Mirror publishStage / FIRST-DEPOSIT-1 so
+    // qnfo-social's drainDissemination (cron 30 */2) posts the revision. A deterministic id
+    // 'rev-<slug>' + INSERT OR IGNORE makes it idempotent per paper, so a re-drain cannot double-post.
+    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("rev-" + slug, slug, newDoi, newTitle, "bluesky", "queued", "auto", 0, (String(newDoi).indexOf("http") === 0 ? newDoi : "https://doi.org/" + newDoi), "https://papers.qnfo.org/papers/" + slug + "/").run();
+  } catch (eRevDiss) {
+  }
   if (env.GRAPH_DB) {
     try {
       var node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("zenodo-10-5281-zenodo-" + recId).first();
@@ -1275,6 +1387,30 @@ async function drainV2(env) {
   } catch (eEnrich) {
     await logEvent(env, "enrich-err", String(eEnrich && eEnrich.message || eEnrich).slice(0, 200));
   }
+  try {
+    // QUEUED-PROMOTION-1 (2026-09-27): legacy rows land in status='queued' and nothing promoted them,
+    // so the revision queue silently wedged (canonical: version_queue id 59 sat queued 24h+).
+    // Promote any queued row that already carries a corrected_md so the drain can process it.
+    var _pr = await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='drafted', updated_at=datetime('now') WHERE status='queued' AND corrected_md IS NOT NULL AND LENGTH(TRIM(corrected_md)) > 100").run();
+    if (_pr.meta && _pr.meta.changes) await logEvent(env, "v2-promote", "promoted " + _pr.meta.changes + " queued row(s) to drafted", "ok");
+  } catch (ePr) {
+  }
+  try {
+    // CLAIM-RECLAIM-1 (2026-09-27): the cron fires hourly, so a researching claim older than 4h is
+    // immortal and wedges the idea queue (canonical: row claimed 14:00Z stayed researching 4h+).
+    // claimed_at is ISO-8601 text (T separator), so the bound MUST be strftime ISO too - a space-format
+    // bound never compares less (same type-mismatch class as DEPLOY-LOCK-EPOCH-TYPE-1).
+    var _cl = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0 WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 hours')").run();
+    if (_cl.meta && _cl.meta.changes) await logEvent(env, "claim-reclaim", "released " + _cl.meta.changes + " stale researching claim(s)", "ok");
+  } catch (eCl) {
+  }
+  try {
+    // FAILED-REARM-1 (2026-09-27): transient stage failures older than 6h self-heal, bounded by
+    // recover_count < 3 so a poison row cannot loop forever. created_at is ISO-8601 text; bound in ISO.
+    var _fr = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', attempt=0, error=NULL, claimed_at=NULL, recover_count=recover_count+1 WHERE status='failed' AND recover_count < 3 AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-6 hours')").run();
+    if (_fr.meta && _fr.meta.changes) await logEvent(env, "failed-rearm", "re-armed " + _fr.meta.changes + " failed research row(s)", "ok");
+  } catch (eFr) {
+  }
   var rows = await env.QNFO_AUDIT.prepare("SELECT * FROM version_queue WHERE status='drafted' OR (status='publishing' AND updated_at < datetime('now','-15 minutes')) ORDER BY id ASC LIMIT 2").all();
   var results = [];
   for (var i = 0; i < (rows.results || []).length; i++) {
@@ -1353,13 +1489,24 @@ async function gwCall(env, prompt, maxTokens) {
     const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) {
-      await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + "; falling back to Workers AI", "warn");
+      var _eb = "";
+      try {
+        _eb = String(await r.text()).slice(0, 300);
+      } catch (e) {
+        _eb = "(body unreadable)";
+      }
+      await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + " host=" + _lastRouterHost + " body=" + _eb + "; falling back to Workers AI", "warn");
       return await aiText(env, MODELS[0], prompt, maxTokens);
     }
     const j = await r.json();
     const c = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-    if (typeof c === "string" && c) return c;
-    await logEvent(env, "gw-fallback", "gateway empty content; falling back to Workers AI", "warn");
+    // GW-CANNED-DETECT-1 (2026-09-29): the gateway answers HTTP 200 with a ~370-char canned
+    // FALLBACK_TEXT when its ensemble budget is exhausted. gwCall used to return that as a real
+    // answer, so stageReconcile/stageRevise (>= 10000 chars) terminalised every row. Detect the
+    // canned signature and degrade to the Workers AI path instead of feeding it downstream.
+    const _canned = typeof c === "string" && /I do not have a reliable answer for that right now|ensemble mode \(model=ensemble\) cross-checks answers across models/i.test(c);
+    if (typeof c === "string" && c && !_canned) return c;
+    await logEvent(env, _canned ? "gw-canned" : "gw-fallback", _canned ? "gateway returned canned FALLBACK_TEXT (len=" + String(c).trim().length + "); falling back to Workers AI" : "gateway empty content; falling back to Workers AI", "warn");
     return await aiText(env, MODELS[0], prompt, maxTokens);
   } catch (e) {
     clearTimeout(t);
@@ -1648,7 +1795,12 @@ async function stageReconcile(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
-  const reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
+  let reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
+  if (!reconciled || reconciled.length < 1e4) {
+    // RECONCILE-RETRY-1 (2026-09-29): one bounded retry before the best-leg degrade.
+    let _rc2 = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n") + "\n\nIMPORTANT: output the COMPLETE reconciled paper in full. Do not summarize and do not truncate.", 3e4);
+    if (_rc2 && _rc2.length > (reconciled ? reconciled.length : 0)) reconciled = _rc2;
+  }
   if (!reconciled || reconciled.length < 1e4) {
     let best = parts[0];
     for (let _i = 1; _i < parts.length; _i++) if (parts[_i].length > best.length) best = parts[_i];
@@ -1718,9 +1870,16 @@ async function stageRevise(env, row) {
     ctx = JSON.parse(row.context || "{}");
   } catch (e) {
   }
-  const revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
+  let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
   if (!revised || revised.length < 1e4) {
-    await markError(env, row, "revise: output too short");
+    // REVISE-RETRY-1 (2026-09-29): one bounded retry before terminal escalation.
+    // The prior code escalated on the first short output: an absolute 1e4 floor with no
+    // retry permanently wedged the row (RESEARCH-TERMINAL cluster).
+    let _r2 = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3) + "\n\nIMPORTANT: output the COMPLETE revised paper, start to finish. Do not summarize and do not truncate.", 3e4);
+    if (_r2 && _r2.length > (revised ? revised.length : 0)) revised = _r2;
+  }
+  if (!revised || revised.length < 1e4) {
+    await markError(env, row, "revise: output too short (" + (revised ? revised.length : 0) + " chars after retry)");
     return { ok: false, stage: "revise" };
   }
   await r2Put(env, String(row.id) + "/reconciled.md", revised);
@@ -2038,6 +2197,12 @@ __name22222(run, "run");
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
+      try {
+        // HEARTBEAT-1 (2026-09-27): research-exec had no heartbeat row, so a dead cron was invisible
+        // to the fleet heartbeat surface (issue class #973).
+        await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, ts, ok) VALUES ('qnfo-research-exec', ?, 1)").bind(nowIso()).run();
+      } catch (eHb) {
+      }
       try {
         var drained = await drainV2(env);
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");

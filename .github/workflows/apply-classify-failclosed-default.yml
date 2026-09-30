@@ -1,0 +1,101 @@
+name: apply-classify-failclosed-default
+
+# CLASSIFY-FAILCLOSED-DEFAULT-1 applier runner (issue #1466 residual).
+# Applies scripts/classify-failclosed-default-patch.py, gates it with py_compile,
+# and pushes race-safely against the concurrent writers on main.
+
+on:
+  push:
+    paths:
+      - 'scripts/classify-failclosed-default-patch.py'
+      - '.github/workflows/apply-classify-failclosed-default.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-classify-failclosed-default
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Show pre-state
+        run: |
+          set -euo pipefail
+          echo "head=$(git rev-parse --short HEAD)"
+          grep -c 'does not match' scripts/apply-pending-patches.py || true
+
+      - name: Apply
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python3 scripts/classify-failclosed-default-patch.py
+
+      - name: Syntax gate
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/apply-pending-patches.py
+          echo "PY_COMPILE_OK"
+
+      - name: Behaviour gate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location("app", "scripts/apply-pending-patches.py")
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          cases = [
+              ("FAIL: pattern does not match expected output", 1, "error"),
+              ("FAIL: anchor does not match in target", 3, "stale-anchor"),
+              ("FAIL (fail-closed): anchor occurrence != 1 in scripts/x.py", 3, "stale-anchor"),
+              ("Traceback (most recent call last): NameError: name 'Path' is not defined", 1, "error"),
+              ("TIMEOUT after 60s", 124, "error"),
+          ]
+          bad = 0
+          for text, rc, want in cases:
+              got = m.classify(text, rc)
+              ok = got == want
+              bad += (not ok)
+              print(f"  classify({text[:44]!r}, {rc}) -> {got!r} want {want!r} {'OK' if ok else 'WRONG'}")
+          if bad:
+              sys.exit(f"BEHAVIOUR_GATE_FAILED {bad} mismatch(es)")
+          print("BEHAVIOUR_GATE_OK")
+          PY
+
+      - name: Commit and push (race-safe)
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "fleet-bot@qnfo.org"
+          git add scripts/apply-pending-patches.py
+          if git diff --cached --quiet; then
+            echo "nothing to commit - already applied"
+            exit 0
+          fi
+          git commit -m "fix(ci): #1466 residual - classify() requires drift signature, not bare 'does not match'"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "PUSH_OK attempt=$i"
+              exit 0
+            fi
+            sleep $((i * 3))
+          done
+          echo "::error::push failed after 5 attempts"
+          exit 1
+
+      - name: Post-state
+        run: |
+          set -euo pipefail
+          echo "head=$(git rev-parse --short HEAD)"
+          grep -n 'anchor.{0,60}does not match' scripts/apply-pending-patches.py || echo "MARKER_NOT_VISIBLE"

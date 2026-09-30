@@ -1,0 +1,49 @@
+name: mirror-autosync
+
+# MIRROR-AUTOSYNC-1 (issue #1229): the automatic half of the repo-internal parity
+# self-audit. deploy-drift.yml FAILS CLOSED when a mirror diverges from its source;
+# this workflow regenerates the mirrors and PROPOSES the repair as a pull request.
+#
+# WHY A PR AND NOT A DIRECT PUSH: scripts/mirror-guard.py --fix copies
+# <dir>/worker.js over <dir>/deployed-current.worker.js. That is the correct
+# direction when the source is ahead, but it is a REGRESSION when the mirror is a
+# capture of a live deploy that is ahead of the repo (the DEPLOY-UNLOGGED-MUTATION
+# class, issues #1340-#1343). Canonical case found 2026-09-29: qnfo-lifecycle live
+# /health reports 1.6.2-cronconsolidate while both repo files carry 1.6.2, so an
+# unattended cp would have reverted a live fix. Auto-propose; merge deliberately.
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  autosync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: detect repo-internal mirror drift (report)
+        run: |
+          set +e
+          {
+            echo "mirror-guard report (pre-repair):"
+            echo '```'
+            python scripts/mirror-guard.py || true
+            echo '```'
+          } | tee /tmp/mirror-before.txt
+      - name: regenerate mirrors from source
+        run: python scripts/mirror-guard.py --fix
+      - name: propose repair PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: mirror-autosync/repair
+          delete-branch: true
+          commit-message: "mirror-autosync: regenerate deployed-current mirrors from source"
+          title: "mirror-autosync: repo-internal mirror drift repair"
+          body-path: /tmp/mirror-before.txt

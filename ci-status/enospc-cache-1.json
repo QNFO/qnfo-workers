@@ -1,0 +1,9 @@
+{
+  "workflow": "apply-enospc-cache-1",
+  "issue": "1445 / ENOSPC-CACHE-1",
+  "marker": "ENOSPC-CACHE-1",
+  "pre_version": "1.0.2-apt-clean-enospc",
+  "post_version": "1.0.2-apt-clean-enospc",
+  "head": "bd9b4c1a961d042dbffaf03330a07321a242e1fa",
+  "ts": "2026-09-29T17:10:37.000Z"
+}

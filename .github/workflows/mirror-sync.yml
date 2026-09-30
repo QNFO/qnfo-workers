@@ -1,0 +1,138 @@
+name: mirror-sync
+
+# MIRROR-STALENESS-DEPLOY-FAIL-1 recurrence guard.
+#
+# WHY: the canonical server-side deploy (qnfo-ops POST /ops/deploy and the
+# qnfo-fleet-control */20 redeploy) fetches the artifact at
+# <dir>/deployed-current.worker.js, NOT <dir>/worker.js. A worker.js version bump
+# that does not move the mirror in the SAME commit therefore leaves the deploy route
+# verifying a stale version and failing closed with an opaque ok=0.
+#
+# mirror-guard.yml (correctly) fails on that lag. But the fleet's normal working
+# pattern is "bump worker.js, then sync the mirror in a follow-up commit", so
+# mirror-guard went red on essentially every intermediate push to main (10+ runs on
+# 2026-09-26/27 alone). That is a chronic red on a mechanical, fully-derivable fix.
+#
+# WHAT: on every push to main, regenerate the lagging mirrors from source and commit
+# them. Only LAG is regenerated -- the same constant NAMES with different VALUES.
+# MISSING and NAMESET-DIFF verdicts are NEVER auto-copied, because a structural
+# difference is probably a build artifact, and mirror-guard.py itself refuses to cp
+# those. This closes the gap between the push that bumps a version and the push that
+# syncs the mirror, so a mirror is never left behind.
+#
+# MIRROR-MISSING-REPAIR-1 (2026-09-29): the staging step used `git add -u`, which
+# stages only MODIFIED TRACKED files. A MISSING mirror is by definition an UNTRACKED
+# NEW file, so even after mirror-guard.py --fix learned to regenerate one, this
+# workflow could never commit it -- the repair was invisible. `git add -u` is
+# therefore replaced by an explicit pathspec that includes new files. Both halves of
+# the defect (guard never created it; workflow could never stage it) are now fixed.
+#
+# This is deliberately a SEPARATE workflow from mirror-guard.yml: the guard stays a
+# gate (it can still fail on CAPTURED / unresolvable drift), while this workflow is
+# the repair actor. detect -> act -> verify.
+#
+# CI-RUNAWAY-LOOP-1 (2026-09-30, qnfo-ops): `on: push: branches: [main]` carried no
+# filter, so this workflow also ran on every PURE-ARTIFACT commit (ci-status/**,
+# audits/**) produced by the fleet's own bots. It does not itself commit in that case,
+# so it was not part of the self-heal cycle -- but every one of those runs burned a
+# runner and a queue slot for a push that could not possibly contain a worker mirror.
+# `paths-ignore` is therefore added for the artifact trees only; a push that touches
+# ANY worker source still runs the repair actor.
+#
+# Invariants:
+#   - rewrites only */deployed-current.worker.js files
+#   - commits only when mirror-guard.py --fix actually changed a file
+#   - re-verifies with a plain `mirror-guard.py` before committing
+#   - never leaves the workflow red on a lost push race: the next push re-triggers
+#
+# NOTE the commit message is passed with two single-line -m flags, and never as an
+# inline multi-line string. A multi-line `git commit -m "..."` inside a `run: |`
+# block scalar puts its continuation lines at column 1, which terminates the scalar
+# and makes the whole workflow file invalid YAML -- the exact defect that made
+# apply-ops-patch.yml create runs with zero jobs.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "ci-status/**"
+      - "audits/**"
+  # Invocable by ci-watchdog: when mirror-guard goes red the watchdog
+  # dispatches this repair actor. Without a workflow_dispatch trigger that
+  # call returns 422, the finding stays unactionable, and the monitor can
+  # never clear -- observed in production as
+  #   OPEN mirror-lag mirror-guard -> dispatched mirror-sync -> http-422
+  # A repair actor that cannot be invoked is not a repair actor.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Regenerate lagging mirrors from source
+        id: fix
+        run: |
+          set -euo pipefail
+          python scripts/mirror-guard.py --fix
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard -- '*/deployed-current.worker.js')" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no lagging mirrors on this push"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "--- mirrors regenerated ---"
+            git diff --stat
+            git ls-files --others --exclude-standard -- '*/deployed-current.worker.js'
+          fi
+
+      - name: Verify the regenerated mirrors leave the guard green
+        if: steps.fix.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python scripts/mirror-guard.py
+          echo "mirror-guard exits 0 with the regenerated mirrors"
+
+      - name: Commit and push the regenerated mirrors
+        if: steps.fix.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-mirror-bot"
+          git config user.email "ops@qnfo.org"
+          # MIRROR-MISSING-REPAIR-1: `git add -u` cannot stage a newly created
+          # mirror. Stage the mirror paths explicitly so both regenerated (modified)
+          # and newly created (untracked) mirrors are included.
+          git add -A -- '*/deployed-current.worker.js'
+          if git diff --cached --quiet; then
+            echo "nothing staged after add; exiting"
+            exit 0
+          fi
+          git diff --cached --stat
+          SUBJECT="chore(mirror-guard): auto-sync lagging deployed-current mirrors"
+          BODY="MIRROR-STALENESS-DEPLOY-FAIL-1: the canonical deploy reads <dir>/deployed-current.worker.js, so a worker.js version bump that does not move the mirror in the same commit leaves the deploy route verifying a stale version and failing closed with an opaque ok=0. Regenerated from source by scripts/mirror-guard.py --fix; only LAG mirrors (same constant names, different values) and MISSING mirrors with an import-free, non-empty source are touched. Verified green with a plain mirror-guard.py run before committing."
+          FOOT="Co-authored-by: qnfo-mirror-bot <ops@qnfo.org>"
+          git commit -m "$SUBJECT" -m "$BODY" -m "$FOOT"
+          for i in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "PUSHED mirror sync"
+              exit 0
+            fi
+            echo "push attempt $i lost the race; rebasing onto origin/main and retrying"
+            git pull --rebase --autostash origin main || true
+            sleep $((i * 5))
+          done
+          echo "::warning::mirror-sync could not push after 3 attempts; the next push to main retries. A red mirror-guard on this commit is the expected consequence."

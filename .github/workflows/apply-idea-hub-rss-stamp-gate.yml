@@ -1,0 +1,160 @@
+name: apply-idea-hub-rss-stamp-gate
+
+# Applies scripts/idea-hub-rss-stamp-gate-patch.py (F10-RSS-PIPELINE-STAMP-GATE-1, issue
+# #1412), asserts the post-conditions and mirror parity, commits as a bot, deploys idea-hub
+# through the binding-preserving deployer, then verifies from an EXTERNAL vantage that the
+# leaked stamp is gone from the live public feed.
+#
+# The verify step deliberately does NOT use a worker-context fetch: issue #1190 records that
+# worker-context web_fetch returns HTTP 522 for same-zone hosts that are externally 200, so a
+# worker-context check would produce a false outage. GitHub runners are external.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/idea-hub-rss-stamp-gate-patch.py'
+      - '.github/workflows/apply-idea-hub-rss-stamp-gate.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-idea-hub-rss-stamp-gate
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.apply.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - id: apply
+        name: Apply the stamp gate (fail-loud)
+        run: |
+          set -uo pipefail
+          python scripts/idea-hub-rss-stamp-gate-patch.py
+          echo "applier_rc=$?"
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post-conditions
+        run: |
+          set -euo pipefail
+          echo "--- stamp gate present in BOTH artifacts ---"
+          grep -c "F10-RSS-PIPELINE-STAMP-GATE-1" idea-hub/worker.js
+          grep -c "F10-RSS-PIPELINE-STAMP-GATE-1" idea-hub/deployed-current.worker.js
+          grep -c "const STAMP=" idea-hub/worker.js
+          grep -q "1.0.7-rss-pipeline-stamp-gate" idea-hub/worker.js && echo "VERSION_BUMPED"
+          echo "--- stamp regex actually rejects the observed leak string ---"
+          node -e '
+            const fs=require("fs");
+            const src=fs.readFileSync("idea-hub/worker.js","utf8");
+            const m=src.match(/const STAMP=(\/.*?\/i);/);
+            if(!m){console.error("STAMP regex not extractable");process.exit(1)}
+            const re=eval(m[1]);
+            const leak="RETRY (prior submission was dropped by an expressed-step abort). Notation-commissioning audit: apply the two-part criterion from the x thesis to the contradictory epistemologies of physics and quantum mechanics.";
+            const leak2="Can ultrametric/discrete geometry unify quantum theory and gravity where smooth manifolds fail? Directly adjacent to DLF (p-adic AdS/CFT, Bruhat-Tits trees) - cross-link to qnf-DLF-001 before execution.";
+            const good="Explain the relationship between finite-distinction quantum mechanics and the adelic physics program.";
+            const a=re.test(leak), b=re.test(leak2), c=re.test(good);
+            console.log("stamp_matches_observed_leak_1="+a);
+            console.log("stamp_matches_observed_leak_2="+b);
+            console.log("stamp_matches_clean_research_title="+c);
+            if(!a||!b){console.error("FAIL: observed leak string is not rejected");process.exit(1)}
+            if(c){console.error("FAIL: clean research title is over-blocked");process.exit(1)}
+            console.log("STAMP_GATE_BEHAVIOUR_OK");
+          '
+          echo "--- mirror parity (mirror-guard invariant) ---"
+          cmp idea-hub/worker.js idea-hub/deployed-current.worker.js
+          echo "MIRROR_PARITY_OK"
+          echo "--- syntax ---"
+          cp idea-hub/worker.js /tmp/ih.mjs
+          node --check /tmp/ih.mjs
+          echo "SYNTAX_OK"
+
+      - name: Commit
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-fleet-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit (already applied)"; exit 0
+          fi
+          git commit -m "fix(idea-hub): F10-RSS-PIPELINE-STAMP-GATE-1 - reject orchestrator retry stamps in public RSS titles (issue #1412)"
+          # COMMITBACK-DRIFT-1: bare `git push` loses against the concurrent fleet commit
+          # stream; use the proven rebase+retry loop.
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "PUSH_OK attempt $i"; exit 0
+            fi
+            echo "push attempt $i failed; retrying in 20s"; sleep 20
+          done
+          echo "PUSH_FAILED after 3 attempts"; exit 1
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main FRESH (not the triggering SHA)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assert the artifact we are about to ship is the patched one
+        run: |
+          set -euo pipefail
+          grep -q "1.0.7-rss-pipeline-stamp-gate" idea-hub/worker.js
+          grep -q "const STAMP=" idea-hub/worker.js
+          echo "ARTIFACT_IS_PATCHED"
+      - name: Deploy idea-hub (binding-preserving)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          LEDGER_STRICT: '1'
+        run: |
+          python scripts/raw_put.py idea-hub idea-hub/worker.js
+      - name: Verify live /health serves the new version
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5 6 7 8; do
+            v=$(curl -s --max-time 15 https://ideas.qnfo.org/health \
+                | python -c "import sys,json;print(json.load(sys.stdin).get('version',''))" 2>/dev/null || true)
+            echo "attempt $i: live version = '$v'"
+            if [ "$v" = "1.0.7-rss-pipeline-stamp-gate" ]; then echo "LIVE_OK"; exit 0; fi
+            sleep 12
+          done
+          echo "LIVE_VERIFY_FAILED"
+          exit 1
+      - name: Verify the leaked stamp is gone from the LIVE public feed (external vantage)
+        run: |
+          set -uo pipefail
+          sleep 15
+          body=$(curl -s --max-time 25 https://ideas.qnfo.org/rss.xml)
+          echo "$body" | grep -o '<title>[^<]*</title>' | head -8
+          n_stamp=$(echo "$body" | grep -c 'expressed-step abort' || true)
+          n_retry=$(echo "$body" | grep -c '<title>RETRY' || true)
+          n_cross=$(echo "$body" | grep -c 'cross-link to qnf-' || true)
+          echo "live_feed_occurrences: expressed-step abort=$n_stamp RETRY_title=$n_retry cross-link=$n_cross"
+          if [ "$n_stamp" != "0" ] || [ "$n_retry" != "0" ] || [ "$n_cross" != "0" ]; then
+            echo "FEED_STILL_LEAKING"
+            exit 1
+          fi
+          echo "FEED_CLEAN"

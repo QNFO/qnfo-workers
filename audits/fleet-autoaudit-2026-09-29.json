@@ -1,0 +1,1331 @@
+{
+  "audited_at": "2026-09-29 21:03:40",
+  "d1_write_failures": [],
+  "d1_writes_ok": 110,
+  "guard": {
+    "_guard_rc": 0,
+    "ahead": [],
+    "cf_script_list": true,
+    "content_checked": true,
+    "content_drift": [],
+    "cron_only": [
+      {
+        "crons": [
+          "*/20 * * * *"
+        ],
+        "dir": "ai-health-prober",
+        "worker": "ai-health-prober"
+      },
+      {
+        "crons": [
+          "0 */3 * * *",
+          "*/15 * * * *"
+        ],
+        "dir": "qnfo-email-orchestrator",
+        "worker": "qnfo-email-orchestrator"
+      }
+    ],
+    "cron_only_count": 2,
+    "drift": [],
+    "live_err": [],
+    "multi_version": [],
+    "multi_version_count": 0,
+    "name_resolution": true,
+    "no_health_route": [],
+    "no_live_version": [],
+    "no_repo_version": [],
+    "not_a_worker": [
+      {
+        "dir": "audits",
+        "worker": "audits"
+      },
+      {
+        "dir": "ci-status",
+        "worker": "ci-status"
+      },
+      {
+        "dir": "docs",
+        "worker": "docs"
+      },
+      {
+        "dir": "funding",
+        "worker": "funding"
+      },
+      {
+        "dir": "machine-readability",
+        "worker": "machine-readability"
+      },
+      {
+        "dir": "migrations",
+        "worker": "migrations"
+      },
+      {
+        "dir": "papers",
+        "worker": "papers"
+      },
+      {
+        "dir": "qnfo-web-unified",
+        "worker": "qnfo-web-unified"
+      },
+      {
+        "dir": "scripts",
+        "worker": "scripts"
+      }
+    ],
+    "not_a_worker_count": 9,
+    "not_deployed_dirs": [
+      "agent-orchestrator",
+      "audit-hub",
+      "companion-hub",
+      "errata-hub",
+      "errata-orchestrator",
+      "events-radar",
+      "jnl-pipeline",
+      "jnl-referee",
+      "jnl-reviser",
+      "jnl-watch",
+      "jnl-zenodo",
+      "memory-mcp",
+      "notes-intake",
+      "obsidian-writer",
+      "ops-gateway",
+      "osf-integrity-check",
+      "paper-hub",
+      "personal-events-radar",
+      "personal-life-indexer",
+      "personal-life-maintain",
+      "personal-life-search",
+      "qnfo-agent-ws",
+      "qnfo-analytics",
+      "qnfo-artifact-agent",
+      "qnfo-artifacts",
+      "qnfo-arxiv-radar",
+      "qnfo-auditor",
+      "qnfo-autopilot",
+      "qnfo-blank-audit",
+      "qnfo-calendar-intake",
+      "qnfo-chameleon",
+      "qnfo-chat-canary",
+      "qnfo-citation-watch",
+      "qnfo-code-agent",
+      "qnfo-code-orchestrator",
+      "qnfo-ddocs-indexer",
+      "qnfo-errata-publish",
+      "qnfo-errata-respond",
+      "qnfo-errata-watch",
+      "qnfo-error-selfheal",
+      "qnfo-events",
+      "qnfo-fleet-advisor",
+      "qnfo-fleet-calibrator",
+      "qnfo-fleet-deploy",
+      "qnfo-fleet-feed",
+      "qnfo-idea-factory",
+      "qnfo-idea-miner",
+      "qnfo-idea-triage",
+      "qnfo-impact",
+      "qnfo-paper-explainer",
+      "qnfo-pipeline-ops",
+      "qnfo-proof",
+      "qnfo-qwav",
+      "qnfo-register-guard",
+      "qnfo-research-radar",
+      "qnfo-research-supervisor",
+      "qnfo-scorecard",
+      "qnfo-signal-loop",
+      "qnfo-thread-ingest",
+      "qnfo-twin-maintain",
+      "qnfo-venue-radar",
+      "radar-hub",
+      "research-daily-brief",
+      "skills-discovery",
+      "vault-indexer"
+    ],
+    "not_deployed_notdrift": 65,
+    "not_deployed_workers": [
+      {
+        "dir": "agent-orchestrator",
+        "worker": "qnfo-agent-orchestrator-legacy-dup"
+      },
+      {
+        "dir": "audit-hub",
+        "worker": "audit-hub"
+      },
+      {
+        "dir": "companion-hub",
+        "worker": "companion-hub"
+      },
+      {
+        "dir": "errata-hub",
+        "worker": "errata-hub"
+      },
+      {
+        "dir": "errata-orchestrator",
+        "worker": "qnfo-errata-orchestrator"
+      },
+      {
+        "dir": "events-radar",
+        "worker": "events-radar"
+      },
+      {
+        "dir": "jnl-pipeline",
+        "worker": "jnl-pipeline"
+      },
+      {
+        "dir": "jnl-referee",
+        "worker": "jnl-referee"
+      },
+      {
+        "dir": "jnl-reviser",
+        "worker": "jnl-reviser"
+      },
+      {
+        "dir": "jnl-watch",
+        "worker": "jnl-watch"
+      },
+      {
+        "dir": "jnl-zenodo",
+        "worker": "jnl-zenodo"
+      },
+      {
+        "dir": "memory-mcp",
+        "worker": "qnfo-memory-mcp-legacy-dup"
+      },
+      {
+        "dir": "notes-intake",
+        "worker": "notes-intake"
+      },
+      {
+        "dir": "obsidian-writer",
+        "worker": "obsidian-writer"
+      },
+      {
+        "dir": "ops-gateway",
+        "worker": "ops-gateway"
+      },
+      {
+        "dir": "osf-integrity-check",
+        "worker": "osf-integrity-check"
+      },
+      {
+        "dir": "paper-hub",
+        "worker": "paper-hub"
+      },
+      {
+        "dir": "personal-events-radar",
+        "worker": "personal-events-radar"
+      },
+      {
+        "dir": "personal-life-indexer",
+        "worker": "personal-life-indexer"
+      },
+      {
+        "dir": "personal-life-maintain",
+        "worker": "personal-life-maintain"
+      },
+      {
+        "dir": "personal-life-search",
+        "worker": "personal-life-search"
+      },
+      {
+        "dir": "qnfo-agent-ws",
+        "worker": "qnfo-agent-ws"
+      },
+      {
+        "dir": "qnfo-analytics",
+        "worker": "qnfo-analytics"
+      },
+      {
+        "dir": "qnfo-artifact-agent",
+        "worker": "qnfo-artifact-agent"
+      },
+      {
+        "dir": "qnfo-artifacts",
+        "worker": "qnfo-artifacts"
+      },
+      {
+        "dir": "qnfo-arxiv-radar",
+        "worker": "qnfo-arxiv-radar"
+      },
+      {
+        "dir": "qnfo-auditor",
+        "worker": "qnfo-auditor"
+      },
+      {
+        "dir": "qnfo-autopilot",
+        "worker": "qnfo-autopilot"
+      },
+      {
+        "dir": "qnfo-blank-audit",
+        "worker": "qnfo-blank-audit"
+      },
+      {
+        "dir": "qnfo-calendar-intake",
+        "worker": "qnfo-calendar-intake"
+      },
+      {
+        "dir": "qnfo-chameleon",
+        "worker": "qnfo-chameleon"
+      },
+      {
+        "dir": "qnfo-chat-canary",
+        "worker": "qnfo-chat-canary"
+      },
+      {
+        "dir": "qnfo-citation-watch",
+        "worker": "qnfo-citation-watch"
+      },
+      {
+        "dir": "qnfo-code-agent",
+        "worker": "qnfo-code-agent"
+      },
+      {
+        "dir": "qnfo-code-orchestrator",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
+        "dir": "qnfo-ddocs-indexer",
+        "worker": "qnfo-ddocs-indexer"
+      },
+      {
+        "dir": "qnfo-errata-publish",
+        "worker": "qnfo-errata-publish"
+      },
+      {
+        "dir": "qnfo-errata-respond",
+        "worker": "qnfo-errata-respond"
+      },
+      {
+        "dir": "qnfo-errata-watch",
+        "worker": "qnfo-errata-watch"
+      },
+      {
+        "dir": "qnfo-error-selfheal",
+        "worker": "qnfo-error-selfheal"
+      },
+      {
+        "dir": "qnfo-events",
+        "worker": "qnfo-events"
+      },
+      {
+        "dir": "qnfo-fleet-advisor",
+        "worker": "qnfo-fleet-advisor"
+      },
+      {
+        "dir": "qnfo-fleet-calibrator",
+        "worker": "qnfo-fleet-calibrator"
+      },
+      {
+        "dir": "qnfo-fleet-deploy",
+        "worker": "qnfo-fleet-deploy"
+      },
+      {
+        "dir": "qnfo-fleet-feed",
+        "worker": "qnfo-fleet-feed"
+      },
+      {
+        "dir": "qnfo-idea-factory",
+        "worker": "qnfo-idea-factory"
+      },
+      {
+        "dir": "qnfo-idea-miner",
+        "worker": "qnfo-idea-miner"
+      },
+      {
+        "dir": "qnfo-idea-triage",
+        "worker": "qnfo-idea-triage"
+      },
+      {
+        "dir": "qnfo-impact",
+        "worker": "qnfo-impact"
+      },
+      {
+        "dir": "qnfo-paper-explainer",
+        "worker": "qnfo-paper-explainer"
+      },
+      {
+        "dir": "qnfo-pipeline-ops",
+        "worker": "qnfo-pipeline-ops"
+      },
+      {
+        "dir": "qnfo-proof",
+        "worker": "qnfo-proof"
+      },
+      {
+        "dir": "qnfo-qwav",
+        "worker": "qnfo-qwav"
+      },
+      {
+        "dir": "qnfo-register-guard",
+        "worker": "qnfo-register-guard"
+      },
+      {
+        "dir": "qnfo-research-radar",
+        "worker": "qnfo-research-radar"
+      },
+      {
+        "dir": "qnfo-research-supervisor",
+        "worker": "qnfo-research-supervisor"
+      },
+      {
+        "dir": "qnfo-scorecard",
+        "worker": "qnfo-scorecard"
+      },
+      {
+        "dir": "qnfo-signal-loop",
+        "worker": "qnfo-signal-loop"
+      },
+      {
+        "dir": "qnfo-thread-ingest",
+        "worker": "qnfo-thread-ingest"
+      },
+      {
+        "dir": "qnfo-twin-maintain",
+        "worker": "qnfo-twin-maintain"
+      },
+      {
+        "dir": "qnfo-venue-radar",
+        "worker": "qnfo-venue-radar"
+      },
+      {
+        "dir": "radar-hub",
+        "worker": "radar-hub"
+      },
+      {
+        "dir": "research-daily-brief",
+        "worker": "research-daily-brief"
+      },
+      {
+        "dir": "skills-discovery",
+        "worker": "qnfo-skills-discovery"
+      },
+      {
+        "dir": "vault-indexer",
+        "worker": "vault-indexer"
+      }
+    ],
+    "scope": "all",
+    "sync": 36,
+    "sync_workers": [
+      "calendar-api",
+      "fleet-exec",
+      "idea-hub",
+      "personal-api",
+      "personal-companion",
+      "q08-signal-engine",
+      "qnfo-agent-orchestrator",
+      "qnfo-ai",
+      "qnfo-ai-calibration",
+      "qnfo-ai-search",
+      "qnfo-archive",
+      "qnfo-backlog-exec",
+      "qnfo-cloud-ops",
+      "qnfo-containers-pilot",
+      "qnfo-deploy-guard",
+      "qnfo-email",
+      "qnfo-fleet-control",
+      "qnfo-fleet-dashboard",
+      "qnfo-gateway",
+      "qnfo-infra",
+      "qnfo-intent-orchestrator",
+      "qnfo-ipatent",
+      "qnfo-kaizen",
+      "qnfo-lifecycle",
+      "qnfo-memory-mcp",
+      "qnfo-observability",
+      "qnfo-ops",
+      "qnfo-outreach",
+      "qnfo-paper-indexer",
+      "qnfo-paper-reviser",
+      "qnfo-pdf",
+      "qnfo-research-exec",
+      "qnfo-skill-sync",
+      "qnfo-social",
+      "qnfo-subscribers",
+      "qnfo-tools-mcp"
+    ]
+  },
+  "purge_error": null,
+  "rows": {
+    "audit-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "audit-hub"
+    },
+    "audits": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "audits"
+    },
+    "calendar-api": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "calendar-api"
+    },
+    "ci-status": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "ci-status"
+    },
+    "companion-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "companion-hub"
+    },
+    "docs": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "docs"
+    },
+    "errata-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "errata-hub"
+    },
+    "events-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "events-radar"
+    },
+    "fleet-exec": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "fleet-exec"
+    },
+    "funding": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "funding"
+    },
+    "idea-hub": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "idea-hub"
+    },
+    "jnl-pipeline": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-pipeline"
+    },
+    "jnl-referee": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-referee"
+    },
+    "jnl-reviser": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-reviser"
+    },
+    "jnl-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-watch"
+    },
+    "jnl-zenodo": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-zenodo"
+    },
+    "machine-readability": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "machine-readability"
+    },
+    "migrations": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "migrations"
+    },
+    "notes-intake": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "notes-intake"
+    },
+    "obsidian-writer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "obsidian-writer"
+    },
+    "ops-gateway": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "ops-gateway"
+    },
+    "osf-integrity-check": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "osf-integrity-check"
+    },
+    "paper-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "paper-hub"
+    },
+    "papers": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "papers"
+    },
+    "personal-api": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-api"
+    },
+    "personal-companion": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-companion"
+    },
+    "personal-events-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-events-radar"
+    },
+    "personal-life-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-life-indexer"
+    },
+    "personal-life-maintain": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-life-maintain"
+    },
+    "personal-life-search": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-life-search"
+    },
+    "q08-signal-engine": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "q08-signal-engine"
+    },
+    "qnfo-agent-orchestrator": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-agent-orchestrator"
+    },
+    "qnfo-agent-orchestrator-legacy-dup": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-agent-orchestrator-legacy-dup"
+    },
+    "qnfo-agent-ws": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-agent-ws"
+    },
+    "qnfo-ai": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai"
+    },
+    "qnfo-ai-calibration": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai-calibration"
+    },
+    "qnfo-ai-search": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai-search"
+    },
+    "qnfo-analytics": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-analytics"
+    },
+    "qnfo-archive": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-archive"
+    },
+    "qnfo-artifact-agent": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-artifact-agent"
+    },
+    "qnfo-artifacts": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-artifacts"
+    },
+    "qnfo-arxiv-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-arxiv-radar"
+    },
+    "qnfo-auditor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-auditor"
+    },
+    "qnfo-autopilot": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-autopilot"
+    },
+    "qnfo-backlog-exec": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-backlog-exec"
+    },
+    "qnfo-blank-audit": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-blank-audit"
+    },
+    "qnfo-calendar-intake": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-calendar-intake"
+    },
+    "qnfo-chameleon": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-chameleon"
+    },
+    "qnfo-chat-canary": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-chat-canary"
+    },
+    "qnfo-citation-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-citation-watch"
+    },
+    "qnfo-cloud-ops": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-cloud-ops"
+    },
+    "qnfo-code-agent": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-code-agent"
+    },
+    "qnfo-code-orchestrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-code-orchestrator"
+    },
+    "qnfo-containers-pilot": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-containers-pilot"
+    },
+    "qnfo-ddocs-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-ddocs-indexer"
+    },
+    "qnfo-deploy-guard": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-deploy-guard"
+    },
+    "qnfo-email": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-email"
+    },
+    "qnfo-errata-orchestrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-orchestrator"
+    },
+    "qnfo-errata-publish": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-publish"
+    },
+    "qnfo-errata-respond": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-respond"
+    },
+    "qnfo-errata-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-watch"
+    },
+    "qnfo-error-selfheal": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-error-selfheal"
+    },
+    "qnfo-events": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-events"
+    },
+    "qnfo-fleet-advisor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-advisor"
+    },
+    "qnfo-fleet-calibrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-calibrator"
+    },
+    "qnfo-fleet-control": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-fleet-control"
+    },
+    "qnfo-fleet-dashboard": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-fleet-dashboard"
+    },
+    "qnfo-fleet-deploy": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-deploy"
+    },
+    "qnfo-fleet-feed": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-feed"
+    },
+    "qnfo-gateway": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-gateway"
+    },
+    "qnfo-idea-factory": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-idea-factory"
+    },
+    "qnfo-idea-miner": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-idea-miner"
+    },
+    "qnfo-idea-triage": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-idea-triage"
+    },
+    "qnfo-impact": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-impact"
+    },
+    "qnfo-infra": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-infra"
+    },
+    "qnfo-intent-orchestrator": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-intent-orchestrator"
+    },
+    "qnfo-ipatent": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ipatent"
+    },
+    "qnfo-kaizen": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-kaizen"
+    },
+    "qnfo-lifecycle": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-lifecycle"
+    },
+    "qnfo-memory-mcp": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-memory-mcp"
+    },
+    "qnfo-memory-mcp-legacy-dup": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-memory-mcp-legacy-dup"
+    },
+    "qnfo-observability": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-observability"
+    },
+    "qnfo-ops": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ops"
+    },
+    "qnfo-outreach": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-outreach"
+    },
+    "qnfo-paper-explainer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-paper-explainer"
+    },
+    "qnfo-paper-indexer": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-paper-indexer"
+    },
+    "qnfo-paper-reviser": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-paper-reviser"
+    },
+    "qnfo-pdf": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-pdf"
+    },
+    "qnfo-pipeline-ops": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-pipeline-ops"
+    },
+    "qnfo-proof": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-proof"
+    },
+    "qnfo-qwav": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-qwav"
+    },
+    "qnfo-register-guard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-register-guard"
+    },
+    "qnfo-research-exec": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-research-exec"
+    },
+    "qnfo-research-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-research-radar"
+    },
+    "qnfo-research-supervisor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-research-supervisor"
+    },
+    "qnfo-scorecard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-scorecard"
+    },
+    "qnfo-signal-loop": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-signal-loop"
+    },
+    "qnfo-skill-sync": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-skill-sync"
+    },
+    "qnfo-skills-discovery": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-skills-discovery"
+    },
+    "qnfo-social": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-social"
+    },
+    "qnfo-subscribers": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-subscribers"
+    },
+    "qnfo-thread-ingest": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-thread-ingest"
+    },
+    "qnfo-tools-mcp": {
+      "before": null,
+      "http": 200,
+      "live": null,
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-tools-mcp"
+    },
+    "qnfo-twin-maintain": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-twin-maintain"
+    },
+    "qnfo-venue-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-venue-radar"
+    },
+    "qnfo-web-unified": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "qnfo-web-unified"
+    },
+    "radar-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "radar-hub"
+    },
+    "research-daily-brief": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "research-daily-brief"
+    },
+    "scripts": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "scripts"
+    },
+    "vault-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "vault-indexer"
+    }
+  },
+  "stale_rows_purged": 0
+}

@@ -1,0 +1,227 @@
+name: apply-cron-only-class-1
+
+# CRON_ONLY-1 (issue #1402) applier.
+#
+# APPLIER-CI-CREDENTIAL-GAP-1 (root-caused by qnfo-ops 2026-09-29):
+#   The previous version of this applier RAN (ci-status/cron-only-class-1.json,
+#   ts 2026-09-29T19:30:58Z) and applied the patch in the CI working tree
+#   (pre_marker_count 0 -> post_marker_count 9), but the commit-back never executed,
+#   so scripts/deploy-drift-guard.py on main still has NO CRON_ONLY class
+#   (verified by raw fetch of main: has_CRON_ONLY=false).
+#   The behavioural checks classified nothing (positive_classified="" / negative_still="")
+#   because deploy-drift-guard.py obtains the authoritative CF script list from
+#   os.environ["CF_ACCOUNT_ID"] + os.environ["CLOUDFLARE_API_TOKEN"] (guard lines 323-324)
+#   and this workflow declared NO env. With no script list the guard degrades to
+#   NOT_DEPLOYED and the CRON_ONLY assertion can never pass -- a permanent,
+#   self-renewing failure (the applier class CI-APPLIER-NEVER-APPLIES-1).
+#   FIX: provide the two secrets this repo already has (used by fleet-autodeploy.yml,
+#   deploy-qnfo-ops.yml, lifecycle-sot-and-deploy.yml) and publish the patch rc plus the
+#   raw classification output, so a zero-effect run is diagnosable and never silent
+#   (FAILURE-ARTIFACT-LOSS-1 / issue #1381).
+#
+# Gating: the commit is conditional on (a) the patch script exiting 0 (applied) or 1
+# (already applied) AND (b) the positive behavioural check actually classifying
+# ai-health-prober as CRON_ONLY. A partially-applied patch can no longer be committed.
+
+on:
+  push:
+    paths:
+      - scripts/patch-cron-only-class-1.py
+      - .github/workflows/apply-cron-only-class-1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-cron-only-class-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: record pre-patch state
+        run: |
+          set -e
+          echo "guard bytes: $(wc -c < scripts/deploy-drift-guard.py)"
+          echo "CRON_ONLY before: $(grep -c 'CRON_ONLY' scripts/deploy-drift-guard.py || true)"
+          echo "api token present: $([ -n "${CLOUDFLARE_API_TOKEN:-}" ] && echo yes || echo no)"
+          echo "account id present: $([ -n "${CF_ACCOUNT_ID:-}" ] && echo yes || echo no)"
+          cp scripts/deploy-drift-guard.py /tmp/pre-guard.py
+
+      - name: apply CRON_ONLY-1 patch
+        id: patch
+        continue-on-error: true
+        run: |
+          set +e
+          python3 scripts/patch-cron-only-class-1.py > /tmp/patch.log 2>&1
+          rc=$?
+          echo "patch_rc=$rc"
+          echo "patch_rc=$rc" >> "$GITHUB_OUTPUT"
+          cat /tmp/patch.log
+          exit 0
+
+      - name: guard - patched source parses and carries marker plus helpers
+        id: g1
+        continue-on-error: true
+        run: |
+          set -e
+          python3 -m py_compile scripts/deploy-drift-guard.py
+          grep -qF 'CRON_ONLY-1' scripts/deploy-drift-guard.py
+          grep -qF 'def declared_crons(' scripts/deploy-drift-guard.py
+          grep -qF 'def declares_http_surface(' scripts/deploy-drift-guard.py
+          grep -qF 'def cron_only_declared(' scripts/deploy-drift-guard.py
+          grep -qF 'cron_only_count' scripts/deploy-drift-guard.py
+          echo "GUARD OK - syntax plus marker plus 3 helpers plus json count"
+
+      - name: guard - exit-code neutrality
+        id: g2
+        continue-on-error: true
+        run: |
+          set -e
+          python3 - <<'PY'
+          import re
+          src = open("scripts/deploy-drift-guard.py", encoding="utf-8").read()
+          m = re.search(r"problems = .*", src)
+          assert m, "problems sum not found"
+          assert "cron_only" not in m.group(0), "CRON_ONLY leaked into the exit-code sum"
+          print("EXIT-CODE NEUTRALITY OK:", m.group(0).strip())
+          PY
+
+      - name: behavioural check - positive ai-health-prober to CRON_ONLY
+        id: pos
+        continue-on-error: true
+        run: |
+          python3 scripts/deploy-drift-guard.py ai-health-prober > /tmp/pos.txt 2>&1 || true
+          cat /tmp/pos.txt
+          if grep -qE '^CRON_ONLY ai-health-prober' /tmp/pos.txt; then
+            echo "POSITIVE OK"
+          else
+            echo "POSITIVE FAILED - see /tmp/pos.txt above"
+          fi
+
+      - name: behavioural check - negative control with HTTP surface
+        id: neg
+        continue-on-error: true
+        run: |
+          mkdir -p cron-neg-probe
+          printf 'name = "cron-neg-probe"\nworkers_dev = true\n\n[triggers]\ncrons = ["*/20 * * * *"]\n' > cron-neg-probe/wrangler.toml
+          python3 scripts/deploy-drift-guard.py cron-neg-probe > /tmp/neg.txt 2>&1 || true
+          cat /tmp/neg.txt
+          rm -rf cron-neg-probe
+
+      - name: behavioural check - negative control with no config
+        id: neg2
+        continue-on-error: true
+        run: |
+          mkdir -p cron-nocfg-probe
+          python3 scripts/deploy-drift-guard.py cron-nocfg-probe > /tmp/neg2.txt 2>&1 || true
+          cat /tmp/neg2.txt
+          rm -rf cron-nocfg-probe
+
+      - name: decide whether to commit
+        id: decide
+        run: |
+          set -e
+          rc="${{ steps.patch.outputs.patch_rc }}"
+          ok="0"
+          if [ "$rc" = "0" ] || [ "$rc" = "1" ]; then
+            if grep -qE '^CRON_ONLY ai-health-prober' /tmp/pos.txt 2>/dev/null; then ok="1"; fi
+          fi
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "decide - patch_rc=$rc ok=$ok"
+
+      - name: commit patched guard
+        if: steps.decide.outputs.ok == '1'
+        run: |
+          set -e
+          git config user.name "qnfo-ci"
+          git config user.email "ci@qnfo.org"
+          git add scripts/deploy-drift-guard.py
+          if git diff --cached --quiet; then
+            echo "no source change to commit (already applied)"
+            exit 0
+          fi
+          git commit -m "fix(drift-guard): CRON_ONLY-1 class scheduled-only workers as CRON_ONLY (issue #1402)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then echo "commit-back push OK attempt $i"; exit 0; fi
+            echo "push attempt $i rejected - retrying"
+            sleep 6
+          done
+          echo "COMMIT-BACK FAILED after 5 attempts"
+          exit 1
+
+      - name: verify landed on main
+        if: steps.decide.outputs.ok == '1'
+        run: |
+          set -e
+          git fetch origin main
+          git show origin/main:scripts/deploy-drift-guard.py > /tmp/landed.py
+          grep -qF 'CRON_ONLY-1' /tmp/landed.py
+          python3 -m py_compile /tmp/landed.py
+          echo "LANDED OK on origin/main with $(grep -c 'CRON_ONLY' /tmp/landed.py) CRON_ONLY occurrences"
+
+      - name: publish outcome artifact
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          PRE=$(grep -c 'CRON_ONLY' /tmp/pre-guard.py 2>/dev/null || echo 0)
+          POST=$(grep -c 'CRON_ONLY' scripts/deploy-drift-guard.py 2>/dev/null || echo 0)
+          POS=$(grep -oE '^CRON_ONLY [^ ]+' /tmp/pos.txt 2>/dev/null | head -1 || true)
+          NEG=$(grep -oE '^NO_HEALTH_ROUTE [^ ]+' /tmp/neg.txt 2>/dev/null | head -1 || true)
+          PRC="${{ steps.patch.outputs.patch_rc }}"
+          HEAD=$(git rev-parse HEAD)
+          TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          CRED="$([ -n "${CLOUDFLARE_API_TOKEN:-}" ] && echo yes || echo no)"
+          python3 - "$PRE" "$POST" "$POS" "$NEG" "$PRC" "$HEAD" "$TS" "$CRED" <<'PY'
+          import json, sys
+          pre, post, pos, neg, prc, head, ts, cred = sys.argv[1:9]
+          doc = {
+              "workflow": "apply-cron-only-class-1",
+              "issue": "1402 / CRON_ONLY-1",
+              "marker": "CRON_ONLY-1",
+              "pre_marker_count": pre,
+              "post_marker_count": post,
+              "positive_classified": pos,
+              "negative_still": neg,
+              "patch_rc": prc,
+              "credential_present": cred,
+              "head": head,
+              "ts": ts,
+          }
+          with open("ci-status/cron-only-class-1.json", "w") as fh:
+              json.dump(doc, fh, indent=2, sort_keys=True)
+              fh.write("\n")
+          print(open("ci-status/cron-only-class-1.json").read())
+          PY
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "selfheal@qnfo.org"
+          git add ci-status/cron-only-class-1.json
+          if git diff --cached --quiet; then
+            echo "artifact unchanged"
+            exit 0
+          fi
+          git commit -m "ci(cron-only-class-1): outcome artifact"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main >/dev/null 2>&1 || true
+            if git push origin HEAD:main; then echo "artifact push OK attempt $i"; exit 0; fi
+            sleep 6
+          done
+          echo "artifact push failed"

@@ -1,0 +1,57 @@
+{
+  "artifact": "fleet-autoaudit NOT_DEPLOYED triage",
+  "generated_utc": "2026-09-29T17:45:00Z",
+  "source_table": "QNFO_AUDIT.worker_live_audit",
+  "source_runs": ["2026-09-29 15:47:44", "2026-09-29 15:51:44"],
+  "total_rows_in_table": 112,
+  "class_counts": {
+    "NOT_DEPLOYED": 74,
+    "SYNC": 28,
+    "DRIFT": 4,
+    "NO_REPO_VERSION": 3,
+    "NO_HEALTH_ROUTE": 2,
+    "NO_REPO_VERSION+NO_REPO_VERSION": 1
+  },
+  "triage_verdict": {
+    "genuine_declared_worker_absent": 53,
+    "non_worker_directory_noise": 19,
+    "stale_orphan_row_false_positive": 2,
+    "arithmetic_check": "53 + 19 + 2 = 74"
+  },
+  "method": {
+    "not_deployed_definition": "deploy-drift-guard.py emits NOT_DEPLOYED only when the workers.dev /health probe 404s AND the resolved worker name is positively absent from the CF account script list (GET /accounts/{acct}/workers/scripts). If that list is unavailable the guard degrades to NO_HEALTH_ROUTE instead, so the class can never be produced by a missing token.",
+    "co_occurrence_proof": "The run produced both NOT_DEPLOYED (74) and NO_HEALTH_ROUTE (2). NO_HEALTH_ROUTE is only reachable when the script list IS available, therefore the script list was live and NOT_DEPLOYED is a positive exclusion, not a probe artifact.",
+    "instrument_positive_control": "cf_worker_read qnfo-ops -> 200, version 2.37.22-github409-retry. cf_worker_read qnfo-email-orchestrator -> 200, version 0.4.1-escalate-deadend-fix, size 17015 B. Therefore 404 responses from the same tool are meaningful.",
+    "cf_api_404_sample": ["docs", "qnfo-analytics", "qnfo-error-selfheal", "jnl-referee", "qnfo-code-agent", "qnfo-qwav", "audit-hub"],
+    "invalid_method_rejected": "A probe via run_code_net returned HTTP 404 error code 1042 for all 60 hostnames, including variants. Error 1042 is the Cloudflare same-zone Worker-to-Worker block, so the isolate cannot probe *.workers.dev at all. Those results were discarded as a methodology artifact, not evidence of absence."
+  },
+  "genuine_declared_worker_absent": [
+    "audit-hub", "companion-hub", "errata-hub", "errata-orchestrator->qnfo-errata-orchestrator", "events-radar",
+    "jnl-pipeline", "jnl-referee", "jnl-reviser", "jnl-watch", "jnl-zenodo",
+    "notes-intake", "obsidian-writer", "osf-integrity-check", "paper-hub", "personal-events-radar",
+    "qnfo-agent-ws", "qnfo-artifact-agent", "qnfo-artifacts", "qnfo-auditor", "qnfo-autopilot",
+    "qnfo-blank-audit", "qnfo-calendar-intake", "qnfo-chameleon", "qnfo-chat-canary", "qnfo-citation-watch",
+    "qnfo-code-agent", "qnfo-code-orchestrator", "qnfo-ddocs-indexer", "qnfo-errata-publish", "qnfo-errata-respond",
+    "qnfo-errata-watch", "qnfo-error-selfheal", "qnfo-events", "qnfo-fleet-advisor", "qnfo-fleet-calibrator",
+    "qnfo-fleet-deploy", "qnfo-fleet-feed", "qnfo-idea-factory", "qnfo-idea-miner", "qnfo-idea-triage",
+    "qnfo-paper-explainer", "qnfo-pipeline-ops", "qnfo-proof", "qnfo-register-guard", "qnfo-research-supervisor",
+    "qnfo-scorecard", "qnfo-signal-loop", "qnfo-twin-maintain", "qnfo-venue-radar", "radar-hub",
+    "research-daily-brief", "skills-discovery->qnfo-skills-discovery", "vault-indexer"
+  ],
+  "non_worker_directory_noise": [
+    "audits", "ci-status", "docs", "funding", "machine-readability", "migrations", "ops-gateway", "papers",
+    "personal-life-indexer", "personal-life-maintain", "personal-life-search", "qnfo-analytics",
+    "qnfo-arxiv-radar", "qnfo-impact", "qnfo-qwav", "qnfo-research-radar", "qnfo-thread-ingest",
+    "qnfo-web-unified", "scripts"
+  ],
+  "stale_orphan_row_false_positive": [
+    "agent-orchestrator (declares qnfo-agent-orchestrator, which is live; row left over from the 15:47:44 pre-dedup run)",
+    "memory-mcp (declares qnfo-memory-mcp, which is live at 2.0.3; row left over from the 15:47:44 pre-dedup run)"
+  ],
+  "issues_filed": ["AUDIT-STALE-ROWS-1", "NOT-DEPLOYED-NONWORKER-NOISE-1", "NOT-DEPLOYED-KEYED-BY-DIR-1"],
+  "cannot_see": [
+    "whether a genuinely absent declared worker SHOULD be deployed (that is a product decision, not a drift signal)",
+    "behavioural breakage behind a 200 /health",
+    "content drift on workers whose live bundle hash was not compared (content mode requires the CF token in CI)"
+  ]
+}

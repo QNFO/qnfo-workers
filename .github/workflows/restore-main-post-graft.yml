@@ -1,0 +1,106 @@
+name: restore-main-post-graft
+
+# RESTORE-MAIN-POST-GRAFT-1 (2026-09-27).
+#
+# DEFECT: the WORKTREE-GRAFT-PUSH-1 graft that landed the attachguard bot commit as
+# 07743499 placed the grafted commit's TREE on top of main instead of applying only its
+# diff. main was therefore reverted to the ~09:44 snapshot PLUS the attachguard fix:
+# `git diff 81d7a6c3 07743499` reports 33 files changed, including
+#   qnfo-ai 5.29.3-roster-auth -> 5.29.1
+#   qnfo-ai-calibration 1.2.3-closefix -> 1.2.1-noskip
+#   fleet-exec VERSION 1.0.1 -> fleet-executor/0.3.1
+#   docs/BRANCH-DISPOSITION-20260927.md and docs/UNMINIFY-PROOF-20260927.md deleted
+#   agent-orchestrator/wrangler.toml + memory-mcp/wrangler.toml resurrected
+#     (the duplicate-worker-name defect neutralised in a9b9a83c)
+#
+# main is the DEPLOY SOURCE (REPO-IS-DEPLOY-SOURCE-1), so a redeploy from main would push
+# that older code live. This workflow restores every path to its 81d7a6c3 content and
+# deletes the files the graft added, while KEEPING the three files the attachguard work
+# legitimately owns. Every step is fail-closed.
+#
+# Trigger: a push touching this file, or manual workflow_dispatch.
+# NOTE commit flags are single-line -m arguments: a multi-line commit message inside a
+# `run: |` scalar terminates the block and invalidates the workflow YAML.
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-main-post-graft.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: restore-main-post-graft
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Save the three files the attachguard work owns
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/keep
+          cp qnfo-ops/worker.js /tmp/keep/worker.js
+          cp qnfo-ops/deployed-current.worker.js /tmp/keep/mirror.js
+          cp .github/workflows/deploy-qnfo-ops.yml /tmp/keep/deploy-qnfo-ops.yml
+          echo "keepers saved"
+
+      - name: Delete the files the graft added
+        run: |
+          set -euo pipefail
+          git diff --name-only --diff-filter=A 81d7a6c3 HEAD | while read -r f; do
+            case "$f" in
+              qnfo-ops/worker.js|qnfo-ops/deployed-current.worker.js|.github/workflows/deploy-qnfo-ops.yml|.github/workflows/restore-main-post-graft.yml)
+                echo "keep $f" ;;
+              *)
+                git rm -f --ignore-unmatch "$f" && echo "removed $f" ;;
+            esac
+          done
+
+      - name: Restore every path to its 81d7a6c3 content
+        run: |
+          set -euo pipefail
+          git checkout 81d7a6c3 -- .
+          echo "restored from 81d7a6c3"
+
+      - name: Re-apply the attachguard keepers
+        run: |
+          set -euo pipefail
+          cp /tmp/keep/worker.js qnfo-ops/worker.js
+          cp /tmp/keep/mirror.js qnfo-ops/deployed-current.worker.js
+          cp /tmp/keep/deploy-qnfo-ops.yml .github/workflows/deploy-qnfo-ops.yml
+          echo "keepers re-applied"
+
+      - name: Verify the restore (fail-closed)
+        run: |
+          set -euo pipefail
+          grep -q 'var VERSION = "2.37.13-attachguard-xml-form";' qnfo-ops/worker.js
+          test "$(grep -c 'attachmentGuardXml' qnfo-ops/worker.js)" = "2"
+          cmp qnfo-ops/worker.js qnfo-ops/deployed-current.worker.js
+          grep -q 'var VERSION = "5.29.3-roster-auth";' qnfo-ai/worker.js
+          grep -q 'var VERSION = "1.2.3-closefix";' qnfo-ai-calibration/worker.js
+          test -f docs/BRANCH-DISPOSITION-20260927.md
+          test -f docs/UNMINIFY-PROOF-20260927.md
+          test ! -f agent-orchestrator/wrangler.toml
+          test ! -f memory-mcp/wrangler.toml
+          echo "VERIFIED: main restored, attachguard keepers intact"
+
+      - name: Commit and push to main
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-restore-bot"
+          git config user.email "ops@qnfo.org"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing staged; exiting"; exit 0; fi
+          git diff --cached --stat
+          git commit -m "fix(main): restore the 33 files reverted by the attachguard graft (07743499), keeping qnfo-ops 2.37.13" -m "RESTORE-MAIN-POST-GRAFT-1: WORKTREE-GRAFT-PUSH-1 placed the grafted commit tree on main instead of its diff, reverting qnfo-ai 5.29.3-roster-auth -> 5.29.1 and qnfo-ai-calibration 1.2.3-closefix -> 1.2.1-noskip, deleting docs/BRANCH-DISPOSITION-20260927.md and docs/UNMINIFY-PROOF-20260927.md, and resurrecting agent-orchestrator/wrangler.toml + memory-mcp/wrangler.toml (duplicate-worker-name defect neutralised in a9b9a83c). Restores every path to its 81d7a6c3 content; keeps the three attachguard-owned files." -m "Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git push origin HEAD:main

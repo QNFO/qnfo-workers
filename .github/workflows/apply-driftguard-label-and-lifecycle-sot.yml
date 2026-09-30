@@ -1,0 +1,175 @@
+name: apply-driftguard-label-and-lifecycle-sot
+
+# DRIFTGUARD-LABEL-CLASS-1 + LEDGER-VERSION-EXTRACT-1 + LIFECYCLE-VERSION-SOT-1
+# (issue 1370, 2026-09-29).
+#
+# EVIDENCE, all reproduced live before this workflow existed:
+#   * scripts/deploy-drift-guard.py classified ANY string inequality between the repo
+#     VERSION constant and live /health as DRIFT. qnfo-lifecycle: repo constant "1.6.2",
+#     live /health "1.6.2-cronconsolidate" -> permanent DRIFT, even though
+#     qnfo-lifecycle/worker.js and qnfo-lifecycle/deployed-current.worker.js are the SAME
+#     sha (d3b76f91bea19cf5ad8acd802c993494d4de45d2, 30293 B) and the live bundle is
+#     30295 B -- a 2-byte trailing-whitespace delta. The guard docstring called that a
+#     DEPLOY-UNLOGGED-MUTATION ("live ahead"); that attribution is wrong and is corrected.
+#   * scripts/raw_put.py extracted the deploy version with r'var VERSION = "([^"]+)"', so
+#     any worker whose constant is `const QNFO_VERSION = "..."` (qnfo-lifecycle,
+#     qnfo-memory-mcp) was recorded in qnfo-audit.deployment_history with
+#     version_id="unknown" -- a null version in the very ledger DEPLOY-LEDGER-1 protects.
+#
+# FIX 1  deploy-drift-guard.py gains LABEL_MISMATCH: repo != live but cmp_ver()==0.
+#        Reported in text and JSON, never fatal (a redeploy cannot change a label; the
+#        --content sha check stays the authority on the bytes).
+# FIX 2  raw_put.py VERSION_RE widened to the same alternation the guard uses, so
+#        const/let/QNFO_-prefixed constants reach the deploy ledger.
+# FIX 3  qnfo-lifecycle /health derives from QNFO_VERSION instead of a hardcoded tag, so
+#        the bundle constant and /health can never disagree again.
+#
+# WHY THIS WORKFLOW EXISTS AT ALL: scripts/driftguard-label-and-lifecycle-sot-patch.py is
+# an applier, and an applier with no invocation path is the ORPHANED-APPLIER-1 failure
+# mode documented in apply-d1guard-literal-fn-aware.yml. This is its execution path.
+#
+# DEPLOY-STALE-CHECKOUT-1 (fixed 2026-09-29, this revision). The `deploy` job originally
+# did a bare `actions/checkout@v4`, which resolves to the SHA that TRIGGERED the run --
+# not the commit the `apply` job had just pushed. It therefore read the UNPATCHED
+# qnfo-lifecycle artifact (repo 1.6.2 vs live 1.6.2-cronconsolidate -> LABEL_MISMATCH,
+# never `ahead`), decided need=false, and took the "Report skipped deploy" branch. The
+# job could not deploy the patch it had just committed, in ANY run, by construction.
+# Evidence: qnfo-audit.deployment_history has ZERO rows for qnfo-lifecycle while
+# `scripts/raw_put.py` deploys for qnfo-ops land normally (id 116, 2026-09-29T16:03:38Z).
+# The deploy job now hard-syncs to origin/main before deciding.
+#
+# NO-SILENT-SKIP-1 (this revision). The skip branch previously just echoed. A skip is now
+# only allowed when the guard genuinely reports the worker in SYNC; otherwise the job
+# FAILS. A deploy job that quietly does nothing is indistinguishable from one that works.
+#
+# NOTE commit messages are single-line -m flags, never inline multi-line strings: a
+# multi-line git commit -m inside a run: | block puts continuation lines at column 1,
+# terminates the block scalar, and makes the whole workflow file invalid YAML.
+#
+# NOTE CF_ACCOUNT_ID is deliberately NOT exported. scripts/raw_put.py reads it with a
+# default; exporting an UNDEFINED GitHub secret yields an EMPTY string, which os.environ.get
+# returns in preference to the default and would blank the account id in every API URL.
+
+on:
+  push:
+    paths:
+      - 'scripts/driftguard-label-and-lifecycle-sot-patch.py'
+      - '.github/workflows/apply-driftguard-label-and-lifecycle-sot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-driftguard-label-and-lifecycle-sot
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Apply patch (fail-closed) and assert the patched properties
+        run: |
+          set -euo pipefail
+          python3 scripts/driftguard-label-and-lifecycle-sot-patch.py
+          python3 -m py_compile scripts/deploy-drift-guard.py scripts/raw_put.py
+          grep -q 'LABEL_MISMATCH' scripts/deploy-drift-guard.py
+          grep -q 'label_mismatch_count' scripts/deploy-drift-guard.py
+          grep -q 'QNFO_' scripts/raw_put.py
+          grep -q 'version: QNFO_VERSION,' qnfo-lifecycle/worker.js
+          cmp qnfo-lifecycle/worker.js qnfo-lifecycle/deployed-current.worker.js
+          cp qnfo-lifecycle/worker.js /tmp/lifecycle.mjs
+          node --check /tmp/lifecycle.mjs
+          echo "guard, raw_put and qnfo-lifecycle patched; mirror pair byte-identical; artifact parses as ESM"
+
+      - name: Self-audit - drift guard over qnfo-lifecycle, JSON
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy-drift-guard.py qnfo-lifecycle --json | tee /tmp/drift-pre.json
+          python3 -c "import json;d=json.load(open('/tmp/drift-pre.json'));print('pre-deploy: sync=%s drift=%s label_mismatch=%s ahead=%s' % (d['sync'], len(d['drift']), d.get('label_mismatch_count'), len(d['ahead'])))"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-driftguard-bot"
+          git config user.email "ops@qnfo.org"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "nothing staged (already applied)"
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "fix(driftguard+raw_put+lifecycle): #1370 LABEL_MISMATCH class, ledger version extraction, /health single source of truth" -m "deploy-drift-guard.py: a repo VERSION vs live /health difference whose numeric prefixes are EQUAL is no longer DRIFT - new LABEL_MISMATCH class, reported in text and JSON, never fatal. The docstring attribution of the qnfo-lifecycle case as a live-ahead mutation is corrected: both repo artifacts and live share sha d3b76f91 (30293 vs 30295 B, trailing whitespace only). raw_put.py: VERSION_RE widened from var VERSION only to var|let|const (QNFO_)?VERSION, so const QNFO_VERSION workers stop landing in deployment_history as unknown. qnfo-lifecycle: health() returns QNFO_VERSION so the bundle constant and /health can never disagree." -m "Co-authored-by: Chatbox <chatbox@chatboxai.com>"
+          git push origin "HEAD:${{ github.ref_name }}"
+
+  deploy:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # DEPLOY-STALE-CHECKOUT-1: without this, `actions/checkout` resolves to the SHA
+      # that triggered the run, i.e. the PRE-patch tree. The apply job's commit is a
+      # descendant of it, so the deploy job would read the old artifact and always skip.
+      - name: Sync to the latest main (the apply job's commit)
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          echo "deploy job tree is now at $(git rev-parse --short HEAD)"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Decide - is the repo artifact strictly ahead of live?
+        id: decide
+        run: |
+          set -euo pipefail
+          python3 scripts/deploy-drift-guard.py qnfo-lifecycle --json | tee /tmp/ahead.json
+          NEED=$(python3 -c "import json;d=json.load(open('/tmp/ahead.json'));print('true' if any(a['worker']=='qnfo-lifecycle' for a in d['ahead']) else 'false')")
+          echo "need=$NEED" >> "$GITHUB_OUTPUT"
+          echo "repo strictly ahead of live: $NEED"
+
+      - name: Deploy qnfo-lifecycle (binding- and settings-preserving)
+        if: steps.decide.outputs.need == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/raw_put.py qnfo-lifecycle qnfo-lifecycle/deployed-current.worker.js
+
+      - name: Verify live /health now matches the artifact version
+        if: steps.decide.outputs.need == 'true'
+        run: |
+          set -euo pipefail
+          sleep 8
+          python3 scripts/deploy-drift-guard.py qnfo-lifecycle --json | tee /tmp/drift-post.json
+          python3 -c "import json;d=json.load(open('/tmp/drift-post.json'));assert d['sync']==1, d;assert d.get('label_mismatch_count')==0, d;print('SYNC confirmed for qnfo-lifecycle; label_mismatch=0')"
+
+      # NO-SILENT-SKIP-1: skipping is only legitimate when the guard says SYNC. If the
+      # repo artifact still differs from live and we did not deploy, the job must FAIL --
+      # otherwise a permanently broken deploy path looks identical to a healthy no-op.
+      - name: Report skipped deploy - and refuse to skip silently
+        if: steps.decide.outputs.need != 'true'
+        run: |
+          set -euo pipefail
+          python3 -c "import json;d=json.load(open('/tmp/ahead.json'));print('skip: sync=%s drift=%s label_mismatch=%s ahead=%s not_deployed=%s' % (d['sync'], len(d['drift']), d.get('label_mismatch_count'), len(d['ahead']), len(d.get('not_deployed_workers') or [])));assert d['sync']==1, 'NO-SILENT-SKIP-1: repo artifact is not ahead of live but the worker is NOT in sync either -- the deploy path is broken: %s' % d"
+          echo "repo artifact is in sync with live; no deploy performed"
