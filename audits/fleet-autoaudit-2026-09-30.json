@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 18:13:13",
+  "audited_at": "2026-09-30 18:28:23",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -478,7 +478,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.6-node-b64-exports",
+        "version": "1.0.7-do-dispatch-guard",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -498,7 +498,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.35-realtime-obs",
+        "version": "1.7.36-refresh-deadline",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.2.10-research-queue-enum",
+        "version": "1.2.11-outreach-gate-derive",
         "worker": "qnfo-observability"
       },
       {
@@ -1036,9 +1036,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.6-node-b64-exports",
+      "before": "1.0.7-do-dispatch-guard",
       "http": 200,
-      "live": "1.0.6-node-b64-exports",
+      "live": "1.0.7-do-dispatch-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1148,9 +1148,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.35-realtime-obs",
+      "before": "1.7.36-refresh-deadline",
       "http": 200,
-      "live": "1.7.35-realtime-obs",
+      "live": "1.7.36-refresh-deadline",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.2.10-research-queue-enum",
+      "before": "1.2.11-outreach-gate-derive",
       "http": 200,
-      "live": "1.2.10-research-queue-enum",
+      "live": "1.2.11-outreach-gate-derive",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
