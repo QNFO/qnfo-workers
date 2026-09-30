@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.38-registry-refresh";
+var VERSION = "1.7.39-errors-since-deploy";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1355,7 +1355,9 @@ async function buildState(env, ctx) {
     // monotonic -- a single transient 502 kept this warn lit forever. Count only rows still open
     // and last observed inside the same active window as worker errors (last_seen is epoch-ms
     // text from the Observability API ingest, or ISO text from the loop).
-    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM fleet_issue_loop WHERE category='worker-observability' AND closed_at IS NULL AND (CASE WHEN CAST(last_seen AS REAL) > 1e12 THEN CAST(last_seen AS REAL) ELSE (julianday(last_seen) - 2440587.5) * 864e5 END) >= ?", [nowMs - ERR_ACTIVE_MS]);
+    // ...and, like worker errors, an issue last observed before its service's current code deploy
+    // belongs to the previous version (service comes from the ingested Observability payload).
+    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM (SELECT l.fingerprint, (CASE WHEN CAST(l.last_seen AS REAL) > 1e12 THEN CAST(l.last_seen AS REAL) ELSE (julianday(l.last_seen) - 2440587.5) * 864e5 END) AS seen_ms, (SELECT CASE WHEN json_valid(d.payload) THEN json_extract(d.payload, '$.service') END FROM fleet_issue_dispatch d WHERE d.fingerprint = l.fingerprint) AS svc FROM fleet_issue_loop l WHERE l.category='worker-observability' AND l.closed_at IS NULL) x WHERE x.seen_ms >= ? AND NOT EXISTS (SELECT 1 FROM fleet_deploys f WHERE x.svc IS NOT NULL AND f.worker = x.svc AND f.ok = 1 AND COALESCE(f.note,'') NOT LIKE 'SETTINGS-ONLY%' AND (julianday(f.ts) - 2440587.5) * 864e5 > x.seen_ms)", [nowMs - ERR_ACTIVE_MS]);
     const n = w && w.length ? (w[0].n || 0) : 0;
     const req = w && w.length ? (w[0].req || 0) : 0;
     const inObs = iss && iss.length ? (iss[0].n || 0) : 0;
@@ -1583,6 +1585,36 @@ async function buildState(env, ctx) {
     push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + " last-send=" + (sendAge === null ? "n/a" : sendAge + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24h, no send in 26h)" : open > 0 ? " draining at 8/day cap, ETA " + Math.ceil(open / 8) + "d" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
   });
   const analytics = await analytics24(env);
+  // Errors that all precede the worker's current CODE deploy (last error hour closed before the
+  // deploy landed) belong to the previous version: they are "recovered", active or not. Anything
+  // after the deploy stays active. Same settle rule as qnfo-deploy-guard (workerSettled).
+  const _recovered = [], _unfixed = [], _active = [];
+  if ((analytics.errWorkers && analytics.errWorkers.length) || (analytics.recoveredWorkers && analytics.recoveredWorkers.length)) {
+    let lastDeploy = {};
+    try {
+      const ld = await d1all(env.AUDIT, "SELECT worker, MAX(ts) AS ts FROM fleet_deploys WHERE ok=1 AND COALESCE(note,'') NOT LIKE 'SETTINGS-ONLY%' GROUP BY worker") || [];
+      for (const r of ld) lastDeploy[r.worker] = Date.parse(r.ts);
+    } catch (e) {
+    }
+    const predates = function(w) {
+      const lastErrEnd = Date.parse(w.last_error_hour || "") + 36e5;
+      const dep = lastDeploy[w.name];
+      return isFinite(lastErrEnd) && isFinite(dep) && dep >= lastErrEnd;
+    };
+    for (const w of analytics.errWorkers || []) {
+      if (predates(w)) _recovered.push(w);
+      else _active.push(w);
+    }
+    for (const w of analytics.recoveredWorkers || []) {
+      if (predates(w)) _recovered.push(w);
+      else _unfixed.push(w);
+    }
+    for (const w of _recovered) {
+      if (analytics.per[w.name]) analytics.per[w.name].errors_active = 0;
+    }
+  }
+  analytics.errWorkers = _active;
+  analytics.recovered = _recovered;
   const d1c = await d1Count(env);
   const liveNames = await liveScripts(env);
   const liveCount = liveNames ? liveNames.length : null;
@@ -1649,25 +1681,7 @@ async function buildState(env, ctx) {
       return k + "=" + w.by_status[k];
     }).join(" ") + (w.last_error_hour ? "; last " + String(w.last_error_hour).slice(5, 13).replace("T", " ") + "h" : "") + ")";
   };
-  if (analytics.errWorkers.length) issues.push({ sev: "err", text: analytics.errWorkers.length + " worker(s) with errors in the last " + ERR_ACTIVE_MS / 36e5 + "h: " + analytics.errWorkers.map(_errFmt).join(", ") });
-  // Older 24h errors: cleared when a successful deploy of that worker landed after the last
-  // error hour closed; otherwise still a warn (nothing has changed since they happened).
-  const _recovered = [], _unfixed = [];
-  if (analytics.recoveredWorkers && analytics.recoveredWorkers.length) {
-    let lastDeploy = {};
-    try {
-      const ld = await d1all(env.AUDIT, "SELECT worker, MAX(ts) AS ts FROM fleet_deploys WHERE ok=1 AND COALESCE(note,'') NOT LIKE 'SETTINGS-ONLY%' GROUP BY worker") || [];
-      for (const r of ld) lastDeploy[r.worker] = Date.parse(r.ts);
-    } catch (e) {
-    }
-    for (const w of analytics.recoveredWorkers) {
-      const lastErrEnd = Date.parse(w.last_error_hour || "") + 36e5;
-      const dep = lastDeploy[w.name];
-      if (isFinite(lastErrEnd) && isFinite(dep) && dep >= lastErrEnd) _recovered.push(w);
-      else _unfixed.push(w);
-    }
-  }
-  analytics.recovered = _recovered;
+  if (_active.length) issues.push({ sev: "err", text: _active.length + " worker(s) with errors in the last " + ERR_ACTIVE_MS / 36e5 + "h and after their current deploy: " + _active.map(_errFmt).join(", ") });
   if (_unfixed.length) issues.push({ sev: "warn", text: _unfixed.length + " worker(s) with 24h errors, none in the last " + ERR_ACTIVE_MS / 36e5 + "h and no deploy since: " + _unfixed.map(_errFmt).join(", ") });
   if (analytics.error) issues.push({ sev: "warn", text: "analytics unavailable: " + analytics.error });
   const chains = [];
