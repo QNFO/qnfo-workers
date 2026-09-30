@@ -16,7 +16,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.6-node-b64-exports";
+var VERSION = "1.0.7-do-dispatch-guard";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -339,7 +339,16 @@ var worker_default = {
     }
     const id = env.SHELL_CONTAINER.idFromName("default");
     const stub = env.SHELL_CONTAINER.get(id);
-    return stub.fetch(request);
+    // PILOT-FETCH-GUARD-1 (2026-09-30): worker_default.fetch had NO try/catch, so any throw
+    // from the Durable Object stub (DO momentarily unavailable, idFromName/DO binding
+    // transient) surfaced as an uncaught Worker exception = Cloudflare `scriptThrewException`
+    // (37 in 24h). Convert it into a structured 500 so callers get a real error body and the
+    // invocation is not counted as an uncaught throw.
+    try {
+      return await stub.fetch(request);
+    } catch (e) {
+      return json({ ok: false, error: "PILOT-DO-DISPATCH-1: " + String(e && e.message || e) }, 500);
+    }
   }
 };
 export { ShellContainer };
