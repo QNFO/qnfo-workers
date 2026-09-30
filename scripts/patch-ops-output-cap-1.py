@@ -4,13 +4,19 @@
 MEASURED DEFECT (raw fetch of qnfo-ops/worker.js, 385590 B, main, 2026-09-30):
   line 101:  var GW_MAX_OUT = 32768;
   /v1/models advertises max_output 393216 (OPS_ANSWER_CAP / DEFAULT_MAX_OUT), but
-  every paid/relay call site clamps to the bare GW_MAX_OUT literal:
+  every paid/relay call site clamps to the bare GW_MAX_OUT literal. Four lines carry
+  the clamp, and each carries it TWICE -- once in the OpenAI-shaped branch
+  (max_completion_tokens) and once in the legacy branch (max_tokens):
     3572  callDeepSeek(env, ...)        Math.min(maxTokens, GW_MAX_OUT)
     3646  callDeepSeekStream(env, ...)  Math.min(maxTokens, GW_MAX_OUT)
     4040  handleRelay(env, ...)         Math.min(maxOut,    GW_MAX_OUT)
     4391  agent stream path             Math.min(answerCap, GW_MAX_OUT)
-  So the advertised ceiling is unreachable: a client asking for 393216 receives at
-  most 32768. Advertisement and deliverable disagree by 12x.
+  = 8 clamp sites. So the advertised ceiling is unreachable: a client asking for
+  393216 receives at most 32768. Advertisement and deliverable disagree by 12x.
+
+  (rev 2 -- rev 1 asserted 4 sites and ABORTED with "matched 8 times". The applier's
+  fail-closed anchor check caught its own author's miscount and wrote NOTHING, which
+  is the behaviour it was built for. Rev 2 corrects the expectation to the measured 8.)
 
 WHY THIS APPLIER DOES NOT SIMPLY RAISE THE CONSTANT:
   Setting the default to 393216 would forward max_completion_tokens=393216 to the AI
@@ -23,12 +29,12 @@ WHY THIS APPLIER DOES NOT SIMPLY RAISE THE CONSTANT:
 
 WHAT THIS APPLIER DOES INSTEAD (behaviour-preserving by construction):
   * adds one resolver, gwMaxOut(env), whose default IS the current literal 32768;
-  * routes all four clamp sites through it.
+  * routes all eight clamp sites through it.
   The effective ceiling is byte-identical today and becomes adjustable through the
   OPS_GW_MAX_OUT secret once the upstream limit is measured. The gap is closed by
   making the ceiling measurable and adjustable rather than by guessing a number.
 
-FAIL-CLOSED: the 4-site substitution must match EXACTLY 4 times and the resolver
+FAIL-CLOSED: the clamp substitution must match EXACTLY 8 times and the resolver
   insert EXACTLY 1 time, in BOTH files; anything else raises and nothing is written.
 IDEMPOTENT: re-running on an already-patched tree is a no-op.
 MIRROR: qnfo-ops/deployed-current.worker.js must stay byte-identical to
@@ -67,7 +73,7 @@ function gwMaxOut(env) {
 
 CLAMP_OLD = ", GW_MAX_OUT)"
 CLAMP_NEW = ", gwMaxOut(env))"
-EXPECT_CLAMPS = 4
+EXPECT_CLAMPS = 8
 
 
 def patch(path):
