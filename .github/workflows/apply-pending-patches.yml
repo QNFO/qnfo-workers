@@ -28,6 +28,17 @@ name: apply-pending-patches
 #     is marker-based with bounded retry, not exact-VERSION equality (exact
 #     equality produces false-negative CI failures when a concurrent agent
 #     deploys a newer version).
+#   * SILENT-LANDING-LOSS-1 (added 2026-09-30 by qnfo-ops) -- every step used
+#     to carry continue-on-error, so a commit-back PUSH_FAILED still reported
+#     job success and a lost landing left nothing red. The commit-back step is
+#     now fail-loud and its outcome is recorded as push_ok in the artifact.
+#   * CI-STATUS-PATH-GUESS-1 (added 2026-09-30 by qnfo-ops) -- measured this
+#     day, the largest bucket of unfiled ops tool errors was github_repo_read
+#     404s on ci-status/<name>.json paths no workflow ever wrote
+#     (restore-container-config-1485.json, ensemble-budget-3.json,
+#     deploy-containers-pilot.json, fix-pilot-container-class.json, ...).
+#     ci-status/index.json now lists every artifact a run actually published,
+#     so a reader never guesses a filename again.
 
 on:
   push:
@@ -90,7 +101,7 @@ jobs:
           if [ "$found" = "0" ]; then echo "no worker bundles changed"; fi
 
       - name: "Commit landed patches (race-safe: pull --rebase + bounded retry)"
-        continue-on-error: true
+        id: commitback
         run: |
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
@@ -143,6 +154,7 @@ jobs:
             "workflow": "apply-pending-patches",
             "marker": "APPLY-PENDING-1",
             "apply_rc": "${{ steps.apply.outputs.apply_rc }}",
+            "push_ok": "${{ steps.commitback.outcome }}",
             "job_status": "${{ job.status }}",
             "head": "${{ github.sha }}",
             "ts": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
@@ -153,6 +165,26 @@ jobs:
             echo "--- applier-doctor.json ---"
             head -c 2000 ci-status/applier-doctor.json
           fi
+
+      - name: "Publish the artifact index for ci-status"
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, pathlib
+          d = pathlib.Path("ci-status")
+          files = sorted(p.name for p in d.glob("*") if p.is_file() and p.name != "index.json")
+          idx = {
+              "marker": "CI-STATUS-INDEX-1",
+              "workflow": "apply-pending-patches",
+              "artifacts": files,
+              "count": len(files),
+              "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it.",
+          }
+          (d / "index.json").write_text(json.dumps(idx, indent=2))
+          print(json.dumps(idx))
+          PY
 
       - name: "Commit the status artifact"
         if: always()
