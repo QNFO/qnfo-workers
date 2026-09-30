@@ -9,11 +9,11 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.34-panel6-mediated-count-writeback1";
+var VERSION = "1.7.35-realtime-obs";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
-var STALE_MS = 15 * 60 * 1e3;
+var STALE_MS = 60 * 1e3;
 var DAY_MS = 24 * 60 * 60 * 1e3;
 function pad2(n) {
   return (n < 10 ? "0" : "") + n;
@@ -1316,6 +1316,14 @@ async function buildState(env, ctx) {
     const c = cnt && cnt.length ? cnt[0].c : -1;
     const latest = rows.length ? rows[0].resource_name + " " + rows[0].action + " " + (rows[0].version_id || "") + " @ " + rows[0].deployed_at : "none";
     push({ key: "deployments", label: "Deployments (24h)", state: "info", detail: c >= 0 ? c + " deploys; latest: " + latest : latest, ts: rows.length ? rows[0].deployed_at : null });
+  });
+  await safeAudit("worker_observability", "Worker observability (live)", async function() {
+    const w = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, COALESCE(SUM(requests),0) AS req FROM analytics_dash_workers");
+    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM fleet_issue_loop WHERE category='worker-observability'");
+    const n = w && w.length ? (w[0].n || 0) : 0;
+    const req = w && w.length ? (w[0].req || 0) : 0;
+    const inObs = iss && iss.length ? (iss[0].n || 0) : 0;
+    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) tracked", ts: null });
   });
   await safeAudit("errata_queue", "Errata queue", async function() {
     const g = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS c FROM errata_queue GROUP BY status");
