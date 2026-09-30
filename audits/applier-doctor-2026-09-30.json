@@ -1,10 +1,17 @@
 {
  "counts": {
+<<<<<<< Updated upstream
   "already-applied": 70,
   "error": 7,
   "stale-anchor": 12,
   "superseded": 4,
   "undetermined": 8
+=======
+  "already-applied": 74,
+  "error": 8,
+  "stale-anchor": 11,
+  "undetermined": 10
+>>>>>>> Stashed changes
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -18,6 +25,23 @@
  "marker": "APPLIER-DOCTOR-2",
  "never_landed": [],
  "results": [
+  {
+   "changed_files": [],
+   "declared_signals": [
+    "ADR-009-AUDIT-TRAIL-UNWRITTEN-1",
+    "audit_trail",
+    "AUDIT_TRAIL_ACTIONS",
+    "logAuditTrail"
+   ],
+   "rc": 1,
+   "script": "scripts/adr009-audit-trail-unwritten-1-patch.py",
+   "tail": [
+    "== ADR-009-AUDIT-TRAIL-UNWRITTEN-1 ==",
+    "FAIL-CLOSED qnfo-ops/worker.js: cloud_ops_events call anchor matched 0 times (expected 1) - nothing written",
+    "FAIL: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 aborted (fail-closed)"
+   ],
+   "verdict": "undetermined"
+  },
   {
    "changed_files": [],
    "rc": 0,
@@ -141,7 +165,11 @@
    "script": "scripts/apply-pending-patches.py",
    "tail": [
     "LANDED(0): nothing to apply - main is current",
+<<<<<<< Updated upstream
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
+=======
+    "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
+>>>>>>> Stashed changes
     "wrote ci-status/apply-pending-report.json"
    ],
    "verdict": "undetermined"
@@ -751,7 +779,22 @@
    "tail": [
     "ABORT OPS-OUTPUT-CAP-DECOUPLE-1: anchor mismatch in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/worker.js: ', GW_MAX_OUT)' matched 8 times (expected 4)"
    ],
+<<<<<<< Updated upstream
    "verdict": "stale-anchor"
+=======
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/patch-q08-title-promote-1.py",
+   "tail": [
+    "TITLE-PROMOTE-1 q08-signal-engine/worker.js: already",
+    "TITLE-PROMOTE-1 q08-signal-engine/deployed-current.worker.js: already",
+    "TITLE-PROMOTE-1: already applied"
+   ],
+   "verdict": "already-applied"
+>>>>>>> Stashed changes
   },
   {
    "changed_files": [],
@@ -804,6 +847,20 @@
    "verdict": "already-applied"
   },
   {
+<<<<<<< Updated upstream
+=======
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/queue-drain-dispatch-false-timeout-1-patch.py",
+   "tail": [
+    "== QUEUE-DRAIN-DISPATCH-FALSE-TIMEOUT-1 ==",
+    "already applied qnfo-fleet-dashboard/worker.js",
+    "OK: QUEUE-DRAIN-DISPATCH-FALSE-TIMEOUT-1 complete, 0 target(s) changed"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+>>>>>>> Stashed changes
    "changed_files": [],
    "failing_anchor": "{'A_TAIL': 0}",
    "rc": 3,
@@ -993,7 +1050,11 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
+<<<<<<< Updated upstream
     "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 184008}"
+=======
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 209478}"
+>>>>>>> Stashed changes
    ],
    "verdict": "already-applied"
   },
@@ -1097,6 +1158,7 @@
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
+<<<<<<< Updated upstream
  "superseded": [
   "scripts/attachguard-xml-form-patch.py",
   "scripts/container-restore5-repair-bindings-patch.py",
@@ -1105,13 +1167,24 @@
  ],
  "total": 101,
  "ts": "2026-09-30T13:58:53.328Z",
+=======
+ "superseded": [],
+ "total": 103,
+ "ts": "2026-09-30T20:01:03.328Z",
+>>>>>>> Stashed changes
  "undetermined": [
+  "scripts/adr009-audit-trail-unwritten-1-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
   "scripts/panel6-mediated-count-patch.py",
+<<<<<<< Updated upstream
+=======
+  "scripts/patch-schedules-body-1498.py",
+  "scripts/schedules-live-1-patch.py",
+>>>>>>> Stashed changes
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
