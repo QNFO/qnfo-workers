@@ -97,6 +97,18 @@ jobs:
           AFTER='${{ github.sha }}'
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             BEFORE=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
+          elif ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            # GUARD-RANGE-FORCEPUSH-1 (2026-09-30): after a force-push (or once a squash-merge has
+            # orphaned the old tip) the event's `before` commit is not fetchable, so the guard
+            # below exited 3 on runs 36734137517 and 36734650689 although nothing was wrong with
+            # the change. Validate everything the branch adds beyond main instead. That range is
+            # a superset of the pushed delta, so it can only be stricter. If even the merge base
+            # cannot be resolved, BEFORE stays unresolvable and the guard still fails closed.
+            MB=$(git merge-base origin/main "$AFTER" 2>/dev/null || true)
+            if [ -n "$MB" ]; then
+              echo "before $BEFORE is not in this clone (force-push); validating merge-base with origin/main instead: $MB"
+              BEFORE="$MB"
+            fi
           fi
           echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
           echo "after=$AFTER" >> "$GITHUB_OUTPUT"
