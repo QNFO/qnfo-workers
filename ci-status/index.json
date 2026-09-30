@@ -37,6 +37,7 @@
     "panel6-mediated-count.json",
     "preserve-worker-meta.json",
     "raw-put-schedules.json",
+    "remediation-bridge.json",
     "remediation-consumer.json",
     "research-exec-terminal-rescue.json",
     "restore-container-config-1485.json",
@@ -52,6 +53,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 49,
+  "count": 50,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
