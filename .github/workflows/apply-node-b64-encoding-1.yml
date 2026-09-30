@@ -22,6 +22,11 @@ name: apply-node-b64-encoding-1
 # It carries NO skip token (CI-TRIGGER-SKIP-1) and disables no deploy path.
 # The resulting push to qnfo-containers-pilot/** triggers deploy-containers-pilot.yml,
 # which is the only path that transmits the [[containers]] block.
+#
+# RE-TRIGGER 2 (2026-09-30T13:56Z): the first push of this file (commit ac74ea3) raced the
+# patcher commit (c53814b) and ran while scripts/patch-node-b64-encoding-1.py did not yet
+# exist on main. This revision re-fires the workflow with the patcher present. The patcher
+# is idempotent, so a duplicate run is harmless.
 
 on:
   push:
@@ -49,6 +54,7 @@ jobs:
       - name: apply the /node base64 fix (idempotent, fail-closed)
         run: |
           set -euo pipefail
+          test -f scripts/patch-node-b64-encoding-1.py || { echo "::error::patcher missing on main"; exit 1; }
           python3 scripts/patch-node-b64-encoding-1.py
           node --check qnfo-containers-pilot/worker.js && echo "SYNTAX OK worker.js"
           if [ -f qnfo-containers-pilot/deployed-current.worker.js ]; then
