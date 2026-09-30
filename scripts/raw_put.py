@@ -405,6 +405,25 @@ def declared_containers(artifact_path):
     return []
 
 
+def observability_reassert():
+    """OBS-RESET-ON-DEPLOY-1 (2026-09-30): a /content PUT creates a NEW script version, and the
+    observability setting is PER-VERSION, so EVERY code deploy resets it to unset (measured:
+    fleet-exec observability vanished across a raw_put.py deploy). Ask qnfo-fleet-control to
+    re-assert it -- it owns the DO-exports-aware reapply (the Python side must NOT touch a
+    settings PATCH with exports, which can corrupt DO namespaces). Fire-and-forget: a failure
+    here must NOT fail the deploy; fleet-control's */20 + hourly self-heal is the backstop."""
+    try:
+        req = urllib.request.Request(
+            "https://qnfo-fleet-control.q08.workers.dev/obs/reassert",
+            data=b"{}", method="POST",
+            headers={"Content-Type": "application/json", "User-Agent": FLEET_UA})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            body = r.read().decode("utf-8", "replace")
+        print("OBS-REASSERT: HTTP %s %s" % (r.status, body[:120]))
+    except Exception as e:
+        print("OBS-REASSERT: skipped (%s) -- fleet-control */20 cron is the backstop" % str(e)[:140])
+
+
 def main(argv):
     if len(argv) < 3:
         print(__doc__)
@@ -533,6 +552,7 @@ def main(argv):
               "Set LEDGER_STRICT=1 to make this fatal.")
 
     guard_ledger(worker, None, ver, True, notes)
+    observability_reassert()
     guard_unlock()
     print(f"OK: {worker} {ver} deployed with compatibility_date={got_date}, "
           f"{len(got_flags)} flag(s) preserved, {sched_note}")
