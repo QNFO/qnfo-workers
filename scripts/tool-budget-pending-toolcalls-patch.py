@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """TOOL-BUDGET-PENDING-1 applier (fail-closed).
 
-Root cause measured 2026-09-30 on qnfo-ops/worker.js (repo 2.37.32-toolbudget-canonical,
+Root cause measured 2026-09-30 on qnfo-ops/worker.js (repo 2.37.31-continuation-inherit,
 live 2.37.31-continuation-inherit).
 
 The tool loop has two ceilings: the iteration cap (MAX_TOOL_ITERS / env
 OPS_MAX_TOOL_ITERS) and the soft wall-clock deadline (loopDeadline). Both collapse
 into one budget predicate:
 
-  chat path : withTools = iter < maxIters && !deadlineHit      (worker.js ~4474)
-  job path  : withTools = turn < maxTurns                      (worker.js ~5373)
+  chat path : withTools = iter < maxIters && !deadlineHit      (worker.js 4474)
+  job path  : withTools = turn < maxTurns                      (worker.js 5373)
 
 When either ceiling trips the loop pushes BUDGET_EXHAUSTED_DIRECTIVE and calls the
 model WITHOUT tools. But the branch that consumes the model's tool_calls is guarded
 by a DIFFERENT predicate:
 
-  chat : if (toolCalls && iter < maxIters)     <- asymmetric with withTools
-  job  : if (toolCalls && withTools) { ... }   <- correct guard, but NO else
+  chat : if (toolCalls && iter < maxIters)     <- asymmetric with withTools (4516)
+  job  : if (toolCalls && withTools) { ... }   <- correct guard, but NO else (5391)
 
 Two measured, client-visible defects follow:
 
@@ -44,7 +44,7 @@ TARGET = pathlib.Path("qnfo-ops/worker.js")
 MARKER = "TOOL-BUDGET-PENDING-1"
 
 # ---------------------------------------------------------------- anchors (old) --
-A1 = "var MAX_TOOL_ITERS = 40;"
+A1 = "var MAX_TOOL_ITERS = 12;"
 
 A2 = (
     '  let finalized = false;\n'
@@ -88,7 +88,7 @@ A9 = (
 )
 
 # optional (0 or 1): version bump. A concurrent agent may already have advanced it.
-A10 = 'var VERSION = "2.37.32-toolbudget-canonical";'
+A10 = 'var VERSION = "2.37.31-continuation-inherit";'
 
 # ---------------------------------------------------------------- replacements --
 R1 = A1 + r'''
@@ -168,7 +168,7 @@ R9 = (
     '      break;'
 )
 
-R10 = 'var VERSION = "2.37.33-tool-budget-pending";'
+R10 = 'var VERSION = "2.37.32-tool-budget-pending";'
 
 REQUIRED = [(A1, R1), (A2, R2), (A3, R3), (A4, R4), (A5, R5), (A6, R6), (A7, R7), (A8, R8), (A9, R9)]
 OPTIONAL = [(A10, R10)]
