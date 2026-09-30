@@ -16,6 +16,18 @@ name: apply-cloud-ops-cron-dow-1
 #   * WORKFLOW-YAML-LINT-1 -- an unquoted colon inside a step NAME made a
 #     workflow unparseable and produced zero-job runs. Every step name below is
 #     colon-free; workflow-lint.yml gates it.
+#   * BLOCK-SCALAR-COL0-1 (2026-09-30, issue #1500) -- the Python body of the
+#     live-/health audit in the "Force the worker to re-register..." step was
+#     written at COLUMN 0 inside a `run: |` block scalar. A line indented less
+#     than the scalar's content TERMINATES the scalar, so the file was invalid
+#     YAML, never appeared as a runnable workflow, and the schedule repair it
+#     encodes never executed. Every embedded-script line now stays inside the
+#     scalar's indentation.
+#   * VERSION-ASSERT-DRIFT-1 (2026-09-30, issue #1500) -- the artifact asserts
+#     pinned 1.15.0-cron-dow-cf while live moved to 1.15.1-cron-alias-dispatch
+#     (#1500 F1). A repaired workflow would therefore have failed at the assert
+#     step and never reached the deploy. The asserts are now tolerant (1.15.x)
+#     and report the version they actually saw.
 #   * SCHEDULE-EVENT-NEVER-FIRES-1 -- the GitHub `schedule` event has never
 #     fired in this repo, so this workflow is push-triggered plus
 #     workflow_dispatch, never schedule-only.
@@ -85,10 +97,10 @@ jobs:
           echo "--- D2/D3 fingerprint guard ---"
           grep -c "cron_fingerprint" qnfo-cloud-ops/worker.js
           grep -c "cron_fingerprint" qnfo-cloud-ops/deployed-current.worker.js
-          echo "--- version bump ---"
-          grep -q "1.15.0-cron-dow-cf" qnfo-cloud-ops/worker.js && echo VERSION_OK
-          echo "--- toml declares 21 corrected crons ---"
-          grep -o '"' qnfo-cloud-ops/wrangler.toml | wc -l
+          echo "--- version (tolerant: 1.15.x) ---"
+          grep -oE 'var VERSION = "1\.15\.[0-9]+[^"]*"' qnfo-cloud-ops/worker.js | head -1
+          echo "--- toml declares the corrected cron set ---"
+          grep -o 'crons = \[[^]]*\]' qnfo-cloud-ops/wrangler.toml | head -1
           grep -q "CF-DOW-1" qnfo-cloud-ops/wrangler.toml && echo TOML_MARK_OK
           echo "--- syntax ---"
           cp qnfo-cloud-ops/worker.js /tmp/co.mjs
@@ -143,7 +155,8 @@ jobs:
       - name: Assert the artifact about to ship is the patched one
         run: |
           set -euo pipefail
-          grep -q "1.15.0-cron-dow-cf" qnfo-cloud-ops/worker.js
+          grep -qE 'var VERSION = "1\.15\.[0-9]+' qnfo-cloud-ops/worker.js
+          grep -oE 'var VERSION = "1\.15\.[0-9]+[^"]*"' qnfo-cloud-ops/worker.js | head -1
           grep -q "isoDowToCf" qnfo-cloud-ops/worker.js
           grep -q "cron_fingerprint" qnfo-cloud-ops/worker.js
           grep -q "CF-DOW-1" qnfo-cloud-ops/wrangler.toml
@@ -160,7 +173,20 @@ jobs:
           set -uo pipefail
           python3 scripts/raw_put.py qnfo-cloud-ops qnfo-cloud-ops/worker.js
 
-      - name: Verify live version and the registered schedule set
+      - name: Read back the LIVE registered schedule set (authoritative)
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/qnfo-cloud-ops/schedules"
+          echo "--- GET /workers/scripts/qnfo-cloud-ops/schedules ---"
+          curl -s --max-time 30 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$url" | head -c 4000 || true
+          echo
+          echo "SCHEDULES_READBACK_DONE"
+
+      - name: Verify live version and the generated schedule set
         run: |
           set -uo pipefail
           base="https://qnfo-cloud-ops.q08.workers.dev"
@@ -168,7 +194,7 @@ jobs:
             v=$(curl -s --max-time 15 "$base/health" \
                 | python3 -c "import sys,json;print(json.load(sys.stdin).get('version',''))" 2>/dev/null || true)
             echo "attempt $i: live version = '$v'"
-            if [ "$v" = "1.15.0-cron-dow-cf" ]; then echo "LIVE_OK"; break; fi
+            case "$v" in 1.15.*) echo LIVE_OK; break;; esac
             sleep 12
           done
           echo "--- generated cron set from live /health ---"
@@ -181,18 +207,23 @@ jobs:
           curl -s --max-time 60 -X POST https://qnfo-cloud-ops.q08.workers.dev/cron-rebuild | head -c 3000 || true
           echo
           echo "--- verify the weekday lane now covers Monday-Friday (CF 2-6) ---"
-          curl -s --max-time 20 https://qnfo-cloud-ops.q08.workers.dev/health \
-            | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-crons=d.get('crons',[])
-print('registered_or_generated_crons=%d' % len(crons))
-bad=[c for c in crons if ' 1-5' in c]
-print('legacy_iso_weekday_crons=%d' % len(bad))
-for c in bad: print('LEGACY', c)
-ok=[c for c in crons if ' 2-6' in c]
-print('corrected_weekday_crons=%d' % len(ok))
-" || true
+          curl -s --max-time 20 https://qnfo-cloud-ops.q08.workers.dev/health > /tmp/co-health.json || true
+          python3 - <<'PYEOF'
+          import json
+          try:
+              d = json.load(open('/tmp/co-health.json'))
+          except Exception as e:
+              print('health parse failed: %s' % e)
+              raise SystemExit(0)
+          crons = d.get('crons', [])
+          print('registered_or_generated_crons=%d' % len(crons))
+          bad = [c for c in crons if ' 1-5' in c]
+          print('legacy_iso_weekday_crons=%d' % len(bad))
+          for c in bad:
+              print('LEGACY', c)
+          ok = [c for c in crons if ' 2-6' in c]
+          print('corrected_weekday_crons=%d' % len(ok))
+          PYEOF
 
       - name: Publish machine-readable status
         if: always()
