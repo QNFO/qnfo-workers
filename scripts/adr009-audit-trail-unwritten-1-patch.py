@@ -84,7 +84,7 @@ async function logAuditTrail(env, name, args, res) {
 __name(logAuditTrail, "logAuditTrail");
 '''
 
-CALL_OLD = '", "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();'
+CALL_OLD = ', "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();'
 CALL_NEW = CALL_OLD + '\n    await logAuditTrail(env, name, args, res);'
 
 
