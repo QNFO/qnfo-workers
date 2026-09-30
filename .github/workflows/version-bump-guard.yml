@@ -26,11 +26,15 @@ on:
   push:
     paths:
       - '*/worker.js'
+      - '*/deployed-current.worker.js'
       - 'scripts/version-bump-guard.py'
+      - 'scripts/cf-import-guard.py'
       - '.github/workflows/version-bump-guard.yml'
   pull_request:
     paths:
       - '*/worker.js'
+      - '*/deployed-current.worker.js'
+      - 'scripts/cf-import-guard.py'
   workflow_dispatch:
 
 permissions:
@@ -67,6 +71,15 @@ jobs:
           else
             echo "no workflow-lint.py in this revision; skipping"
           fi
+
+      # CF-IMPORT-GUARD-1: a worker bundle must not import a name the runtime does not provide.
+      # `import { Container } from "cloudflare:workers"` (written by the now-retired
+      # fix-pilot-container-class workflow) made every upload of qnfo-containers-pilot fail with
+      # Cloudflare error 10021 while the live worker kept serving; see scripts/cf-import-guard.py.
+      - name: Forbidden Cloudflare module imports
+        run: |
+          set -euo pipefail
+          python3 scripts/cf-import-guard.py
 
       - name: Resolve the diff range
         id: range
