@@ -109,6 +109,13 @@ jobs:
                 n=$(grep -m1 -E '^[[:space:]]*name[[:space:]]*=' "$d/wrangler.toml" | sed -E 's/.*"([^"]+)".*/\1/')
                 if [ -z "$n" ]; then echo "skip $d (no declared name)"; continue; fi
                 case "$n" in *-legacy-dup) echo "refuse $d (duplicate-name directory, issue 1384)"; continue;; esac
+                # CANONICAL-SKIP-CONTAINERS-1 (2026-09-30): /ops/deploy refuses container workers on
+                # purpose ("CONTAINER-CONFIG-DROPPED-1: ... is a container worker", HTTP 502, run
+                # 36732337041) because a /content PUT drops the [[containers]] config. Selecting one
+                # here made every change under qnfo-containers-pilot/ turn this workflow red for a
+                # refusal that is the guard working. They ship through deploy-containers-pilot.yml /
+                # restore-container-config-1485.yml (wrangler), so skip them in push-diff mode.
+                if grep -q '^\[\[containers\]\]' "$d/wrangler.toml"; then echo "skip $d (container worker: canonical /content deploy refuses it by design; deployed by deploy-containers-pilot / restore-container-config-1485)"; continue; fi
                 echo "$n $d/worker.js" >> /tmp/targets.txt
               done < /tmp/dirs.txt
             fi
