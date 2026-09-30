@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.1-toolbudget-relock";
+var VERSION = "2.38.2-tool-meta-error-first";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -3393,7 +3393,7 @@ __name222222(execTool, "execTool");
 async function logToolEvent(env, name, args, res, ms) {
   if (!env.QNFO_AUDIT) return;
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ args, resultOk: !!(res && res.ok), error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, ms }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_ai_tool", name, snippet({ /* OPS-TOOL-META-ERROR-FIRST-1 */ error: res && !res.ok ? String(res.error || res.err || "").slice(0, 300) : void 0, resultOk: !!(res && res.ok), ms, args }, 600), "qnfo-ops", res && res.ok ? "ok" : res && res.rejected ? "rejected" : "error").run();
   } catch (e) {
   }
 }
