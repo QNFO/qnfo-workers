@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.22-terminal-rescue";
+var VERSION = "0.9.23-heartbeat-upsert";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -2200,7 +2200,12 @@ var worker_default = {
       try {
         // HEARTBEAT-1 (2026-09-27): research-exec had no heartbeat row, so a dead cron was invisible
         // to the fleet heartbeat surface (issue class #973).
-        await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, ts, ok) VALUES ('qnfo-research-exec', ?, 1)").bind(nowIso()).run();
+        // HEARTBEAT-UPSERT-1 (2026-09-30): fleet_heartbeat(worker TEXT PRIMARY KEY) -- the plain
+        // INSERT throws SQLITE_CONSTRAINT on the 2nd run and was swallowed by this try/catch, so the
+        // row froze at the FIRST successful write (2026-09-27T19:00Z) while the cron kept firing.
+        // That produced a false "inert cron" signal for 3 days (the dashboard/observability liveness
+        // surface could not see research-exec at all). Upsert so liveness is always current.
+        await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-research-exec', ?, ?, 1) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(VERSION, nowIso()).run();
       } catch (eHb) {
       }
       try {
