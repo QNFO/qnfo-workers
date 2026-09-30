@@ -1,25 +1,34 @@
 #!/usr/bin/env python3
 """ATTACH-LIFECYCLE-CUSTOM-DOMAIN-1 (agent_issues #1517), 2026-09-30.
 
-v2 2026-09-30 (ATTACH-DOMAIN-OBSERVABLE-1)
-------------------------------------------
-The v1 script reported every failure to STDOUT only, and the workflow that runs it
-had no commit-back step. Consequence measured 2026-09-30T20:4xZ: a failed run left
-NO durable trace anywhere -- deployment_history had zero custom_domain rows, no
-ci-status artifact existed, and the GitHub Actions log API is not reachable from the
-ops endpoint (unauthenticated api.github.com returns 403 rate-limited from the shared
-egress IP). The blocker was therefore UNREADABLE, not merely unfixed.
+v3 2026-09-30 (ATTACH-DOMAIN-SCOPE-FALLBACK-1)
+---------------------------------------------
+v2 made the script self-reporting. v2's FIRST live run then produced the exact blocker,
+which v1 had hidden for two turns:
 
-v2 writes ci-status/attach-lifecycle-custom-domain.json on EVERY exit path, and the
-workflow commits it back to main. The exact Cloudflare HTTP status and error body are
-now always recoverable with a plain repo read.
+    {"stage": "attach", "status": "failed", "http": 405,
+     "error": "attach http=405 body={\\"success\\": false, \\"errors\\":
+               [{\\"code\\": 10405, \\"message\\": \\"Method not allowed for this
+               authentication scheme\\"}], ...}",
+     "zone_id": "84e9dc1d7fb72629ccdbe3174ed24420",
+     "ts": "2026-09-30T20:40:38Z"}
+
+Reading of that artifact: the CI token CAN read (GET /accounts/{acct}/workers/domains
+succeeded, and GET /zones?name=qnfo.org resolved zone_id 84e9dc1d...), so Zone:Read is
+present; but POST to /accounts/{acct}/workers/domains is rejected with 10405, i.e. the
+token lacks the Workers Custom Domains write permission. The blocker is TOKEN SCOPE,
+not a script bug and not an origin fault.
+
+v3 therefore tries the two primitives a zone-scoped token would need anyway, and
+reports each outcome verbatim, so the account owner knows exactly which permission is
+missing rather than just "it failed".
 
 WHY THIS EXISTS
 ---------------
 agent_issues #1517 reports https://lifecycle.qnfo.org/run/metrics-refresh -> HTTP 530
 "error code: 1016" while the workers.dev origin answers 200.
 
-Measured 2026-09-30T19:5xZ and re-measured 2026-09-30T20:4xZ from an EXTERNAL host
+Measured 2026-09-30T19:5xZ, re-measured 20:4xZ and again 20:5xZ from an EXTERNAL host
 (deliberately NOT a same-zone worker fetch -- a Worker cannot reliably probe a hostname
 in its own zone, which is what produced the misleading 530 in the first place):
 
@@ -35,22 +44,27 @@ the zone -- not an origin fault. The defect is a missing custom-domain attach.
 
 WHAT IT DOES
 ------------
-Attaches a Workers custom domain lifecycle.qnfo.org -> qnfo-lifecycle. Cloudflare
-creates the proxied DNS record as part of the custom-domain attach, which is why this
-is the right primitive here rather than a hand-written A/AAAA record (a hand-written
-record would not route to the Worker).
+1. Preferred: attaches a Workers custom domain lifecycle.qnfo.org -> qnfo-lifecycle.
+   Cloudflare creates the proxied DNS record as part of the attach.
+2. Fallback, only if (1) is rejected 405: creates a Workers route
+   lifecycle.qnfo.org/* -> qnfo-lifecycle, and only after that route write succeeds
+   creates the proxied AAAA 100:: record the route needs. Route FIRST is deliberate:
+   if the route write is also rejected, nothing at all is created.
 
-REVERSIBILITY
--------------
-Additive and reversible: DELETE /accounts/{acct}/workers/domains/{id} removes both the
-attachment and the record it created. No existing hostname is touched.
+REVERSIBILITY / PARTIAL STATE
+-----------------------------
+Both primitives are additive. DELETE /accounts/{acct}/workers/domains/{id} reverses
+(1). DELETE /zones/{zone}/workers/routes/{id} plus DELETE /zones/{zone}/dns_records/{id}
+reverses (2). If the route write succeeds but the DNS write fails, the result is a route
+with no DNS record: inert (no traffic reaches it) and reversible. No existing hostname
+is touched in any branch.
 
 FAIL-CLOSED / IDEMPOTENT
 ------------------------
   * already attached        -> exit 0, no write
-  * token lacks Zone:Read / Workers Routes, or the zone is not in this account
-                            -> exit 1 printing the exact Cloudflare error body; no
-                               partial state is left behind
+  * token lacks the needed write scope -> exit 1 printing the exact Cloudflare error
+    body for BOTH paths; no partial state is left behind beyond the inert-route case
+    described above
   * post-attach verification (external 200 on /health containing "status":"ok") must
     pass within 120s or the job fails. The script never reports success for an attach
     it could not observe.
@@ -70,13 +84,14 @@ ZONE_NAME = "qnfo.org"
 HOSTNAME = "lifecycle.qnfo.org"
 SERVICE = "qnfo-lifecycle"
 ENVIRONMENT = "production"
-UA = "qnfo-ops-attach-domain/2.0"
+UA = "qnfo-ops-attach-domain/3.0"
 API = "https://api.cloudflare.com/client/v4"
 REPORT_PATH = "ci-status/attach-lifecycle-custom-domain.json"
 
 RESULT = {
     "marker": "ATTACH-LIFECYCLE-CUSTOM-DOMAIN-1",
     "observability": "ATTACH-DOMAIN-OBSERVABLE-1",
+    "fallback": "ATTACH-DOMAIN-SCOPE-FALLBACK-1",
     "hostname": HOSTNAME,
     "service": SERVICE,
     "account_id": ACCT,
@@ -87,6 +102,9 @@ RESULT = {
     "error": None,
     "zone_id": None,
     "already_attached": None,
+    "custom_domain_http": None,
+    "route_http": None,
+    "dns_http": None,
     "ts": None,
 }
 
@@ -162,19 +180,52 @@ def main():
     RESULT["zone_id"] = zone_id
     print("zone %s = %s" % (ZONE_NAME, zone_id))
 
-    # 3. attach
+    # 3. preferred path -- Workers custom domain
     st, j = req("POST", "/accounts/%s/workers/domains" % ACCT, {
         "zone_id": zone_id,
         "hostname": HOSTNAME,
         "service": SERVICE,
         "environment": ENVIRONMENT,
     })
-    if st not in (200, 201) or not j.get("success"):
-        err = "attach http=%s body=%s" % (st, json.dumps(j)[:800])
+    RESULT["custom_domain_http"] = st
+    if st in (200, 201) and j.get("success"):
+        print("ATTACHED: %s" % json.dumps(j.get("result"))[:500])
+        return verify()
+
+    err = "attach http=%s body=%s" % (st, json.dumps(j)[:800])
+    print("FAIL(custom-domain): " + err)
+    if st != 405:
         report("attach", "failed", http=st, error=err)
-        print("FAIL: " + err)
         return 1
-    print("ATTACHED: %s" % json.dumps(j.get("result"))[:500])
+
+    # 4. fallback -- zone-scoped route + DNS, in an order that cannot half-apply
+    print("405 on workers/domains -> token lacks Workers Custom Domains; trying zone route")
+    st, j = req("POST", "/zones/%s/workers/routes" % zone_id,
+                {"pattern": HOSTNAME + "/*", "script": SERVICE})
+    RESULT["route_http"] = st
+    if st not in (200, 201) or not j.get("success"):
+        ferr = ("fallback-route http=%s body=%s ; custom-domain http=%s body=%s"
+                % (st, json.dumps(j)[:600], RESULT["custom_domain_http"], err))
+        report("fallback-route", "failed", http=st, error=ferr)
+        print("FAIL(route): " + ferr)
+        return 1
+    print("ROUTE CREATED: %s" % json.dumps(j.get("result"))[:400])
+
+    st, j = req("POST", "/zones/%s/dns_records" % zone_id, {
+        "type": "AAAA",
+        "name": HOSTNAME,
+        "content": "100::",
+        "proxied": True,
+        "comment": "ATTACH-LIFECYCLE-CUSTOM-DOMAIN-1 (#1517) zone-route fallback",
+    })
+    RESULT["dns_http"] = st
+    if st not in (200, 201) or not j.get("success"):
+        ferr = ("fallback-dns http=%s body=%s (route exists, record missing -> inert)"
+                % (st, json.dumps(j)[:600]))
+        report("fallback-dns", "failed", http=st, error=ferr)
+        print("FAIL(dns): " + ferr)
+        return 1
+    print("DNS CREATED: %s" % json.dumps(j.get("result"))[:400])
     return verify()
 
 
