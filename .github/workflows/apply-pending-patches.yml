@@ -39,6 +39,18 @@ name: apply-pending-patches
 #     deploy-containers-pilot.json, fix-pilot-container-class.json, ...).
 #     ci-status/index.json now lists every artifact a run actually published,
 #     so a reader never guesses a filename again.
+#   * COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1 (added 2026-09-30 by
+#     qnfo-ops) -- the commit-back step staged
+#       git add -A scripts/ '*worker.js' ci-status/
+#     a pathspec that CANNOT match qnfo-ops/scripts/*.sh or
+#     .github/workflows/*.yml. Any patch that touched a file outside those
+#     three paths was written into this ephemeral worktree and then silently
+#     discarded at commit time, while the applier still reported it "landed"
+#     and PARTIAL-APPLY-1's revert stayed quiet (nothing failed). Measured
+#     consequence: the TOOLBUDGET-CANONICAL-1 rewrite of
+#     qnfo-ops/scripts/guard-timebudget.sh was dropped on every run, so the
+#     guard stayed old AND orphaned and the OPS-SETTINGS-IMMUTABLE-1 tool-loop
+#     budget drift gate never fired. Staging is now tree-wide.
 
 on:
   push:
@@ -106,7 +118,14 @@ jobs:
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
-          git add -A scripts/ '*worker.js' ci-status/ 2>/dev/null || git add -A
+          # COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1: this was
+          #   git add -A scripts/ '*worker.js' ci-status/
+          # which silently dropped qnfo-ops/scripts/*.sh and .github/workflows/*.yml
+          # written by patchers. Stage the whole tree. This cannot resurrect a
+          # half-applied patch: the applier already reverts the exact paths a failing
+          # patcher touched (PARTIAL-APPLY-1 / REVERT-COLLATERAL-1), so anything left
+          # dirty at this point is a deliberate, successful write.
+          git add -A
           if git diff --cached --quiet; then
             echo "nothing to commit (main already current)"
             exit 0
