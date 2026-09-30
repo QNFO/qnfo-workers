@@ -89,7 +89,7 @@ function scoreFromFacts(f, nowMs) {
   if (f.sig30 > 0) {
     out.push({
       dimension: "s4_intelligence", framework: "VSM", score: r1(5 * f.sig30_done / f.sig30),
-      evidence: "MEASURED: environment signals last 30d " + f.sig30 + ", triaged (status != new) " + f.sig30_done + " (" + pct(f.sig30_done / f.sig30) + "%). score = 5 x triaged/received.",
+      evidence: "MEASURED: environment signals last 30d (expired orphans excluded) " + f.sig30 + ", triaged (status != new) " + f.sig30_done + " (" + pct(f.sig30_done / f.sig30) + "%). score = 5 x triaged/received.",
       gap: f.sig30 - f.sig30_done ? (f.sig30 - f.sig30_done) + " signal(s) untriaged" : "none measured",
       confidence: f.sig30 >= 50 ? "high" : "medium"
     });
@@ -162,8 +162,8 @@ var FACT_SQL2 = "SELECT " +
   "(SELECT count(*) FROM guard_registry) AS guards_n," +
   "(SELECT count(*) FROM guard_registry WHERE status='verified') AS guards_ok";
 var FACT_SQL3 = "SELECT " +
-  "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day')) AS sig30," +
-  "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status!='new') AS sig30_done," +
+  "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status!='expired') AS sig30," +
+  "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status NOT IN ('new','expired')) AS sig30_done," +
   "(SELECT count(*) FROM impact_thresholds) AS gates_n," +
   "(SELECT count(*) FROM impact_thresholds WHERE state='MET') AS gates_met," +
   "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open') AS triaged," +
