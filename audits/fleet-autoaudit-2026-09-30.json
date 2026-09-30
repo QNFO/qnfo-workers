@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 16:07:55",
+  "audited_at": "2026-09-30 16:19:03",
   "d1_write_failures": [],
   "d1_writes_ok": 112,
   "guard": {
@@ -26,20 +26,7 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.7.35-realtime-obs",
-        "repo": "1.7.34-panel6-mediated-count-writeback1",
-        "worker": "qnfo-fleet-dashboard"
-      },
-      {
-        "dir": "qnfo-ops",
-        "live": "2.38.6-obs-summary",
-        "repo": "2.38.5-backlog-probe-error",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -417,7 +404,7 @@
       }
     ],
     "scope": "all",
-    "sync": 34,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -505,6 +492,11 @@
         "worker": "qnfo-fleet-control"
       },
       {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.7.35-realtime-obs",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
         "dir": "qnfo-gateway",
         "version": "3.7.16-utf8-escape",
         "worker": "qnfo-gateway"
@@ -543,6 +535,11 @@
         "dir": "qnfo-observability",
         "version": "1.2.10-research-queue-enum",
         "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.7-github-write-reread",
+        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1138,11 +1135,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.34-panel6-mediated-count-writeback1",
+      "before": "1.7.35-realtime-obs",
       "http": 200,
       "live": "1.7.35-realtime-obs",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1266,11 +1263,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.5-backlog-probe-error",
+      "before": "2.38.7-github-write-reread",
       "http": 200,
-      "live": "2.38.6-obs-summary",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "2.38.7-github-write-reread",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
