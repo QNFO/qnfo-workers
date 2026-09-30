@@ -1,3 +1,13 @@
+// idea-hub v1.2.0-ideation-loop-20261001
+// SIGNALS-TRIAGE-GAP-1 (issue 1654) / L8 re-entry: qnfo-signal-loop, the only producer AND consumer of
+//   signals.source='artifact_reentry', disappeared unrecorded around 2026-09-25 (worker_removals rationale), so
+//   re-entry emission stopped 09-14, consumption 09-15 (128 left status=new) and idea_proposals stopped 09-24. Its
+//   reentry + consume legs are ported here (idea-hub is already permitted for artifact_reentry in
+//   signal_worker_boundary and holds the same LIVING_PAPER + QNFO_AUDIT bindings), with cost bounds the original
+//   lacked: re-entry reads existing signals once instead of 2 queries per paper for 500 papers every hour and emits
+//   at most REENTRY_BATCH new papers per run; consume takes CONSUME_SIGNALS signals x CONSUME_QUESTIONS questions per
+//   run and pauses while more than PROPOSAL_BACKPRESSURE proposals await triage (the original could insert 375
+//   proposals/hour against a triage rate of 5).
 // idea-hub v1.1.0-triage-consumer-20261001
 // IDEA-TRIAGE-CONSUMER-ABSENT-1 (issue 1689): qnfo-idea-triage was retired 2026-09-19 on the assumption that idea-hub
 //   "embedded triage fully subsumes it", but idea-hub had no triage path at all, so idea_proposals stopped being
@@ -51,7 +61,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.1.0-triage-consumer";
+var VERSION = "1.2.0-ideation-loop";
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -168,4 +178,73 @@ async function triageProposals(env) {
   try { await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('idea-hub', ?1, ?2, ?3) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(VERSION, new Date().toISOString(), out.errors ? 0 : 1).run(); } catch (e) {}
   return out;
 }
-export default{async scheduled(event,env,ctx){ctx.waitUntil(triageProposals(env))},async fetch(req,env){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,quarantine_threads:qt,mutation_routes:false,bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname.startsWith('/#/'))return html();return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+
+// ---- L8 re-entry loop (ported from qnfo-signal-loop 1.1.2, bounded) ----
+var REENTRY_BATCH = 20, CONSUME_SIGNALS = 2, CONSUME_QUESTIONS = 3, PROPOSAL_BACKPRESSURE = 30;
+function extractOpenQuestions(bodyMd) {
+  if (!bodyMd) return [];
+  var text = String(bodyMd), out = [], seen = new Set();
+  var push = function (x) {
+    var t = String(x).replace(/\s+/g, " ").replace(/^[\s*\-\d.]+/, "").trim();
+    if (t.length < 15 || t.length > 320) return;
+    var k = t.slice(0, 80).toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    if (out.length < 15) out.push(t);
+  };
+  var m = text.match(/##?\s*(Open Questions?|Open Problems?|Future Work|Future Directions?|Limitations?|Outlook|Unresolved|Discussion)[\s\S]{0,4000}/i);
+  if (m) m[0].split("\n").forEach(function (l) { if (/^\s*([-*]|\d+\.)\s+\S/.test(l)) push(l); });
+  (text.match(/[^.\n]{12,300}?(open question|remains? open|open problem|unresolved|future work|not yet (known|understood|resolved|established)|unknown whether|remains? to be)[^.\n]{0,240}[.?]/gi) || []).forEach(push);
+  (text.match(/[^.\n?]{25,300}\?/g) || []).forEach(push);
+  return out;
+}
+async function runReentry(env) {
+  var out = { scanned: 0, emitted: 0, errors: 0 };
+  var papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' ORDER BY created_at DESC LIMIT 500").all()).results || [];
+  out.scanned = papers.length;
+  var have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
+  var todo = papers.filter(function (p) { return !have.has(String(p.doi)); }).slice(0, REENTRY_BATCH);
+  for (var i = 0; i < todo.length; i++) {
+    var p = todo[i];
+    try {
+      var pr = await env.LIVING_PAPER.prepare("SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE doi = ? LIMIT 1").bind(p.doi).first();
+      var oq = extractOpenQuestions(pr && pr.b || "");
+      var now = new Date().toISOString();
+      await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind("artifact_reentry:" + String(p.doi).replace(/[^a-z0-9]+/gi, "-").slice(0, 80), now, "artifact_reentry", p.doi, String(p.title || "").slice(0, 500), JSON.stringify(oq), oq.length ? 0.9 : 0, "research", "new", now).run();
+      out.emitted++;
+    } catch (e) { out.errors++; }
+  }
+  return out;
+}
+async function runConsume(env) {
+  var out = { consumed: 0, proposals: 0, paused: false, errors: 0 };
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status='new'").first();
+  if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
+  var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='artifact_reentry'").first();
+  if (!b || Number(b.permitted) !== 1) { out.paused = true; return out; }
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, source_ref, open_questions FROM signals WHERE source='artifact_reentry' AND status='new' AND evidential_weight > 0 ORDER BY created_at LIMIT ?1").bind(CONSUME_SIGNALS).all()).results || [];
+  for (var i = 0; i < rows.length; i++) {
+    var sg = rows[i], oq = [];
+    try { oq = JSON.parse(sg.open_questions || "[]"); } catch (e) {}
+    var ok = true;
+    var qs = Array.isArray(oq) ? oq.slice(0, CONSUME_QUESTIONS) : [];
+    for (var j = 0; j < qs.length; j++) {
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?,?,?,?,?,?)")
+          .bind("auto-reentry", "Re-entry from " + String(sg.source_ref || "").slice(0, 120) + ": " + String(qs[j]).slice(0, 1800), "auto", "new", "l8-reentry", new Date().toISOString()).run();
+        out.proposals++;
+      } catch (e) { out.errors++; ok = false; }
+    }
+    if (ok) { await env.QNFO_AUDIT.prepare("UPDATE signals SET status='consumed', decision=? WHERE id=?").bind("idea-hub " + VERSION + ": " + qs.length + " of " + oq.length + " open questions proposed", sg.id).run(); out.consumed++; }
+  }
+  return out;
+}
+async function ideationCycle(env) {
+  var r = {};
+  try { r.reentry = await runReentry(env); } catch (e) { r.reentry = { error: String(e && e.message || e) }; }
+  try { r.consume = await runConsume(env); } catch (e) { r.consume = { error: String(e && e.message || e) }; }
+  r.triage = await triageProposals(env);
+  return r;
+}
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,quarantine_threads:qt,mutation_routes:false,bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname.startsWith('/#/'))return html();return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
