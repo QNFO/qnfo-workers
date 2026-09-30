@@ -16,14 +16,23 @@ jobs:
   mirror-guard:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth 2: on a pull_request the checkout is the MERGE ref, whose first parent (HEAD^1) is the base
+      # tip, so `git diff HEAD^1 HEAD` is exactly what the PR changes (MIRROR-GUARD-PR-SCOPE-1).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: VERSION-pair mirror guard
         run: |
+          # A push to main is held to strict global parity. A pull request is gated only on the workers it
+          # touches: lag that already exists on main (the ops bot lands source first, qnfo-mirror-bot repairs
+          # the mirror minutes later) is reported as PRE-EXISTING instead of failing an unrelated PR.
+          SCOPE=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then SCOPE="--scope-to-diff=HEAD^1"; fi
           if [ -f scripts/mirror-guard.py ]; then
-            python scripts/mirror-guard.py
+            python scripts/mirror-guard.py $SCOPE
           else
             echo "scripts/mirror-guard.py missing; workflow restored but script still absent"
             exit 1
