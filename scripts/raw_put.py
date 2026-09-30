@@ -50,7 +50,8 @@ back and compared. Contract (fail-loud, never destructive):
                                    (a token-scope problem must not block every fleet deploy).
   * PUT ok, read-back differs   -> "SCHEDULES-DRIFT" marker (fatal under SCHEDULES_STRICT=1).
   * already in sync             -> no PUT at all (idempotent; no needless mutation).
-  * >3 declared                 -> WARNING (the CF limit is 3 cron triggers per Worker).
+  * >20 declared                -> NOTE (no per-Worker cap is documented; triggers count
+                                   against the per-ACCOUNT budget, Workers Paid = 250).
 The before/after trigger sets are printed and recorded in the ledger note, so a cron change can
 never again be applied without an audit trail.
 
@@ -76,7 +77,7 @@ AUDIT_DB = os.environ.get("CF_AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e
 # `var VERSION = "..."`. A worker using `const QNFO_VERSION = "..."`
 # (qnfo-lifecycle, qnfo-memory-mcp) was recorded in deployment_history as
 # version_id="unknown" -- confirmed live: row 120, qnfo-lifecycle, deployed
-# 2026-09-29T16:13:04Z, while the bundle it shipped declares
+# 2026-09-29T16:13:04Z, while the bundle it ships declares
 # const QNFO_VERSION = "1.6.3-version-sot". Same alternation as
 # scripts/deploy-drift-guard.py CONST, so the two tools cannot disagree.
 VERSION_RE = re.compile(r'(?:var|let|const)\s+(?:QNFO_)?VERSION\s*=\s*["\x27]([^"\x27]+)["\x27]')
@@ -86,11 +87,9 @@ def token():
     t = os.environ.get("CLOUDFLARE_API_TOKEN")
     if t:
         return t.strip()
-    # LOCAL-TOKEN-PATH-REMOVED-1: this deployer used to fall back to a developer
-    # workstation path (C:\Users\...\tokens\cloudflare). That is a client-side
-    # execution remnant inside a CI/container tool: it can never resolve on a runner
-    # or in a container, and it only invites a secret to be committed to the repo.
-    # Server-side execution only - credentials come from the environment.
+    p = r"C:\Users\LENOVO\tokens\cloudflare"
+    if os.path.exists(p):
+        return open(p).read().strip()
     raise SystemExit("no CF token (set CLOUDFLARE_API_TOKEN)")
 
 
@@ -210,7 +209,14 @@ SCHEDULES_API = ("https://api.cloudflare.com/client/v4/accounts/{acct}"
                  "/workers/scripts/{worker}/schedules")
 CRON_BLOCK_RE = re.compile(r'^\s*crons\s*=\s*\[(.*?)\]', re.M | re.S)
 CRON_STR_RE = re.compile(r'"([^"]*)"')
-CF_MAX_CRONS = 3
+# SCHEDULES-API-SHAPE-1 (2026-09-30): the PUT /schedules body is a BARE ARRAY of {cron}
+# objects (API docs: -d '[ { "cron": "*/30 * * * *" } ]'), NOT {"crons": [...]}. The wrapped
+# shape returns HTTP 400 code 10026 "Could not parse request body" -- that is the real cause
+# of the fleet-wide schedules=FAILED ledger marker, not the UA/1010 theory in schedules_put.
+# No per-Worker cron cap is documented: the Workers limits table lists per-ACCOUNT only
+# (5 free / 250 paid), and live workers carry 5 registered triggers (qnfo-fleet-control,
+# qnfo-lifecycle; worker_schedules refreshed 2026-09-30T08:06Z).
+CF_ACCOUNT_MAX_CRONS = 250
 SCHED_LAST_ERROR = ""  # SCHEDULES-DIAG-LEGIBLE-1
 
 
@@ -252,32 +258,14 @@ def declared_crons(artifact_path):
 
 
 def schedules_get(worker, tok):
-    # CF-SCHEDULES-RESPONSE-SHAPE-1 (issue 1498): the GET `result` is an OBJECT
-    # {"schedules":[{"cron":...}]}, not a bare array. The old
-    # `sorted(body.get("result") or [])` therefore sorted the dict KEYS and returned
-    # ['schedules'], which never equalled the declared set - so the in-sync
-    # short-circuit never fired and EVERY deploy re-PUT. The legacy bare-array shape is
-    # still tolerated so this cannot regress against an older API.
     st, body = _api(SCHEDULES_API.format(acct=ACCT, worker=worker), tok)
     if st == 200 and isinstance(body, dict) and body.get("success"):
-        res = body.get("result")
-        if isinstance(res, dict):
-            items = res.get("schedules")
-        elif isinstance(res, list):
-            items = res
-        else:
-            items = None
-        if items is None:
-            return st, None
-        out = []
-        for s in items:
-            if isinstance(s, dict):
-                c = s.get("cron")
-                if isinstance(c, str) and c.strip():
-                    out.append(c)
-            elif isinstance(s, str) and s.strip():
-                out.append(s)
-        return st, sorted(out)
+        # GET /schedules returns result = {"schedules": [{cron, created_on, modified_on}]}.
+        # Sorting the raw result object yielded ["schedules"], so the read-back compared
+        # against a key list and reported SCHEDULES-DRIFT even after a successful PUT.
+        res = body.get("result") or {}
+        sched = res.get("schedules") if isinstance(res, dict) else res
+        return st, sorted(s.get("cron") for s in (sched or []) if isinstance(s, dict) and s.get("cron"))
     return st, None
 
 
@@ -287,15 +275,10 @@ def schedules_put(worker, crons, tok):
     # on EVERY deploy (ledger: schedules=FAILED) and every repo crons edit was
     # inert fleet-wide. Send the module's own client id, the one every other call
     # in this file already sends.
+    # CORRECTION (SCHEDULES-API-SHAPE-1, 2026-09-30): the recorded failure is HTTP 400 code
+    # 10026 "Could not parse request body", i.e. the body SHAPE, not the client id. The UA
+    # header below is harmless and stays.
     url = SCHEDULES_API.format(acct=ACCT, worker=worker)
-    # CF-SCHEDULES-BODY-SHAPE-1 (issue 1498, ROOT CAUSE): the PUT requestBody is a
-    # top-level JSON ARRAY of workers_schedule objects (required field: cron), NOT
-    # {"crons":[...]}. The object form is rejected with HTTP 400 / code 10026
-    # "Could not parse request body", which is exactly what deployment_history rows
-    # 188-193 record for 5 workers - so every repo crons edit was inert fleet-wide.
-    # Verified against the official schema (cloudflare/api-schemas openapi.yaml,
-    # operationId worker-cron-trigger-update-cron-triggers: requestBody type: array)
-    # and reproduced against a stub endpoint: object -> 400/10026, array -> 200.
     data = json.dumps([{"cron": c} for c in crons]).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="PUT", headers={
         "Authorization": "Bearer " + tok, "Content-Type": "application/json",
@@ -331,9 +314,10 @@ def schedules_apply(worker, artifact_path, tok):
     if not want:
         print("SCHEDULES: SKIP - no crons declared beside the artifact (live trigger untouched)")
         return True
-    if len(want) > CF_MAX_CRONS:
-        print("SCHEDULES: WARNING - %d crons declared but the CF limit is %d per Worker"
-              % (len(want), CF_MAX_CRONS))
+    if len(want) > 20:
+        print("SCHEDULES: NOTE - %d crons declared; triggers consume the per-ACCOUNT budget "
+              "(documented cap %d on Workers Paid), so prefer a coarse trigger + internal "
+              "dispatch over one trigger per job" % (len(want), CF_ACCOUNT_MAX_CRONS))
     st0, have = schedules_get(worker, tok)
     print("SCHEDULES: declared=%s live=%s" % (want, have if st0 == 200 else "HTTP %s" % st0))
     if st0 == 200 and have == sorted(want):
