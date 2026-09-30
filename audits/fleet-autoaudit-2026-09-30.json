@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 14:05:41",
+  "audited_at": "2026-09-30 14:15:48",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -26,14 +26,7 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [
-      {
-        "dir": "qnfo-ops",
-        "live": "2.38.2-tool-meta-error-first",
-        "repo": "2.38.1-toolbudget-relock",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -411,7 +404,7 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -450,7 +443,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.3-roster-auth",
+        "version": "5.29.5-anthropic-relay",
         "worker": "qnfo-ai"
       },
       {
@@ -542,6 +535,11 @@
         "dir": "qnfo-observability",
         "version": "1.2.10-research-queue-enum",
         "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.2-tool-meta-error-first",
+        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -865,9 +863,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.3-roster-auth",
+      "before": "5.29.5-anthropic-relay",
       "http": 200,
-      "live": "5.29.3-roster-auth",
+      "live": "5.29.5-anthropic-relay",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1249,11 +1247,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.1-toolbudget-relock",
+      "before": "2.38.2-tool-meta-error-first",
       "http": 200,
       "live": "2.38.2-tool-meta-error-first",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
