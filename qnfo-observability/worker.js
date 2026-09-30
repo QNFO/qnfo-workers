@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-const VERSION = "1.2.11-outreach-gate-derive"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+const VERSION = "1.2.12-chain-draining"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -387,7 +387,11 @@ const INTEGRATION_CHAINS = [
     // false 'empty-match' warn. Watch the real enum.
     sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM research_queue WHERE status IN ('queued','pending','researching','ensemble-draft','claimed')",
     total: "SELECT COUNT(*) n FROM research_queue",
-    max: 10, minOk: null, expectEmpty: false, want: 'queued/active <= 10' },
+    max: 10, minOk: null, expectEmpty: false, want: 'queued/active <= 10',
+    // CHAIN-DRAINING-1 (2026-09-30): a backlog above the ceiling whose consumer is demonstrably
+    // advancing is throughput-bound, not wired wrong. 'stuck' is reserved for no consumer progress.
+    progress: "SELECT MAX(ts) latest FROM cloud_ops_events WHERE job='qnfo-research-exec' AND kind='done' AND status='ok' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours')",
+    progressWindowH: 3 },
   { id: 'revisions', name: 'Revision log -> publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'paper_revision_log',
     sql: "SELECT COUNT(*) n FROM paper_revision_log WHERE status = 'queued'",
     total: "SELECT COUNT(*) n FROM paper_revision_log",
@@ -409,7 +413,15 @@ async function assessIntegration(env) {
       if (r) {
         st.n = r.n == null ? null : Number(r.n);
         st.oldest_h = ageHours(r.oldest || r.latest);
-        if (c.max != null && st.n > c.max) { st.status = 'stuck'; st.detail = 'backpressure: ' + st.n + ' waiting (' + c.want + ')'; }
+        let progH = null;
+        if (c.max != null && st.n > c.max && c.progress) {
+          try { const pr = await env.AUDIT.prepare(c.progress).first(); progH = pr && pr.latest ? ageHours(pr.latest) : null; } catch (eP) { progH = null; }
+        }
+        if (c.max != null && st.n > c.max && progH != null && progH <= (c.progressWindowH || 3)) {
+          st.status = 'draining';
+          st.detail = 'draining: ' + st.n + ' waiting above ceiling (' + c.want + '); consumer ' + c.consumer + ' advanced ' + Math.round(progH * 60) + 'm ago';
+        }
+        else if (c.max != null && st.n > c.max) { st.status = 'stuck'; st.detail = 'backpressure: ' + st.n + ' waiting (' + c.want + ')' + (c.progress ? '; no consumer progress in ' + (c.progressWindowH || 3) + 'h' : ''); }
         else if (c.minOk != null && st.n < c.minOk) { st.status = 'degraded'; st.detail = 'below expected activity (' + c.want + ')'; }
         else if (st.n === 0 && st.total != null && st.total >= EMPTY_MATCH_MIN_TOTAL && !c.expectEmpty) {
           // The pending predicate matched nothing, but the medium is not empty. Either the queue drained
@@ -481,8 +493,8 @@ async function assessIntegration(env) {
   if (noSignal.length > 0) opportunities.push({ kind: 'integration-candidate', text: noSignal.length + ' workers emit no probe/trace/invocation signal: ' + noSignal.slice(0, 8).join(', ') + (noSignal.length > 8 ? ', ...' : '') });
   // v1.1.5: empty-match is deliberately excluded from chainScore - it is an UNKNOWN, not a pass and not
   // a failure. Counting it as healthy is what let five stale predicates report green for days.
-  const chainVals = chains.filter(function (c) { return c.status === 'healthy' || c.status === 'stuck' || c.status === 'degraded'; });
-  const chainScore = chainVals.length ? chainVals.reduce(function (a, c) { return a + (c.status === 'healthy' ? 1 : c.status === 'degraded' ? 0.5 : 0); }, 0) / chainVals.length : null;
+  const chainVals = chains.filter(function (c) { return c.status === 'healthy' || c.status === 'draining' || c.status === 'stuck' || c.status === 'degraded'; });
+  const chainScore = chainVals.length ? chainVals.reduce(function (a, c) { return a + (c.status === 'healthy' ? 1 : c.status === 'draining' ? 0.75 : c.status === 'degraded' ? 0.5 : 0); }, 0) / chainVals.length : null;
   const coverageScore = Math.min(1, (coverage.probed / Math.max(1, fleetSize)) * 0.6 + (coverage.traced / Math.max(1, fleetSize)) * 0.4);
   const decVals = decay.filter(function (d) { return d.age_h != null; });
   const freshnessScore = decVals.length ? decVals.reduce(function (a, d) { return a + Math.max(0, 1 - d.age_h / 48); }, 0) / decVals.length : null;

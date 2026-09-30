@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.36-refresh-deadline";
+var VERSION = "1.7.37-realtime-truth";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -242,7 +242,7 @@ __name22(loadState, "loadState");
 __name222(loadState, "loadState");
 __name2222(loadState, "loadState");
 async function analytics24(env) {
-  const out = { per: {}, req: 0, err: 0, errWorkers: [], unattributed: 0, ts: null, error: null };
+  const out = { per: {}, req: 0, err: 0, errWorkers: [], recoveredWorkers: [], unattributed: 0, ts: null, error: null };
   if (!env.CF_TOKEN) {
     out.error = "CF_TOKEN secret not set";
     return out;
@@ -250,7 +250,7 @@ async function analytics24(env) {
   try {
     const end = /* @__PURE__ */ new Date();
     const start = new Date(end.getTime() - DAY_MS);
-    const query = 'query { viewer { accounts(filter:{accountTag:"' + ACCOUNT + '"}) { workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:"' + start.toISOString() + '", datetime_leq:"' + end.toISOString() + '"}) { sum { requests errors } dimensions { scriptName } } } } }';
+    const query = 'query { viewer { accounts(filter:{accountTag:"' + ACCOUNT + '"}) { workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:"' + start.toISOString() + '", datetime_leq:"' + end.toISOString() + '"}) { sum { requests errors } dimensions { scriptName status datetimeHour } } } } }';
     const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.CF_TOKEN },
@@ -263,12 +263,27 @@ async function analytics24(env) {
       return out;
     }
     const rows = (((g.data || {}).viewer || {}).accounts || [{}])[0].workersInvocationsAdaptive || [];
+    // WORKER-ERRORS-RECENCY-1 (2026-09-30): a 24h error TOTAL cannot distinguish a worker that is
+    // failing now from one fixed hours ago (qnfo-containers-pilot: 37 scriptThrewException, all in
+    // the 2026-09-29T19:00 hour, remediated and redeployed, still "err" for the rest of the day).
+    // Keep the status class and hour so the flag can say WHY and WHEN.
+    const activeCut = Date.now() - ERR_ACTIVE_MS;
     for (const row of rows) {
-      const nm = (row.dimensions || {}).scriptName || "?";
+      const dm = row.dimensions || {};
+      const nm = dm.scriptName || "?";
       const sm = row.sum || {};
-      const d = out.per[nm] || (out.per[nm] = { requests: 0, errors: 0 });
+      const d = out.per[nm] || (out.per[nm] = { requests: 0, errors: 0, errors_active: 0, by_status: {}, last_error_hour: null });
       d.requests += sm.requests || 0;
       d.errors += sm.errors || 0;
+      if (sm.errors) {
+        const cls = dm.status || "unknown";
+        d.by_status[cls] = (d.by_status[cls] || 0) + sm.errors;
+        const hMs = Date.parse(dm.datetimeHour || "");
+        // an hour bucket counts as active if any part of it falls inside the active window;
+        // an unparseable bucket is treated as active (fail-closed)
+        if (!isFinite(hMs) || hMs + 36e5 > activeCut) d.errors_active += sm.errors;
+        if (isFinite(hMs) && (!d.last_error_hour || dm.datetimeHour > d.last_error_hour)) d.last_error_hour = dm.datetimeHour;
+      }
     }
     for (const k of Object.keys(out.per)) {
       out.req += out.per[k].requests;
@@ -278,7 +293,10 @@ async function analytics24(env) {
         out.unattributed += out.per[k].errors;
         continue;
       }
-      if (out.per[k].errors > 0) out.errWorkers.push({ name: k, errors: out.per[k].errors });
+      const pk = out.per[k];
+      const ent = { name: k, errors: pk.errors, errors_active: pk.errors_active, by_status: pk.by_status, last_error_hour: pk.last_error_hour };
+      if (pk.errors_active > 0) out.errWorkers.push(ent);
+      else if (pk.errors > 0) out.recoveredWorkers.push(ent);
     }
     out.errWorkers.sort(function(a, b) {
       return b.errors - a.errors;
@@ -1114,7 +1132,7 @@ __name2(execOne, "execOne");
 __name22(execOne, "execOne");
 __name222(execOne, "execOne");
 __name2222(execOne, "execOne");
-async function loopExecute(env) {
+async function loopExecute(env, deadlineMs) {
   await loopEnsure(env);
   const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, owner, payload, gh_number, created_at, exec_state, exec_ts, exec_attempts FROM fleet_issue_dispatch WHERE state='queued' ORDER BY created_at ASC LIMIT 25") || [];
   const executed = [], failed = [], needsHuman = [], noAction = [];
@@ -1126,6 +1144,9 @@ async function loopExecute(env) {
       if (att >= 3) continue;
       if (row.exec_ts && Date.now() - new Date(row.exec_ts).getTime() < EXEC_COOLDOWN_MS) continue;
     }
+    // SCHEDULED-WALL-BUDGET-1: never start a dispatch that could outlive the invocation budget
+    // (one dispatch = 30s call + D1 writes + a GitHub receipt at 15s).
+    if (deadlineMs && Date.now() > deadlineMs - 6e4) break;
     const r = await execOne(env, row, es);
     if (r.state === "executed") executed.push(r.fingerprint);
     else if (r.state === "failed") failed.push(r.fingerprint);
@@ -1330,11 +1351,15 @@ async function buildState(env, ctx) {
   });
   await safeAudit("worker_observability", "Worker observability (live)", async function() {
     const w = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, COALESCE(SUM(requests),0) AS req FROM analytics_dash_workers");
-    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM fleet_issue_loop WHERE category='worker-observability'");
+    // OBS-OPEN-COUNT-1 (2026-09-30): COUNT(*) over every worker-observability row ever ingested is
+    // monotonic -- a single transient 502 kept this warn lit forever. Count only rows still open
+    // and last observed inside the same active window as worker errors (last_seen is epoch-ms
+    // text from the Observability API ingest, or ISO text from the loop).
+    const iss = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM fleet_issue_loop WHERE category='worker-observability' AND closed_at IS NULL AND (CASE WHEN CAST(last_seen AS REAL) > 1e12 THEN CAST(last_seen AS REAL) ELSE (julianday(last_seen) - 2440587.5) * 864e5 END) >= ?", [nowMs - ERR_ACTIVE_MS]);
     const n = w && w.length ? (w[0].n || 0) : 0;
     const req = w && w.length ? (w[0].req || 0) : 0;
     const inObs = iss && iss.length ? (iss[0].n || 0) : 0;
-    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) tracked", ts: null });
+    push({ key: "worker_observability", label: "Worker observability (live)", state: inObs > 0 ? "warn" : "ok", detail: n + " workers with live usage (" + req + " events/24h); " + inObs + " observability issue(s) observed in the last " + ERR_ACTIVE_MS / 36e5 + "h", ts: null });
   });
   await safeAudit("errata_queue", "Errata queue", async function() {
     const g = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS c FROM errata_queue GROUP BY status");
@@ -1511,9 +1536,13 @@ async function buildState(env, ctx) {
       return;
     }
     const open = Number(o.open) || 0, failed = Number(f.c) || 0, terminal = Number(f.terminal) || 0, recoverable = failed - terminal, age = ageOf(o.mx);
-    const stale = open > 0 && age !== null && age > 24;
+    // QUEUE-DRAIN-FRESHNESS-1 (2026-09-30): MAX(created_at) measures the PRODUCER. A queue whose
+    // consumer advanced a stage recently is draining, not stale, however old its newest row is.
+    const dp = await qlook(env.AUDIT, "SELECT MAX(ts) AS mx FROM cloud_ops_events WHERE job='qnfo-research-exec' AND kind='done' AND status='ok' AND ts >= '" + new Date(nowMs - 2 * DAY_MS).toISOString() + "'");
+    const drainAge = dp && !dp.__err ? ageOf(dp.mx) : null;
+    const stale = open > 0 && age !== null && age > 24 && (drainAge === null || drainAge > 24);
     queueStats.push({ queue: "research_queue", db: "qnfo-audit", open, failed, newest: o.mx || null, age_h: age, stale, drain: "qnfo-research-exec", action: failed > 0 ? recoverable > 0 ? "research-exec retry recoverable failed rows" : "terminal failure - root-cause ensemble leg production" : stale ? "run research-exec scan; drain ensemble-draft/pending" : "none" });
-    push({ key: "queue_research", label: "Queue research_queue", state: failed > 0 ? "err" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "open=" + open + " failed=" + failed + " newest=" + (age === null ? "n/a" : age + "h") + (stale ? " STALE (>24h)" : "") + (failed > 0 ? " FAILED=" + failed + (terminal > 0 ? " terminal=" + terminal + " (auto-retry exhausted; root-cause required)" : "") + (recoverable > 0 ? " recoverable=" + recoverable + " (research-exec can retry)" : "") : "") + " drain=qnfo-research-exec", ts: o.mx || null });
+    push({ key: "queue_research", label: "Queue research_queue", state: failed > 0 ? "err" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "open=" + open + " failed=" + failed + " newest=" + (age === null ? "n/a" : age + "h") + " last-drain=" + (drainAge === null ? "none 48h" : drainAge + "h") + (stale ? " STALE (>24h, no drain progress)" : open > 0 ? " draining" : "") + (failed > 0 ? " FAILED=" + failed + (terminal > 0 ? " terminal=" + terminal + " (auto-retry exhausted; root-cause required)" : "") + (recoverable > 0 ? " recoverable=" + recoverable + " (research-exec can retry)" : "") : "") + " drain=qnfo-research-exec", ts: o.mx || null });
   });
   await safeAudit("queue_version", "Queue version_queue (drafted+error)", async function() {
     const d = await qlook(env.AUDIT, "SELECT COUNT(*) AS c, MAX(updated_at) AS mx FROM version_queue WHERE status='drafted'");
@@ -1546,9 +1575,12 @@ async function buildState(env, ctx) {
     let gate = null;
     try { const gs = await d1all(env.OUTREACH, "SELECT value FROM pipeline_state WHERE key='external_sends_enabled'"); gate = gs && gs.length ? String(gs[0].value) : null; } catch (e) { gate = null; }
     const gated = gate === "0" || gate === "false";
-    const stale = !gated && open > 0 && age !== null && age > 24;
+    // QUEUE-DRAIN-FRESHNESS-1: the drain sends at a deliberate 8/day cap; judge it by its last send.
+    const ls = await qlook(env.AUDIT, "SELECT MAX(sent_at) AS mx FROM outreach_queue WHERE status='sent'");
+    const sendAge = ls && !ls.__err ? ageOf(ls.mx) : null;
+    const stale = !gated && open > 0 && age !== null && age > 24 && (sendAge === null || sendAge > 26);
     queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: drainable.mx || null, age_h: age, stale, selector_drift: false, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: nc > 0 ? nc + " candidates awaiting contact enrichment (no email; not sendable)" : gated ? "external sends gated (kill switch off)" : stale ? "drain due - qnfo-cloud-ops jobOutreach (8/day cap)" : "none" });
-    push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24h)" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
+    push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + " last-send=" + (sendAge === null ? "n/a" : sendAge + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24h, no send in 26h)" : open > 0 ? " draining at 8/day cap, ETA " + Math.ceil(open / 8) + "d" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
   });
   const analytics = await analytics24(env);
   const d1c = await d1Count(env);
@@ -1565,12 +1597,12 @@ async function buildState(env, ctx) {
   const scheduledSrc = await liveScheduled(env, liveNames);
   for (const s of scheduledSrc) {
     if (liveNames && liveNames.indexOf(s.name) < 0) continue;
-    const per = analytics.per[s.name] || { requests: 0, errors: 0 };
+    const per = analytics.per[s.name] || { requests: 0, errors: 0, errors_active: 0 };
     const exp = expectedFires(s.crons, now.getTime(), DAY_MS);
     const createdMs = s.created_on ? Date.parse(s.created_on) : NaN;
     const young = isFinite(createdMs) && (now.getTime() - createdMs) < 26 * 36e5;
     let st;
-    if (per.errors > 0) st = "ERR";
+    if ((per.errors_active || 0) > 0) st = "ERR";
     else if (exp > 0 && per.requests === 0 && !s.no_run_exempt && !young) st = "NO-RUN";
     else if (per.requests > 0) st = "OK";
     else st = "IDLE";
@@ -1582,6 +1614,7 @@ async function buildState(env, ctx) {
       modified_on: s.modified_on || null,
       req24: per.requests,
       err24: per.errors,
+      err_active: per.errors_active || 0,
       expected24: exp,
       next: workerNextRuns(s.crons, now.getTime(), 2),
       status: st,
@@ -1611,14 +1644,36 @@ async function buildState(env, ctx) {
     if (a.state === "err") issues.push({ sev: "err", text: a.label + ": " + a.detail });
     else if (a.state === "warn") issues.push({ sev: "warn", text: a.label + ": " + a.detail });
   }
-  if (analytics.errWorkers.length) issues.push({ sev: "err", text: analytics.errWorkers.length + " worker(s) with 24h errors: " + analytics.errWorkers.map(function(w) {
-    return w.name + "(" + w.errors + ")";
-  }).join(", ") });
+  const _errFmt = function(w) {
+    return w.name + "(" + w.errors + (w.errors_active != null && w.errors_active !== w.errors ? ", " + w.errors_active + " active" : "") + "; " + Object.keys(w.by_status || {}).map(function(k) {
+      return k + "=" + w.by_status[k];
+    }).join(" ") + (w.last_error_hour ? "; last " + String(w.last_error_hour).slice(5, 13).replace("T", " ") + "h" : "") + ")";
+  };
+  if (analytics.errWorkers.length) issues.push({ sev: "err", text: analytics.errWorkers.length + " worker(s) with errors in the last " + ERR_ACTIVE_MS / 36e5 + "h: " + analytics.errWorkers.map(_errFmt).join(", ") });
+  // Older 24h errors: cleared when a successful deploy of that worker landed after the last
+  // error hour closed; otherwise still a warn (nothing has changed since they happened).
+  const _recovered = [], _unfixed = [];
+  if (analytics.recoveredWorkers && analytics.recoveredWorkers.length) {
+    let lastDeploy = {};
+    try {
+      const ld = await d1all(env.AUDIT, "SELECT worker, MAX(ts) AS ts FROM fleet_deploys WHERE ok=1 AND COALESCE(note,'') NOT LIKE 'SETTINGS-ONLY%' GROUP BY worker") || [];
+      for (const r of ld) lastDeploy[r.worker] = Date.parse(r.ts);
+    } catch (e) {
+    }
+    for (const w of analytics.recoveredWorkers) {
+      const lastErrEnd = Date.parse(w.last_error_hour || "") + 36e5;
+      const dep = lastDeploy[w.name];
+      if (isFinite(lastErrEnd) && isFinite(dep) && dep >= lastErrEnd) _recovered.push(w);
+      else _unfixed.push(w);
+    }
+  }
+  analytics.recovered = _recovered;
+  if (_unfixed.length) issues.push({ sev: "warn", text: _unfixed.length + " worker(s) with 24h errors, none in the last " + ERR_ACTIVE_MS / 36e5 + "h and no deploy since: " + _unfixed.map(_errFmt).join(", ") });
   if (analytics.error) issues.push({ sev: "warn", text: "analytics unavailable: " + analytics.error });
   const chains = [];
   const sysChains = systemIntegration && systemIntegration.chains || [];
   for (const c of sysChains) {
-    const mapSt = c.status === "healthy" ? "ok" : c.status === "unknown" ? "ok" : "warn";
+    const mapSt = c.status === "healthy" || c.status === "draining" ? "ok" : c.status === "unknown" ? "ok" : "warn";
     chains.push({ name: c.id, label: c.name, state: mapSt, stages: [c.producer, c.consumer], results: [{ label: c.medium, n: c.n, state: mapSt, detail: c.detail }] });
     if (mapSt !== "ok") issues.push({ sev: c.status === "stuck" ? "err" : "warn", text: "Integration chain " + c.name + ": " + c.status + " - " + (c.detail || "") });
   }
@@ -1673,6 +1728,8 @@ async function buildState(env, ctx) {
     queues: queueStats,
     coverage: { live_workers: liveCount, scheduled_tracked: scheduled.length, unregistered: integration && integration.unregistered ? integration.unregistered.length : null },
     unattributed_errors: analytics.unattributed || 0,
+    recovered_workers: analytics.recovered || [],
+    error_workers: analytics.errWorkers || [],
     loop: await loopSnapshot(env),
     meta: { device_captured_at: dev.captured_at, schema: "fleet-state/live", sources: { scheduled: "worker_schedules", probes: "service_registry", report_card: "autonomy_scores", chains: "integration_state(qnfo-observability)" } }
   };
@@ -2184,6 +2241,14 @@ __name22(pageHtml, "pageHtml");
 __name222(pageHtml, "pageHtml");
 __name2222(pageHtml, "pageHtml");
 var inflight = null;
+// WORKER-ERRORS-RECENCY-1: errors inside this window are "active"; older 24h errors are
+// reported as recovered (cleared by a later deploy) or as a warn (no deploy since).
+var ERR_ACTIVE_MS = 3 * 36e5;
+// SCHEDULED-WALL-BUDGET-1 (2026-09-30): the */15 cron awaited runRefresh (<=90s) + loopSync +
+// loopExecute (up to 25 dispatches x 30s + GitHub receipts) + liveScheduled with no overall
+// bound, and the Workers Observability API recorded "Worker invocation ended with
+// exceededWallTime" (15 internalError/24h). Every phase now runs against one deadline.
+var SCHEDULED_BUDGET_MS = 10 * 60 * 1e3;
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -2465,17 +2530,27 @@ var worker_default = {
     }
   },
   async scheduled(controller, env, ctx) {
+    const deadline = Date.now() + SCHEDULED_BUDGET_MS;
+    const within = function(p, reserveMs) {
+      const left = deadline - Date.now() - (reserveMs || 0);
+      if (left <= 0) return Promise.resolve(null);
+      return Promise.race([p, new Promise(function(res) {
+        setTimeout(function() {
+          res(null);
+        }, left);
+      })]);
+    };
     try {
+      // runRefresh already schedules loopMaybeSync (the claimed, single-writer GitHub sync) via
+      // waitUntil. The unconditional loopSync that followed here bypassed that claim, so every
+      // cron ran the sync twice concurrently (double GitHub traffic, duplicate-comment risk).
       const st = await runRefresh(env, ctx);
-      ctx.waitUntil(persistWeeklyReportCard(env, st));
-      ctx.waitUntil(persistRoiSnapshot(env).catch(function() {
-      }));
+      ctx.waitUntil(within(persistWeeklyReportCard(env, st).catch(function() {
+      })));
+      ctx.waitUntil(within(persistRoiSnapshot(env).catch(function() {
+      })));
       try {
-        await loopSync(env, st);
-      } catch (e2) {
-      }
-      try {
-        await loopExecute(env);
+        await within(loopExecute(env, deadline - 12e4), 6e4);
       } catch (e3) {
       }
       try {
@@ -2483,7 +2558,7 @@ var worker_default = {
         const _names = (_lf.results || []).map(function(x) {
           return x.service;
         });
-        if (_names.length) await liveScheduled(env, _names);
+        if (_names.length) await within(liveScheduled(env, _names), 3e4);
       } catch (e4) {
       }
       return new Response("ok generated " + st.generated_at + " issues " + (st.issues || []).length);
@@ -2589,8 +2664,18 @@ async function redHtml(env) {
     sh = await d1all(env.AUDIT, "SELECT * FROM shutdown_manifest ORDER BY id");
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + sh.length + " ARMED kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>");
-  for (const r of sh) H.push('<tr><td class="bad"><b>' + esc(r.id) + "</b></td><td>" + esc(r.phase) + '</td><td class="bad">' + esc(r.component) + "</td><td>" + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + "</td><td>" + esc(r.due_date) + '</td><td class="bad">' + esc(r.state) + "</td></tr>");
+  // MANIFEST-STATE-CLASS-1 (2026-09-30): every row was painted "bad" and the heading counted every
+  // row as ARMED, including a DISARMED trigger. Colour by state: FIRED/EXECUTED bad, ARMED warn
+  // (a live kill condition, evaluated by the gates below), DISARMED ok.
+  const _armedN = sh.filter(function(r) {
+    return String(r.state || "").toUpperCase() === "ARMED";
+  }).length;
+  const _shCls = function(stv) {
+    const u = String(stv || "").toUpperCase();
+    return u === "DISARMED" ? "ok" : u === "ARMED" ? "warn" : "bad";
+  };
+  H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + _armedN + " ARMED of " + sh.length + " kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>");
+  for (const r of sh) H.push('<tr><td class="' + _shCls(r.state) + '"><b>' + esc(r.id) + "</b></td><td>" + esc(r.phase) + '</td><td class="' + _shCls(r.state) + '">' + esc(r.component) + "</td><td>" + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + "</td><td>" + esc(r.due_date) + '</td><td class="' + _shCls(r.state) + '">' + esc(r.state) + "</td></tr>");
   H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory. EARLY-TRIGGER is evaluated in the COST TRUTH panel below.</div></div>');
   let th = [];
   try {
@@ -2632,10 +2717,42 @@ async function redHtml(env) {
     if (sn.length === 2 && Number(sn[0].pageviews) > 0 && Number(sn[1].pageviews) > 0) snapMoM = Math.round(1e4 * (Number(sn[0].pageviews) - Number(sn[1].pageviews)) / Number(sn[1].pageviews)) / 100;
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>2 &middot; SURVIVAL GATES vs measured</h2><table><tr><th>gate</th><th>target</th><th>state</th></tr>');
+  // GATE-STATE-LIVE-1 (2026-09-30): impact_thresholds.state was a stored label, so
+  // full_reports_live_30d read OPEN while the same panel measured 10 (gate >=2, PASSING).
+  // A governance gate is evaluated from its source at evaluation time; the stored label is used
+  // only when no live measurement exists, and a changed verdict is written back (registry-as-truth).
+  let _new30 = null, _wcLive = null, _waiLive = null;
+  try {
+    const rn = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM subscribers WHERE status='subscribed' AND created_at >= datetime('now','-30 day')");
+    _new30 = rn && rn.length ? Number(rn[0].n) : null;
+  } catch (e) {
+  }
+  try {
+    const rw = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric='worker_count'");
+    _wcLive = rw && rw.length && rw[0].last_value != null ? Number(rw[0].last_value) : null;
+    const ra = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric='workers_ai_cost_30d_usd'");
+    _waiLive = ra && ra.length && ra[0].last_value != null ? Number(ra[0].last_value) : null;
+  } catch (e) {
+  }
+  const _liveGate = {
+    full_reports_live_30d: rep30 != null ? { st: rep30 >= 2 ? "MET" : "OPEN", v: String(rep30) } : null,
+    impressions_growth_30d: growth != null ? { st: growth >= 30 ? "MET" : "OPEN", v: (growth >= 0 ? "+" : "") + growth + "% vs frozen baseline" } : null,
+    subscribers_growth_monthly: _new30 != null ? { st: _new30 >= 10 ? "MET" : "OPEN", v: "+" + _new30 + " in 30d" } : null,
+    worker_count: _wcLive != null && isFinite(_wcLive) ? { st: _wcLive <= 28 ? "MET" : "OPEN", v: String(_wcLive) } : null,
+    workers_ai_cost_30d_usd: _waiLive != null && isFinite(_waiLive) ? { st: _waiLive <= 7.5 ? "MET" : "OPEN", v: "$" + _waiLive.toFixed(2) } : null
+  };
+  H.push('<div class="panel"><h2>2 &middot; SURVIVAL GATES vs measured</h2><table><tr><th>gate</th><th>target</th><th>measured</th><th>state</th></tr>');
   for (const t of th) {
-    const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
-    H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
+    const lg = _liveGate[t.metric] || null;
+    const stv = lg ? lg.st : t.state;
+    const cls = stv === "MET" ? "ok" : stv === "MEASURED" ? "warn" : "bad";
+    H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + "</td><td>" + (lg ? esc(lg.v) : '<span class="sub">stored</span>') + '</td><td class="' + cls + '">' + esc(stv) + "</td></tr>");
+    if (lg && lg.st !== t.state) {
+      try {
+        await env.AUDIT.prepare("UPDATE impact_thresholds SET state=?1 WHERE metric=?2").bind(lg.st, t.metric).run();
+      } catch (e) {
+      }
+    }
   }
   H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + " (gate &ge;2 &rarr; " + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; vs frozen baseline 5,610 (target 7,293 = +30% by 2026-10-25) = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + " " + (growth != null && growth < 30 ? '&mdash; <b class="bad">NOT MET</b>' : '&mdash; <span class="ok">MET</span>') + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
   let inv = null, bal = null, tup = null, aiN = null;
@@ -2657,18 +2774,37 @@ async function redHtml(env) {
     tup = j.result || null;
   } catch (e) {
   }
+  // WAI-NEURONS-DATASET-1 (2026-09-30): workersInvocationsAdaptive has no `neurons` field, so this
+  // query always errored and the row always read n/a. Workers AI usage lives in aiInferenceAdaptiveGroups.
   try {
-    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { sum { neurons } dimensions { usageModel } } } } }');
-    const rows = (((g || {}).viewer || {}).accounts || [{}])[0].workersInvocationsAdaptive || [];
+    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { sum { totalNeurons } } } } }');
+    const rows = (((g || {}).viewer || {}).accounts || [{}])[0].aiInferenceAdaptiveGroups || [];
     aiN = rows.reduce(function(a, x) {
-      return a + (x.sum && x.sum.neurons || 0);
+      return a + (x.sum && x.sum.totalNeurons || 0);
     }, 0);
-    if (aiN === 0) aiN = null;
+    if (!(aiN > 0)) aiN = null;
+  } catch (e) {
+  }
+  // GATEWAY-METERED-SPEND-1: the AI Gateway invoice covers unified-billing providers only, and its
+  // amount_due is NET of credits ($0.00 while $212 of usage accrued). Spend for governance is the
+  // gateway-metered cost of every request (unified billing + BYOK providers), 30d sliding.
+  let gwSpend30 = null;
+  try {
+    const gg = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { sum { cost } } } } }');
+    const rows = (((gg || {}).viewer || {}).accounts || [{}])[0].aiGatewayRequestsAdaptiveGroups || [];
+    if (rows.length) gwSpend30 = rows.reduce(function(a, x) {
+      return a + (x.sum && Number(x.sum.cost) || 0);
+    }, 0);
   } catch (e) {
   }
   H.push('<div class="panel"><h2>3 &middot; COST TRUTH (live billing, USD cents audited)</h2><table><tr><th>metric</th><th>value</th></tr>');
+  const invGross = inv ? (inv.invoice_lines || []).reduce(function(a, L) {
+    return a + (Number(L.amount) > 0 ? Number(L.amount) : 0);
+  }, 0) : null;
+  if (gwSpend30 != null) H.push('<tr><td><b>AI spend 30d (gateway-metered, all providers incl. BYOK)</b></td><td class="' + (gwSpend30 >= 150 ? "bad" : gwSpend30 >= 110 ? "warn" : "ok") + '"><b>$' + gwSpend30.toFixed(2) + "</b> vs $150 cap &middot; $110 plan</td></tr>");
+  else H.push('<tr><td>AI spend 30d (gateway-metered)</td><td class="warn">analytics n/a</td></tr>');
   if (inv) {
-    H.push('<tr><td>AI Gateway invoice draft (current period)</td><td class="bad">' + usd(inv.amount_due) + " due</td></tr>");
+    H.push("<tr><td>AI Gateway invoice draft (current period, unified billing)</td><td>" + usd(invGross) + " gross usage &middot; " + usd(inv.amount_due) + " due after credits</td></tr>");
     const lines = (inv.invoice_lines || []).slice().sort(function(a, b) {
       return (b.amount || 0) - (a.amount || 0);
     }).slice(0, 7);
@@ -2679,7 +2815,8 @@ async function redHtml(env) {
   } else H.push('<tr><td>AI Gateway invoice draft</td><td class="warn">billing API unavailable</td></tr>');
   H.push("<tr><td>Credit balance</td><td>" + (bal ? usd(bal.balance) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push("<tr><td>Auto top-up</td><td>" + (tup ? "refill " + usd(tup.amount) + " when balance &lt; " + usd(tup.threshold) : '<span class="warn">n/a</span>') + "</td></tr>");
-  H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? aiN.toLocaleString() + " neurons (&asymp;$15 est, model-mix dependent)" : '<span class="warn">n/a</span>') + "</td></tr>");
+  const _waiEst = aiN != null ? Math.max(0, aiN - 1e4 * 30) / 1e3 * 0.011 : null;
+  H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? Math.round(aiN).toLocaleString() + " neurons &middot; list-price est $" + _waiEst.toFixed(2) + " (10k/day free, $0.011/1k)" + (_waiLive != null && isFinite(_waiLive) ? " &middot; registry $" + _waiLive.toFixed(2) : "") : '<span class="warn">n/a</span>') + "</td></tr>");
   let gwLimitLive = null;
   try {
     const rgl = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
@@ -2694,11 +2831,13 @@ async function redHtml(env) {
     pubEvents = rpe && rpe.length ? Number(rpe[0].n) : null;
   } catch (e) {
   }
-  const spendOver = inv ? Number(inv.amount_due) / 100 >= 150 : false;
+  // EARLY-TRIGGER spend = gateway-metered 30d cost (falls back to the invoice's GROSS usage).
+  const trigSpend = gwSpend30 != null ? gwSpend30 : invGross != null ? invGross / 100 : null;
+  const spendOver = trigSpend != null ? trigSpend >= 150 : false;
   const earlyFire = spendOver && pubEvents === 0;
   H.push("<tr><td>Spend limit</td><td>" + (gwLimitLive != null ? "$" + gwLimitLive + " / 30d sliding (live gateway config)" : "$150 / 30d sliding (manifest threshold)") + "</td></tr>");
-  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (inv ? usd(inv.amount_due) : "n/a") + " " + (spendOver ? '<b class="bad">&ge; $150/30d</b>' : "&lt; $150/30d") + " AND publish_events_30d=" + (pubEvents == null ? '<b class="bad">n/a</b>' : pubEvents) + (pubEvents === 0 ? ' (<b class="bad">ZERO</b>)' : ' (<span class="ok">non-zero</span>)') + " &rarr; " + (earlyFire ? '<b class="bad">TRIGGER FIRES</b>' : '<span class="ok">not firing</span>') + ' <span class="sub">defn: version_queue status=published last 30d (WS-0)</span></td></tr>');
-  H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits (e.g. $18.08 pretax credit on the gpt-5.5 line); gateway spend is dominated by agent-session LLM traffic.</div></div>');
+  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (trigSpend != null ? "$" + trigSpend.toFixed(2) : "n/a") + " " + (spendOver ? '<b class="bad">&ge; $150/30d</b>' : "&lt; $150/30d") + " AND publish_events_30d=" + (pubEvents == null ? '<b class="bad">n/a</b>' : pubEvents) + (pubEvents === 0 ? ' (<b class="bad">ZERO</b>)' : ' (<span class="ok">non-zero</span>)') + " &rarr; " + (earlyFire ? '<b class="bad">TRIGGER FIRES</b>' : '<span class="ok">not firing</span>') + ' <span class="sub">defn: version_queue status=published last 30d (WS-0)</span></td></tr>');
+  H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits, so it is never used as spend. Governance spend is the gateway-metered 30d cost (aiGatewayRequestsAdaptiveGroups.sum.cost), which also covers BYOK providers billed outside Cloudflare.</div></div>');
   let ghIssues = null, ghTotal = null;
   try {
     const g = await ghCall(env, "GET", "/search/issues?q=org%3AQNFO+is%3Aissue+is%3Aopen&per_page=100");
@@ -2764,7 +2903,9 @@ async function redHtml(env) {
   const _epf = await _n("SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
   const _esv = await _n("SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
   const _dln = await _n("SELECT COUNT(*) AS n FROM dead_links WHERE resolved_at IS NULL");
-  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','cancelled','rejected')");
+  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','cancelled','rejected') AND COALESCE(status,'') NOT LIKE 'skipped%'");
+  // A queue draining at its policy rate (last send < 26h) is working, not an open failure.
+  const _oqDrain = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE status='sent' AND sent_at >= datetime('now','-26 hours')");
   const _opsRows = [
     ["email_loop_quarantine", _elq, "quarantine", "qnfo-email loop classifier"],
     ["ai_gateway_failures (24h)", _agf, "event-plane", "qnfo-ai-calibration (not drainable)"],
@@ -2773,11 +2914,11 @@ async function redHtml(env) {
     ["email_parse_failures", _epf, "issue", "qnfo-email parse-failure resolver"],
     ["email_send_violations", _esv, "issue", "qnfo-email send policy"],
     ["dead_links", _dln, "issue", "link checker"],
-    ["outreach_queue", _oq2, "queue", "qnfo-outreach drain"]
+    ["outreach_queue", _oq2, _oqDrain > 0 ? "draining" : "queue", "qnfo-cloud-ops jobOutreach (8/day cap)" + (_oqDrain > 0 && _oq2 > 0 ? ", " + _oqDrain + " sent 26h, ETA " + Math.ceil(_oq2 / 8) + "d" : "")]
   ];
   let _opsOpen = 0;
   for (const row of _opsRows) {
-    const bad = row[1] != null && row[1] > 0 && row[2] !== "event-plane" && row[2] !== "lock";
+    const bad = row[1] != null && row[1] > 0 && row[2] !== "event-plane" && row[2] !== "lock" && row[2] !== "draining";
     H.push("<tr><td>" + esc(row[0]) + '</td><td class="' + (bad ? "bad" : "ok") + '">' + (row[1] != null ? row[1] : "?") + "</td><td>" + esc(row[2] + " \u00b7 " + row[3]) + "</td></tr>");
     if (bad) _opsOpen += row[1];
   }
@@ -2819,7 +2960,11 @@ async function redHtml(env) {
   });
   let auditMismatch = [];
   try {
-    auditMismatch = await d1all(env.AUDIT, "SELECT worker, live_version, registry_before, probed_at FROM worker_live_audit WHERE match=0 LIMIT 30") || [];
+    // LIVE-AUDIT-DRIFT-ONLY-1 (2026-09-30): match=0 also covers classified non-drift rows
+    // (NOT_DEPLOYED repo dirs, NOT_A_WORKER, CRON_ONLY workers with no HTTP surface), which
+    // rendered as "30 version mismatches" with empty live/registry columns. Drift = a live,
+    // probed worker whose version differs.
+    auditMismatch = await d1all(env.AUDIT, "SELECT worker, live_version, registry_before, probed_at FROM worker_live_audit WHERE match=0 AND COALESCE(note,'') NOT IN ('NOT_DEPLOYED','NOT_A_WORKER','CRON_ONLY') LIMIT 30") || [];
   } catch (e) {
   }
   H.push('<div class="sub" style="margin-top:6px">drift: ghost ' + (ig.drift && ig.drift.ghost || 0) + " &middot; unregistered " + (ig.drift && ig.drift.unregistered || 0) + " &middot; unversioned " + (ig.drift && ig.drift.unversioned || 0) + " &middot; islands " + (ig.islands || []).length + " &middot; sched NO-RUN " + noRun.length + " &middot; sched ERR " + schedErr.length + " &middot; failed probes " + badProbes.length + " &middot; live-vs-registry version mismatches " + auditMismatch.length + "</div>");
@@ -2843,7 +2988,7 @@ async function redHtml(env) {
   } catch (e) {
   }
   try {
-    const r = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, MAX(ts) AS latest FROM ai_gateway_failures");
+    const r = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, COALESCE(SUM(CASE WHEN ts >= ((strftime('%s','now')-86400)*1000) THEN count ELSE 0 END),0) AS d24, MAX(ts) AS latest FROM ai_gateway_failures");
     gwf = r && r.length ? r[0] : null;
   } catch (e) {
   }
@@ -2873,7 +3018,9 @@ async function redHtml(env) {
   }
   H.push('<div class="panel"><h2>6 &middot; UNREMEDIATED REGISTERS</h2><table><tr><th>register</th><th>count</th><th>meaning</th></tr>');
   H.push('<tr><td>email_loop_quarantine (open)</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops not yet processed/archived/spam</td></tr>");
-  H.push('<tr><td>ai_gateway_failures</td><td class="' + (gwf && gwf.total > 0 ? "bad" : "ok") + '">' + (gwf ? gwf.total.toLocaleString() : "?") + "</td><td>gateway error events (all-time; latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + ")</td></tr>");
+  // GOVERNANCE-METRIC-DEFINITION-VERIFY-1: an all-time event total is monotonic and can never
+  // clear; the register shows the 24h window (alerting lives in the live gw_failures audit).
+  H.push('<tr><td>ai_gateway_failures (24h)</td><td class="' + (gwf && Number(gwf.d24) >= 25 ? "warn" : "ok") + '">' + (gwf ? Number(gwf.d24).toLocaleString() : "?") + "</td><td>gateway error events, event-plane (not drainable); all-time " + (gwf ? Number(gwf.total).toLocaleString() : "?") + ", latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + "</td></tr>");
   H.push("<tr><td>version_queue</td><td>" + esc(vq.map(function(x) {
     return x.status + ":" + x.n;
   }).join(", ") || "0") + "</td><td>paper revision publishes waiting on Zenodo/PDF/KG</td></tr>");
@@ -2883,11 +3030,11 @@ async function redHtml(env) {
   H.push("<tr><td>dead_links (open)</td><td>" + (er != null ? er : "?") + "</td><td>checked links still failing</td></tr>");
   let oq = null;
   try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled','rejected')");
+    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled','rejected') AND status NOT LIKE 'skipped%'");
     oq = r && r.length ? r[0].n : null;
   } catch (e) {
   }
-  H.push('<tr><td>outreach_queue (open)</td><td class="' + (oq > 0 ? "bad" : "ok") + '">' + (oq != null ? oq : "?") + "</td><td>outreach rows not yet sent/skipped</td></tr>");
+  H.push('<tr><td>outreach_queue (open)</td><td class="' + (oq > 0 && !(_oqDrain > 0) ? "bad" : "ok") + '">' + (oq != null ? oq : "?") + "</td><td>outreach rows not yet sent/skipped" + (_oqDrain > 0 && oq > 0 ? " &middot; draining (" + _oqDrain + " sent in 26h, 8/day cap)" : "") + "</td></tr>");
   H.push("</table></div>");
   let em = null, subs = null, zenodoN = null;
   try {
@@ -2907,25 +3054,29 @@ async function redHtml(env) {
     zenodoN = r && r.length ? r[0].n : null;
   } catch (e) {
   }
-  const burn = inv ? Number(inv.amount_due) / 100 : null;
+  // MONEY-MATH-GROSS-1: burn = gateway-metered 30d AI spend (never the credit-netted amount_due).
+  const burn = trigSpend;
   const monthly = burn;
   const cpr = monthly != null && rep30 > 0 ? monthly / rep30 : null;
   H.push('<div class="panel"><h2>7 &middot; MONEY MATH (decision metrics)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push('<tr><td>Monthly burn (AI Gateway invoice draft, includes Workers AI prepaid)</td><td class="bad">' + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
+  H.push('<tr><td>Monthly burn (AI spend 30d, gateway-metered, all providers)</td><td class="' + (monthly == null ? "warn" : monthly >= 150 ? "bad" : monthly >= 110 ? "warn" : "ok") + '">' + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
   H.push('<tr><td>Revenue</td><td class="bad">$0.00 &mdash; no payment rail exists</td></tr>');
   H.push("<tr><td>Subscribers (active)</td><td>" + (subs ? subs.s : "?") + "</td></tr>");
   H.push("<tr><td>Email (sent / replied)</td><td>" + (em ? (em.sent || 0) + " sent &middot; " + (em.replied || 0) + " replied &middot; " + (em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "% reply rate" : "?") : "?") + "</td></tr>");
   H.push("<tr><td>Output (30d / all-time)</td><td>" + (rep30 != null ? rep30 : "?") + " full reports / " + (repTotal != null ? repTotal : "?") + " total &middot; " + (zenodoN != null ? zenodoN : "?") + " Zenodo DOIs</td></tr>");
   H.push("<tr><td>Cost per full report (30d)</td><td>" + (cpr != null ? "$" + cpr.toFixed(2) : "?") + "</td></tr>");
   H.push("<tr><td>Break-even at $10/mo subscriber</td><td>" + (monthly != null ? Math.ceil(monthly / 10) + " paying subscribers" : "?") + "</td></tr>");
-  H.push("<tr><td>Pageviews MoM (snapshots)</td><td>" + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : '<span class="warn">n/a</span>') + "</td></tr>");
+  H.push("<tr><td>Pageviews 30d vs frozen baseline 5,610 (kill-gate definition)</td><td>" + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : '<span class="warn">n/a</span>') + ' <span class="sub">(30d vs prior-30d: ' + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + "; day-over-day snapshot " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + ")</span></td></tr>");
   H.push("</table>");
+  // ROI-VERDICT-GATE-DEFN-1 (2026-09-30): the verdict read "GATES ON TRACK" from the prior-window
+  // MoM while the same page marked the kill gate (+30% over the frozen 5,610 baseline) NOT MET.
+  // The verdict now uses the kill-gate definition it describes.
   let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (trueMoM != null && trueMoM >= 30 && rep30 != null && rep30 >= 2) {
+  if (growth != null && growth >= 30 && rep30 != null && rep30 >= 2) {
     verdict = "GATES ON TRACK";
     vcls = "ok";
-  } else if (trueMoM != null && trueMoM > 0 || rep30 >= 1) {
-    verdict = "PARTIAL \u2014 WATCH (impressions gate failing)";
+  } else if (rep30 != null && rep30 >= 2) {
+    verdict = "PARTIAL \u2014 reports gate met, impressions gate " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "% of +30% vs frozen baseline" : "unmeasured");
     vcls = "warn";
   }
   H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + "/mo) and zero revenue, the 2026-10-25 phase-1 retirement fires unless the +30% impressions gate passes or the gates are revised by owner.</span></div>");
@@ -3017,7 +3168,9 @@ async function redHtml(env) {
     await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2); FAIL-CLOSED #1301 null_gates=" + nullGates).run();
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad == null ? "n/a" : String(driftBad)) + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
+  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad == null ? "n/a" : String(driftBad)) + ((st.recovered_workers || []).length ? " &middot; recovered (errors earlier in 24h, fixed by a later deploy): " + esc(st.recovered_workers.map(function(w) {
+    return w.name + "(" + w.errors + ")";
+  }).join(", ")) : "") + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
   H.push("</body></html>");
   return H.join("");
 }
