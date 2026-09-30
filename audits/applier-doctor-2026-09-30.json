@@ -1,6 +1,6 @@
 {
  "counts": {
-  "already-applied": 68,
+  "already-applied": 69,
   "error": 7,
   "stale-anchor": 11,
   "superseded": 4,
@@ -132,10 +132,8 @@
   {
    "changed_files": [
     " M ci-status/apply-pending-report.json",
-    " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js",
-    " M qnfo-email/deployed-current.worker.js",
-    " M qnfo-email/worker.js"
+    " M qnfo-containers-pilot/deployed-current.worker.js",
+    " M qnfo-containers-pilot/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -144,7 +142,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): schedules-live-1-patch.py",
+    "LANDED(1): patch-node-b64-encoding-1.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -216,8 +214,8 @@
    "rc": 0,
    "script": "scripts/cloud-ops-cron-alias-dispatch-patch.py",
    "tail": [
-    "STATE worker.js alias=4 noop=1 syncerr=2 version=1.15.1-cron-alias-dispatch",
-    "STATE deployed-current.worker.js alias=4 noop=1 syncerr=2 version=1.15.1-cron-alias-dispatch",
+    "STATE worker.js alias=4 noop=1 syncerr=2 version=1.15.3-schedules-live-1",
+    "STATE deployed-current.worker.js alias=4 noop=1 syncerr=2 version=1.15.3-schedules-live-1",
     "TOTAL_EDITS 0"
    ],
    "verdict": "already-applied"
@@ -227,8 +225,8 @@
    "rc": 0,
    "script": "scripts/cloud-ops-cron-dow-patch.py",
    "tail": [
-    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.1-cron-alias-dispatch",
-    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.1-cron-alias-dispatch",
+    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.3-schedules-live-1",
+    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.15.3-schedules-live-1",
     "TOTAL_EDITS 0"
    ],
    "verdict": "already-applied"
@@ -730,6 +728,24 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M qnfo-containers-pilot/deployed-current.worker.js",
+    " M qnfo-containers-pilot/worker.js"
+   ],
+   "declared_signals": [
+    "NODE-EXEC-B64-ENCODING-1",
+    "FLEET-CONTROL-NO-REPO-MIRROR-1",
+    "FAIL-CLOSED-ANCHOR-1"
+   ],
+   "rc": 0,
+   "script": "scripts/patch-node-b64-encoding-1.py",
+   "tail": [
+    "PATCHED qnfo-containers-pilot/worker.js bytes=17882",
+    "PATCHED qnfo-containers-pilot/deployed-current.worker.js bytes=17882"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/patch-ops-metadata-preserve-and-schema-hint.py",
@@ -913,25 +929,15 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-cloud-ops/deployed-current.worker.js",
-    " M qnfo-cloud-ops/worker.js",
-    " M qnfo-email/deployed-current.worker.js",
-    " M qnfo-email/worker.js"
-   ],
-   "declared_signals": [
-    "SCHEDULES-LIVE-1",
-    "SCHEDULES-BODY-SHAPE-1",
-    "EMAIL-APPROVAL-GATE-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/schedules-live-1-patch.py",
    "tail": [
-    "  \"skipped\": [],",
+    "  ],",
     "  \"errors\": []",
     "}"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -1097,8 +1103,8 @@
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/patch-cron-only-class-2.py"
  ],
- "total": 99,
- "ts": "2026-09-30T08:49:17.067Z",
+ "total": 100,
+ "ts": "2026-09-30T13:56:10.092Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
@@ -1106,7 +1112,7 @@
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
   "scripts/panel6-mediated-count-patch.py",
-  "scripts/schedules-live-1-patch.py",
+  "scripts/patch-node-b64-encoding-1.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
  ]
