@@ -165,6 +165,9 @@ for f in worker.js deployed-current.worker.js; do
   if ! grep -q 'ops_tool_budget_bail' "$DIR/$f"; then
     echo "FAIL: ops_tool_budget_bail event missing from $f (budget-bail observability)"; FAIL=1
   fi
+  if ! grep -q 'TOOLBUDGET-DO-LOOP-PARITY-1' "$DIR/$f"; then
+    echo "FAIL: DO/WS tool loop lacks the final no-tools round in $f (TOOLBUDGET-DO-LOOP-PARITY-1)"; FAIL=1
+  fi
 done
 if [ "$FAIL" -eq 0 ]; then echo "GUARD PASS"; else echo "GUARD FAIL"; fi
 exit $FAIL

@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.13-agent-final-tier";
+var VERSION = "2.38.14-do-loop-budget-parity";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -5504,7 +5504,21 @@ var AgenticOpsExec = class extends DurableObject {
         }
         iter++;
       }
-      if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
+      // TOOLBUDGET-DO-LOOP-PARITY-1 (2026-09-30): this DO/WS session loop had no final
+      // no-tools round, so a session whose round cap was spent returned
+      // "(tool loop did not converge within N iterations)" and NO answer at all -
+      // the same silent-failure class TOOL-BUDGET-PENDING-1 fixed on the chat path
+      // (worker.js L4731). Give it the identical final round and record the bail.
+      if (!finalText) {
+        try {
+          const _fin = await callDeepSeek(this.env, messages.concat([{ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE }]), DEFAULT_MAX_OUT, null, {});
+          const _fc = _fin && _fin.resp && _fin.resp.choices && _fin.resp.choices[0];
+          const _fm = _fc && _fc.message || {};
+          finalText = stripToolFrames(String(_fm.content || "").trim());
+        } catch (e) { finalText = ""; }
+        try { await logToolBudgetBail(this.env, "do-session", 0, "", maxIters, false); } catch (e) { }
+        if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
+      }
       await this.ctx.storage.put(historyKey, history);
       try {
         ws.send(JSON.stringify({ type: "message", role: "assistant", content: finalText }));
