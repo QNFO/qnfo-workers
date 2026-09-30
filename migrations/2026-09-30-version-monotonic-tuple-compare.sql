@@ -1,4 +1,4 @@
--- VERSION-MONOTONIC-TUPLE-1   *** PROPOSED - NOT YET APPLIED TO PRODUCTION (unless the deploy notes say otherwise) ***
+-- VERSION-MONOTONIC-TUPLE-1   APPLIED to qnfo-audit production 2026-09-30 by the observability remediation session (issue #1451). Verified live: forward version 2.38.6 accepted, genuine regression 2.37.20 blocked. Repo text == live sqlite_master text (5672 bytes).
 -- Target DB: qnfo-audit (35e2e573-92f3-46ac-83c6-22f6429fc5e5), table deployment_history.
 --
 -- Replaces trigger deployment_history_version_monotonic_ins (issue #1451). The production trigger
