@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 18:39:12",
+  "audited_at": "2026-09-30 18:48:43",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -493,7 +493,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.40-obs-ledger",
+        "version": "0.4.41-owned-metrics",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -528,7 +528,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.6.4-metric-freshness",
+        "version": "1.6.5-metric-undefined-class",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.9-fleet-selfprobe",
+        "version": "2.38.10-workers-dev-apply",
         "worker": "qnfo-ops"
       },
       {
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.40-obs-ledger",
+      "before": "0.4.41-owned-metrics",
       "http": 200,
-      "live": "0.4.40-obs-ledger",
+      "live": "0.4.41-owned-metrics",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1244,9 +1244,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.6.4-metric-freshness",
+      "before": "1.6.5-metric-undefined-class",
       "http": 200,
-      "live": "1.6.4-metric-freshness",
+      "live": "1.6.5-metric-undefined-class",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.9-fleet-selfprobe",
+      "before": "2.38.10-workers-dev-apply",
       "http": 200,
-      "live": "2.38.9-fleet-selfprobe",
+      "live": "2.38.10-workers-dev-apply",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
