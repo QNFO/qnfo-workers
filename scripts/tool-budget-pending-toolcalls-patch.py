@@ -34,17 +34,50 @@ an explicit else-branch that RECORDS the unexecuted calls instead of dropping th
 a tool_log row, an escalation, a note appended to the answer, and a machine-readable
 pending_tool_calls field on the response.
 
+REGRESSION RECORD (2026-09-30, APPLIER-ORDER-DEPENDENT-ANCHOR-1)
+----------------------------------------------------------------
+This patch was written, reported "landed", deployed as 2.37.32-tool-budget-ceiling-1,
+and then SILENTLY REGRESSED. Two independent mechanisms, both fixed here:
+
+  1. ORDER DEPENDENCE. scripts/apply-pending-patches.py runs scripts/*patch*.py in
+     ALPHABETICAL order. "tool-budget-pending-toolcalls-patch.py" sorts BEFORE
+     "toolbudget-canonical-patch.py" ("-" 0x2D < "b" 0x62). A1 used to be the hard
+     literal "var MAX_TOOL_ITERS = 40;", and the canonical patch is what CREATES that
+     literal. On the run that raised the cap this patch therefore executed while the
+     value was still 12, found 0 occurrences of its own anchor, FAIL-CLOSED, and the
+     cap was raised afterwards by a patch sorting LATER. The run artifact
+     ci-status/apply-pending-report.json (head 98c7acd7) records exactly this:
+       tool-budget-pending-toolcalls-patch.py  rc=3 stale-anchor
+         FAIL-CLOSED anchor occurrence != 1 (found 0) for: 'var MAX_TOOL_ITERS = 40;'
+       toolbudget-canonical-patch.py           rc=0 landed
+         VERSION 2.37.31-continuation-inherit -> 2.38.0
+     Net effect: live went 2.37.32 (which HAD the recorder) -> 2.38.0 (which LOST it).
+     A1 is now DISCOVERED from the file (any value), so this patch no longer depends
+     on any other patch's ordering.
+
+  2. COMMIT PATHSPEC (COMMIT-PATHSPEC-DROPS-NON-WORKER-ARTIFACTS-1). The apply
+     workflow staged `git add -A scripts/ '*worker.js' ci-status/`, a pathspec that
+     cannot match qnfo-ops/scripts/*.sh or .github/workflows/*.yml. Any patch that
+     touched a file outside those three paths was written into the ephemeral CI
+     worktree and then discarded at commit time, while the applier still reported it
+     as "landed". Fixed in the workflow itself.
+
 FAIL-CLOSED: every required anchor must occur EXACTLY once, else exit 3 with no write.
 IDEMPOTENT: exits 0 with no change once MARKER is present in the target.
 """
 import pathlib
+import re
 import sys
 
 TARGET = pathlib.Path("qnfo-ops/worker.js")
 MARKER = "TOOL-BUDGET-PENDING-1"
+NEW_VERSION = "2.38.1-tool-budget-pending"
 
 # ---------------------------------------------------------------- anchors (old) --
-A1 = "var MAX_TOOL_ITERS = 40;"
+# A1 is DISCOVERED at runtime (APPLIER-ORDER-DEPENDENT-ANCHOR-1). Pinning it to
+# "= 40;" made this patch depend on toolbudget-canonical-patch.py having run first,
+# which alphabetical ordering guarantees it has NOT.
+A1_RE = re.compile(r"var MAX_TOOL_ITERS = \d+;")
 
 A2 = (
     '  let finalized = false;\n'
@@ -87,11 +120,9 @@ A9 = (
     '      break;'
 )
 
-# optional (0 or 1): version bump. A concurrent agent may already have advanced it.
-A10 = 'var VERSION = "2.37.32-toolbudget-canonical";'
-
 # ---------------------------------------------------------------- replacements --
-R1 = A1 + r'''
+# R1 is appended to the discovered MAX_TOOL_ITERS declaration.
+R1_SUFFIX = r'''
 // TOOL-BUDGET-PENDING-1 (2026-09-30): final-round tool calls are RECORDED, never dropped.
 var PENDING_TOOLCALLS_NOTE = "\n\n[tool-budget-exhausted] {n} tool call(s) were NOT executed this turn because the tool budget (iteration cap or wall-clock deadline) was exhausted. They are listed in the pending_tool_calls field of this response and can be replayed on the next turn.";
 function summarizePendingToolCalls(toolCalls) {
@@ -168,10 +199,7 @@ R9 = (
     '      break;'
 )
 
-R10 = 'var VERSION = "2.37.33-tool-budget-pending";'
-
-REQUIRED = [(A1, R1), (A2, R2), (A3, R3), (A4, R4), (A5, R5), (A6, R6), (A7, R7), (A8, R8), (A9, R9)]
-OPTIONAL = [(A10, R10)]
+VERSION_RE = re.compile(r'var VERSION = "[^"]+";')
 
 
 def main() -> int:
@@ -184,26 +212,44 @@ def main() -> int:
         print(f"{MARKER}: already applied to {TARGET} (no change)")
         return 0
 
-    # validate FIRST (fail-closed, atomic: no write until every required anchor is unique)
-    for old, _ in REQUIRED:
+    m = A1_RE.search(text)
+    if not m:
+        print(f"{MARKER}: FAIL-CLOSED 'var MAX_TOOL_ITERS = <n>;' not found")
+        return 3
+    a1 = m.group(0)
+
+    required = [
+        (a1, a1 + R1_SUFFIX),
+        (A2, R2),
+        (A3, R3),
+        (A4, R4),
+        (A5, R5),
+        (A6, R6),
+        (A7, R7),
+        (A8, R8),
+        (A9, R9),
+    ]
+
+    for old, _ in required:
         n = text.count(old)
         if n != 1:
             print(f"{MARKER}: FAIL-CLOSED anchor occurrence != 1 (found {n}) for: {old[:80]!r}")
             return 3
 
     new = text
-    for old, rep in REQUIRED:
+    for old, rep in required:
         new = new.replace(old, rep, 1)
-    for old, rep in OPTIONAL:
-        if new.count(old) == 1:
-            new = new.replace(old, rep, 1)
+
+    vm = VERSION_RE.search(new)
+    if vm:
+        new = new.replace(vm.group(0), 'var VERSION = "%s";' % NEW_VERSION, 1)
 
     if MARKER not in new:
         print(f"{MARKER}: FAIL-CLOSED post-condition missing marker")
         return 3
 
     TARGET.write_text(new, encoding="utf-8")
-    print(f"{MARKER}: patched {TARGET} ({len(text)} -> {len(new)} bytes)")
+    print(f"{MARKER}: patched {TARGET} ({len(text)} -> {len(new)} bytes), VERSION -> {NEW_VERSION}")
     return 0
 
 
