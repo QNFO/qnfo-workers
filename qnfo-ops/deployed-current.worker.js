@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.12-schedules-path-fix";
+var VERSION = "2.38.13-agent-final-tier";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -57,6 +57,20 @@ __name22(stripToolFrames, "stripToolFrames");
 __name222(stripToolFrames, "stripToolFrames");
 __name2222(stripToolFrames, "stripToolFrames");
 __name22222(stripToolFrames, "stripToolFrames");
+// AGENT-FINAL-TIER-1 (2026-09-30, agent_issues #1271): the free-first chat tier is gated on
+// "no tools in THIS call", but the final no-tools round of an agent loop carries a tool-bearing
+// transcript. @cf/zai-org/glm-5.3-flash answers such a transcript with tool-call markup, which
+// stripToolFrames() then removes -> empty answer, ok=0 (16 of 20 ops_ai_log failures in 24h,
+// 64-350s each). One cost policy per path (fleet lessons B5): a call whose transcript already
+// holds tool calls/results belongs to the agent class and never takes the chat free tier.
+function isAgentTranscript(messages) {
+  if (!Array.isArray(messages)) return false;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m && (m.role === "tool" || Array.isArray(m.tool_calls) && m.tool_calls.length)) return true;
+  }
+  return false;
+}
 function isOAIUpstream(m) {
   const t = String(m || "");
   return /^openai\//i.test(t) || /^dynamic\//i.test(t) || /gpt[-_.]/i.test(t) || /^o[1-9](?:[-\/]|$)/i.test(t) || /-codex/i.test(t);
@@ -3735,7 +3749,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
       console.log("OPS_CODE_MODEL_FALLBACK " + UPSTREAM_CODE_MODEL + " -> " + UPSTREAM_MODEL + " : " + o.__codeFallbackErr);
     }
   }
-  if (!o.codeMode && !o.upstreamModel && env.WAI && !(tools && tools.length)) {
+  if (!o.codeMode && !o.upstreamModel && env.WAI && !(tools && tools.length) && !isAgentTranscript(messages)) {
     // COST-ROUTING-STACK-1 L2: free-first @cf ONLY for the chat class (no tools). Agent loops (tools
     // present) go straight to the paid canary-PASS tier; the free tier stays a last-resort
     // budgetFallback on paid failure/cap, never the first choice for tool-bearing work.
@@ -3814,7 +3828,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   // OPS-STREAM-FREE-FIRST-1 (2026-09-26): the streaming path previously had NO free-first branch,
   // so EVERY streamed ops conversation was billed against the paid gateway route (cost root cause).
   // Mirror callDeepSeek: prefer the free Workers-AI model, paid path only as last-resort fallback.
-  if (!o.upstreamModel && env.WAI && !(tools && tools.length)) {
+  if (!o.upstreamModel && env.WAI && !(tools && tools.length) && !isAgentTranscript(messages)) {
     // COST-ROUTING-STACK-1 L2: streaming free-first @cf only for chat class (no tools); agent loops skip it.
     try {
       const _rg = await callGLM(env, messages, maxTokens, tools, o);
@@ -4635,6 +4649,26 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   const finalize = /* @__PURE__ */ __name222222(async function() {
     if (finalized) return null;
     finalized = true;
+    // AGENT-FINAL-TIER-1: an answer that is ONLY tool-call markup strips to "". Recover once with a
+    // no-tools final round (now routed to the tool-capable tier) instead of logging an empty ok=0.
+    if (!clientHandoff && !cacheHit && String(content || "").trim() && !String(stripToolFrames(String(content || "")) || "").trim()) {
+      escalations++;
+      try {
+        const _w6 = work.concat([{ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE + " Answer in plain prose; do not emit tool-call markup." }]);
+        const { resp: r6, servedBy: _sb6 } = await callDeepSeek(env, _w6, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+        const c6 = r6 && r6.choices && r6.choices[0];
+        const t6 = stripToolFrames(String(c6 && c6.message && c6.message.content || ""));
+        if (String(t6 || "").trim()) {
+          content = t6;
+          finishReason = c6 && c6.finish_reason || "stop";
+          upstreamUsage = r6 && r6.usage || upstreamUsage;
+          if (_sb6) servedBy = String(servedBy || "") ? servedBy + " -> " + _sb6 : _sb6;
+          if (isStream) emitChunk({ role: "assistant", content }, null);
+          streamedTokens = true;
+        }
+      } catch (e6) {
+      }
+    }
     const promptTokens = cacheHit ? 0 : upstreamUsage && upstreamUsage.prompt_tokens ? upstreamUsage.prompt_tokens : estTokens(JSON.stringify(work));
     const completionTokens = cacheHit ? estTokens(content) : upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
     const costUsd = cacheHit ? 0 : costUsdCalc(promptTokens, completionTokens);

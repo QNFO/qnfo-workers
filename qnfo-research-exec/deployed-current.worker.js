@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.23-heartbeat-upsert";
+var VERSION = "0.9.24-single-flight-lease";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -2194,6 +2194,55 @@ __name22(run, "run");
 __name222(run, "run");
 __name2222(run, "run");
 __name22222(run, "run");
+// RESEARCH-SINGLE-FLIGHT-1 (2026-09-30): run() had no mutual exclusion, and it had three
+// concurrent triggers -- this hourly cron, the fleet dashboard's remediation loop (POST /run
+// every 15 min with a 30s client abort) and manual callers. Measured on 2026-09-30:
+// the same claim advanced "ground->ensemble" twice two seconds apart (18:16:38 / 18:16:40),
+// and every stage longer than 30s was cancelled mid-flight when the dashboard aborted
+// (cloud_ops_events kind=gw-error "gwCall failed: The operation was aborted" at 17:05,
+// 17:20, 17:57, 18:07, 18:08, 18:15), burning paid gateway tokens and driving rows into
+// recover-exhausted / "output too short". An HTTP-triggered invocation cannot outlive its
+// caller (waitUntil is capped at 30s after the response), so long stages belong on the cron.
+//   - one D1 lease serialises every run (TTL below the 15-min scheduled wall limit);
+//   - the cron drains up to RUN_LOOP_BUDGET_MS of consecutive stages per invocation;
+//   - HTTP /run is a non-blocking kick by default; ?sync=1 keeps the inline path for an
+//     operator who holds the connection open.
+var LEASE_TTL_MS = 14 * 60 * 1e3;
+var RUN_LOOP_BUDGET_MS = 4 * 60 * 1e3; // + one p99 stage (~10.5 min) stays under the 15-min scheduled wall limit
+async function leaseAcquire(env, holder) {
+  try {
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS research_exec_lease (k TEXT PRIMARY KEY, holder TEXT, expires_ms INTEGER)").run();
+    const now = Date.now();
+    const r = await env.QNFO_AUDIT.prepare("INSERT INTO research_exec_lease (k, holder, expires_ms) VALUES ('run', ?1, ?2) ON CONFLICT(k) DO UPDATE SET holder=excluded.holder, expires_ms=excluded.expires_ms WHERE research_exec_lease.expires_ms < ?3").bind(holder, now + LEASE_TTL_MS, now).run();
+    return !!(r && r.meta && Number(r.meta.changes) === 1);
+  } catch (e) {
+    return false;
+  }
+}
+async function leaseRelease(env, holder) {
+  try {
+    await env.QNFO_AUDIT.prepare("DELETE FROM research_exec_lease WHERE k='run' AND holder=?1").bind(holder).run();
+  } catch (e) {
+  }
+}
+async function runLeased(env, holder, maxStages, budgetMs) {
+  if (!await leaseAcquire(env, holder)) return { busy: true, stages: [] };
+  const t0 = Date.now();
+  const stages = [];
+  try {
+    for (let i = 0; i < maxStages; i++) {
+      const r = await run(env);
+      stages.push(r);
+      // Stop when idle (nothing claimable), on any failure (no hammering a failing stage),
+      // or when another full stage might not fit the scheduled wall limit.
+      if (!r || r.status !== "ok" || r.claimed === 0) break;
+      if (Date.now() - t0 > budgetMs) break;
+    }
+  } finally {
+    await leaseRelease(env, holder);
+  }
+  return { busy: false, stages, ms: Date.now() - t0 };
+}
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
@@ -2216,7 +2265,8 @@ var worker_default = {
       }
       if (env.RESEARCH_HALT === "1") return;
       try {
-        await run(env);
+        const lr = await runLeased(env, "cron-" + Date.now().toString(36), 8, RUN_LOOP_BUDGET_MS);
+        if (lr.busy) await logEvent(env, "lease-busy", "cron skipped: another run holds the single-flight lease", "ok");
       } catch (e) {
         await logEvent(env, "error", "run threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
@@ -2226,8 +2276,13 @@ var worker_default = {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
     if (url.pathname === "/run" && request.method === "POST") {
-      const out = await run(env);
-      return json({ ok: true, worker: WORKER, version: VERSION, out });
+      if (url.searchParams.get("sync") !== "1") {
+        await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
+        return json({ ok: true, worker: WORKER, version: VERSION, accepted: true, mode: "deferred", note: "research stages run on the cron under a single-flight lease (RESEARCH-SINGLE-FLIGHT-1); POST /run?sync=1 runs one stage inline" }, 202);
+      }
+      const lr = await runLeased(env, "http-" + Date.now().toString(36), 1, 0);
+      if (lr.busy) return json({ ok: true, worker: WORKER, version: VERSION, busy: true, note: "another run holds the single-flight lease" }, 409);
+      return json({ ok: true, worker: WORKER, version: VERSION, out: lr.stages[0] || null });
     }
     if (url.pathname === "/run/drain-v2" && request.method === "POST") {
       const drained = await drainV2(env);

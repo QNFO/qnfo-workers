@@ -1,0 +1,51 @@
+name: fleet-telemetry-probe
+
+# FLEET-TELEMETRY-PROBE-1: read-only per-worker error-class / CPU / AI-spend snapshot
+# (scripts/fleet_telemetry_probe.py). The Workers analytics GraphQL API is reachable from
+# CI but not from agent sessions, so this is the evidence source for worker-errors red
+# flags and for the quniverse-fleet-lessons efficiency objectives (cost per successful
+# task, free-first routing, zero-traffic retirement candidates). Read-only: it never
+# deploys or mutates a worker.
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths:
+      - scripts/fleet_telemetry_probe.py
+      - .github/workflows/fleet-telemetry-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe Workers / Workers AI / AI Gateway analytics
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/fleet_telemetry_probe.py
+
+      - name: Upload the telemetry snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-telemetry
+          path: ci-status/fleet-telemetry.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Commit the ci-status artifact back
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/fleet-telemetry.json
+          bash scripts/push_artifact.sh "ci(status): fleet-telemetry [skip ci]" ci-status/fleet-telemetry.json || true
