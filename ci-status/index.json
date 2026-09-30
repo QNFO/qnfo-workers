@@ -35,11 +35,12 @@
     "restore-container-config-exports.json",
     "restore-container-config-v2.json",
     "restore-container-config.json",
+    "sync-version-capture-1.json",
     "unmangle-worker-js.json",
     "version-precedence-1.json",
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 37,
+  "count": 38,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
