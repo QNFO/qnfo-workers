@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.1-escalate-deadend-fix";
+var VERSION = "0.4.2-heartbeat";
 var NAMESPACE = "email-orchestrator";
 var DAY_ACTIONS = ["wednesday-response-check"];
 var DOC = {
@@ -100,8 +100,13 @@ var worker_default = {
     return this.cors(json(await this.runRepliesInternal(env, dry)));
   },
   async scheduled(controller, env, ctx) {
+    var hbOk = 1;
     try { var r = await this.runRepliesInternal(env, false); console.log("reply-draft:", JSON.stringify(r)); }
-    catch (e) { console.error("reply-draft failed:", String(e && e.message || e)); }
+    catch (e) { hbOk = 0; console.error("reply-draft failed:", String(e && e.message || e)); }
+    // CRON-ONLY-HEARTBEAT-1 (2026-09-30): no workers.dev route (CRON_ONLY, #1402), so liveness is published here and
+    // read by qnfo-fleet-control /state; without it the fleet could not tell this worker from a dead one.
+    try { await env.AUDIT_DB.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-email-orchestrator", VERSION, new Date().toISOString(), hbOk).run(); }
+    catch (e) { console.error("heartbeat failed:", String(e && e.message || e)); }
   },
   async runRepliesInternal(env, dry) {
     // EMAIL-PIPELINE-ESCALATE-DEADEND-1 (#1251): also scan escalated rows that a

@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.5";
+var VERSION = "2.3.6-heartbeat";
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
 // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
 // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -211,9 +211,21 @@ var worker_default = {
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async function() {
-      await runProbe(env);
-      await checkFreshness(env);
-      await checkHealthCoverage(env, Date.now());
+      var ok = 1;
+      try {
+        await runProbe(env);
+        await checkFreshness(env);
+        await checkHealthCoverage(env, Date.now());
+      } catch (e) {
+        ok = 0;
+      }
+      /* CRON-ONLY-HEARTBEAT-1 (2026-09-30): this worker has no workers.dev route (CRON_ONLY class, #1402), so no
+         HTTP census can ever see it; the fleet read it as permanently down/unknown. Each cron run now upserts
+         fleet_heartbeat, which qnfo-fleet-control /state reads as this worker's liveness. */
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(WORKER, VERSION, new Date().toISOString(), ok).run();
+      } catch (e) {
+      }
     })());
   }
 };

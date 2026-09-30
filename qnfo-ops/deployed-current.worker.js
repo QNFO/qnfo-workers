@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.8-dangling-binding-prune";
+var VERSION = "2.38.9-fleet-selfprobe";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -840,12 +840,20 @@ async function fleetStatus(env) {
   const boundNames = new Set(FLEET.map(function(f) {
     return f.name;
   }));
-  for (const w of apiList) {
-    if (boundNames.has(w.id)) continue;
+  /* FLEET-SELFPROBE-1 (2026-09-30): three defects made this census lie about the fleet it runs in.
+     (1) qnfo-ops probed ITSELF through its own custom domain and recorded http 522 / healthy:false for the
+         worker that was answering the request; a worker serving this response is up by construction.
+     (2) a live worker absent from service_registry (e.g. a worker created minutes ago) got base=null and
+         healthy:null forever; fall back to its workers.dev URL, which is what register-at-deploy writes.
+     (3) the probes ran one after another (27 x up to 6 s), so /fleet could outlive the deploy-guard's 15 s
+         fetch budget; they now run in parallel. */
+  const _extra = await Promise.all(apiList.filter(function(w) { return !boundNames.has(w.id); }).map(async function(w) {
     const hs = w.handlers || [];
-    const base = regMap[w.id] || null;
+    const base = regMap[w.id] || (w.id ? "https://" + w.id + ".q08.workers.dev" : null);
     let rh = null;
-    if (base) {
+    if (w.id === "qnfo-ops") {
+      rh = { ok: true, http: 200, version: VERSION, error: null, self: true };
+    } else if (base) {
       const rctrl = new AbortController();
       const rt = setTimeout(function() {
         rctrl.abort();
@@ -865,10 +873,11 @@ async function fleetStatus(env) {
         rh = { ok: false, http: 0, version: "", error: e && e.name === "AbortError" ? "timeout" : e && e.message ? e.message : String(e) };
       }
     }
-    out.push({ name: w.id, healthy: rh ? rh.ok : null, http: rh ? rh.http : null, version: rh ? rh.version : "", error: rh ? rh.error : null, count: null, probe: rh ? "registry-http" : "api", base_url: base, modified_on: w.modified_on || null, handlers: hs.map(function(h) {
+    return { name: w.id, healthy: rh ? rh.ok : null, http: rh ? rh.http : null, version: rh ? rh.version : "", error: rh ? rh.error : null, count: null, probe: rh ? (rh.self ? "self" : (regMap[w.id] ? "registry-http" : "workers-dev-fallback")) : "api", base_url: base, modified_on: w.modified_on || null, handlers: hs.map(function(h) {
       return Array.isArray(h) ? String(h[0]) : String(h);
-    }).slice(0, 8) });
-  }
+    }).slice(0, 8) };
+  }));
+  for (const _x of _extra) out.push(_x);
   out.sort(function(a, b) {
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });
@@ -2364,6 +2373,12 @@ async function installDeclaredBindings(env, worker) {
       out.note = "no wrangler.toml in the repo for this worker";
       return out;
     }
+    /* COMPAT-FLAGS-DECLARED-APPLY-1 (2026-09-30): the section parser below ignores top-level keys, and the deploy
+       carried only the LIVE compatibility_flags, so a flag added to wrangler.toml never reached Cloudflare (same
+       inert-config class as #1337's crons). Surface the declared flags so cfWorkerDeploy can UNION them in. */
+    out.compat_flags = [];
+    const _cfm = String(toml).match(/^\s*compatibility_flags\s*=\s*\[([^\]]*)\]/m);
+    if (_cfm) out.compat_flags = (_cfm[1].match(/"([^"]+)"/g) || []).map(function(q) { return q.slice(1, -1); });
     const sections = [];
     let cur = null;
     for (const raw of String(toml).split(/\r?\n/)) {
@@ -2513,6 +2528,7 @@ async function cfWorkerDeploy(env, args) {
   });
   let bindingsInstalled = 0;
   let bindingInstallNote = null;
+  let _declFlags = [];
   // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
   // bindingsOut.length === 0, so a worker that already carried any non-secret binding
   // could NEVER gain a newly declared one. Canonical victim: qnfo-research-exec never
@@ -2524,6 +2540,7 @@ async function cfWorkerDeploy(env, args) {
   {
     const _ins = await installDeclaredBindings(env, worker);
     bindingInstallNote = _ins.note || null;
+    if (_ins && Array.isArray(_ins.compat_flags)) _declFlags = _ins.compat_flags.slice();
     const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];
     if (bindingsOut.length === 0 && _decl.length) {
       bindingsOut = _decl;
@@ -2566,6 +2583,8 @@ async function cfWorkerDeploy(env, args) {
     } catch (_e) {
     }
     if (!_compatDate) _compatDate = "2026-08-01";
+    // COMPAT-FLAGS-DECLARED-APPLY-1: live flags are kept (never removed), repo-declared flags are added.
+    for (const _f of _declFlags) { if (_compatFlags.indexOf(_f) === -1) _compatFlags.push(_f); }
     if (_isContainerWorker && !_containers.length &&
         !(args && args.allow_container_config_drop)) {
       return {

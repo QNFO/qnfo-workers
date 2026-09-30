@@ -1,6 +1,9 @@
 name = "qnfo-deploy-guard"
 main = "worker.js"
 compatibility_date = "2026-08-01"
+# FLEET-PROBE-1042-1 (2026-09-30): refreshRegistryVersion() reads <worker>.q08.workers.dev/health; without
+# this flag that same-zone subrequest is error 1042 (HTTP 404), so the live-version read silently failed.
+compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
 
 

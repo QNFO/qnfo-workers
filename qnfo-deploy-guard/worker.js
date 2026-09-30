@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.10 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts)
+// qnfo-deploy-guard v1.3.17 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.16-burst-coalesce";
+var VERSION = "1.3.17-settings-ledger-autoresolve";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -40,7 +40,9 @@ async function fileIssue(env, title, desc, priority) {
   var ex = await auditAll(env, "SELECT id FROM agent_issues WHERE status=?1 AND title=?2 LIMIT 1", ["open", title]);
   if (ex && ex.length) return { filed: false, existing: ex[0].id };
   var now = Date.now();
-  var res = await auditRun(env, "INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [title, String(desc).slice(0, 900), "qnfo-deploy-guard", "reliability", priority || "high", "open", "qnfo-deploy-guard/" + VERSION, now, now]);
+  // 4000, not 900: a coalesced burst carries its full worker list, and autoResolve() parses it back. At 900 a
+  // 48-worker list was cut mid-array, which would leave the ticket unparseable and therefore never resolvable.
+  var res = await auditRun(env, "INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [title, String(desc).slice(0, 4000), "qnfo-deploy-guard", "reliability", priority || "high", "open", "qnfo-deploy-guard/" + VERSION, now, now]);
   return { filed: true, ok: res && res.ok !== false, error: res && res.error };
 }
 // ALERTS-CHAIN-NO-CONSUMER-1 (2026-09-23): deploy-guard alerts are INFORMATIONAL self-notifications -
@@ -112,7 +114,92 @@ function coalesceBursts(list) {
     if (grp.length <= BURST_MAX) continue;
     out = out.filter(function (x) { return x.type !== type; });
     var names = grp.map(function (x) { return x.worker; });
-    out.push({ type: type, worker: "fleet", count: grp.length, sample: names.slice(0, 12), workers: names });
+    out.push({ type: type, worker: "fleet", count: grp.length, workers: names });
+  }
+  return out;
+}
+// DEPLOY-TICKET-AUTORESOLVE-1 (2026-09-30): the guard FILED tickets but nothing ever CLOSED them. Measured: 48 of
+// the 106 open agent_issues were deploy-guard rows, most superseded minutes later by a ledgered canonical redeploy
+// (fleet_deploys ids 915-1005, 15:51-15:54Z) -- file rate beat close rate by construction. A ticket now resolves
+// on POSITIVE evidence only, re-evaluated every scan:
+//   event anomalies (unlogged-mutation / uncoordinated-deploy, per worker or a coalesced fleet burst) resolve when
+//     the worker is no longer live, OR a successful ledgered deploy postdates the ticket and nothing mutated after
+//     it, OR worker_live_audit verified the live code == repo canonical (SYNC, content-hash) after the ticket and
+//     nothing mutated after that verification;
+//   state anomalies (non-canonical-deploy / lock-contention / cost-threshold) resolve when this scan no longer
+//     observes them.
+// Never resolved: a ticket whose anomaly re-occurs in this scan, or any ticket when the fleet probe failed.
+// LIMITATION, STATED: the SYNC rule proves the live CODE is canonical; it cannot attribute a settings-only change.
+// That is why settings mutators now ledger themselves (SETTINGS-ONLY-LEDGER-1, fleet-control obs reassert).
+function isSettingsOnly(note) { return String(note || "").indexOf("SETTINGS-ONLY") === 0; }
+var MUT_SLACK_MS = 180000;
+var CONTAINER_WORKERS = ["qnfo-containers-pilot"]; // mirrors qnfo-ops cfWorkerDeploy _CONTAINER_WORKERS
+var EVENT_TYPES = { "UNLOGGED-MUTATION": "unlogged-mutation", "UNCOORDINATED-DEPLOY": "uncoordinated-deploy" };
+function workerSettled(w, since, rc) {
+  if (rc.haveLive && !rc.liveNames[w]) return "worker no longer live (retired/disposed)";
+  var mo = rc.snapshot[w] ? ms(rc.snapshot[w].mo) : NaN;
+  // best = newest successful CODE deploy after the ticket; lastLogged = newest successful ledger row of any kind.
+  // A SETTINGS-ONLY row can cover a later mutation, but it can never be the deploy that supersedes unknown code.
+  var rows = rc.ledgerBy[w] || []; var best = null; var lastLogged = -Infinity;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].ok === 0) continue;
+    var t = ms(rows[i].ts);
+    if (!isFinite(t)) continue;
+    if (t > lastLogged) lastLogged = t;
+    if (!isSettingsOnly(rows[i].note) && t > since && (!best || t > best.t)) best = { t: t, r: rows[i] };
+  }
+  if (best && (!isFinite(mo) || mo <= lastLogged + MUT_SLACK_MS)) return "superseded by ledgered deploy fleet_deploys.id=" + best.r.id + " at " + best.r.ts + " (" + String(best.r.note || "").slice(0, 60) + ")";
+  var au = rc.audit[w];
+  if (au && Number(au.match) === 1 && au.note === "SYNC") {
+    var pt = ms(au.probed_at);
+    if (isFinite(pt) && pt > since && (!isFinite(mo) || mo <= pt)) return "live code verified == repo canonical (worker_live_audit SYNC at " + au.probed_at + ", after the last mutation " + (rc.snapshot[w] ? rc.snapshot[w].mo : "?") + ")";
+  }
+  return null;
+}
+function burstWorkers(desc) {
+  try { var j = JSON.parse(desc); if (j && Array.isArray(j.workers)) return j.workers; } catch (e) {}
+  return null;
+}
+async function autoResolve(env, rc) {
+  var out = [];
+  if (!rc.haveLive) return out;
+  var open = await auditAll(env, "SELECT id, title, description, created_at FROM agent_issues WHERE status='open' AND source='qnfo-deploy-guard'", []);
+  for (var i = 0; i < open.length; i++) {
+    var it = open[i]; var title = String(it.title || ""); var reason = null;
+    var m = /^DEPLOY-([A-Z-]+): (.+)$/.exec(title);
+    var since = Number(it.created_at) || 0;
+    if (m && EVENT_TYPES[m[1]]) {
+      var type = EVENT_TYPES[m[1]]; var w = m[2];
+      if (w !== "fleet") {
+        if (rc.seen[type + "|" + w]) continue;
+        reason = workerSettled(w, since, rc);
+      } else {
+        var ws = burstWorkers(it.description);
+        if (!ws || !ws.length) continue;
+        var why = [];
+        for (var k = 0; k < ws.length; k++) {
+          if (rc.seen[type + "|" + ws[k]]) { why = null; break; }
+          var r1 = workerSettled(ws[k], since, rc);
+          if (!r1) { why = null; break; }
+          why.push(ws[k]);
+        }
+        if (why) reason = "all " + why.length + " burst workers settled (ledgered redeploy or verified SYNC after the burst)";
+      }
+    } else if (title === "DEPLOY-NON-CANONICAL-DEPLOY: fleet" && rc.nonCanon.length === 0) {
+      reason = "no live worker's last code deploy is non-canonical any more";
+    } else if (title === "DEPLOY-LOCK-CONTENTION: fleet" && rc.denials === 0) {
+      reason = "no lock denials in this scan";
+    } else if (title === "COST-THRESHOLD-BREACH: qnfo-ops" && rc.cost && !(rc.cost.day_usd > rc.cost.thresholds.day_usd || rc.cost.month_usd > rc.cost.thresholds.month_usd)) {
+      reason = "spend back under thresholds (day " + rc.cost.day_usd + ", 30d " + rc.cost.month_usd + ")";
+    }
+    if (!reason) continue;
+    var note = "\n\nRESOLVED " + nowIso() + " by qnfo-deploy-guard/" + VERSION + " (DEPLOY-TICKET-AUTORESOLVE-1): " + reason;
+    // issue_close_evidence_required (qnfo-audit trigger) ABORTs any close whose issue_triage row carries no
+    // close_evidence, so the evidence is written FIRST (upsert: rows predating the autotriage trigger have none).
+    var ev = await auditRun(env, "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence) VALUES (?1, 'DEPLOY-TICKET-AUTORESOLVE-1', 'resolved', 'qnfo-deploy-guard', datetime('now'), 'auto-resolve on positive evidence', ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='resolved'", [it.id, "qnfo-deploy-guard/" + VERSION + ": " + reason]);
+    if (ev && ev.ok === false) { out.push({ id: it.id, title: title, reason: reason, ok: false, error: "evidence write failed: " + ev.error }); continue; }
+    var up = await auditRun(env, "UPDATE agent_issues SET status='resolved', close_channel='deploy-guard-autoresolve', updated_at=?1, description=substr(COALESCE(description,'') || ?2, 1, 6000) WHERE id=?3 AND status='open'", [Date.now(), note, it.id]);
+    out.push({ id: it.id, title: title, reason: reason, ok: !(up && up.ok === false) });
   }
   return out;
 }
@@ -128,8 +215,9 @@ async function scan(env) {
     var month = (ca.j.last_30d && ca.j.last_30d.cost) || 0;
     cost = { day_usd: day, month_usd: month, cap_per_utc_day: ca.j.cap_per_utc_day, thresholds: thr };
   }
-  var ledger = await auditAll(env, "SELECT worker, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
-  var lastLedger = {}; for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; }
+  var ledger = await auditAll(env, "SELECT id, worker, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
+  var lastLedger = {}; var ledgerBy = {};
+  for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; (ledgerBy[ledger[i].worker] = ledgerBy[ledger[i].worker] || []).push(ledger[i]); }
   var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
   var active = {};
   try { var al = await auditAll(env, "SELECT worker, owner, since, expires_at FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > ?1", [Date.now()]); for (var j = 0; j < al.length; j++) active[al[j].worker] = al[j]; } catch (e) {}
@@ -165,17 +253,27 @@ async function scan(env) {
   // canonical sequence (uncached GitHub-source fetch + binding preservation). Aggregated to one anomaly.
   var liveNames = {}; for (var lw = 0; lw < fleet.length; lw++) liveNames[fleet[lw].name] = 1;
   var haveLive = fleet.length > 0;
+  // SETTINGS-ONLY-LEDGER-1 (v1.3.17): a settings PATCH (e.g. fleet-control's observability reassert) bumps CF
+  // modified_on without touching code, so its mutator now ledgers it with a "SETTINGS-ONLY" note. That row must
+  // satisfy the unlogged-mutation rule above (it IS logged) but must NOT stand in for the worker's last CODE
+  // deploy here, or every reassert would make a canonically deployed worker look non-canonical.
+  var lastCode = {}; for (var lc = 0; lc < ledger.length; lc++) { if (!isSettingsOnly(ledger[lc].note)) lastCode[ledger[lc].worker] = ledger[lc]; }
   var nonCanon = [];
-  for (var ncw in lastLedger) {
+  for (var ncw in lastCode) {
     if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
     // FLEET-GHOST-LEDGER-1 (v1.3.12): a retired/ghost worker (present only in the ledger, absent from the
     // live fleet) is not a deploy target -- its stale row must not permanently drive the aggregate (canonical
     // offender: qnfo-fleet-advisor, retired, last ledger row 2026-09-09). Guarded by haveLive so a failed
     // fleet probe cannot silently disable the non-canonical check.
     if (haveLive && !liveNames[ncw]) continue;
-    var nlr = lastLedger[ncw] || {};
+    var nlr = lastCode[ncw] || {};
     var nnote = String(nlr.note || "");
     if (/self-test|deliberately/i.test(nnote)) continue; // deliberate detector self-tests (e.g. ops-gateway)
+    // CONTAINER-CANONICAL-1 (v1.3.17): /ops/deploy REFUSES container workers by design (a /content PUT through it
+    // drops [[containers]]; qnfo-ops _CONTAINER_WORKERS, canonical-deploy.yml CANONICAL-SKIP-CONTAINERS-1), so for
+    // them the container-aware deployers (raw_put.py with CONTAINER-CONFIG-PRESERVE-1, restore_container_config.py)
+    // ARE the canonical path. Without this, the fleet non-canonical ticket could never clear.
+    if (CONTAINER_WORKERS.indexOf(ncw) >= 0) { if (nlr.ok === 0) nonCanon.push(ncw); continue; }
     if (nnote.indexOf("opsDeploy route") < 0 || nlr.ok === 0) nonCanon.push(ncw); // non-canonical path OR a FAILED canonical attempt (ok:0 carries the canonical note)
   }
   if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
@@ -191,9 +289,16 @@ async function scan(env) {
     if (res.filed) filed.push({ title: title, ok: res.ok });
   }
   if (filed.length) await fileAlert(env, "warn", "deploy-guard filed " + filed.length + " ticket(s): " + filed.map(function (f) { return f.title; }).join("; "));
+  var resolved = [];
+  if (fp.ok) {
+    var audit = {};
+    try { var ar = await auditAll(env, "SELECT worker, match, note, probed_at FROM worker_live_audit", []); for (var ai = 0; ai < ar.length; ai++) audit[ar[ai].worker] = ar[ai]; } catch (e) {}
+    try { resolved = await autoResolve(env, { haveLive: haveLive, liveNames: liveNames, snapshot: snapshot, ledgerBy: ledgerBy, audit: audit, seen: seen, nonCanon: nonCanon, denials: denials.length, cost: cost }); } catch (e) { resolved = [{ error: String(e && e.message || e).slice(0, 200) }]; }
+    if (resolved.length) await fileAlert(env, "info", "deploy-guard auto-resolved " + resolved.length + " ticket(s): " + resolved.map(function (r) { return r.id; }).join(","));
+  }
   var ok = fp.ok ? 1 : 0;
   try { await auditRun(env, "INSERT INTO fleet_heartbeat (worker,version,ts,ok) VALUES (?1,?2,?3,?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok", [WORKER, VERSION, nowIso(), ok]); } catch (e) {}
-  var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, anomalies: uniq, filed: filed, active_locks: Object.keys(active), recent_denials: denials.length, registry_added: regAdded, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
+  var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, anomalies: uniq, filed: filed, resolved: resolved, non_canonical: nonCanon, active_locks: Object.keys(active), recent_denials: denials.length, registry_added: regAdded, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
   try { await env.FLEET_CONFIG.put(SNAP_KEY, JSON.stringify(snapshot), { expirationTtl: 604800 }); } catch (e) {}
   try { await env.FLEET_CONFIG.put(REPORT_KEY, JSON.stringify(report), { expirationTtl: 604800 }); } catch (e) {}
   if (fp.ok) { try { var dn2 = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var z = 0; z < dn2.keys.length; z++) { await env.FLEET_CONFIG.delete(dn2.keys[z].name); } } catch (e) {} }

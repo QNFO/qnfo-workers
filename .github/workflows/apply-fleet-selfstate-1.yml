@@ -71,5 +71,5 @@ jobs:
         run: |
           set -euo pipefail
           grep -c 'FLEET-SELFSTATE-1' qnfo-fleet-control/worker.js
-          grep -n 'var VERSION = "0.4.39-selfstate-1";' qnfo-fleet-control/worker.js
+          grep -n 'async function selfState(env)' qnfo-fleet-control/worker.js
           grep -n 'if (p === "/state")' qnfo-fleet-control/worker.js

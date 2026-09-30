@@ -31,6 +31,7 @@ TARGETS = ["qnfo-ops/worker.js", "qnfo-ops/deployed-current.worker.js"]
 
 OLD_VERSION = 'var VERSION = "2.38.3-schema-first";'
 NEW_VERSION = 'var VERSION = "2.38.4-registry-health";'
+LANDED_MARKERS = ("OPS-REGISTRY-HEALTH-1", "registry-http", "unprobedCount")
 
 A1_OLD = '''async function fleetStatus(env) {
   const out = await Promise.all(FLEET.map(async function(f) {'''
@@ -122,8 +123,11 @@ def main():
             print("skip (absent): " + rel)
             continue
         src = p.read_text()
-        if NEW_VERSION in src:
-            print("already applied: " + rel + " (idempotent no-op)")
+        # APPLIER-LANDED-MARKERS-1 (2026-09-30, GitHub issue #139): see apply-fleet-selfstate-1.py -- the exact
+        # NEW_VERSION literal stops matching once qnfo-ops advances past 2.38.4, so re-runs went RED at R1 while
+        # the feature was live. Decide "already landed" from version-independent feature markers.
+        if NEW_VERSION in src or all(m in src for m in LANDED_MARKERS):
+            print("already applied: " + rel + " (feature markers present; idempotent no-op)")
             continue
         for label, old, new in EDITS:
             n = src.count(old)

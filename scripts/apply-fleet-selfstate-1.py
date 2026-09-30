@@ -39,6 +39,7 @@ from pathlib import Path
 TARGETS = ["qnfo-fleet-control/worker.js"]
 
 OLD_VERSION = 'var VERSION = "0.4.38-reorg-dispose-guards1";'
+LANDED_MARKERS = ("FLEET-SELFSTATE-1", "async function selfState(env)", 'if (p === "/state")')
 NEW_VERSION = 'var VERSION = "0.4.39-selfstate-1";'
 
 SELFSTATE_FN = r'''
@@ -175,8 +176,12 @@ def main():
         if not p.exists():
             fail("target missing: " + rel)
         src = p.read_text()
-        if NEW_VERSION in src:
-            print("already applied: " + rel + " (idempotent no-op)")
+        # APPLIER-LANDED-MARKERS-1 (2026-09-30, GitHub issue #142): idempotency keyed on the exact NEW_VERSION
+        # literal broke as soon as the worker moved PAST it (0.4.39-selfstate-1 -> 0.4.39-selfstate-obs4 ...):
+        # every re-run then fell through to the E1 anchor, found 0 matches and went RED although the feature
+        # was live. The feature's own markers are version-independent, so they decide "already landed".
+        if NEW_VERSION in src or all(m in src for m in LANDED_MARKERS):
+            print("already applied: " + rel + " (feature markers present; idempotent no-op)")
             continue
         for label, old, new in EDITS:
             n = src.count(old)

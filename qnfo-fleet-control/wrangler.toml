@@ -7,7 +7,10 @@
 name = "qnfo-fleet-control"
 main = "worker.js"
 compatibility_date = "2026-09-08"
-compatibility_flags = ["nodejs_compat"]
+# FLEET-PROBE-1042-1 (2026-09-30): without global_fetch_strictly_public a subrequest from this worker
+# to another *.q08.workers.dev worker is Cloudflare error 1042 (same-zone), served as HTTP 404. Measured:
+# fleet_state_snapshots recorded workers_up=3/38 because only custom-domain probes succeeded.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 workers_dev = true
 
 # MERGE WAVE A (2026-09-11): qnfo-fleet-advisor + qnfo-fleet-calibrator + qnfo-fleet-deploy merged

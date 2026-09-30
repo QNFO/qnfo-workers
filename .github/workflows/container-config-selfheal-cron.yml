@@ -83,6 +83,21 @@ name: container-config-selfheal-cron
 #   [[containers]] block, when GET /settings is unreadable, or when the PUT is rejected.
 #
 # NO SKIP TOKEN EVER: a self-heal commit must not carry [skip ci] (CI-TRIGGER-SKIP-1).
+#
+# RESTORE-ONLY-WHEN-RED-1 (2026-09-30) -- REVISION 3.
+#   Revisions 1-2 re-PUT qnfo-containers-pilot on EVERY run, and this workflow runs after every push
+#   to main. Measured: the last container.error was 2026-09-29T19:45:21Z, container.exec kept
+#   succeeding for the next ~23 h, and yet the worker was re-uploaded once per push -- each upload
+#   restarted the container under other agents and was filed by qnfo-deploy-guard as
+#   DEPLOY-UNLOGGED-MUTATION + DEPLOY-UNCOORDINATED-DEPLOY (agent_issues 1503/1609/1610).
+#   The verdict could never be GREEN either (no PILOT_TOKEN; /settings.containers is null even for a
+#   running container), so the job acted without ever knowing whether anything was broken.
+#   FIX: scripts/container_restore_gate.py decides FIRST, on positive evidence of the #1485 class
+#   (/health not 200, /status ctx.container-undefined, or a fresh container.error as the newest
+#   container event in cloud_ops_events). Healthy -> no PUT. And when it does restore, the restore
+#   script now takes the deploy-guard lock and writes a fleet_deploys row (RESTORE-LEDGER-1).
+#   The outcome artifact is committed only when a restore ran or the verdict CHANGED, so a healthy
+#   fleet no longer writes one commit to main per push.
 
 on:
   schedule:
@@ -170,9 +185,15 @@ jobs:
           print(json.dumps(out, indent=2))
           PY
 
+      - name: Gate - restore only on positive evidence of the #1485 class (RESTORE-ONLY-WHEN-RED-1)
+        id: gate
+        if: steps.pre.outputs.rc == 'ok'
+        continue-on-error: true
+        run: python3 scripts/container_restore_gate.py | tee /tmp/gate.json
+
       - name: Self-heal - restore [[containers]] via /content metadata (CONTAINER-CONFIG-RESTORE-3)
         id: restore
-        if: steps.pre.outputs.rc == 'ok'
+        if: steps.pre.outputs.rc == 'ok' && steps.gate.outputs.need_restore == 'true'
         continue-on-error: true
         run: |
           set -o pipefail
@@ -289,6 +310,8 @@ jobs:
               "issue": 1485,
               "pre_rc": os.environ.get("PRE_RC", ""),
               "restore_exit": os.environ.get("RESTORE_EXIT", ""),
+              "gate_need_restore": os.environ.get("GATE_NEED", ""),
+              "gate_reason": os.environ.get("GATE_REASON", ""),
               "settings_readback_rc": os.environ.get("VERIFY_RC", ""),
               "probe_rc": os.environ.get("PROBE_RC", ""),
               "verdict": os.environ.get("VERDICT_RC", ""),
@@ -305,16 +328,29 @@ jobs:
         env:
           PRE_RC: ${{ steps.pre.outputs.rc }}
           RESTORE_EXIT: ${{ steps.restore.outputs.restore_exit }}
+          GATE_NEED: ${{ steps.gate.outputs.need_restore }}
+          GATE_REASON: ${{ steps.gate.outputs.reason }}
           VERIFY_RC: ${{ steps.verify.outputs.rc }}
           PROBE_RC: ${{ steps.probe.outputs.rc }}
           VERDICT_RC: ${{ steps.verdict.outputs.rc }}
 
       - name: Commit outcome artifact (race-safe, no skip token)
         if: always()
+        env:
+          GATE_NEED: ${{ steps.gate.outputs.need_restore }}
+          VERDICT_RC: ${{ steps.verdict.outputs.rc }}
         run: |
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "fleet-bot@qnfo.org"
+          # RESTORE-ONLY-WHEN-RED-1: commit only when a restore ran or the verdict changed. The artifact
+          # always differs (ts/head), so "changed bytes" used to mean "one commit per push".
+          prev_verdict="$(git show HEAD:ci-status/container-config-selfheal-cron.json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("verdict",""))' 2>/dev/null || true)"
+          if [ "${GATE_NEED:-}" != "true" ] && [ "$prev_verdict" = "${VERDICT_RC:-}" ]; then
+            echo "no restore and verdict unchanged ($prev_verdict) - not committing (RESTORE-ONLY-WHEN-RED-1)"
+            git checkout -- ci-status/container-config-selfheal-cron.json 2>/dev/null || true
+            exit 0
+          fi
           git add ci-status/container-config-selfheal-cron.json || true
           if git diff --cached --quiet; then
             echo "artifact unchanged"
@@ -337,6 +373,8 @@ jobs:
         run: |
           {
             echo "## container-config-selfheal-cron (issue #1485) - revision 2"
+            echo ""
+            echo "gate: need_restore=\`${{ steps.gate.outputs.need_restore }}\` -- ${{ steps.gate.outputs.reason }}"
             echo ""
             echo "pre=\`${{ steps.pre.outputs.rc }}\` restore_exit=\`${{ steps.restore.outputs.restore_exit }}\` settings_readback=\`${{ steps.verify.outputs.rc }}\` probe=\`${{ steps.probe.outputs.rc }}\` **verdict=\`${{ steps.verdict.outputs.rc }}\`**"
             echo ""

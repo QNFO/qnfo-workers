@@ -148,6 +148,10 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # AUTODEPLOY-CANONICAL-1: with this key --apply deploys through qnfo-ops POST /ops/deploy (lock + ledger +
+      # schedules + declared compat flags) instead of raw_put.py, so auto-deploys stop registering as
+      # DEPLOY-NON-CANONICAL-DEPLOY in qnfo-deploy-guard. raw_put.py remains the fallback when it is absent.
+      OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -205,14 +209,31 @@ jobs:
             exit 0
           fi
           git commit -m "chore(fleet-autoaudit): scheduled self-audit artifact [skip ci]"
-          for i in 1 2 3 4 5; do
+          # ARTIFACT-PUSH-CONFLICT-1 (2026-09-30, GitHub issue #145): `git pull --rebase` CONFLICTED on
+          # audits/fleet-autoaudit-<date>.json (run 36752410754) because a concurrent run -- a workflow_run
+          # run checks out the SHA of its triggering event, i.e. a stale base -- had already committed a
+          # newer copy of the same file; `set -e` then killed the step mid-rebase. The artifact is a
+          # SNAPSHOT (latest wins), never a merge, so on rejection re-base by construction: stash this
+          # run's audits/, hard-reset to origin/main, restore the files, recommit. A content conflict is
+          # impossible in that sequence.
+          snap="$(mktemp -d)"
+          cp -a audits/. "$snap/"
+          for i in 1 2 3 4 5 6; do
             if git push origin HEAD:main; then
               echo "artifact pushed on attempt $i"
               exit 0
             fi
-            echo "push rejected on attempt $i; rebasing onto origin/main"
-            git pull --rebase --autostash origin main
+            echo "push rejected on attempt $i; re-applying the snapshot onto origin/main"
             sleep $((i * 3))
+            git fetch origin main
+            git reset --hard origin/main
+            cp -a "$snap/." audits/
+            git add audits/
+            if git diff --cached --quiet; then
+              echo "origin/main already carries an identical artifact - nothing to push"
+              exit 0
+            fi
+            git commit -m "chore(fleet-autoaudit): scheduled self-audit artifact [skip ci]"
           done
-          echo "::error::audit artifact push failed after 5 attempts (concurrent writers)"
+          echo "::error::audit artifact push failed after 6 attempts (concurrent writers)"
           exit 1

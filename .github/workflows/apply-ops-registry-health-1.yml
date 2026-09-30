@@ -65,5 +65,5 @@ jobs:
         run: |
           set -euo pipefail
           grep -n 'OPS-REGISTRY-HEALTH-1' qnfo-ops/worker.js
-          grep -n 'var VERSION = "2.38.4-registry-health";' qnfo-ops/worker.js
+          grep -n 'unprobedCount' qnfo-ops/worker.js
           grep -n 'registry-http' qnfo-ops/worker.js
