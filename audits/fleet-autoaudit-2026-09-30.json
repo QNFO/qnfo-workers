@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 23:25:28",
+  "audited_at": "2026-09-30 23:30:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -26,14 +26,7 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.43-uncached-crons",
-        "repo": "0.4.42-uncached-crons",
-        "worker": "qnfo-fleet-control"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -411,7 +404,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -497,6 +490,11 @@
         "dir": "qnfo-email",
         "version": "2.1.8-owner-dmarc-gate",
         "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.44-uncached-crons-json",
+        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -1142,11 +1140,11 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.42-uncached-crons",
+      "before": "0.4.44-uncached-crons-json",
       "http": 200,
-      "live": "0.4.43-uncached-crons",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.4.44-uncached-crons-json",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
