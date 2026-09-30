@@ -100,6 +100,37 @@ VALIDATES_RE = re.compile(
 )
 
 
+# PUSH-RACE-NO-RETRY-1 (warn-only): a step that pushes to main with no rebase and no retry loop. main takes a
+# commit every few minutes from the fleet's own bots, so a bare `git push origin HEAD:main` loses the race
+# (non-fast-forward) and the work computed in that step is silently lost. Measured 2026-09-30: findings #59,
+# #61 and #123 were exactly this, each an applier whose patch never landed.
+PUSH_TO_MAIN_RE = re.compile(r"git push[^\n]*(?:HEAD:main|origin main)")
+# Protected = a rebase in the step, or a SHELL loop (`for|while|until ... do ... done`) that contains the push.
+# The bare words for/while also appear in Python heredocs (`for k in ...`), which masked an unprotected
+# push in restore-container-config-now on the first version of this rule.
+PUSH_RETRY_RE = re.compile(r"rebase|(?s:\b(?:for|while|until)\b[^\n]*\n?[^\n]*\bdo\b.*?git push.*?\bdone\b)")
+
+
+def unprotected_main_pushers(files: list[str]) -> list[str]:
+    """Workflows with a step that pushes to main and has neither a rebase nor a retry loop in that step."""
+    out: list[str] = []
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+            for j in (doc.get("jobs") or {}).values():
+                for s in (j.get("steps") or []):
+                    run = join_continuations(s.get("run") or "")
+                    if PUSH_TO_MAIN_RE.search(run) and not PUSH_RETRY_RE.search(run):
+                        out.append(os.path.basename(p))
+                        raise StopIteration
+        except StopIteration:
+            continue
+        except Exception:  # warn-only pass: never let it break the lint
+            continue
+    return out
+
+
 def unvalidated_bundle_committers(files: list[str]) -> list[str]:
     out: list[str] = []
     for p in files:
@@ -284,6 +315,13 @@ def main() -> int:
               "group and cancel-in-progress: true (a run on one ref cancels the in-flight run on every other ref; "
               "put ${{ github.ref }} in the group):")
         for name in xref:
+            print(f"  WARN {name}")
+        print()
+    nopush = unprotected_main_pushers(files)
+    if nopush:
+        print(f"WARN PUSH-RACE-NO-RETRY-1: {len(nopush)} workflow(s) push to main in a step with no rebase and no retry "
+              "loop (main moves every few minutes; a bare push loses the race and the work is lost):")
+        for name in nopush:
             print(f"  WARN {name}")
         print()
     if bad:

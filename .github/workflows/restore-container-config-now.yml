@@ -155,7 +155,16 @@ jobs:
           git config user.email "ci@qnfo.org"
           git add ci-status/restore-container-config-now.json
           git commit -m "ci(status): restore-container-config-now outcome" || echo "no change to commit"
-          git push origin HEAD:main || echo "push failed"
+          # PUSH-RACE-RETRY-2: a lost race used to drop this status artifact silently ("push failed").
+          # Rebase and retry; it stays non-fatal so a status write can never fail the gate below.
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then pushed=1; break; fi
+            echo "push attempt $i rejected, rebasing"
+            git pull --rebase origin main || true
+            sleep $((i * 3))
+          done
+          if [ "$pushed" != "1" ]; then echo "::warning::status push failed after 5 attempts"; fi
 
       - name: FINAL GATE - containers must be live
         if: always()
