@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.38-registry-refresh";
+var VERSION = "1.7.39-agissue-count";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2943,9 +2943,14 @@ async function redHtml(env) {
     }
   } catch (e) {
   }
-  let agOpen = [], dodByOwner = [], gtdByOwner = null, dispatch = [], ilOpen = null;
+  let agOpen = [], agOpenCount = null, dodByOwner = [], gtdByOwner = null, dispatch = [], ilOpen = null;
   try {
     agOpen = await d1all(env.AUDIT, "SELECT id, title, category, priority FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled') ORDER BY priority DESC, id DESC LIMIT 60") || [];
+    // DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1 (2026-09-30, agent_issues #1663): the panel below rendered
+    // agOpen.length, i.e. the LIMIT-60 PAGE SIZE, as the open-issue TOTAL. With 89 open
+    // rows it reported 60. Never derive a total from a truncated page: count separately.
+    const agCountRows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
+    agOpenCount = agCountRows && agCountRows.length ? agCountRows[0].n : null;
   } catch (e) {
   }
   try {
@@ -2982,7 +2987,8 @@ async function redHtml(env) {
   H.push('<tr><td>gtd_register</td><td class="' + (gtdOpen > 0 ? "bad" : "ok") + '">' + (gtdOpen != null ? gtdOpen : "?") + "</td><td>" + (gtdByOwner ? esc(gtdByOwner.map(function(x) {
     return x.owner + ":" + x.n;
   }).join(", ")) : "") + "</td></tr>");
-  H.push('<tr><td>agent_issues (D1)</td><td class="' + (agOpen.length > 0 ? "bad" : "ok") + '">' + agOpen.length + "</td><td>not closed/resolved/wontfix</td></tr>");
+  const agOpenShown = agOpenCount != null ? agOpenCount : agOpen.length;
+  H.push('<tr><td>agent_issues (D1)</td><td class="' + (agOpenShown > 0 ? "bad" : "ok") + '">' + agOpenShown + "</td><td>not closed/resolved/wontfix" + (agOpenCount != null && agOpenCount > agOpen.length ? " (listing shows newest " + agOpen.length + ")" : "") + "</td></tr>");
   H.push('<tr><td>fleet_issue_dispatch (queued)</td><td class="' + (dispOpen > 0 ? "bad" : "ok") + '">' + dispOpen + "</td><td>" + esc(dispatch.map(function(x) {
     return (x.exec_state || "undispatched") + ":" + x.n;
   }).join(", ")) + "</td></tr>");
