@@ -39,7 +39,7 @@ on:
     types: [applier-rot-triage]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: applier-rot-triage
@@ -108,6 +108,26 @@ jobs:
             ci-status/applier-doctor.json
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Commit the ci-status artifact back
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          git add ci-status/applier-rot-triage.json ci-status/applier-doctor.json
+          if git diff --cached --quiet; then echo "no status change"; exit 0; fi
+          git commit -m "ci(status): applier-rot-triage [skip ci]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "status pushed on attempt $i"
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "status push failed after 3 attempts"
+          exit 0
 
       - name: Fail closed on an unfiled finding
         if: steps.tri.outputs.rc != '0'
