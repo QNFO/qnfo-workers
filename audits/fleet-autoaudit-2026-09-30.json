@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-09-30 17:37:12",
+  "audited_at": "2026-09-30 18:13:13",
   "d1_write_failures": [],
-  "d1_writes_ok": 112,
+  "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -31,7 +31,12 @@
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [],
+    "no_health_route": [
+      {
+        "dir": "qnfo-autonomy-scorer",
+        "worker": "qnfo-autonomy-scorer"
+      }
+    ],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -941,6 +946,14 @@
       "match": 0,
       "note": "NOT_DEPLOYED",
       "worker": "qnfo-auditor"
+    },
+    "qnfo-autonomy-scorer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NO_HEALTH_ROUTE",
+      "worker": "qnfo-autonomy-scorer"
     },
     "qnfo-autopilot": {
       "before": null,
