@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.37-opsprobe-writeback1";
+var VERSION = "0.4.38-reorg-dispose-guards1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var GH = "https://raw.githubusercontent.com/QNFO/";
 var FETCH_TIMEOUT_MS = 8e3;
@@ -1911,7 +1911,10 @@ async function budgetAudit(env, names) {
       // NET-ZERO delete-worker candidates for workers with an explicit retirement intent AND zero 24h
       // traffic (disposeRetired re-checks bindings + protectedNames + output-contract before deleting).
       try {
-        var oitem = "node-budget-overage:" + out.over.join("; ");
+        // handoff 29754 P4: the dedupe key must be STABLE. out.over carries the live count
+        // (e.g. "workers live=42 cap=36 (+6)"), so a count change produced a NEW work-queue row
+        // every cycle. Normalize digits out of the KEY; the live text stays in evidence (out.note).
+        var oitem = "node-budget-overage:" + out.over.map(function(s) { return String(s).replace(/[0-9]+/g, "#"); }).join("; ");
         var oex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(oitem).first();
         if (!oex) {
           await env.AUDIT.prepare("INSERT INTO reorg_work_queue (item, evidence, owner, due, state, created_at) VALUES (?1,?2,'deepchat-reorg',date('now','+14 day'),'OPEN',datetime('now'))").bind(oitem, out.note).run();
@@ -2431,7 +2434,24 @@ async function disposeRetired(env) {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
     var token = env.CF_API_TOKEN;
     if (!token) return;
-    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1, "qnfo-goal-author": 1, "qnfo-cloud-ops": 1, "qnfo-outreach": 1, "qnfo-kaizen": 1, "qnfo-lifecycle": 1, "qnfo-intent-orchestrator": 1, "qnfo-backlog-exec": 1, "qnfo-research-exec": 1, "qnfo-paper-indexer": 1, "qnfo-infra": 1, "qnfo-fleet-dashboard": 1, "qnfo-paper-reviser": 1 };
+    // DEGENERATE-DETECTION-SOURCE-1 (2026-09-30, handoff 29754 P4): worker_invocations is the ONLY
+    // usage signal used to justify a destructive retire, and it has held ~1 row fleet-wide, so an
+    // "0 invocations/24h" read is VACUOUS (it would make every worker look unused). Prove the source
+    // is non-degenerate BEFORE acting: a degenerate source yields UNKNOWN, never a delete verdict.
+    // Fail closed: skip disposal this cycle and log once per day.
+    var srcHealth = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN created_at > datetime('now','-2 day') THEN 1 ELSE 0 END) AS recent FROM worker_invocations").first();
+    var srcRecent = srcHealth ? Number(srcHealth.recent || 0) : 0;
+    if (srcRecent < 10) {
+      try {
+        var sdup = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE 'DEGENERATE-DETECTION-SOURCE-1:%' AND ts > datetime('now','-1 day')").first();
+        if (!sdup || Number(sdup.n || 0) === 0) {
+          await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind("DEGENERATE-DETECTION-SOURCE-1: worker_invocations recent=" + srcRecent + " (<10) -> usage UNKNOWN, disposal skipped").run();
+        }
+      } catch (e) {
+      }
+      return;
+    }
+    var protectedNames = { "qnfo-fleet-control": 1, "qnfo-ops": 1, "qnfo-email": 1, "qnfo-deploy-guard": 1, "personal-api": 1, "personal-companion": 1, "qnfo-cloud-ops": 1, "qnfo-outreach": 1, "qnfo-kaizen": 1, "qnfo-lifecycle": 1, "qnfo-intent-orchestrator": 1, "qnfo-backlog-exec": 1, "qnfo-research-exec": 1, "qnfo-paper-indexer": 1, "qnfo-infra": 1, "qnfo-fleet-dashboard": 1, "qnfo-paper-reviser": 1 };
     var q = await env.AUDIT_DB.prepare("SELECT id, item FROM reorg_work_queue WHERE state='OPEN' AND item LIKE 'delete-worker:%'").all();
     var targets = {};
     for (var i = 0; i < (q.results || []).length; i++) {
