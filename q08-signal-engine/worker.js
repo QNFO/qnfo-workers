@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.31-urlsafe"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.32-titlepromote"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -290,7 +290,7 @@ function buildPrompt(friction, fewShot, recentStructures) {
     parts.push(REGISTER_EXEMPLAR);
   }
   if (recentStructures && recentStructures.length > 0) {
-    parts.push("\n--- RECENT STRUCTURES ON THIS SITE (BANNED PATTERNS — diverge from every one) ---");
+    parts.push("\n--- RECENT SECTION SKELETONS ON THIS SITE (BANNED PATTERNS — diverge from every one; these are H2/H3 heading shapes, never title shapes) ---");
     for (var s of recentStructures.slice(0, 6)) {
       parts.push(s.slice(0, 200));
     }
@@ -317,6 +317,9 @@ var COMPOSE_MODELS = [
 
 async function compose(env, prompt) {
   var lastErr;
+  // TITLE-PROMOTE-1: compliance-driven fallback -- keep the best draft across
+  // models rather than returning the first long-enough one gate-unchecked.
+  var best = null;
   for (var modelId of COMPOSE_MODELS) {
     try {
       var resp = await env.AI.run(modelId, {
@@ -326,11 +329,16 @@ async function compose(env, prompt) {
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
       var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
-      if (text && text.length > 200) return { text, model: modelId };
+      if (!text || text.length <= 200) continue;
+      var norm = normalizeDraft(text);
+      var g = gate(norm);
+      if (g.ok) return { text: norm, model: modelId };
+      if (!best || norm.length > best.text.length) best = { text: norm, model: modelId, problems: g.problems };
     } catch (e) {
       lastErr = e;
     }
   }
+  if (best) return best;
   throw new Error("all compose models failed: " + String(lastErr && lastErr.message || lastErr).slice(0, 200));
 }
 
@@ -388,6 +396,31 @@ var LABEL_TITLE_RES = [
   /^the\s+\w+\s+\w*\s*(?:trap|paradox|illusion|fallacy|myth|dilemma|tyranny|consequence|problem|curse|temptation|revenge)\b/i,
   /:\s+(?:how|why)\s+(?:[a-z]+\s+){0,3}(?:drives?|shapes?|creates?|breeds?|undermines?|erodes?|rewards?|punishes?)\b/i
 ];
+
+
+// TITLE-PROMOTE-1 (v0.7.32). 11 of the 15 gate_failed cycles (engine_runs 190-204)
+// failed on "no H1 title": gate() requires /^#\s+/m while the corrective-retry
+// prompt asked for "NO section headers", which the writer applied to the H1 too.
+// Promote an unambiguous leading title line instead of discarding a complete essay.
+// Deterministic: invents nothing, rewrites at most one line, idempotent.
+function normalizeDraft(text) {
+  if (!text) return text;
+  var t = String(text).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  if (/^#\s+\S/m.test(t)) return t;
+  var lines = t.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    if (/^#{2,6}\s/.test(line)) break;
+    if (/^(worth your time:|[-*_]{3,}\s*$)/i.test(line)) break;
+    if (line.length <= 100 && !/[.!?]$/.test(line) && line.split(/\s+/).length <= 14) {
+      lines[i] = "# " + line;
+      return lines.join("\n");
+    }
+    break;
+  }
+  return t;
+}
 
 function gate(text) {
   // Enforce LONG-FORM PROSE with a hook, not lists:
@@ -636,7 +669,7 @@ async function generate(env) {
   // Gate — one corrective retry on failure
   var gateResult = gate(piece.text);
   if (!gateResult.ok) {
-    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, NO section headers — fixing only these issues ---\n" + gateResult.problems.join("; ");
+    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay — fixing only these issues ---\n" + gateResult.problems.join("; ");
     var retryPiece = null;
     try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
@@ -984,7 +1017,7 @@ export default {
       var piece = await compose(env, prompt);
       var gateResult = gate(piece.text);
       if (!gateResult.ok) {
-        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, NO section headers — fixing only these issues ---\n" + gateResult.problems.join("; ");
+        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay — fixing only these issues ---\n" + gateResult.problems.join("; ");
         var retryPiece = null;
         try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
         if (retryPiece && retryPiece.text) {

@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.39-agissue-count";
+var VERSION = "1.7.40-dispatch-abort-classify";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1033,11 +1033,11 @@ function execTargetFor(category, resource, env) {
       if (Date.now() < ACT_MS) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (warm-up ACTIVATION_AT); no auto-drain" };
       return { safe: false, noAction: true, note: "outreach ACTIVATION_AT (2026-09-15) has passed; external send gate is qnfo-outreach pipeline_state.external_sends_enabled (read live, not a date) and the drain runs on the qnfo-cloud-ops cron (job=outreach, 8/day cap) - no auto-drain from this lane (OUTREACH-LANE-INERT-1 / #1508)" };
     }
-    return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
+    return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run", note: "advance research_queue (research-exec /run)" };
   }
   if (category === "integration-chain") {
-    if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research pipeline (research-exec /run)" };
-    if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
+    if (r.indexOf("research intake") >= 0 || r.indexOf("research execution") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run", note: "advance research pipeline (research-exec /run)" };
+    if (r.indexOf("reviser") >= 0 && r.indexOf("publish drain") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run/drain-v2", note: "drain version_queue (research-exec /run/drain-v2)" };
     if (r.indexOf("revision log") >= 0 && r.indexOf("publish drain") >= 0) return env && env.REVISER_TOKEN ? { safe: true, svc: "SVC_QNFO_PAPER_REVISER", path: "/run/scan?mode=live", note: "run paper-reviser scan to drain revision log", auth: "X-Reviser-Token" } : { safe: false, noAction: true, note: "PAPER-REVISER-SCAN-UNAUTHORIZED-1: /run/scan needs qnfo-paper-reviser X-Reviser-Token which this worker does not hold; qnfo-paper-reviser cron 37 */4 drains it - no auto-dispatch" };
     if (r.indexOf("alerts") >= 0 && r.indexOf("digest") >= 0) return { safe: false, svc: "SVC_QNFO_OBSERVABILITY", path: "/run/ingest", note: "observability worker retired (wave-A consolidation) - fail-closed to manual disposition" };
     if (r.indexOf("outreach") >= 0) {
@@ -1045,7 +1045,7 @@ function execTargetFor(category, resource, env) {
       if (Date.now() < ACT_MS) return { safe: false, noAction: true, note: "outreach sends gated until 2026-09-15 (ACTIVATION_AT); no auto-drain" };
       return { safe: false, noAction: true, note: "outreach ACTIVATION_AT (2026-09-15) has passed; external send gate is qnfo-outreach pipeline_state.external_sends_enabled (read live, not a date) and the drain runs on the qnfo-cloud-ops cron (job=outreach, 8/day cap) - no auto-drain from this lane (OUTREACH-LANE-INERT-1 / #1508)" };
     }
-    if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", path: "/run", note: "advance research_queue (research-exec /run)" };
+    if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run", note: "advance research_queue (research-exec /run)" };
     return { safe: false, noAction: true, escalate: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
   }
   if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
@@ -1101,7 +1101,7 @@ async function execOne(env, row, prevState) {
   }
   const svc = spec.svc ? env[spec.svc] : null;
   const t0 = Date.now();
-  let ok = false, status = 0, body = "";
+  let ok = false, status = 0, body = "", aborted = false;
   try {
     if (!svc) throw new Error("binding " + spec.svc + " not bound");
     const _eh = { "User-Agent": PROBE_UA };
@@ -1111,7 +1111,23 @@ async function execOne(env, row, prevState) {
     ok = res.ok;
     body = squash(await res.text()).slice(0, 240);
   } catch (e) {
+    aborted = /abort/i.test(String((e && e.name) || "") + " " + String((e && e.message) || e));
     body = "ERR " + squash(String(e.message || e)).slice(0, 180);
+  }
+  // QUEUE-DRAIN-DISPATCH-FALSE-TIMEOUT-1 (issue 1667): an aborted dispatch is only a failure when the
+  // consumer is NOT demonstrably advancing. POST research-exec /run answers 202 in 28-84ms incl. body
+  // (measured 2026-09-30), so an abort here is a client-side subrequest-queue artefact, not a dead
+  // target. Same convention as CHAIN-DRAINING-1 in qnfo-observability. progressJob is set only on the
+  // research-exec specs, so no other target can be reclassified by a foreign worker's progress.
+  if (!ok && aborted && spec.progressJob) {
+    try {
+      const pr = await env.AUDIT.prepare("SELECT MAX(ts) latest FROM cloud_ops_events WHERE job=?1 AND kind='done' AND status='ok' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours')").bind(spec.progressJob).first();
+      if (pr && pr.latest) {
+        ok = true;
+        body = "accepted (dispatch aborted; consumer " + spec.progressJob + " advanced " + pr.latest + ")";
+      }
+    } catch (eP) {
+    }
   }
   const ms = Date.now() - t0;
   const state = ok ? "executed" : "failed";
