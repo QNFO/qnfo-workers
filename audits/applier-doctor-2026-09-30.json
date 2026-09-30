@@ -2,9 +2,9 @@
  "counts": {
   "already-applied": 56,
   "error": 8,
-  "stale-anchor": 12,
-  "superseded": 5,
-  "undetermined": 9
+  "stale-anchor": 11,
+  "superseded": 6,
+  "undetermined": 11
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -49,7 +49,7 @@
    "rc": 1,
    "script": "scripts/affirm-veto-sentence-scope-patch.py",
    "tail": [
-    "FAIL (post-write assertion): adjacency-only veto survived in qnfo-ops/worker.js"
+    "FAIL (fail-closed): VERSION literal occurrences = 0 in qnfo-ops/worker.js"
    ],
    "verdict": "undetermined"
   },
@@ -133,6 +133,9 @@
   {
    "changed_files": [
     " M ci-status/apply-pending-report.json",
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js",
+    " M qnfo-ops/scripts/guard-timebudget.sh",
     " M qnfo-ops/worker.js"
    ],
    "declared_signals": [
@@ -142,7 +145,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(1): toolbudget-canonical-patch.py",
+    "LANDED(3): schedules-register-repair-patch.py, tool-budget-pending-toolcalls-patch.py, toolbudget-canonical-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -175,7 +178,7 @@
    "rc": 3,
    "script": "scripts/cf-worker-deploy-preserve-meta-patch.py",
    "tail": [
-    "FAIL (fail-closed): anchor A3 metadata rebuild + fail-closed guard matched 0 times, expected exactly 1"
+    "FAIL (fail-closed): could not find a 2.37.<minor> VERSION literal in /home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/worker.js"
    ],
    "verdict": "stale-anchor"
   },
@@ -544,6 +547,21 @@
   },
   {
    "changed_files": [],
+   "declared_signals": [
+    "MIRROR-PARITY-RESTORE-1",
+    "TOOL-BUDGET-PENDING-1",
+    "OPS-D1-SCHEMA-HINT-FULL-1",
+    "CONTAINER-CONFIG-DROPPED-1"
+   ],
+   "rc": 3,
+   "script": "scripts/mirror-parity-restore-patch.py",
+   "tail": [
+    "FAIL-CLOSED: source worker.js lacks required markers: ['TOOL-BUDGET-PENDING-1', 'summarizePendingToolCalls', 'BUDGET-AUTO-CONTINUE-1']"
+   ],
+   "verdict": "undetermined"
+  },
+  {
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/notdeployed-existence-probe-patch.py",
    "tail": [
@@ -559,7 +577,7 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=380292 marker=1",
+    "  worker.js bytes=381117 marker=1",
     "  deployed-current.worker.js bytes=378404 marker=1"
    ],
    "verdict": "already-applied"
@@ -871,6 +889,23 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js"
+   ],
+   "declared_signals": [
+    "SCHEDULES-REGISTER-REPAIR-1"
+   ],
+   "rc": 0,
+   "script": "scripts/schedules-register-repair-patch.py",
+   "tail": [
+    "PATCHED: qnfo-cloud-ops/worker.js",
+    "PATCHED: qnfo-cloud-ops/deployed-current.worker.js",
+    "changed=2"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "rc": 0,
    "script": "scripts/self-fetch-guard-patch.py",
@@ -939,28 +974,34 @@
    "verdict": "error"
   },
   {
-   "changed_files": [],
-   "rc": 3,
+   "changed_files": [
+    " M qnfo-ops/worker.js"
+   ],
+   "outcome_present_in": [
+    "qnfo-ops/worker.js :: TOOL-BUDGET-PENDING-1"
+   ],
+   "rc": 0,
    "script": "scripts/tool-budget-pending-toolcalls-patch.py",
    "tail": [
-    "TOOL-BUDGET-PENDING-1: FAIL-CLOSED anchor occurrence != 1 (found 0) for: 'var MAX_TOOL_ITERS = 40;'"
+    "TOOL-BUDGET-PENDING-1: patched qnfo-ops/worker.js (381115 -> 383873 bytes)"
    ],
-   "verdict": "stale-anchor"
+   "verdict": "superseded"
   },
   {
    "changed_files": [
-    " M qnfo-ops/worker.js"
+    " M qnfo-ops/scripts/guard-timebudget.sh"
    ],
    "declared_signals": [
     "REPO_ROOT/.",
     "TOOLBUDGET-CANONICAL-1",
+    "Ops tool loop reached its time budget after",
     "envInt(this.env, \"OPS_NONSTREAM_DEADLINE_MS\", 3e4)",
     "ops_tool_budget_bail"
    ],
    "rc": 0,
    "script": "scripts/toolbudget-canonical-patch.py",
    "tail": [
-    "LANDED worker.js: MAX_TOOL_ITERS -> 40, OPS_NONSTREAM_DEADLINE_MS -> 3e5, bail-record instrumentation added, VERSION 2.37.31-continuation-inherit -> 2.38.0-toolbudget-canonical"
+    "LANDED: MAX_TOOL_ITERS already 40, OPS_NONSTREAM_DEADLINE_MS already 3e5, bail-record already present, guard-timebudget.sh hardened (notation-aware, both arms)"
    ],
    "verdict": "undetermined"
   },
@@ -990,25 +1031,27 @@
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
   "scripts/patch-container-binding-guard-1.py",
   "scripts/raw-put-schedules-patch.py",
-  "scripts/run-gate-internal-patch.py",
-  "scripts/tool-budget-pending-toolcalls-patch.py"
+  "scripts/run-gate-internal-patch.py"
  ],
  "superseded": [
   "scripts/attachguard-xml-form-patch.py",
   "scripts/container-restore5-repair-bindings-patch.py",
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/patch-404hint-list-1.py",
-  "scripts/patch-cron-only-class-2.py"
+  "scripts/patch-cron-only-class-2.py",
+  "scripts/tool-budget-pending-toolcalls-patch.py"
  ],
- "total": 90,
- "ts": "2026-09-30T08:05:13.983Z",
+ "total": 92,
+ "ts": "2026-09-30T08:07:47.978Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
+  "scripts/mirror-parity-restore-patch.py",
   "scripts/panel6-mediated-count-patch.py",
+  "scripts/schedules-register-repair-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/toolbudget-canonical-patch.py",
   "scripts/version-anchor-normalize-patch.py"
