@@ -15,7 +15,7 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 [triggers]
 crons = ["10 1 * * *"]
 
-[[services]]
-binding = "FLEET_FEED"
-service = "qnfo-fleet-feed"
-environment = "production"
+# FLEET_FEED service binding removed 2026-09-30: its target worker qnfo-fleet-feed was deleted in
+# REORG-2026-09-25 wave-5b, and Cloudflare rejects any upload that declares a binding to a missing
+# worker (error 10144), which blocked every canonical deploy of this worker. worker.js guards on
+# env.FLEET_FEED, so the feed call is simply skipped.
