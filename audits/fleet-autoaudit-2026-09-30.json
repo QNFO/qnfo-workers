@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 13:55:50",
+  "audited_at": "2026-09-30 14:05:41",
   "d1_write_failures": [],
   "d1_writes_ok": 110,
   "guard": {
@@ -28,10 +28,10 @@
     "cron_only_count": 2,
     "drift": [
       {
-        "dir": "qnfo-containers-pilot",
-        "live": "1.0.5-container-import-fix",
-        "repo": "1.0.4-container-ctx-guard",
-        "worker": "qnfo-containers-pilot"
+        "dir": "qnfo-ops",
+        "live": "2.38.2-tool-meta-error-first",
+        "repo": "2.38.1-toolbudget-relock",
+        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
@@ -479,6 +479,11 @@
         "worker": "qnfo-cloud-ops"
       },
       {
+        "dir": "qnfo-containers-pilot",
+        "version": "1.0.5-container-import-fix",
+        "worker": "qnfo-containers-pilot"
+      },
+      {
         "dir": "qnfo-deploy-guard",
         "version": "1.3.15-ms-failclosed",
         "worker": "qnfo-deploy-guard"
@@ -537,11 +542,6 @@
         "dir": "qnfo-observability",
         "version": "1.2.10-research-queue-enum",
         "worker": "qnfo-observability"
-      },
-      {
-        "dir": "qnfo-ops",
-        "version": "2.38.1-toolbudget-relock",
-        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1017,11 +1017,11 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.4-container-ctx-guard",
+      "before": "1.0.5-container-import-fix",
       "http": 200,
       "live": "1.0.5-container-import-fix",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-containers-pilot"
     },
     "qnfo-ddocs-indexer": {
@@ -1251,9 +1251,9 @@
     "qnfo-ops": {
       "before": "2.38.1-toolbudget-relock",
       "http": 200,
-      "live": "2.38.1-toolbudget-relock",
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.38.2-tool-meta-error-first",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
