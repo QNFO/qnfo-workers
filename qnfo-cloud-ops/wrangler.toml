@@ -93,12 +93,12 @@ bucket_name = "d-drive"
 # Re-sync offsets at the 2026-10-25 CET flip (+2 CEST -> +1 CET).
 #
 # CRON-LIMIT-CORRECTED-1 (2026-09-30, qnfo-ops remediation of issue 1665).
-# The previous comment here cited a guard `CF_MAX_CRONS = 3` in
-# scripts/raw_put.py and asserted Cloudflare accepts at most 3 cron triggers per
-# Worker. Both claims were stale. Corrected against live evidence:
-#   (a) No `CF_MAX_CRONS` exists in scripts/raw_put.py (repo HEAD 8719134,
-#       verified with `grep -rn CF_MAX_CRONS`). The current guard is
-#       `CF_ACCOUNT_MAX_CRONS = 250`.
+# The previous comment here cited a now-deleted per-Worker cron-cap guard
+# constant in scripts/raw_put.py and asserted Cloudflare accepts at most 3 cron
+# triggers per Worker. Both claims were stale. Corrected against live evidence:
+#   (a) No per-Worker cron-cap constant exists in scripts/raw_put.py (repo HEAD
+#       8719134). The current guard is `CF_ACCOUNT_MAX_CRONS = 250`, which
+#       encodes the per-ACCOUNT cap.
 #   (b) The cap is per ACCOUNT, not per Worker: Cloudflare Workers docs "Limits"
 #       (last updated 2026-09-05) list "Number of Cron Triggers per account:
 #       5 (Free) / 250 (Paid)". No per-Worker cron cap is documented.
