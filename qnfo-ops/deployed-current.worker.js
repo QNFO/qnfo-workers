@@ -120,6 +120,18 @@ function summarizePendingToolCalls(toolCalls) {
 }
 var OPS_JOB_COST_CAP_DEFAULT = 0.75; // OPS-JOB-COST-CAP-1 (2026-09-26): hard per-job USD ceiling for the async job-workflow loop. job-workflow was 54% of logged ops spend ($83.85 / 223 jobs; max single job $1.68; up to 11.99M cumulative prompt tokens) and ran unbounded on frontier models with no per-job ceiling. Env override: OPS_JOB_COST_CAP_USD. Bounds each job; breaches stop the loop and return JOB_BUDGET_EXCEEDED instead of continuing to spend.
 var MAX_TOOL_RESULT_CHARS = 16384;
+
+// TOOLBUDGET-BAIL-RECORD-1 (2026-09-30): budget-bail observability. The tool
+// loop is forced into its final round when the round cap or the wall-clock
+// deadline is hit. Before this recorder existed that event left no trace in
+// qnfo-audit, so a caller-visible "tool budget exhausted before these could
+// run" could not be diagnosed from the fleet's own logs.
+function opsToolBudgetBail(env, scope, iter, maxIters, deadlineHit) {
+  try {
+    return env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(randId("evt-"), iso(), "ops_tool_budget_bail", scope, snippet({ iter: iter, maxIters: maxIters, deadlineHit: !!deadlineHit, version: VERSION }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { return null; }
+}
+__name(opsToolBudgetBail, "opsToolBudgetBail");
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
@@ -288,6 +300,17 @@ async function logEscalation(env, taskClass, fromModel, toModel, kind, reason) {
   } catch (e) { console.log("model_ladder_escalations insert failed:", e && e.message || e); }
 }
 __name(logEscalation, "logEscalation");
+// TOOLBUDGET-BAIL-1 (2026-09-30): D3a machine-readable bail record. The bail path
+// already writes a model_ladder_escalations row (kind='tool-budget-exhausted'); this
+// adds the cloud_ops_events row so a bail is countable in the fleet event stream
+// instead of only being visible as the user-facing 'tool budget exhausted' symptom.
+async function logToolBudgetBail(env, strategy, n, names, maxIters, deadlineHit) {
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+      .bind(randId("evt-"), iso(), "ops_tool_budget_bail", "tool-budget-exhausted", snippet({ strategy, pending: n, tools: names, maxIters, deadlineHit: !!deadlineHit }, 600), "qnfo-ops", "ok").run();
+  } catch (e) { console.log("ops_tool_budget_bail insert failed:", e && e.message || e); }
+}
+__name(logToolBudgetBail, "logToolBudgetBail");
 // L0 DETERMINISTIC-FIRST: answer well-known single-turn ops intents with zero model calls.
 // Patterns are deliberately tight so agent-loop canaries ("Reply exactly: ...", tool directives) never match.
 async function deterministicOpsAnswer(env, text) {
@@ -4492,7 +4515,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const withTools = iter < maxIters && !deadlineHit;
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
-        if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+        if (!withTools) {
+          if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
+          work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+        }
         const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
         if (isStream) {
@@ -4538,6 +4564,8 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           escalations += pendingToolCalls.length;
           toolLog.push({ name: "(budget-exhausted)", ok: 0, summary: "not executed: " + pendingToolCalls.map(function(p) { return p.name; }).join(",") });
           ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "tool-budget-exhausted", pendingToolCalls.length + " tool call(s) not executed (budget spent): " + pendingToolCalls.map(function(p) { return p.name; }).join(",")));
+          // TOOLBUDGET-BAIL-1: emit the D3a bail record (cloud_ops_events kind=ops_tool_budget_bail).
+          ctx.waitUntil(logToolBudgetBail(env, strategy, pendingToolCalls.length, pendingToolCalls.map(function(p) { return p.name; }).join(","), maxIters, !!deadlineHit));
         } else if (toolCalls && withTools) {
           streamedTokens = false;
           const serverCalls = toolCalls.filter(function(tc) {
@@ -5398,7 +5426,10 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       }
       const withTools = turn < maxTurns;
       const capNow = withTools ? Math.min(answerCap, Math.max(2e3, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(work)) * 0.2)))) : answerCap;
-      if (!withTools) work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+      if (!withTools) {
+        if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "job-workflow", turn, maxTurns, false);
+        work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+      }
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "20 seconds", backoff: "exponential" }, timeout: "15 minutes" }, async function() {

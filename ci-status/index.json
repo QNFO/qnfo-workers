@@ -24,10 +24,12 @@
     "fleet-autoaudit-d1ok-v2.json",
     "fleet-autoaudit-d1ok.json",
     "github-write-409-retry.json",
+    "guard-timebudget.json",
     "ops-deploy-ledger.json",
     "panel6-mediated-count-2.json",
     "preserve-worker-meta.json",
     "raw-put-schedules.json",
+    "remediation-consumer.json",
     "research-exec-terminal-rescue.json",
     "restore-container-config-1485.json",
     "restore-container-config-bindings.json",
@@ -42,6 +44,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 39,
+  "count": 41,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
