@@ -153,6 +153,20 @@ def classify(text: str, rc: int) -> str:
             return "error"
         if "fail-closed" in low or "anchor occurrence != 1" in low:
             return "stale-anchor"
+        # APPLIER-CLASSIFY-SIGNATURE-2 (issue #1673, 2026-10-01).
+        # The v1 signature list above was too narrow: five appliers emitted an
+        # explicit fail-closed ANCHOR message that matched no signature and were
+        # therefore filed as `error`, so anchor drift masqueraded as a crash --
+        # the mirror image of the #1466 defect this predicate replaced. The drift
+        # signature must now co-occur with `anchor` or a VERSION literal, so a
+        # genuine application failure cannot be absorbed by this branch.
+        if ("anchor" in low or "version" in low) and re.search(
+            r"(count != 1|matched 0 times|occurs 0 times|occurrences = 0|"
+            r"expected exactly 1|anchor not found|pre-patch version|"
+            r"anchor drift|anchor-invalid)",
+            low,
+        ):
+            return "stale-anchor"
         # CLASSIFY-FAILCLOSED-DEFAULT-1 (issue #1466 residual, 2026-09-29).
         # The bare `"does not match" in low` predicate classified ANY message
         # carrying that phrase as benign anchor drift, so a genuine application
@@ -166,6 +180,67 @@ def classify(text: str, rc: int) -> str:
     if "already applied" in low and "patched" not in low:
         return "already-applied"
     return "ran"
+
+
+# APPLIER-RETIRE-2 (issue #1673, 2026-10-01): the retire lifecycle.
+#
+# WHY RUNTIME-VERIFIED AND NOT A STATIC LIST
+#   The first attempt at this list (scripts/applier-classify-signature-and-retire-patch.py,
+#   2026-09-29) never landed: it pins the pre-2026-09-30 classify() text, so it
+#   exits 3 on every run, and the list was lost with it. A static list is also
+#   unsafe in principle -- the tree moves after the list is written, so a stale
+#   entry can silently drop a fix that was never applied. Each entry therefore
+#   carries `evidence = (file, token)` and the applier is skipped ONLY IF that
+#   token is found in that file AT RUN TIME. If the evidence is gone, the applier
+#   runs normally. Retirement is fail-closed; execution is fail-open. A generic
+#   token (a table name, whitespace) is never accepted as evidence.
+RETIRED_APPLIERS = [
+    {
+        "script": "applier-doctor-classify-patch.py",
+        "evidence": ("scripts/applier-doctor.py", "APPLIER-DOCTOR-2"),
+        "reason": (
+            "superseded: the doctor's classify outcome landed as APPLIER-DOCTOR-2 "
+            "(with APPLIER-DOCTOR-FALSE-POSITIVE-CLASS-1); the rewrite RENAMED the "
+            "marker the applier pins (APPLIER-DOCTOR-CLASSIFY-2), which is why "
+            "supersession was structurally undetectable"
+        ),
+    },
+    {
+        "script": "applier-doctor-outcome-aware-patch.py",
+        "evidence": ("scripts/applier-doctor.py", "OUTCOME-AWARE-2"),
+        "reason": (
+            "superseded: the outcome-aware doctor landed as OUTCOME-AWARE-2; the "
+            "applier pins APPLIER-DOCTOR-OUTCOME-AWARE-1, the pre-rename marker"
+        ),
+    },
+    {
+        "script": "fleet-autoaudit-v4-envelope-patch.py",
+        "evidence": ("scripts/fleet-autoaudit.py", "REST-ENVELOPE-OK-1"),
+        "reason": (
+            "superseded: two of its three declared outcome markers "
+            "(REST-ENVELOPE-OK-1, AUDIT-STALE-ROWS-1) are present in the target; "
+            "it now aborts with 'anchor drift ... expected (1,1,1,1), got (1,0,0,0)'"
+        ),
+    },
+]
+
+
+def _retire_evidence_ok(root: Path, entry: dict) -> bool:
+    """APPLIER-RETIRE-2: skip an applier ONLY when its superseding evidence is
+    present in the tree RIGHT NOW. Absent evidence -> do not retire (run it)."""
+    try:
+        rel, token = entry["evidence"]
+    except Exception:  # noqa: BLE001
+        return False
+    if not rel or not token or len(str(token).strip()) < 8:
+        return False
+    fp = root / rel
+    if not fp.is_file():
+        return False
+    try:
+        return str(token) in fp.read_text(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def main() -> int:
@@ -185,10 +260,26 @@ def main() -> int:
         print(f"{MARKER}: no patch scripts found under {scripts_dir}")
         return 3
 
-    print(f"{MARKER} scanning {len(pats)} patch script(s) under {scripts_dir}")
     results = []
     landed = []
     reverted_any = []
+    retired_seen = []
+
+    # APPLIER-RETIRE-2: retire superseded one-shot appliers, but only on
+    # evidence present in the tree at this moment (see RETIRED_APPLIERS).
+    # Retirement is fail-closed (needs evidence); execution is fail-open.
+    for _entry in RETIRED_APPLIERS:
+        if _entry["script"] in {p.name for p in pats} and _retire_evidence_ok(root, _entry):
+            retired_seen.append(_entry["script"])
+    if retired_seen:
+        pats = [p for p in pats if p.name not in set(retired_seen)]
+        print(f"{MARKER} retired {len(retired_seen)} applier(s) whose outcome is already in the tree")
+        for _n in retired_seen:
+            print(f"  RETIRED {_n}")
+    else:
+        print(f"{MARKER} retired 0 applier(s) - no supersession evidence found")
+
+    print(f"{MARKER} scanning {len(pats)} patch script(s) under {scripts_dir}")
 
     for path in pats:
         before = snapshot(root)
@@ -257,6 +348,10 @@ def main() -> int:
         summary[r["verdict"]] = summary.get(r["verdict"], 0) + 1
 
     print(f"SUMMARY total={len(results)} {summary}")
+    if retired_seen:
+        # Visibility is the fix for the silent half of APPLIER-ROT-1: a retired
+        # applier must never look like an applier that simply did not run.
+        print("RETIRED(" + str(len(retired_seen)) + "): " + ", ".join(retired_seen))
     if landed:
         print("LANDED(" + str(len(landed)) + "): " + ", ".join(landed))
     else:
@@ -279,6 +374,7 @@ def main() -> int:
                 "total": len(results),
                 "summary": summary,
                 "landed": landed,
+                "retired": retired_seen,
                 "reverted": reverted_any,
                 "results": results,
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
