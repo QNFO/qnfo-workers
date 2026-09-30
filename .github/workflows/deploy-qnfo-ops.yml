@@ -70,6 +70,13 @@ name: deploy-qnfo-ops
 
 on:
   push:
+    # DEPLOY-BRANCH-FILTER-1 (2026-09-30): this workflow ends in `raw_put.py qnfo-ops`, a
+    # PRODUCTION deploy. Without a branch filter any push to ANY branch that touched the paths
+    # below deployed that branch's qnfo-ops/worker.js: bringing PR branches up to date from main
+    # (which changes qnfo-ops/worker.js on the branch) deployed qnfo-ops from #87 and #97 (run
+    # 36728140486, 14:20Z; harmless only because the content equalled main). Production deploys
+    # come from main; use workflow_dispatch for anything else.
+    branches: [main]
     paths:
       - '.github/workflows/deploy-qnfo-ops.yml'
       - 'qnfo-ops/worker.js'
@@ -145,7 +152,13 @@ jobs:
             has_v=$(grep -cF "$V" /tmp/live.js 2>/dev/null || true)
             has_g=$(grep -cF 'd1ReadOnlyGuard' /tmp/live.js 2>/dev/null || true)
             has_old=$(grep -cF 'mutation keywords are rejected anywhere' /tmp/live.js 2>/dev/null || true)
-            LIVEV=$(grep -o 'var VERSION = "[^"]*";' /tmp/live.js 2>/dev/null | head -1 | sed 's/.*"\(.*\)".*/\1/')
+            # VERIFY-SILENT-ABORT-1: under GitHub's default `bash -e` plus `set -o pipefail` this
+            # assignment exits non-zero whenever the live read has no `var VERSION` line (empty or
+            # error body, different bundling), killing the step 0.3s in with no diagnostic. That is
+            # the `unknown` failure class: the run went red before printing the attempt line below.
+            # `|| true` lets the loop print bytes/has_version and retry, and the final error then
+            # carries the evidence.
+            LIVEV=$(grep -o 'var VERSION = "[^"]*";' /tmp/live.js 2>/dev/null | head -1 | sed 's/.*"\(.*\)".*/\1/' || true)
             LB="$(build_of "$LIVEV")"
             echo "attempt=$i bytes=$bytes expect=$V live=$LIVEV has_version=$has_v has_guard=$has_g has_legacy_msg=$has_old"
             # Guard invariants are unconditional: they never pass on a bad bundle.

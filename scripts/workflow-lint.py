@@ -73,6 +73,47 @@ def join_continuations(text: str) -> str:
     return re.sub(r"\\[ \t]*\n[ \t]*", " ", text)
 
 
+# BRANCH-FILTER-1 (warn-only): a workflow whose `push` trigger is not restricted to `main` but
+# whose steps deploy to production or push to main runs those steps for a push to ANY branch
+# that touches its trigger paths. Measured 2026-09-30: 36 of 95 push-triggered workflows, and
+# run 36728140486 deployed qnfo-ops from a PR branch that had merely been updated from main.
+# Not blocking yet: each affected workflow lists its own file in its trigger paths, so editing
+# it re-fires it on main; fixing all 36 in one merge would launch ~35 applier runs at once.
+DEPLOYS_RE = re.compile(
+    r"raw_put\.py|wrangler(?:@\d+)? deploy|canonical_deploy\.py|git push origin HEAD:main"
+    r"|api\.cloudflare\.com/client/v4/accounts/\S*/workers/scripts/\S*(?:content|schedules)"
+)
+
+
+def unfiltered_deployers(files: list[str]) -> list[str]:
+    """Workflows with a push trigger not restricted to main whose run steps deploy or push to main."""
+    out: list[str] = []
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+            on = doc.get(True, doc.get("on")) if isinstance(doc, dict) else None
+            if isinstance(on, str):
+                on = {on: None}
+            elif isinstance(on, list):
+                on = {k: None for k in on}
+            if not isinstance(on, dict) or "push" not in on:
+                continue
+            branches = (on["push"] or {}).get("branches")
+            if branches and set(branches) <= {"main"}:
+                continue
+            runs = " ".join(
+                (s.get("run") or "")
+                for j in (doc.get("jobs") or {}).values()
+                for s in (j.get("steps") or [])
+            )
+            if DEPLOYS_RE.search(join_continuations(runs)):
+                out.append(os.path.basename(p))
+        except Exception:  # warn-only pass: never let it break the lint
+            continue
+    return out
+
+
 def run_blocks(doc: dict) -> list[str]:
     out: list[str] = []
     jobs = doc.get("jobs")
@@ -155,6 +196,13 @@ def main() -> int:
         print(f"OK     {p} jobs={sorted(jobs)}" + (f" [{'; '.join(notes)}]" if notes else ""))
 
     print()
+    risky = unfiltered_deployers(files)
+    if risky:
+        print(f"WARN BRANCH-FILTER-1: {len(risky)} workflow(s) deploy or push to main but their push trigger "
+              "is not restricted to `main` (a push to any branch touching their paths runs them):")
+        for name in risky:
+            print(f"  WARN {name}")
+        print()
     if bad:
         print(f"=== WORKFLOW-LINT FAILED: {len(bad)} invalid workflow file(s) ===")
         for b in bad:
