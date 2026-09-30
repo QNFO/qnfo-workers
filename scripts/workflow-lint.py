@@ -119,6 +119,39 @@ def unvalidated_bundle_committers(files: list[str]) -> list[str]:
     return out
 
 
+def cross_ref_cancellers(files: list[str]) -> list[str]:
+    """CONCURRENCY-CROSS-REF-1 (warn-only): a workflow that runs for a push or PR on any branch,
+    has a constant concurrency group (no `${{ ... }}` in it) and cancel-in-progress: true. A run
+    on one ref then cancels the in-flight run on every other ref. Measured 2026-09-30:
+    version-bump-guard run 36732557644 was cancelled 4 s after it started by an unrelated ref,
+    leaving the `guard` check `cancelled` on a commit nothing had rejected."""
+    out: list[str] = []
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+            c = doc.get("concurrency") if isinstance(doc, dict) else None
+            if not isinstance(c, dict) or c.get("cancel-in-progress") is not True:
+                continue
+            if "${{" in str(c.get("group", "")):
+                continue
+            on = doc.get(True, doc.get("on"))
+            if isinstance(on, str):
+                on = {on: None}
+            elif isinstance(on, list):
+                on = {k: None for k in on}
+            if not isinstance(on, dict):
+                continue
+            push = on.get("push")
+            branches = push.get("branches") if isinstance(push, dict) else None
+            main_only_push = "push" not in on or bool(branches and set(branches) <= {"main"})
+            if "pull_request" in on or not main_only_push:
+                out.append(os.path.basename(p))
+        except Exception:  # warn-only pass: never let it break the lint
+            continue
+    return out
+
+
 def unfiltered_deployers(files: list[str]) -> list[str]:
     """Workflows with a push trigger not restricted to main whose run steps deploy or push to main."""
     out: list[str] = []
@@ -243,6 +276,14 @@ def main() -> int:
               "syntax/import check (pushes made with the default GITHUB_TOKEN do not trigger the guard workflows, "
               "so validate before committing):")
         for name in unval:
+            print(f"  WARN {name}")
+        print()
+    xref = cross_ref_cancellers(files)
+    if xref:
+        print(f"WARN CONCURRENCY-CROSS-REF-1: {len(xref)} workflow(s) run for any ref with a constant concurrency "
+              "group and cancel-in-progress: true (a run on one ref cancels the in-flight run on every other ref; "
+              "put ${{ github.ref }} in the group):")
+        for name in xref:
             print(f"  WARN {name}")
         print()
     if bad:
