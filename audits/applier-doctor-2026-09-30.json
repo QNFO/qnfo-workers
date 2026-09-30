@@ -4,7 +4,7 @@
   "error": 7,
   "stale-anchor": 11,
   "superseded": 4,
-  "undetermined": 8
+  "undetermined": 9
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -131,7 +131,9 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json"
+    " M ci-status/apply-pending-report.json",
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js"
    ],
    "declared_signals": [
     ".",
@@ -140,7 +142,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(0): nothing to apply - main is current",
+    "LANDED(1): outreach-selector-terminal-status-patch.py",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: container-restore5-repair-bindings-patch.py, driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -596,6 +598,23 @@
    "verdict": "already-applied"
   },
   {
+   "changed_files": [
+    " M qnfo-cloud-ops/deployed-current.worker.js",
+    " M qnfo-cloud-ops/worker.js"
+   ],
+   "declared_signals": [
+    "OUTREACH-SELECTOR-TERMINAL-STATUS-1"
+   ],
+   "rc": 0,
+   "script": "scripts/outreach-selector-terminal-status-patch.py",
+   "tail": [
+    "  + invalid branch writes status=skipped-invalid",
+    "WROTE qnfo-cloud-ops/deployed-current.worker.js (3 edit(s))",
+    "OUTREACH-SELECTOR-TERMINAL-STATUS-1: 6 edit(s) applied"
+   ],
+   "verdict": "undetermined"
+  },
+  {
    "changed_files": [],
    "declared_signals": [
     "PANEL6-MEDIATED-COUNT-1",
@@ -1029,14 +1048,15 @@
   "scripts/dashboard-gate-failopen-patch.py",
   "scripts/patch-cron-only-class-2.py"
  ],
- "total": 94,
- "ts": "2026-09-30T08:00:54.536Z",
+ "total": 95,
+ "ts": "2026-09-30T08:02:30.978Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
   "scripts/driftguard-server-version-patch.py",
   "scripts/github409-variant-reread-patch.py",
+  "scripts/outreach-selector-terminal-status-patch.py",
   "scripts/panel6-mediated-count-patch.py",
   "scripts/selfheal-rate-aware-patch.py",
   "scripts/version-anchor-normalize-patch.py"
