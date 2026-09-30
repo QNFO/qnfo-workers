@@ -1,16 +1,16 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "93d670684ca7d4e9c1cf79dd29f15803583145cd",
-  "total": 86,
+  "head": "6a5802a0b44586c4c8ed5b0ccc3f2c2b3a39804e",
+  "total": 87,
   "summary": {
-    "already-applied": 54,
+    "already-applied": 55,
     "error": 10,
     "stale-anchor": 21,
     "landed": 1
   },
   "landed": [
-    "cloud-ops-cron-alias-dispatch-patch.py"
+    "email-approval-gate-patch.py"
   ],
   "reverted": [
     {
@@ -33,7 +33,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -42,7 +42,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -159,7 +159,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "OK applied=0"
     },
     {
@@ -183,11 +183,11 @@
     {
       "script": "cloud-ops-cron-alias-dispatch-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "TOTAL_EDITS 6"
+      "tail": "TOTAL_EDITS 0"
     },
     {
       "script": "cloud-ops-cron-dow-patch.py",
@@ -195,7 +195,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -213,7 +213,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "[done] changes: none (already applied)"
     },
     {
@@ -222,7 +222,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -287,7 +287,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "ALREADY APPLIED - nothing to do"
     },
     {
@@ -296,7 +296,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED (DEPLOY-GUARD-WRAP-2) - nothing to do"
     },
     {
@@ -343,8 +343,17 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.05,
+      "seconds": 0.07,
       "tail": "FAIL: anchor 'CONST' occurs 0 times (expected exactly 1)"
+    },
+    {
+      "script": "email-approval-gate-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "reverted": [],
+      "seconds": 0.2,
+      "tail": "TOTAL_EDITS 6"
     },
     {
       "script": "fleet-autoaudit-d1ok-patch-v2.py",
@@ -379,7 +388,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "SUMMARY S1=OK S2=OK S3=OK"
     },
     {
@@ -388,7 +397,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.14,
+      "seconds": 0.16,
       "tail": "CHANGED=0"
     },
     {
@@ -424,7 +433,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "FAIL-CLOSED: the short-circuiting `if (!curSha) break;` survived in qnfo-ops/worker.js"
     },
     {
@@ -451,7 +460,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "  invariant coverage lives in scripts/drift-guard-notdeployed-worker-patch.py (#1383)"
     },
     {
@@ -487,7 +496,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "APPLY-TRIGGER-1490-1: benign no-op. The applier will land scripts/*patch*.py (notably patch-ops-metadata-preserve-and-schema-hint.py -> #1490/#1487/#1485) in this same run."
     },
     {
@@ -559,7 +568,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "RESULT: applied=0 already=2 (nothing to do)"
     },
     {
@@ -577,7 +586,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "DONE: 0 file(s) patched, marker=GITHUB-READ-404-HINT-1"
     },
     {
@@ -613,7 +622,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "VERSION-QUOTE-1 already applied - no-op"
     },
     {
@@ -676,7 +685,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.09,
+      "seconds": 0.1,
       "tail": "changed_files: 0"
     },
     {
@@ -721,7 +730,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -739,7 +748,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "nothing to do"
     },
     {
@@ -784,7 +793,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 183344}"
     },
     {
@@ -806,5 +815,5 @@
       "tail": "  count=0          after = snapshot(root)"
     }
   ],
-  "ts": "2026-09-30T07:19:38Z"
+  "ts": "2026-09-30T07:47:17Z"
 }
