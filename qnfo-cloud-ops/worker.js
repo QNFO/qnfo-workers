@@ -1544,7 +1544,7 @@ async function jobOutreach(env) {
   const CAP = 3;
   let rows;
   try {
-    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status IN ('pending','needs-email') ORDER BY created_at ASC LIMIT 10").all();
+    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason FROM outreach_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT 10").all();
   } catch (e) {
     return { status: "error", notes: { error: String(e && e.message || e) } };
   }
@@ -1570,10 +1570,14 @@ async function jobOutreach(env) {
       const dup = await env.AUDIT.prepare("SELECT 1 AS x FROM contact_ledger WHERE email=?1 UNION ALL SELECT 1 AS x FROM outreach_log WHERE email=?1 LIMIT 1").bind(email).first();
       if (dup) {
         out.skipped_dupe++;
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-dup', error='duplicate contact (contact_ledger/outreach_log)' WHERE id=?1 AND status='pending'").bind(r.id).run().catch(function() {
+        });
         continue;
       }
       if (!validEmail(email)) {
         out.errors.push({ id: r.id, error: "invalid email " + email });
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-invalid', error='invalid recipient syntax: ' || ?1 WHERE id=?2 AND status='pending'").bind(String(email).slice(0, 120), r.id).run().catch(function() {
+        });
         continue;
       }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
