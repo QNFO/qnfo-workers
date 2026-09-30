@@ -16,6 +16,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
+import { Container } from "cloudflare:workers";
+
 var VERSION = "1.0.4-container-ctx-guard";
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
@@ -68,7 +70,7 @@ async function logEvent(env, kind, text, meta, status) {
   }
 }
 __name(logEvent, "logEvent");
-var ShellContainer = class {
+class ShellContainer extends Container {
   static {
     __name(this, "ShellContainer");
   }
@@ -341,8 +343,6 @@ var worker_default = {
     return stub.fetch(request);
   }
 };
-export {
-  ShellContainer,
-  worker_default as default
-};
+export { ShellContainer };
+export default worker_default;
 //# sourceMappingURL=worker.js.map

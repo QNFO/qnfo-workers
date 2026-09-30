@@ -2218,12 +2218,19 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((err) => console.log("self-register err", err && err.message || err)));
       }
+      // CLOUD-OPS-HEALTH-AUTH-1 (#1471): this route is handled before the auth
+      // gate below, so it used to disclose binding/secret presence and the
+      // full cron map to anonymous callers. Serve a minimal public body; the
+      // detailed body requires a valid bearer token.
+      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION };
+      const healthToken = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      if (!auth(healthToken, env)) {
+        return new Response(JSON.stringify(publicBody), { headers: { "Content-Type": "application/json", ...CORS } });
+      }
       const off = amsOffset(/* @__PURE__ */ new Date());
       const crons = buildCrons(off).map((c) => c.cron + " -> " + c.job);
       return new Response(JSON.stringify({
-        ok: true,
-        worker: WORKER_NAME,
-        version: VERSION,
+        ...publicBody,
         jobs: Object.keys(JOBS),
         ams_offset: off,
         crons,
