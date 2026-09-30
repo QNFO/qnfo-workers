@@ -31,9 +31,15 @@ permissions:
   issues: write        # close the resolved finding
   actions: read        # read run conclusions - this is the green evidence
 
+# RATE-LIMIT-AWARE-1 (2026-09-30): was cancel-in-progress: false, which queued one full pass per push. This
+# job runs on every push to main and each pass spends dozens of API calls from the repo's shared GITHUB_TOKEN
+# budget (~1000/hour, also used by every other workflow and by CodeQL's SARIF upload). During a burst of merges
+# that queue helped exhaust the budget: CodeQL failed with "API rate limit exceeded for installation" and this
+# reaper's own calls failed (closed=0, every finding logged "at None"). A pass is idempotent and only the newest
+# state matters, so a newer push now supersedes an older pass instead of queueing behind it.
 concurrency:
   group: ci-watchdog-resolve-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   resolve:
