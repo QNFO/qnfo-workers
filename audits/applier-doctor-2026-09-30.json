@@ -1,9 +1,9 @@
 {
  "counts": {
-  "already-applied": 74,
+  "already-applied": 77,
   "error": 8,
   "stale-anchor": 11,
-  "undetermined": 10
+  "undetermined": 9
  },
  "errored": [
   "scripts/dashboard-drift-failclosed-patch.py",
@@ -19,23 +19,15 @@
  "never_landed": [],
  "results": [
   {
-   "changed_files": [
-    " M qnfo-ops/worker.js"
-   ],
-   "declared_signals": [
-    "ADR-009-AUDIT-TRAIL-UNWRITTEN-1",
-    "audit_trail",
-    "AUDIT_TRAIL_ACTIONS",
-    "logAuditTrail"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/adr009-audit-trail-unwritten-1-patch.py",
    "tail": [
-    "OK qnfo-ops/worker.js: VERSION 2.38.14-do-loop-budget-parity -> 2.38.15-audit-trail-writer",
-    "WROTE qnfo-ops/worker.js (403877 -> 405797 bytes)",
-    "OK: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 complete, 1 target(s) changed"
+    "== ADR-009-AUDIT-TRAIL-UNWRITTEN-1 ==",
+    "already applied qnfo-ops/worker.js",
+    "OK: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 complete, 0 target(s) changed"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -150,9 +142,7 @@
   },
   {
    "changed_files": [
-    " M ci-status/apply-pending-report.json",
-    " M qnfo-ops/deployed-current.worker.js",
-    " M qnfo-ops/worker.js"
+    " M ci-status/apply-pending-report.json"
    ],
    "declared_signals": [
     ".",
@@ -161,7 +151,7 @@
    "rc": 0,
    "script": "scripts/apply-pending-patches.py",
    "tail": [
-    "LANDED(2): adr009-audit-trail-unwritten-1-patch.py, toolbudget-permanent-durability-patch.py",
+    "LANDED(0): nothing to apply - main is current",
     "::warning::REVERT-COLLATERAL-1 reverted path-scoped writes from: driftguard-label-and-lifecycle-sot-patch.py",
     "wrote ci-status/apply-pending-report.json"
    ],
@@ -483,7 +473,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 403877 (unchanged)",
+    "bytes: 405797 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -505,7 +495,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (403879 bytes)",
+    "mirror pair byte-identical (405799 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -548,8 +538,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=403879 marker=1",
-    "  deployed-current.worker.js bytes=403879 marker=1"
+    "  worker.js bytes=405799 marker=1",
+    "  deployed-current.worker.js bytes=405799 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -686,6 +676,17 @@
     "B already-applied qnfo-research-exec/worker.js",
     "B already-applied qnfo-research-exec/deployed-current.worker.js",
     "changed=0"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/patch-fleet-exec-tick-unauth-1.py",
+   "tail": [
+    "fleet-exec/worker.js                          already-applied ",
+    "fleet-exec/deployed-current.worker.js         already-applied ",
+    "OK FLEET-EXEC-TICK-UNAUTH-1"
    ],
    "verdict": "already-applied"
   },
@@ -1087,6 +1088,15 @@
   },
   {
    "changed_files": [],
+   "rc": 0,
+   "script": "scripts/unauth-trigger-1-patch.py",
+   "tail": [
+    "SUPERSEDED: UNAUTH-TRIGGER-1 already closed by patch-fleet-exec-tick-unauth-1.py (commit 81581bf); no-op"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
    "declared_signals": [
     "REPO_ROOT/.",
     "normalize_version_anchors"
@@ -1114,10 +1124,9 @@
   "scripts/run-gate-internal-patch.py"
  ],
  "superseded": [],
- "total": 103,
- "ts": "2026-09-30T20:02:04.114Z",
+ "total": 105,
+ "ts": "2026-09-30T20:44:07.213Z",
  "undetermined": [
-  "scripts/adr009-audit-trail-unwritten-1-patch.py",
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
   "scripts/container-start-race-patch.py",
