@@ -1,0 +1,69 @@
+name: apply-outreach-attempt-cap-1
+
+# OUTREACH-ATTEMPT-CAP-1 (issue #1562). Server-side applier: the ops endpoint cannot
+# round-trip a ~127 KB worker.js through its output channel (live GW_MAX_OUT=32768,
+# issue #1531), so the fix ships as a small, fail-closed, idempotent patch script.
+#
+# WHY THIS ONE IS DIFFERENT FROM apply-outreach-throughput-1.yml
+#   That applier's run 36735258890 failed at step "Commit and push" while its
+#   "Apply patch" step SUCCEEDED -- i.e. the patch was valid and the push was what
+#   broke. main is NOT protected (branches/main reports protected:false), so the cause
+#   was a non-fast-forward race: this repo takes bot pushes from many actors and main
+#   advances within seconds. The push step here therefore fetches and rebases before
+#   every attempt and retries, and the whole job is a no-op once the patch is present.
+#
+# Self-retiring: once the patch has landed, the apply step prints an idempotent no-op
+# and the job exits without committing. The schedule below is a retry guard for the
+# race above and can be deleted once a green run has committed the patch.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/apply-outreach-attempt-cap-1.py'
+      - '.github/workflows/apply-outreach-attempt-cap-1.yml'
+  schedule:
+    - cron: '11 */2 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-outreach-attempt-cap-1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch (fail-closed, idempotent)
+        run: python3 scripts/apply-outreach-attempt-cap-1.py
+
+      - name: Commit and push (fetch + rebase + retry)
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-ops-bot"
+          git config user.email "ops@qnfo.org"
+          if git diff --quiet; then
+            echo "already applied -- nothing to commit (idempotent no-op)"
+            exit 0
+          fi
+          git add -A
+          git commit -m "fix(outreach): OUTREACH-ATTEMPT-CAP-1 attempt-capped terminal email lookup, needs-contact drainable, CAP 3->8, window 10->25 (#1562, #1508)"
+          for i in $(seq 1 8); do
+            git fetch origin main --quiet || true
+            git rebase origin/main || { echo "REBASE CONFLICT on attempt $i"; git rebase --abort || true; exit 1; }
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i, retrying"
+            sleep 15
+          done
+          echo "push failed after 8 attempts"
+          exit 1
