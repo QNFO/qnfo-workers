@@ -1,10 +1,10 @@
-var VERSION="2.1.6-approval-gate-1"/* SCHEDULES-LIVE-1 */;
+var VERSION="2.1.7-ops-zone-fallback"/* SCHEDULES-LIVE-1 */;
 const BODY_MAX_TEXT=1e4,BODY_MAX_HTML=2e4;
 export default{async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"",headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=classifyAddress(to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));const spam=(filter.action==="spam")||heuristicSpam(from,subject);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText})}catch(err){console.error("processCommand",err&&err.message||err)}
 await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){}console.log("qnfo-email v2.1.5 scheduled done")},async fetch(req,e){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,command_control:true,raw_archive:true,mime_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});if(req.method!=="OPTIONS"&&p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=(e.API_KEY&&(a==="Bearer "+e.API_KEY||x===e.API_KEY))||(e.GATEWAY_EMAIL_KEY&&(a==="Bearer "+e.GATEWAY_EMAIL_KEY||x===e.GATEWAY_EMAIL_KEY));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:String(err&&err.message||err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=String(err&&err.message||err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:err.message||String(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:err.message||String(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:err.message||String(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:err.message},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:err.message||String(err)},500)}}};
 function trunc(s,n){return String(s||"").slice(0,n)}function classifyAddress(to){to=String(to||"").toLowerCase();return to.includes("rowan")||to.includes("rwn")?"personal":"general"}
 async function storeEmail(db,d){const r=await db.prepare("INSERT INTO emails (message_id,sender,recipient,subject,body_text,body_html,headers_json,classification,received_at,status,in_reply_to,references_hdr) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'received',?10,?11) ON CONFLICT(message_id) DO UPDATE SET recipient=?3,subject=?4,body_text=?5,body_html=?6,headers_json=?7,classification=?8,in_reply_to=?10,references_hdr=?11").bind(d.messageId,d.from,d.to,d.subject,d.bodyText,d.bodyHtml,d.headersJson,d.classification,d.receivedAt,d.inReplyTo,d.refsHdr).run();return r.meta&&r.meta.last_row_id||0}
-async function applyFilters(db,from,to,subject,body){try{const r=await db.prepare("SELECT * FROM email_filters WHERE enabled=1 ORDER BY priority DESC LIMIT 100").all();for(const f of r.results||[]){const fl=String(f.field||"").toLowerCase();const hay=fl==="sender"||fl==="from"?from:fl==="recipient"||fl==="to"?to:fl==="body"||fl==="body_text"?body:subject;const pat=String(f.pattern||"").toLowerCase().replace(/^\*+|\*+$/g,"");if(pat&&String(hay||"").toLowerCase().includes(pat))return{action:f.action||"process",reason:f.reason||"filter"}}}catch(e){}return{action:"process"}}
+async function applyFilters(db,from,to,subject,body){try{const r=await db.prepare("SELECT * FROM email_filters WHERE enabled=1 ORDER BY priority DESC LIMIT 100").all();for(const f of r.results||[]){const fl=String(f.field||"").toLowerCase();/* FILTER-UNKNOWN-FIELD-FAILCLOSED-1 (#1478): an unrecognised field used to fall back to the SUBJECT silently, so a typo'd filter matched the wrong header. Unknown fields now never match and are logged. Live filters use only from/sender/subject (measured 2026-09-30), so no live behaviour changes. */const hay=fl==="sender"||fl==="from"?from:fl==="recipient"||fl==="to"?to:fl==="body"||fl==="body_text"?body:fl==="subject"||fl===""?subject:null;if(hay===null){console.warn("email_filters: unknown field '"+fl+"' on filter "+(f.id||"?")+" - skipped (FILTER-UNKNOWN-FIELD-FAILCLOSED-1)");continue}const pat=String(f.pattern||"").toLowerCase().replace(/^\*+|\*+$/g,"");if(pat&&String(hay||"").toLowerCase().includes(pat))return{action:f.action||"process",reason:f.reason||"filter"}}}catch(e){}return{action:"process"}}
 async function logAction(db,id,status,cls,start){try{await db.prepare("UPDATE emails SET status=?1, processing_ms=?2 WHERE id=?3").bind(status,Date.now()-start,id).run()}catch(e){}}
 async function archiveRaw(e,x){try{const raw=trunc(x.rawText,200000);await e.AUDIT_DB.prepare("INSERT INTO email_raw_archive (email_id,message_id,raw_text,raw_size,created_at) VALUES (?1,?2,?3,?4,?5)").bind(x.emailId,x.messageId,raw,Number(x.rawSize||raw.length||0),x.receivedAt).run()}catch(err){console.error("raw archive",err.message||err)}}
 function machine(sender,subject){const s=(sender||"").toLowerCase(),sub=(subject||"").toLowerCase();return !s||s.includes("mailer-daemon")||s.includes("noreply")||s.includes("no-reply")||s.includes("postmaster")||(s.includes("google.com")&&sub.includes("report domain:"))}function strategic(sender,subject){return /green-coding|arne|jpc|jpcub|joules|benchmark|license|licensing|qnfo-ula|commercial|prototype|small-batch|energy per compute/i.test((sender||"")+" "+(subject||""))}
@@ -41,6 +41,29 @@ const HELP = [
 "Self-ingestion is quarantined (issue 951). COMMAND_TOKEN (if set) gates actions."
 ].join("\n");
 const OPS_BASE = "https://ops.qnfo.org";
+// OWNER-CMD-OPS-522-1 (2026-09-30, agent_issues #1472): every owner email command failed with "ops job queue
+// unavailable (HTTP 522)" -- 7/7 rows, zero successes ever. This worker's email handler runs in the qnfo.org zone,
+// and ops.qnfo.org is a custom domain for another Worker on that SAME zone: without global_fetch_strictly_public
+// such a subrequest does not reach the Worker and dies as 522 (the same defect measured on ops -> ideas.qnfo.org,
+// 522 from inside, 200 from outside). The flag is now declared in wrangler.toml, and every ops call falls back to
+// ops' workers.dev hostname -- a different zone -- on a network error, 52x or a 1042 answer.
+const OPS_BASES = [OPS_BASE, "https://qnfo-ops.q08.workers.dev"];
+async function opsFetch(path, init) {
+  let last = null;
+  for (const base of OPS_BASES) {
+    try {
+      const res = await fetch(base + path, init);
+      if (res.status >= 520 && res.status <= 530) { last = res; continue; }
+      if (res.status === 404) {
+        const peek = await res.clone().text().catch(function () { return ""; });
+        if (/error code:?\s*1042/i.test(peek)) { last = res; continue; }
+      }
+      return res;
+    } catch (e) { last = e; }
+  }
+  if (last instanceof Response) return last;
+  throw last || new Error("ops unreachable on every base");
+}
 async function sha16(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
   return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2, "0"); }).join("");
@@ -230,7 +253,7 @@ async function cmdJob(env, commandText) {
   const key = env.OPS_KEY || "";
   const h = key ? { "Authorization": "Bearer " + key } : {};
   try {
-    const res = await fetch(OPS_BASE + "/v1/jobs/" + encodeURIComponent(id), { headers: h });
+    const res = await opsFetch("/v1/jobs/" + encodeURIComponent(id), { headers: h });
     const txt = await res.text();
     if (res.status === 404) return { ok: false, error: "job " + id + " not found" };
     let j = null;
@@ -254,7 +277,7 @@ async function cmdAgent(env, verb, commandText, kind) {
   let j = null, lastErr = "";
   for (let attempt = 0; attempt < 3 && !j; attempt++) {
     try {
-      const res = await fetch(OPS_BASE + "/v1/jobs", {
+      const res = await opsFetch("/v1/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
         body: JSON.stringify({ model: "ops-exec", messages: [{ role: "user", content: text }] })
@@ -270,7 +293,7 @@ async function cmdAgent(env, verb, commandText, kind) {
   for (let i = 0; i < polls; i++) {
     await new Promise(function(r){ setTimeout(r, 2000); });
     try {
-      const pr = await fetch(OPS_BASE + "/v1/jobs/" + encodeURIComponent(j.id), { headers: { "Authorization": "Bearer " + key } });
+      const pr = await opsFetch("/v1/jobs/" + encodeURIComponent(j.id), { headers: { "Authorization": "Bearer " + key } });
       const ptxt = await pr.text();
       let pj = null;
       try { pj = JSON.parse(ptxt); } catch (e) { pj = null; }

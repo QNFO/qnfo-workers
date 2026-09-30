@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.10-workers-dev-apply";
+var VERSION = "2.38.11-selfheal-resolve-path";
 function firstFrameIdx(s) {
   if (!s || typeof s !== "string") return -1;
   const bar = "\uFF5C";
@@ -1569,6 +1569,7 @@ async function telemetryAnalyze(env, hours) {
   try {
     const rows = await env.QNFO_AUDIT.prepare("SELECT text, MAX(ts) last_ts, COUNT(*) n FROM cloud_ops_events WHERE ts >= ?1 AND status = 'error' AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text IS NOT NULL GROUP BY text ORDER BY n DESC LIMIT 100").bind(since).all();
     out.scanned = (rows.results || []).length;
+    const _stillFailing = new Set();
     for (const r of rows.results || []) {
       if ((r.n || 0) < 3) continue;
       // SELFHEAL-EXTRACTOR-BARE-NAME-1 (issue 1165): cloud_ops_events.text holds the BARE
@@ -1595,7 +1596,9 @@ async function telemetryAnalyze(env, hours) {
         // by the CALLING AGENT while probing an unknown schema, not a malfunction of the tool.
         // Those are excluded so the loop measures tool health, not agent mistakes.
         const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2 /* SELFHEAL-EXCLUSION-TABLE-1 */ AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(meta,''), x.pattern) > 0 OR instr(COALESCE(text,''), x.pattern) > 0)").bind(since, toolKey).first();
-        _errs = (okRow && okRow.e) || r.n || 0;
+        // ISSUE-LEDGER-EXCLUSION-BLIND-1 (#1484): `okRow.e || r.n` treated an exclusion-filtered count of 0 as
+        // "missing" and fell back to the RAW count, so a tool whose every error is an excluded class still filed.
+        _errs = okRow && okRow.e != null ? Number(okRow.e) : (r.n || 0);
         _oks = (okRow && okRow.s) || 0;
         _rate = _errs / Math.max(1, _errs + _oks);
         _fresh = String(r.last_ts || "") >= new Date(Date.now() - h * 1800 * 1e3).toISOString();
@@ -1623,6 +1626,7 @@ async function telemetryAnalyze(env, hours) {
         }
       } catch (e2) {
       }
+      _stillFailing.add(toolKey);
       const title = "[self-heal] tool " + toolKey + " failing x" + _errs + " (" + (100 * _rate).toFixed(1) + "% of " + (_errs + _oks) + " calls in " + h + "h)";
       try {
         const _fp = "selfheal:" + fnv32("[self-heal] tool " + toolKey);
@@ -1638,6 +1642,21 @@ async function telemetryAnalyze(env, hours) {
       } catch (e3) {
         out.insertError = String(e3 && e3.message || e3);
       }
+    }
+    // ISSUE-LEDGER-EXCLUSION-BLIND-1 (#1484), resolution path: a tool that stops erroring never re-enters the
+    // loop above (it only iterates tools with >= 3 errors in the window), so its open row could never resolve.
+    // Sweep open selfheal rows whose tool did not meet the filing predicate in THIS window. Runs only after the
+    // census query succeeded (a failed query throws before this point, so it can never mass-resolve).
+    try {
+      const _open = await env.QNFO_AUDIT.prepare("SELECT fingerprint, title FROM issue_ledger WHERE status = 'open' AND fingerprint LIKE 'selfheal:%'").all();
+      for (const _o of _open.results || []) {
+        const _tm2 = /^\[self-heal\] tool (\S+) failing/.exec(String(_o.title || ""));
+        if (!_tm2 || _stillFailing.has(_tm2[1])) continue;
+        await env.QNFO_AUDIT.prepare("UPDATE issue_ledger SET status = 'resolved', resolved_at = ?1, updated_at = ?1, last_detail = ?2 WHERE fingerprint = ?3 AND status = 'open'").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "), "auto-resolved: below the filing predicate (rate>=15% or >=25 errors, >=3 errors) in the last " + h + "h window", _o.fingerprint).run();
+        out.autoResolved = (out.autoResolved || 0) + 1;
+      }
+    } catch (eS) {
+      out.sweepError = String(eS && eS.message || eS).slice(0, 160);
     }
   } catch (e) {
     out.error = String(e && e.message || e);
@@ -2357,14 +2376,21 @@ async function cfWorkerRead(env, args) {
     let src = "";
     if (ct.indexOf("multipart") >= 0) {
       const raw = await srcR.text();
-      const parts = raw.split(/--[^\r\n]+/);
+      // CF-WORKER-READ-TRUNCATION-LIE-1 (2026-09-30, #1489): the parts were split on the regex /--[^\r\n]+/, which
+      // also matches any "--" INSIDE the JavaScript (a "// ---" comment, "i--"), so the module was cut at its first
+      // such line and reported with a small size and truncated:false (measured: qnfo-containers-pilot read as 352
+      // bytes ending mid-comment; the source is 17294). Split on the real boundary from Content-Type instead.
+      const _bm = /boundary="?([^";\s]+)"?/i.exec(ct);
+      const parts = _bm ? raw.split("--" + _bm[1]) : [raw];
       for (const p of parts) {
-        if (p.indexOf("worker.js") >= 0 || p.indexOf("application/javascript") >= 0) {
-          const body = p.replace(/^[\s\S]*?\r?\n\r?\n/, "");
-          if (body.trim()) {
-            src = body;
-            break;
-          }
+        const _he = p.search(/\r?\n\r?\n/);
+        if (_he < 0) continue;
+        const _head = p.slice(0, _he);
+        if (!/javascript|worker\.js|name="[^"]+\.m?js"/i.test(_head)) continue;
+        const body = p.slice(_he).replace(/^\r?\n\r?\n/, "").replace(/\r?\n$/, "");
+        if (body.trim()) {
+          src = body;
+          break;
         }
       }
       if (!src) src = raw;

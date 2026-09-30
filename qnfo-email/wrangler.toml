@@ -1,6 +1,9 @@
 name = "qnfo-email"
 main = "worker.js"
 compatibility_date = "2026-08-01"
+# OWNER-CMD-OPS-522-1 (2026-09-30): same-zone subrequests (email handler on qnfo.org -> ops.qnfo.org) only reach
+# another Worker with this flag; without it every owner command 522d (#1472). Applied by the deployers' declared-flag union.
+compatibility_flags = ["global_fetch_strictly_public"]
 
 # Bindings verified from live CF API 2026-09-22 (BINDING-PRESERVATION-1).
 # This config was previously ABSENT from the repo, so every deploy had to carry
