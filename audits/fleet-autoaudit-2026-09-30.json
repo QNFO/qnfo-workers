@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-30 18:48:43",
+  "audited_at": "2026-09-30 18:52:45",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -26,7 +26,20 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-email",
+        "live": "2.1.7-ops-zone-fallback",
+        "repo": "2.1.6-approval-gate-1",
+        "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-ops",
+        "live": "2.38.12-schedules-path-fix",
+        "repo": "2.38.10-workers-dev-apply",
+        "worker": "qnfo-ops"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -409,7 +422,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 34,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -487,11 +500,6 @@
         "worker": "qnfo-deploy-guard"
       },
       {
-        "dir": "qnfo-email",
-        "version": "2.1.6-approval-gate-1",
-        "worker": "qnfo-email"
-      },
-      {
         "dir": "qnfo-fleet-control",
         "version": "0.4.41-owned-metrics",
         "worker": "qnfo-fleet-control"
@@ -540,11 +548,6 @@
         "dir": "qnfo-observability",
         "version": "1.2.11-outreach-gate-derive",
         "worker": "qnfo-observability"
-      },
-      {
-        "dir": "qnfo-ops",
-        "version": "2.38.10-workers-dev-apply",
-        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1062,9 +1065,9 @@
     "qnfo-email": {
       "before": "2.1.6-approval-gate-1",
       "http": 200,
-      "live": "2.1.6-approval-gate-1",
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.1.7-ops-zone-fallback",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-email"
     },
     "qnfo-email-orchestrator": {
@@ -1278,9 +1281,9 @@
     "qnfo-ops": {
       "before": "2.38.10-workers-dev-apply",
       "http": 200,
-      "live": "2.38.10-workers-dev-apply",
-      "match": 1,
-      "note": "SYNC",
+      "live": "2.38.12-schedules-path-fix",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
