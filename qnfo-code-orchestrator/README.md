@@ -62,8 +62,8 @@ Only a real run verifies: D1 REST access from Actions, `gh pr create` with `GITH
   `Uncaught SyntaxError ... at m.js:L:C` even with unresolvable imports; valid syntax + missing import fails later (`No such module`);
   `globalOutbound:null` blocks fetch. **Local workerd did NOT enforce `limits.cpuMs`** (a top-level `while(true){}` hung), so the
   verifier races a 4 s wall clock and ships OFF. The test's fake `LOADER` replays those real error strings; it is not workerd.
-- **NOT verified**: anything against live Cloudflare (this worker, `qnfo-code-agent` and Workers AI model output are not deployed /
-  not exercised), real LLM output quality, and CPU-limit enforcement on the real platform.
+- **Verified live (2026-10-01)**: this worker is deployed (`GET /health` reports version 0.2.4 with the AI, AUDIT_DB and container bindings) and one task, `ct_smoke20261001a`, ran read -> propose -> verify -> ready_to_publish -> published on live Cloudflare and was delivered as pull request 297 through `code-task-publish.yml`.
+- **NOT verified**: real LLM output quality beyond that one-line smoke edit, CPU-limit enforcement on the real platform (so `JS_VERIFY` stays off), and any JavaScript file or any file over 60,000 characters (no deterministic verifier is enabled for them, so no deployed worker source can be edited by this loop yet).
 - **Not built**: GitHub webhook wake-up (CI/review events resuming a task), multi-file edits, a verifier that RUNS tests, the
   `qnfo-code-agent` deploy. Deploy must use a wrangler workflow (this worker has `[[containers]]` + a Durable Object; the canonical `/content` PUT destroys those bindings, see `qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md`), and `qnfo-code-agent` needs a GitHub credential with PR-write.
 
