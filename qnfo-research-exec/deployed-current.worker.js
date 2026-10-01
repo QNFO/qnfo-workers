@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.40-grounding-bib";
+var VERSION = "0.9.41-zenodo-identity";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -55,6 +55,11 @@ var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gp
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
+// ZENODO-IDENTITY-1 (2026-10-01): Zenodo's creator name form ("Family, Given") and the one affiliation string
+// (STRATEGY-1 s2.2). New papers used to carry the given-first name and no affiliation; the owner's records held 15
+// affiliation variants, including retired labels.
+var ZENODO_CREATOR_NAME = "Quni-Gudzinas, Rowan Brad";
+var ZENODO_AFFILIATION = "QNFO (independent research)";
 var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
 // ROUTER-TRANSPORT-FAILOVER-1: env.QNFO_AI is preferred, but when that service binding is
 // absent the old code fell straight through to a public workers.dev fetch, which does not
@@ -431,7 +436,7 @@ async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
     upload_type: "publication",
     publication_type: "preprint",
     description: (abstract || title).slice(0, 3e3) + (slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + slug + '/">papers.qnfo.org/papers/' + slug + '/</a></p>' : ''),
-    creators: [{ name: AUTHOR, orcid: ORCID }],
+    creators: [{ name: ZENODO_CREATOR_NAME, affiliation: ZENODO_AFFILIATION, orcid: ORCID }],
     access_right: "open",
     license: "cc-by",
     version: "1.0.0",
@@ -2543,9 +2548,85 @@ function validateVersionFiles(files) {
   }
   return null;
 }
+// ZENODO-METADATA-EDITS-1 (2026-10-01): kind='metadata' rows of the same queue edit a published record's metadata in
+// place (no new version, no file change): read it, set the ORCID-matched creator's name and affiliation, then edit,
+// PUT and publish. Any failure after `edit` discards the edit, so a record is never left mid-edit. A record that is
+// already canonical is marked 'unchanged' without an edit. First use: one name form and one affiliation string on the
+// owner's ~940 records (15 affiliation variants, including retired labels). Up to METADATA_EDITS_PER_RUN rows per run.
+var METADATA_EDITS_PER_RUN = 8;
+var ORCID_RE = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
+function validateCreatorPatch(patch) {
+  var p = patch && patch.creator_by_orcid;
+  if (!p || typeof p.orcid !== "string" || !ORCID_RE.test(p.orcid)) return "metadata_json.creator_by_orcid.orcid missing or malformed";
+  if (typeof p.name !== "string" && typeof p.affiliation !== "string") return "creator_by_orcid needs name or affiliation";
+  return null;
+}
+function applyCreatorPatch(metadata, patch) {
+  var bad = validateCreatorPatch(patch);
+  if (bad) return { error: bad };
+  var p = patch.creator_by_orcid;
+  var before = Array.isArray(metadata && metadata.creators) ? metadata.creators : [];
+  var hit = 0;
+  var creators = before.map(function(c) {
+    var n = Object.assign({}, c);
+    if (String(n.orcid || "").replace(/^https?:\/\/orcid\.org\//, "") === p.orcid) {
+      hit++;
+      if (typeof p.name === "string" && p.name) n.name = p.name;
+      if (typeof p.affiliation === "string") n.affiliation = p.affiliation;
+    }
+    return n;
+  });
+  if (!hit) return { error: "no creator with ORCID " + p.orcid };
+  return { creators: creators, changed: JSON.stringify(creators) !== JSON.stringify(before) };
+}
+async function drainMetadataEdits(env, limit) {
+  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return [];
+  var rs = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='metadata' AND status='pending' ORDER BY id ASC LIMIT ?").bind(limit || METADATA_EDITS_PER_RUN).all();
+  var out = [];
+  var rows = (rs && rs.results) || [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
+    if (!claim || !claim.meta || claim.meta.changes !== 1) continue;
+    var recId = Number(row.record_id), editing = false, status = "error", error = null;
+    try {
+      var patch = JSON.parse(row.metadata_json || "{}");
+      var bad = validateCreatorPatch(patch);
+      if (bad) throw new Error(bad);
+      var dep = await zenodo(env, "GET", "/" + recId);
+      if (!dep || dep._status || !dep.metadata) throw new Error("read failed: " + JSON.stringify(dep).slice(0, 200));
+      var first = applyCreatorPatch(dep.metadata, patch);
+      if (first.error) throw new Error(first.error);
+      if (!first.changed) {
+        status = "unchanged";
+      } else {
+        var ed = await zenodo(env, "POST", "/" + recId + "/actions/edit", {});
+        if (!ed || ed._status) throw new Error("edit failed: " + JSON.stringify(ed).slice(0, 200));
+        editing = true;
+        var base = ed.metadata || dep.metadata;
+        var applied = applyCreatorPatch(base, patch);
+        if (applied.error) throw new Error(applied.error);
+        var put = await zenodo(env, "PUT", "/" + recId, { metadata: Object.assign({}, base, { creators: applied.creators }) });
+        if (!put || put._status) throw new Error("metadata put failed: " + JSON.stringify(put).slice(0, 200));
+        var pub = await zenodo(env, "POST", "/" + recId + "/actions/publish", {});
+        if (!pub || pub._status || !pub.id) throw new Error("publish failed: " + JSON.stringify(pub).slice(0, 200));
+        editing = false;
+        status = "published";
+      }
+    } catch (e) {
+      error = String(e && e.message || e).slice(0, 300);
+      if (editing) {
+        try { await zenodo(env, "POST", "/" + recId + "/actions/discard", {}); } catch (e2) {}
+      }
+    }
+    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_record_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, status === "error" ? null : recId, error, row.id).run();
+    out.push({ id: row.id, record: recId, status: status, error: error });
+  }
+  return out;
+}
 async function drainVersionRequests(env) {
   if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return null;
-  var row = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE status='pending' ORDER BY id ASC LIMIT 1").first();
+  var row = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='version' AND status='pending' ORDER BY id ASC LIMIT 1").first();
   if (!row) return null;
   var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
   if (!claim || !claim.meta || claim.meta.changes !== 1) return null;
@@ -2620,6 +2701,12 @@ var worker_default = {
       } catch (e) {
         await logEvent(env, "error", "drainVersionRequests threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
+      try {
+        var me = await drainMetadataEdits(env);
+        if (me.length) await logEvent(env, "zenodo-metadata", JSON.stringify(me).slice(0, 700), me.some(function(x) { return x.status === "error"; }) ? "error" : "ok");
+      } catch (e) {
+        await logEvent(env, "error", "drainMetadataEdits threw: " + String(e && e.message || e).slice(0, 200), "error");
+      }
       if (env.RESEARCH_HALT === "1") return;
       try {
         const lr = await runLeased(env, "cron-" + Date.now().toString(36), 8, RUN_LOOP_BUDGET_MS);
@@ -2651,6 +2738,8 @@ var worker_default = {
 };
 export {
   worker_default as default,
+  applyCreatorPatch,
+  drainMetadataEdits,
   drainVersionRequests,
   markError,
   parkPoisonRow,
