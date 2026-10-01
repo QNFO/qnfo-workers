@@ -118,3 +118,7 @@ jobs:
       # (ratified weight changes, constraints filed as fleet work, card notes queued as intents), never by a session.
       - name: OBJECTIVE-REVISION-APPLY-1 and OWNER-NOTES-ROUTE-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/objective-apply.test.mjs
+
+      # WATCHMAKER-INDEX-1: the fleet's own daily count of recurring operations that still need a person or a session.
+      - name: WATCHMAKER-INDEX-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/watchmaker.test.mjs

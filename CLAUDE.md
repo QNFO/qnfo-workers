@@ -53,6 +53,9 @@ because each one was broken at least once; the linked issue holds the evidence.
   worker cron (using qnfo-ai and D1). A decision the owner must make is made in https://fleet.qnfo.org (queue cards,
   objective decisions, the prompt panel), never by "telling a session". The dashboard refuses claude.ai and anthropic.com
   links in queue items, and `cloudflare-only-host-guard.py` (deploy-gate) fails CI on a claude.ai link in any tracked file.
+- The watchmaker index (WATCHMAKER-INDEX-1, `GET https://fleet.qnfo.org/api/watchmaker`, metric `watchmaker_index`, target 0)
+  counts recurring operations that still need a person or a session, or whose Cloudflare runner is stalled. A PR that adds
+  a recurring operation adds it to `WATCHMAKER_OPS` in qnfo-fleet-dashboard/worker.js with the D1 query that proves it ran.
 - Recurring verification belongs to worker crons (LOOP-WATCH-1 in qnfo-fleet-control, `GET /loops`, files and self-closes
   `CHARTER-TICK-STALE-1`, `PORTFOLIO-SYNC-STALE-1` and friends), not to session check-ins or routines. A session follows
   its own in-flight PR through GitHub events while it is open; it arms no claude.ai reminder, check-in or Routine.
