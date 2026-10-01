@@ -1,4 +1,4 @@
-var VERSION = "1.6.5-metric-undefined-class"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.6.6-research-metrics-writer"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -308,6 +308,33 @@ async function runMetricFreshness(env) {
       out.refreshed.push("worker_count");
     }
   } catch (e) { out.refresh_error_worker_count = e.message; }
+  // RESEARCH-METRICS-WRITER-1 (2026-10-01, agent_issues #1742): publications_30d and full_reports_live_30d
+  // (registry formulas over living-paper.papers) and indexed_surface (<loc> count of the papers.qnfo.org sitemap)
+  // had no writer anywhere in the fleet: their last values were written by hand on 2026-09-29 17:18Z and went
+  // stale against a daily cadence while this auditor filed the ticket every hour. Same rule as the two writers
+  // above: recompute from the registry's own source of truth, never invent; a source that cannot be read this
+  // cycle is left untouched and reported in refresh_error_*.
+  try {
+    if (!env.LIVING_PAPER) throw new Error("no LIVING_PAPER binding");
+    var pub = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE status = 'published' AND created_at >= datetime('now','-30 day')").first();
+    var full = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE status = 'published' AND length(COALESCE(body_md,'')) >= 5000 AND created_at >= datetime('now','-30 day')").first();
+    if (pub && pub.c != null) {
+      await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(pub.c), nowIso, "MEASURED", "publications_30d").run();
+      out.refreshed.push("publications_30d");
+    }
+    if (full && full.c != null) {
+      await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(full.c), nowIso, "MEASURED", "full_reports_live_30d").run();
+      out.refreshed.push("full_reports_live_30d");
+    }
+  } catch (e) { out.refresh_error_publications = e.message; }
+  try {
+    var sm = await fetch("https://papers.qnfo.org/sitemap.xml", { headers: { "User-Agent": "qnfo-lifecycle/" + QNFO_VERSION }, signal: AbortSignal.timeout(15000) });
+    if (!sm.ok) throw new Error("sitemap http " + sm.status);
+    var locs = ((await sm.text()).match(/<loc>/g) || []).length;
+    if (locs <= 0) throw new Error("sitemap carries no <loc> entries");
+    await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(locs), nowIso, "MEASURED", "indexed_surface").run();
+    out.refreshed.push("indexed_surface");
+  } catch (e) { out.refresh_error_indexed_surface = e.message; }
   var remaining = out.stale + out.never + out.unparsed_cadence;
   var stTitle = "METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence";
   if (remaining === 0) {

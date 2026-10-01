@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 17:10:21",
+  "audited_at": "2026-10-01 21:10:59",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -432,7 +432,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.11-ai-attr",
+        "version": "5.30.0-spend-gov",
         "worker": "qnfo-ai"
       },
       {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.4",
+        "version": "0.2.5",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -497,7 +497,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.22-scholar-pdf-rendered",
+        "version": "3.7.23-home-identity",
         "worker": "qnfo-gateway"
       },
       {
@@ -572,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.23-owner-delegation",
+        "version": "0.7.24-social-gates",
         "worker": "qnfo-social"
       },
       {
@@ -592,7 +592,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.0.11",
+        "version": "1.1.1",
         "worker": "radar-hub"
       }
     ]
@@ -880,9 +880,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.11-ai-attr",
+      "before": "5.30.0-spend-gov",
       "http": 200,
-      "live": "5.29.11-ai-attr",
+      "live": "5.30.0-spend-gov",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.4",
+      "before": "0.2.5",
       "http": 200,
-      "live": "0.2.4",
+      "live": "0.2.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.22-scholar-pdf-rendered",
+      "before": "3.7.23-home-identity",
       "http": 200,
-      "live": "3.7.22-scholar-pdf-rendered",
+      "live": "3.7.23-home-identity",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1416,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.23-owner-delegation",
+      "before": "0.7.24-social-gates",
       "http": 200,
-      "live": "0.7.23-owner-delegation",
+      "live": "0.7.24-social-gates",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1472,9 +1472,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.0.11",
+      "before": "1.1.1",
       "http": 200,
-      "live": "1.0.11",
+      "live": "1.1.1",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"

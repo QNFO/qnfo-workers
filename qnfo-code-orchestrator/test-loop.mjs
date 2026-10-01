@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.5 + task-loop + the ladder + js_verify off by default", h.version === "0.2.5" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.2.6 + task-loop + the ladder + js_verify off by default", h.version === "0.2.6" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -396,6 +396,15 @@ function fakeLoader(spinMs) {
   await call(env2, "POST", "/v1/tick", {});
   const r4 = await env2.AUDIT_DB.prepare("SELECT ctx FROM code_tasks WHERE id=?").bind(e4.body.id).first();
   check("with CODE_AGENT_KEY the code-agent read is still used first", calls.read.length === 1 && JSON.parse(r4.ctx).base === "from-agent\n", calls.read);
+
+  // FENCE-IN-FILE-1: a file that itself contains a fenced block is extracted whole (the closing fence is the last one)
+  const fenced = "a\n```\ncode\n```\nb\n";
+  installCodeAgent({ "qnfo-workers/docs/f.md": fenced });
+  const { env: env5 } = envWith(["Here it is:\n```file\n" + fenced + "c\n```\nDone."], { PR_PUBLISH_MODE: "pull", CODE_AGENT_KEY: "k" });
+  const e5 = await call(env5, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/f.md", goal: "append c" });
+  await call(env5, "POST", "/v1/tick", {});
+  const r5 = await env5.AUDIT_DB.prepare("SELECT status, ctx, last_error FROM code_tasks WHERE id=?").bind(e5.body.id).first();
+  check("fence-in-file: a proposal containing an inner fenced block is not cut at that block", r5.status === "ready_to_publish" && /a\n```\ncode\n```\nb\nc/.test(JSON.parse(r5.ctx).patch.replace(/^\+/gm, "")), { st: r5.status, err: r5.last_error });
 }
 
 console.log("\n" + failures + " failure(s)");

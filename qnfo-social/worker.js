@@ -12,7 +12,14 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.23-owner-delegation";
+var VERSION = "0.7.24-social-gates";
+// 0.7.21 (2026-10-01, #1712 POST-ID-UTM-1, #1647 SOCIAL-ENGAGEMENT-COLLECTION-STOPPED-1, #1713): measured at 14:11 UTC,
+// social_threads had 141 posted rows and 0 with post_uri. Every one of them was posted before 0.7.19 went live
+// (first deploy 11:22 UTC; newest post 04:30 UTC), and since then the queue was empty and the weekly cap (96 Bluesky
+// posts in 7 days against 2) held everything, so the 0.7.19 code had never run on a real post. Hardened here:
+// markPosted writes status and post_uri in one statement; the HTTP publish routes pass the pause flag, the cap and the
+// content gate and record a row with post_uri; OWNER-VOICE-CONTENT-GATE-1 repairs mojibake and refuses q08.org links;
+// SOCIAL-ENGAGEMENT-SELF-1 collects per-post Bluesky engagement daily for every recorded post id.
 // LINKEDIN-BUFFER-DRAFTS-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s4-s5): LinkedIn's API Terms 3.1 forbid
 // automated posting, so the LinkedIn channel never receives a shareNow post. bufferPost saves it as a Buffer DRAFT
 // (saveToDraft: true) that the owner approves with one tap in Buffer; Mastodon and X keep posting automatically inside
@@ -183,6 +190,42 @@ function postUriValue(bskyUri, bufferResult) {
   const keys = Object.keys(ids);
   if (!keys.length) return null;
   return keys.length === 1 ? ids[keys[0]] : JSON.stringify(ids);
+}
+
+// OWNER-VOICE-CONTENT-GATE-1 (0.7.21, STRATEGY s4 + s5 gate 3): nothing leaves qnfo-social for the owner's channels with
+// a q08.org link (q08 was removed from Bluesky) or with mojibake. UTF-8 text that was decoded as Latin-1/cp1252 upstream
+// (e.g. an em dash stored as U+00E2 U+0080 U+0094, posted live on 2026-10-01) is repaired back to the real character;
+// text that still carries a mojibake sequence after repair is held, never posted.
+var CP1252_BYTE = { '\u20ac': 0x80, '\u201a': 0x82, '\u0192': 0x83, '\u201e': 0x84, '\u2026': 0x85, '\u2020': 0x86, '\u2021': 0x87,
+  '\u02c6': 0x88, '\u2030': 0x89, '\u0160': 0x8a, '\u2039': 0x8b, '\u0152': 0x8c, '\u017d': 0x8e, '\u2018': 0x91, '\u2019': 0x92,
+  '\u201c': 0x93, '\u201d': 0x94, '\u2022': 0x95, '\u2013': 0x96, '\u2014': 0x97, '\u02dc': 0x98, '\u2122': 0x99, '\u0161': 0x9a,
+  '\u203a': 0x9b, '\u0153': 0x9c, '\u017e': 0x9e, '\u0178': 0x9f };
+var MOJI_CONT = '[\\u0080-\\u00bf' + Object.keys(CP1252_BYTE).join('') + ']';
+var MOJI_SEQ_RE = new RegExp('[\\u00c2-\\u00df]' + MOJI_CONT + '|[\\u00e0-\\u00ef]' + MOJI_CONT + '{2}|[\\u00f0-\\u00f4]' + MOJI_CONT + '{3}', 'g');
+var MOJIBAKE_LEFT_RE = /\u00c3[\u0080-\u00bf]|\u00e2\u0080|\u00e2\u20ac|\u00c2[\u0080-\u00bf]|\ufffd/;
+var Q08_LINK_RE = /(?:^|[^a-z0-9.-])(?:[a-z0-9-]+\.)*q08\.org(?!\.?[a-z0-9-])/i;
+function repairMojibake(text) {
+  const s = String(text || '');
+  let dec = null;
+  try { dec = new TextDecoder('utf-8', { fatal: true }); } catch (e) { return s; }
+  return s.replace(MOJI_SEQ_RE, function(m) {
+    const bytes = [];
+    for (const ch of m) {
+      const c = ch.charCodeAt(0);
+      const b = c <= 0xff ? c : CP1252_BYTE[ch];
+      if (b === undefined) return m;
+      bytes.push(b);
+    }
+    try { return dec.decode(new Uint8Array(bytes)); } catch (e) { return m; }
+  });
+}
+function contentGate(texts) {
+  const out = (texts || []).map(function(t) { return repairMojibake(typeof t === 'string' ? t : String((t && t.text) || '')); });
+  for (const t of out) {
+    if (Q08_LINK_RE.test(t)) return { ok: false, reason: 'q08-link', texts: out };
+    if (MOJIBAKE_LEFT_RE.test(t)) return { ok: false, reason: 'mojibake', texts: out };
+  }
+  return { ok: true, texts: out };
 }
 
 // Buffer (Mastodon/LinkedIn/X) publishes ONE standalone post with no thread, no facets and
@@ -593,10 +636,14 @@ async function bufferPost(env, text, campaign) {
         const svcText = utmTagText(text, BUFFER_UTM_SOURCE[svc] || svc, campaign);
         // LINKEDIN-BUFFER-DRAFTS-1 (#1713): LinkedIn is draft-only (owner approves in Buffer); the rest share now.
         const draft = svc === "linkedin";
-        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: " + (draft ? "addToQueue, saveToDraft: true" : "shareNow") + " }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
+        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: " + (draft ? "addToQueue, saveToDraft: true" : "shareNow") + " }) { ... on PostActionSuccess { post { id status } } ... on MutationError { message } } }";
         const r = await bufferGql(env, mutation);
         const cp = r && r.data && r.data.createPost;
-        if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : "ok", post_id: cp.post.id });
+        // 0.7.21: read back the status Buffer gave the LinkedIn post; anything but 'draft' is an alert (ToS 3.1).
+        if (cp && cp.post && draft && cp.post.status && String(cp.post.status).toLowerCase() !== "draft") {
+          await logAlert(env, "linkedin-draft", "error", "LINKEDIN-BUFFER-DRAFTS-1: Buffer post " + cp.post.id + " came back with status " + cp.post.status + ", not draft");
+          results.push({ platform: svc, status: "error", post_id: cp.post.id, error: "not-draft:" + cp.post.status });
+        } else if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : "ok", post_id: cp.post.id });
         else results.push({ platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) });
       } catch (e) { results.push({ platform: svc, status: "error", error: String(e && e.message || e) }); }
     }
@@ -685,6 +732,93 @@ async function recordPostUri(env, id, value) {
   try { await env.DB.prepare("UPDATE social_threads SET post_uri=? WHERE id=?").bind(value, id).run(); }
   catch (e) { console.log('POST-ID-UTM-1 post_uri write failed for thread ' + id + ': ' + String(e).slice(0, 120)); }
 }
+async function recordPostUriBySlug(env, slug, value) {
+  if (!value || !slug) return;
+  await ensureSocialSchema(env);
+  await env.DB.prepare("UPDATE social_threads SET post_uri=?, updated_at=datetime('now') WHERE slug=?").bind(value, slug).run();
+}
+// POST-ID-UTM-1 (0.7.21): status='posted' and post_uri land in ONE statement, so a posted row can no longer exist without
+// its platform id because a second write was lost. Fallback (column missing): mark posted, then the fail-soft id write.
+async function markPosted(env, id, uriValue) {
+  await ensureSocialSchema(env);
+  try {
+    await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL, post_uri=COALESCE(?, post_uri), updated_at=datetime('now') WHERE id=?").bind(uriValue || null, id).run();
+  } catch (e) {
+    console.log('POST-ID-UTM-1 combined posted write failed for thread ' + id + ', falling back: ' + String(e).slice(0, 120));
+    await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(id).run();
+    await recordPostUri(env, id, uriValue);
+  }
+}
+// SOCIAL-ADHOC-GATE-1 (0.7.21, #1712/#1713): the HTTP routes that publish (/post, /thread, /cross, /broadcast, /repost)
+// used to skip the pause flag, the weekly cap and the post-id record, so anything calling them through qnfo-ai's social
+// tool posted outside every gate and left no row. They now pass the same gates as the cron drains and record a
+// social_threads row with post_uri, which also makes the post count toward the weekly cap.
+async function routeGate(env, who, texts, opts) {
+  opts = opts || {};
+  const g = await socialGate(env, who);
+  if (g.reason === 'paused' || g.reason === 'gate-error') return { status: g.reason === 'paused' ? 423 : 503, body: { error: 'social posting held: ' + g.reason, reason: g.reason } };
+  if (!opts.skipCap && !g.allowed) return { status: 429, body: { error: 'weekly cadence cap reached', reason: g.reason, posted_7d: g.posted_7d, cap: g.cap } };
+  const c = contentGate(texts);
+  if (!c.ok) return { status: 422, body: { error: 'content gate: ' + c.reason, reason: c.reason } };
+  return { texts: c.texts };
+}
+async function recordAdhoc(env, kind, title, texts, uriValue) {
+  await ensureSocialSchema(env);
+  const slug = kind + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  try {
+    await env.DB.prepare("INSERT INTO social_threads (slug, title, posts, status, posted_at, post_uri, flags, updated_at) VALUES (?,?,?,'posted',datetime('now'),?,?,datetime('now'))").bind(slug, String(title || '').slice(0, 300), JSON.stringify(texts || []), uriValue || null, 'adhoc-route').run();
+  } catch (e) { console.log('SOCIAL-ADHOC-GATE-1 record failed ' + slug + ': ' + String(e).slice(0, 120)); }
+  return slug;
+}
+
+// SOCIAL-ENGAGEMENT-SELF-1 (0.7.21, #1647): social_engagements stopped at 2026-09-20 because its only collector, the
+// weekly qnfo-cloud-ops "engagement" job, missed its 2026-09-27 run (no job-run row that day) and reads only the 30 newest
+// feed items. qnfo-social now also collects, daily in its 07:00 UTC cron, likes/reposts/replies/quotes for every Bluesky
+// post it recorded an id for in the last 60 days (social_threads.post_uri + dissemination_tracker.post_id). It reads the
+// public AppView (no credential) and writes the same (platform, post_id, metric, collected_at) key as qnfo-cloud-ops, so
+// the two collectors upsert the same rows instead of duplicating them.
+function blueskyUriOf(v) {
+  const s = String(v || '').trim();
+  if (s.indexOf('at://') === 0) return s;
+  if (s.charAt(0) === '{') { try { const o = JSON.parse(s); if (o && typeof o.bluesky === 'string' && o.bluesky.indexOf('at://') === 0) return o.bluesky; } catch (e) {} }
+  return null;
+}
+async function collectEngagement(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  const uris = [];
+  const seen = {};
+  const add = function(u) { if (u && !seen[u] && uris.length < 100) { seen[u] = 1; uris.push(u); } };
+  await ensureSocialSchema(env);
+  try {
+    const a = await env.DB.prepare("SELECT post_uri FROM social_threads WHERE status='posted' AND post_uri IS NOT NULL AND post_uri<>'' AND posted_at >= datetime('now','-60 days') ORDER BY posted_at DESC LIMIT 100").all();
+    for (const r of (a.results || [])) add(blueskyUriOf(r.post_uri));
+  } catch (e) { console.log('SOCIAL-ENGAGEMENT-SELF-1 social_threads read failed: ' + String(e).slice(0, 120)); }
+  try {
+    const b = await env.DB.prepare("SELECT post_id FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id LIKE 'at://%' AND posted_at >= datetime('now','-60 days') ORDER BY posted_at DESC LIMIT 100").all();
+    for (const r of (b.results || [])) add(blueskyUriOf(r.post_id));
+  } catch (e) { console.log('SOCIAL-ENGAGEMENT-SELF-1 dissemination read failed: ' + String(e).slice(0, 120)); }
+  const stmts = [];
+  let found = 0, errors = 0;
+  for (let i = 0; i < uris.length; i += 25) {
+    const chunk = uris.slice(i, i + 25);
+    try {
+      const r = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?' + chunk.map(function(u) { return 'uris=' + encodeURIComponent(u); }).join('&'), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
+      if (!r.ok) { errors++; continue; }
+      const j = await r.json();
+      for (const p of (j && j.posts) || []) {
+        found++;
+        const m = { likes: p.likeCount, reposts: p.repostCount, replies: p.replyCount, quotes: p.quoteCount };
+        for (const k of Object.keys(m)) {
+          stmts.push(env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?,?,?,?,?,?) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value").bind('bluesky', String(p.uri), k, Number(m[k] || 0), 'qnfo-social', day));
+        }
+      }
+    } catch (e) { errors++; }
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  const out = { day: day, uris: uris.length, posts_found: found, rows: stmts.length, errors: errors };
+  console.log('SOCIAL-ENGAGEMENT-SELF-1 ' + JSON.stringify(out));
+  return out;
+}
 
 // Drain the share queue oldest-first under a daily ceiling.
 // WS-A3 (2026-09-26): consume the orphaned dissemination_tracker queue. 19 papers sat at
@@ -756,9 +890,17 @@ async function drainDissemination(env) {
         continue;
       }
       // POST-ID-UTM-1 (#1712): postText tags the link and fits by shortening the title, never the link.
-      const text = String(row.paper_title || row.paper_slug) + " \u2014 " + link;
+      // OWNER-VOICE-CONTENT-GATE-1: repair mojibake in the title; never post a q08.org link or unrepairable text.
+      const cg = contentGate([String(row.paper_title || row.paper_slug) + " \u2014 " + link]);
+      if (!cg.ok) {
+        await env.DB.prepare("UPDATE dissemination_tracker SET action=?, post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(cg.reason === 'q08-link' ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted', row.id).run();
+        console.log("CONTENT_GATE dissemination " + row.id + " " + cg.reason);
+        continue;
+      }
+      const text = cg.texts[0];
+      const embedTitle = repairMojibake(String(row.paper_title || 'QNFO'));
       const s = await session(env);
-      const r = await postText(s, text, null, { embed: { title: String(row.paper_title || 'QNFO'), desc: 'QNFO research \u2014 open access' }, campaign: row.paper_slug ? String(row.paper_slug) : undefined });
+      const r = await postText(s, text, null, { embed: { title: embedTitle, desc: 'QNFO research \u2014 open access' }, campaign: row.paper_slug ? String(row.paper_slug) : undefined });
       // post_id = the at:// URI (retractDeadLinks deletes by it); post_url = the public bsky.app permalink.
       const rkey = String(r.uri || '').split('/').pop();
       const handle = String((s && s.handle) || env.BSKY_HANDLE || '');
@@ -835,8 +977,16 @@ async function drainQueue(env) {
     if (!row) break;
     try {
       await env.DB.prepare("UPDATE social_threads SET status='posting' WHERE id=? AND status='queued'").bind(row.id).run();
-      const posts = JSON.parse(row.posts);
-      if (!Array.isArray(posts) || !posts.length) throw new Error('bad posts payload');
+      const rawPosts = JSON.parse(row.posts);
+      if (!Array.isArray(rawPosts) || !rawPosts.length) throw new Error('bad posts payload');
+      // OWNER-VOICE-CONTENT-GATE-1: q08.org link -> suppressed; mojibake that cannot be repaired -> held. Neither posts.
+      const cg = contentGate(rawPosts);
+      if (!cg.ok) {
+        await env.DB.prepare("UPDATE social_threads SET status=?, error=?, updated_at=datetime('now') WHERE id=?").bind(cg.reason === 'q08-link' ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted', row.id).run();
+        console.log("CONTENT_GATE thread " + row.id + " " + cg.reason);
+        continue;
+      }
+      const posts = cg.texts;
       const s = await session(env);
       let threadLink = null;
       for (const pt of posts) { const u = extractUrls(String(pt)); if (u.length) { threadLink = u[0]; break; } }
@@ -855,7 +1005,7 @@ async function drainQueue(env) {
         }
         if (p.verdict === "transient") { continue; }
       }
-      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined, campaign: row.slug ? String(row.slug) : undefined });
+      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: repairMojibake(String(row.title || 'QNFO')), desc: 'QNFO research' } : undefined, campaign: row.slug ? String(row.slug) : undefined });
       // Buffer (Mastodon/LinkedIn/X) posts plain text with no facet/embed support - the
       // link MUST be applied to the text itself here, mirroring what postThread() does
       // internally for Bluesky's post 1. Previously this sent the raw linkless posts[0].
@@ -864,10 +1014,9 @@ async function drainQueue(env) {
         const bufText = pickBufferText(posts, threadLink, row.title, 280);
         bufferResult = await bufferPost(env, bufText, row.slug ? String(row.slug) : undefined);
       } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
-      await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
+      // POST-ID-UTM-1 (#1712): status and platform ids in one write (markPosted falls back if the column is missing).
+      await markPosted(env, row.id, postUriValue(uris[0], bufferResult));
       posted++;
-      // POST-ID-UTM-1 (#1712): a separate, fail-soft write, so a missing column can never re-queue a posted row.
-      await recordPostUri(env, row.id, postUriValue(uris[0], bufferResult));
       console.log('drain posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
     } catch (e) {
       failed++;
@@ -882,7 +1031,11 @@ async function drainQueue(env) {
 export default {
   async scheduled(event, env) {
     if (event.cron === '0 6 * * *') { await autoScan(env); return; }
-    if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
+    if (event.cron === '0 7 * * *') {
+      await alertDigest(env);
+      try { await collectEngagement(env); } catch (e) { await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
+      return;
+    }
     try {
       const ps = await syncProfile(env);
       if (ps && (ps.updated || ps.error || ps.held)) console.log('[qnfo-social] profile-sync', JSON.stringify(ps));
@@ -906,18 +1059,29 @@ export default {
         const r = await drainDissemination(env);
         return new Response(JSON.stringify({ ok: true, ...r }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
+      const json = function(obj, status) { return new Response(JSON.stringify(obj), { status: status || 200, headers: { 'Content-Type': 'application/json', ...cors } }); };
+      if (p === '/engagement' && m === 'POST') {
+        return json({ ok: true, engagement: await collectEngagement(env) });
+      }
       if (p === '/post' && m === 'POST') {
         const b = await request.json();
+        const g = await routeGate(env, '/post', [String(b.text || '')]);
+        if (g.status) return json(g.body, g.status);
         const s = await session(env);
-        const r = await postText(s, String(b.text || ''));
-        return new Response(JSON.stringify({ ok: true, uri: r.uri }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        const r = await postText(s, g.texts[0], null, { campaign: b.slug ? String(b.slug) : undefined });
+        const slug = await recordAdhoc(env, 'post', b.title || g.texts[0].slice(0, 120), g.texts, r.uri);
+        return json({ ok: true, uri: r.uri, slug: slug });
       }
       if (p === '/cross' && m === 'POST') {
         const b = await request.json();
         const link = String(b.link || '');
-        const bufText = link ? applyLink(String(b.text || ''), link, 280) : truncate(String(b.text || ''), 280);
+        const g = await routeGate(env, '/cross', [String(b.text || ''), link]);
+        if (g.status) return json(g.body, g.status);
+        const bufText = link ? applyLink(g.texts[0], link, 280) : truncate(g.texts[0], 280);
         const res = await bufferPost(env, bufText, b.slug ? String(b.slug) : undefined);
-        return new Response(JSON.stringify({ ok: true, buffer: res, text_sent: bufText }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        const uriVal = postUriValue(null, res);
+        const slug = uriVal ? await recordAdhoc(env, 'cross', b.title || bufText.slice(0, 120), [bufText], uriVal) : null;
+        return json({ ok: true, buffer: res, text_sent: bufText, post_uri: uriVal, slug: slug });
       }
       // Buffer admin proxy: Buffer posts are plain text with no facet/embed model, so a bad
       // cross-post can only be REMOVED, never repaired in place. This route gives the fleet
@@ -933,12 +1097,16 @@ export default {
         const b = await request.json();
         const posts = sanitizePosts(b.posts);
         if (!posts.length) return new Response(JSON.stringify({ error: 'no posts' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+        const g = await routeGate(env, '/thread', posts);
+        if (g.status) return json(g.body, g.status);
         const s = await session(env);
-        const uris = await postThread(s, posts);
-        return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
+        const uris = await postThread(s, g.texts, { campaign: b.slug ? String(b.slug) : undefined });
+        const slug = await recordAdhoc(env, 'thread', b.title || g.texts[0].slice(0, 120), g.texts, uris[0]);
+        return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris, slug: slug }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/threads' && m === 'GET') {
-        const rows = await env.DB.prepare("SELECT id, slug, title, status, error, retry_count, posted_at, created_at FROM social_threads ORDER BY id DESC LIMIT 50").all();
+        await ensureSocialSchema(env);
+        const rows = await env.DB.prepare("SELECT id, slug, title, status, error, retry_count, posted_at, created_at, post_uri FROM social_threads ORDER BY id DESC LIMIT 50").all();
         return new Response(JSON.stringify(rows.results || []), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/queue' && m === 'POST') {
@@ -994,10 +1162,11 @@ export default {
         if (!row) return new Response(JSON.stringify({ error: 'thread not found' }), { status: 404, headers: { 'Content-Type': 'application/json', ...cors } });
         if (row.status === 'posted') return new Response(JSON.stringify({ error: 'already posted', status: row.status }), { status: 409, headers: { 'Content-Type': 'application/json', ...cors } });
         const posts = sanitizePosts(JSON.parse(row.posts));
+        const g = await routeGate(env, '/broadcast', posts);
+        if (g.status) return json(g.body, g.status);
         const s = await session(env);
-        const uris = await postThread(s, posts, { campaign: row.slug ? String(row.slug) : undefined });
-        await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
-        await recordPostUri(env, row.id, postUriValue(uris[0], null));
+        const uris = await postThread(s, g.texts, { campaign: row.slug ? String(row.slug) : undefined });
+        await markPosted(env, row.id, postUriValue(uris[0], null));
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
 
@@ -1015,11 +1184,18 @@ export default {
         const b = await request.json();
         const threads = Array.isArray(b.threads) ? b.threads : (b.threads ? [b.threads] : []);
         if (!threads.length) return new Response(JSON.stringify({ error: 'no threads' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+        // Remediation recreates posts that already existed, so the weekly cap does not apply; the pause flag and the
+        // content gate do. A thread that fails the content gate is left untouched (its old posts are not deleted).
+        const g0 = await routeGate(env, '/repost', [], { skipCap: true });
+        if (g0.status) return json(g0.body, g0.status);
         const s = await session(env);
         const results = [];
         for (const th of threads) {
           try {
+            const cg = contentGate(((th && th.posts) || []).concat([String((th && th.link) || ''), String((th && th.title) || '')]));
+            if (!cg.ok) { results.push({ slug: th && th.slug, skipped: 'content gate: ' + cg.reason }); continue; }
             const r = await repostThread(s, th);
+            if (th.slug && r.newRoot) { try { await recordPostUriBySlug(env, String(th.slug), r.newRoot); } catch (eU) {} }
             results.push(r);
           } catch (e) {
             results.push({ error: String(e).slice(0, 200) });
@@ -1081,4 +1257,4 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, syncProfile, PROFILE_DESCRIPTION };
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION };
