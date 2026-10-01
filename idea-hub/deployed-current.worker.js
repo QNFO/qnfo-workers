@@ -1,3 +1,10 @@
+// idea-hub v1.3.0-think-loop-20261001
+// AUTOPILOT-FOLD-1 (2026-10-01, issue 1640): qnfo-autopilot vanished unrecorded around 2026-09-25 and is folded into
+//   existing workers instead of being recreated. Its think loop (one novel, falsifiable research question ->
+//   self_questions + idea_proposals; last row 2026-09-21) lands here, next to the other ideation producers, with two
+//   changes: it runs every THINK_EVERY_H hours instead of hourly, and it respects the same PROPOSAL_BACKPRESSURE pause
+//   as re-entry. The 7-day near-duplicate filter is kept. Proposals are stored as the plain question text (the original
+//   wrapped it in {"ideas":[...]}, which the triage scorer then read as JSON noise).
 // idea-hub v1.2.0-ideation-loop-20261001
 // SIGNALS-TRIAGE-GAP-1 (issue 1654) / L8 re-entry: qnfo-signal-loop, the only producer AND consumer of
 //   signals.source='artifact_reentry', disappeared unrecorded around 2026-09-25 (worker_removals rationale), so
@@ -61,7 +68,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.2.0-ideation-loop";
+var VERSION = "1.3.0-think-loop";
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -157,11 +164,14 @@ function isNoise(t) { t = String(t || ""); return NOISE_RE.some(function (re) { 
 function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\?\s*$/.test(t) && /^(what|who|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have|quick|one line|one sentence|in one sentence|probe)/i.test(t); }
 async function triageProposals(env) {
   var out = { triaged: 0, accepted: 0, errors: 0 };
-  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i], now = new Date().toISOString();
     try {
-      if (isNoise(row.idea) || isQuestion(row.idea)) {
+      // Research questions from the fleet's own producers are ideas, not chat questions: the chat-question filter
+      // would HOLD every think-loop proposal unscored ("Can X predict Y?" matches it).
+      var internal = row.name === "think-loop" || row.name === "auto-reentry";
+      if (isNoise(row.idea) || (!internal && isQuestion(row.idea))) {
         await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='HOLD', rationale=?, triaged_at=?, status='triaged_hold' WHERE id=?").bind("noise/question filter", now, row.id).run();
         out.triaged++; continue;
       }
@@ -240,10 +250,42 @@ async function runConsume(env) {
   }
   return out;
 }
+
+// ---- think loop (folded from qnfo-autopilot 0.3.3) ----
+var THINK_EVERY_H = 6;
+var THINK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+async function thinkLoop(env) {
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status='new'").first();
+  if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) return { ok: true, skipped: "backpressure" };
+  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
+  var ai = await env.AI.run(THINK_MODEL, { messages: [
+    { role: "system", content: 'You are the QNFO research collective. Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
+    { role: "user", content: "Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus." }
+  ], max_tokens: 1024 });
+  var text = tExtract(ai).trim();
+  if (!text) return { ok: false, why: "model empty" };
+  var q = null, m = text.match(/\{[\s\S]*\}/);
+  if (m) { try { q = JSON.parse(m[0]); } catch (e) {} }
+  if (!q || !q.question) { var qm = text.match(/"question"\s*:\s*"([^"]+)"/); if (qm) q = { question: qm[1], hypothesis: "" }; }
+  if (!q || !q.question) return { ok: false, why: "no parseable question" };
+  var sig = function (x) { var o = new Set(); String(x || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).forEach(function (w) { if (w.length > 4) o.add(w); }); return o; };
+  var contain = function (a, b) { if (!a.size || !b.size) return 0; var n = 0; a.forEach(function (x) { if (b.has(x)) n++; }); return n / Math.min(a.size, b.size); };
+  var cand = sig(q.question);
+  var recent = (await env.QNFO_AUDIT.prepare("SELECT question FROM self_questions WHERE status='open' AND ts >= ?1").bind(new Date(Date.now() - 7 * 864e5).toISOString()).all()).results || [];
+  if (recent.some(function (r) { return contain(cand, sig(r.question)) >= 0.6; })) return { ok: true, skipped: "near-duplicate theme" };
+  var now = new Date().toISOString(), question = String(q.question).slice(0, 300);
+  await env.QNFO_AUDIT.prepare("INSERT INTO self_questions (ts, question, hypothesis, source, status) VALUES (?1, ?2, ?3, 'think-loop', 'open')").bind(now, question, String(q.hypothesis || "").slice(0, 300)).run();
+  var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(question));
+  var qh = Array.from(new Uint8Array(d)).slice(0, 4).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  var existing = await env.QNFO_AUDIT.prepare("SELECT id FROM idea_proposals WHERE ip_hash = ?1 LIMIT 1").bind(qh).first();
+  if (!existing) await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES ('think-loop', ?1, '', 'new', ?2, ?3)").bind(question, qh, now).run();
+  return { ok: true, question: question, routed: !existing };
+}
 async function ideationCycle(env) {
   var r = {};
   try { r.reentry = await runReentry(env); } catch (e) { r.reentry = { error: String(e && e.message || e) }; }
   try { r.consume = await runConsume(env); } catch (e) { r.consume = { error: String(e && e.message || e) }; }
+  if (new Date().getUTCHours() % THINK_EVERY_H === 0) { try { r.think = await thinkLoop(env); } catch (e) { r.think = { error: String(e && e.message || e) }; } }
   r.triage = await triageProposals(env);
   return r;
 }

@@ -1,0 +1,8 @@
+notes-intake is FOLDED (2026-10-01, NOTES-INTAKE-FOLD-1, issue 1639). Do not redeploy this directory.
+
+The worker vanished unrecorded around 2026-09-25 (last notes_intake_runs row 2026-09-25T10:30Z). Its Obsidian vault
+pipeline (ingest -> triage -> calendar -> publish queue -> notes/v1/_index.md) now runs inside calendar-api's hourly
+cron, before the .ics publish, with the obsidian-vault bucket bound as VAULT. Calendar uids, the source tag and the
+_meta/notes-intake.status.json key are unchanged. Manual runs: POST calendar-api /notes/run (CAL_TOKEN).
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.

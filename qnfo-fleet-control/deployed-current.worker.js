@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.46-crons-quoted-parse";
+var VERSION = "0.4.47-autopilot-fold";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2547,6 +2547,304 @@ var worker_default = {
   }
 };
 var deployDefault = worker_default;
+// ---- AUTOPILOT-FOLD-1 (2026-10-01, issue 1640): qnfo-autopilot folded into qnfo-fleet-control ----
+// qnfo-autopilot 0.3.3 vanished unrecorded around 2026-09-25 (worker_removals). Its duties are folded into existing
+// workers instead of recreating it:
+//   * overdue task_dod_register census  -> already done hourly here by registerWatch(); not duplicated.
+//   * worker_activity_daily snapshot    -> activitySnapshotDaily() below, once a day (it wrote 24 rows/worker/day).
+//   * think loop (research questions)   -> idea-hub 1.3.0, next to the other ideation producers.
+//   * evolve loop (self-rewrite)        -> EVOLVE-PR-1 below, REBUILT. The original fetched a LIVE script, truncated it
+//     to 16k chars, asked a model for the COMPLETE rewritten source and PUT it straight to Cloudflare, bypassing the
+//     repo, CI and canonical deploy. Measured outcome since 2026-09-11: 116 attempts, 0 applied (93 rejected by the
+//     Cloudflare parser - mostly truncation SyntaxErrors - and 25 against deleted scripts); the 16 applied rewrites of
+//     09-10/11 went live without ever reaching the repo. Its /evolve/apply and /git/commit routes were unauthenticated.
+//     EVOLVE-PR-1 keeps the loop autonomous but lands every change the way a human change lands:
+//       target  = an open agent_issue owned (issue_triage.owner) by an eligible worker; core control-plane workers,
+//                 container workers and `const VERSION` bundles are never targeted;
+//       propose = a 160-line excerpt chosen by the issue's keywords; the model returns ONE exact anchor (must occur
+//                 exactly once in the repo file) and its replacement - never a whole file;
+//       check   = confidence >= 0.6, no VERSION edits, balanced ()[]{} and backticks, bounded size, then a second
+//                 model must approve the edit as a plausible fix that keeps behaviour otherwise unchanged;
+//       land    = branch evolve/<worker>-c<id>, one commit with worker.js + deployed-current mirror + VERSION bump,
+//                 a PR, and a self-merge ONLY when the required checks (gate, guard, mirror-guard, comparator) pass;
+//                 canonical-deploy then ships it;
+//       verify  = fleet_deploys must show the new VERSION and worker_live_audit http 200 with it live; otherwise an
+//                 inverse-edit revert PR goes through the same gate.
+//     Pace: one candidate in flight, at most one new proposal per EVOLVE_GAP_H, 24h backoff after 3 straight rejections.
+var EVOLVE_REPO = "QNFO/qnfo-workers";
+var EVOLVE_GAP_H = 6;
+var EVOLVE_REQUIRED = ["gate", "guard", "mirror-guard", "comparator"];
+var EVOLVE_DENY = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer"];
+var EVOLVE_OPEN_STATES = ["pr-open", "merged", "deployed"];
+var EVOLVE_FAIL_STATES = ["no-context", "model-skip", "invalid", "review-rejected", "ci-rejected", "ci-timeout", "pr-failed"];
+function evGh(env) {
+  return { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/evolve", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" };
+}
+__name(evGh, "evGh");
+async function evApi(env, method, path, body) {
+  var r = await timedFetch("https://api.github.com/repos/" + EVOLVE_REPO + path, { method: method, headers: evGh(env), body: body ? JSON.stringify(body) : void 0 }, 15e3);
+  var j = null;
+  try { j = await r.json(); } catch (e) {}
+  return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
+}
+__name(evApi, "evApi");
+function evDecode(b64) {
+  return new TextDecoder().decode(Uint8Array.from(atob(String(b64 || "").replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); }));
+}
+__name(evDecode, "evDecode");
+async function evSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT NOT NULL, ts TEXT, status TEXT DEFAULT 'proposed', proposal TEXT, sha256 TEXT)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_rewrite_state (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, ts TEXT, action TEXT, status TEXT, detail TEXT)").run();
+  var cols = ["kind TEXT", "issue_id INTEGER", "pr_number INTEGER", "branch TEXT", "head_sha TEXT", "merged_sha TEXT", "version_from TEXT", "version_to TEXT", "path TEXT", "note TEXT", "updated_at TEXT", "parent_id INTEGER"];
+  for (var i = 0; i < cols.length; i++) {
+    try { await env.AUDIT.prepare("ALTER TABLE evolve_candidates ADD COLUMN " + cols[i]).run(); } catch (e) {}
+  }
+}
+__name(evSchema, "evSchema");
+async function evSet(env, id, status, note, extra) {
+  var sets = ["status=?1", "note=?2", "updated_at=?3"], vals = [status, String(note || "").slice(0, 500), new Date().toISOString()];
+  var keys = Object.keys(extra || {});
+  for (var i = 0; i < keys.length; i++) { sets.push(keys[i] + "=?" + (vals.length + 1)); vals.push(extra[keys[i]]); }
+  vals.push(id);
+  var st = env.AUDIT.prepare("UPDATE evolve_candidates SET " + sets.join(",") + " WHERE id=?" + vals.length);
+  await st.bind.apply(st, vals).run();
+  var row = await env.AUDIT.prepare("SELECT worker FROM evolve_candidates WHERE id=?1").bind(id).first();
+  await env.AUDIT.prepare("INSERT INTO self_rewrite_state (worker, ts, action, status, detail) VALUES (?1, ?2, 'evolve-pr', ?3, ?4)").bind(row ? row.worker : "", new Date().toISOString(), status, ("c" + id + " " + String(note || "")).slice(0, 220)).run();
+}
+__name(evSet, "evSet");
+function evBalanced(a, b) {
+  var pairs = [["(", ")"], ["[", "]"], ["{", "}"]];
+  for (var i = 0; i < pairs.length; i++) {
+    var da = a.split(pairs[i][0]).length - a.split(pairs[i][1]).length;
+    var db = b.split(pairs[i][0]).length - b.split(pairs[i][1]).length;
+    if (da !== db) return false;
+  }
+  return (a.split("`").length - b.split("`").length) % 2 === 0;
+}
+__name(evBalanced, "evBalanced");
+function evBump(content, cid) {
+  var re = /^var VERSION = "(\d+)\.(\d+)\.(\d+)([^"]*)";$/m;
+  var all = content.match(/^var VERSION = "[^"]*";$/gm) || [];
+  if (all.length !== 1) return null;
+  var m = content.match(re);
+  if (!m) return null;
+  var from = m[1] + "." + m[2] + "." + m[3] + m[4];
+  var to = m[1] + "." + m[2] + "." + (Number(m[3]) + 1) + "-evolve-c" + cid;
+  return { from: from, to: to, content: content.replace(m[0], 'var VERSION = "' + to + '";') };
+}
+__name(evBump, "evBump");
+function evAiText(r) {
+  if (!r) return "";
+  var c = r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content;
+  if (c) return String(c);
+  if (typeof r.response === "string") return r.response;
+  if (r.response && typeof r.response === "object") return JSON.stringify(r.response);
+  return typeof r === "string" ? r : "";
+}
+__name(evAiText, "evAiText");
+async function evModelJson(env, model, system, user) {
+  var r = await env.AI.run(model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 2500, temperature: 0.1 });
+  var t = evAiText(r), m = t.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (e) { return null; }
+}
+__name(evModelJson, "evModelJson");
+async function evReadFile(env, path, ref) {
+  var r = await evApi(env, "GET", "/contents/" + path.split("/").map(encodeURIComponent).join("/") + "?ref=" + (ref || "main"));
+  if (!r.ok || !r.j || !r.j.content) return null;
+  return evDecode(r.j.content);
+}
+__name(evReadFile, "evReadFile");
+function evExcerpt(content, title) {
+  var toks = String(title || "").toLowerCase().split(/[^a-z0-9_]+/).filter(function(t) { return t.length >= 5 && !/^\d+$/.test(t); });
+  if (!toks.length) return null;
+  var lines = content.split("\n"), score = lines.map(function(l) { var x = l.toLowerCase(), n = 0; for (var i = 0; i < toks.length; i++) if (x.indexOf(toks[i]) >= 0) n++; return n; });
+  var W = 160, best = -1, bestAt = 0, cur = 0;
+  for (var i = 0; i < lines.length; i++) {
+    cur += score[i];
+    if (i >= W) cur -= score[i - W];
+    if (cur > best) { best = cur; bestAt = Math.max(0, i - W + 1); }
+  }
+  if (best <= 0) return null;
+  return lines.slice(bestAt, bestAt + W).join("\n");
+}
+__name(evExcerpt, "evExcerpt");
+// Commit worker.js + its mirror on a new branch and open a PR.
+async function evOpenPr(env, cid, worker, dir, newContent, title, body) {
+  var ref = await evApi(env, "GET", "/git/ref/heads/main");
+  var base = ref.j && ref.j.object && ref.j.object.sha;
+  if (!base) return { ok: false, why: "main ref HTTP " + ref.status };
+  var cm = await evApi(env, "GET", "/git/commits/" + base);
+  var tree = cm.j && cm.j.tree && cm.j.tree.sha;
+  if (!tree) return { ok: false, why: "base commit HTTP " + cm.status };
+  var blob = await evApi(env, "POST", "/git/blobs", { content: b64encode(newContent), encoding: "base64" });
+  if (!blob.ok) return { ok: false, why: "blob HTTP " + blob.status };
+  var tr = await evApi(env, "POST", "/git/trees", { base_tree: tree, tree: [{ path: dir + "/worker.js", mode: "100644", type: "blob", sha: blob.j.sha }, { path: dir + "/deployed-current.worker.js", mode: "100644", type: "blob", sha: blob.j.sha }] });
+  if (!tr.ok) return { ok: false, why: "tree HTTP " + tr.status };
+  var co = await evApi(env, "POST", "/git/commits", { message: title + "\n\n" + body, tree: tr.j.sha, parents: [base] });
+  if (!co.ok) return { ok: false, why: "commit HTTP " + co.status };
+  var branch = "evolve/" + worker + "-c" + cid;
+  var br = await evApi(env, "POST", "/git/refs", { ref: "refs/heads/" + branch, sha: co.j.sha });
+  if (!br.ok) return { ok: false, why: "branch HTTP " + br.status };
+  var pr = await evApi(env, "POST", "/pulls", { title: title, head: branch, base: "main", body: body });
+  if (!pr.ok) return { ok: false, why: "pull HTTP " + pr.status + " " + String(pr.j && pr.j.message || "").slice(0, 80), branch: branch };
+  return { ok: true, pr: pr.j.number, branch: branch, head: co.j.sha };
+}
+__name(evOpenPr, "evOpenPr");
+async function evClosePr(env, pr, branch) {
+  await evApi(env, "PATCH", "/pulls/" + pr, { state: "closed" });
+  if (branch) await evApi(env, "DELETE", "/git/refs/heads/" + branch);
+}
+__name(evClosePr, "evClosePr");
+// Apply anchor->replacement to the CURRENT main file, bump VERSION and open the PR.
+async function evLand(env, cid, worker, dir, anchor, replacement, title, bodyLines) {
+  var path = dir + "/worker.js";
+  var content = await evReadFile(env, path, "main");
+  if (!content) return { ok: false, status: "invalid", why: "cannot read " + path };
+  if (content.split(anchor).length !== 2) return { ok: false, status: "invalid", why: "anchor no longer occurs exactly once" };
+  var bumped = evBump(content.replace(anchor, function() { return replacement; }), cid);
+  if (!bumped) return { ok: false, status: "invalid", why: "no single numeric `var VERSION` to bump" };
+  var body = bodyLines.concat(["", "VERSION " + bumped.from + " -> " + bumped.to + ". Landed by qnfo-fleet-control EVOLVE-PR-1: merged by the loop only if gate, guard, mirror-guard and comparator pass; verified live after canonical-deploy; auto-reverted through a PR otherwise."]).join("\n");
+  var pr = await evOpenPr(env, cid, worker, dir, bumped.content, title, body);
+  if (!pr.ok) return { ok: false, status: "pr-failed", why: pr.why };
+  return { ok: true, pr: pr.pr, branch: pr.branch, head: pr.head, from: bumped.from, to: bumped.to, path: path };
+}
+__name(evLand, "evLand");
+async function evPropose(env) {
+  var model = env.EVOLVE_MODEL || "@cf/moonshotai/kimi-k2.7-code";
+  var reviewer = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
+  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('high','medium','low') AND a.title NOT LIKE 'SEC-%' AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.id LIMIT 40").all()).results || [];
+  for (var i = 0; i < cands.length; i++) {
+    var iss = cands[i], worker = String(iss.owner || "");
+    if (!/^[a-z0-9-]+$/.test(worker) || EVOLVE_DENY.indexOf(worker) >= 0) continue;
+    var toml = await evReadFile(env, worker + "/wrangler.toml", "main");
+    if (!toml || /^\[\[containers\]\]/m.test(toml)) continue;
+    var content = await evReadFile(env, worker + "/worker.js", "main");
+    if (!content || !/^var VERSION = "\d+\.\d+\.\d+[^"]*";$/m.test(content)) continue;
+    var now = new Date().toISOString();
+    var ins = await env.AUDIT.prepare("INSERT INTO evolve_candidates (worker, ts, status, kind, issue_id, path, updated_at) VALUES (?1, ?2, 'proposing', 'fix', ?3, ?4, ?2)").bind(worker, now, iss.id, worker + "/worker.js").run();
+    var cid = ins.meta.last_row_id;
+    var excerpt = evExcerpt(content, iss.title + " " + iss.d);
+    if (!excerpt) { await evSet(env, cid, "no-context", "no excerpt matched the issue keywords"); return { ok: true, cid: cid, status: "no-context" }; }
+    var sys = "You are a careful senior engineer making the smallest correct fix to a Cloudflare Worker (JavaScript module). Output strict JSON only: {\"anchor\": \"<exact contiguous text copied verbatim from the EXCERPT, at least 40 characters, occurring once>\", \"replacement\": \"<text that replaces the anchor>\", \"rationale\": \"<=200 chars\", \"confidence\": 0-1}. Never touch the VERSION line. If the excerpt does not contain the code that must change, output {\"skip\": \"<reason>\"}.";
+    var user = "ISSUE #" + iss.id + ": " + iss.title + "\n" + iss.d + "\n\nEXCERPT of " + worker + "/worker.js:\n" + excerpt;
+    var p = await evModelJson(env, model, sys, user).catch(function() { return null; });
+    if (!p || p.skip || !p.anchor || p.replacement == null) { await evSet(env, cid, "model-skip", p && p.skip ? String(p.skip) : "no usable JSON from " + model); return { ok: true, cid: cid, status: "model-skip" }; }
+    var anchor = String(p.anchor), repl = String(p.replacement), why = null;
+    if (anchor.length < 40) why = "anchor shorter than 40 chars";
+    else if (content.split(anchor).length !== 2) why = "anchor occurs " + (content.split(anchor).length - 1) + " times";
+    else if (anchor === repl) why = "no-op edit";
+    else if (/VERSION\s*=/.test(anchor + repl)) why = "edit touches VERSION";
+    else if (repl.length > 8e3 || Math.abs(repl.length - anchor.length) > 4e3) why = "edit too large";
+    else if (!evBalanced(anchor, repl)) why = "unbalanced brackets or backticks";
+    else if (!(Number(p.confidence) >= 0.6)) why = "confidence " + p.confidence;
+    var proposal = JSON.stringify({ anchor: anchor, replacement: repl, rationale: String(p.rationale || "").slice(0, 300), confidence: p.confidence, model: model });
+    await env.AUDIT.prepare("UPDATE evolve_candidates SET proposal=?1 WHERE id=?2").bind(proposal, cid).run();
+    if (why) { await evSet(env, cid, "invalid", why); return { ok: true, cid: cid, status: "invalid" }; }
+    var rv = await evModelJson(env, reviewer, "You review a proposed code edit to a production Cloudflare Worker. Approve only if it plausibly fixes the issue, is syntactically valid in context, and leaves unrelated behaviour unchanged. Output strict JSON only: {\"approve\": true|false, \"reason\": \"<=200 chars\"}.", "ISSUE #" + iss.id + ": " + iss.title + "\n" + iss.d + "\n\nCONTEXT:\n" + excerpt + "\n\nREPLACE:\n" + anchor + "\n\nWITH:\n" + repl + "\n\nRATIONALE: " + String(p.rationale || "")).catch(function() { return null; });
+    if (!rv || rv.approve !== true) { await evSet(env, cid, "review-rejected", rv ? String(rv.reason || "") : "reviewer returned no JSON"); return { ok: true, cid: cid, status: "review-rejected" }; }
+    var title = "evolve(" + worker + "): agent_issue " + iss.id + " (candidate " + cid + ")";
+    var land = await evLand(env, cid, worker, worker, anchor, repl, title, ["Automated fix proposal for agent_issue #" + iss.id + ": " + iss.title, "", "Rationale (" + model + "): " + String(p.rationale || ""), "Review (" + reviewer + "): approved - " + String(rv.reason || "")]);
+    if (!land.ok) { await evSet(env, cid, land.status, land.why); return { ok: true, cid: cid, status: land.status }; }
+    await evSet(env, cid, "pr-open", "PR " + land.pr, { pr_number: land.pr, branch: land.branch, head_sha: land.head, version_from: land.from, version_to: land.to });
+    return { ok: true, cid: cid, status: "pr-open", pr: land.pr };
+  }
+  return { ok: true, status: "idle", note: "no eligible open issue" };
+}
+__name(evPropose, "evPropose");
+async function evRevert(env, c, why) {
+  var p = null;
+  try { p = JSON.parse(c.proposal || "null"); } catch (e) {}
+  if (!p || !p.anchor) { await evSet(env, c.id, "revert-failed", "no stored edit: " + why); return; }
+  var now = new Date().toISOString();
+  var ins = await env.AUDIT.prepare("INSERT INTO evolve_candidates (worker, ts, status, kind, issue_id, path, parent_id, proposal, updated_at) VALUES (?1, ?2, 'proposing', 'revert', ?3, ?4, ?5, ?6, ?2)").bind(c.worker, now, c.issue_id, c.path, c.id, JSON.stringify({ anchor: p.replacement, replacement: p.anchor, rationale: "revert of candidate " + c.id + ": " + why })).run();
+  var rid = ins.meta.last_row_id;
+  var land = await evLand(env, rid, c.worker, c.worker, p.replacement, p.anchor, "evolve(" + c.worker + "): revert candidate " + c.id, ["Automatic revert of evolve candidate " + c.id + " (PR " + c.pr_number + "): " + why]);
+  if (!land.ok) {
+    await evSet(env, rid, "revert-failed", land.why);
+    await evSet(env, c.id, "revert-failed", why + "; revert PR not opened: " + land.why);
+    try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3)").bind("EVOLVE-REVERT-FAILED-1: " + c.worker + " candidate " + c.id + " needs a manual revert", "Evolve candidate " + c.id + " (PR " + c.pr_number + ", VERSION " + c.version_to + ") failed post-deploy verification (" + why + ") and the inverse-edit revert could not be opened: " + land.why, Date.now()).run(); } catch (e) {}
+    return;
+  }
+  await evSet(env, rid, "pr-open", "PR " + land.pr, { pr_number: land.pr, branch: land.branch, head_sha: land.head, version_from: land.from, version_to: land.to });
+  await evSet(env, c.id, "reverting", why + "; revert PR " + land.pr);
+}
+__name(evRevert, "evRevert");
+async function evAdvance(env, c) {
+  var ageH = (Date.now() - Date.parse(c.updated_at || c.ts)) / 36e5;
+  if (c.status === "pr-open") {
+    var pr = await evApi(env, "GET", "/pulls/" + c.pr_number);
+    if (!pr.ok) return { cid: c.id, note: "pull HTTP " + pr.status };
+    if (pr.j.merged) { await evSet(env, c.id, "merged", "merged " + String(pr.j.merge_commit_sha || "").slice(0, 7), { merged_sha: pr.j.merge_commit_sha }); return { cid: c.id, status: "merged" }; }
+    if (pr.j.state === "closed") { await evSet(env, c.id, "ci-rejected", "PR closed without merge"); return { cid: c.id, status: "closed" }; }
+    var head = pr.j.head && pr.j.head.sha;
+    var runs = await evApi(env, "GET", "/commits/" + head + "/check-runs?per_page=100");
+    var by = {};
+    ((runs.j && runs.j.check_runs) || []).forEach(function(r) { if (EVOLVE_REQUIRED.indexOf(r.name) >= 0 && (!by[r.name] || r.id > by[r.name].id)) by[r.name] = r; });
+    var failed = EVOLVE_REQUIRED.filter(function(n) { return by[n] && by[n].status === "completed" && ["success", "neutral", "skipped"].indexOf(by[n].conclusion) < 0; });
+    if (failed.length) { await evClosePr(env, c.pr_number, c.branch); await evSet(env, c.id, "ci-rejected", "required check(s) failed: " + failed.join(",")); return { cid: c.id, status: "ci-rejected" }; }
+    var green = EVOLVE_REQUIRED.every(function(n) { return by[n] && by[n].status === "completed"; });
+    if (green) {
+      var mg = await evApi(env, "PUT", "/pulls/" + c.pr_number + "/merge", { merge_method: "squash", sha: head, commit_title: pr.j.title + " (#" + c.pr_number + ")" });
+      if (mg.ok) { await evApi(env, "DELETE", "/git/refs/heads/" + c.branch); await evSet(env, c.id, "merged", "self-merged on green required checks", { merged_sha: mg.j && mg.j.sha }); return { cid: c.id, status: "merged" }; }
+      if (mg.status === 405 || mg.status === 409) await evApi(env, "PUT", "/pulls/" + c.pr_number + "/update-branch", {});
+      return { cid: c.id, note: "merge HTTP " + mg.status };
+    }
+    if (ageH > 3) { await evClosePr(env, c.pr_number, c.branch); await evSet(env, c.id, "ci-timeout", "required checks not complete after 3h"); return { cid: c.id, status: "ci-timeout" }; }
+    return { cid: c.id, status: "pr-open", note: "waiting on checks" };
+  }
+  if (c.status === "merged") {
+    var dep = await env.AUDIT.prepare("SELECT ts FROM fleet_deploys WHERE worker=?1 AND to_sha=?2 AND ok=1 ORDER BY id DESC LIMIT 1").bind(c.worker, c.version_to).first();
+    if (dep) { await evSet(env, c.id, "deployed", "canonical deploy " + dep.ts); return { cid: c.id, status: "deployed" }; }
+    if (ageH > 3) { await evSet(env, c.id, "deploy-missing", "no fleet_deploys row for " + c.version_to + " 3h after merge"); return { cid: c.id, status: "deploy-missing" }; }
+    return { cid: c.id, status: "merged", note: "waiting on canonical deploy" };
+  }
+  if (c.status === "deployed") {
+    var la = await env.AUDIT.prepare("SELECT http, live_version, probed_at FROM worker_live_audit WHERE worker=?1").bind(c.worker).first();
+    var probedAfter = la && la.probed_at && Date.parse(String(la.probed_at).replace(" ", "T") + (/[zZ]$/.test(la.probed_at) ? "" : "Z")) > Date.parse(c.updated_at);
+    if (!probedAfter) return { cid: c.id, status: "deployed", note: "waiting on a live audit after deploy" };
+    if (la.http === 200 && la.live_version === c.version_to) {
+      await evSet(env, c.id, c.kind === "revert" ? "reverted-verified" : "verified", "live " + la.live_version + " http 200");
+      if (c.kind === "revert" && c.parent_id) await evSet(env, c.parent_id, "reverted", "revert candidate " + c.id + " verified live");
+      if (c.kind !== "revert" && c.issue_id) { try { await env.AUDIT.prepare("UPDATE agent_issues SET description = description || ?1, updated_at=?2 WHERE id=?3").bind(" | EVOLVE-PR-1: candidate " + c.id + " merged as PR " + c.pr_number + " and verified live as " + c.version_to + "; close against this issue's own DoD.", Date.now(), c.issue_id).run(); } catch (e) {} }
+      return { cid: c.id, status: "verified" };
+    }
+    if (c.kind === "revert") { await evSet(env, c.id, "revert-failed", "revert live check failed: http " + la.http + " version " + la.live_version); return { cid: c.id, status: "revert-failed" }; }
+    await evRevert(env, c, "post-deploy live check failed: http " + la.http + ", live version " + la.live_version);
+    return { cid: c.id, status: "reverting" };
+  }
+  return { cid: c.id, status: c.status };
+}
+__name(evAdvance, "evAdvance");
+async function evolveTick(env, force) {
+  if (!env.GITHUB_TOKEN) return { ok: false, why: "no GITHUB_TOKEN" };
+  if (!env.AI) return { ok: false, why: "no AI binding" };
+  await evSchema(env);
+  var inflight = await env.AUDIT.prepare("SELECT * FROM evolve_candidates WHERE status IN ('pr-open','merged','deployed') ORDER BY id ASC LIMIT 1").first();
+  if (inflight) return { ok: true, advanced: await evAdvance(env, inflight) };
+  var last = await env.AUDIT.prepare("SELECT ts FROM evolve_candidates WHERE kind IS NOT NULL ORDER BY id DESC LIMIT 1").first();
+  if (!force && last && Date.now() - Date.parse(last.ts) < EVOLVE_GAP_H * 36e5) return { ok: true, idle: "gap " + EVOLVE_GAP_H + "h" };
+  var recent = (await env.AUDIT.prepare("SELECT status, ts FROM evolve_candidates WHERE kind IS NOT NULL ORDER BY id DESC LIMIT 3").all()).results || [];
+  if (!force && recent.length === 3 && recent.every(function(r) { return EVOLVE_FAIL_STATES.indexOf(r.status) >= 0; }) && Date.now() - Date.parse(recent[0].ts) < 24 * 36e5) return { ok: true, idle: "backoff after 3 rejections" };
+  return await evPropose(env);
+}
+__name(evolveTick, "evolveTick");
+// Folded autopilot activity snapshot: one row per scheduled worker per day (dashboard req24).
+async function activitySnapshotDaily(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_activity_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, worker_name TEXT NOT NULL, day TEXT NOT NULL, req24 INTEGER, source TEXT, ts TEXT)").run();
+  var r = await timedFetch("https://fleet.qnfo.org/api/state", { headers: { "User-Agent": "qnfo-fleet-control/" + VERSION } }, 2e4);
+  if (!r.ok) return { ok: false, why: "dashboard HTTP " + r.status };
+  var st = await r.json();
+  var day = new Date().toISOString().slice(0, 10), now = new Date().toISOString(), stmts = [];
+  (st.scheduled || []).forEach(function(s) {
+    if (!s.name || s.req24 == null) return;
+    stmts.push(env.AUDIT.prepare("DELETE FROM worker_activity_daily WHERE worker_name=?1 AND day=?2").bind(s.name, day));
+    stmts.push(env.AUDIT.prepare("INSERT INTO worker_activity_daily (worker_name, day, req24, source, ts) VALUES (?1, ?2, ?3, 'dashboard-scheduled-req24', ?4)").bind(s.name, day, s.req24, now));
+  });
+  for (var i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+  return { ok: true, workers: stmts.length / 2 };
+}
+__name(activitySnapshotDaily, "activitySnapshotDaily");
 var worker_default2 = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -2560,6 +2858,17 @@ var worker_default2 = {
       var mok = mat && ((env.DEPLOY_ADMIN_TOKEN && mat === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && mat === env.SELFHEAL_TOKEN));
       if (!mok) return json({ error: "unauthorized" }, 401);
       return json(await refreshOwnedMetrics(env));
+    }
+    if (p === "/evolve/status" && request.method === "GET") {
+      try { await evSchema(env); } catch (e) {}
+      var evr = await env.AUDIT.prepare("SELECT id, worker, kind, status, issue_id, pr_number, version_from, version_to, note, ts, updated_at FROM evolve_candidates WHERE kind IS NOT NULL ORDER BY id DESC LIMIT 20").all().catch(function() { return { results: [] }; });
+      return json({ ok: true, version: VERSION, loop: "EVOLVE-PR-1", gap_hours: EVOLVE_GAP_H, required_checks: EVOLVE_REQUIRED, candidates: evr.results || [] });
+    }
+    if (p === "/evolve/tick" && request.method === "POST") {
+      var eah = request.headers.get("Authorization") || "";
+      var eat = eah.indexOf("Bearer ") === 0 ? eah.slice(7) : eah;
+      if (!(eat && ((env.DEPLOY_ADMIN_TOKEN && eat === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && eat === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await evolveTick(env, new URL(request.url).searchParams.get("force") === "1"));
     }
     if (p === "/advisor" || p.startsWith("/advisor/")) {
       const u2 = new URL(request.url);
@@ -2579,12 +2888,14 @@ var worker_default2 = {
     if (cron === "0 3 * * *") {
       ctx.waitUntil(disposeRetired(env));
       ctx.waitUntil(costImpactGuard(env).catch((e) => console.error("costImpactGuard error:", e && e.message || e)));
+      ctx.waitUntil(activitySnapshotDaily(env).catch((e) => console.error("activitySnapshotDaily error:", e && e.message || e)));
       return calibratorMod.default.scheduled(event, env, ctx);
     }
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
     ctx.waitUntil(pollObservability(env).catch((e) => console.error("pollObservability error:", e && e.message || e)));
     ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e)));
     ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
+    ctx.waitUntil(evolveTick(env, false).catch((e) => console.error("evolveTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };

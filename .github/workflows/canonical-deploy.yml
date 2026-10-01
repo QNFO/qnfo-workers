@@ -115,6 +115,9 @@ jobs:
                 # here made every change under qnfo-containers-pilot/ turn this workflow red for a
                 # refusal that is the guard working. They ship through deploy-containers-pilot.yml /
                 # restore-container-config-1485.yml (wrangler), so skip them in push-diff mode.
+                # WORKER-FOLD-SKIP-1 (2026-10-01): a FOLDED marker means the worker's duties now live inside other
+                # workers (qnfo-autopilot, notes-intake); deploying the old directory would recreate a retired worker.
+                if [ -f "$d/FOLDED" ]; then echo "skip $d (FOLDED: $(head -1 "$d/FOLDED"))"; continue; fi
                 if grep -q '^\[\[containers\]\]' "$d/wrangler.toml"; then echo "skip $d (container worker: canonical /content deploy refuses it by design; deployed by deploy-containers-pilot / restore-container-config-1485)"; continue; fi
                 echo "$n $d/worker.js" >> /tmp/targets.txt
               done < /tmp/dirs.txt
