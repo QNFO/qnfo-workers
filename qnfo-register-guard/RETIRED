@@ -1,0 +1,5 @@
+qnfo-register-guard is RETIRED (2026-10-01). Do not redeploy this directory.
+
+Why: the worker relabels task_dod_register rows whose owner is 'scheduled-runner' or 'fleet' when no executor is cited. No open row has either owner any more (open owners are agent, qnfo-fleet-control, qnfo-kaizen, qnfo-research-exec), so it would relabel nothing. The detection it mirrored (overdue, no-executor, agent-uncited) and its daily digest already run in qnfo-cloud-ops (worker.js "register guard", kinds overdue/no_executor/agent_uncited). The script has been absent from the account since its last run on 2026-09-13 (cloud_ops_events kind=register-guard, 04:30Z daily); it has no deployment_history or fleet_deploys row. audit-hub embeds an older copy of the same module and is itself not deployed.
+
+canonical-deploy.yml skips any directory containing a RETIRED file. This source is kept for reference only.
