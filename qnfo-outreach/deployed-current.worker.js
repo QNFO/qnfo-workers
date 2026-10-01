@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.5-shared-cap-notes";
+var VERSION = "0.3.6-api-internal";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -274,10 +274,21 @@ async function bumpFunnel(env, mined, drafted, sent) {
 }
 __name(bumpFunnel, "bumpFunnel");
 var worker_default = {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method;
+    // OUTREACH-API-INTERNAL-1 (2026-10-01, charter H0, #1735 sweep): GET /api/contacts and /api/sends returned third-party
+    // contact rows (name, email, organisation, suppression reason) and sent message bodies to anyone, and POST /api/miners/github
+    // and /api/warmup ran on demand. Nothing in the fleet calls /api/* (the dashboard probes /health only). They now answer
+    // only an internal caller authenticated by service-binding props, or a bearer equal to OUTREACH_API_TOKEN when that secret
+    // is set (not set today, so the routes fail closed). The weekday cron and the public RFC comment form are unchanged.
+    if (path.startsWith("/api/")) {
+      const caller = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+      const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      const tokOk = !!env.OUTREACH_API_TOKEN && bearer.length === env.OUTREACH_API_TOKEN.length && bearer === env.OUTREACH_API_TOKEN;
+      if (!/^qnfo-[a-z0-9-]{1,60}$/.test(caller) && !tokOk) return json({ error: "forbidden: /api/* is internal only (OUTREACH-API-INTERNAL-1)" }, 403);
+    }
     if (path === "/health" || path === "/") {
       return json({
         ok: true,
@@ -286,6 +297,8 @@ var worker_default = {
         activation_at: "2026-09-13T00:00:00Z",
         warmup_from: "2026-09-08T00:00:00Z",
         cron: "0 11 * * 1-5",
+        capabilities: ["contact-mining", "campaign-sends", "warmup-self-check", "rfc-comments"],
+        limitations: ["/api/* answers only internal service-binding callers (props) or OUTREACH_API_TOKEN; public callers get 403", "sends only on the weekday 11:00 cron, inside the fleet-wide shared daily and per-domain caps (fail closed)", "never mails a suppressed address (email_suppression or contacts.suppress)", "warm-up mail goes only to the own-mailbox allowlist"],
         mode: Date.now() >= ACTIVATION_AT_MS ? "external-enabled" : "draft+warmup",
         day: utcDay()
       });

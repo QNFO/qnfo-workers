@@ -1,4 +1,4 @@
-var VERSION = "1.6.5-metric-undefined-class"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.6.6-run-internal"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -29,13 +29,22 @@ __name222(corsHeaders, "corsHeaders");
 __name2222(corsHeaders, "corsHeaders");
 __name22222(corsHeaders, "corsHeaders");
 var worker_default = {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const u = new URL(request.url), p = u.pathname;
     const origin = request.headers.get("Origin") || "https://qnfo.org";
     const h = corsHeaders(origin);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
     if (p === "/health") return health(env, origin);
     if (p === "/status") return handleStatus(env, origin);
+    // LIFECYCLE-RUN-INTERNAL-1 (2026-10-01, charter H0, #1735 sweep): every /run/* route was anonymous. GET /run/secrets-audit
+    // returned the secret NAMES of every worker in the account (read with this worker's CF_API_TOKEN), /run/backup wrote a
+    // full D1 export to R2 per call, and /run/memory-maintain?commit=1 mutated agent memory. No worker or script calls these
+    // routes (qnfo-ops binds this worker for /health only); the crons do the work. They now answer only an internal caller
+    // authenticated by service-binding props (ctx.props.caller, settable only by a deployer of the caller).
+    if (p.startsWith("/run/")) {
+      const caller = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+      if (!/^qnfo-[a-z0-9-]{1,60}$/.test(caller)) return new Response(JSON.stringify({ error: "forbidden: /run/* is internal only (LIFECYCLE-RUN-INTERNAL-1); the crons run this work" }), { status: 403, headers: h });
+    }
     if (p === "/run/drift") return handleDrift(env, origin);
     if (p === "/run/backup") return handleBackup(env, origin);
     if (p === "/run/secrets-audit") return handleSecretsAudit(env, origin);
@@ -77,6 +86,8 @@ function health(env, origin) {
     worker: "qnfo-lifecycle",
     version: QNFO_VERSION,
     cronSchedules: 5,
+    capabilities: ["lifecycle-scan", "graph-seed", "d1-backup", "drift-audit", "secrets-audit", "registry-sync", "ula-check", "memory-maintain", "metric-freshness"],
+    limitations: ["/run/* answers only internal service-binding callers (props); public callers get 403", "work runs on its crons: hourly registry sync, daily 03:00 maintenance, 05:00 backup, Monday 08:00 secrets audit, monthly graph seed", "the secrets audit reads secret names only, never values"],
     features: ["lifecycle-scan", "graph-seed", "backup", "drift-audit-enhanced", "secrets-audit-enhanced", "registry-sync", "infra-ping", "ula-check", "memory-maintain", "metric-freshness"],
     bindings: { d1: ["qnfo-audit", "qnfo-graph", "portfolio-state", "living-paper", "ipatent-db"], r2: ["qnfo", "qnfo-audit", "qnfo-backups"] }
   }), { headers: h });

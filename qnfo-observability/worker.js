@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.2.13-chain-cadence"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.2.14-public-read-only"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -641,11 +641,25 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/+$/, '') || '/';
+    // OBS-PUBLIC-READONLY-1 (2026-10-01, charter H0, #1735 sweep): evOkAuth() fails OPEN when EVENTS_TOKEN is unset (it is),
+    // so on the public hostname anyone could read every worker's trace logs (logs_json, exceptions_json, URLs) at
+    // /workers/logs, post events, and resolve or mute issue_ledger rows. The only external callers of /v1/* (qnfo-events,
+    // audit-hub, qnfo-chameleon) are retired; the dashboard reaches /run/ingest through its service binding, whose hostname a
+    // public request cannot carry. On a public hostname only the aggregate reads stay anonymous; everything else needs a
+    // configured EVENTS_TOKEN bearer.
+    if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname) && !['/health', '/integration', '/trend'].includes(p)) {
+      const tok = env.EVENTS_TOKEN || '';
+      const hdr = req.headers.get('Authorization') || '';
+      const given = hdr.startsWith('Bearer ') ? hdr.slice(7) : '';
+      let okTok = !!tok && given.length === tok.length;
+      if (okTok) { let d = 0; for (let i = 0; i < tok.length; i++) d |= tok.charCodeAt(i) ^ given.charCodeAt(i); okTok = d === 0; }
+      if (!okTok) return json({ error: 'forbidden: on a public hostname only /health, /integration and /trend are open (OBS-PUBLIC-READONLY-1)' }, 403);
+    }
     await ensureSchema(env);
     if (p === '/health') {
       const cursor = await getCursor(env);
       const agg = await env.AUDIT.prepare('SELECT COUNT(*) n, MAX(ingested_at) latest FROM worker_logs').first();
-      return json({ ok: true, name: NAME, version: VERSION, cursor, log_rows: agg ? agg.n : 0, latest_ingest: agg ? agg.latest : null });
+      return json({ ok: true, name: NAME, version: VERSION, capabilities: ['trace-log-ingest', 'integration-assessment', 'trend', 'issue-ledger', 'fleet-probe-summary'], limitations: ['on a public hostname only /health, /integration and /trend are open; other routes need EVENTS_TOKEN or a service binding', 'ingests worker trace logs from R2 on the hourly :17 cron', '/workers/logs returns at most 200 rows'], cursor, log_rows: agg ? agg.n : 0, latest_ingest: agg ? agg.latest : null });
     }
     if (p === '/integration') {
       const summary = await assessIntegration(env);
