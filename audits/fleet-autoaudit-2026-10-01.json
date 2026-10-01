@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-01 12:04:40",
+  "audited_at": "2026-10-01 12:10:00",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-research-exec"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -33,14 +40,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.10.0-portfolio-guard",
-        "repo": "1.9.1-invest-spend-basis",
-        "worker": "qnfo-fleet-dashboard"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -395,7 +395,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -498,6 +498,11 @@
         "worker": "qnfo-fleet-control"
       },
       {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.10.0-portfolio-guard",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
         "dir": "qnfo-gateway",
         "version": "3.7.22-scholar-pdf-rendered",
         "worker": "qnfo-gateway"
@@ -564,7 +569,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.36-zenodo-version-requests",
+        "version": "0.9.37-ai-text-timeout",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1154,11 +1159,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.9.1-invest-spend-basis",
+      "before": "1.10.0-portfolio-guard",
       "http": 200,
       "live": "1.10.0-portfolio-guard",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1362,9 +1367,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.36-zenodo-version-requests",
+      "before": "0.9.37-ai-text-timeout",
       "http": 200,
-      "live": "0.9.36-zenodo-version-requests",
+      "live": "0.9.37-ai-text-timeout",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
