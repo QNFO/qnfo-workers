@@ -1,8 +1,16 @@
 {
-  "audited_at": "2026-10-01 13:01:11",
+  "audited_at": "2026-10-01 14:17:34",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-cloud-ops",
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -462,7 +470,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.2-register-relabel",
+        "version": "1.16.3-identity-moved",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -492,7 +500,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.11.1-owner-edit",
+        "version": "1.12.0-identity-store",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1016,9 +1024,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.2-register-relabel",
+      "before": "1.16.3-identity-moved",
       "http": 200,
-      "live": "1.16.2-register-relabel",
+      "live": "1.16.3-identity-moved",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1152,9 +1160,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.11.1-owner-edit",
+      "before": "1.12.0-identity-store",
       "http": 200,
-      "live": "1.11.1-owner-edit",
+      "live": "1.12.0-identity-store",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
