@@ -6,8 +6,10 @@ portfolio (programmes, projects, products) and its performance, reach, reputatio
 continued Claude usage). The deterministic duties below (owner-voice guard, kill switches, scorecard snapshot, run log,
 owner action list) run as a daily cron in qnfo-fleet-dashboard (`portfolioDailyRun`). The claude.ai Routines that used to
 run this procedure (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, `trig_01QXd2AG8oTevkuVRsfZyHG4`), the daily fleet issue sweep and every
-session check-in were disabled on 2026-10-01 at the owner's direction. Judgement work
-(shipping code) is done by whichever agent session the owner starts, or by the fleet's own Cloudflare agents.
+session check-in were disabled on 2026-10-01 at the owner's direction. Judgement work runs on the fleet's own Cloudflare
+agents: qnfo-fleet-control `evolveTick` (anchored PRs from `agent_issues`), the code loop, the intent-orchestrator (owner
+prompts and card notes, OWNER-NOTES-ROUTE-1) and OBJECTIVE-REVISION-APPLY-1 (owner-ratified objective changes, applied by
+qnfo-fleet-dashboard). An agent session the owner starts is an optional contributor; no step below waits for one.
 Any run may improve this file through a pull request; the improvement is part of the job.
 
 ## 1. The system of record
@@ -24,7 +26,7 @@ Any run may improve this file through a pull request; the improvement is part of
 Other recurring work, and the split so nothing runs twice (all of it on Cloudflare crons; CLOUDFLARE-ONLY-HOST-1):
 - **Fleet defects** (hourly): qnfo-fleet-control `evolveTick` turns open `agent_issues` into anchored PRs, and
   qnfo-backlog-exec (01:10 UTC) closes or reopens them with evidence. This procedure does not sweep general defects; it
-  takes only STRATEGY-tagged issues (source `claude-code-session:STRATEGY-1`) and reach/ROI work.
+  takes only STRATEGY-tagged issues (source or title naming STRATEGY, whoever filed them) and reach/ROI work.
 - **Identity weekly review** (IDENTITY-WEEKLY-1, Mondays after 06:00 UTC, qnfo-fleet-dashboard on its existing `*/15` cron,
   once a day via the `cloud_ops_events` row `identity-weekly-<day>`): Bluesky, Mastodon, Zenodo, ORCID, GitHub and
   OpenAlex metrics; live bios against the canonical copy and the STRATEGY 2.2 never-claim list; deadline and page checks
@@ -35,8 +37,10 @@ Other recurring work, and the split so nothing runs twice (all of it on Cloudfla
   (no Routines, no check-ins); a session that wants to follow its PR relies on GitHub events while it is open.
 
 ## 2. Daily run (every day)
+Steps 2, 4 and 7 run unattended in `portfolioDailyRun`. Steps 1, 3, 5 and 6 are what a contributor does with that run
+(the fleet's code loop and issue loop, or an optional session); none of them blocks the cron.
 1. **Orient.** Read `CLAUDE.md`, `docs/STRATEGY.md`, this file, the last 3 `portfolio_runs` rows, open PRs, and open
-   agent_issues whose source is `claude-code-session:STRATEGY-1`. Skip anything another session is visibly working on
+   STRATEGY-tagged agent_issues (source or title naming STRATEGY). Skip anything another contributor is visibly working on
    (an open PR or a comment within the last 2 hours).
 2. **Protect the owner's name** (before anything else ships):
    - Bluesky `qnfo.bsky.social`, last 24 h (public AppView `getAuthorFeed`): every post on-pillar, no mojibake
@@ -62,6 +66,8 @@ Other recurring work, and the split so nothing runs twice (all of it on Cloudfla
    summary of at most 12 lines: what shipped, scorecard changes, risks, and the owner-only items still open.
 
 ## 3. Weekly (Mondays, after the daily run)
+The Monday `portfolio_runs` row (kind `weekly-cron`) carries the 7- and 28-day KPI deltas unattended; the rest of this
+section is contributor work that reads it.
 - Scorecard trend over 7 and 28 days; update STRATEGY section 1 "Where we are" and the section 9 progress column.
 - Distribution allocation for the coming week (STRATEGY 6.4): which selected works, formats and slots, from the attributed
   results. Until the bandit is built, choose by hand from the data and record the reasoning in the run row.
@@ -74,7 +80,9 @@ Other recurring work, and the split so nothing runs twice (all of it on Cloudfla
 - Portfolio review against STRATEGY section 7: invest, maintain, reposition or retire each line, with the numbers.
 - Cost review: total monthly cost (about $725 on 2026-09-26) by source, against the targets in section 8.
 - Funding and career pipeline: deadlines in the next 45 days and their state (Identity doc Opportunities).
-- A one-page monthly report in `docs/reports/YYYY-MM.md`: scorecard, decisions, next month's three priorities.
+- The report of record is the `portfolio_runs` row of kind `monthly-cron` written on the 1st (scorecard, deltas, owner
+  actions), read at fleet.qnfo.org. A one-page write-up in `docs/reports/YYYY-MM.md` (decisions, next month's three
+  priorities) is a contributor's addition, not a dependency.
 
 ## 5. Dates that drive the plan
 | Date | What |

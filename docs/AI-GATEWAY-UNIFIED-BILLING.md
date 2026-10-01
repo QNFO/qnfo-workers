@@ -3,6 +3,12 @@
 Status: SPEC + VERIFIED PATCH (branch `ops/aigw-unified-billing-2026-09-16`), 2026-09-16.
 Owner: qnfo-ops. Evidence for every claim below is a live tool call or a Cloudflare doc page; nothing here is assumed.
 
+> **Amended 2026-10-01 (NO-CLAUDE-RUNTIME-DEPENDENCY-1, owner directive: the fleet must not depend on continued Claude
+> usage).** The fleet has no Anthropic upstream: qnfo-ops 2.38.34 dropped the `claude-sonnet-4.5` route (any `claude-*`
+> id now routes to the public ops model), qnfo-ai has none, and the recommended client config and canaries below no longer
+> list Anthropic models. Fallback when DeepSeek fails is `deepseek-v4-pro`, then the free `@cf` budget fallback. The
+> Anthropic rows in the catalogue (s4) are left as a record of what the gateway can reach, not as a recommendation.
+
 ---
 
 ## 1. Problem statement (user directive)
@@ -170,7 +176,6 @@ DeepChat provider entry (OpenAI-compatible), one provider replaces the per-provi
   "baseURL": "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b/ai/v1",
   "apiKey": "<CF API token with Account>Workers AI>Read>",
   "models": [
-    "anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5.1",
     "openai/gpt-5.6-sol", "openai/gpt-5.6-luna", "openai/gpt-5.5",
     "deepseek/deepseek-v4-pro", "@cf/deepseek-ai/deepseek-v4-flash-0731",
     "@cf/zai-org/glm-5.3", "@cf/moonshotai/kimi-k2.7-code"
@@ -178,7 +183,7 @@ DeepChat provider entry (OpenAI-compatible), one provider replaces the per-provi
 }
 ```
 
-Anthropic-native tooling can use `…/ai/v1/messages` with the same token. Workers AI ids additionally need
+Workers AI ids additionally need
 `cf-aig-gateway-id: default`; if the client cannot send custom headers, use third-party ids only on that provider entry.
 
 ### 5.3 Analytics + logging feedback loop (the reason to move at all)
@@ -200,7 +205,7 @@ Anthropic-native tooling can use `…/ai/v1/messages` with the same token. Worke
 1. `GET /accounts/{acct}/ai-gateway/gateways/default` returns the gateway with expected `collect_logs`,
    `log_management`, `spend_limits` and the credits balance.
 2. One canary call per provider through `/ai/v1/chat/completions` returns 200 with `usage` populated
-   (deepseek/deepseek-v4-pro, anthropic/claude-sonnet-5, openai/gpt-5.6-luna, @cf/deepseek-ai/deepseek-v4-flash-0731).
+   (deepseek/deepseek-v4-pro, openai/gpt-5.6-luna, @cf/deepseek-ai/deepseek-v4-flash-0731; no Anthropic canary since 2026-10-01).
 3. The same call appears in `GET …/logs` with a `request_id`, provider, model and cost.
 4. `qnfo-ops /health` shows VERSION 2.31.0 and `ai_queries` shows a gateway-served row for the next chat.
 5. Rollback: redeploy the previous version (or set `AIGW_ENABLED=0`); the direct path is untouched by the patch.

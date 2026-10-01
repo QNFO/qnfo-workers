@@ -54,8 +54,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   objective decisions, the prompt panel), never by "telling a session". The dashboard refuses claude.ai and anthropic.com
   links in queue items, and `cloudflare-only-host-guard.py` (deploy-gate) fails CI on a claude.ai link in any tracked file.
 - Recurring verification belongs to worker crons (LOOP-WATCH-1 in qnfo-fleet-control, `GET /loops`, files and self-closes
-  `CHARTER-TICK-STALE-1`, `PORTFOLIO-SYNC-STALE-1` and friends), not to session check-ins or routines. A session may arm a
-  short-lived reminder for its own in-flight PR, and deletes it when done.
+  `CHARTER-TICK-STALE-1`, `PORTFOLIO-SYNC-STALE-1` and friends), not to session check-ins or routines. A session follows
+  its own in-flight PR through GitHub events while it is open; it arms no claude.ai reminder, check-in or Routine.
 - Owner documents (identity, brand, CV, opportunities, their archives and edit history) live in the private D1
   `qnfo-identity`, table `owner_docs` (canonical key `identity`), bound ONLY to qnfo-fleet-dashboard (IDENTITY-STORE-1). The
   dashboard serves and edits them at fleet.qnfo.org/owner and runs IDENTITY-WEEKLY-1 from them; never bind `qnfo-identity`
@@ -64,8 +64,11 @@ because each one was broken at least once; the linked issue holds the evidence.
   `qnfo-identity.owner_docs` and first keeps the current text as a `<key>--v<yyyymmddhhmmss>` row, visibility `history`. The final verbatim export of the retired Claude
   Doc (rev 46, with its five comment threads) is `personal-life.owner_documents` key `identity-brand-opportunities` (private
   plane). Never recreate an owner document on claude.ai.
-- Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted) and this session's routines;
-  the remaining claude.ai Routines are tracked by ROUTINES-ON-CLAUDE-1 and OBJECTIVE-REVISION-APPLY-1.
+- Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted); every claude.ai Routine and
+  check-in (disabled; ROUTINES-ON-CLAUDE-1 tracks the owner deleting them); owner-ratified objective revisions with no
+  Cloudflare consumer (OBJECTIVE-REVISION-APPLY-1, applied by qnfo-fleet-dashboard 1.13.0); card notes only sessions read
+  (now intents, OWNER-NOTES-ROUTE-1); the qnfo-ops `claude-sonnet-4.5` route (2.38.34: no Anthropic upstream anywhere in
+  the fleet; a `claude-*` model id routes to the ops model).
 
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`

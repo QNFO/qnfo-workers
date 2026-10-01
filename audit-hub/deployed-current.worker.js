@@ -3,7 +3,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.7";
+var VERSION = "1.1.8";
 var SELF = { purpose: "fleet event/log audit + act + feedback loops (automated, user-free)", checks: ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "F1", "F2", "F3", "F4"] };
 var HUMAN_DOMAINS = new Set("outlook.com hotmail.com live.com msn.com gmail.com yahoo.com ymail.com icloud.com me.com mac.com protonmail.com proton.me zoho.com aol.com gmx.com tutanota.com".split(" "));
 function json(o, st) {
@@ -614,7 +614,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "qnfo-scorecard/1.0.0";
+var VERSION = "qnfo-scorecard/1.0.1";
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
 }
@@ -741,7 +741,7 @@ async function compute(env) {
       watchmaker: "Watchmaker Index = share of recurring operations requiring human or ad-hoc agent intervention (target ~0)"
     },
     autonomy: {
-      sae_level: "L2+ (partial autonomy with receipts; publish/promotion loops run L3-grade unattended; strategic adaptation still needs ad-hoc agent sessions - the decide-loop gap)",
+      sae_level: "L2+ (partial autonomy with receipts; publish/promotion loops run L3-grade unattended; strategic adaptation: the fleet proposes objective revisions on cron, the owner ratifies them on fleet.qnfo.org and OBJECTIVE-REVISION-APPLY-1 applies them; agent sessions are optional contributors, never a dependency)",
       sheridan_loa: 8,
       ladder: { heal: "L2", improve: "L1->L2", audit: "L2", publish: "L2-gated", promote: "L1-warmup", govern: "L0" },
       alfus: { human_independence: 7, mission_complexity: 8, environmental_complexity: 8 },

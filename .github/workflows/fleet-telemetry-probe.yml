@@ -6,12 +6,18 @@ name: fleet-telemetry-probe
 # flags and for the quniverse-fleet-lessons efficiency objectives (cost per successful
 # task, free-first routing, zero-traffic retirement candidates). Read-only: it never
 # deploys or mutates a worker.
+#
+# GitHub `schedule` never fires on this repository (CLAUDE.md), and the probe used to run only by hand or from a push to a
+# session branch (NO-CLAUDE-RUNTIME-DEPENDENCY-1). It now rides every completed canonical-deploy on main, at most once
+# every 6 hours (the age of the committed ci-status/fleet-telemetry.json), so it keeps running with no session at all.
+# A pull request that changes the probe still runs it once for review.
 on:
-  schedule:
-    - cron: "41 */6 * * *"
+  workflow_run:
+    workflows: ["canonical-deploy"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-  push:
-    branches: ["claude/**"]
+  pull_request:
     paths:
       - scripts/fleet_telemetry_probe.py
       - .github/workflows/fleet-telemetry-probe.yml
@@ -25,14 +31,25 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+      - name: At most every 6 hours when chained from a deploy
+        id: due
+        run: |
+          set -uo pipefail
+          if [ "${{ github.event_name }}" != "workflow_run" ]; then echo "run=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          last=$(git log -1 --format=%ct -- ci-status/fleet-telemetry.json 2>/dev/null || echo 0)
+          age=$(( $(date +%s) - ${last:-0} ))
+          if [ "$age" -ge 21600 ]; then echo "run=1" >> "$GITHUB_OUTPUT"; else echo "run=0" >> "$GITHUB_OUTPUT"; echo "last snapshot ${age}s ago; next after 6h"; fi
       - name: Probe Workers / Workers AI / AI Gateway analytics
+        if: steps.due.outputs.run == '1'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: python3 scripts/fleet_telemetry_probe.py
 
       - name: Upload the telemetry snapshot
-        if: always()
+        if: always() && steps.due.outputs.run == '1'
         uses: actions/upload-artifact@v4
         with:
           name: fleet-telemetry
@@ -41,7 +58,7 @@ jobs:
           retention-days: 30
 
       - name: Commit the ci-status artifact back
-        if: always() && github.ref == 'refs/heads/main'
+        if: always() && steps.due.outputs.run == '1' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         continue-on-error: true
         run: |
           set -uo pipefail
