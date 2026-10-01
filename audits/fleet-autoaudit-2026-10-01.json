@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-01 11:43:20",
+  "audited_at": "2026-10-01 11:47:27",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-dashboard"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -494,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.69-charter-loop",
+        "version": "0.4.70-portfolio-loop",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1151,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.69-charter-loop",
+      "before": "0.4.70-portfolio-loop",
       "http": 200,
-      "live": "0.4.69-charter-loop",
+      "live": "0.4.70-portfolio-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
