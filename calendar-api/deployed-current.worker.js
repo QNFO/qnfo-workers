@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.1-personal-feed-gated";
+var VERSION = "0.4.2-feed-rotation";
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -334,6 +334,16 @@ async function publishICS(env) {
     const ics = await buildICS(env, plane, fromIso);
     const key = "calendar/" + plane + "-" + token + ".ics";
     await env.ICS_R2.put(key, ics, { httpMetadata: { contentType: "text/calendar; charset=utf-8" } });
+    // CAL-FEED-ROTATE-1 (2026-10-01): a feed is revoked by renaming its calendar_meta token row to ics_token_<plane>_prev.
+    // getIcsToken then mints a new token, and this publish deletes the old object so the old URL stops serving at once.
+    try {
+      const prev = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + plane + "_prev").first();
+      if (prev && prev.v && prev.v !== token) {
+        await env.ICS_R2.delete("calendar/" + plane + "-" + prev.v + ".ics");
+        await env.CAL_DB.prepare("DELETE FROM calendar_meta WHERE k=?").bind("ics_token_" + plane + "_prev").run();
+      }
+    } catch (eRot) {
+    }
     out.push({ plane, key, url: R2_PUBLIC + "/" + key, bytes: ics.length });
   }
   return out;

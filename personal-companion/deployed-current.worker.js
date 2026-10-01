@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.7.3-ai-attribution";
+var VERSION = "1.7.4-feed-dynamic";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1626,7 +1626,7 @@ var worker_default = {
         last = (r2.results || [])[0] || null;
       } catch (e) {
       }
-      return json({ ok: true, version: VERSION, pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
+      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "the morning brief goes only to the owner's address"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
     }
     if (!authorized(request, env)) {
       return json({ error: { message: "unauthorized: append ?k=KEY" } }, 401);
@@ -2142,7 +2142,14 @@ async function sendMorningBrief(env) {
       for (var m = 0; m < ups.length; m++) L.push(ups[m]);
     }
     L.push("");
-    L.push("Calendar feed: https://pub-7e5e6cd48f4b43ebb55a5ee25093cb71.r2.dev/calendar/personal-9582049ba1bb4d2a835ae709.ics");
+    // CAL-FEED-ROTATE-1 (2026-10-01): the personal feed URL was hard-coded here, in a public repository, so anyone could
+    // subscribe to the owner's personal calendar. Read the current token at send time (calendar_meta in qnfo-audit, written
+    // by calendar-api); after a rotation the brief carries the new URL with no code change.
+    try {
+      var _ft = env.AUDIT ? await env.AUDIT.prepare("SELECT v FROM calendar_meta WHERE k='ics_token_personal'").first() : null;
+      if (_ft && _ft.v) L.push("Calendar feed: https://pub-7e5e6cd48f4b43ebb55a5ee25093cb71.r2.dev/calendar/personal-" + _ft.v + ".ics");
+    } catch (eFeed) {
+    }
     var body = L.join(NL);
     var r = await sendOne(env, "rwnquni@outlook.com", "Morning - " + day, body);
     if (r && r.ok) {
