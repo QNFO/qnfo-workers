@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.42-autonomy-stale-flag";
+var VERSION = "1.7.43-scheduled-no-run-handler";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1054,6 +1054,12 @@ function execTargetFor(category, resource, env) {
   if (category === "model-health") return { safe: false, noAction: true, note: "degraded ids reconciled by ai-health-prober (hourly) + calibration guard; no human gate" };
   if (category === "worker-errors") return { safe: false, noAction: true, note: "24h error window rolls; fleet-control scan re-probes each cycle; no human gate" };
   if (category === "analytics") return { safe: false, noAction: true, note: "analytics scope checked by qnfo-cloud-ops weekly; no human gate" };
+  // SCHEDULED-NO-RUN-HANDLER-1 (2026-10-01, #1635): this category fell through to the unmapped escalation,
+  // so every cron-trigger dispatch ended no-handler-superseded. Its handler is qnfo-fleet-control's hourly
+  // scan: cronDrift compares each worker's declared wrangler.toml crons with the live /schedules and PUTs
+  // them back when a declared schedule is missing (audited as cron-heal). A worker whose schedule is present
+  // but still saw 0 invocations surfaces again next cycle under worker-errors.
+  if (category === "scheduled-no-run") return { safe: false, noAction: true, note: "missing cron triggers are restored by qnfo-fleet-control cronDrift (hourly scan: declared wrangler.toml crons vs live /schedules, PUT on mismatch, audited cron-heal); no human gate" };
   return { safe: false, noAction: true, escalate: true, note: "unmapped category recorded for the fleet loop; no human gate (NEVER-HUMAN-1)" };
 }
 __name(execTargetFor, "execTargetFor");
