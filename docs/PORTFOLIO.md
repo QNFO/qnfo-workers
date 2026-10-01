@@ -1,0 +1,181 @@
+# The QNFO portfolio (QNFO-PORTFOLIO-1)
+
+Portfolio policy 1.0.0, 2026-10-01. The QNFO GitHub organisation is the public face of everything the Quniverse
+produces: the fleet, the research programs, the papers' source, the demos, the licence and the organisation profile.
+This document is the policy half of the portfolio; the live half (section 5, between the `PORTFOLIO-LIVE` markers) is
+regenerated daily by `qnfo-fleet-control` (PORTFOLIO-LOOP-1) from the live organisation and the program registry.
+The same evaluation also rewrites the public mirror `QNFO/.github/PORTFOLIO.md` and the portfolio index in the
+organisation profile README, so every surface says the same thing on the same day.
+
+Owner directive (2026-10-01): check every QNFO repository and unify, consolidate and link all resources as one
+portfolio, automatically and without further involvement.
+
+## 1. What was found (2026-10-01)
+
+| Fact | Value |
+|---|---|
+| Repositories in the organisation | 122 (116 public and private non-forks, plus 11 forks) |
+| Archived | 74 |
+| Active, non-fork | 42, of which 10 private |
+| Active public repositories without a licence file | 36 of 42 (the organisation's licence lives in `QNFO/license` and is not propagated) |
+| Active public repositories without a description or topics | 8 each |
+| Existing inventories | three, all stale and disagreeing: `QNFO/.github/PORTFOLIO.md` (knowledge-graph snapshot of 2026-08-13), `qnfo-audit.repo_inventory` (49 rows from July under the owner's personal account), the WBS table in the organisation profile README |
+| Weekly status writer | `qnfo-cloud-ops` already rewrites `QNFO/.github/PORTFOLIO-STATUS.md` (counts only) |
+| Program registry | `portfolio-state.program_registry`: 79 WBS rows, 17 programs, of which 15 name a GitHub repository |
+
+The repositories are real and mostly fine; the portfolio layer around them was hand-made and had stopped being
+maintained. The fix is the same as for the charter: one measured register, three generated surfaces, no hand editing.
+
+## 2. One portfolio, four surfaces
+
+| Surface | Where | What it holds | Written by |
+|---|---|---|---|
+| Register | D1 `qnfo-audit.portfolio_repos` (+ `portfolio_sync_runs`) | one row per repository: tier, charter pillar, visibility, WBS codes, hygiene flags, last push | PORTFOLIO-LOOP-1, daily |
+| Live JSON | `GET https://qnfo-fleet-control.q08.workers.dev/portfolio` | the register and the last sync run | served from D1 |
+| This document | `QNFO/qnfo-workers/docs/PORTFOLIO.md` | policy (sections 1 to 4) and the live block (section 5) | hand (policy) + loop (live block) |
+| Public mirror | `QNFO/.github/PORTFOLIO.md` and the `PORTFOLIO-LIVE` block in `QNFO/.github/profile/README.md` | the public inventory and the index on the organisation landing page | loop, fully generated |
+
+Superseded, kept for history, no longer written: `qnfo-audit.repo_inventory`, the hand-written WBS table in the
+profile README (the generated index sits above it), the 2026-08-13 snapshot text of `QNFO/.github/PORTFOLIO.md`.
+The WBS codes themselves stay canonical in `portfolio-state.program_registry`; the loop reads them, never writes them.
+
+## 3. Tiers and the rules that assign them
+
+Every repository gets exactly one tier, in this order of precedence, and every tier maps to one charter pillar
+(`docs/QUNIVERSE-CHARTER.md` section 3.2). The rules are `pfTier` in `qnfo-fleet-control/worker.js`; the lists are
+short on purpose, so a new platform or governance repository is a one-line change there.
+
+| Tier | Rule | Pillar | Graded for hygiene |
+|---|---|---|---|
+| archived | GitHub `archived` flag | research (legacy) | no |
+| fork | GitHub `fork` flag | core | no |
+| platform | named in `PF_PLATFORM`: qnfo-workers, qnfo-ops, qnfo-skills, qnfo-schemas, infrastructure, qnfo-infra, qnfo-releases, qnfo-model-router, qnfo-errata-pipeline, qnfo-setup-bootstrap, qnfo-fleet-issues, qwav-platform, personal-life-workers, qnfo-ensemble-research | core | yes |
+| governance | `.github`, `license`, `gitbook` | autonomy | yes |
+| client-config | `deepchat`, `.deepchat`, `qnfo-config-backup` (private) | personal | no, and never named publicly |
+| demo | `qwav-demo-*`, `qwav-demos` | reach | yes |
+| research | everything else | research | yes |
+
+Hygiene flags on graded repositories: `no-description`, `no-license`, `no-topics`, `dormant-<n>d` (no push for more
+than 120 days). The hygiene score is the share of graded repositories with none of the first three flags.
+
+## 4. Portfolio rules (binding on every session and worker)
+
+1. **A repository is a portfolio item or it does not exist.** A new QNFO repository names its tier (by the rules above)
+   and, if it is research, a WBS code in `program_registry` within one sync. The loop lists unlinked research
+   repositories every day until they are registered.
+2. **Fewer, linked, described.** Every active public repository carries a description, topics and a licence
+   (`QNFO/license`, the Content License Agreement, for research and demos; a code licence for platform repositories).
+   The loop lists the gaps daily; sessions fix them when they touch the repository.
+3. **Archive, do not delete.** A research repository that is dormant for 120+ days and has no WBS code is an archive
+   candidate. The loop proposes; a session archives (reversible); nothing is ever deleted.
+4. **Private stays private.** Private repositories are counted in every surface and named in none.
+5. **One identity.** Public text says `QNFO` (the imprint) and names Rowan Brad Quni-Gudzinas as author of record;
+   never "Research Foundation", "Collective" or "Program" as an organisation name (STRATEGY-1 section 2.1).
+6. **The fleet is the writer.** Portfolio surfaces are regenerated by the loop; a hand edit to a generated surface is
+   overwritten on the next sync. Policy changes go through a pull request to this document and `pfTier`.
+7. **Public pages are part of the portfolio.** Repositories with GitHub Pages (`has_pages`) and a homepage are linked
+   from the inventory; the fleet's own sites (qnfo.org, papers.qnfo.org, fleet.qnfo.org) are linked from the mirror.
+
+How it runs: `portfolioSyncIfStale` on the kernel's hourly cron (syncs when the last successful run is older than
+20 hours, so a new deploy syncs within the hour), `POST /portfolio/sync` with the admin token on demand. A failed
+organisation fetch writes nothing. Every run is a `portfolio_sync_runs` row with the per-surface commit status.
+`charter-guard` fails CI if this document loses its markers; `portfolio.test.mjs` replays the organisation fixture
+through the classifier and the three renderers on every pull request that touches the kernel.
+
+## 5. Live register
+
+<!-- PORTFOLIO-LIVE:BEGIN -->
+_Generated by qnfo-fleet-control PORTFOLIO-LOOP-1 at 2026-10-01T12:00:00.000Z from the live GitHub organisation and portfolio-state.program_registry. Do not edit by hand. Live JSON: `GET https://qnfo-fleet-control.q08.workers.dev/portfolio`._
+
+### Scoreboard
+
+| Signal | Value |
+|---|---|
+| Repositories in the organisation | 127 (10 private) |
+| Active, graded repositories (platform, governance, research, demo) | 39 |
+| Hygiene score (description, licence and topics all present) | 0.08 |
+| Dormant graded repositories (no push for 120+ days) | 1 |
+| Research repositories with no WBS program code | 6 |
+| WBS codes linked to a repository | 17 of 17 with a github_repo |
+
+### Tiers
+
+| Tier | Meaning | Repositories |
+|---|---|---|
+| platform | the fleet, its tooling and infrastructure (charter pillar core) | 14 |
+| governance | organisation profile, licence and documentation (pillar autonomy) | 3 |
+| research | active research programs and papers (pillar research) | 14 |
+| demo | interactive demonstrations and sites (pillar reach) | 8 |
+| client-config | private client configuration and backups (pillar personal; never public) | 3 |
+| fork | forks of upstream tooling kept for reference (pillar core) | 10 |
+| archived | completed or superseded work, read-only (pillar research) | 75 |
+| **all** | 10 private (counted, never listed) | **127** |
+
+### Platform: the fleet, its tooling and infrastructure (charter pillar core)
+
+| Repository | Description | WBS | Last push | Hygiene |
+|---|---|---|---|---|
+| [qnfo-workers](https://github.com/QNFO/qnfo-workers) |  | - | 2026-10-01 | no-description, no-license |
+| [qnfo-ops](https://github.com/QNFO/qnfo-ops) | Operations & Governance — Audit, Handoff, Policy, Skills, WBS Migration | - | 2026-10-01 | no-license |
+| [qnfo-skills](https://github.com/QNFO/qnfo-skills) | QNFO DeepChat skills — 28 skills including cloudflare-deployer, qnfo-agent, publication-publisher. Redundant b | - | 2026-10-01 | no-license |
+| [qnfo-schemas](https://github.com/QNFO/qnfo-schemas) |  | - | 2026-09-27 | no-description, no-topics |
+| [qnfo-ensemble-research](https://github.com/QNFO/qnfo-ensemble-research) | Ensemble Research pilot - multiple independent papers on one shared theme, reconciled and published with full  | - | 2026-09-09 | no-license, no-topics |
+| [qnfo-errata-pipeline](https://github.com/QNFO/qnfo-errata-pipeline) | Cloud-native errata pipeline: detect -> draft -> publish Workers (in-Worker PDF via Browser Rendering) | - | 2026-08-28 | no-license, no-topics |
+| [infrastructure](https://github.com/QNFO/infrastructure) | QNFO Cloudflare Workers and Pages source code | - | 2026-08-19 | no-license |
+| [qwav-platform](https://github.com/QNFO/qwav-platform) | QWAV Platform: Cloudflare worker source (papers-server, ask-qwav, archive, deep-qwav-meta), papers HTML, boots | QWAV.PLT | 2026-08-16 | no-license |
+| [qnfo-releases](https://github.com/QNFO/qnfo-releases) | QNFO paper releases repository | - | 2026-07-26 | no-license |
+| [qnfo-infra](https://github.com/QNFO/qnfo-infra) | Cloudflare Infrastructure — D1, DNS, Pages, R2, Vectorize, Workers | - | 2026-07-13 | no-license |
+
+### Governance: organisation profile, licence and documentation (pillar autonomy)
+
+| Repository | Description | WBS | Last push | Hygiene |
+|---|---|---|---|---|
+| [.github](https://github.com/QNFO/.github) | QNFO organization profile and public transparency dashboard — mission, research programs, funding posture, gov | QNFO.GOV | 2026-09-26 | ok |
+| [license](https://github.com/QNFO/license) | QNFO Content License Agreement | - | 2026-07-22 | ok |
+| [gitbook](https://github.com/QNFO/gitbook) | GitBook content | - | 2026-05-29 | dormant-125d |
+
+### Research: active research programs and papers (pillar research)
+
+| Repository | Description | WBS | Last push | Hygiene |
+|---|---|---|---|---|
+| [qnfo-research](https://github.com/QNFO/qnfo-research) | QNFO Research Artifacts — papers, releases, WBS plans, review reports, and project files. Separate from qnfo-s | QNFO.RES, QNFO.RES.001 | 2026-09-27 | no-license |
+| [QWAV](https://github.com/QNFO/QWAV) ([site](https://qnfo.github.io/QWAV/)) | QWAV | - | 2026-09-24 | no-license |
+| [ultrametric-physics](https://github.com/QNFO/ultrametric-physics) | Ultrametric Physics program: p-adic valuation, ultrametric geometry, adelic QFT, arithmetic gauge, ultrametric | QNFO.UMP, QNFO.UMP.003 | 2026-08-28 | no-license |
+| [cwi-qec-poster-2026](https://github.com/QNFO/cwi-qec-poster-2026) | CWI Summer School on QA/QEC 2026 poster | - | 2026-08-25 | no-license |
+| [revolutionary-quantum-guide](https://github.com/QNFO/revolutionary-quantum-guide) |  | - | 2026-08-21 | no-description, no-license |
+| [adelic-shannon-theory](https://github.com/QNFO/adelic-shannon-theory) | Adelic Shannon Theory: generalising information theory to the adele ring. p-adic entropy, AUM channel capacity | QNFO.ADL, QNFO.ADL.001 | 2026-08-20 | no-license |
+| [consilient-gap-synthesis](https://github.com/QNFO/consilient-gap-synthesis) |  | QNFO.CGS | 2026-08-17 | no-description, no-license |
+| [qec-darwinism-ultrametric](https://github.com/QNFO/qec-darwinism-ultrametric) | QNFO.UMP.004: QEC-Darwinism tradeoff in ultrametric spaces | - | 2026-08-16 | no-license |
+| [reentrant-distinctions](https://github.com/QNFO/reentrant-distinctions) |  | - | 2026-08-16 | no-description, no-license |
+| [laws-of-form](https://github.com/QNFO/laws-of-form) | Laws of Form program: Spencer-Brown calculus, quantum laws of form, primordial mark, knowing patterns, verb le | QNFO.SLB | 2026-08-13 | no-license |
+| [informational-universe](https://github.com/QNFO/informational-universe) | QNFO.INM.001: The Informational Universe — information as the primary substrate | - | 2026-08-06 | no-license |
+| [odr-thesis](https://github.com/QNFO/odr-thesis) | ODR Thesis: The Compton count as the only primitive — Bruhat-Tits tree as the coordinate system of physics. 5- | QNFO.ODR | 2026-08-04 | no-license |
+| [infomatics](https://github.com/QNFO/infomatics) | Infomatics: Mathematics of Information-as-Fundamental - A research program investigating information as the fu | QNFO.INM | 2026-08-04 | no-license |
+| [cfpe](https://github.com/QNFO/cfpe) | CFPE program: Cascading Bayesian Foresight Engine -- methodology, paradigm forecast, 100-year forecast. Consol | QNFO.CFE | 2026-08-04 | no-license |
+
+### Demo: interactive demonstrations and sites (pillar reach)
+
+| Repository | Description | WBS | Last push | Hygiene |
+|---|---|---|---|---|
+| [qwav-demo-bt-qec](https://github.com/QNFO/qwav-demo-bt-qec) ([site](https://qwav-demo-bt-qec.pages.dev)) | Interactive BT-Tree QEC demo: staircase redundancy, error confinement, QEC-Darwinism tradeoff on ultrametric s | - | 2026-08-31 | no-license |
+| [qwav-demo-monna-map-perspective](https://github.com/QNFO/qwav-demo-monna-map-perspective) |  | - | 2026-08-16 | no-description, no-license, no-topics |
+| [qwav-demos](https://github.com/QNFO/qwav-demos) | QWAV interactive demos: convergence explorer, error confinement, QPNA playground, hardware visualizer. Consoli | QWAV.DEM | 2026-08-16 | no-license |
+| [qwav-demo-hardware-visualizer](https://github.com/QNFO/qwav-demo-hardware-visualizer) ([site](https://qnfo.github.io/qwav-demo-hardware-visualizer/)) | QWAV Artifact A5 — Hardware Pathway Visualizer: 40-atom neutral atom tree lattice with Rydberg blockade gates, | - | 2026-08-06 | no-license |
+| [qwav-demo-tree-distance](https://github.com/QNFO/qwav-demo-tree-distance) ([site](https://qnfo.github.io/qwav-demo-tree-distance/)) | QWAV Artifact A4 — Tree Distance Sandbox: cophenetic vs Euclidean vs ultrametric distance, triadic rigidity th | - | 2026-08-06 | no-license |
+| [qwav-demo-ultrametric-convergence](https://github.com/QNFO/qwav-demo-ultrametric-convergence) ([site](https://qnfo.github.io/qwav-demo-ultrametric-convergence/)) | QWAV Artifact A3 — Ultrametric Convergence Explorer: upward-monotonic diversity collapse in tree geometry. Coa | - | 2026-08-06 | no-license |
+| [qwav-demo-error-confinement](https://github.com/QNFO/qwav-demo-error-confinement) ([site](https://qnfo.github.io/qwav-demo-error-confinement/)) | QWAV Artifact A1 — Error Confinement Live Demo: interactive Bruhat-Tits tree showing strong-triangle-inequalit | - | 2026-08-06 | no-license |
+| [qwav-demo-qpna-classifier](https://github.com/QNFO/qwav-demo-qpna-classifier) ([site](https://qnfo.github.io/qwav-demo-qpna-classifier/)) | QWAV Artifact A2 — Q-PNA Classifier Playground: glass-box ultrametric classification. Live agglomerative clust | - | 2026-08-04 | no-license |
+
+### Forks kept for reference
+
+[cloudflare-skill-forks](https://github.com/QNFO/cloudflare-skill-forks), [mcp](https://github.com/QNFO/mcp), [claude-skills](https://github.com/QNFO/claude-skills), [qm](https://github.com/QNFO/qm), [claude-code-tresor](https://github.com/QNFO/claude-code-tresor), [gaios](https://github.com/QNFO/gaios), [claude-code-aso-skill](https://github.com/QNFO/claude-code-aso-skill), [agent-skills-discovery-rfc](https://github.com/QNFO/agent-skills-discovery-rfc), [playwright-mcp](https://github.com/QNFO/playwright-mcp), [workers-mcp](https://github.com/QNFO/workers-mcp)
+
+### Archived (read-only)
+
+[wbs-6-synthesis](https://github.com/QNFO/wbs-6-synthesis), [computing-machines](https://github.com/QNFO/computing-machines), [Beyond-Belief](https://github.com/QNFO/Beyond-Belief), [measurement-stratigraphy](https://github.com/QNFO/measurement-stratigraphy), [29-schism-synthesis](https://github.com/QNFO/29-schism-synthesis), [zbw-qnfo-unified](https://github.com/QNFO/zbw-qnfo-unified), [the-two-level-lie](https://github.com/QNFO/the-two-level-lie), [ostrowski-dimensionless-reformulation](https://github.com/QNFO/ostrowski-dimensionless-reformulation), [non-anthropocentric-natural-units](https://github.com/QNFO/non-anthropocentric-natural-units), [no-thing-there](https://github.com/QNFO/no-thing-there), [harmonische-paradigma](https://github.com/QNFO/harmonische-paradigma), [harmonic-adelic-completions](https://github.com/QNFO/harmonic-adelic-completions), [cross-domain-phase2](https://github.com/QNFO/cross-domain-phase2), [continuum-trilogy](https://github.com/QNFO/continuum-trilogy), [consilience-physics-numtheory](https://github.com/QNFO/consilience-physics-numtheory), [jpcub-validation](https://github.com/QNFO/jpcub-validation), [huang-2025-quantum-advantage-audit](https://github.com/QNFO/huang-2025-quantum-advantage-audit), [adelic-particle-spectrum](https://github.com/QNFO/adelic-particle-spectrum), [adelic-langlands-physics](https://github.com/QNFO/adelic-langlands-physics), [adelic-epistemological-foundations](https://github.com/QNFO/adelic-epistemological-foundations), [adelic-cross-domain-program](https://github.com/QNFO/adelic-cross-domain-program), [adelic-cross-domain](https://github.com/QNFO/adelic-cross-domain), [acrp04-five-smooth-audit](https://github.com/QNFO/acrp04-five-smooth-audit), [qnfo-consilient-synthesis](https://github.com/QNFO/qnfo-consilient-synthesis), [acrp06-vpmax-extension](https://github.com/QNFO/acrp06-vpmax-extension), [29-schisms-deepdive](https://github.com/QNFO/29-schisms-deepdive), [autaxys-ontological-closure](https://github.com/QNFO/autaxys-ontological-closure), [acrp07-qubit-delusion-valuation](https://github.com/QNFO/acrp07-qubit-delusion-valuation), [acrp07-valuation-qubit-delusion](https://github.com/QNFO/acrp07-valuation-qubit-delusion), [ultrametric-p-adic-metrology](https://github.com/QNFO/ultrametric-p-adic-metrology), [acrp08-paradigm-forecast](https://github.com/QNFO/acrp08-paradigm-forecast), [finite-precision-oc-convergence](https://github.com/QNFO/finite-precision-oc-convergence), [composite-radix-theory](https://github.com/QNFO/composite-radix-theory), [substrate-is-algorithm](https://github.com/QNFO/substrate-is-algorithm), [boundary-ultrametricity](https://github.com/QNFO/boundary-ultrametricity), [ultrametric-consilience-atlas](https://github.com/QNFO/ultrametric-consilience-atlas), [qwav-decade](https://github.com/QNFO/qwav-decade), [counterfactual-physics](https://github.com/QNFO/counterfactual-physics), [qnfo-unified-plan](https://github.com/QNFO/qnfo-unified-plan), [the-informational-universe](https://github.com/QNFO/the-informational-universe), [agentic-ai-deep-tech-research](https://github.com/QNFO/agentic-ai-deep-tech-research), [ultrametric-tree-universality](https://github.com/QNFO/ultrametric-tree-universality), [hardware-pathway](https://github.com/QNFO/hardware-pathway), [tree-distance](https://github.com/QNFO/tree-distance), [ultrametric-convergence](https://github.com/QNFO/ultrametric-convergence), [ultrametric-error-confinement](https://github.com/QNFO/ultrametric-error-confinement), [Q-PNA](https://github.com/QNFO/Q-PNA), [alpha-pi-helix](https://github.com/QNFO/alpha-pi-helix), [zbw-p5-capstone](https://github.com/QNFO/zbw-p5-capstone), [tate-adelic-template](https://github.com/QNFO/tate-adelic-template), [hidden-radix-pqc](https://github.com/QNFO/hidden-radix-pqc), [bqnn-classical-baseline](https://github.com/QNFO/bqnn-classical-baseline), [rosetta-fractal-math](https://github.com/QNFO/rosetta-fractal-math), [measure-theoretic-artifacts-adelic](https://github.com/QNFO/measure-theoretic-artifacts-adelic), [systemwide-audit-2026-07](https://github.com/QNFO/systemwide-audit-2026-07), [waveform-vs-quantum](https://github.com/QNFO/waveform-vs-quantum), [stacked-ring-review](https://github.com/QNFO/stacked-ring-review), [s10-observer-research](https://github.com/QNFO/s10-observer-research), [cancellation-rule-research](https://github.com/QNFO/cancellation-rule-research), [numerata](https://github.com/QNFO/numerata), [shor-assumptions](https://github.com/QNFO/shor-assumptions), [trapped-ion-posner-connection](https://github.com/QNFO/trapped-ion-posner-connection), [symbol-metric-neutrality](https://github.com/QNFO/symbol-metric-neutrality), [ultrametric-tree-resistance](https://github.com/QNFO/ultrametric-tree-resistance), [zenodo-automation](https://github.com/QNFO/zenodo-automation), [tree-and-shadow-viz](https://github.com/QNFO/tree-and-shadow-viz), [nested-semantic-graph](https://github.com/QNFO/nested-semantic-graph), [ultrametric-game-of-life](https://github.com/QNFO/ultrametric-game-of-life), [Physics-of-Rationalization](https://github.com/QNFO/Physics-of-Rationalization), [0pus](https://github.com/QNFO/0pus), [ai-411](https://github.com/QNFO/ai-411), [aiq-bios](https://github.com/QNFO/aiq-bios)
+
+### Portfolio actions the loop proposes (it never archives or deletes on its own)
+
+- Research repositories to register in portfolio-state.program_registry: QWAV, cwi-qec-poster-2026, revolutionary-quantum-guide, qec-darwinism-ultrametric, reentrant-distinctions, informational-universe
+- Hygiene (description, licence, topics) to fix: qnfo-workers (no-description, no-license); qnfo-ops (no-license); qnfo-skills (no-license); qnfo-schemas (no-description, no-topics); qnfo-ensemble-research (no-license, no-topics); qnfo-errata-pipeline (no-license, no-topics); infrastructure (no-license); qwav-platform (no-license); qnfo-releases (no-license); qnfo-infra (no-license); qnfo-research (no-license); QWAV (no-license); ultrametric-physics (no-license); cwi-qec-poster-2026 (no-license); revolutionary-quantum-guide (no-description, no-license); adelic-shannon-theory (no-license); consilient-gap-synthesis (no-description, no-license); qec-darwinism-ultrametric (no-license); reentrant-distinctions (no-description, no-license); laws-of-form (no-license); informational-universe (no-license); odr-thesis (no-license); infomatics (no-license); cfpe (no-license); qwav-demo-bt-qec (no-license); qwav-demo-monna-map-perspective (no-description, no-license, no-topics); qwav-demos (no-license); qwav-demo-hardware-visualizer (no-license); qwav-demo-tree-distance (no-license); qwav-demo-ultrametric-convergence (no-license); qwav-demo-error-confinement (no-license); qwav-demo-qpna-classifier (no-license)
+<!-- PORTFOLIO-LIVE:END -->

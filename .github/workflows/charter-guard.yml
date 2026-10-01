@@ -18,6 +18,7 @@ on:
   pull_request:
     paths:
       - 'docs/QUNIVERSE-CHARTER.md'
+      - 'docs/PORTFOLIO.md'
       - 'qnfo-fleet-control/**'
       - 'scripts/charter-guard.py'
       - '*/wrangler.toml'
@@ -26,6 +27,7 @@ on:
     branches: [main]
     paths:
       - 'docs/QUNIVERSE-CHARTER.md'
+      - 'docs/PORTFOLIO.md'
       - 'qnfo-fleet-control/**'
       - 'scripts/charter-guard.py'
       - '*/wrangler.toml'
@@ -66,6 +68,14 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::charter loop suite reported failures"; exit 1; }
+
+      - name: Replay the portfolio loop offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/portfolio.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::portfolio loop suite reported failures"; exit 1; }
 
       - name: Resolve the diff range
         id: range
