@@ -17,6 +17,9 @@ ACTIONS
 -------
   delete-worker NAME     DELETE a script. Refused unless the repo directory NAME carries a RETIRED or
                          FOLDED marker (the repo's own retirement record) and NAME is not protected.
+  delete-vectorize NAME  DELETE a Vectorize index. Allowlisted indexes only (VECTORIZE_OWNERS: index -> repo directory of the
+                         worker it served). Refused unless that directory carries a RETIRED/FOLDED marker, the worker
+                         script is absent from the account, and the index holds 0 vectors.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
                          status, metadata and user agent, for caller attribution.
   ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL).
@@ -83,6 +86,42 @@ def emit(obj: dict) -> None:
 
 def iso(ms_ago: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - ms_ago / 1000))
+
+
+# Vectorize indexes this tool may delete -> the repo directory of the retired/folded worker they served.
+VECTORIZE_OWNERS = {"qnfo-calibration": "qnfo-fleet-calibrator"}
+
+
+def delete_vectorize(name: str, acct: str, token: str) -> int:
+    owner = VECTORIZE_OWNERS.get(name)
+    if not owner:
+        emit({"action": "delete-vectorize", "index": name, "ok": False, "refused": "not allowlisted"})
+        return 3
+    marker = next((m for m in ("RETIRED", "FOLDED") if os.path.isfile(os.path.join(owner, m))), None)
+    if not marker:
+        emit({"action": "delete-vectorize", "index": name, "ok": False,
+              "refused": "no RETIRED/FOLDED marker in the repo directory " + owner})
+        return 3
+    st_w, _ = call("GET", f"/accounts/{acct}/workers/scripts/{owner}/settings", token)
+    if st_w != 404:
+        emit({"action": "delete-vectorize", "index": name, "ok": False,
+              "refused": "owning worker " + owner + " still exists (settings http " + str(st_w) + "); delete it first"})
+        return 3
+    st0, j0 = call("GET", f"/accounts/{acct}/vectorize/v2/indexes/{name}/info", token)
+    if st0 == 404:
+        emit({"action": "delete-vectorize", "index": name, "ok": True, "already_absent": True, "marker": marker})
+        return 0
+    count = int((j0.get("result") or {}).get("vectorCount", (j0.get("result") or {}).get("vectorsCount", -1)))
+    if st0 != 200 or count != 0:
+        emit({"action": "delete-vectorize", "index": name, "ok": False, "refused": "index not provably empty",
+              "info_http": st0, "vector_count": count})
+        return 3
+    st, j = call("DELETE", f"/accounts/{acct}/vectorize/v2/indexes/{name}", token)
+    st2, _ = call("GET", f"/accounts/{acct}/vectorize/v2/indexes/{name}/info", token)
+    ok = st == 200 and st2 == 404
+    emit({"action": "delete-vectorize", "index": name, "marker": marker, "http": st, "ok": ok,
+          "verify_info_http": st2, "errors": j.get("errors")})
+    return 0 if ok else 1
 
 
 def delete_worker(name: str, acct: str, token: str) -> int:
@@ -208,7 +247,7 @@ def r2_get(acct: str, token: str, path: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["report", "r2-get", "delete-worker", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
+    ap.add_argument("action", choices=["report", "r2-get", "delete-worker", "delete-vectorize", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -220,6 +259,11 @@ def main() -> int:
             print("::error::delete-worker needs --target")
             return 2
         return delete_worker(a.target, acct, token)
+    if a.action == "delete-vectorize":
+        if not a.target:
+            print("::error::delete-vectorize needs --target")
+            return 2
+        return delete_vectorize(a.target, acct, token)
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "report":
