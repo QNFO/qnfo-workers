@@ -148,5 +148,78 @@ try:
 finally:
     fa.ROOT = _real_root
 
+
+# ---------------------------------------------------------------- RATELIMIT-RETRY-1
+import io, json as _json, urllib.error as _ue, urllib.request as _ur
+class _H(dict):
+    def get(self, k, d=None): return super().get(k, d)
+def _wait(code, headers=None, body=b"", attempt=0):
+    return fa._rate_limit_wait(code, _H(headers or {}), body, attempt)
+
+RL = b'{"message":"API rate limit exceeded for installation. If you reach out to GitHub Support..."}'
+check("the exact message from run 36836230221 is retried, with backoff", _wait(403, {}, RL, 0) == 15 and _wait(403, {}, RL, 1) == 30 and _wait(403, {}, RL, 2) == 60, [_wait(403, {}, RL, i) for i in range(3)])
+check("backoff is capped", _wait(403, {}, RL, 9) == fa.GH_RETRY_CAP_S, _wait(403, {}, RL, 9))
+check("Retry-After is honoured", _wait(403, {"Retry-After": "20"}, RL, 0) == 20)
+check("Retry-After is capped too", _wait(429, {"Retry-After": "9999"}, b"", 0) == fa.GH_RETRY_CAP_S)
+import time as _t
+check("x-ratelimit-reset is honoured when the quota is 0", 40 <= _wait(403, {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(_t.time()) + 45)}, b"forbidden", 0) <= 50)
+check("429 is always a rate limit", _wait(429, {}, b"", 0) == 15)
+check("secondary rate limit text is retried", _wait(403, {}, b'{"message":"You have exceeded a secondary rate limit."}', 0) == 15)
+check("a 403 that is NOT a rate limit fails immediately (no retry)", _wait(403, {}, b'{"message":"Resource not accessible by integration"}', 0) is None)
+check("404 / 422 / 500 are never retried as rate limits", all(_wait(c, {}, RL, 0) is None for c in (404, 422, 500)))
+
+def run_gh(responses):
+    """responses: list of ('ok', obj) | ('err', code, headers, body). Returns (result, attempts, slept)."""
+    os.environ["GITHUB_TOKEN"], os.environ["GITHUB_REPOSITORY"] = "t", "o/r"
+    seq, calls, slept = list(responses), {"n": 0}, []
+    def fake_urlopen(req, timeout=30):
+        calls["n"] += 1
+        r = seq.pop(0)
+        if r[0] == "ok":
+            return io.BytesIO(_json.dumps(r[1]).encode())
+        raise _ue.HTTPError(req.full_url, r[1], "x", _H(r[2]), io.BytesIO(r[3]))
+    class _T:
+        time = staticmethod(_t.time)
+        @staticmethod
+        def sleep(x): slept.append(x)
+    real = (_ur.urlopen, fa.time)
+    _ur.urlopen, fa.time = fake_urlopen, _T
+    try:
+        res = fa.gh_api("PATCH", "/issues/52", {"body": "x"})
+    finally:
+        _ur.urlopen, fa.time = real
+    return res, calls["n"], slept
+
+res, n, slept = run_gh([("err", 403, {}, RL), ("err", 403, {}, RL), ("ok", {"number": 52})])
+check("rate-limited twice then recovers: the call succeeds, with backoff sleeps", res == {"number": 52} and n == 3 and slept == [15, 30], (res, n, slept))
+res, n, slept = run_gh([("err", 403, {}, RL)] * 5)
+check("never recovers: gives up with a clear, honest error after bounded attempts", "_error" in res and "rate-limited; gave up" in res["_error"] and n <= fa.GH_RETRY_MAX and sum(slept) <= fa.GH_RETRY_BUDGET_S, (res, n, slept))
+res, n, slept = run_gh([("err", 403, {}, b'{"message":"Resource not accessible by integration"}')])
+check("a non-rate-limit 403 is NOT retried (one attempt, no sleep)", "_error" in res and n == 1 and slept == [], (n, slept))
+res, n, slept = run_gh([("ok", [1, 2])])
+check("a normal success makes exactly one call", res == [1, 2] and n == 1 and slept == [], (n, slept))
+
+
+# a publish that fails after retries leaves a fleet-visible event, and a broken D1 can never break the audit
+seen = []
+real_d1 = fa.d1
+fa.d1 = lambda sql, params: seen.append((sql, params)) or {"success": True}
+try:
+    fa._record_publish_failure("updated", 52, "HTTP 403: rate limit", "2026-10-01 08:26:46")
+finally:
+    fa.d1 = real_d1
+ok_ev = len(seen) == 1 and "cloud_ops_events" in seen[0][0] and seen[0][1][2] == "autoaudit.publish-failed" and seen[0][1][5] == "fleet-autoaudit" and seen[0][1][6] == "error" and len(seen[0][1]) == 7
+check("publish failure writes one cloud_ops_events row (7 columns, kind autoaudit.publish-failed)", ok_ev, seen and seen[0][1])
+check("the event says D1 is current and the report is stale", "stale" in seen[0][1][3] and "2026-10-01 08:26:46" in seen[0][1][3], seen[0][1][3])
+def boom(sql, params): raise RuntimeError("d1 down")
+fa.d1 = boom
+try:
+    fa._record_publish_failure("updated", 52, "x", "t"); survived = True
+except Exception:
+    survived = False
+finally:
+    fa.d1 = real_d1
+check("a failing D1 write never breaks the audit", survived)
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)

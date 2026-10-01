@@ -418,23 +418,64 @@ def summary_md(d, rows, ok, failed, now, purged=None, purge_err=None):
     return "\n".join(lines) + "\n"
 
 
+GH_RETRY_MAX = 5          # attempts per call
+GH_RETRY_BUDGET_S = 240   # total time one call may spend waiting out a rate limit
+GH_RETRY_CAP_S = 120      # longest single wait
+
+
+def _rate_limit_wait(code, headers, body, attempt):
+    """Seconds to wait before retrying, or None if this response is NOT a rate limit (so it must fail now).
+
+    RATELIMIT-RETRY-1 (2026-10-01): run 36836230221 wrote all 113 audit rows to D1 and then failed to publish the report with
+    `HTTP 403: API rate limit exceeded for installation`. gh_api made one attempt and returned an error that main() only printed
+    as a warning, so issue #52 kept showing a previous run's text: the system's state was right in D1 and wrong where people
+    (and the drain hook) read it. This repo is written by many concurrent sessions and workflows, so the installation quota is
+    routinely exhausted for a minute at a time. GitHub's own signals are honoured; anything that is not a rate limit (a real 403,
+    404, 422) still fails immediately.
+    """
+    if code not in (403, 429):
+        return None
+    text = body.decode("utf-8", "replace").lower() if isinstance(body, (bytes, bytearray)) else str(body or "").lower()
+    get = (lambda k: headers.get(k)) if headers is not None else (lambda k: None)
+    retry_after, remaining, reset = get("Retry-After"), get("x-ratelimit-remaining"), get("x-ratelimit-reset")
+    if not (code == 429 or "rate limit" in text or remaining == "0"):
+        return None
+    if retry_after and str(retry_after).isdigit():
+        wait = int(retry_after)
+    elif remaining == "0" and reset and str(reset).isdigit():
+        wait = max(1, int(reset) - int(time.time())) + 1
+    else:
+        wait = 15 * (2 ** attempt)  # 15, 30, 60, 120
+    return min(wait, GH_RETRY_CAP_S)
+
+
 def gh_api(method, path, payload=None):
     token = env("GITHUB_TOKEN")
     repo = env("GITHUB_REPOSITORY")
     url = f"https://api.github.com/repos/{repo}{path}"
     data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers={
-        "Authorization": "Bearer " + token,
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "qnfo-fleet-autoaudit",
-        "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.load(r)
-    except urllib.error.HTTPError as e:
-        return {"_error": f"HTTP {e.code}: {e.read()[:200]!r}"}
-    except Exception as e:
-        return {"_error": str(e)[:200]}
+    waited = 0
+    for attempt in range(GH_RETRY_MAX):
+        req = urllib.request.Request(url, data=data, method=method, headers={
+            "Authorization": "Bearer " + token,
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "qnfo-fleet-autoaudit",
+            "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            wait = _rate_limit_wait(e.code, e.headers, body, attempt)
+            if wait is None or attempt == GH_RETRY_MAX - 1 or waited + wait > GH_RETRY_BUDGET_S:
+                tail = f" (rate-limited; gave up after {attempt + 1} attempts, waited {waited}s)" if wait is not None else ""
+                return {"_error": f"HTTP {e.code}: {body[:200]!r}{tail}"}
+            print(f"::warning::GitHub API rate-limited (HTTP {e.code}) on {method} {path}; retry {attempt + 1}/{GH_RETRY_MAX - 1} in {wait}s")
+            time.sleep(wait)
+            waited += wait
+        except Exception as e:
+            return {"_error": str(e)[:200]}
+    return {"_error": "unreachable"}
 
 
 def publish_issue(body):
@@ -447,6 +488,22 @@ def publish_issue(body):
     res = gh_api("POST", "/issues", {"title": f"{ISSUE_TAG}: scheduled fleet self-audit",
                                      "body": body, "labels": ["fleet-autoaudit"]})
     return "created", res.get("number"), res.get("_error")
+
+
+def _record_publish_failure(action, num, err, now):
+    """If the report could not be published even after retries, leave a fleet-visible trace (never raises).
+
+    D1 holds the authoritative audit; issue #52 is the human-readable VIEW of it. When the view goes stale the system must say
+    so somewhere other than a log line, or "the system knows its own state" is true only for whoever reads D1.
+    """
+    try:
+        import uuid
+        d1("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)",
+           ["ce_" + uuid.uuid4().hex[:14], datetime.datetime.utcnow().isoformat() + "Z", "autoaudit.publish-failed",
+            ("issue %s failed; D1 worker_live_audit (probed_at=%s) is current, the #52 report is stale: %s" % (action, now, err))[:500],
+            json.dumps({"action": action, "issue": num, "audit_at": now, "error": str(err)[:300]}), "fleet-autoaudit", "error"])
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------- apply
@@ -556,6 +613,7 @@ def main():
     action, num, err = publish_issue(body)
     if err:
         print(f"::warning::issue publish {action} failed: {err}")
+        _record_publish_failure(action, num, err, now)
     else:
         print(f"self-audit issue {action}: #{num}")
 
