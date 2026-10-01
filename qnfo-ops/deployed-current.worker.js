@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.18-budget-auto-promote";
+var VERSION = "2.38.19-container-exit-visible";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -3392,7 +3392,18 @@ __name222(containerDispatch, "containerDispatch");
 __name2222(containerDispatch, "containerDispatch");
 __name22222(containerDispatch, "containerDispatch");
 function fmtContainer(j) {
-  if (!j || !j.ok) return { ok: false, error: j && j.error || "container error" };
+  // CONTAINER-EXIT-VISIBLE-1 (2026-10-01, #1664): the pilot answers a command that exits non-zero with
+  // {ok:false, result:{exitCode, stdout, stderr}} and no error field. This used to collapse to a bare
+  // "container error", discarding the exit code and output, so an ordinary failing command (missing file,
+  // failed grep) read as an infrastructure fault and the agent could not see why. Keep the result and
+  // label it as a command exit; "container error" is now reserved for responses with no result at all.
+  if (j && j.result && typeof j.result === "object" && j.result.exitCode != null) {
+    const r = j.result;
+    const out = { ok: r.exitCode === 0, exit_code: r.exitCode, stdout: (r.stdout || "").slice(0, 65536), stderr: (r.stderr || "").slice(0, 8192), stdout_truncated: !!r.stdoutTruncated, stderr_truncated: !!r.stderrTruncated };
+    if (r.exitCode !== 0) out.error = "command exited " + r.exitCode + (r.stderr ? ": " + String(r.stderr).slice(0, 200) : "");
+    return out;
+  }
+  if (!j || !j.ok) return { ok: false, error: j && j.error || "container error (no result in response)" };
   const r = j.result || {};
   return { ok: r.exitCode === 0, exit_code: r.exitCode, stdout: (r.stdout || "").slice(0, 65536), stderr: (r.stderr || "").slice(0, 8192), stdout_truncated: !!r.stdoutTruncated, stderr_truncated: !!r.stderrTruncated };
 }
