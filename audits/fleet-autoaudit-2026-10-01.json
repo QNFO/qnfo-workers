@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-01 15:26:19",
+  "audited_at": "2026-10-01 15:32:08",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -472,7 +479,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.9-rate-limit",
+        "version": "1.0.10-props-caller",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -492,7 +499,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.14.0-watchmaker",
+        "version": "1.14.1-intent-intake",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -562,7 +569,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.44-gw-props-auth",
+        "version": "0.9.46-gates-bib-aware",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1040,9 +1047,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.9-rate-limit",
+      "before": "1.0.10-props-caller",
       "http": 200,
-      "live": "1.0.9-rate-limit",
+      "live": "1.0.10-props-caller",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1152,9 +1159,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.14.0-watchmaker",
+      "before": "1.14.1-intent-intake",
       "http": 200,
-      "live": "1.14.0-watchmaker",
+      "live": "1.14.1-intent-intake",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1360,9 +1367,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.44-gw-props-auth",
+      "before": "0.9.46-gates-bib-aware",
       "http": 200,
-      "live": "0.9.44-gw-props-auth",
+      "live": "0.9.46-gates-bib-aware",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
