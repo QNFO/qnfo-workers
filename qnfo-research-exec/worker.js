@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.35-revise-patch";
+var VERSION = "0.9.36-zenodo-version-requests";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2406,6 +2406,75 @@ async function runLeased(env, holder, maxStages, budgetMs) {
   }
   return { busy: false, stages, ms: Date.now() - t0 };
 }
+// ZENODO-VERSION-REQUESTS-1 (2026-10-01): publish a new version of an existing Zenodo record from files at public
+// GitHub raw URLs, driven by rows in qnfo-audit zenodo_version_requests (first use: the owner's CV, concept record
+// 17176733, from rwnq8/resume). A D1 write is the authorization: only holders of the Cloudflare account can queue a
+// request. File URLs must be raw.githubusercontent.com/{rwnq8,QNFO}/<repo>/<40-hex commit>/<path>, so a row cannot make
+// the worker fetch another host or a moving branch. Every file of the previous version is replaced. One request per run.
+var VERSION_REQ_URL_RE = /^https:\/\/raw\.githubusercontent\.com\/(rwnq8|QNFO)\/[A-Za-z0-9._-]+\/[0-9a-f]{40}\/[^?#\s]+$/;
+var VERSION_REQ_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}$/;
+function validateVersionFiles(files) {
+  if (!Array.isArray(files) || files.length === 0 || files.length > 20) return "files must be a list of 1 to 20 entries";
+  var seen = {};
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i] || {};
+    if (typeof f.name !== "string" || !VERSION_REQ_NAME_RE.test(f.name)) return "bad file name at " + i;
+    if (seen[f.name]) return "duplicate file name " + f.name;
+    seen[f.name] = 1;
+    if (typeof f.url !== "string" || !VERSION_REQ_URL_RE.test(f.url)) return "url not a pinned raw.githubusercontent.com rwnq8/QNFO path at " + i;
+  }
+  return null;
+}
+async function drainVersionRequests(env) {
+  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return null;
+  var row = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE status='pending' ORDER BY id ASC LIMIT 1").first();
+  if (!row) return null;
+  var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
+  if (!claim || !claim.meta || claim.meta.changes !== 1) return null;
+  var draftId = null;
+  var finish = async function(status, doi, recordId, error) {
+    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_doi=?, result_record_id=?, draft_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, doi, recordId, draftId, error, row.id).run();
+    return { id: row.id, status, doi, error };
+  };
+  try {
+    var files = JSON.parse(row.files_json || "null");
+    var bad = validateVersionFiles(files);
+    if (bad) return await finish("error", null, null, bad);
+    var meta = JSON.parse(row.metadata_json || "{}");
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return await finish("error", null, null, "metadata_json must be an object");
+    var nv = await zenodo(env, "POST", "/" + Number(row.record_id) + "/actions/newversion", {});
+    var latest = nv && nv.links && nv.links.latest_draft;
+    draftId = latest ? String(latest).split("/").pop() : null;
+    if (!draftId) return await finish("error", null, null, "newversion failed: " + JSON.stringify(nv).slice(0, 250));
+    var draft = await zenodo(env, "GET", "/" + draftId);
+    if (!draft || draft._status || !draft.links || !draft.links.bucket) return await finish("error", null, null, "draft read failed: " + JSON.stringify(draft).slice(0, 250));
+    var carried = await zenodo(env, "GET", "/" + draftId + "/files");
+    if (Array.isArray(carried)) {
+      for (var ci = 0; ci < carried.length; ci++) {
+        var del = await fetch(carried[ci].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE", headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
+        if (!del.ok) return await finish("error", null, null, "delete of carried file " + carried[ci].filename + " failed: " + del.status);
+      }
+    }
+    for (var fi = 0; fi < files.length; fi++) {
+      var src = await fetch(files[fi].url, { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
+      if (!src.ok) return await finish("error", null, null, "fetch " + files[fi].url + ": " + src.status);
+      var buf = await src.arrayBuffer();
+      if (!buf || buf.byteLength === 0) return await finish("error", null, null, "empty file " + files[fi].name);
+      var up = await fetch(draft.links.bucket + "/" + encodeURIComponent(files[fi].name) + "?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/" + VERSION }, body: buf });
+      if (!up.ok) return await finish("error", null, null, "upload " + files[fi].name + ": " + up.status);
+    }
+    var md = Object.assign({}, draft.metadata || {}, meta);
+    delete md.doi;
+    if (!meta.publication_date) md.publication_date = new Date().toISOString().slice(0, 10);
+    var put = await zenodo(env, "PUT", "/" + draftId, { metadata: md });
+    if (!put || put._status) return await finish("error", null, null, "metadata put failed: " + JSON.stringify(put).slice(0, 250));
+    var pub = await zenodo(env, "POST", "/" + draftId + "/actions/publish", {});
+    if (!pub || !pub.doi) return await finish("error", null, null, "publish failed: " + JSON.stringify(pub).slice(0, 250));
+    return await finish("published", pub.doi, pub.id || null, null);
+  } catch (e) {
+    return await finish("error", null, null, String(e && e.message || e).slice(0, 300));
+  }
+}
 var worker_default = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
@@ -2426,6 +2495,12 @@ var worker_default = {
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");
       } catch (e) {
         await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
+      }
+      try {
+        var vr = await drainVersionRequests(env);
+        if (vr) await logEvent(env, "zenodo-version", JSON.stringify(vr).slice(0, 700), vr.status === "published" ? "ok" : "error");
+      } catch (e) {
+        await logEvent(env, "error", "drainVersionRequests threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
       if (env.RESEARCH_HALT === "1") return;
       try {
@@ -2458,6 +2533,7 @@ var worker_default = {
 };
 export {
   worker_default as default,
+  drainVersionRequests,
   markError,
   parkPoisonRow,
   reclaimStaleResearching
