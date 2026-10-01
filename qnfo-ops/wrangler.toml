@@ -78,6 +78,9 @@ environment = "production"
 binding = "AI"
 service = "qnfo-ai"
 environment = "production"
+# INTERNAL-CALLER-PROPS-1 (#1703): qnfo-ai authenticates this binding by ctx.props.caller, so a router key
+# rotation no longer strands this worker. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+props = { caller = "qnfo-ops" }
 
 [[services]]
 binding = "AISEARCH"
