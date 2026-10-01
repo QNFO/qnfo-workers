@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.16-aig-caller-meta";
+var VERSION = "2.38.17-empty-final-guard";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -4728,6 +4728,22 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         }
       } catch (e6) {
       }
+    }
+    // EMPTY-FINAL-GUARD-1 (2026-10-01, issue 1696): when the answer is empty or ONLY tool-call markup and the
+    // markup-recovery round above also returned nothing, the stripped content was "" and the client received an
+    // empty answer (ops_ai_log 2026-09-30T20:41:41Z: 214s streamed mobile run, 2 tool calls ok, ok=0, response '').
+    // Always end with an explicit message. It contains "re-send your request", so okFlag stays 0 (honest), but the
+    // row and the client are never blank.
+    if (!clientHandoff && !cacheHit && !String(stripToolFrames(String(content || "")) || "").trim()) {
+      const _okN = toolLog.filter(function(t) { return t && t.ok; }).length;
+      const _names = Array.from(new Set(toolLog.map(function(t) { return t && t.name; }).filter(Boolean))).slice(0, 6).join(", ");
+      const _secs = Math.round((Date.now() - t0) / 1e3);
+      content = toolLog.length
+        ? "The agent ran " + toolLog.length + " tool call(s) (" + _okN + " ok: " + _names + ") but the model produced no final answer within this turn (" + _secs + "s). The tool results are recorded; please re-send your request for a concise answer."
+        : "The model returned no answer for this turn (" + _secs + "s). Please re-send your request.";
+      finishReason = "stop";
+      if (isStream) emitChunk({ role: "assistant", content }, null);
+      streamedTokens = true;
     }
     const promptTokens = cacheHit ? 0 : upstreamUsage && upstreamUsage.prompt_tokens ? upstreamUsage.prompt_tokens : estTokens(JSON.stringify(work));
     const completionTokens = cacheHit ? estTokens(content) : upstreamUsage && upstreamUsage.completion_tokens ? upstreamUsage.completion_tokens : estTokens(content);
