@@ -272,8 +272,11 @@ def ops_intake_probe() -> int:
     if not key:
         emit({"action": "ops-intake-probe", "ok": False, "error": "OPS_ROUTER_AUTH_KEY not configured"})
         return 2
+    # A unique idea per run: qnfo-ops answers an identical prompt from its exact-match KV cache (chat-cache-exact-kv),
+    # so a repeated probe returned the first run's tool result without calling the tool (2026-10-01 run 36851076322).
+    idea = PROBE_IDEA + " run " + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     body = {"model": "ops", "stream": False, "max_tokens": 2000, "messages": [{"role": "user", "content":
-            "Call the research_queue tool exactly once with idea=\"" + PROBE_IDEA + "\" and express=true. "
+            "Call the research_queue tool exactly once with idea=\"" + idea + "\" and express=true. "
             "Do not call any other tool. Then reply with ONLY the raw JSON object the tool returned."}]}
     req = urllib.request.Request("https://ops.qnfo.org/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
                                  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
@@ -285,7 +288,7 @@ def ops_intake_probe() -> int:
         emit({"action": "ops-intake-probe", "ok": False, "http": e.code})
         return 1
     text = (((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
-    emit({"action": "ops-intake-probe", "ok": True, "probe_idea": PROBE_IDEA, "reply": text[:2500]})
+    emit({"action": "ops-intake-probe", "ok": True, "probe_idea": idea, "reply": text[:2500]})
     return 0
 
 
