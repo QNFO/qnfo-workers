@@ -12,7 +12,12 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.19-post-id-utm";
+var VERSION = "0.7.20-linkedin-draft";
+// LINKEDIN-BUFFER-DRAFTS-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s4-s5): LinkedIn's API Terms 3.1 forbid
+// automated posting, so the LinkedIn channel never receives a shareNow post. bufferPost saves it as a Buffer DRAFT
+// (saveToDraft: true) that the owner approves with one tap in Buffer; Mastodon and X keep posting automatically inside
+// the cadence caps. The draft id is recorded as buffer-draft:<id> in social_threads.post_uri so the daily sent-as-you
+// digest (qnfo-cloud-ops) can list what is waiting for approval.
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -170,7 +175,11 @@ function postUriValue(bskyUri, bufferResult) {
   const ids = {};
   if (bskyUri) ids.bluesky = String(bskyUri);
   const res = (bufferResult && bufferResult.results) || [];
-  for (const r of res) if (r && r.status === 'ok' && r.post_id) ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer:' + r.post_id;
+  for (const r of res) {
+    if (!r || !r.post_id) continue;
+    if (r.status === 'ok') ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer:' + r.post_id;
+    else if (r.status === 'draft') ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer-draft:' + r.post_id; // LINKEDIN-BUFFER-DRAFTS-1
+  }
   const keys = Object.keys(ids);
   if (!keys.length) return null;
   return keys.length === 1 ? ids[keys[0]] : JSON.stringify(ids);
@@ -542,10 +551,12 @@ async function bufferPost(env, text, campaign) {
       if (!ch) { results.push({ platform: svc, status: "no-channel" }); continue; }
       try {
         const svcText = utmTagText(text, BUFFER_UTM_SOURCE[svc] || svc, campaign);
-        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: shareNow }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
+        // LINKEDIN-BUFFER-DRAFTS-1 (#1713): LinkedIn is draft-only (owner approves in Buffer); the rest share now.
+        const draft = svc === "linkedin";
+        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: " + (draft ? "addToQueue, saveToDraft: true" : "shareNow") + " }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
         const r = await bufferGql(env, mutation);
         const cp = r && r.data && r.data.createPost;
-        if (cp && cp.post) results.push({ platform: svc, status: "ok", post_id: cp.post.id });
+        if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : "ok", post_id: cp.post.id });
         else results.push({ platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) });
       } catch (e) { results.push({ platform: svc, status: "error", error: String(e && e.message || e) }); }
     }

@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.16.0-identity-weekly"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, IDENTITY-WEEKLY-1 */
+var VERSION = "1.16.1-sent-as-you"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, IDENTITY-WEEKLY-1, SENT-AS-YOU-DIGEST-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2053,9 +2053,145 @@ async function jobEngagement(env) {
   } catch (e) {
     out.write_error = String(e && e.message || e);
   }
+  // SENT-AS-YOU-DIGEST-1 (#1713): the daily owner-voice ledger rides this daily tick (no new cron; the fleet is over
+  // its 50-schedule cap). Independent of the collectors above: a Bluesky or Buffer failure never suppresses it.
+  try {
+    out.sent_as_you = await sentAsYouDigest(env);
+  } catch (e) {
+    out.sent_as_you = "error: " + String(e && e.message || e).slice(0, 160);
+  }
   return { status: "ok", notes: out };
 }
 __name(jobEngagement, "jobEngagement");
+// SENT-AS-YOU-DIGEST-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s5 gate 7): once a day, every item the fleet
+// sent in the owner's name in the last 24h (Bluesky threads and cross-posts, dissemination posts, cold-outreach emails
+// from both engines, replies sent by qnfo-email) plus the LinkedIn drafts waiting in Buffer and the state of both kill
+// switches, delivered to the owner's alerts channel through qnfo-email /send as an owner notice (HANDOFF-ALLOWLIST-1
+// lets owner notices past the general digest opt-out) and stored as a cloud_ops_events digest. The one-line stop
+// command names the owner-voice-stop job below.
+var OWNER_VOICE_TO = "rwnquni@outlook.com";
+var OWNER_VOICE_STOP_LINE = "STOP everything sent as you: run cloud-ops job owner-voice-stop (POST https://qnfo-cloud-ops.q08.workers.dev/run?job=owner-voice-stop with the ops admin token), or reply to this email with 'pause outreach and social' (owner sender; the ops agent executes). Resume with owner-voice-resume.";
+async function ownerVoiceFlags(env) {
+  const f = { social_paused: "0", external_sends_enabled: "?" };
+  try {
+    const r = await env.AUDIT.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
+    f.social_paused = r && r.value != null ? String(r.value) : "0";
+  } catch (e) {
+    f.social_paused = "?";
+  }
+  try {
+    if (env.OUTREACH) {
+      const r = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key='external_sends_enabled'").first();
+      f.external_sends_enabled = r && r.value != null ? String(r.value) : "1";
+    }
+  } catch (e) {
+  }
+  return f;
+}
+__name(ownerVoiceFlags, "ownerVoiceFlags");
+async function sentAsYouDigest(env) {
+  const now = /* @__PURE__ */ new Date();
+  const today = now.toISOString().slice(0, 10);
+  const since = new Date(now.getTime() - 24 * 36e5).toISOString().slice(0, 19).replace("T", " ");
+  const items = [];
+  const errs = {};
+  const q = /* @__PURE__ */ __name(async (label, db, sql, map) => {
+    if (!db) { errs[label] = "no binding"; return; }
+    try {
+      const r = await db.prepare(sql).bind(since).all();
+      for (const row of r.results || []) items.push(map(row));
+    } catch (e) {
+      errs[label] = String(e && e.message || e).slice(0, 120);
+    }
+  }, "q");
+  // social_threads.post_uri is added lazily by qnfo-social (POST-ID-UTM-1); fall back when the column is absent.
+  try {
+    const r = await env.AUDIT.prepare("SELECT slug, title, posted_at, post_uri FROM social_threads WHERE status='posted' AND datetime(posted_at) >= datetime(?1) ORDER BY posted_at").bind(since).all();
+    for (const row of r.results || []) items.push({ kind: "social-thread", when: row.posted_at, what: String(row.title || row.slug || "").slice(0, 120), where: String(row.post_uri || "") });
+  } catch (e) {
+    await q("social_threads", env.AUDIT, "SELECT slug, title, posted_at FROM social_threads WHERE status='posted' AND datetime(posted_at) >= datetime(?1) ORDER BY posted_at", (row) => ({ kind: "social-thread", when: row.posted_at, what: String(row.title || row.slug || "").slice(0, 120), where: "" }));
+  }
+  await q("dissemination", env.AUDIT, "SELECT channel, paper_slug, post_url, posted_at FROM dissemination_tracker WHERE action='posted' AND datetime(posted_at) >= datetime(?1) ORDER BY posted_at", (row) => ({ kind: "post:" + row.channel, when: row.posted_at, what: String(row.paper_slug || "").slice(0, 120), where: String(row.post_url || "") }));
+  await q("outreach_log", env.AUDIT, "SELECT email, subject, sent_at, status FROM outreach_log WHERE datetime(sent_at) >= datetime(?1) ORDER BY sent_at", (row) => ({ kind: "email:cloud-ops" + (row.status && row.status !== "sent" && row.status !== "ok" ? ":" + row.status : ""), when: row.sent_at, what: String(row.subject || "").slice(0, 120), where: String(row.email || "") }));
+  await q("outreach_sends", env.OUTREACH, "SELECT s.kind, s.subject, s.sent_at, c.email FROM sends s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.status='sent' AND datetime(s.sent_at) >= datetime(?1) ORDER BY s.sent_at", (row) => ({ kind: "email:qnfo-outreach/" + row.kind, when: row.sent_at, what: String(row.subject || "").slice(0, 120), where: String(row.email || "") }));
+  await q("email_replies", env.AUDIT, "SELECT sender, subject, sent_at FROM email_reply_queue WHERE sent_at IS NOT NULL AND datetime(sent_at) >= datetime(?1) ORDER BY sent_at", (row) => ({ kind: "reply:qnfo-email", when: row.sent_at, what: String(row.subject || "").slice(0, 120), where: String(row.sender || "") }));
+  let drafts = "unavailable";
+  if (env.BUFFER_TOKEN) {
+    try {
+      const gql = /* @__PURE__ */ __name(async (query) => {
+        const r = await fetch("https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
+        if (!r.ok) throw new Error("buffer http " + r.status);
+        return r.json();
+      }, "gql");
+      const orgR = await gql("{ account { organizations { id } } }");
+      const orgs = orgR && orgR.data && orgR.data.account && orgR.data.account.organizations || [];
+      if (!orgs.length) drafts = "no organization";
+      else {
+        const pR = await gql('query { posts(first: 20, input: { organizationId: "' + orgs[0].id + '", filter: { status: [draft] } }) { edges { node { id channelId } } } }');
+        if (pR && pR.errors && pR.errors.length) drafts = "error: " + String(pR.errors[0].message || "").slice(0, 80);
+        else drafts = String((pR && pR.data && pR.data.posts && pR.data.posts.edges || []).length);
+      }
+    } catch (e) {
+      drafts = "error: " + String(e && e.message || e).slice(0, 80);
+    }
+  } else drafts = "no token";
+  const flags = await ownerVoiceFlags(env);
+  // Sources mix 'YYYY-MM-DD HH:MM:SS' and ISO 'YYYY-MM-DDTHH:MM:SS.sssZ'; normalise before sorting or ' ' sorts before 'T'.
+  for (const it of items) it.when = String(it.when || "").replace("T", " ").slice(0, 16);
+  items.sort((a, b) => a.when.localeCompare(b.when));
+  const subject = "QNFO sent as you — " + today + " (" + items.length + " item" + (items.length === 1 ? "" : "s") + ")";
+  const L = [subject, "", "Everything the fleet sent in your name since " + since + " UTC:"];
+  if (!items.length) L.push("- nothing");
+  for (const it of items.slice(0, 80)) L.push("- " + it.when + "  " + it.kind + "  " + it.what + (it.where ? "  -> " + it.where : ""));
+  if (items.length > 80) L.push("- ... and " + (items.length - 80) + " more");
+  L.push("", "LinkedIn drafts waiting for your approval in Buffer: " + drafts);
+  L.push("Kill switches: social_paused=" + flags.social_paused + " (qnfo-social), external_sends_enabled=" + flags.external_sends_enabled + " (both email engines)");
+  const ek = Object.keys(errs);
+  if (ek.length) L.push("Sources not read: " + ek.map((k) => k + " (" + errs[k] + ")").join("; "));
+  L.push("", OWNER_VOICE_STOP_LINE);
+  const text = L.join(NL);
+  const stored = await storeDigest(env, "sent-as-you", subject, text);
+  let delivered = null;
+  try {
+    if (env.EMAIL && env.EMAIL_API_KEY) {
+      const r = await cfEmail(env, "/send", { method: "POST", body: { to: env.OWNER_VOICE_TO || OWNER_VOICE_TO, subject, body: text, notify: true, classification: "handoff" } });
+      delivered = r && !r.error ? "ok" : "error: " + String(r && r.error || "unknown").slice(0, 120);
+    } else delivered = "skipped: no EMAIL binding or key";
+  } catch (e) {
+    delivered = "error: " + String(e && e.message || e).slice(0, 120);
+  }
+  return { items: items.length, drafts, flags, delivered, stored: !!(stored && stored.stored), errors: ek.length ? errs : void 0 };
+}
+__name(sentAsYouDigest, "sentAsYouDigest");
+// OWNER-VOICE-STOP-1 (#1713): one deterministic switch for both streams. Not scheduled; run on demand (/run?job=...).
+async function setOwnerVoice(env, paused) {
+  const out = { social_paused: null, external_sends_enabled: null };
+  try {
+    await env.AUDIT.prepare("INSERT INTO pipeline_flags (key, value, updated_at) VALUES ('social_paused', ?1, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at").bind(paused ? "1" : "0").run();
+    out.social_paused = paused ? "1" : "0";
+  } catch (e) {
+    out.social_paused = "error: " + String(e && e.message || e).slice(0, 120);
+  }
+  try {
+    if (!env.OUTREACH) throw new Error("no OUTREACH binding");
+    await env.OUTREACH.prepare("INSERT INTO pipeline_state (key, value, updated_at) VALUES ('external_sends_enabled', ?1, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at").bind(paused ? "0" : "1").run();
+    out.external_sends_enabled = paused ? "0" : "1";
+  } catch (e) {
+    out.external_sends_enabled = "error: " + String(e && e.message || e).slice(0, 120);
+  }
+  const ok = !/^error/.test(String(out.social_paused)) && !/^error/.test(String(out.external_sends_enabled));
+  await recordEvent(env, "owner-voice", "ov-" + (paused ? "stop" : "resume") + "-" + Date.now().toString(36), "owner voice " + (paused ? "STOPPED" : "resumed") + " " + JSON.stringify(out), { job: paused ? "owner-voice-stop" : "owner-voice-resume", status: ok ? "ok" : "partial" });
+  return { status: ok ? "ok" : "partial", notes: out };
+}
+__name(setOwnerVoice, "setOwnerVoice");
+async function jobOwnerVoiceStop(env) {
+  return setOwnerVoice(env, true);
+}
+__name(jobOwnerVoiceStop, "jobOwnerVoiceStop");
+async function jobOwnerVoiceResume(env) {
+  return setOwnerVoice(env, false);
+}
+__name(jobOwnerVoiceResume, "jobOwnerVoiceResume");
 async function jobGtdReconcile(env) {
   try {
     const open = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work").first();
@@ -2407,6 +2543,8 @@ var JOBS = {
   "visibility": jobVisibilityAndIdentity,
   "identity-weekly": jobIdentityWeekly,
   "engagement": jobEngagement,
+  "owner-voice-stop": jobOwnerVoiceStop,
+  "owner-voice-resume": jobOwnerVoiceResume,
   "radar": jobRadar
 };
 function cfDowToIso(spec) {
