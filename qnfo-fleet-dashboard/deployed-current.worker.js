@@ -2217,6 +2217,7 @@ async function handleRequest(request, env, ctx) {
     if (b.op === "add") {
       if (!String(b.title || "").trim()) return json({ error: "title required" }, 400);
       if (b.url && !/^https:\/\//.test(String(b.url))) return json({ error: "url must be https" }, 400);
+      if (b.url && !safeLink(b.url)) return json({ error: "links to claude.ai / anthropic.com are refused: owner data lives on Cloudflare (NO-CLAUDE-RUNTIME-DEPENDENCY-1)" }, 400);
       await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, default_in_effect=excluded.default_in_effect, action=excluded.action, url=excluded.url, sev=excluded.sev, due=excluded.due, status='open', resolved_at=NULL, resolution=NULL, updated_at=datetime('now')").bind(b.slug, String(b.title).slice(0, 200), String(b.why || "").slice(0, 400), String(b.default || "").slice(0, 300), String(b.action || "").slice(0, 300), String(b.url || ""), b.sev === "urgent" ? "urgent" : "normal", String(b.due || "").slice(0, 10), String(b.source || "api").slice(0, 60)).run();
       return json({ ok: true, slug: b.slug });
     }
@@ -3054,6 +3055,13 @@ var HUMAN_SNAPSHOT_MAX_AGE_MS = 5 * 6e4;
 async function ensureHumanTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT)").run();
 }
+// NO-CLAUDE-RUNTIME-DEPENDENCY-1: the owner's data and workflow live on Cloudflare. A dashboard item never links to
+// claude.ai or anthropic.com, and only https links are rendered.
+function safeLink(u) {
+  const m = /^https:\/\/([^\/?#:]+)/i.exec(String(u || ""));
+  if (!m) return "";
+  return /(^|\.)(claude\.ai|anthropic\.com)$/i.test(m[1]) ? "" : String(u);
+}
 function mailDomain(addr) {
   const m = String(addr || "").toLowerCase().match(/@([a-z0-9.-]+)\s*>?\s*$/);
   return m ? m[1] : "unknown sender";
@@ -3087,7 +3095,7 @@ async function collectHumanActions(env) {
   await read("human_actions", async function() {
     await ensureHumanTable(env);
     const rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
-    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: r.url || "", sev: r.sev === "urgent" ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
+    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: safeLink(r.url), sev: r.sev === "urgent" ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
   });
   await read("register", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, title, dod, due, updated_at FROM v_waiting_on_human ORDER BY due = '', due, id");
@@ -3127,9 +3135,18 @@ async function collectHumanActions(env) {
   // Objective revisions are immutable by the fleet: only the owner ratifies or rejects them (QUNIVERSE-CHARTER s7).
   // Derived live from goals, so it clears itself the moment the last proposal is decided.
   await read("objective-revisions", async function() {
-    const rows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM goals WHERE goal_type='objective-revision' AND status='proposed'");
-    const n = rows && rows.length ? Number(rows[0].n || 0) : 0;
-    if (n > 0) add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " proposed objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Tell a session which to ratify or reject (qnfo-audit goals, goal_type objective-revision).", url: "", due: "", age: ageDaysOf(rows[0].oldest) });
+    const rows = await d1all(env.AUDIT, "SELECT id, statement, alignment, created_at FROM goals WHERE goal_type='objective-revision' AND status='proposed' ORDER BY id");
+    const n = rows.length;
+    if (n > 0) {
+      let oldest = null;
+      for (const r of rows) {
+        const a = ageDaysOf(r.created_at);
+        if (a != null && (oldest == null || a > oldest)) oldest = a;
+      }
+      add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " proposed objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Decide each one on this card. A ratified change is recorded now; applying it to the objective function is tracked in OBJECTIVE-REVISION-APPLY-1.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
+        return { id: r.id, statement: String(r.statement || "").slice(0, 220), why: String(r.alignment || "").slice(0, 200) };
+      }) });
+    }
   });
   await read("shutdown-manifest", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, phase, component, condition, due_date, state FROM shutdown_manifest ORDER BY id");
@@ -3732,16 +3749,24 @@ function humanFragment(v) {
   const banner = v.verdict === "ACTION" ? { cls: "act", big: v.count + (v.count === 1 ? " thing needs" : " things need") + " you", sub: v.urgent ? v.urgent + " urgent" : "Everything else is handled." } : v.verdict === "CLEAR" ? { cls: "ok", big: "Nothing needs you", sub: "Every queue that can wait on a human is empty. The system is handling the rest." } : { cls: "unk", big: "Can't confirm", sub: v.blind.length ? "Could not read: " + v.blind.join("; ") : "System data is " + v.system.state_age_min + " min old, so an all-clear would be a guess." };
   o.push('<section class="banner ' + banner.cls + '"><h1>' + e(banner.big) + "</h1><p>" + e(banner.sub) + "</p></section>");
   if (v.verdict === "ACTION" && v.blind.length) o.push('<div class="card meta">Also could not read: ' + e(v.blind.join("; ")) + "</div>");
+  let shown = 0;
   for (const it of v.items) {
+    if (shown === 5) o.push('<details class="more"><summary>' + (v.items.length - 5) + " more waiting on you</summary>");
+    shown++;
     o.push('<article class="card' + (it.sev === "urgent" ? " urgent" : "") + '"><h2>' + (it.sev === "urgent" ? '<span class="tag u">urgent</span>' : "") + e(it.title) + "</h2>");
     o.push('<div class="meta">' + e(it.source) + (it.due ? " &middot; due " + e(it.due) : "") + (it.age != null ? " &middot; waiting " + e(agoText(it.age).replace(" ago", "")) : "") + "</div>");
     if (it.why) o.push('<div class="row"><b>Why you</b>' + e(it.why) + "</div>");
     if (it.fallback) o.push('<div class="row"><b>If you wait</b>' + e(it.fallback) + "</div>");
     if (it.action) o.push('<div class="row"><b>To do</b>' + e(it.action) + "</div>");
     if (/^https:\/\//.test(it.url || "")) o.push('<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>');
+    if (it.detail && it.detail.length) {
+      for (const d of it.detail) o.push('<div class="pr"><div>#' + e(d.id) + " " + e(d.statement) + '</div><div class="meta">' + e(d.why) + "</div>" + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(d.id) + '"><button data-act="ratify" data-oid="' + e(d.id) + '">Ratify</button><button data-act="reject" data-oid="' + e(d.id) + '">Reject</button></div>' : "") + "</div>");
+      if (!(v.owner && v.owner.authed)) o.push('<div class="meta">Sign in to decide each one here.</div>');
+    }
     if (v.owner && v.owner.authed) o.push('<div class="acts" data-key="' + e(it.key) + '">' + (String(it.key).indexOf("ha:") === 0 ? '<button data-act="done">Done</button><button data-act="dismiss">Not doing</button>' : "") + '<button data-act="snooze" data-days="3">Snooze 3d</button><button data-act="snooze" data-days="7">Snooze 7d</button><button data-act="note">Add note</button></div>');
     o.push("</article>");
   }
+  if (shown > 5) o.push("</details>");
   if (v.upcoming && v.upcoming.length) {
     o.push("<details><summary>Coming up (" + v.upcoming.length + ")</summary><ul>");
     for (const it of v.upcoming) o.push("<li><b>" + e(it.due) + "</b> " + e(it.title) + (it.action ? ' <span class="meta">&mdash; ' + e(it.action) + "</span>" : "") + (/^https:\/\//.test(it.url || "") ? ' <a href="' + e(it.url) + '" rel="noopener">open</a>' : "") + "</li>");
@@ -3815,13 +3840,13 @@ function humanHtml(v) {
   o.push(".tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--line);color:var(--mute);margin-right:6px}.tag.u{background:var(--act);color:#fff}");
   o.push(".verdict.ok{border-left:5px solid var(--ok)}.verdict.unk{border-left:5px solid var(--unk)}.verdict.act{border-left:5px solid var(--act)}.vtop{display:flex;gap:6px;align-items:center}.chip{font-weight:800;letter-spacing:.04em;padding:3px 10px;border-radius:8px;font-size:14px}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.unk{background:var(--unkbg);color:var(--unk)}.chip.act{background:var(--actbg);color:var(--act)}.vhead{margin:8px 0 4px;font-size:16px;font-weight:600}.why{margin:6px 0 0;padding-left:18px;font-size:14px;color:var(--mute)}");
   o.push("h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:24px 0 8px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.stat .n{font-size:22px;font-weight:700}.stat .l{font-size:12px;color:var(--mute)}.bad{color:var(--act)}.good{color:var(--ok)}.amber{color:var(--warn)}");
-  o.push(".acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.acts button{padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer}.acts button:hover{border-color:var(--link)}.acts button:disabled{opacity:.5;cursor:default}#ptext{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}.pr{border-top:1px solid var(--line);margin-top:10px;padding-top:8px;font-size:14px}.ans{white-space:pre-wrap;font-size:14px;margin-top:6px}#so{color:var(--mute);margin-left:10px}details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:14px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
+  o.push(".acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.acts button{padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer}.acts button:hover{border-color:var(--link)}.acts button:disabled{opacity:.5;cursor:default}#ptext{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}.pr{border-top:1px solid var(--line);margin-top:10px;padding-top:8px;font-size:14px}.ans{white-space:pre-wrap;font-size:14px;margin-top:6px}#so{color:var(--mute);margin-left:10px}details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:14px}details.more{background:transparent;border:0;padding:0;margin-top:0}details.more>summary{padding:8px 2px;margin-bottom:8px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
   o.push("</style></head><body><main>");
   o.push('<div class="top"><b>Fleet &middot; your queue</b><span><span id="dot" class="dot g"></span><span id="age">live</span>' + (v.owner && v.owner.authed ? '<a href="#" id="so">sign out</a>' : "") + "</span></div>");
   o.push('<div id="live">' + humanFragment(v) + "</div>");
   // Real-time: re-fetch the server-rendered fragment every 10s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
-  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var d=live.querySelector('details'),open=d&&d.open,ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;var n=live.querySelector('details');if(n&&open)n.open=true;var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
+  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
   return o.join("");
 }
 // OWNER-RESPOND-1 (2026-10-01): respond to the fleet from the dashboard itself, and start/track server-side prompts.
@@ -3840,7 +3865,7 @@ function humanHtml(v) {
 // What a response does (all inside this worker's own D1 rows; no credential is copied anywhere):
 //   done / dismiss  resolve or dismiss a queue item (human_actions); evidence = "owner via dashboard"
 //   snooze          hide any item for 1-90 days (human_responses); derived items return if still true afterwards
-//   note            a note on any item, kept in human_responses and listed in /api/human for sessions to read
+//   note            a note on any item, kept in human_responses and shown on the page and in /api/human
 //   Ask now         runs the prompt through qnfo-ai over the dashboard's service binding (authenticated by binding
 //                   props, no key), grounded in the current queue + decision, no tools, daily-capped
 //   Queue as task   inserts a pending task into the intents table the intent-orchestrator already triages
@@ -4008,6 +4033,16 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     }
     await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, until) VALUES (?1,?2,?3,?4)").bind(key, kind, note || null, until).run();
     return ownerJson({ ok: true, key, kind, until });
+  }
+  if (path === "/api/owner/objective") {
+    const id = Number(b && b.id);
+    const decision = String(b && b.decision || "");
+    if (!Number.isInteger(id) || id < 1) return ownerJson({ error: "bad id" }, 400);
+    if (decision !== "ratify" && decision !== "reject") return ownerJson({ error: "decision must be ratify|reject" }, 400);
+    const r = await env.AUDIT.prepare("UPDATE goals SET status=?1, updated_at=datetime('now') WHERE id=?2 AND goal_type='objective-revision' AND status='proposed'").bind(decision === "ratify" ? "ratified" : "rejected", id).run();
+    if (!(r.meta && r.meta.changes)) return ownerJson({ error: "no proposed objective revision " + id }, 404);
+    await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note) VALUES (?1,?2,?3)").bind("goals:objective-revision:" + id, decision, String(b && b.note || "").slice(0, 500) || null).run();
+    return ownerJson({ ok: true, id, status: decision === "ratify" ? "ratified" : "rejected" });
   }
   if (path === "/api/owner/prompt") {
     const text = String(b && b.text || "").trim();

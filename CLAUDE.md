@@ -41,6 +41,19 @@ because each one was broken at least once; the linked issue holds the evidence.
   to main; never edit it by hand. Hand-written sections change by PR with a version bump. `CHARTER_PILLARS` and
   `CHARTER_MVP` in the kernel and the tables in the charter change together (the guard enforces parity).
 
+## No Claude dependency at runtime (NO-CLAUDE-RUNTIME-DEPENDENCY-1)
+- Owner directive 2026-10-01: the fleet and its dashboard must not depend on continued Claude usage, and all data is hosted
+  on Cloudflare (D1, R2, KV, Workers), never on claude.ai (Claude Docs, artifacts, Routines). A session builds the fleet; it
+  is never part of it.
+- Do not make claude.ai a system of record, a link target in a worker or doc, or a recurring runner. Recurring work is a
+  worker cron (using qnfo-ai and D1). A decision the owner must make is made in https://fleet.qnfo.org (queue cards,
+  objective decisions, the prompt panel), never by "telling a session". The dashboard refuses claude.ai and anthropic.com
+  links in queue items.
+- Sensitive personal data does not go into the shared `qnfo-audit` D1 that many workers and sessions can read; it needs a
+  dedicated private store bound only to the worker that serves it (open decision: agent_issues NO-CLAUDE-RUNTIME-DEPENDENCY-1).
+- Known violations being retired: the Identity doc on Claude Docs and the two claude.ai Routines
+  (NO-CLAUDE-RUNTIME-DEPENDENCY-1, ROUTINES-ON-CLAUDE-1, OBJECTIVE-REVISION-APPLY-1).
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").

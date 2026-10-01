@@ -41,7 +41,11 @@ The owner's side of "manage, track, initiate server-side prompts" lives in the o
 
 **Prompts** (`POST /api/owner/prompt {text, mode}`, 20/day, `OWNER_PROMPTS_DAILY_CAP`): *Ask now* runs the prompt through qnfo-ai over the dashboard's service binding (authenticated by binding props, no key), grounded in the current queue and decision, with no tools; *Queue as task* inserts a `pending` task into `intents`, which the intent-orchestrator triages (06:00 and 06:30 UTC). Both are listed and tracked on the page (`owner_prompts`, joined to `intents.status` / `triage_decision`).
 
-Tables (created on first use): `human_responses`, `owner_prompts`. The owner-only to-dos from the charter are seeded by `migrations/2026-10-01-owner-only-actions.sql`; the objective-revision item is derived live from `goals`. Dated items more than 14 days away sit under "Coming up" and do not count toward the banner.
+Tables (created on first use): `human_responses`, `owner_prompts`. The owner-only to-dos from the charter are seeded by `migrations/2026-10-01-owner-only-actions.sql`; the objective-revision item is derived live from `goals`. Dated items more than 14 days away sit under "Coming up" and do not count toward the banner. The first five cards show; the rest sit under "N more waiting on you".
+
+**Objective revisions** are decided on their card (`POST /api/owner/objective {id, decision: ratify|reject}`): the goal becomes `ratified` or `rejected` in D1. Applying a ratified change to the objective function has no Cloudflare consumer yet (OBJECTIVE-REVISION-APPLY-1), so a ratified row is recorded but not yet applied.
+
+**No Claude dependency (NO-CLAUDE-RUNTIME-DEPENDENCY-1).** Every response, prompt and decision is stored and acted on in Cloudflare; the dashboard never links claude.ai or anthropic.com (`safeLink`, also enforced on `POST /api/human`). *Ask now* uses `@cf/zai-org/glm-5.3-flash` on Workers AI through qnfo-ai.
 
 ## What counts as "needs the human" (docs/AUTONOMY-DECISION-POLICY.md T2)
 | Source | Rows that appear |
