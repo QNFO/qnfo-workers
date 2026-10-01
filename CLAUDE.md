@@ -67,7 +67,7 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted); every claude.ai Routine and
   check-in (disabled; ROUTINES-ON-CLAUDE-1 tracks the owner deleting them); owner-ratified objective revisions with no
   Cloudflare consumer (OBJECTIVE-REVISION-APPLY-1, applied by qnfo-fleet-dashboard 1.13.0); card notes only sessions read
-  (now intents, OWNER-NOTES-ROUTE-1); the qnfo-ops `claude-sonnet-4.5` route (2.38.34: no Anthropic upstream anywhere in
+  and queued tasks no Cloudflare loop read (now `agent_issues` rows, OWNER-NOTES-ROUTE-1); the qnfo-ops `claude-sonnet-4.5` route (2.38.34: no Anthropic upstream anywhere in
   the fleet; a `claude-*` model id routes to the ops model).
 
 ## Issues and evidence

@@ -7,9 +7,9 @@ continued Claude usage). The deterministic duties below (owner-voice guard, kill
 owner action list) run as a daily cron in qnfo-fleet-dashboard (`portfolioDailyRun`). The claude.ai Routines that used to
 run this procedure (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, `trig_01QXd2AG8oTevkuVRsfZyHG4`), the daily fleet issue sweep and every
 session check-in were disabled on 2026-10-01 at the owner's direction. Judgement work runs on the fleet's own Cloudflare
-agents: qnfo-fleet-control `evolveTick` (anchored PRs from `agent_issues`), the code loop, the intent-orchestrator (owner
-prompts and card notes, OWNER-NOTES-ROUTE-1) and OBJECTIVE-REVISION-APPLY-1 (owner-ratified objective changes, applied by
-qnfo-fleet-dashboard). An agent session the owner starts is an optional contributor; no step below waits for one.
+agents: qnfo-fleet-control `evolveTick` (anchored PRs from `agent_issues`), the code loop, the issue pipeline that the
+owner's queued tasks and card notes now enter as `agent_issues` rows (OWNER-NOTES-ROUTE-1), and OBJECTIVE-REVISION-APPLY-1
+(owner-ratified objective changes, applied by qnfo-fleet-dashboard). An agent session the owner starts is an optional contributor; no step below waits for one.
 Any run may improve this file through a pull request; the improvement is part of the job.
 
 ## 1. The system of record

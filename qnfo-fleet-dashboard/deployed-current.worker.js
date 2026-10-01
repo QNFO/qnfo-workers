@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.13.0-owner-decisions"; /* OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.13.1-owner-requests"; /* OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -3198,24 +3198,52 @@ async function objectiveRevisionApply(env, id, via) {
   }
   return { ok: true, id, outcome: "applied", detail: src };
 }
-// OWNER-NOTES-ROUTE-1 (1.13.0): a note the owner adds to a card ("Add note") was kept for sessions to read and nothing on
-// Cloudflare read it. Each note now becomes a pending intent (id 'int-note-<human_responses.id>', so it is routed once)
-// that the intent-orchestrator triages like "Queue as task". The request path routes it at once; the */15 cron routes
-// any note the request path could not.
+// OWNER-NOTES-ROUTE-1 (1.13.0): what the owner sends the fleet from the dashboard must reach a Cloudflare consumer. Card
+// notes ("Add note") were kept for sessions to read, and "Queue as task" wrote a type='task' intent that no triage reads
+// (qnfo-intent-orchestrator and qnfo-idea-triage take type 'research', qnfo-kaizen type 'meta'). Each note and each queued
+// task now also becomes one agent_issues row (OWNER-NOTE-<id> / OWNER-TASK-<id>, category 'owner-request', priority high),
+// the fleet's work queue that autotriage, the issue loop, backlog-exec and the dashboard read; its id is kept on the
+// human_responses / owner_prompts row so it is filed once, and the prompt panel shows the issue's status. The request
+// path files at once; the */15 cron files anything it missed.
+async function ownerRequestColumns(env) {
+  for (const t of ["human_responses", "owner_prompts"]) {
+    await env.AUDIT.prepare("ALTER TABLE " + t + " ADD COLUMN issue_id INTEGER").run().catch(function() {
+    });
+  }
+}
+async function ownerRequestIssue(env, title, body) {
+  const now = Date.now();
+  await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-dashboard:owner-request', 'owner-request', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1)").bind(title, body, now).run();
+  const row = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
+  return row ? Number(row.id) : null;
+}
 async function ownerNotesRoute(env) {
-  const rows = await d1all(env.AUDIT, "SELECT hr.id, hr.key, hr.note FROM human_responses hr LEFT JOIN intents i ON i.id = 'int-note-' || hr.id WHERE hr.kind = 'note' AND hr.note IS NOT NULL AND i.id IS NULL ORDER BY hr.id LIMIT 20");
-  let n = 0;
-  for (const r of rows) {
+  await ensureOwnerTables(env);
+  await ownerRequestColumns(env);
+  const out = { notes: 0, tasks: 0 };
+  const dod = " Definition of done: act on it, or record why not, and close with evidence in issue_triage.close_evidence (CLAUDE.md). Filed by qnfo-fleet-dashboard OWNER-NOTES-ROUTE-1.";
+  const notes = await d1all(env.AUDIT, "SELECT id, key, note FROM human_responses WHERE kind = 'note' AND note IS NOT NULL AND issue_id IS NULL ORDER BY id LIMIT 20");
+  for (const r of notes) {
     let title = "";
     if (String(r.key).indexOf("ha:") === 0) {
       const h = (await d1all(env.AUDIT, "SELECT title FROM human_actions WHERE slug = ?", [String(r.key).slice(3)]))[0];
       title = h ? String(h.title || "") : "";
     }
-    const desire = "Owner note on the dashboard card " + (title ? "'" + title.slice(0, 160) + "' " : "") + "(" + r.key + "): " + String(r.note);
-    const ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-card-note','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind("int-note-" + r.id, desire, ("Owner note: " + String(r.note)).slice(0, 120), new Date().toISOString()).run();
-    if (ins && ins.meta && ins.meta.changes) n++;
+    const id = await ownerRequestIssue(env, ("OWNER-NOTE-" + r.id + ": " + (title || r.key)).slice(0, 180), "The owner added a note on fleet.qnfo.org to the card " + r.key + (title ? " ('" + title.slice(0, 160) + "')" : "") + ": " + String(r.note).slice(0, 600) + dod);
+    if (id) {
+      await env.AUDIT.prepare("UPDATE human_responses SET issue_id = ?1 WHERE id = ?2").bind(id, r.id).run();
+      out.notes++;
+    }
   }
-  return { routed: n };
+  const tasks = await d1all(env.AUDIT, "SELECT id, prompt FROM owner_prompts WHERE mode = 'task' AND issue_id IS NULL ORDER BY ts LIMIT 20");
+  for (const r of tasks) {
+    const id = await ownerRequestIssue(env, ("OWNER-TASK-" + r.id + ": " + String(r.prompt || "").replace(/\s+/g, " ")).slice(0, 180), "The owner queued this task on fleet.qnfo.org (owner_prompts " + r.id + "): " + String(r.prompt || "").slice(0, 1800) + dod);
+    if (id) {
+      await env.AUDIT.prepare("UPDATE owner_prompts SET issue_id = ?1 WHERE id = ?2").bind(id, r.id).run();
+      out.tasks++;
+    }
+  }
+  return out;
 }
 // Cron: apply any revision ratified outside the dashboard route (or before 1.13.0). Bounded: a handful per tick.
 async function objectiveRevisionSweep(env) {
@@ -3979,7 +4007,7 @@ function humanFragment(v) {
   if (v.owner && v.owner.authed) {
     o.push('<h3>Tell or ask the fleet</h3><section class="card"><textarea id="ptext" rows="3" maxlength="2000" placeholder="Ask about the queue, decision or spend, or tell the fleet to do something"></textarea><div class="acts"><button id="pask">Ask now</button><button id="ptask">Queue as task</button><span class="meta" id="pmsg"></span></div><div class="meta" style="margin-top:6px">Ask now answers from the current queue and decision (no actions). Queue as task goes to the intent orchestrator\'s next triage (06:00 and 06:30 UTC).</div>');
     for (const pr of v.prompts || []) {
-      const chip = pr.mode === "task" ? "task &middot; " + e(pr.intent_status || pr.status) + (pr.triage_decision ? " &middot; " + e(pr.triage_decision) : "") : e(pr.status) + (pr.model ? " &middot; " + e(pr.model) : "");
+      const chip = pr.mode === "task" ? "task &middot; " + (pr.issue_id ? "issue " + e(pr.issue_id) + " " + e(pr.issue_status || "?") : e(pr.intent_status || pr.status)) + (pr.triage_decision ? " &middot; " + e(pr.triage_decision) : "") : e(pr.status) + (pr.model ? " &middot; " + e(pr.model) : "");
       o.push('<div class="pr"><div class="meta">' + e(String(pr.ts || "").slice(0, 16)) + " &middot; " + chip + "</div><div>" + e(String(pr.prompt || "").slice(0, 220)) + "</div>" + (pr.response ? '<details><summary>Answer</summary><div class="ans">' + e(pr.response) + "</div></details>" : "") + (pr.error ? '<div class="meta bad">' + e(pr.error) + "</div>" : "") + "</div>");
     }
     o.push("</section>");
@@ -4021,7 +4049,7 @@ function humanHtml(v) {
   o.push('<div id="live">' + humanFragment(v) + "</div>");
   // Real-time: re-fetch the server-rendered fragment every 10s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
-  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item and queued for the intent triage):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
+  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item and filed as fleet work):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
   return o.join("");
 }
 // OWNER-RESPOND-1 (2026-10-01): respond to the fleet from the dashboard itself, and start/track server-side prompts.
@@ -4111,7 +4139,8 @@ async function activeSnoozes(env) {
 async function ownerPromptsView(env) {
   try {
     await ensureOwnerTables(env);
-    const rows = await d1all(env.AUDIT, "SELECT p.id, p.ts, p.mode, p.prompt, p.status, p.response, p.model, p.error, i.status AS intent_status, i.triage_decision FROM owner_prompts p LEFT JOIN intents i ON i.id = p.intent_id ORDER BY p.ts DESC LIMIT 6");
+    await ownerRequestColumns(env);
+    const rows = await d1all(env.AUDIT, "SELECT p.id, p.ts, p.mode, p.prompt, p.status, p.response, p.model, p.error, i.status AS intent_status, i.triage_decision, p.issue_id, a.status AS issue_status FROM owner_prompts p LEFT JOIN intents i ON i.id = p.intent_id LEFT JOIN agent_issues a ON a.id = p.issue_id ORDER BY p.ts DESC LIMIT 6");
     return rows;
   } catch (e) {
     return [];
@@ -4249,7 +4278,12 @@ async function ownerRoutes(request, env, ctx, path, owner) {
       const intentId = dup.length ? dup[0].id : iid;
       if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
       await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
-      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, duplicate: !!dup.length });
+      await ownerNotesRoute(env).catch(function() {
+      });
+      const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
+        return [];
+      }))[0];
+      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, issue_id: filed && filed.issue_id || null, duplicate: !!dup.length });
     }
     await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status) VALUES (?1,'ask',?2,'running')").bind(id, text).run();
     const st = await currentState(env, ctx, 5 * 6e4);

@@ -3,7 +3,7 @@
 // the worker source. Proves: a balanced weight change applies at once (sai_config, objective-function formula and
 // version, goal adopted, logged); an unbalanced, stale or unknown-term change is refused before anything is written; a
 // non-weight revision is filed as fleet work; a revision ratified elsewhere is applied once by the sweep; reject clears a
-// ratified-but-inapplicable one; a card note becomes exactly one pending intent.
+// ratified-but-inapplicable one; a card note and a queued task each become exactly one fleet issue.
 // Run: node qnfo-fleet-dashboard/objective-apply.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
@@ -109,7 +109,9 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 const a = src.indexOf("var OBJREV_WEIGHT_RE"), b = src.indexOf("// NO-CLAUDE-RUNTIME-DEPENDENCY-1: the owner's data and workflow live on Cloudflare.");
 ok(a > 0 && b > a, "the OBJECTIVE-REVISION-APPLY-1 block is found in worker.js");
 const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, RegExp });
-vm.runInContext("async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }\n" + src.slice(a, b) + "\n;this.__api = { objectiveRevisionSweep, objRevPlan, ownerNotesRoute };", cx);
+const eo = src.indexOf("async function ensureOwnerTables(env) {");
+const ensureOwner = src.slice(eo, src.indexOf("\n}\n", eo) + 3);
+vm.runInContext("async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }\n" + ensureOwner + "\n" + src.slice(a, b) + "\n;this.__api = { objectiveRevisionSweep, objRevPlan, ownerNotesRoute };", cx);
 const api = cx.__api;
 db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 61").run();
 db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 42").run();
@@ -126,18 +128,28 @@ ok(plan.applicable && /thinking 0\.15 -> 0\.20, decision 0\.15 -> 0\.10/.test(pl
 ok(!api.objRevPlan("Increase the weight of thinking from 0.15 to 0.10 and increase the weight of decision from 0.15 to 0.20", { w_thinking: 0.15, w_decision: 0.15, w_x: 0.7 }, { statement: "SAI = 0.15*thinking + 0.15*decision + 0.70*x", version: 7 }).applicable, "a verb that contradicts the numbers is refused");
 ok(api.objRevPlan("Re-evaluate the terminal objectives", {}, null).kind === "work", "free text is fleet work");
 
-// 9. OWNER-NOTES-ROUTE-1: a card note becomes exactly one pending intent
+// 9. OWNER-NOTES-ROUTE-1: a card note and a queued task each become exactly one fleet issue
+const ownerIssues = () => db.prepare("SELECT id, title, description, source, category, priority, status FROM agent_issues WHERE source = 'qnfo-fleet-dashboard:owner-request' ORDER BY id").all();
 r = await post("/api/owner/respond", { key: "ha:ga4", kind: "note", note: "Granted Viewer to the service account today." });
 ok(r.status === 200, "a note is accepted");
-const it = db.prepare("SELECT id, desire, status, device, priority FROM intents").all();
-ok(it.length === 1 && /^int-note-\d+$/.test(it[0].id) && it[0].status === "pending" && it[0].device === "owner-card-note" && it[0].desire.includes("'Grant GA4 access'") && it[0].desire.includes("Granted Viewer"), "the note is queued as a pending intent naming the card");
+let oi = ownerIssues();
+ok(oi.length === 1 && /^OWNER-NOTE-\d+: Grant GA4 access$/.test(oi[0].title) && oi[0].description.includes("Granted Viewer") && oi[0].category === "owner-request" && oi[0].priority === "high" && oi[0].status === "open", "the note is filed as one open fleet issue naming the card");
+ok(db.prepare("SELECT issue_id FROM human_responses WHERE kind = 'note'").get().issue_id === oi[0].id, "the note keeps its issue id");
 await api.ownerNotesRoute({ AUDIT });
-ok(db.prepare("SELECT COUNT(*) n FROM intents").get().n === 1, "a note is routed once");
+ok(ownerIssues().length === 1, "a note is filed once");
 db.prepare("INSERT INTO human_responses (key, kind, note) VALUES ('code:7', 'note', 'Drop this one.')").run();
 const rr = await api.ownerNotesRoute({ AUDIT });
-ok(rr.routed === 1 && db.prepare("SELECT COUNT(*) n FROM intents WHERE desire LIKE '%(code:7): Drop this one.%'").get().n === 1, "the cron routes a note the request path missed");
+ok(rr.notes === 1 && ownerIssues().some((x) => x.title.endsWith(": code:7") && x.description.includes("Drop this one.")), "the cron files a note the request path missed");
 r = await post("/api/owner/respond", { key: "ha:ga4", kind: "snooze", days: 3 });
-ok(r.status === 200 && db.prepare("SELECT COUNT(*) n FROM intents").get().n === 2, "a snooze is not a note and queues nothing");
+ok(r.status === 200 && ownerIssues().length === 2, "a snooze is not a note and files nothing");
+r = await post("/api/owner/prompt", { text: "Draft the October funder shortlist from the Identity doc deadlines.", mode: "task" });
+j = await r.json();
+oi = ownerIssues();
+const taskIssue = oi.find((x) => /^OWNER-TASK-op-/.test(x.title));
+ok(r.status === 200 && j.ok && taskIssue && j.issue_id === taskIssue.id && taskIssue.description.includes("October funder shortlist"), "a queued task is filed as a fleet issue and the route returns its id");
+ok(db.prepare("SELECT COUNT(*) n FROM intents WHERE device = 'owner-dashboard'").get().n === 1, "the task is still recorded as an intent (daily digest)");
+await api.ownerNotesRoute({ AUDIT });
+ok(ownerIssues().length === 3, "a task is filed once");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
