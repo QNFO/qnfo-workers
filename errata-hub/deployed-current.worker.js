@@ -1,13 +1,13 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.1.3"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.1.4-republish-verify"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
 var WATCH_VERSION = "0.2.2";
 var RESPOND_VERSION = "0.4.1";
-var PUBLISH_VERSION = "0.7.1-relid-fix";
+var PUBLISH_VERSION = "0.7.2-republish-verify";
 var erratawatchMod = (function(){
 const QNFO_VERSION = "qnfo-errata-watch/fabric-20260910";
 var __defProp = Object.defineProperty;
@@ -21497,6 +21497,44 @@ async function publishAction(env, action) {
 __name(publishAction, "publishAction");
 __name2(publishAction, "publishAction");
 __name22(publishAction, "publishAction");
+// ERRATA-REPUBLISH-VERIFY-1 (2026-10-01, #1181): a correction marked 'published' was never checked afterwards.
+// publishNewVersion plus repointStores could succeed against Zenodo while the new DOI never registered, or the papers row
+// could drift. Each published action older than 30 min is now verified:
+//   - papers (by slug) must carry version_to, and its doi must resolve in the DOI handle registry (responseCode 1);
+//   - pass -> status 'verified';
+//   - still failing 48h after publication -> 'verify-failed', plus a notification.
+async function verifyPublished(env) {
+  const out = { checked: 0, verified: 0, failed: 0, pending: 0 };
+  const rows = ((await env.WATCH_DB.prepare(
+    "SELECT id, queue_id, paper_doi, slug, version_to, updated_at FROM errata_actions WHERE status='published' AND updated_at < datetime('now','-30 minutes') ORDER BY id ASC LIMIT 10"
+  ).all()) || {}).results || [];
+  for (const a of rows) {
+    out.checked++;
+    let ok = false, why = "";
+    try {
+      const paper = a.slug ? await env.PAPERS_DB.prepare("SELECT version, doi FROM papers WHERE slug=?1 LIMIT 1").bind(a.slug).first() : null;
+      if (!paper) why = "paper row missing for slug " + a.slug;
+      else if (a.version_to && String(paper.version) !== String(a.version_to)) why = "papers.version " + paper.version + " != version_to " + a.version_to;
+      else if (!paper.doi) why = "papers.doi empty";
+      else {
+        const r = await fetch("https://doi.org/api/handles/" + encodeURIComponent(paper.doi).replace(/%2F/gi, "/"), { headers: { "User-Agent": "qnfo-errata-verify/1.0" } });
+        const j = r.ok ? await r.json() : null;
+        ok = !!(j && j.responseCode === 1);
+        if (!ok) why = "doi " + paper.doi + " not registered (http " + r.status + ")";
+      }
+    } catch (e) { why = "verify error: " + String(e && e.message || e); }
+    if (ok) {
+      await env.WATCH_DB.prepare("UPDATE errata_actions SET status='verified', updated_at=datetime('now') WHERE id=?").bind(a.id).run();
+      out.verified++;
+    } else if (a.updated_at && Date.parse(String(a.updated_at).replace(" ", "T") + "Z") < Date.now() - 48 * 36e5) {
+      await env.WATCH_DB.prepare("UPDATE errata_actions SET status='verify-failed', updated_at=datetime('now') WHERE id=?").bind(a.id).run();
+      try { await notifyUser(env, { paper_doi: a.paper_doi }, a.slug ? { slug: a.slug, doi: a.paper_doi } : null, null, "post-correction re-publication check failed after 48h: " + why); } catch (e) {}
+      out.failed++;
+    } else out.pending++;
+  }
+  return out;
+}
+__name(verifyPublished, "verifyPublished");
 async function runPublish(env, mode) {
   const dry = mode === "dry";
   if (!dry) {
@@ -21553,6 +21591,13 @@ var publish_worker_src_default = {
         return json({ ok: false, error: e.message }, 500);
       }
     }
+    if (url.pathname === "/run/verify") {
+      try {
+        return json(await verifyPublished(env));
+      } catch (e) {
+        return json({ ok: false, error: e.message }, 500);
+      }
+    }
     if (url.pathname === "/run/publish") {
       const mode = url.searchParams.get("mode") || "dry";
       try {
@@ -21567,6 +21612,8 @@ var publish_worker_src_default = {
     try {
       const r = await runPublish(env, "live");
       console.log("[qnfo-errata-publish] cron done:", JSON.stringify({ processed: r.processed, results: r.results }));
+      const v = await verifyPublished(env);
+      if (v.checked) console.log("[qnfo-errata-publish] verify:", JSON.stringify(v));
     } catch (e) {
       console.error("[qnfo-errata-publish] cron error:", e.message);
     }
