@@ -1,0 +1,41 @@
+name: adversarial-workers-guard
+
+# GUARDS-LOCAL-ONLY-1 (#1686), cloud-runnable half only. The other three guards named in that issue
+# (prompt-store-verify, scheduler-guard, model_guard) inspect the owner's local DeepChat app database and
+# %APPDATA%; a cloud runner has nothing to inspect, so they are deliberately NOT wired here (a pass would
+# be meaningless). This one reads only files in this repo.
+#
+# Failure path: a red run on main is filed as a `ci-watchdog` issue by scripts/ci_watchdog.py, so a failing
+# guard files an issue without a separate reporter. GitHub `schedule` never fires on this repo, so the gate
+# is event-driven: every PR and every push to main that touches a worker file.
+
+on:
+  pull_request:
+    paths:
+      - "*/worker.js"
+      - "*/deployed-current.worker.js"
+      - "scripts/adversarial-workers-guard.py"
+      - ".github/workflows/adversarial-workers-guard.yml"
+  push:
+    branches: [main]
+    paths:
+      - "*/worker.js"
+      - "*/deployed-current.worker.js"
+      - "scripts/adversarial-workers-guard.py"
+      - ".github/workflows/adversarial-workers-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: ADVERSARIAL-REASONING-1 on core worker prompt surfaces (fail-closed)
+        run: python3 scripts/adversarial-workers-guard.py

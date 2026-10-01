@@ -299,7 +299,15 @@ def _repo_version(text):
         # plain VERSION wins; QNFO_VERSION remains the fallback.
         plain = [val for prefix, val in hits if not prefix]
         if plain:
-            return plain[-1]
+            # MODULE-SCOPE-VERSION-1 (2026-10-01): last-wins is wrong when a worker FOLDS another worker's
+            # code in at the END of the bundle (personal-companion: line 9 `var VERSION = "1.7.2-..."` is
+            # served by /health; line 1859 `  var VERSION = "0.1.21-folded"` is the folded vault-indexer's
+            # own, indented). Last-wins picked the folded one -> permanent false DRIFT. A declaration at
+            # column 0 is module scope; prefer the last of those, and keep plain last-wins only when no
+            # plain declaration starts a line (so fleet-exec, both col 0, still resolves to its last).
+            top = [m.group(2) for m in CONST.finditer(text)
+                   if not m.group(1) and (m.start() == 0 or text[m.start() - 1] == "\n")]
+            return (top or plain)[-1]
         return hits[-1][1]
     # VERSION-QUOTE-1: explicit SERVER_VERSION fallback, never a wildcard prefix.
     # PROTOCOL_VERSION precedes SERVER_VERSION in qnfo-memory-mcp and is not the

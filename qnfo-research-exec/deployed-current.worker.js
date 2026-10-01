@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.27-gw-breaker";
+var VERSION = "0.9.28-queue-antistarvation";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -2221,7 +2221,11 @@ async function run(env) {
         return { status: r2.ok ? "ok" : "error", res: r2 };
       }
     }
-    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY score DESC LIMIT 1").first();
+    // QUEUE-ANTISTARVATION-1 (2026-10-01, agent_issues #1700): `ORDER BY score DESC` let a newer row with an equal or higher
+    // score (daily radar supply scores 0.70-0.80) outbid 8 rows that had waited 17 days, so they were claimable but never won.
+    // Rows older than 72h are claimed first, oldest first (FIFO); everything fresher stays in score order. created_at is ISO-8601
+    // text, compared against an ISO bound exactly as the failed-row re-arm below does.
+    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
     if (!row) {
       return { status: "ok", claimed: 0 };
     }
