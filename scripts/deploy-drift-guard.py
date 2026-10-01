@@ -518,6 +518,7 @@ def main():
     not_a_worker = []
     cron_only = []
     label_mismatch = []
+    retired_present = []
 
     for d in sorted(os.listdir(ROOT)):
         if not os.path.isdir(os.path.join(ROOT, d)):
@@ -531,6 +532,13 @@ def main():
         worker = declared or d
         if wanted and d not in wanted and worker not in wanted:
             continue
+        # RETIRED-PRESENT-1 (#272): a directory marked FOLDED/RETIRED means the worker must be absent from the
+        # account. If the CF script list still has it, it was recreated (2026-10-01: qnfo-agent-ws, then
+        # qnfo-fleet-calibrator). Informational only: it does not change the exit code, because the fix is to delete
+        # the stray script, which no deploy gate can do. It is reported so the audit and /state can surface it.
+        _marker = next((m for m in ("FOLDED", "RETIRED") if os.path.isfile(os.path.join(ROOT, d, m))), None)
+        if _marker and deployed is not None and worker in deployed:
+            retired_present.append((d, worker, _marker))
         rv, rpath, rtext = repo_artifact(d)
         live, lv = live_result(worker)
         if not live and lv is None:
@@ -624,6 +632,8 @@ def main():
             "not_deployed_notdrift": len(not_deployed),
             "not_a_worker": [{"worker": w, "dir": d} for d, w in not_a_worker],
             "not_a_worker_count": len(not_a_worker),
+            "retired_present": [{"worker": w, "dir": d, "marker": m} for d, w, m in retired_present],
+            "retired_present_count": len(retired_present),
             "name_resolution": True,
             "cf_script_list": deployed is not None,
             "content_checked": bool(want_content and content_ok),
@@ -647,6 +657,8 @@ def main():
             print(f"NOT_A_WORKER {w} (dir {d})")
         for d, w, e in live_err:
             print(f"LIVE_ERR {w} (dir {d}): {e}")
+        for d, w, m in retired_present:
+            print(f"RETIRED_PRESENT {w} (dir {d}): {m} marker but the script exists in the account")
         tag = "all" if scan_all else "narrative"
         print(f"deploy-drift-guard[{tag}]: sync={len(sync_workers)} drift={len(drift)} "
               f"content_drift={len(content_drift)} ahead={len(ahead)} "

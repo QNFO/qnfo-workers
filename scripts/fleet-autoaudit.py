@@ -314,6 +314,11 @@ def classify(d):
     # differs (same convention as NO_HEALTH_ROUTE).
     for it in d.get("cron_only", []):
         put(_w(it), None, None, None, 0, "CRON_ONLY")
+    # RETIRED-PRESENT-1 (#272): a FOLDED/RETIRED directory whose script exists in the account. Appended to the
+    # worker's existing note (CRON_ONLY, NO_HEALTH_ROUTE, ...) so it is visible whatever the health probe returned;
+    # match is forced to 0 by put() because a retired worker that exists is by definition not in sync.
+    for it in d.get("retired_present", []):
+        put(_w(it), None, None, None, 0, "RETIRED_PRESENT")
     return rows
 
 
