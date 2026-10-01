@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 05:59:12",
+  "audited_at": "2026-10-01 06:02:45",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -28,8 +28,20 @@
     "cron_only_count": 2,
     "drift": [
       {
+        "dir": "q08-signal-engine",
+        "live": "0.7.34-alert-undigested",
+        "repo": "0.7.33-run-lifecycle",
+        "worker": "q08-signal-engine"
+      },
+      {
+        "dir": "qnfo-autonomy-scorer",
+        "live": "1.1.2-alert-undigested",
+        "repo": "1.1.1-vsm-ooda-measured",
+        "worker": "qnfo-autonomy-scorer"
+      },
+      {
         "dir": "qnfo-fleet-control",
-        "live": "0.4.49-graphql-usage",
+        "live": "0.4.50-sla-escalate",
         "repo": "\\d+\\.\\d+\\.\\d+[^",
         "worker": "qnfo-fleet-control"
       }
@@ -406,7 +418,7 @@
       }
     ],
     "scope": "all",
-    "sync": 37,
+    "sync": 35,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -439,11 +451,6 @@
         "worker": "personal-companion"
       },
       {
-        "dir": "q08-signal-engine",
-        "version": "0.7.33-run-lifecycle",
-        "worker": "q08-signal-engine"
-      },
-      {
         "dir": "qnfo-agent-orchestrator",
         "version": "1.1.0",
         "worker": "qnfo-agent-orchestrator"
@@ -467,11 +474,6 @@
         "dir": "qnfo-archive",
         "version": "1.2.0",
         "worker": "qnfo-archive"
-      },
-      {
-        "dir": "qnfo-autonomy-scorer",
-        "version": "1.1.1-vsm-ooda-measured",
-        "worker": "qnfo-autonomy-scorer"
       },
       {
         "dir": "qnfo-backlog-exec",
@@ -848,9 +850,9 @@
     "q08-signal-engine": {
       "before": "0.7.33-run-lifecycle",
       "http": 200,
-      "live": "0.7.33-run-lifecycle",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.7.34-alert-undigested",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
@@ -952,9 +954,9 @@
     "qnfo-autonomy-scorer": {
       "before": "1.1.1-vsm-ooda-measured",
       "http": 200,
-      "live": "1.1.1-vsm-ooda-measured",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.1.2-alert-undigested",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-autonomy-scorer"
     },
     "qnfo-autopilot": {
@@ -1144,7 +1146,7 @@
     "qnfo-fleet-control": {
       "before": "\\d+\\.\\d+\\.\\d+[^",
       "http": 200,
-      "live": "0.4.49-graphql-usage",
+      "live": "0.4.50-sla-escalate",
       "match": 0,
       "note": "DRIFT",
       "worker": "qnfo-fleet-control"
