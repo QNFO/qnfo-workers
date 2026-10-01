@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.29-gw-auth-drift";
+var VERSION = "0.9.30-poison-park";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -212,6 +212,18 @@ __name22(reasoningPreamble, "reasoningPreamble");
 __name222(reasoningPreamble, "reasoningPreamble");
 __name2222(reasoningPreamble, "reasoningPreamble");
 __name22222(reasoningPreamble, "reasoningPreamble");
+async function parkPoisonRow(env, row, msg) {
+  var reason = "PARKED-POISON-1: recover_count exhausted (" + Number(row.recover_count || 0) + "); last error: " + String(msg || "unknown");
+  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed')").bind(reason.slice(0, 300), row.id).run();
+  try { await logEvent(env, "poison-park", "parked research row " + String(row.id).slice(0, 8) + " recover_count=" + Number(row.recover_count || 0), "warn"); } catch (e) {}
+  return r;
+}
+async function reclaimStaleResearching(env) {
+  var stale = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 hours')";
+  var parked = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', claimed_at=NULL, error='PARKED-POISON-1: stale researching claim with recover_count exhausted (' || recover_count || '); not re-armed' WHERE " + stale + " AND recover_count >= 3").run();
+  var req = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0, recover_count=recover_count+1 WHERE " + stale + " AND recover_count < 3").run();
+  return { parked: (parked.meta && parked.meta.changes) || 0, requeued: (req.meta && req.meta.changes) || 0 };
+}
 async function markError(env, row, msg) {
   var recoverCount = Number(row.recover_count || 0);
   if (recoverCount < 3) {
@@ -219,13 +231,10 @@ async function markError(env, row, msg) {
       "UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=recover_count+1, attempt=0, claimed_at=NULL WHERE id=?"
     ).bind(String(msg).slice(0, 300), row.id).run();
   } else {
-    var _trArm = Number(row.terminal_rearms || 0);
-    if (_trArm < 2) {
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', error=?, recover_count=0, attempt=0, terminal_rearms=terminal_rearms+1, claimed_at=NULL WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
-      try { await logEvent(env, "terminal-rearm", "TERMINAL-RESCUE-1 re-armed terminal row " + String(row.id).slice(0, 8) + " terminal_rearms=" + (_trArm + 1), "ok"); } catch (eTR) {}
-      return;
-    }
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='failed', error=? WHERE id=?").bind(String(msg).slice(0, 300), row.id).run();
+    // RESEARCH-POISON-PARK-1 (#1700): a row that exhausted recover_count is NOT re-armed with a reset
+    // counter (its inputs are unchanged, so it would just loop); it leaves researching for a parked
+    // terminal status with the reason recorded. UPDATE only, never DELETE.
+    await parkPoisonRow(env, row, msg);
     try {
       var _rid = String(row.id).slice(0, 8);
       var _ex = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 LIMIT 1").bind("RESEARCH-TERMINAL " + _rid + "%").first();
@@ -1408,8 +1417,9 @@ async function drainV2(env) {
     // immortal and wedges the idea queue (canonical: row claimed 14:00Z stayed researching 4h+).
     // claimed_at is ISO-8601 text (T separator), so the bound MUST be strftime ISO too - a space-format
     // bound never compares less (same type-mismatch class as DEPLOY-LOCK-EPOCH-TYPE-1).
-    var _cl = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0 WHERE status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-4 hours')").run();
-    if (_cl.meta && _cl.meta.changes) await logEvent(env, "claim-reclaim", "released " + _cl.meta.changes + " stale researching claim(s)", "ok");
+    var _cl = await reclaimStaleResearching(env);
+    if (_cl.requeued) await logEvent(env, "claim-reclaim", "released " + _cl.requeued + " stale researching claim(s)", "ok");
+    if (_cl.parked) await logEvent(env, "poison-park", "parked " + _cl.parked + " stale researching row(s) with recover_count exhausted", "warn");
   } catch (eCl) {
   }
   try {
@@ -2354,6 +2364,9 @@ var worker_default = {
   }
 };
 export {
-  worker_default as default
+  worker_default as default,
+  markError,
+  parkPoisonRow,
+  reclaimStaleResearching
 };
 //# sourceMappingURL=worker.js.map
