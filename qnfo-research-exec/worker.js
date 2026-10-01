@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.48-capability-contract";
+var VERSION = "0.9.49-paper-row-prep";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2499,11 +2499,49 @@ __name2(collectArtifacts, "collectArtifacts");
 __name22(collectArtifacts, "collectArtifacts");
 __name222(collectArtifacts, "collectArtifacts");
 __name2222(collectArtifacts, "collectArtifacts");
-async function publishStageV2(env, row) {
-  const slug = row.paper_slug;
+// PAPER-ROW-PREP-1 (2026-10-01, #1620; ported from the wave-4 session's PR 358): the 0.8 pipeline (ground..verify) writes
+// the paper only to R2 reconciled.md and never creates the living-paper row nor sets research_queue.paper_slug (the
+// draft->publish stage that did last ran 2026-09-08), so publishStageV2 read papers WHERE slug=NULL and failed for every
+// row that passed verify, and markError sent the verified paper back to ground (row 5099abb8 reached publish at 15:51Z
+// and was parked to avoid exactly that). Build the row from reconciled.md as status 'draft' and record the slug before
+// any Zenodo call. Safe to re-run.
+async function ensurePaperRow(env, row) {
+  if (row.paper_slug) {
+    const have = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(row.paper_slug).first();
+    if (have) return { paper: have, slug: row.paper_slug };
+  }
+  const md = await r2Get(env, String(row.id) + "/reconciled.md");
+  if (!md) return { error: "reconciled.md missing" };
+  const body = String(md).trim();
+  const title = cleanTitle(body) || extractTitle(body, "") || String(row.idea || "QNFO research paper").slice(0, 140);
+  const abstract = cleanAbstract(body) || title;
+  const identifier = "qnf-" + String(row.id);
+  let slug = row.paper_slug || slugify(title);
+  const clash = await env.LIVING_PAPER.prepare("SELECT identifier FROM papers WHERE slug=?1 AND identifier<>?2 LIMIT 1").bind(slug, identifier).first();
+  if (clash) slug = slug.slice(0, 71) + "-" + String(row.id).replace(/[^a-z0-9]/gi, "").slice(0, 8).toLowerCase();
+  const own = await env.LIVING_PAPER.prepare("SELECT status FROM papers WHERE identifier=?1").bind(identifier).first();
+  if (own) {
+    if (String(own.status || "") === "published") return { error: "identifier " + identifier + " already published" };
+    await env.LIVING_PAPER.prepare("UPDATE papers SET title=?1, abstract=?2, body_md=?3, slug=?4, updated_at=datetime('now') WHERE identifier=?5").bind(title, abstract, body, slug, identifier).run();
+  } else {
+    await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, version, status, body_md, license, language, paper_type, identifier_type, slug, created_at, updated_at) VALUES (?1,?2,?3,?4,'1.0.0','draft',?5,'CC BY 4.0','en','preprint','qnfo',?6,datetime('now'),datetime('now'))").bind(identifier, title, JSON.stringify([AUTHOR]), abstract, body, slug).run();
+  }
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET paper_slug=? WHERE id=?").bind(slug, row.id).run();
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
-  if (!paper) {
-    await markError(env, row, "paper row missing for slug " + slug);
+  return paper ? { paper, slug, created: !own } : { error: "paper row not readable after write for slug " + slug };
+}
+async function publishStageV2(env, row) {
+  const prep = await ensurePaperRow(env, row);
+  if (!prep.paper) {
+    await markError(env, row, "publish prep: " + prep.error);
+    return { ok: false, stage: "publish" };
+  }
+  const slug = prep.slug;
+  const paper = prep.paper;
+  // The papers publish floor would refuse status='published' below 20000 chars AFTER the Zenodo deposit is public,
+  // leaving an orphan DOI. Refuse before depositing.
+  if (row.source !== "remediation" && String(paper.body_md || "").trim().length < PUBLISH_FLOOR_CHARS) {
+    await markError(env, row, "publish: body " + String(paper.body_md || "").trim().length + " chars < publish floor " + PUBLISH_FLOOR_CHARS);
     return { ok: false, stage: "publish" };
   }
   const artifacts = await collectArtifacts(env, String(row.id));
