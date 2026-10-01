@@ -193,7 +193,7 @@ var advisorMod = (function() {
         }
         promptLines.push("Propose ONE concrete, falsifiable improvement action (owner + priority + the evidence that would close it). Max 120 words, no preamble.");
         const prompt = promptLines.join(NL);
-        const rp = await env.AI.run(modelP, { messages: [{ role: "user", content: prompt }], max_tokens: 350, temperature: 0.3 });
+        const rp = await aiRunAttr(env, "fleet-control", "advisor-propose", modelP, { messages: [{ role: "user", content: prompt }], max_tokens: 350, temperature: 0.3 });
         const cp = rp && rp.response || rp && rp.choices && rp.choices[0] && rp.choices[0].message && rp.choices[0].message.content;
         let proposal = String(cp || "").trim().slice(0, 800);
         let verdict = "";
@@ -201,7 +201,7 @@ var advisorMod = (function() {
         if (proposal) {
           for (let i = 0; i < iters; i++) {
             rounds = i + 1;
-            const rv = await env.AI.run(modelR, { messages: [{ role: "user", content: "Review this advisor action. If specific, falsifiable, high-value -> reply ACCEPT. Else reply IMPROVE then the improved action (owner + priority), max 120 words." + NL + "Proposal: " + proposal }], max_tokens: 350, temperature: 0.2 });
+            const rv = await aiRunAttr(env, "fleet-control", "advisor-review", modelR, { messages: [{ role: "user", content: "Review this advisor action. If specific, falsifiable, high-value -> reply ACCEPT. Else reply IMPROVE then the improved action (owner + priority), max 120 words." + NL + "Proposal: " + proposal }], max_tokens: 350, temperature: 0.2 });
             const cv = rv && rv.response || rv && rv.choices && rv.choices[0] && rv.choices[0].message && rv.choices[0].message.content;
             const review = String(cv || "").trim();
             verdict = review.slice(0, 20).toUpperCase();
@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.60-budget-units";
+var VERSION = "0.4.61-budget-billing-split-ai-attrib";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2669,7 +2669,7 @@ function evAiText(r) {
 }
 __name(evAiText, "evAiText");
 async function evModelJson(env, model, system, user) {
-  var r = await env.AI.run(model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 2500, temperature: 0.1 });
+  var r = await aiRunAttr(env, "qnfo-fleet-control", "patch-gen", model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 2500, temperature: 0.1 });
   var t = evAiText(r), m = t.match(/\{[\s\S]*\}/);
   if (!m) return null;
   try { return JSON.parse(m[0]); } catch (e) { return null; }
@@ -3315,11 +3315,12 @@ async function refreshOwnedMetrics(env) {
       var parts = Object.keys(byProv).sort(function (a, b) { return byProv[b] - byProv[a]; }).map(function (k) { return k + " $" + byProv[k].toFixed(2); }).join(", ");
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "LIST-COST ESTIMATE (not billed): unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
       out.written.push("cost_usd_30d=" + total.toFixed(2) + " (" + parts.slice(0, 160) + ")");
-      out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, alerts: await aiSpendCaps(db, byProv, total) };
+      var byBill = aiSpendByBilling(grows);
+      out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, byBilling: byBill, alerts: await aiSpendCaps(db, byProv, total, byBill) };
       // METRIC-TRIGGER-LOOP-1 (#1634): the analytics trigger inputs had no writer since a one-off audit on
       // 2026-09-26. Keep the cost keys fresh from the same measurement.
       var gwOnly = Object.keys(byProv).filter(function (k) { return k !== "workers-ai"; }).reduce(function (a, k) { return a + byProv[k]; }, 0);
-      var metaKv = [["ai_est_cost_30d", total.toFixed(2)], ["gateway_cost_usd_30d", gwOnly.toFixed(2)], ["last_refresh", nowIso]];
+      var metaKv = [["ai_est_cost_30d", total.toFixed(2)], ["gateway_cost_usd_30d", gwOnly.toFixed(2)], ["unified_cost_usd_30d", byBill.unified.toFixed(2)], ["byok_cost_usd_30d", byBill.byok.toFixed(2)], ["last_refresh", nowIso]];
       if (waiNeurons != null) metaKv.push(["neurons_30d", String(waiNeurons)]);
       for (var mk = 0; mk < metaKv.length; mk++) {
         await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(metaKv[mk][0], metaKv[mk][1]).run().catch(function () {});
@@ -3335,6 +3336,41 @@ async function refreshOwnedMetrics(env) {
 __name(refreshOwnedMetrics, "refreshOwnedMetrics");
 // Gateway rows -> USD by provider. Unified-billing "compat" rows carry the real provider as the model prefix.
 // Workers AI rows are dropped here because their cost is counted from neurons.
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
+// per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
+// Neurons are not returned by the binding; calls + input/output chars are the attribution proxy. No new paid service.
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+        await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, Date.now() - t0).run();
+      }
+    } catch (e3) {}
+  }
+}
+__name(aiRunAttr, "aiRunAttr");
+// BUDGET-OVER-METRIC-DEFINITION-1 (#1699): billing-mode split. Unified-billing traffic arrives as provider
+// compat/unknown/universal (real provider = model prefix); every other named provider row is BYOK (billed by the provider,
+// not against the gateway credit). Workers AI is neuron-billed and excluded. The monthly cap meters unified only.
+function aiSpendByBilling(rows) {
+  var o = { unified: 0, byok: 0 };
+  (rows || []).forEach(function (r) {
+    var d = r && r.dimensions || {};
+    var prov = String(d.provider || "unknown").toLowerCase();
+    if (prov === "workers-ai" || prov === "workers_ai") return;
+    var c = r && r.sum && Number(r.sum.cost) || 0;
+    if (!(c > 0)) return;
+    if (prov === "compat" || prov === "unknown" || prov === "universal") o.unified += c; else o.byok += c;
+  });
+  return o;
+}
+__name(aiSpendByBilling, "aiSpendByBilling");
 function aiSpendByProvider(rows) {
   var by = {};
   rows.forEach(function (r) {
@@ -3350,20 +3386,21 @@ function aiSpendByProvider(rows) {
 }
 __name(aiSpendByProvider, "aiSpendByProvider");
 // Record measured spend against fleet_budget soft caps and raise one digest alert per breached cap per day.
-async function aiSpendCaps(db, byProv, total) {
+async function aiSpendCaps(db, byProv, total, byBill) {
   var raised = [];
   var rs = await db.prepare("SELECT node_class, cap, target FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'").all().catch(function () { return { results: [] }; });
   var caps = rs.results || [];
   for (var i = 0; i < caps.length; i++) {
     var c = caps[i], key = String(c.node_class).slice("ai_spend:".length);
-    var cur = key === "total" ? total : (byProv[key] || 0);
+    // ai_spend:total is the unified-billing spend (the cap meters unified only); all-provider list cost stays in cost_usd_30d.
+    var cur = key === "total" ? (byBill ? byBill.unified : total) : (byProv[key] || 0);
     await db.prepare("UPDATE fleet_budget SET current=?1, updated_at=?2 WHERE node_class=?3").bind(Number(cur.toFixed(2)), new Date().toISOString(), c.node_class).run().catch(function () {});
     if (c.cap != null && cur > Number(c.cap)) {
       // BUDGET-UNITS-1 (2026-10-01, #1699): these figures are gateway LIST-cost estimates across every provider (unified
       // billing + BYOK + Workers AI), measured against internal soft budgets. They are not billed amounts and not the
       // gateway monthly spend limit, which meters unified-billing traffic only. Comparing the two made a ~1.26x billed
       // overage read as ~3x.
-      var msg = "AI-SPEND-CAP " + c.node_class + ": 30d list-cost estimate $" + cur.toFixed(2) + " > internal soft budget $" + Number(c.cap).toFixed(2) + " (target $" + c.target + "; all providers incl BYOK; not the billed amount and not the gateway monthly cap)";
+      var msg = "AI-SPEND-CAP " + c.node_class + (c.node_class === "ai_spend:total" ? ": 30d unified-billing list cost $" : ": 30d list-cost estimate $") + cur.toFixed(2) + " > internal soft budget $" + Number(c.cap).toFixed(2) + " (target $" + c.target + "; all providers incl BYOK; not the billed amount and not the gateway monthly cap)";
       var dup = await db.prepare("SELECT id FROM alerts WHERE source='qnfo-fleet-control' AND message LIKE ?1 AND created_at > datetime('now','-1 day') LIMIT 1").bind("AI-SPEND-CAP " + c.node_class + ":%").first().catch(function () { return null; });
       if (!dup) {
         await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'warning', ?1, NULL)").bind(msg).run().catch(function () {});
