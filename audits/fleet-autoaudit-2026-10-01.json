@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 14:37:10",
+  "audited_at": "2026-10-01 14:41:33",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.76-portfolio-hygiene",
+        "version": "0.4.77-deploy-sync",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.76-portfolio-hygiene",
+      "before": "0.4.77-deploy-sync",
       "http": 200,
-      "live": "0.4.76-portfolio-hygiene",
+      "live": "0.4.77-deploy-sync",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
