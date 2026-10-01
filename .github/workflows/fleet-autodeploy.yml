@@ -153,7 +153,14 @@ jobs:
       # DEPLOY-NON-CANONICAL-DEPLOY in qnfo-deploy-guard. raw_put.py remains the fallback when it is absent.
       OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
     steps:
+      # AUDIT-STALE-CHECKOUT-1 (2026-10-01): a workflow_run / dispatch run checks out the SHA that was
+      # main's head when the TRIGGER fired, which can be minutes stale by the time this job runs. The audit
+      # then compares LIVE (current) against an OLD tree and reports false DRIFT / repo-ahead (seen 3x in one
+      # hour: qnfo-fleet-control 0.4.54, personal-companion 1.7.2, dashboard/ops). A push run keeps its own
+      # SHA; every other trigger audits the CURRENT head of main.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
 
       - uses: actions/setup-python@v5
         with:
