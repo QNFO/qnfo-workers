@@ -311,6 +311,49 @@ RETIRED_APPLIERS = [
         "evidence": ("qnfo-ops/worker.js", "timeoutMs: 15e3"),
         "reason": "superseded: its three root causes were fixed directly in qnfo-ops (backlog probe gets its own 15 s budget and keeps its error; telemetryReport scopes calls/fails/top to job = 'qnfo-ops'); the applier pins the TELEMETRY-TRUTH-1 marker that fix never carried",
     },
+    # APPLIER-RETIRE-6 (2026-10-01, issue 1673): the last 8 stale-anchor appliers in ci-status/apply-pending-report.json
+    # (07:31Z). Each was read and its defect found fixed in the target under a different shape, so its anchor can never
+    # match again; the evidence token below was verified present (grep -F) in the named file.
+    {
+        "script": "affirm-veto-sentence-scope-patch.py",
+        "evidence": ("qnfo-ops/worker.js", "AFFIRM-VETO-CLAUSE"),
+        "reason": "superseded: the adjacency-scoped veto was replaced by the clause-scoped AFFIRM-VETO-CLAUSE guard (affirm-veto-clause-targets landed)",
+    },
+    {
+        "script": "driftguard-label-and-lifecycle-sot-patch.py",
+        "evidence": ("scripts/deploy-drift-guard.py", "LABEL_MISMATCH"),
+        "reason": "landed: (A) LABEL_MISMATCH class in deploy-drift-guard.py, (B) raw_put.py VERSION_RE accepts QNFO_VERSION, (C) qnfo-lifecycle /health and heartbeat derive from QNFO_VERSION",
+    },
+    {
+        "script": "driftguard-server-version-patch.py",
+        "evidence": ("scripts/deploy-drift-guard.py", "SERVER_CONST = re.compile"),
+        "reason": "superseded: deploy-drift-guard.py carries the explicit SERVER_VERSION fallback (VERSION-QUOTE-1), which is the NO_REPO_VERSION fix",
+    },
+    {
+        "script": "fleet-selfheal-20260929-patch.py",
+        "evidence": ("qnfo-lifecycle/worker.js", "METRIC-FRESHNESS-WRITER-1"),
+        "reason": "landed: S2/S3 reported OK and S1's METRIC-FRESHNESS-WRITER-1 is in qnfo-lifecycle; only S1's anchor moved",
+    },
+    {
+        "script": "fleetfix-1299-1193-patch.py",
+        "evidence": ("qnfo-social/worker.js", "postText(s, text, null, { embed:"),
+        "reason": "landed: #1299 reply arity fixed (embed passed as opts, reply null) and #1193 fleet-exec cadence is */10 in fleet-exec/wrangler.toml; it anchors on a pre-0.7.16 qnfo-social VERSION",
+    },
+    {
+        "script": "selfheal-rate-aware-patch.py",
+        "evidence": ("qnfo-ops/worker.js", "const toolKey = _tm ? _tm[1]"),
+        "reason": "superseded: telemetryAnalyze extracts the bare tool name from cloud_ops_events.text (the extractor blind spot this applier fixed)",
+    },
+    {
+        "script": "selfheal-volfloor-patch.py",
+        "evidence": ("qnfo-ops/worker.js", "_rate >= 0.15 || _errs >= 25"),
+        "reason": "superseded: the self-heal gate carries the absolute-volume floor (_errs >= 25) alongside the rate gate",
+    },
+    {
+        "script": "version-anchor-normalize-patch.py",
+        "evidence": ("qnfo-ops/worker.js", "SAME-ZONE-FETCH-FALLBACK-1"),
+        "reason": "obsolete: it only re-anchored 8 appliers on exact qnfo-ops VERSION literals; all 8 now report already-applied (e.g. samezone-fetch-fallback's SAME-ZONE-FETCH-FALLBACK-1 is in qnfo-ops)",
+    },
 ]
 
 
