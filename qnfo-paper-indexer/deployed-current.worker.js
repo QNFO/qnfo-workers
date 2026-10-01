@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.6-zenodo-versions";
+var VERSION = "3.0.7-capability-contract";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -326,7 +326,7 @@ var worker_default = {
     try {
       switch (path) {
         case "/health":
-          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "purge-orphan-sweep", "cron-self-heal"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
+          return json({ status: "ok", worker: "qnfo-paper-indexer", version: VERSION, capabilities: ["paper-indexing", "vectorize-upsert", "citation-impact", "orphan-purge"], limitations: ["indexes only papers in corpus statuses", "scheduled runs at 04:00 and 06:05 daily"], features: ["on-demand-webhook", "on-demand-batch", "scheduled-daily", "citation-impact", "status-filter", "purge", "purge-orphan-sweep", "cron-self-heal"], corpus_statuses: CORPUS_STATUSES, bindings: { ai: !!env.AI, d1_living: !!env.LIVING_PAPER, d1_audit: !!env.QNFO_AUDIT, vz: !!env.PAPER_VZ } });
         case "/count": {
           const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM index_state").first();
           const g = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS c FROM papers WHERE " + CORPUS_WHERE).first();

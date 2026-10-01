@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.2-suppression-gate";
+var VERSION = "1.1.3-capability-contract";
 var SITE = "https://qnfo.org";
 var FROM = { email: "qnfo@qnfo.org", name: "QNFO" };
 var MAX_RECIPIENTS = 1e3;
@@ -267,6 +267,8 @@ async function health(env) {
     status: "ok",
     worker: "qnfo-subscribers",
     version: VERSION,
+    capabilities: ["subscribe", "double-opt-in", "unsubscribe", "weekly-digest"],
+    limitations: ["no send before double opt-in", "the digest sends only on the Monday 16:00 cron or an authenticated POST /run/digest", "suppressed addresses are never mailed"],
     subscribers: confirmed,
     pending,
     send_email: !!env.SEND_EMAIL,

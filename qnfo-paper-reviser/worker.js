@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.2"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.2.3"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -451,7 +451,7 @@ var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if ((url.pathname.startsWith("/run/") || url.pathname.startsWith("/debug/")) && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
-    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-paper-reviser", version: VERSION, model: MODEL, bindings: { ai: !!env.AI, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, auth: !!env.REVISER_TOKEN } });
+    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-paper-reviser", version: VERSION, model: MODEL, capabilities: ["paper-revision-scan", "revision-audit", "version-queue"], limitations: ["/run/* and /debug/* require X-Reviser-Token", "/run/scan defaults to a dry run", "scheduled scans run every 4 hours (37 */4)", "one model per run: " + MODEL], bindings: { ai: !!env.AI, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, auth: !!env.REVISER_TOKEN } });
     if (url.pathname === "/run/scan") {
       const mode = url.searchParams.get("mode") || "dry";
       try {
