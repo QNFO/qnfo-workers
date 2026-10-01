@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.32-ai-attr";
+var VERSION = "0.9.33-revise-diag";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1975,14 +1975,19 @@ async function stageRevise(env, row) {
   } catch (e) {
   }
   let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
+  const _len1 = revised ? revised.length : 0;
+  let _len2 = -1;
   if (!revised || revised.length < 1e4) {
     // REVISE-RETRY-1 (2026-09-29): one bounded retry before terminal escalation.
     // The prior code escalated on the first short output: an absolute 1e4 floor with no
     // retry permanently wedged the row (RESEARCH-TERMINAL cluster).
     let _r2 = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3) + "\n\nIMPORTANT: output the COMPLETE revised paper, start to finish. Do not summarize and do not truncate.", 3e4);
+    _len2 = _r2 ? _r2.length : 0;
     if (_r2 && _r2.length > (revised ? revised.length : 0)) revised = _r2;
   }
   if (!revised || revised.length < 1e4) {
+    // REVISE-DIAG-1 (#1620): record what each attempt returned so a short revise is attributable (input size, first/retry length, floor).
+    await logEvent(env, "revise-short", "row=" + row.id + " paper_chars=" + paper.length + " fixes_chars=" + fixes.length + " attempt1=" + _len1 + " retry=" + _len2 + " floor=10000", "warn");
     await markError(env, row, "revise: output too short (" + (revised ? revised.length : 0) + " chars after retry)");
     return { ok: false, stage: "revise" };
   }
