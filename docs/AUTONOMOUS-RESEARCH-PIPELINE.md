@@ -34,6 +34,14 @@ Stages (one active idea at a time; cron every 10 min):
 
 Safety rails: max 1 active research task; DO 30-min watchdog (exists); revise ≤2; publish only after review-clean; every transition logged in pipeline_tasks + audit trail.
 
+Audit trail (2026-10-01, #1622):
+- There is no separate plan artifact. research_queue (stage, context, attempt, revise_count, recover_count, error, ...)
+  holds each idea's state.
+- Transitions are audited in `cloud_ops_events` with `job='qnfo-research-exec'`. `pipeline_tasks` has not been written
+  since 2026-09-06.
+- The legacy WBS-era `research_plans` table (0 rows, no reader or writer) was dropped
+  (migrations/2026-10-01-drop-research-plans.sql).
+
 ## 4. Dissemination policy (L3)
 
 - Bluesky: qnfo-social /compose (AI draft, fact-checker validates claims vs title+abstract) → /approve → cron 14:30 posts. social_promote from publish stage queues directly.
@@ -76,3 +84,4 @@ AI Gateway $90/30d spend limit (sliding) is the backstop; per-paper cost = sum o
 ## 10. Change log
 
 - 2026-09-01: v1.0 initial — audit complete, design locked, implementation begins (T1..T6).
+- 2026-10-01: audit trail clarified: research_queue state plus cloud_ops_events transitions; legacy research_plans dropped (#1622).
