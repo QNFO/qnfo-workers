@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 21:10:59",
+  "audited_at": "2026-10-01 21:15:26",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.5",
+        "version": "0.2.6",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.81-revise-outside-cap",
+        "version": "0.4.82-hygiene-scope",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -522,7 +522,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.6.5-metric-undefined-class",
+        "version": "1.6.6-research-metrics-writer",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.5",
+      "before": "0.2.6",
       "http": 200,
-      "live": "0.2.5",
+      "live": "0.2.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.81-revise-outside-cap",
+      "before": "0.4.82-hygiene-scope",
       "http": 200,
-      "live": "0.4.81-revise-outside-cap",
+      "live": "0.4.82-hygiene-scope",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1248,9 +1248,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.6.5-metric-undefined-class",
+      "before": "1.6.6-research-metrics-writer",
       "http": 200,
-      "live": "1.6.5-metric-undefined-class",
+      "live": "1.6.6-research-metrics-writer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
