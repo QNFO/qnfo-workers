@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-01T01:33:57Z",
+ "generated_at": "2026-10-01T01:34:02Z",
  "account": "edb167b78c9fb901ea5bca3ce58ccc4b",
  "errors_24h": {
   "qnfo-fleet-dashboard": {
@@ -1345,7 +1345,7 @@
    {
     "model": "@cf/baai/bge-base-en-v1.5",
     "requests": 28439,
-    "neurons": 234518.18416500016
+    "neurons": 234518.18416500013
    },
    {
     "model": "@cf/openai/gpt-oss-120b",
@@ -1355,12 +1355,12 @@
    {
     "model": "@cf/nvidia/nemotron-3-120b-a12b",
     "requests": 253,
-    "neurons": 163314.477
+    "neurons": 163314.47699999998
    },
    {
     "model": "@cf/qwen/qwen2.5-coder-32b-instruct",
     "requests": 1018,
-    "neurons": 53369.80727272596
+    "neurons": 53369.807272725964
    },
    {
     "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
@@ -1375,7 +1375,7 @@
    {
     "model": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
     "requests": 221,
-    "neurons": 17540.015240559722
+    "neurons": 17540.015240559725
    },
    {
     "model": "@cf/qwen/qwen3-30b-a3b-fp8",
@@ -1390,7 +1390,7 @@
    {
     "model": "@cf/zai-org/glm-4.7-flash",
     "requests": 556,
-    "neurons": 7069.904500000002
+    "neurons": 7069.904500000003
    },
    {
     "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
@@ -1501,7 +1501,7 @@
    "provider": "openai",
    "requests": 487,
    "cachedRequests": 4,
-   "cost": 52.344717,
+   "cost": 52.344716999999996,
    "erroredRequests": 0
   },
   {
@@ -1510,7 +1510,7 @@
    "provider": "deepseek",
    "requests": 3363,
    "cachedRequests": 24,
-   "cost": 45.81163846895,
+   "cost": 45.81163846895001,
    "erroredRequests": 0
   },
   {
@@ -1519,7 +1519,7 @@
    "provider": "deepseek",
    "requests": 22679,
    "cachedRequests": 260,
-   "cost": 43.474004462699995,
+   "cost": 43.47400446270001,
    "erroredRequests": 0
   },
   {
@@ -1528,7 +1528,7 @@
    "provider": "openai",
    "requests": 392,
    "cachedRequests": 0,
-   "cost": 30.154473999999997,
+   "cost": 30.154474000000004,
    "erroredRequests": 2
   },
   {
@@ -1573,7 +1573,7 @@
    "provider": "workers-ai",
    "requests": 1895,
    "cachedRequests": 1834,
-   "cost": 0.2585614929180145,
+   "cost": 0.25856149291801456,
    "erroredRequests": 0
   },
   {
@@ -1582,7 +1582,7 @@
    "provider": "workers-ai",
    "requests": 486,
    "cachedRequests": 451,
-   "cost": 0.15532835012054447,
+   "cost": 0.1553283501205444,
    "erroredRequests": 0
   },
   {
@@ -1591,7 +1591,7 @@
    "provider": "workers-ai",
    "requests": 649,
    "cachedRequests": 324,
-   "cost": 0.060412770000000005,
+   "cost": 0.06041276999999999,
    "erroredRequests": 0
   },
   {
@@ -1600,7 +1600,7 @@
    "provider": "workers-ai",
    "requests": 1515,
    "cachedRequests": 1444,
-   "cost": 0.025892758364677422,
+   "cost": 0.025892758364677436,
    "erroredRequests": 0
   },
   {
