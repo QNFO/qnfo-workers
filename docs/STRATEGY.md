@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.1, 2026-10-01 (1.1: owner delegation of social accounts, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.2, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -310,6 +310,26 @@ once; approve each LinkedIn draft with one tap; add the service account to GA4 (
 ask one established arXiv author for a personal endorsement; add the selected works to ORCID; paste the headline and bio
 (section 2.2) into LinkedIn, which cannot be edited by API. Google Scholar intake also needs `citation_pdf_url` on paper
 pages (fleet work, weeks 2-4).
+
+### 10.1 Status at closeout (measured 2026-10-01 21:15Z)
+Done items have live evidence in `qnfo-audit.issue_triage.close_evidence`; open items close only on the live event named.
+
+| Item | State | Evidence or closing event |
+|---|---|---|
+| Harmful streams paused, consent fixes, q08 off the owner's channels | done | qnfo-outreach 0.3.5, qnfo-cloud-ops 1.16.3, q08 hold trigger dropped; `external_sends_enabled=1` |
+| Shared outreach cap, 8/day and 3/day per domain (#1718) | done | 7-day window: max 8/day, max 3/domain across both engines |
+| Paper pages: author of record, Scholar tags, PDF | done | gateway 3.7.23; `citation_author` = Rowan Brad Quni-Gudzinas on placeholder-author papers |
+| qnfo.org identity and selected works | done | home page: `id="selected-works"`, 7 DOIs, ORCID, JSON-LD, no QWAV links |
+| Research publishing restarted (#1620, #1728) | done | Zenodo DOIs 10.5281/zenodo.23086421 and .23087164 published 2026-10-01 |
+| External-mention radar (#1641) | done | radar-hub 1.1.1; `external_mentions` 0 -> 2; `reach_signals` source `mention-radar` |
+| Daily portfolio run and owner page on Cloudflare | done | `portfolio_runs` daily rows from qnfo-fleet-dashboard; no claude.ai Routine enabled |
+| Outreach resumed under consent rules (#1710) | live, open | first post-resume send (2026-10-02; today's cap was spent before the pause) carries the opt-out line |
+| Post ids and UTM on every post (#1712) | live, open | 138 of 141 historical posts backfilled; next post (~2026-10-08, weekly cap) stores `post_uri` and a UTM link |
+| Engagement collection (#1647) | live, open | qnfo-social daily 07:00Z collector writes `social_engagements` on 2026-10-02 |
+| LinkedIn as Buffer drafts (#1713) | live, open | first owner-approved draft; owner confirms the LinkedIn channel in Buffer |
+| Reach scorecard, 5+ sources for 7 days (#1711) | live, open | 5 sources on 2026-09-30; earliest close about 2026-10-07; GA4 and Search Console need the owner's service-account grant |
+| AI spend under cap (#1683) | partial | qnfo-ai 5.30.0 governor caps router spend at $60/30d (`GET /spend`); account-wide $448/30d is mostly the owner's desktop client on the BYOK DeepSeek key: owner decision (route it through qnfo-ai or add a gateway rate limit) |
+| q08 keep-or-retire (#1716) | scheduled | decision on 2026-10-31 from bot-filtered human reads |
 
 ---
 
