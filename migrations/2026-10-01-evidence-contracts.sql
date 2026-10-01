@@ -1,0 +1,17 @@
+-- EVIDENCE-CONTRACTS-1 (2026-10-01). Applied live. Each remaining open issue whose proof is a future scheduled run gets a
+-- remediation_contract with a literal read-only d1-query probe. qnfo-fleet-control's hourly remediationContractsTick
+-- (REMEDIATION-TICK-1, PR 291) runs it; a pass writes remediation_verifications pass=1, and the
+-- remediation_verification_autoclose triggers close the issue with that evidence. Classes:
+--   EVID-1647-ENGAGEMENT  social_engagements collected_at >= 2026-10-02 (daily 05:15Z Bluesky collection)
+--   EVID-1642-VENUE       venue_radar_runs ok/empty/dup-only after the 08:11Z redeploy (daily 06:45Z)
+--   EVID-1653-RADAR       personal_radar and events_radar written after the 08:13Z radar-hub redeploy
+--   EVID-1641-MENTIONS    cloud-ops radar job-run with per-source status, all ok, after 1.15.7
+--   EVID-1620-PUBLISH     a research_queue row published with a DOI and no stale researching row
+--   EVID-1504-REVISE      a live revise stage completes ok and no canned gateway answers in 6h
+--   EVID-1699-BUDGET      ai_spend:total non-zero after the BYOK billing split
+--   EVID-1683-SPEND       ai_spend:total (30d unified) <= $150 cap
+--   EVID-1681-ATTR        workers_ai_attribution_coverage_pct >= 50
+--   EVID-1680-WATCH       ops_owner_turn_incomplete_pct_7d measured < 5 (trigger refiles at >= 5)
+--   EVID-1696-WATCH       ops_agent_empty_answers_7d measured < 1 (trigger refiles at >= 1)
+-- The probe SQL lives in remediation_contracts.verify_probe (qnfo-audit); see that table for the exact text.
+SELECT class, issue_id, status FROM remediation_contracts WHERE class LIKE 'EVID-%';
