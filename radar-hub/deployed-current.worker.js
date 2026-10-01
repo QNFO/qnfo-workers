@@ -2,7 +2,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // HUB-VERSION-SCOPE-1 (2026-09-23): radar-hub's OWN version, at MODULE scope so the hub's
 // `export default` can read it. Each embedded sub-worker IIFE declares its own `VERSION`
 // inside its own scope; a bare reference from module scope throws ReferenceError.
-var VERSION = "1.0.9";
+var VERSION = "1.0.10";
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -435,7 +435,7 @@ return { default: worker_default };
 
 var arxivMod = (function(){
 const QNFO_VERSION = "qnfo-arxiv-radar/fabric-20260910";
-const VERSION = "1.0.1+fabric.20260910";
+const VERSION = "1.1.0-qwav-classify";
 var arxivModDefault = {
   async scheduled(event, env, ctx) {
     try {
@@ -488,15 +488,31 @@ async function run(env) {
     if (score >= 1) candidates.push(h);
   }
   out.candidates = candidates.length;
-  out.sample = candidates.slice(0, 5).map(function(c){ return c.id + " " + c.title.slice(0, 60); });
+  // QWAV-SCAN-CLASSIFY-1 (2026-10-01, RM-VISION-QWAV-SCAN-1): the radar kept any hit with one keyword and gave no
+  // topic, so the digest could not be read by research area and nothing downstream could weigh a hit. Each hit is now
+  // classified deterministically (no model call, zero cost) into the QWAV research classes and given a fit grade:
+  // "core" when it touches the ultrametric/ZBW programme or two classes at once, "adjacent" otherwise.
+  for (const c of candidates) {
+    const cls = classify(c.text);
+    c.cls = cls.top; c.classes = cls.classes; c.score = cls.score; c.fit = cls.fit;
+  }
+  candidates.sort(function(a, b) { return (b.fit === "core") - (a.fit === "core") || b.score - a.score; });
+  out.by_class = {};
+  for (const c of candidates) out.by_class[c.cls] = (out.by_class[c.cls] || 0) + 1;
+  out.core = candidates.filter(function(c) { return c.fit === "core"; }).length;
+  out.sample = candidates.slice(0, 5).map(function(c){ return c.id + " [" + c.cls + "/" + c.fit + "] " + c.title.slice(0, 60); });
   const lines = [];
-  for (const c of candidates.slice(0, 15)) {
-    lines.push("- [" + c.id + "] " + c.title + " (" + c.published + ") " + c.authors.slice(0, 3).join(", "));
+  const order = ["ultrametric", "zbw", "qec", "energy", "other"];
+  for (const k of order) {
+    const grp = candidates.filter(function(c) { return c.cls === k; }).slice(0, 10);
+    if (!grp.length) continue;
+    lines.push("", "## " + CLASS_TITLE[k] + " (" + grp.length + ")");
+    for (const c of grp) lines.push("- [" + c.id + "] " + c.title + " (" + c.published + ", " + c.fit + ", score " + c.score + ") " + c.authors.slice(0, 3).join(", "));
   }
   const d = new Date();
   const ymd = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
   const key = "notes/v1/" + d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + ymd + "/_arxiv-radar-" + ymd + ".md";
-  const body = "# arXiv Radar " + ymd + "\n\nWidened scan: " + hits.length + " hits, " + candidates.length + " strong candidates\n\n" + lines.join("\n") + "\n";
+  const body = "# arXiv Radar " + ymd + "\n\nWidened scan: " + hits.length + " hits, " + candidates.length + " candidates (" + out.core + " core)\n" + lines.join("\n") + "\n";
   try {
     if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); out.noteKey = key; }
   } catch (e) {}
@@ -509,8 +525,34 @@ async function run(env) {
         out.enqueued++;
       } catch (e) {}
     }
+    // Run ledger in the existing research_scan_log (job arxiv-radar): the radar logged only to the console, so the
+    // fleet could not tell a quiet day from a dormant radar (the backlog called it dormant for 20-27 days).
+    try {
+      await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1, ?2, 'arxiv-radar', ?3)").bind("arxiv-" + Date.now().toString(36), new Date().toISOString(), JSON.stringify({ v: VERSION, hits: out.hits, candidates: out.candidates, core: out.core, by_class: out.by_class, enqueued: out.enqueued, dupes: out.dupes, note: out.noteKey, error: out.error, top: candidates.slice(0, 8).map(function(c) { return { id: c.id, cls: c.cls, fit: c.fit, score: c.score, title: c.title.slice(0, 120) }; }) }).slice(0, 3000)).run();
+      out.logged = true;
+    } catch (e) { out.logged = false; }
   }
   return out;
+}
+const CLASS_KW = {
+  ultrametric: ["ultrametric", "p-adic", "padic", "bruhat", "adelic", "primon", "non-archimedean", "arithmetic quantum"],
+  zbw: ["zbw", "zitterbewegung", "compton"],
+  qec: ["error correction", "logical qubit", "qldpc", "ldpc", "surface code", "fault-tolerant", "fault tolerant", "stabilizer code"],
+  energy: ["quantum energy", "joules", "landauer", "thermodynamic", "energy overhead", "energy efficiency", "cryogenic", "margolus", "energy cost"]
+};
+const CLASS_TITLE = { ultrametric: "Ultrametric, p-adic and adelic", zbw: "Zitterbewegung", qec: "Quantum error correction", energy: "Quantum energy and thermodynamics", other: "Other" };
+function classify(text) {
+  const classes = {};
+  let score = 0;
+  for (const k in CLASS_KW) {
+    let n = 0;
+    for (const kw of CLASS_KW[k]) if (text.includes(kw)) n++;
+    if (n) { classes[k] = n; score += n; }
+  }
+  let top = "other", best = 0;
+  for (const k in classes) if (classes[k] > best) { best = classes[k]; top = k; }
+  const fit = classes.ultrametric || classes.zbw || Object.keys(classes).length >= 2 ? "core" : "adjacent";
+  return { top: top, classes: classes, score: score, fit: fit };
 }
 
 return arxivModDefault;
@@ -1303,6 +1345,17 @@ export default {
     if (p === "/citation" || p.startsWith("/citation/")) return citationMod.fetch(sub("/citation"), env, ctx);
     if (p === "/jobs" || p.startsWith("/jobs/")) return jmwMod.default.fetch(sub("/jobs"), env, ctx);
     if (p === "/personal" || p.startsWith("/personal/")) return perMod.default.fetch(sub("/personal"), env, ctx);
+    if (p === "/arxiv/health") return arxivMod.fetch(sub("/arxiv"), env, ctx);
+    if (p === "/arxiv/last") {
+      const row = env.AUDIT ? await env.AUDIT.prepare("SELECT ts, payload FROM research_scan_log WHERE job='arxiv-radar' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; }) : null;
+      return new Response(JSON.stringify(row ? { ts: row.ts, run: JSON.parse(row.payload || "{}") } : { ts: null }), { headers: { "content-type": "application/json" } });
+    }
+    if (p === "/arxiv/run" && request.method === "POST") {
+      // One forced run per 10 minutes: the route is public, and each run calls arXiv and writes D1.
+      const last = env.AUDIT ? await env.AUDIT.prepare("SELECT ts FROM research_scan_log WHERE job='arxiv-radar' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; }) : null;
+      if (last && Date.now() - Date.parse(last.ts) < 6e5) return new Response(JSON.stringify({ ok: false, error: "last run " + last.ts + "; one run per 10 minutes" }), { status: 429, headers: { "content-type": "application/json" } });
+      return arxivMod.fetch(sub("/arxiv"), env, ctx);
+    }
     return new Response("radar-hub", { status: 200 });
   },
   async scheduled(event, env, ctx) {

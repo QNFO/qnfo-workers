@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.6-authblind";
+var VERSION = "1.2.7-auth-fail-closed";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -74,7 +74,11 @@ __name(sha256Hex, "sha256Hex");
 async function authorized(request, env) {
   var h = request.headers.get("Authorization") || "";
   if (!h.startsWith("Bearer ")) return false;
-  return await sha256Hex(h.slice(7)) === await sha256Hex(env.QNFO_ROUTER_KEY || "");
+  // AUTH-FAIL-CLOSED-1 (2026-10-01): compare only against a configured key. Without this, a missing QNFO_ROUTER_KEY
+  // made the expected value sha256("") and an empty bearer token would match; header whitespace trimming is what
+  // prevented it in practice, and the code must not rely on that.
+  if (!env.QNFO_ROUTER_KEY || h.length <= 7) return false;
+  return await sha256Hex(h.slice(7)) === await sha256Hex(env.QNFO_ROUTER_KEY);
 }
 __name(authorized, "authorized");
 async function jfetch(env, url, headers, body, timeoutMs, bindName) {
