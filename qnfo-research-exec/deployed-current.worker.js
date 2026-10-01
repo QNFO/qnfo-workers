@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.41-zenodo-identity";
+var VERSION = "0.9.42-ensemble-fresh";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1968,8 +1968,15 @@ async function stageEnsemble(env, row) {
     return { ok: false, stage: "ensemble" };
   }
   const shared = WRITER_PROMPT + "\n\n" + grounding;
+  // ENSEMBLE-FRESH-DRAFTS-1 (2026-10-01): the fallback path reused any draft-N.md already in R2, including drafts written
+  // for an EARLIER grounding. Row 567 re-grounded with 14 bibliography entries (GROUNDING-BIB-1) and then reconciled three
+  // cached drafts written against the empty bibliography (14:36Z), so the new citations never reached the paper. Each
+  // draft now carries a grounding fingerprint sidecar (draft-N.fp); a cached draft is reused only for the same grounding.
+  // Writer legs run at low reasoning effort (REASONING-EFFORT-LOW-1): at the default (maximum) effort the 8192-token
+  // budget went to reasoning and 2 of 3 primary legs routinely came back under 4000 chars.
+  const gfp = (await sha256hex(grounding)).slice(0, 16);
   const legs = await Promise.all(WRITER_MODELS.map(async function(m, i) {
-    let draft = await aiText(env, m, shared, 3e4);
+    let draft = await aiText(env, m, shared, 3e4, "low");
     let via = "workers-ai";
     if (!draft || draft.length < 4e3) {
       draft = await gwCall(env, shared, 3e4);
@@ -1977,6 +1984,7 @@ async function stageEnsemble(env, row) {
     }
     if (draft && draft.length >= 4e3) {
       await r2Put(env, String(row.id) + "/draft-" + i + ".md", draft);
+      await r2Put(env, String(row.id) + "/draft-" + i + ".fp", gfp);
       return { i, len: draft.length, via };
     }
     return { i, len: 0, via: "none" };
@@ -1988,16 +1996,18 @@ async function stageEnsemble(env, row) {
     await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/3; retrying with gwCall+fallback");
     const fallbackLegs = await Promise.all([0, 1, 2].map(async function(fi) {
       const existing = await r2Get(env, String(row.id) + "/draft-" + fi + ".md");
-      if (existing && existing.length >= 4e3) return { i: fi, len: existing.length, via: "cached" };
+      const existingFp = existing ? String(await r2Get(env, String(row.id) + "/draft-" + fi + ".fp")).trim() : "";
+      if (existing && existing.length >= 4e3 && existingFp === gfp) return { i: fi, len: existing.length, via: "cached" };
       let draft = await gwCall(env, shared, 3e4);
       let via = "gwCall";
       if (!draft || draft.length < 4e3) {
         const fm = WRITER_FALLBACK_MODELS[fi % WRITER_FALLBACK_MODELS.length];
-        draft = await aiText(env, fm, shared, 3e4);
+        draft = await aiText(env, fm, shared, 3e4, "low");
         via = "fallback-" + fm.split("/").pop();
       }
       if (draft && draft.length >= 4e3) {
         await r2Put(env, String(row.id) + "/draft-" + fi + ".md", draft);
+        await r2Put(env, String(row.id) + "/draft-" + fi + ".fp", gfp);
         return { i: fi, len: draft.length, via };
       }
       return { i: fi, len: 0, via: "none" };
