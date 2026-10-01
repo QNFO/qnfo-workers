@@ -146,3 +146,63 @@ identity) and #1733 (PR 371).
   tracked by #1735 / EVID-C6-CONFORMANCE.
 - Self-closing contracts: EVID-QWAV-SCAN-CRON (#1734, 2026-10-02 08:30Z), EVID-GATE-A2-PUBLISHV2 (first new version),
   EVID-C6-CONFORMANCE (#1735), plus those listed in round 3.
+
+## Round 5 (11:30Z to 21:15Z): owner-voice gates, watchdog ping-pong, research metrics with no writer
+
+Evidence labels as above: **[verified]** seen live in this session after the change; **[scheduled]** a contract probe
+decides it; **[superseded]** another session landed the same fix first and the duplicate was withdrawn.
+
+### Merged and live [verified]
+
+| Change | PR | Live evidence |
+|---|---|---|
+| LinkedIn goes to Buffer as a draft the owner approves (LINKEDIN-BUFFER-DRAFTS-1); Mastodon and X unchanged | 322 | qnfo-social 0.7.20 deployed 12:48Z, carried forward in 0.7.24; `saveToDraft` on the LinkedIn mutation only |
+| Daily sent-as-you digest on the engagement tick: every social post, cross-post, outreach email and reply of the last 24h, Buffer drafts waiting, both kill switches, the stop line; delivered through qnfo-email as an owner notice (SENT-AS-YOU-DIGEST-1); `owner-voice-stop` / `owner-voice-resume` jobs flip `pipeline_flags.social_paused` and `pipeline_state.external_sends_enabled` together | 322 | qnfo-cloud-ops 1.15.10, re-cut 1.16.1 at merge, now 1.16.3; first digest on the 2026-10-02 05:15Z tick |
+| ci_watchdog skips a failure superseded by a later green run on the same branch, or already closed by a finding (SUPERSEDED-FAILURE-SKIP-1) | 322 | #332 was closed 12:13:03Z on green run 36860215928 and #333 re-filed for the same run 11 s later; dry runs after the fix skipped two live cases |
+| publications_30d, full_reports_live_30d and indexed_surface written hourly from living-paper.papers and the papers.qnfo.org sitemap (RESEARCH-METRICS-WRITER-1) | 384 | qnfo-lifecycle 1.6.6 deployed 21:13:23Z; the second refresh read 31/31 fresh and the auditor closed #1742 itself (close_evidence `0 stale / 0 never / 0 unparsed of 31`) |
+
+### Closed with evidence this round
+
+- #1714 citation_pdf_url: all 7 selected works answer `200 application/pdf` under 5 MB at `/papers/<slug>.pdf` and carry the
+  tag (gateway 3.7.22 from #323, measured 12:10Z). My own gateway implementation was **[superseded]** and dropped unmerged.
+- #1715 impressions window: `metric_registry.impressions_growth_30d` reads "n/a: prior window has 27 of 30 days" after the
+  11:45Z refresh instead of +395%.
+- #1736 mirror qnfo-skills-mcp: the worker does not exist on the account (Workers API 404 code 10007, route error 1042, no
+  deploy, registry or ledger row ever). Creating the directory would resurrect an absent worker against
+  WORKER-RESURRECTION-GUARD-1 and charter wave W1 (MCP 4 -> 1). Recorded as why-not.
+- #1742 metric staleness: self-closed by qnfo-lifecycle 1.6.6 on its own fresh verdict (above).
+- RM-SEO-INDEXNOW-JSONLD-1 verified: ScholarlyArticle JSON-LD on 8/8 sampled paper pages, IndexNow key file 200, the daily
+  submit sent 5 URLs -> 202.
+
+### Withdrawn as superseded
+
+- PR 353 (fleet-control 0.4.77 OBJECTIVE-REVISION-APPLY-1) closed: #352 (fleet-dashboard 1.13.0, live 1.14.0) already applies
+  ratified revisions through `sai_config`, `objective_revision_applies` and a */15 sweep; two consumers of `status='ratified'`
+  with different rules would have been a regression. Its one real finding is filed as #1739: `survival_state.sai` is the
+  unweighted mean of 18 autonomy dimensions, so a ratified weight change reaches the dashboard SAI but not the charter's
+  "Autonomy composite"; the fix is a design choice (publish the dashboard SAI, or ratify a dimension-to-term map).
+
+### Self-closing on evidence (remediation_contracts)
+
+- issue-1713: three distinct days of `cloud_ops_events kind=digest job=sent-as-you` from 2026-10-02 and one
+  `social_threads.post_uri` carrying `buffer-draft:`; first due 2026-10-04 06:00Z. The owner's first approval in Buffer is
+  owner-held and stated as such in the contract.
+- #1641, #1647, #1649, #1710, #1711, #1712, #1718, #1683: probes written by other sessions; nothing here waits on a session.
+
+### Corrections and coordination
+
+- A stale DRIFT row on the 12:04Z self-audit (qnfo-fleet-dashboard 1.9.1 vs 1.10.0, merged two minutes earlier) was cleared
+  by the 12:10Z audit run (41 SYNC, 0 DRIFT), not by editing the register.
+- The CodeQL red on the first PR 322 head was GitHub's installation rate limit during SARIF upload, not the diff; noted on the
+  PR, green on the next head without a kick.
+- Branch restarts after squash merges needed a lease-protected push twice; both times the remote branch held only merged or
+  withdrawn history.
+- Owner-directive rule applied: no claude.ai reminder or check-in survives; the one armed for PR 353 was deleted when the PR
+  closed.
+
+### State at 21:15Z
+
+- Live: qnfo-social 0.7.24-social-gates, qnfo-cloud-ops 1.16.3-identity-moved, qnfo-lifecycle 1.6.6-research-metrics-writer,
+  qnfo-gateway 3.7.23-home-identity (all carrying this round's changes).
+- metric_registry: 31/31 fresh; publications_30d 12, full_reports_live_30d 12, indexed_surface 450.
+- Open from this round: #1713 (contract), #1739 (design decision), #1725 (other session's applier; DoD measured by its contract).
