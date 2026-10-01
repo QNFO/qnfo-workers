@@ -1,11 +1,12 @@
 {
-  "audited_at": "2026-10-01 15:32:08",
+  "audited_at": "2026-10-01 15:36:37",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-fleet-dashboard"
+        "qnfo-research-exec",
+        "qnfo-social"
       ],
       "refreshed": true,
       "second_pass": []
@@ -569,7 +570,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.46-gates-bib-aware",
+        "version": "0.9.47-backfill-verify",
         "worker": "qnfo-research-exec"
       },
       {
@@ -579,7 +580,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.22-profile-owner-wins",
+        "version": "0.7.23-owner-delegation",
         "worker": "qnfo-social"
       },
       {
@@ -1367,9 +1368,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.46-gates-bib-aware",
+      "before": "0.9.47-backfill-verify",
       "http": 200,
-      "live": "0.9.46-gates-bib-aware",
+      "live": "0.9.47-backfill-verify",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1423,9 +1424,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.22-profile-owner-wins",
+      "before": "0.7.23-owner-delegation",
       "http": 200,
-      "live": "0.7.22-profile-owner-wins",
+      "live": "0.7.23-owner-delegation",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
