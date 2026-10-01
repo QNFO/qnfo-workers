@@ -1,6 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.4.3 (2026-10-01; footer label per STRATEGY-1 s2.1) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
+**Version:** 3.4.4 (2026-10-01; footer label per STRATEGY-1 s2.1; /health reports the VERSION constant) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
