@@ -2,8 +2,8 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 38,
- "open_issues": 45,
- "with_contract_before": 45,
+ "open_issues": 43,
+ "with_contract_before": 43,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
@@ -126,6 +126,6 @@
   1688,
   1696
  ],
- "head": "7f63fc3819d9e1ccce6aa9f596efe91d655904ad",
+ "head": "3b89ea0ac2e4de88b6ad28dbe2373ccbd0e2dcb7",
  "job_status": "success"
 }

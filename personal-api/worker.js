@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.16-event-profile-guard";
+var VERSION = "4.1.17-signals-consumer";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1076,6 +1076,25 @@ function sseText(text, id) {
 }
 __name2(sseText, "sseText");
 
+// PROACTIVE-SIGNALS-CONSUMER-1 (2026-10-01, #938 PERSONAL-TELEMETRY-PLANES-INERT): proactive_signals were written daily
+// (event / weather / habit) and never read, so 16/16 rows stayed shown=0. Unshown signals from the last 72h are now
+// served in two places, and marked shown once served:
+//   - the /v1/brief payload (signals[]), which the client renders;
+//   - the twin's chat context, together with overdue open tasks, which no surface showed before.
+async function takeSignals(env, limit, mark) {
+  const out = [];
+  try {
+    const r = await env.PERSONAL.prepare("SELECT id, ts, kind, payload FROM proactive_signals WHERE shown = 0 AND ts >= ?1 ORDER BY ts DESC LIMIT ?2").bind(new Date(Date.now() - 3 * 864e5).toISOString(), limit).all();
+    for (const s of r.results || []) {
+      let p = {};
+      try { p = JSON.parse(s.payload || "{}"); } catch (e) {}
+      out.push({ id: s.id, ts: s.ts, kind: s.kind, title: p.title || "", summary: p.summary ? String(p.summary).slice(0, 300) : "" });
+    }
+    if (mark && out.length) await env.PERSONAL.prepare("UPDATE proactive_signals SET shown = 1 WHERE id IN (" + out.map(() => "?").join(",") + ")").bind(...out.map((x) => x.id)).run();
+  } catch (e) {}
+  return out;
+}
+__name(takeSignals, "takeSignals");
 async function buildBrief(env, withSummary) {
   const date = isoDateNow();
   const tomorrow = isoDatePlus(1);
@@ -2047,6 +2066,18 @@ var api_default = {
           lines.push("ACTUALLY ATTENDED / DONE (last 14 days):");
           for (const a of attended.results) lines.push("- " + a.date + " " + (a.title || "") + (a.venue ? " at " + a.venue : "") + (a.notes ? " - " + a.notes : ""));
         }
+        const sigs = await takeSignals(env, 3, true);
+        if (sigs.length) {
+          lines.push("PROACTIVE SIGNALS (unshown; mention only where relevant to the user's message):");
+          for (const g of sigs) lines.push("- [" + g.kind + "] " + g.title + (g.summary ? ": " + g.summary.slice(0, 200) : ""));
+        }
+        try {
+          const od = await env.PERSONAL.prepare("SELECT title, due FROM tasks WHERE status = 'open' AND due IS NOT NULL AND due < ?1 ORDER BY due ASC LIMIT 5").bind(today).all();
+          if (od.results && od.results.length) {
+            lines.push("OVERDUE OPEN TASKS:");
+            for (const t of od.results) lines.push("- due " + String(t.due).slice(0, 10) + " " + (t.title || ""));
+          }
+        } catch (e2) {}
         if (lines.length) calContext = lines.join("\n\n");
       } catch (e) {
         calContext = null;
@@ -2347,17 +2378,19 @@ var api_default = {
           if (row && row.payload && Date.now() - new Date(row.built_at).getTime() < 180 * 60 * 1e3) {
             const p = JSON.parse(row.payload);
             p.served = "prebuilt";
+            p.signals = await takeSignals(env, 5, true);
             return json(p);
           }
         }
         const b = await buildBrief(env, wantSummary);
+        const servedSignals = await takeSignals(env, 5, true);
         ctx.waitUntil((async () => {
           try {
             await env.PERSONAL.prepare("INSERT OR REPLACE INTO daily_briefs (date, payload, built_at) VALUES (?1,?2,?3)").bind(isoDateNow(), JSON.stringify(b).slice(0, 6e4), (/* @__PURE__ */ new Date()).toISOString()).run();
           } catch (e) {
           }
         })());
-        return json(b);
+        return json(Object.assign({}, b, { signals: servedSignals }));
       } catch (e) {
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }

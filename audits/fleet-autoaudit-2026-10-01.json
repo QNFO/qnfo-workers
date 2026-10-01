@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 08:06:34",
+  "audited_at": "2026-10-01 08:11:13",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -35,10 +35,10 @@
     "cron_only_count": 3,
     "drift": [
       {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.58-census-dod-upsert",
-        "repo": "0.4.57-census-self-schedule",
-        "worker": "qnfo-fleet-control"
+        "dir": "qnfo-cloud-ops",
+        "live": "1.15.6-engagement-daily",
+        "repo": "1.15.5-outreach-cap-status-1",
+        "worker": "qnfo-cloud-ops"
       }
     ],
     "live_err": [],
@@ -481,11 +481,6 @@
         "worker": "qnfo-backlog-exec"
       },
       {
-        "dir": "qnfo-cloud-ops",
-        "version": "1.15.5-outreach-cap-status-1",
-        "worker": "qnfo-cloud-ops"
-      },
-      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.8-public-exec-closed",
         "worker": "qnfo-containers-pilot"
@@ -499,6 +494,11 @@
         "dir": "qnfo-email",
         "version": "2.2.0-handoff-notify",
         "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.58-census-dod-upsert",
+        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -1018,9 +1018,9 @@
     "qnfo-cloud-ops": {
       "before": "1.15.5-outreach-cap-status-1",
       "http": 200,
-      "live": "1.15.5-outreach-cap-status-1",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.15.6-engagement-daily",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-cloud-ops"
     },
     "qnfo-code-agent": {
@@ -1144,11 +1144,11 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.57-census-self-schedule",
+      "before": "0.4.58-census-dod-upsert",
       "http": 200,
       "live": "0.4.58-census-dod-upsert",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
