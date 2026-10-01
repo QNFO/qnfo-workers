@@ -106,4 +106,4 @@ Failure modes: (a) the corpus may have no paying audience — 5,660 pageviews is
 ## 5. Evidence pointers
 - Billing: AI Gateway invoice-preview/credit-balance/topup-config (cents), audited 2026-09-26 10:00Z.
 - Inventory: qnfo-audit D1 (shutdown_manifest, task_dod_register, gtd_register, agent_issues, fleet_issue_dispatch, email_loop_quarantine, worker_live_audit), GitHub org search (25 open issues).
-- Dashboard: fleet.qnfo.org root (FAILURE INVENTORY, qnfo-fleet-dashboard v1.7.13), /roi, /ops.
+- Dashboard: fleet.qnfo.org root, a single human-action page (qnfo-fleet-dashboard v1.8.0); /roi and /ops redirect to it.
