@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.59-census-uncontracted";
+var VERSION = "0.4.60-budget-units";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3313,7 +3313,7 @@ async function refreshOwnedMetrics(env) {
       if (waiUsd != null) byProv["workers-ai"] = (byProv["workers-ai"] || 0) + waiUsd;
       var total = Object.keys(byProv).reduce(function (a, k) { return a + byProv[k]; }, 0);
       var parts = Object.keys(byProv).sort(function (a, b) { return byProv[b] - byProv[a]; }).map(function (k) { return k + " $" + byProv[k].toFixed(2); }).join(", ");
-      await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
+      await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "LIST-COST ESTIMATE (not billed): unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
       out.written.push("cost_usd_30d=" + total.toFixed(2) + " (" + parts.slice(0, 160) + ")");
       out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, alerts: await aiSpendCaps(db, byProv, total) };
       // METRIC-TRIGGER-LOOP-1 (#1634): the analytics trigger inputs had no writer since a one-off audit on
@@ -3359,7 +3359,11 @@ async function aiSpendCaps(db, byProv, total) {
     var cur = key === "total" ? total : (byProv[key] || 0);
     await db.prepare("UPDATE fleet_budget SET current=?1, updated_at=?2 WHERE node_class=?3").bind(Number(cur.toFixed(2)), new Date().toISOString(), c.node_class).run().catch(function () {});
     if (c.cap != null && cur > Number(c.cap)) {
-      var msg = "AI-SPEND-CAP " + c.node_class + ": 30d $" + cur.toFixed(2) + " > soft cap $" + Number(c.cap).toFixed(2) + " (target $" + c.target + "; UNIFIED-AI-SPEND-1, includes BYOK)";
+      // BUDGET-UNITS-1 (2026-10-01, #1699): these figures are gateway LIST-cost estimates across every provider (unified
+      // billing + BYOK + Workers AI), measured against internal soft budgets. They are not billed amounts and not the
+      // gateway monthly spend limit, which meters unified-billing traffic only. Comparing the two made a ~1.26x billed
+      // overage read as ~3x.
+      var msg = "AI-SPEND-CAP " + c.node_class + ": 30d list-cost estimate $" + cur.toFixed(2) + " > internal soft budget $" + Number(c.cap).toFixed(2) + " (target $" + c.target + "; all providers incl BYOK; not the billed amount and not the gateway monthly cap)";
       var dup = await db.prepare("SELECT id FROM alerts WHERE source='qnfo-fleet-control' AND message LIKE ?1 AND created_at > datetime('now','-1 day') LIMIT 1").bind("AI-SPEND-CAP " + c.node_class + ":%").first().catch(function () { return null; });
       if (!dup) {
         await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'warning', ?1, NULL)").bind(msg).run().catch(function () {});
