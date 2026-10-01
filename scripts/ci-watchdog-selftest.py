@@ -115,6 +115,24 @@ def main() -> int:
     k4, _ = cw.classify_structural("version-compare", {"head_branch": "main"})
     check("version-compare reaches the comparator branch", k4 in ("missing-module", "comparator-regression"), k4)
 
+    # DEPLOY-AUTH-CLASS-1 (issue 212): log shapes taken from canonical-deploy runs 36831942233 / 36832200123.
+    auth_log = (
+        "    FAIL in 0.1s  status=401\n"
+        '    error: "{\\"error\\":\\"Unauthorized - set ***\\"}"\n'
+        "##[error]canonical deploy failed for qnfo-ops\n"
+        "# ARTIFACT-PUSH-CONFLICT-1: snapshot re-apply, never a rebase conflict (was: run 1)\n"
+        " ! [rejected]        HEAD -> main (fetch first)\n"
+        "error: failed to push some refs to 'https://github.com/x/y'\n"
+        "push rejected on attempt 1; re-applying the snapshot onto origin/main\n"
+        "artifact pushed on attempt 2\n"
+    )
+    check("401 deploy failure is deploy-unauthorized, not push-race", cw.classify(auth_log, "canonical-deploy")[0] == "deploy-unauthorized")
+    unrecovered = "# never a rebase conflict\nerror: failed to push some refs to 'x'\npush failed after 3 attempts\n"
+    check("an unrecovered push race is still push-race", cw.classify(unrecovered, "canonical-deploy")[0] == "push-race")
+    recovered = "error: failed to push some refs to 'x'\nhint: git pull --rebase\nstatus pushed on attempt 2\n"
+    check("a recovered push is not a finding", cw.classify(recovered, "canonical-deploy")[0] == "unknown")
+    check("git CONFLICT is still push-race", cw.classify("CONFLICT (content): Merge conflict in a.json", "w")[0] == "push-race")
+
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0
 

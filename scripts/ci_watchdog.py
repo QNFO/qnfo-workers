@@ -218,7 +218,21 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
             "matches; key idempotency on the feature's markers, not the exact VERSION literal "
             "(APPLIER-LANDED-MARKERS-1), or retire the applier"
         )
-    if "CONFLICT (content)" in L or ("failed to push some refs" in L and "rebase" in L):
+    # DEPLOY-AUTH-CLASS-1 (2026-10-01, issue 212): canonical-deploy runs 36831942233 and 36832200123 FAILED because
+    # ops.qnfo.org/ops/deploy answered HTTP 401 (the Actions secret OPS_ROUTER_AUTH_KEY no longer matches the Worker's
+    # rotated key, issues 1676/1701), but were filed as `push-race`: the classifier saw the word "rebase" in an echoed
+    # COMMENT line and a "failed to push some refs" from a retry that then succeeded. The failing step is named first.
+    if ("status=401" in L and "canonical deploy failed" in L) or "Unauthorized - set" in L:
+        return "deploy-unauthorized", (
+            "ops.qnfo.org rejected the Actions secret OPS_ROUTER_AUTH_KEY (HTTP 401): it no longer matches the Worker's "
+            "key (credential rotation in progress, issues 1676/1701). Update the secret from the rotating session; "
+            "do not rotate from CI"
+        )
+    # A push race is a finding only if the push did NOT recover; the artifact steps retry onto origin/main and log
+    # "pushed on attempt N" when they land (ARTIFACT-PUSH-CONFLICT-1). Match the git conflict itself, not the word
+    # "rebase", which also appears in comments the runner echoes into the log.
+    recovered = "pushed on attempt" in L
+    if not recovered and ("CONFLICT (content)" in L or ("failed to push some refs" in L and "rebase" in L)):
         return "push-race", (
             "a concurrent writer moved main; an artifact commit must re-apply its snapshot onto "
             "origin/main instead of merging (ARTIFACT-PUSH-CONFLICT-1)"
