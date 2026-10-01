@@ -119,6 +119,8 @@ eq(P.pfDescriptionFromReadme("# Title\n\n![badge](x)\n\nThis repository holds th
 eq(P.pfDescriptionFromReadme("# Only a title\n\n- a list\n- only"), null, "no paragraph means no description");
 eq(P.pfDescriptionFromReadme("---\ntitle: x\n---\n\nFront matter is skipped before the paragraph."), "Front matter is skipped before the paragraph.", "front matter is skipped");
 ok(P.pfDescriptionFromReadme("word ".repeat(80) + "end").length <= 244, "long paragraphs are cut at a word with an ellipsis");
+eq(P.pfDescriptionFromReadme("<!-- hidden --> Intro paragraph <b>with</b> markup\n\nA clean second paragraph of the README text."), "A clean second paragraph of the README text.", "lines carrying markup are left out and comments are cut by index");
+eq(P.pfDescriptionFromReadme("<!-- unterminated comment\n\nnothing after it"), null, "an unterminated comment swallows the rest");
 const wbsAll = fx.wbs.concat([
   { wbs_code: "QWAV", level: "portfolio", slug: "qwav", name: "QWAV", status: "active", github_repo: null },
   { wbs_code: "QNFO.QEC.001", level: "project", slug: "qec-darwinism-ultrametric", name: "x", status: "active", github_repo: null },

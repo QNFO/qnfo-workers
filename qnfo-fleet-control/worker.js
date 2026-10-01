@@ -3741,15 +3741,18 @@ function pfTopicsFor(row, wbsRows) {
 function pfDescriptionFromReadme(md) {
   var text = String(md || "").replace(/\r/g, "");
   if (/^---\n/.test(text)) { var fm = text.indexOf("\n---", 3); if (fm > 0) text = text.slice(fm + 4); }
-  text = text.replace(/<!--[\s\S]*?-->/g, "");
+  // HTML comments are cut out by index (not by a regex, which is never a complete sanitizer); any line that still
+  // carries markup is left out, and the result keeps no angle bracket at all: a description is plain text.
+  for (var c = text.indexOf("<!--"); c >= 0; c = text.indexOf("<!--")) { var e = text.indexOf("-->", c + 4); text = e < 0 ? text.slice(0, c) : text.slice(0, c) + text.slice(e + 3); }
   var paras = text.split(/\n\s*\n/);
   for (var i = 0; i < paras.length; i++) {
     var lines = paras[i].split("\n").map(function(l) { return l.trim(); }).filter(function(l) { return l; });
     if (!lines.length) continue;
-    var skip = /^(#|!\[|\[!\[|<|\||>|[-*]\s|\d+\.\s|```|---|===)/;
-    if (lines.every(function(l) { return skip.test(l); })) continue;
-    var p = lines.filter(function(l) { return !skip.test(l); }).join(" ");
-    p = p.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/<[^>]+>/g, "").replace(/[`*_~]/g, "").replace(/\s+/g, " ").trim();
+    var skip = /^(#|!\[|\[!\[|\||>|[-*]\s|\d+\.\s|```|---|===)/;
+    var usable = lines.filter(function(l) { return !skip.test(l) && l.indexOf("<") < 0 && l.indexOf(">") < 0; });
+    if (!usable.length) continue;
+    var p = usable.join(" ");
+    p = p.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[`*_~<>]/g, "").replace(/\s+/g, " ").trim();
     if (p.length < 20) continue;
     if (p.length > 240) { p = p.slice(0, 240); var cut = p.lastIndexOf(" "); if (cut > 120) p = p.slice(0, cut); p = p.replace(/[,;:\-]+$/, "") + "..."; }
     return p;
