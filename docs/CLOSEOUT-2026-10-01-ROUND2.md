@@ -118,6 +118,7 @@ live, fixed at the root, deployed through the canonical path (or wrangler for th
 - qnfo-containers-pilot 1.0.9 PILOT-RATE-LIMIT-1 (360): 60/min, 600/h and 8 in flight. The defaults sit above the 30-day peaks (38/min, 548/h). Overflow returns 429.
 - qnfo-memory-mcp authentication verified live: `/health auth:true`; unauthenticated `tools/list` returns 401 on `/mcp` and `/`.
 - qnfo-ai-calibration 1.2.7 AUTH-FAIL-CLOSED-1 (370): no configured key now means no access.
+- qnfo-archive 1.2.1 ARCHIVE-INTERNAL-1 (375): anonymous `/handoff/search` returned memory-fact summaries from the qnfo-handoffs index, a public read path around memory-mcp's bearer, and a plain `GET /seed-kg` rewrote 809 knowledge-graph nodes per call. No worker consumed either route. Search now requires a props-authenticated internal caller (public: 403), and a public `/seed-kg` is a dry run; the 04:00 cron still seeds.
 - RM-VISION-QWAV-SCAN-1 (370): radar-hub classifies arXiv hits (ultrametric, zbw, qec, energy; core/adjacent), groups the digest by class and ledgers every run. Live run 15:20Z: 20 hits, 15 candidates, 2 core, 8 queued. Whether the 08:30 cron fires is tracked by #1734 / EVID-QWAV-SCAN-CRON.
 - RM-SELF-KNOWLEDGE-VIEWS-1: verified built. integration_state is fresh (42 rows in 24h); unified_open_issues is consumed; the four views are empty because nothing qualifies (18 of 18 open issues triaged).
 - Portfolio registry: QWAV and QNFO.QEC.001 linked; QNFO.INM.002, QNFO.SLB.003, QWAV.GDE and QNFO.QEC.002 registered.
