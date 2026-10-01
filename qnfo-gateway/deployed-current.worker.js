@@ -1,4 +1,4 @@
-var VERSION="3.7.18-org-label";
+var VERSION="3.7.22-scholar-pdf-rendered";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -747,19 +747,36 @@ __name2222222(renderIndexHTML, "renderIndexHTML");
 __name22222222(renderIndexHTML, "renderIndexHTML");
 __name222222222(renderIndexHTML, "renderIndexHTML");
 __name2222222222(renderIndexHTML, "renderIndexHTML");
+// AUTHOR-OF-RECORD-1 (2026-10-01, docs/STRATEGY.md s2.1): 273 published rows carry a placeholder author ("QNFO Research",
+// "QNFO", "QNFO Research Agent", "QNFO Research / QWAV") while their Zenodo DOI records list Quni-Gudzinas, Rowan Brad with
+// ORCID 0009-0002-4317-5604. Pages must match the registered record, so placeholders render as the author of record.
+var AUTHOR_OF_RECORD = "Rowan Brad Quni-Gudzinas";
+var PLACEHOLDER_AUTHOR_RE = /^\s*qnfo(\s+research(\s+agent)?)?(\s*\/\s*qwav)?\s*$/i;
+function paperAuthors(paper) {
+  const rawAuth = paper.authors || "";
+  let authors = [];
+  try {
+    const p = JSON.parse(rawAuth);
+    if (Array.isArray(p)) authors = p.map((a) => typeof a === "object" && a ? a.name || "" : String(a));
+  } catch (e) {
+    authors = String(rawAuth).split(",").map((st) => st.trim()).filter(Boolean);
+  }
+  const out = [];
+  for (const a of authors) {
+    let n = String(a || "").trim();
+    if (!n) continue;
+    if (PLACEHOLDER_AUTHOR_RE.test(n)) n = AUTHOR_OF_RECORD;
+    if (/^quni-gudzinas,\s*rowan brad$/i.test(n)) n = AUTHOR_OF_RECORD;
+    if (out.indexOf(n) < 0) out.push(n);
+  }
+  return out;
+}
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
   const doi = paper.doi || "";
   const abs = (paper.abstract || "").slice(0, 3e3);
-  let authors = [];
-  const rawAuth = paper.authors || "";
-  try {
-    const p = JSON.parse(rawAuth);
-    if (Array.isArray(p)) authors = p.map((a) => typeof a === "object" ? a.name || "" : String(a));
-  } catch (e) {
-    authors = rawAuth.split(",").map((s) => s.trim()).filter(Boolean);
-  }
+  const authors = paperAuthors(paper);
   // PAPER-PAGE-SEO-1 (2026-10-01): tie the owner's byline to the owner's ORCID iD so scholarly indexes
   // attribute the paper to one person. Serialised by the same JSON.stringify + <>& escape below.
   const authorObjs = authors.map((n) => String(n).indexOf("Quni-Gudzinas") >= 0 ? { "@type": "Person", name: n, sameAs: "https://orcid.org/0009-0002-4317-5604" } : { "@type": "Person", name: n });
@@ -789,14 +806,7 @@ __name222(buildPaperJsonLd, "buildPaperJsonLd");
 __name2222(buildPaperJsonLd, "buildPaperJsonLd");
 __name22222(buildPaperJsonLd, "buildPaperJsonLd");
 function citationAuthorsMeta(paper) {
-  const rawAuth = paper.authors || "";
-  let authors = [];
-  try {
-    const p = JSON.parse(rawAuth);
-    if (Array.isArray(p)) authors = p.map((a) => typeof a === "object" ? a.name || "" : String(a));
-  } catch (e) {
-    authors = rawAuth.split(",").map((st) => st.trim()).filter(Boolean);
-  }
+  const authors = paperAuthors(paper);
   return authors.map((n) => '<meta name="citation_author" content="' + escAttr(n) + '">').join("");
 }
 __name(citationAuthorsMeta, "citationAuthorsMeta");
@@ -839,7 +849,7 @@ function renderPaperHTML(paper) {
   const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "Unknown";
   // PAPER-PAGE-SEO-1 (2026-10-01): the paper page was the one gateway page without a viewport
   // (desktop-width render on phones, mobile-usability flag); twitter:* mirror the og:* values.
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' + buildPaperJsonLd(paper) + "<title>" + esc(displayTitle(paper.title)) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(mathPlain(abstract)) + '"><meta property="og:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(mathPlain(abstract)) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta name="twitter:description" content="' + escAttr(mathPlain(abstract)) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(displayTitle(paper.title)) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '"><meta name="citation_publisher" content="QNFO"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + titleHTML(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article>" + subscribeBlock("papers") + "</div></body></html>";
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' + buildPaperJsonLd(paper) + "<title>" + esc(displayTitle(paper.title)) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(mathPlain(abstract)) + '"><meta property="og:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(mathPlain(abstract)) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta name="twitter:description" content="' + escAttr(mathPlain(abstract)) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(displayTitle(paper.title)) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '">' + (paper._pdf ? '<meta name="citation_pdf_url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '.pdf">' : "") + '<meta name="citation_publisher" content="QNFO"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + titleHTML(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article>" + subscribeBlock("papers") + "</div></body></html>";
 }
 __name(renderPaperHTML, "renderPaperHTML");
 __name2(renderPaperHTML, "renderPaperHTML");
@@ -932,16 +942,106 @@ async function handleBlankPapers(env) {
   }
 }
 __name(handleBlankPapers, "handleBlankPapers");
+// SCHOLAR-PDF-URL-1 (2026-10-01, agent_issues 1714): Google Scholar indexes a paper only with an absolute citation_pdf_url
+// in the same directory as the abstract page, resolving to a searchable PDF of at most 5 MB. Every Zenodo deposit of a paper
+// carries its PDF, so /papers/<slug>.pdf streams that file from the paper's own record and the page emits citation_pdf_url
+// only when the record has a PDF within the limit. The record lookup is cached for a day (an hour when no PDF is found).
+var SCHOLAR_PDF_MAX = 5 * 1024 * 1024;
+// SCHOLAR-PDF-UA-1: Zenodo rejects requests without a User-Agent (a Worker fetch sends none), so 3.7.19 cached every
+// lookup as "no PDF". The UA is sent, only an HTTP 200 answer is cached, and the lookup status is exposed for diagnosis.
+var ZENODO_UA = "QNFO-papers-gateway/3.7 (+https://papers.qnfo.org)";
+async function zenodoPdfInfo(recId) {
+  const ck = new Request("https://papers.qnfo.org/__zenodo-pdf-info/v2/" + recId);
+  try {
+    const hit = await caches.default.match(ck);
+    if (hit) return await hit.json();
+  } catch (e) {
+  }
+  let info = { url: null, key: null, size: 0, status: 0 };
+  try {
+    const r = await fetch("https://zenodo.org/api/records/" + recId, { headers: { Accept: "application/json", "User-Agent": ZENODO_UA } });
+    info.status = r.status;
+    if (r.ok) {
+      const d = await r.json();
+      const f = (d.files || []).find(function(x) {
+        return /\.pdf$/i.test(String(x && x.key || "")) && Number(x.size || 0) > 0 && Number(x.size) <= SCHOLAR_PDF_MAX;
+      });
+      if (f) info = { url: f.links && f.links.self || "https://zenodo.org/api/records/" + recId + "/files/" + encodeURIComponent(f.key) + "/content", key: f.key, size: Number(f.size), status: r.status };
+    }
+  } catch (e) {
+    info.status = -1;
+  }
+  if (info.status === 200) {
+    try {
+      await caches.default.put(ck, new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + (info.url ? 86400 : 3600) } }));
+    } catch (e) {
+    }
+  }
+  return info;
+}
+__name(zenodoPdfInfo, "zenodoPdfInfo");
+function zenodoRecId(doi) {
+  const m = String(doi || "").match(/zenodo\.(\d+)\s*$/i);
+  return m ? m[1] : null;
+}
+__name(zenodoRecId, "zenodoRecId");
+// The rendered fallback: qnfo-pdf stores pdf/<slug>.pdf in qnfo-releases and records it in papers.pdf_path.
+async function servedRenderedPdf(env, paper) {
+  if (!paper || !paper.pdf_path || !env.RELEASES) return null;
+  const obj = await env.RELEASES.get(String(paper.pdf_path));
+  if (!obj || !obj.body || Number(obj.size || 0) <= 0 || Number(obj.size) > SCHOLAR_PDF_MAX) return null;
+  return new Response(obj.body, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + paper.slug + '.pdf"', "Cache-Control": "public, max-age=86400", "X-PDF-Source": "rendered" } });
+}
+__name(servedRenderedPdf, "servedRenderedPdf");
+async function handlePaperPdf(env, slug) {
+  const nf = new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const paper = await env.LIVING_PAPER.prepare(
+    "SELECT slug,doi,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+  ).bind(slug).first();
+  if (!paper) return nf;
+  const rec = zenodoRecId(paper.doi);
+  const info = rec ? await zenodoPdfInfo(rec) : { url: null, status: 0 };
+  if (!info.url) {
+    const rendered = await servedRenderedPdf(env, paper);
+    if (rendered) return rendered;
+    return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "zenodo-" + info.status } });
+  }
+  const r = await fetch(info.url, { headers: { "User-Agent": ZENODO_UA }, cf: { cacheEverything: true, cacheTtl: 86400 } });
+  if (!r.ok || !r.body) return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "content-" + r.status } });
+  return new Response(r.body, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + slug + '.pdf"', "Cache-Control": "public, max-age=86400" } });
+}
+__name(handlePaperPdf, "handlePaperPdf");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
+  if (/\.pdf$/i.test(slug)) {
+    try {
+      return await handlePaperPdf(env, slug.replace(/\.pdf$/i, ""));
+    } catch (e) {
+      return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+  }
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return json({ error: "Paper not found", slug }, 404);
     const accept = request.headers.get("Accept") || "";
     if (accept.includes("text/html") || !accept.includes("application/json")) {
+      const _rec = zenodoRecId(paper.doi);
+      if (_rec) {
+        try {
+          paper._pdf = !!(await zenodoPdfInfo(_rec)).url;
+        } catch (e) {
+        }
+      }
+      if (!paper._pdf && paper.pdf_path && env.RELEASES) {
+        try {
+          const _h = await env.RELEASES.head(String(paper.pdf_path));
+          paper._pdf = !!(_h && Number(_h.size || 0) > 0 && Number(_h.size) <= SCHOLAR_PDF_MAX);
+        } catch (e) {
+        }
+      }
       return new Response(renderPaperHTML(paper), {
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" }
       });

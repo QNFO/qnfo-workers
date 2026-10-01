@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.35-revise-patch";
+var VERSION = "0.9.38-reasoning-effort-low";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1514,16 +1514,31 @@ var GH_API = "https://api.github.com";
 var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
-// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504): every MODELS entry is a reasoning model whose
-// reasoning tokens count against max_tokens. A flat 8192 cap left a paper-length rewrite (6-9k content
-// tokens on top of the reasoning over a 22k-char input) truncated: all 8 glm-5.3-flash calls on
-// 2026-10-01 ended at exactly 8192 output tokens, and every revise and reconcile came back under the
-// 10000-char floor. The caps match qnfo-ai MAX_OUT for the same Workers AI ids.
-var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 32768, "@cf/zai-org/glm-5.3": 32768, "@cf/openai/gpt-oss-120b": 32768 };
-async function aiText(env, model, prompt, maxTokens) {
+// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504), REVERTED to 8192 by AI-TEXT-TIMEOUT-1 the same day: every MODELS
+// entry is a reasoning model, and a paper-length output does not fit 8192 tokens of reasoning plus content (revise and
+// reconcile returned 0 chars). Raising the cap to 32768 (0.9.34) did not help: Workers AI ends a call at about 240 s with
+// "3046: Request timeout", and at 32768 every ensemble primary leg (0/3, 11:34-11:38Z), every reconcile and every full
+// revise hit it. 8192 is the measured-safe budget (ensemble legs return 11-23k chars inside it). Long rewrites are no
+// longer needed on the hot path: revise uses patch mode (REVISE-PATCH-1) and reconcile degrades to the best leg.
+var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 8192, "@cf/zai-org/glm-5.3": 8192, "@cf/openai/gpt-oss-120b": 8192 };
+// REASONING-EFFORT-LOW-1 (2026-10-01, #1504): glm-5.3 models on Workers AI take reasoning_effort (low|high|max; reasoning
+// cannot be disabled) and default to the maximum, so a short structured answer (the revise patch JSON) spent the whole
+// 8192-token budget reasoning and returned 0 chars (12:12Z). Callers that need a short answer pass effort "low". If the
+// API rejects the field (anything but a timeout), the call is retried once without it.
+async function aiText(env, model, prompt, maxTokens, effort) {
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   try {
-    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
+    const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
+    if (effort && /^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort;
+    let r;
+    try {
+      r = await env.AI.run(model, _opts);
+    } catch (e0) {
+      if (!_opts.reasoning_effort || /3046|timeout/i.test(String(e0 && e0.message || e0))) throw e0;
+      await logEvent(env, "ai-warn", "aiText model=" + model + " rejected reasoning_effort, retrying without: " + String(e0 && e0.message || e0).slice(0, 160));
+      delete _opts.reasoning_effort;
+      r = await env.AI.run(model, _opts);
+    }
     if (typeof r === "string") return r;
     if (r && typeof r.response === "string" && r.response) return r.response;
     if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
@@ -2014,7 +2029,11 @@ async function stageRevise(env, row) {
   } catch (e) {
   }
   if (paper.length >= 1e4) {
-    const _praw = await gwCall(env, REVISE_PATCH_PROMPT + "\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 12e3);
+    // Workers AI directly at low reasoning effort: the gateway path ran the same model at default effort and aborted at
+    // its 240 s budget (12:08Z), and a short JSON answer does not need deep reasoning.
+    const _pprompt = REVISE_PATCH_PROMPT + "\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3);
+    let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
+    if (!_praw || _praw.indexOf("[") < 0) _praw = await aiText(env, MODELS[1], _pprompt, 8192, "low");
     const _p = applyRevisePatch(paper, _praw);
     await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length, _p.applied ? "ok" : "warn");
     if (_p.applied > 0 && _p.text.length >= 1e4) {
@@ -2406,6 +2425,75 @@ async function runLeased(env, holder, maxStages, budgetMs) {
   }
   return { busy: false, stages, ms: Date.now() - t0 };
 }
+// ZENODO-VERSION-REQUESTS-1 (2026-10-01): publish a new version of an existing Zenodo record from files at public
+// GitHub raw URLs, driven by rows in qnfo-audit zenodo_version_requests (first use: the owner's CV, concept record
+// 17176733, from rwnq8/resume). A D1 write is the authorization: only holders of the Cloudflare account can queue a
+// request. File URLs must be raw.githubusercontent.com/{rwnq8,QNFO}/<repo>/<40-hex commit>/<path>, so a row cannot make
+// the worker fetch another host or a moving branch. Every file of the previous version is replaced. One request per run.
+var VERSION_REQ_URL_RE = /^https:\/\/raw\.githubusercontent\.com\/(rwnq8|QNFO)\/[A-Za-z0-9._-]+\/[0-9a-f]{40}\/[^?#\s]+$/;
+var VERSION_REQ_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}$/;
+function validateVersionFiles(files) {
+  if (!Array.isArray(files) || files.length === 0 || files.length > 20) return "files must be a list of 1 to 20 entries";
+  var seen = {};
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i] || {};
+    if (typeof f.name !== "string" || !VERSION_REQ_NAME_RE.test(f.name)) return "bad file name at " + i;
+    if (seen[f.name]) return "duplicate file name " + f.name;
+    seen[f.name] = 1;
+    if (typeof f.url !== "string" || !VERSION_REQ_URL_RE.test(f.url)) return "url not a pinned raw.githubusercontent.com rwnq8/QNFO path at " + i;
+  }
+  return null;
+}
+async function drainVersionRequests(env) {
+  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return null;
+  var row = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE status='pending' ORDER BY id ASC LIMIT 1").first();
+  if (!row) return null;
+  var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
+  if (!claim || !claim.meta || claim.meta.changes !== 1) return null;
+  var draftId = null;
+  var finish = async function(status, doi, recordId, error) {
+    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_doi=?, result_record_id=?, draft_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, doi, recordId, draftId, error, row.id).run();
+    return { id: row.id, status, doi, error };
+  };
+  try {
+    var files = JSON.parse(row.files_json || "null");
+    var bad = validateVersionFiles(files);
+    if (bad) return await finish("error", null, null, bad);
+    var meta = JSON.parse(row.metadata_json || "{}");
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return await finish("error", null, null, "metadata_json must be an object");
+    var nv = await zenodo(env, "POST", "/" + Number(row.record_id) + "/actions/newversion", {});
+    var latest = nv && nv.links && nv.links.latest_draft;
+    draftId = latest ? String(latest).split("/").pop() : null;
+    if (!draftId) return await finish("error", null, null, "newversion failed: " + JSON.stringify(nv).slice(0, 250));
+    var draft = await zenodo(env, "GET", "/" + draftId);
+    if (!draft || draft._status || !draft.links || !draft.links.bucket) return await finish("error", null, null, "draft read failed: " + JSON.stringify(draft).slice(0, 250));
+    var carried = await zenodo(env, "GET", "/" + draftId + "/files");
+    if (Array.isArray(carried)) {
+      for (var ci = 0; ci < carried.length; ci++) {
+        var del = await fetch(carried[ci].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE", headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
+        if (!del.ok) return await finish("error", null, null, "delete of carried file " + carried[ci].filename + " failed: " + del.status);
+      }
+    }
+    for (var fi = 0; fi < files.length; fi++) {
+      var src = await fetch(files[fi].url, { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
+      if (!src.ok) return await finish("error", null, null, "fetch " + files[fi].url + ": " + src.status);
+      var buf = await src.arrayBuffer();
+      if (!buf || buf.byteLength === 0) return await finish("error", null, null, "empty file " + files[fi].name);
+      var up = await fetch(draft.links.bucket + "/" + encodeURIComponent(files[fi].name) + "?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/" + VERSION }, body: buf });
+      if (!up.ok) return await finish("error", null, null, "upload " + files[fi].name + ": " + up.status);
+    }
+    var md = Object.assign({}, draft.metadata || {}, meta);
+    delete md.doi;
+    if (!meta.publication_date) md.publication_date = new Date().toISOString().slice(0, 10);
+    var put = await zenodo(env, "PUT", "/" + draftId, { metadata: md });
+    if (!put || put._status) return await finish("error", null, null, "metadata put failed: " + JSON.stringify(put).slice(0, 250));
+    var pub = await zenodo(env, "POST", "/" + draftId + "/actions/publish", {});
+    if (!pub || !pub.doi) return await finish("error", null, null, "publish failed: " + JSON.stringify(pub).slice(0, 250));
+    return await finish("published", pub.doi, pub.id || null, null);
+  } catch (e) {
+    return await finish("error", null, null, String(e && e.message || e).slice(0, 300));
+  }
+}
 var worker_default = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
@@ -2426,6 +2514,12 @@ var worker_default = {
         if (drained.length) await logEvent(env, "v2-drain", JSON.stringify(drained).slice(0, 700), "ok");
       } catch (e) {
         await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
+      }
+      try {
+        var vr = await drainVersionRequests(env);
+        if (vr) await logEvent(env, "zenodo-version", JSON.stringify(vr).slice(0, 700), vr.status === "published" ? "ok" : "error");
+      } catch (e) {
+        await logEvent(env, "error", "drainVersionRequests threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
       if (env.RESEARCH_HALT === "1") return;
       try {
@@ -2458,6 +2552,7 @@ var worker_default = {
 };
 export {
   worker_default as default,
+  drainVersionRequests,
   markError,
   parkPoisonRow,
   reclaimStaleResearching

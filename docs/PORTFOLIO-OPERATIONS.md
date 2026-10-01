@@ -2,27 +2,36 @@
 
 How docs/STRATEGY.md is run, every day, as an ongoing project. Owner directive 2026-10-01: manage the entire fleet and
 portfolio (programmes, projects, products) and its performance, reach, reputation and ROI, on the system's own authority.
-The daily Routine **"QNFO portfolio management"** (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, 07:51 Europe/Amsterdam, a fresh session
-each day, push notification on finish) executes this file.
+**Runs on Cloudflare, not on claude.ai** (owner directive 2026-10-01: the dashboard and its data must not depend on
+continued Claude usage). The deterministic duties below (owner-voice guard, kill switches, scorecard snapshot, run log,
+owner action list) run as a daily cron in qnfo-fleet-dashboard (`portfolioDailyRun`). The claude.ai Routines that used to
+run this procedure (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, `trig_01QXd2AG8oTevkuVRsfZyHG4`), the daily fleet issue sweep and every
+session check-in were disabled on 2026-10-01 at the owner's direction. Judgement work
+(shipping code) is done by whichever agent session the owner starts, or by the fleet's own Cloudflare agents.
 Any run may improve this file through a pull request; the improvement is part of the job.
 
 ## 1. The system of record
 | What | Where | Who changes it |
 |---|---|---|
 | Strategy, identity rules, channels, scorecard, portfolio, targets | `docs/STRATEGY.md` | this procedure (PR) |
-| Profile copy, CV, opportunities, the owner's approvals and to-dos | [Identity doc](https://claude.ai/code/artifact/553e4316-5725-4601-bf41-e5fd7102c96b) | the owner; the Monday identity review; this procedure comments only |
+| Profile copy, CV, opportunities, the owner's approvals and to-dos | D1 `qnfo-audit.owner_docs` (key `identity`, private) and `owner_actions`, read at fleet.qnfo.org/owner and edited at /owner/edit/identity behind the owner's login (each save keeps the replaced version) | the owner; the Monday identity review reports, never edits |
 | Open work | D1 `qnfo-audit.agent_issues` (+ `issue_triage`) | everyone; close only with evidence |
 | Gates and metrics | D1 `impact_thresholds`, `metric_registry`, `objectives`, `shutdown_manifest` | this procedure, with a STRATEGY reference |
 | Run log | D1 `qnfo-audit.portfolio_runs` (row 1 = the 2026-10-01 baseline) | each run appends one row |
 | Launch content | `docs/outreach/` | this procedure |
 | Live state | fleet.qnfo.org (`/roi`, `/api/state`), worker `/health` routes | the fleet |
 
-Other routines on the account, and the split of work so nothing runs twice:
-- **Daily fleet issue sweep** (07:47 UTC): fleet defects and failing infrastructure. This procedure does not sweep general
-  defects; it takes only STRATEGY-tagged issues (source `claude-code-session:STRATEGY-1`) and reach/ROI work.
-- **Identity and brand weekly review** (Mondays 08:46 Europe/Amsterdam): metrics, profile drift, opportunities and one draft
-  post in the Identity doc. This procedure reads that doc for approvals and never edits its content.
-- One-off check-ins from other sessions: read their prompts in `list_triggers` before touching the same item.
+Other recurring work, and the split so nothing runs twice (all of it on Cloudflare crons; CLOUDFLARE-ONLY-HOST-1):
+- **Fleet defects** (hourly): qnfo-fleet-control `evolveTick` turns open `agent_issues` into anchored PRs, and
+  qnfo-backlog-exec (01:10 UTC) closes or reopens them with evidence. This procedure does not sweep general defects; it
+  takes only STRATEGY-tagged issues (source `claude-code-session:STRATEGY-1`) and reach/ROI work.
+- **Identity weekly review** (IDENTITY-WEEKLY-1, Mondays 07:30 Europe/Amsterdam, qnfo-cloud-ops on the `visibility`
+  tick; on demand `POST /run?job=identity-weekly`): Bluesky, Mastodon, Zenodo, ORCID, GitHub and OpenAlex metrics; live
+  bios against the canonical copy and the STRATEGY 2.2 never-claim list; deadline and page checks for every opportunity;
+  funder and employer replies by domain and subject. It writes one `portfolio_runs` row (kind `identity-weekly`), emails
+  the owner only on urgent items, and never edits the Identity doc or a public profile.
+- Agent sessions are optional contributors and nothing on this list waits for one. Nothing is scheduled on claude.ai
+  (no Routines, no check-ins); a session that wants to follow its PR relies on GitHub events while it is open.
 
 ## 2. Daily run (every day)
 1. **Orient.** Read `CLAUDE.md`, `docs/STRATEGY.md`, this file, the last 3 `portfolio_runs` rows, open PRs, and open
@@ -57,7 +66,8 @@ Other routines on the account, and the split of work so nothing runs twice:
   results. Until the bandit is built, choose by hand from the data and record the reasoning in the run row.
 - Outreach by segment: reply rate per segment; any segment under 1% after 50 sends stops.
 - Search loop once Search Console is connected: low-CTR pages get new titles and descriptions; log each change.
-- Read the Identity doc's weekly log row and tracker; act on anything it approved.
+- Read this week's `portfolio_runs` row of kind `identity-weekly` and the Identity doc's tracker; act on anything it
+  approved or flagged.
 
 ## 4. Monthly (the 1st)
 - Portfolio review against STRATEGY section 7: invest, maintain, reposition or retire each line, with the numbers.
@@ -80,10 +90,7 @@ Other routines on the account, and the split of work so nothing runs twice:
 2. Connect LinkedIn (and optionally Mastodon, Threads, X) in Buffer; then approve each LinkedIn draft with one tap.
 3. Google Analytics 4: add the fleet's service account as Viewer; share the property ID. Search Console: verify qnfo.org
    and add the same account as a Full user.
-4. In claude.ai Routines, add the **Cloudflare Developer Platform** and **Claude Docs** connectors to both "QNFO portfolio
-   management" (trigger `trig_01KNd7qpeeLwKdWAoKCmDSTt`) and "Identity and brand weekly review" (Identity doc tracker
-   item 3). Routines created from a session store no connectors in this organisation; without them a run falls back to
-   the repo's workflows and the dashboard API, and cannot read D1 or the Identity doc directly.
+4. (Retired 2026-10-01: no claude.ai connectors are needed; everything runs on Cloudflare.)
 5. Ask one established arXiv author in the field for a personal endorsement (not a mass request).
 6. Add the selected works (STRATEGY 2.4) to ORCID with "Search & link".
 

@@ -1,7 +1,7 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@65eee407586d",
+ "verifier": "remediation-consumer@8c3467b54513",
  "due": 0,
  "pass": 0,
  "fail": 0,
@@ -14,6 +14,7 @@
   "container",
   "curl",
   "d1-query",
+  "d1-query@personal-life",
   "dns",
   "edge-ext",
   "external",
@@ -22,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2396,
- "head": "65eee407586d4cb41387d71487df50aba8b9ec2e",
+ "spent_ms": 3107,
+ "head": "8c3467b54513086309aeea7a6379657ab1e1ffc0",
  "job_status": "success"
 }

@@ -96,6 +96,24 @@ def d1(sql, params=None):
     return (res[0].get("results") or []) if res else []
 
 
+# PLANE-PROBE-1 (2026-10-01, #1649; owner directive: no dependency on continued Claude usage). Some evidence lives in a
+# separate data plane that no QNFO worker may bind (PERSONAL-QNFO-SEPARATION-1): personal-api writes brief_cron_runs to
+# personal-life only. A contract whose transport names an allowlisted plane runs its probe against that database through
+# the Cloudflare API, read-only and subject to the same literal-SELECT gate. Only the probe's expected/observed tokens
+# leave the plane; this repository is public, so a plane probe must never select content. fleet-control's hourly tick
+# runs transport 'd1-query' only, so plane contracts are executed here alone.
+PLANE_DBS = {"d1-query@personal-life": "e8d6c61a-10b7-4086-b81e-9e6e85afa407"}
+
+
+def d1_plane(transport, sql):
+    url = "%s/accounts/%s/d1/database/%s/query" % (CF_API, ACCOUNT, PLANE_DBS[transport])
+    r = _req("POST", url, {"sql": sql, "params": []})
+    if not r.get("success"):
+        raise RuntimeError("d1 plane error: %s" % json.dumps(r.get("errors")))
+    res = r.get("result") or []
+    return (res[0].get("results") or []) if res else []
+
+
 def is_literal_select(sql):
     """A probe may only be a single literal read-only SELECT/WITH statement."""
     s = (sql or "").strip()
@@ -207,13 +225,13 @@ def main():
                 rec["reason"] = why
                 out["skipped"] += 1
             else:
-                rows = d1(c["verify_probe"])
+                transport = c.get("verify_transport")
+                rows = d1_plane(transport, c["verify_probe"]) if transport in PLANE_DBS else d1(c["verify_probe"])
                 exp, obs = extract_pair(rows)
                 passed, verdict = classify(exp, obs)
                 rec["expected"] = exp
                 rec["observed"] = obs
                 rec["verdict"] = verdict
-                transport = c.get("verify_transport")
                 if verdict == "vacuous-probe-result":
                     out["skipped"] += 1
                     rec["reason"] = "probe returned no expected/observed pair"

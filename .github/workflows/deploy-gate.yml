@@ -91,3 +91,23 @@ jobs:
       # worker source re-acquires the output-text prescriptions stripped from qnfo-ai v5.28.6.
       - name: NARRATIVE-PROMPT-GUARD-1 (narrative prompt guides process, not output text)
         run: python3 scripts/narrative-prompt-guard.py
+
+      # CLOUDFLARE-ONLY-HOST-1 (owner directive 2026-10-01): all data, dashboards and UI are hosted on Cloudflare,
+      # never on claude.ai. Fails when any tracked file links a claude.ai-hosted artifact, doc or page as a place
+      # the fleet or the owner keeps something. Runs on every push and PR over the whole tree.
+      - name: CLOUDFLARE-ONLY-HOST-1 (no fleet data or UI on claude.ai)
+        run: python3 scripts/cloudflare-only-host-guard.py
+
+      # IDENTITY-WEEKLY-1: the weekly identity review that replaced a claude.ai Routine runs in qnfo-cloud-ops;
+      # its offline suite (synthetic doc, stubbed APIs, recording D1) must stay green.
+      - name: IDENTITY-WEEKLY-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/identity-weekly.test.mjs
+
+      # OWNER-EDIT-1: the owner edits owner_docs (the Identity doc) on fleet.qnfo.org. The suite drives the real fetch
+      # handler against an in-memory SQLite D1 (node:sqlite needs Node 22, so this last step switches runtime).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: OWNER-EDIT-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/owner-edit.test.mjs
