@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.21-research-intake-truth";
+var VERSION = "2.38.22-unified-open-work";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -5230,7 +5230,22 @@ __name222222(cfAnalytics, "cfAnalytics");
 async function backlogStatus(env) {
   if (!env.BACKLOG) return { ok: false, error: "backlog binding missing" };
   const h = await probeService(env, { binding: "BACKLOG", name: "qnfo-backlog-exec", timeoutMs: 15e3 }, "/health");
-  return { ok: h.ok, healthy: h.ok, http: h.http, error: h.ok ? "" : h.error || "http " + h.http, version: h.body && h.body.version || "", openBacklog: h.body && typeof h.body.openBacklog === "number" ? h.body.openBacklog : -1 };
+  // UNIFIED-OPEN-WORK-1 (2026-10-01, #1625): openBacklog is agent_issues alone (via qnfo-backlog-exec), while
+  // the fleet's open work lives in three stores. Read the one union view (unified_open_issues: agent_issues +
+  // issue_ledger + task_dod_register) and report its total with a per-store breakdown.
+  let unified = null;
+  try {
+    if (env.QNFO_AUDIT) {
+      const ur = await env.QNFO_AUDIT.prepare("SELECT store, COUNT(*) AS n FROM unified_open_issues GROUP BY store").all();
+      const byStore = {};
+      let total = 0;
+      for (const r of ur.results || []) { byStore[r.store] = Number(r.n) || 0; total += Number(r.n) || 0; }
+      unified = { total, byStore, source: "qnfo-audit.unified_open_issues" };
+    }
+  } catch (e) {
+    unified = { error: String(e && e.message || e).slice(0, 160) };
+  }
+  return { openUnified: unified, ok: h.ok, healthy: h.ok, http: h.http, error: h.ok ? "" : h.error || "http " + h.http, version: h.body && h.body.version || "", openBacklog: h.body && typeof h.body.openBacklog === "number" ? h.body.openBacklog : -1 };
 }
 __name(backlogStatus, "backlogStatus");
 __name2(backlogStatus, "backlogStatus");

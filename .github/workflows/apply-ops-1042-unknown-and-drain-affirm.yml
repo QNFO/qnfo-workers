@@ -1,0 +1,76 @@
+name: apply-ops-1042-unknown-and-drain-affirm
+
+# OPS-1042-UNKNOWN-1 + DRAIN-AFFIRM-EXECUTE-1 (2026-10-01).
+#
+# Server-side applier; same fail-closed / idempotent mechanism as
+# apply-ops-registry-health-1.yml. It patches qnfo-ops/worker.js on main, and that
+# push then triggers canonical-deploy.yml / deploy-qnfo-ops.yml, which carry main
+# to LIVE through the binding-preserving scripts/raw_put.py (/content PUT, so the
+# 49 live bindings are preserved). The applier also bumps VERSION, because
+# VERSION-BUMP-GUARD-1 (issue 1371) makes a worker.js change WITHOUT a version bump
+# invisible to fleet-autoaudit.py --apply, deploy-drift.yml and mirror-guard.py --
+# all three stay green while the fix never deploys.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/apply-ops-1042-unknown-and-drain-affirm.py'
+      - '.github/workflows/apply-ops-1042-unknown-and-drain-affirm.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-ops-1042-unknown-and-drain-affirm
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch (fail-closed, idempotent)
+        run: python3 scripts/apply-ops-1042-unknown-and-drain-affirm.py
+
+      - name: Syntax-check patched worker
+        run: |
+          set -euo pipefail
+          cp qnfo-ops/worker.js /tmp/patched.mjs
+          node --check /tmp/patched.mjs
+
+      - name: Commit and push (fetch + rebase + retry)
+        run: |
+          set -euo pipefail
+          git config user.name  "qnfo-ops-bot"
+          git config user.email "ops@qnfo.org"
+          if git diff --quiet; then
+            echo "already applied -- nothing to commit (idempotent no-op)"
+            exit 0
+          fi
+          git add -A
+          git commit -m "fix(ops): OPS-1042-UNKNOWN-1 fleet_status records CF-1042 as UNKNOWN instead of false-down; DRAIN-AFFIRM-EXECUTE-1 affirmation gate accepts execute/remediate/resolve"
+          for i in $(seq 1 8); do
+            git fetch origin main --quiet || true
+            git rebase origin/main || { echo "REBASE CONFLICT on attempt $i"; git rebase --abort || true; exit 1; }
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i, retrying"
+            sleep 15
+          done
+          echo "push failed after 8 attempts"
+          exit 1
+
+      - name: Verify patch present
+        run: |
+          set -euo pipefail
+          grep -nF 'OPS-1042-UNKNOWN-1' qnfo-ops/worker.js
+          grep -nF 'DRAIN-AFFIRM-EXECUTE-1' qnfo-ops/worker.js
+          grep -nF '_cf1042' qnfo-ops/worker.js
+          grep -nF 'execute|remediate|resolve' qnfo-ops/worker.js
