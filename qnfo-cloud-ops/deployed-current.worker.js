@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.5-outreach-cap-status-1"; /* OUTREACH-ATTEMPT-CAP-1 */
+var VERSION = "1.15.6-engagement-daily"; /* OUTREACH-ATTEMPT-CAP-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -179,7 +179,9 @@ var AMS_SCHEDULE = {
   "sitemap-ping": { times: ["06:00"], days: null, fixed: { dom: 1, mon: "*" } },
   "loose-threads-sweep": { times: ["07:00"], days: "1", fixed: null },
   "visibility": { times: ["07:30"], days: "1", fixed: null },
-  "engagement": { times: ["07:15"], days: "1", fixed: null },
+  // ENGAGEMENT-DAILY-1 (2026-10-01, #1647): daily, not weekly. One missed weekly run left an 11-day gap in
+  // social_engagements while posting continued; a daily collector (2 API calls) bounds any gap to a day.
+  "engagement": { times: ["07:15"], days: "*", fixed: null },
   "radar": { times: ["09:30"], days: "1-5", fixed: null },
   "gtd-reconcile": { times: ["05:30"], days: "1", fixed: null },
   "quality-score": { times: ["06:20"], days: "*", fixed: null },
