@@ -30,6 +30,9 @@ v1.0.2 hardening: all time-window cutoffs against ISO-8601 columns now use JS-co
 v1.1.0: feedback loops F1-F4 (close the learning loops + supervise subloops). Fixes v1.0.2 scope bug where upsertCandidate referenced runAudit-local cut7d (mature kaizen promotion silently dead).
 v1.1.1: F2 robustness (red-team direct audit): promotion title now embeds [candidate-id] (survives agent note overwriting last_detail); recurring-finding (auditor-source) candidates verified by future finding trend, not source/category events.
 v1.1.2: deep (Monday) digest now lists OPEN IMPROVEMENT CANDIDATES with resolve instructions so the weekly apply-owner (Fleet Drift & Self-Improvement Audit session, device repo+wrangler repair path) reliably sees + resolves them -> F2 auto-verifies effectiveness. Closes the promote->apply->verify loop deterministically.
+2026-10-01 (NO-CLAUDE-RUNTIME-DEPENDENCY-1): the apply-owner is no longer a session. The claude.ai audit Routines are
+disabled; open candidates are worked as `agent_issues` by the fleet's Cloudflare loops (qnfo-fleet-control `evolveTick`,
+qnfo-backlog-exec), and F2 still verifies each one from the finding trend.
 
 ## Endpoints (Bearer AUDITOR_TOKEN)
 - GET /health · GET / · POST /v1/run (mode standard|deep) · GET /v1/runs · GET /v1/state

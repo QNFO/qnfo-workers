@@ -16,7 +16,10 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.8-public-exec-closed";
+var VERSION = "1.0.10-props-caller";
+var RATE_PER_MINUTE = 60;
+var RATE_PER_HOUR = 600;
+var MAX_INFLIGHT = 8;
 var MAX_CMD = 65536;
 var MAX_OUT = 131072;
 var WORKSPACE = "/workspace";
@@ -128,7 +131,64 @@ class ShellContainer {
     if (stderrTruncated) stderr = stderr.slice(0, MAX_OUT) + "\n...[TRUNCATED]";
     return { exitCode: output.exitCode, stdout, stderr, stdoutTruncated, stderrTruncated };
   }
+  // PILOT-RATE-LIMIT-1 (2026-10-01, charter H0 "rate limits on qnfo-containers-pilot"): every command path
+  // ran unbounded, so one runaway agent loop could hold the container busy and run up container time. All
+  // traffic reaches the single "default" instance of this Durable Object, so an in-memory log here is a
+  // fleet-wide limit. Measured over 30 days (cloud_ops_events container.*): peak 38 requests in one minute,
+  // peak 548 in one hour (the #1485 error storm). The defaults sit above both, and overflow returns 429
+  // with retry_after_s instead of queueing more work.
+  _limits() {
+    const n = (v, d) => {
+      const x = parseInt(v, 10);
+      return Number.isFinite(x) && x > 0 ? x : d;
+    };
+    return { per_minute: n(this.env.PILOT_RPM, RATE_PER_MINUTE), per_hour: n(this.env.PILOT_RPH, RATE_PER_HOUR), inflight: n(this.env.PILOT_MAX_INFLIGHT, MAX_INFLIGHT) };
+  }
+  _admit() {
+    const lim = this._limits();
+    const now = Date.now();
+    if (!this._log) this._log = [];
+    if (!this._inflight) this._inflight = 0;
+    while (this._log.length && now - this._log[0] > 36e5) this._log.shift();
+    let lastMin = 0;
+    for (let i = this._log.length - 1; i >= 0 && now - this._log[i] <= 6e4; i--) lastMin++;
+    let reason = null;
+    let retry = 1;
+    if (this._inflight >= lim.inflight) reason = "inflight " + this._inflight + "/" + lim.inflight;
+    else if (lastMin >= lim.per_minute) {
+      reason = "per_minute " + lastMin + "/" + lim.per_minute;
+      retry = Math.ceil((this._log[this._log.length - lastMin] + 6e4 - now) / 1e3);
+    } else if (this._log.length >= lim.per_hour) {
+      reason = "per_hour " + this._log.length + "/" + lim.per_hour;
+      retry = Math.ceil((this._log[0] + 36e5 - now) / 1e3);
+    }
+    if (!reason) {
+      this._log.push(now);
+      this._inflight++;
+      return null;
+    }
+    // One audit row per minute at most, so a refused flood cannot become a D1 write flood.
+    if (!this._lastLimitLog || now - this._lastLimitLog > 6e4) {
+      this._lastLimitLog = now;
+      this.ctx.waitUntil(logEvent(this.env, "container.ratelimited", reason, lim, "error"));
+    }
+    return new Response(JSON.stringify({ ok: false, error: "PILOT-RATE-LIMIT-1: " + reason, retry_after_s: Math.max(1, retry), limits: lim }), {
+      status: 429,
+      headers: { "content-type": "application/json; charset=utf-8", "retry-after": String(Math.max(1, retry)) }
+    });
+  }
   async fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (!authorized(request, this.env) || path === "/status") return this._route(request);
+    const refused = this._admit();
+    if (refused) return refused;
+    try {
+      return await this._route(request);
+    } finally {
+      this._inflight = Math.max(0, this._inflight - 1);
+    }
+  }
+  async _route(request) {
     const url = new URL(request.url);
     const path = url.pathname;
     if (!authorized(request, this.env)) {
@@ -327,14 +387,31 @@ class ShellContainer {
   }
 };
 var worker_default = {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // PILOT-PROPS-CALLER-1 (2026-10-01): internal workers authenticate by their service binding's ctx.props.caller,
+    // which only someone with deploy rights on the CALLER can set (the qnfo-ai INTERNAL-CALLER-PROPS-1 model). Such a
+    // caller on the internal hostname gets the bearer injected here, so it needs no copy of PILOT_TOKEN. Before this,
+    // qnfo-research-exec called the public hostname with a token it may not hold; since PILOT-PUBLIC-EXEC-CLOSED-1
+    // every one of its verification runs got 403. Public requests never carry props.
+    try {
+      const caller = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+      if (/^qnfo-[a-z0-9-]{1,60}$/.test(caller) && url.hostname === "containers-pilot.internal" && env.PILOT_TOKEN) {
+        const h = new Headers(request.headers);
+        h.set("Authorization", "Bearer " + env.PILOT_TOKEN);
+        h.set("x-pilot-caller", caller);
+        request = new Request(request, { headers: h });
+      }
+    } catch (e) {
+    }
     if (url.pathname === "/health") {
       return json({
         ok: true,
         worker: "qnfo-containers-pilot",
         version: VERSION,
         capabilities: ["bash", "python3.12", "node22", "npm", "pip", "git", "ripgrep", "workspace-fs", "git-clone", "full-shell"],
+        limitations: ["command paths only via an internal service binding (qnfo-ops bearer, or a qnfo-* caller authenticated by binding props)", "PILOT-RATE-LIMIT-1: 429 above the limits below", "one shared container instance", "stdout/stderr capped at " + MAX_OUT + " bytes"],
+        limits: { per_minute: RATE_PER_MINUTE, per_hour: RATE_PER_HOUR, inflight: MAX_INFLIGHT },
         public_exec: false
       });
     }

@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.2-glm53"; // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
+var VERSION = "0.3.3-scan-internal"; // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -379,6 +379,8 @@ var worker_default = {
           status: "ok",
           worker: "qnfo-kaizen",
           version: VERSION,
+          capabilities: ["improvement-scan", "meta-loop", "skill-drift-watch"],
+          limitations: ["scheduled daily at 02:00 and Mondays at 10:00", "/run/scan on a public hostname and /run/meta?commit=1 require KAIZEN_TOKEN; service-binding callers are internal"],
           bindings: { r2: !!env.SKILLS_BUCKET, d1: !!env.QNFO_AUDIT, ai: !!env.AI },
           secrets: { kaizen_token: !!env.KAIZEN_TOKEN, github_token: !!env.GITHUB_TOKEN },
           crons: ["0 2 * * * (meta loop)", "0 10 * * 1 (drift scan)"],
@@ -386,6 +388,10 @@ var worker_default = {
         });
       }
       if (p === "/run/scan") {
+        // KAIZEN-SCAN-INTERNAL-1 (2026-10-01, charter H0): an anonymous POST /run/scan on the public hostname inserted a
+        // kaizen_reports row on every call. The fleet dashboard calls it through its SVC_QNFO_KAIZEN binding, whose
+        // hostname a public request cannot carry (Cloudflare routes on Host), so only public-host callers need the token.
+        if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname) && !auth(request, env)) return json({ error: "unauthorized: POST /run/scan on a public hostname requires KAIZEN_TOKEN" }, 401);
         return json(await runScan(env));
       }
       if (p === "/run/meta") {

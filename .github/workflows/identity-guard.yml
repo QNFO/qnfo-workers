@@ -1,0 +1,40 @@
+name: identity-guard
+
+# IDENTITY-GUARD-1 (2026-10-01, pillar reach)
+#
+# Live worker sources must not carry retired identity labels ("QNFO Research Collective", "Quniverse Research
+# Foundation") or claims the public record does not support (patent portfolio, clearance-eligible, unlinked media,
+# shifting publication counts, physics headline claims). docs/STRATEGY.md s2 is the wording; the owner's Identity doc
+# (owner_docs identity) lists what failed a check. Comments, detector patterns and lines marked
+# `identity-guard: allow` are skipped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  identity-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Identity lexicon guard
+        run: python3 scripts/identity-guard.py .
+
+      # Offline suites for the identity changes that ride the canonical deploy (node:sqlite needs Node 22):
+      # ZENODO-VERSION-REQUESTS-1 / ZENODO-METADATA-EDITS-1 (qnfo-research-exec) and PROFILE-SYNC-1 (qnfo-social).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Zenodo queue offline suite (qnfo-research-exec)
+        run: node qnfo-research-exec/zenodo-version-requests.test.mjs
+      - name: Bluesky profile sync offline suite (qnfo-social)
+        run: node qnfo-social/profile-sync.test.mjs

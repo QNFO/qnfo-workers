@@ -78,7 +78,7 @@ The essential property: **the session is disposable; the state and the triggers 
 | Autonomous **code** agent loop (the "Claude Code in Cloudflare" core) | **Built in the repo, NOT deployed, NOT run against live Cloudflare.** `qnfo-code-orchestrator` v0.2.0 adds a durable task loop (D1 state, model ladder, container + Dynamic Workers verifiers, PR-gated, cron-driven). `qnfo-code-agent` (its GitHub tool server) is `NOT_DEPLOYED`. | `qnfo-code-orchestrator/README.md` Status; 35-assertion offline test `qnfo-code-orchestrator/test-loop.mjs`, run in CI as `code-loop-test` |
 | Event-driven wake of a code task (CI/review webhook) | **Not built** | no webhook route; tasks resume only on the cron tick |
 | Verifier that RUNS tests, multi-file edits | **Not built** | one file per task; verifiers are syntax/parse/size only |
-| Server-side continuation of the drain routine (#174) | **Not built** | still session-driven |
+| Server-side continuation of the drain routine (#174) | **Superseded 2026-10-01** | the claude.ai drain Routine is disabled; open `agent_issues` drain on Cloudflare crons (qnfo-fleet-control `evolveTick` hourly, qnfo-backlog-exec 01:10 UTC) |
 
 ### What was measured about Dynamic Workers (real `workerd`, wrangler 4.145)
 - A JS **syntax error** fails the start as `Uncaught SyntaxError ... at m.js:L:C`, even when the module has unresolvable imports (parsing precedes linking): a reliable, execution-free-until-linked syntax signal.
@@ -92,4 +92,5 @@ The essential property: **the session is disposable; the state and the triggers 
    - Credentials: `ORCH_TOKEN` and `CODE_AGENT_KEY` can be generated and set by the pipeline. The one dependency a session cannot mint is a **GitHub credential with PR-write** for `qnfo-code-agent` (a GitHub App or PAT). Until one exists the loop must park tasks as `needs_human` rather than block anything else.
 3. Run the CPU-limit probe on the real platform; only then consider `JS_VERIFY=dynamic`.
 4. Add a GitHub webhook wake-up and a test-running verifier (the Container's shell/git-clone is the natural place).
-5. Point the drain routine (#174) at a cron or `workflow_run` trigger instead of a human-started session.
+5. ~~Point the drain routine (#174) at a cron or `workflow_run` trigger instead of a human-started session.~~ Done
+   2026-10-01: the Routine is disabled and the drain is the Cloudflare crons above (NO-CLAUDE-RUNTIME-DEPENDENCY-1).

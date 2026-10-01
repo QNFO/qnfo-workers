@@ -13,3 +13,12 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 `drifted` / `stale-canon` / `health-ver` finding, with a `status`
 (healed|failed|deferred|detected) and `verified_at`. Replaces a count-and-skip
 path that re-observed the same unhealed problems every cycle.
+
+## PROFILE-CLAIMS-SCRUB-1 (0.4.79, 2026-10-01, pillar reach)
+
+When PORTFOLIO-LOOP-1 writes `QNFO/.github/profile/README.md`, it first applies `PF_PROFILE_SCRUB`: exact
+`[from, to]` pairs that replace the hand-written claims the public record does not support (the $10M NHTS
+"co-directed" line, a patent line with no application numbers, "predictive analytics at Deloitte and Publicis", Empowering
+Change as QNFO's current 501(c)(3), "scientific research incubator", stale record counts, a duplicated ledger row) and
+swap the theory-first publication list for the STRATEGY-1 s2.4 selected works. Each pair is a no-op once applied;
+drifted text is left alone. Tests: `portfolio.test.mjs` (scrub section).

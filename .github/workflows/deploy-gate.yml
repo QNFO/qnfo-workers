@@ -113,3 +113,12 @@ jobs:
 
       - name: OWNER-EDIT-1 and IDENTITY-STORE-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/owner-edit.test.mjs
+
+      # OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1: owner decisions made on fleet.qnfo.org are applied on Cloudflare
+      # (ratified weight changes, constraints filed as fleet work, card notes queued as intents), never by a session.
+      - name: OBJECTIVE-REVISION-APPLY-1 and OWNER-NOTES-ROUTE-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/objective-apply.test.mjs
+
+      # WATCHMAKER-INDEX-1: the fleet's own daily count of recurring operations that still need a person or a session.
+      - name: WATCHMAKER-INDEX-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/watchmaker.test.mjs

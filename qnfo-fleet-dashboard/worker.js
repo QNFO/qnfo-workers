@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.12.1-identity-sync"; /* IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.14.1-intent-intake"; /* TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2168,6 +2168,22 @@ async function handleRequest(request, env, ctx) {
     if (owner.authed || machine) v.responses = await recentResponses(env);
     return json(v);
   }
+  // WATCHMAKER-INDEX-1: the latest daily count of recurring operations that still need a person or a session, with the
+  // list behind it. Locked pages show the number only.
+  if (path === "/api/watchmaker" && request.method === "GET") {
+    const last = (await d1all(env.AUDIT, "SELECT day, index_value, json FROM watchmaker_runs ORDER BY day DESC LIMIT 1").catch(function() {
+      return [];
+    }))[0];
+    if (!last) return json({ schema_version: "watchmaker/v1", index: null, note: "not measured yet (daily after 07:00Z)" });
+    if (privateView) return json({ schema_version: "watchmaker/v1", locked: true, day: last.day, index: last.index_value, target: 0 });
+    let body = {};
+    try {
+      body = JSON.parse(last.json || "{}");
+    } catch (e) {
+      body = {};
+    }
+    return json(Object.assign({ schema_version: "watchmaker/v1", day: last.day }, body));
+  }
   // The investment verdict + the business-case inputs behind it. ?refresh=1 (used by the fleet-exec heartbeat task)
   // re-measures (throttled to one run / 2 min) and republishes to the ops/fleet feeds.
   if (path === "/api/decision" && request.method === "GET") {
@@ -2468,6 +2484,15 @@ var worker_default = {
       // IDENTITY-STORE-1: complete the one-time, byte-checked move of owner_docs into the private store within one tick of a
       // deploy, then bring any later write to qnfo-audit.owner_docs across (copy only, 1.12.1).
       ctx.waitUntil(within(identityStoreSync(env).catch(function() {
+      })));
+      // OBJECTIVE-REVISION-APPLY-1: apply any objective revision ratified outside the dashboard route (at most 5 a tick).
+      ctx.waitUntil(within(objectiveRevisionSweep(env).catch(function() {
+      })));
+      // WATCHMAKER-INDEX-1: once per UTC day after 07:00Z, the count of recurring operations that still need a person.
+      ctx.waitUntil(within(watchmakerDaily(env).catch(function() {
+      })));
+      // OWNER-NOTES-ROUTE-1: owner notes and queued tasks the request path could not file become agent_issues rows.
+      ctx.waitUntil(within(ownerNotesRoute(env).catch(function() {
       })));
       // IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops with IDENTITY-STORE-1): Mondays after 06:00Z, throttled inside on the
       // cloud_ops_events row identity-weekly-<day>.
@@ -3071,6 +3096,300 @@ var HUMAN_SNAPSHOT_MAX_AGE_MS = 5 * 6e4;
 async function ensureHumanTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT)").run();
 }
+// OBJECTIVE-REVISION-APPLY-1 (1.13.0, agent_issues 1725): the Cloudflare consumer for an owner-ratified objective revision,
+// which until now was recorded and never applied (the 2026-09-26 change, goals.id=51, was applied by hand in a session).
+// A revision that changes term weights ("weight of X from A to B", one or more) applies only when every term exists in
+// sai_config, every "from" equals the live weight, the verb matches the direction and the weights still sum to 1.00; it
+// then updates sai_config, rewrites the SAI formula in the active objective-function row (version + 1) and marks the goal
+// 'adopted', in one D1 batch. Anything else (a new constraint, a re-evaluation) is filed as one agent_issues row for the
+// fleet's issue loop. The card shows the plan before the owner decides and offers Ratify only when it can be applied; the
+// ratify route applies at once, and the */15 cron applies any revision ratified elsewhere. Every outcome is logged in
+// objective_revision_applies (one row per goal, so nothing is retried forever). Rejecting stays the owner's call.
+var OBJREV_WEIGHT_RE = /\b(increase|decrease|reduce|raise|lower|set|change)?\s*(?:the\s+)?weight\s+of\s+['"`]?([a-z_]+)['"`]?\s+from\s+([0-9]*\.?[0-9]+)\s+to\s+([0-9]*\.?[0-9]+)/gi;
+var OBJREV_FORMULA_RE = /SAI = ([0-9]*\.?[0-9]+\*[a-z_]+(?: \+ [0-9]*\.?[0-9]+\*[a-z_]+)*)/;
+var OBJREV_DDL = "CREATE TABLE IF NOT EXISTS objective_revision_applies (goal_id INTEGER PRIMARY KEY, outcome TEXT NOT NULL, detail TEXT, before_json TEXT, after_json TEXT, issue_id INTEGER, via TEXT, applied_at TEXT DEFAULT (datetime('now')))";
+function objRevFmt(v) {
+  return Number(v).toFixed(2);
+}
+function objRevParse(statement) {
+  const out = [];
+  const re = new RegExp(OBJREV_WEIGHT_RE.source, "gi");
+  let m;
+  while (m = re.exec(String(statement || ""))) out.push({ verb: String(m[1] || "").toLowerCase(), term: m[2].toLowerCase(), from: Number(m[3]), to: Number(m[4]) });
+  return out;
+}
+// Rewrites the coefficients of "SAI = a*x + b*y ..." from `next` ({w_x: a'}); null unless the formula names exactly the
+// weights in `next`.
+function objRevFormula(statement, next) {
+  const s = String(statement || "");
+  const m = OBJREV_FORMULA_RE.exec(s);
+  if (!m) return null;
+  const terms = m[1].split(" + ").map(function(t) {
+    return t.split("*")[1];
+  });
+  const keys = Object.keys(next).sort();
+  if (terms.length !== keys.length || terms.slice().map(function(t) {
+    return "w_" + t;
+  }).sort().join(",") !== keys.join(",")) return null;
+  const formula = terms.map(function(t) {
+    return objRevFmt(next["w_" + t]) + "*" + t;
+  }).join(" + ");
+  return s.slice(0, m.index) + "SAI = " + formula + s.slice(m.index + m[0].length);
+}
+function objRevPlan(statement, weights, objective) {
+  const changes = objRevParse(statement);
+  if (!changes.length) return { kind: "work", applicable: true, text: "Ratify files it as fleet work (one agent_issues row for the issue loop): it is not a weight change the system can apply by itself." };
+  const no = function(t) {
+    return { kind: "weights", applicable: false, text: "Cannot be applied as written: " + t + " Reject it; a balanced proposal can be ratified." };
+  };
+  const next = Object.assign({}, weights);
+  const seen = {};
+  for (const c of changes) {
+    const k = "w_" + c.term;
+    if (!(k in weights)) return no("'" + c.term + "' is not a term of the objective function.");
+    if (seen[k]) return no("it changes " + c.term + " twice.");
+    seen[k] = 1;
+    if (Math.abs(Number(weights[k]) - c.from) > 5e-4) return no(c.term + " is " + objRevFmt(weights[k]) + " now, not " + objRevFmt(c.from) + ".");
+    if ((c.verb === "increase" || c.verb === "raise") && !(c.to > c.from) || (c.verb === "decrease" || c.verb === "reduce" || c.verb === "lower") && !(c.to < c.from)) return no("it says " + c.verb + " but moves " + c.term + " from " + objRevFmt(c.from) + " to " + objRevFmt(c.to) + ".");
+    if (!(c.to >= 0 && c.to <= 1)) return no(c.term + " would be outside 0..1.");
+    next[k] = c.to;
+  }
+  const sum = Object.keys(next).reduce(function(n, k) {
+    return n + Number(next[k]);
+  }, 0);
+  if (Math.abs(sum - 1) > 1e-3) return no("the weights would sum to " + sum.toFixed(2) + ", not 1.00.");
+  if (!objective) return no("there is no active objective-function row to update.");
+  const stmt = objRevFormula(objective.statement, next);
+  if (!stmt) return no("the active objective-function statement has no SAI formula naming exactly these weights.");
+  return { kind: "weights", applicable: true, changes, next, statement: stmt, text: "Ratify applies it now: " + changes.map(function(c) {
+    return c.term + " " + objRevFmt(c.from) + " -> " + objRevFmt(c.to);
+  }).join(", ") + " (weights sum 1.00); objective-function v" + objective.version + " -> v" + (Number(objective.version) + 1) + "." };
+}
+async function objRevContext(env) {
+  const w = await d1all(env.AUDIT, "SELECT k, v FROM sai_config WHERE k LIKE 'w\\_%' ESCAPE '\\'");
+  const weights = {};
+  for (const r of w) weights[r.k] = Number(r.v);
+  const o = (await d1all(env.AUDIT, "SELECT id, statement, version FROM objectives WHERE objective_key = 'objective-function' AND status = 'ACTIVE' LIMIT 1"))[0] || null;
+  return { weights, objective: o };
+}
+async function objectiveRevisionApply(env, id, via) {
+  const A = env.AUDIT;
+  await A.prepare(OBJREV_DDL).run();
+  const g = (await d1all(A, "SELECT id, statement, alignment, status FROM goals WHERE id = ? AND goal_type = 'objective-revision'", [id]))[0];
+  if (!g) return { ok: false, error: "no objective revision " + id };
+  const prior = (await d1all(A, "SELECT outcome, detail, issue_id FROM objective_revision_applies WHERE goal_id = ?", [id]))[0];
+  if (prior) return { ok: prior.outcome !== "not-applicable", id, outcome: prior.outcome, detail: prior.detail, issue_id: prior.issue_id, already: true };
+  if (g.status !== "ratified") return { ok: false, error: "objective revision " + id + " is " + g.status + ", not ratified" };
+  const cx = await objRevContext(env);
+  const plan = objRevPlan(g.statement, cx.weights, cx.objective);
+  const today = new Date().toISOString().slice(0, 10);
+  const log = function(outcome, detail, after, issueId) {
+    return A.prepare("INSERT OR IGNORE INTO objective_revision_applies (goal_id, outcome, detail, before_json, after_json, issue_id, via) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, outcome, String(detail).slice(0, 1e3), JSON.stringify({ weights: cx.weights, objective: cx.objective }), after == null ? null : JSON.stringify(after), issueId == null ? null : issueId, via);
+  };
+  if (!plan.applicable) {
+    await log("not-applicable", plan.text, null, null).run();
+    return { ok: false, id, outcome: "not-applicable", detail: plan.text };
+  }
+  if (plan.kind === "work") {
+    const title = "OBJECTIVE-REVISION-" + id + ": apply the owner-ratified objective revision";
+    const now = Date.now();
+    await A.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-dashboard:objective-revision-apply', 'governance', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1)").bind(title, "The owner ratified goals.id=" + id + " on fleet.qnfo.org (" + today + "). It is not a weight change, so OBJECTIVE-REVISION-APPLY-1 cannot apply it by itself. Statement: " + String(g.statement || "").slice(0, 1200) + " | Proposal context: " + String(g.alignment || "").slice(0, 600) + " | Definition of done: the change is reflected in the objectives or constraints the fleet enforces, with a live measurement in issue_triage.close_evidence; then set goals.id=" + id + " status='adopted'.", now).run();
+    const row = (await d1all(A, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
+    await log("filed-as-work", "filed as agent_issues " + (row ? row.id : "?"), null, row ? row.id : null).run();
+    return { ok: true, id, outcome: "filed-as-work", issue_id: row ? row.id : null };
+  }
+  const src = "owner-ratified goals.id=" + id + " on fleet.qnfo.org (" + today + "), applied by OBJECTIVE-REVISION-APPLY-1: " + plan.changes.map(function(c) {
+    return c.term + " " + objRevFmt(c.from) + "->" + objRevFmt(c.to);
+  }).join(", ");
+  const stmts = plan.changes.map(function(c) {
+    return A.prepare("UPDATE sai_config SET v = ?1, source = ?2, updated_at = datetime('now') WHERE k = ?3 AND ABS(v - ?4) < 0.0005").bind(c.to, src, "w_" + c.term, c.from);
+  });
+  stmts.push(A.prepare("UPDATE objectives SET statement = ?1, version = version + 1, source = ?2, ratified_by = 'owner (fleet.qnfo.org)', ratified_on = ?3 WHERE id = ?4 AND version = ?5").bind(plan.statement, src, today, cx.objective.id, cx.objective.version));
+  stmts.push(A.prepare("UPDATE goals SET status = 'adopted', adopted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1 AND status = 'ratified'").bind(id));
+  stmts.push(log("applied", src, { weights: plan.next, objective_version: Number(cx.objective.version) + 1 }, null));
+  const res = await A.batch(stmts);
+  const short = res.slice(0, stmts.length - 1).some(function(r) {
+    return !(r && r.meta && r.meta.changes);
+  });
+  if (short) {
+    await A.prepare("UPDATE objective_revision_applies SET outcome = 'partial', detail = ?2 WHERE goal_id = ?1").bind(id, "a guarded update changed nothing (a concurrent change?); check sai_config and objectives. " + src).run();
+    return { ok: false, id, outcome: "partial", detail: src };
+  }
+  return { ok: true, id, outcome: "applied", detail: src };
+}
+// OWNER-NOTES-ROUTE-1 (1.13.0): what the owner sends the fleet from the dashboard must reach a Cloudflare consumer. Card
+// notes ("Add note") were kept for sessions to read, and "Queue as task" wrote a type='task' intent that no triage reads
+// (qnfo-intent-orchestrator and qnfo-idea-triage take type 'research', qnfo-kaizen type 'meta'). Each note and each queued
+// task now also becomes one agent_issues row (OWNER-NOTE-<id> / OWNER-TASK-<id>, category 'owner-request', priority high),
+// the fleet's work queue that autotriage, the issue loop, backlog-exec and the dashboard read; its id is kept on the
+// human_responses / owner_prompts row so it is filed once, and the prompt panel shows the issue's status. The request
+// path files at once; the */15 cron files anything it missed.
+async function ownerRequestColumns(env) {
+  for (const t of ["human_responses", "owner_prompts"]) {
+    await env.AUDIT.prepare("ALTER TABLE " + t + " ADD COLUMN issue_id INTEGER").run().catch(function() {
+    });
+  }
+}
+async function ownerRequestIssue(env, title, body) {
+  const now = Date.now();
+  await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-dashboard:owner-request', 'owner-request', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1)").bind(title, body, now).run();
+  const row = (await d1all(env.AUDIT, "SELECT id FROM agent_issues WHERE title = ? ORDER BY id DESC LIMIT 1", [title]))[0];
+  return row ? Number(row.id) : null;
+}
+async function ownerNotesRoute(env) {
+  await ensureOwnerTables(env);
+  await ownerRequestColumns(env);
+  const out = { notes: 0, tasks: 0 };
+  const dod = " Definition of done: act on it, or record why not, and close with evidence in issue_triage.close_evidence (CLAUDE.md). Filed by qnfo-fleet-dashboard OWNER-NOTES-ROUTE-1.";
+  const notes = await d1all(env.AUDIT, "SELECT id, key, note FROM human_responses WHERE kind = 'note' AND note IS NOT NULL AND issue_id IS NULL ORDER BY id LIMIT 20");
+  for (const r of notes) {
+    let title = "";
+    if (String(r.key).indexOf("ha:") === 0) {
+      const h = (await d1all(env.AUDIT, "SELECT title FROM human_actions WHERE slug = ?", [String(r.key).slice(3)]))[0];
+      title = h ? String(h.title || "") : "";
+    }
+    const id = await ownerRequestIssue(env, ("OWNER-NOTE-" + r.id + ": " + (title || r.key)).slice(0, 180), "The owner added a note on fleet.qnfo.org to the card " + r.key + (title ? " ('" + title.slice(0, 160) + "')" : "") + ": " + String(r.note).slice(0, 600) + dod);
+    if (id) {
+      await env.AUDIT.prepare("UPDATE human_responses SET issue_id = ?1 WHERE id = ?2").bind(id, r.id).run();
+      out.notes++;
+    }
+  }
+  const tasks = await d1all(env.AUDIT, "SELECT id, prompt FROM owner_prompts WHERE mode = 'task' AND issue_id IS NULL ORDER BY ts LIMIT 20");
+  for (const r of tasks) {
+    const id = await ownerRequestIssue(env, ("OWNER-TASK-" + r.id + ": " + String(r.prompt || "").replace(/\s+/g, " ")).slice(0, 180), "The owner queued this task on fleet.qnfo.org (owner_prompts " + r.id + "): " + String(r.prompt || "").slice(0, 1800) + dod);
+    if (id) {
+      await env.AUDIT.prepare("UPDATE owner_prompts SET issue_id = ?1 WHERE id = ?2").bind(id, r.id).run();
+      out.tasks++;
+    }
+  }
+  // TASK-INTENT-INTAKE-1 (1.14.1, agent_issues 1733): no triage reads type='task' intents (qnfo-intent-orchestrator and
+  // qnfo-idea-triage take 'research', qnfo-kaizen 'meta'), so a task sent from ChatBox, DeepChat or the qnfo-ops feeds waited
+  // forever. Each pending task intent becomes one agent_issues row (INTENT-TASK-<id>, its text verbatim, so an explicit
+  // 'code-task: repo=... path=...' line reaches the code loop's ISSUE-INTAKE-1) and the intent is marked promoted with the issue
+  // id. A dashboard "Queue as task" intent is linked to the issue its owner_prompts row already filed, never filed twice.
+  const intents = await d1all(env.AUDIT, "SELECT id, desire, summary, source, device FROM intents WHERE status = 'pending' AND type = 'task' ORDER BY created_at LIMIT 20");
+  out.intents = 0;
+  for (const r of intents) {
+    let id = null;
+    if (r.device === "owner-dashboard") {
+      const p = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE intent_id = ? AND issue_id IS NOT NULL LIMIT 1", [r.id]))[0];
+      if (!p) continue;
+      id = Number(p.issue_id);
+    } else {
+      id = await ownerRequestIssue(env, ("INTENT-TASK-" + r.id + ": " + String(r.summary || r.desire || "").replace(/\s+/g, " ")).slice(0, 180), "A task intent from " + String(r.source || "?") + " (" + String(r.device || "?") + ", intents " + r.id + ") that no triage reads (type 'task'). Text: " + String(r.desire || "").slice(0, 1800) + dod);
+    }
+    if (!id) continue;
+    await env.AUDIT.prepare("UPDATE intents SET status = 'promoted', triage_decision = 'TO-AGENT-ISSUE', triage_rationale = ?1, triaged_at = ?2, processed_at = ?2 WHERE id = ?3 AND status = 'pending'").bind("filed as agent_issues " + id + " (TASK-INTENT-INTAKE-1, qnfo-fleet-dashboard)", new Date().toISOString(), r.id).run();
+    out.intents++;
+  }
+  return out;
+}
+// Cron: apply any revision ratified outside the dashboard route (or before 1.13.0). Bounded: a handful per tick.
+async function objectiveRevisionSweep(env) {
+  await env.AUDIT.prepare(OBJREV_DDL).run();
+  const rows = await d1all(env.AUDIT, "SELECT id FROM goals WHERE goal_type = 'objective-revision' AND status = 'ratified' AND id NOT IN (SELECT goal_id FROM objective_revision_applies) ORDER BY id LIMIT 5");
+  const out = [];
+  for (const r of rows) out.push(await objectiveRevisionApply(env, Number(r.id), "cron"));
+  return out;
+}
+// WATCHMAKER-INDEX-1 (1.14.0, roadmap RM-WATCHMAKER-INDEX-1, agent_issues 1726): the fleet's own daily count of recurring
+// operations that still need a person or a Claude session, target 0. Every recurring operation is listed below with who
+// runs it and how its last run is measured from D1. It counts when (a) a person or a session runs it, (b) its Cloudflare
+// runner has not run within twice its cadence (someone has to restart it), or (c) its freshness cannot be read (unproven
+// is not unattended). Approvals the owner keeps by policy (LinkedIn drafts, objective ratification) are listed and not
+// counted; retired claude.ai Routines are listed with what replaced them. Once per UTC day after 07:00Z: one
+// watchmaker_runs row, metric_registry 'watchmaker_index', and GET /api/watchmaker.
+var WATCHMAKER_AFTER_UTC_HOUR = 7;
+var WATCHMAKER_OPS = [
+  { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
+  { key: "identity-weekly", what: "Identity weekly review (IDENTITY-WEEKLY-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 168, first_due: "2026-10-05T06:00:00Z", sql: "SELECT MAX(created_at) AS last FROM portfolio_runs WHERE kind = 'identity-weekly'", replaces: "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check'" },
+  { key: "reach-ingest", what: "Reach signals ingest (REACH-SIGNALS-INGEST-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'reach-ingest-' AND id < 'reach-ingest.'" },
+  { key: "charter-loop", what: "Charter live block and snapshot (CHARTER-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-02T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM charter_snapshots" },
+  { key: "portfolio-sync", what: "Repository portfolio sync and hygiene (PORTFOLIO-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM portfolio_sync_runs WHERE status = 'ok'" },
+  { key: "fleet-defects", what: "Fleet defects to anchored PRs (evolveTick)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM evolve_candidates", replaces: "claude.ai Routine 'Daily fleet issue sweep'" },
+  { key: "backlog-drain", what: "Backlog drain: close or reopen issues with evidence", runner: "cron:qnfo-backlog-exec", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jo-qnfo-backlog-exec-' AND id < 'jo-qnfo-backlog-exec.'" },
+  { key: "time-gated-verification", what: "Time-gated issue verification (remediation_contracts)", runner: "workflow:remediation-consumer", cadence_h: 6, sql: "SELECT MAX(last_attempt_at) AS last FROM remediation_contracts", replaces: "13 one-shot claude.ai session check-ins" },
+  { key: "research-intent-triage", what: "Research intent triage (qnfo-intent-orchestrator 06:30Z)", runner: "cron:qnfo-intent-orchestrator", cadence_h: 24, stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'research' AND created_at < ?1", stuck_note: "pending research intents older than 48h" },
+  { key: "task-intent-intake", what: "Task intents from ChatBox, DeepChat and qnfo-ops feeds, filed as agent_issues (TASK-INTENT-INTAKE-1)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'task' AND created_at < ?1", stuck_note: "pending task intents older than 48h with no consumer" },
+  { key: "code-task-merge", what: "Merging code-loop PRs (code-task-publish never merges)", runner: "owner", live_sql: "SELECT COUNT(*) AS n FROM code_tasks WHERE status IN ('published', 'branch_pushed', 'needs_human') AND updated_at > ?1", live_note: "code tasks waiting on a person in the last 30 days" },
+  { key: "linkedin-draft-approval", what: "Approving each LinkedIn draft in Buffer (LinkedIn API Terms 3.1; STRATEGY gate 7)", runner: "owner-by-policy" },
+  { key: "objective-ratification", what: "Ratifying objective revisions (QUNIVERSE-CHARTER s7)", runner: "owner-by-policy" }
+];
+function wmIso(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return new Date(v < 1e11 ? v * 1e3 : v).toISOString();
+  let s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) s = s.replace(" ", "T") + "Z";
+  const t = Date.parse(s);
+  return isNaN(t) ? null : new Date(t).toISOString();
+}
+async function watchmakerMeasure(env, nowMs) {
+  const now = nowMs || Date.now();
+  const rows = [];
+  for (const op of WATCHMAKER_OPS) {
+    const r = { key: op.key, what: op.what, runner: op.runner, counted: false, state: "", replaces: op.replaces || null };
+    try {
+      if (op.runner === "owner-by-policy") {
+        r.state = "owner approval by policy (not counted)";
+      } else if (op.runner === "owner" || op.runner === "session") {
+        if (op.live_sql) {
+          const x = (await d1all(env.AUDIT, op.live_sql, [new Date(now - 30 * DAY_MS).toISOString()]))[0];
+          const n = x ? Number(x.n) : null;
+          r.counted = !(n === 0);
+          r.state = n == null ? "unmeasured" : n + " " + op.live_note;
+        } else {
+          r.counted = true;
+          r.state = "run by a " + (op.runner === "owner" ? "person" : "session");
+        }
+      } else if (op.stuck_sql) {
+        const x = (await d1all(env.AUDIT, op.stuck_sql, [new Date(now - 48 * 36e5).toISOString()]))[0];
+        const n = x ? Number(x.stuck) : null;
+        r.counted = !(n === 0);
+        r.state = n == null ? "unmeasured" : n ? n + " " + op.stuck_note : "no backlog";
+      } else {
+        const x = (await d1all(env.AUDIT, op.sql))[0];
+        const last = x ? wmIso(x.last) : null;
+        r.last = last;
+        const firstDue = op.first_due ? Date.parse(op.first_due) : null;
+        if (!last && firstDue && now < firstDue) r.state = "first run due " + op.first_due;
+        else if (!last) {
+          r.counted = true;
+          r.state = "never ran";
+        } else {
+          const age = (now - Date.parse(last)) / 36e5;
+          r.age_h = Math.round(age * 10) / 10;
+          r.counted = age > 2 * op.cadence_h;
+          r.state = r.counted ? "stalled: last run " + r.age_h + "h ago, cadence " + op.cadence_h + "h" : "ok, last run " + r.age_h + "h ago";
+        }
+      }
+    } catch (e) {
+      r.counted = true;
+      r.state = "unmeasured: " + squash(String(e && e.message || e)).slice(0, 100);
+    }
+    rows.push(r);
+  }
+  const counted = rows.filter(function(r) {
+    return r.counted;
+  });
+  return { schema: "watchmaker/v1", version: VERSION, at: new Date(now).toISOString(), index: counted.length, target: 0, counted: counted.map(function(r) {
+    return r.key;
+  }), ops: rows, retired: ["claude.ai Routine 'QNFO portfolio management' -> portfolio-daily", "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check' -> identity-weekly", "claude.ai Routine 'Daily fleet issue sweep' -> fleet-defects + backlog-drain", "13 one-shot claude.ai check-ins -> time-gated-verification"] };
+}
+async function watchmakerDaily(env, opts) {
+  const now = opts && opts.now || Date.now();
+  const d = new Date(now);
+  if (!(opts && opts.force) && d.getUTCHours() < WATCHMAKER_AFTER_UTC_HOUR) return { skipped: "before " + WATCHMAKER_AFTER_UTC_HOUR + ":00Z" };
+  const A = env.AUDIT;
+  await A.prepare("CREATE TABLE IF NOT EXISTS watchmaker_runs (day TEXT PRIMARY KEY, index_value INTEGER, counted TEXT, json TEXT, created_at TEXT DEFAULT (datetime('now')))").run();
+  const day = d.toISOString().slice(0, 10);
+  const have = (await d1all(A, "SELECT day FROM watchmaker_runs WHERE day = ?", [day]))[0];
+  if (have && !(opts && opts.force)) return { skipped: "already measured " + day };
+  const m = await watchmakerMeasure(env, now);
+  await A.prepare("INSERT OR REPLACE INTO watchmaker_runs (day, index_value, counted, json) VALUES (?1, ?2, ?3, ?4)").bind(day, m.index, m.counted.join(","), JSON.stringify(m)).run();
+  await A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES ('watchmaker_index', 'system', 'leading', 'count of recurring operations that need a person or a session, or whose Cloudflare runner is stalled or unmeasured (WATCHMAKER-INDEX-1)', 'https://fleet.qnfo.org/api/watchmaker (qnfo-fleet-dashboard, watchmaker_runs)', '0', 'qnfo-fleet-dashboard', 'fleet', 'daily', 'MEASURED')").run();
+  await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'watchmaker_index'").bind(String(m.index), new Date(now).toISOString()).run();
+  return m;
+}
 // NO-CLAUDE-RUNTIME-DEPENDENCY-1: the owner's data and workflow live on Cloudflare. A dashboard item never links to
 // claude.ai or anthropic.com, and only https links are rendered.
 function safeLink(u) {
@@ -3152,7 +3471,9 @@ async function collectHumanActions(env) {
   // Objective revisions are immutable by the fleet: only the owner ratifies or rejects them (QUNIVERSE-CHARTER s7).
   // Derived live from goals, so it clears itself the moment the last proposal is decided.
   await read("objective-revisions", async function() {
-    const rows = await d1all(env.AUDIT, "SELECT id, statement, alignment, created_at FROM goals WHERE goal_type='objective-revision' AND status='proposed' ORDER BY id");
+    await env.AUDIT.prepare(OBJREV_DDL).run();
+    const rows = await d1all(env.AUDIT, "SELECT g.id, g.statement, g.alignment, g.created_at, g.status, a.detail AS apply_detail FROM goals g LEFT JOIN objective_revision_applies a ON a.goal_id = g.id WHERE g.goal_type='objective-revision' AND (g.status='proposed' OR (g.status='ratified' AND a.outcome IN ('not-applicable','partial'))) ORDER BY g.id");
+    const cx = rows.length ? await objRevContext(env) : null;
     const n = rows.length;
     if (n > 0) {
       let oldest = null;
@@ -3160,8 +3481,9 @@ async function collectHumanActions(env) {
         const a = ageDaysOf(r.created_at);
         if (a != null && (oldest == null || a > oldest)) oldest = a;
       }
-      add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " proposed objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Decide each one on this card. A ratified change is recorded now; applying it to the objective function is tracked in OBJECTIVE-REVISION-APPLY-1.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
-        return { id: r.id, statement: String(r.statement || "").slice(0, 220), why: String(r.alignment || "").slice(0, 200) };
+      add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Decide each one on this card. A weight change is applied the moment you ratify it; anything else becomes fleet work (OBJECTIVE-REVISION-APPLY-1). Each line says which.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
+        const plan = r.status === "ratified" ? { applicable: false, text: "Ratified but not applied: " + String(r.apply_detail || "") } : objRevPlan(r.statement, cx.weights, cx.objective);
+        return { id: r.id, statement: String(r.statement || "").slice(0, 220), why: String(r.alignment || "").slice(0, 200), plan: plan.text, can_ratify: r.status === "proposed" && plan.applicable };
       }) });
     }
   });
@@ -3778,7 +4100,7 @@ function humanFragment(v) {
     if (it.action) o.push('<div class="row"><b>To do</b>' + e(it.action) + "</div>");
     if (/^https:\/\//.test(it.url || "")) o.push('<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>');
     if (it.detail && it.detail.length) {
-      for (const d of it.detail) o.push('<div class="pr"><div>#' + e(d.id) + " " + e(d.statement) + '</div><div class="meta">' + e(d.why) + "</div>" + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(d.id) + '"><button data-act="ratify" data-oid="' + e(d.id) + '">Ratify</button><button data-act="reject" data-oid="' + e(d.id) + '">Reject</button></div>' : "") + "</div>");
+      for (const d of it.detail) o.push('<div class="pr"><div>#' + e(d.id) + " " + e(d.statement) + '</div><div class="meta">' + e(d.why) + "</div>" + (d.plan ? '<div class="meta"><b>' + e(d.plan) + "</b></div>" : "") + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(d.id) + '">' + (d.can_ratify === false ? "" : '<button data-act="ratify" data-oid="' + e(d.id) + '">Ratify</button>') + '<button data-act="reject" data-oid="' + e(d.id) + '">Reject</button></div>' : "") + "</div>");
       if (!(v.owner && v.owner.authed)) o.push('<div class="meta">Sign in to decide each one here.</div>');
     }
     if (v.owner && v.owner.authed) o.push('<div class="acts" data-key="' + e(it.key) + '">' + (String(it.key).indexOf("ha:") === 0 ? '<button data-act="done">Done</button><button data-act="dismiss">Not doing</button>' : "") + '<button data-act="snooze" data-days="3">Snooze 3d</button><button data-act="snooze" data-days="7">Snooze 7d</button><button data-act="note">Add note</button></div>');
@@ -3822,7 +4144,7 @@ function humanFragment(v) {
   if (v.owner && v.owner.authed) {
     o.push('<h3>Tell or ask the fleet</h3><section class="card"><textarea id="ptext" rows="3" maxlength="2000" placeholder="Ask about the queue, decision or spend, or tell the fleet to do something"></textarea><div class="acts"><button id="pask">Ask now</button><button id="ptask">Queue as task</button><span class="meta" id="pmsg"></span></div><div class="meta" style="margin-top:6px">Ask now answers from the current queue and decision (no actions). Queue as task goes to the intent orchestrator\'s next triage (06:00 and 06:30 UTC).</div>');
     for (const pr of v.prompts || []) {
-      const chip = pr.mode === "task" ? "task &middot; " + e(pr.intent_status || pr.status) + (pr.triage_decision ? " &middot; " + e(pr.triage_decision) : "") : e(pr.status) + (pr.model ? " &middot; " + e(pr.model) : "");
+      const chip = pr.mode === "task" ? "task &middot; " + (pr.issue_id ? "issue " + e(pr.issue_id) + " " + e(pr.issue_status || "?") : e(pr.intent_status || pr.status)) + (pr.triage_decision ? " &middot; " + e(pr.triage_decision) : "") : e(pr.status) + (pr.model ? " &middot; " + e(pr.model) : "");
       o.push('<div class="pr"><div class="meta">' + e(String(pr.ts || "").slice(0, 16)) + " &middot; " + chip + "</div><div>" + e(String(pr.prompt || "").slice(0, 220)) + "</div>" + (pr.response ? '<details><summary>Answer</summary><div class="ans">' + e(pr.response) + "</div></details>" : "") + (pr.error ? '<div class="meta bad">' + e(pr.error) + "</div>" : "") + "</div>");
     }
     o.push("</section>");
@@ -3841,7 +4163,7 @@ function humanFragment(v) {
     o.push("</ul>");
   }
   o.push('<div class="meta" style="margin-top:8px">Red flags, drift, queues and retries are worked by the issue loop and qnfo-fleet-control and are not your job unless they appear above.' + (s.drift ? " Drift: " + e(s.drift) + "." : "") + "</div></details>");
-  o.push('<footer>v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/decision">decision JSON</a></footer>');
+  o.push('<footer>v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/decision">decision JSON</a> &middot; <a href="/api/watchmaker">watchmaker index</a></footer>');
   return o.join("");
 }
 function humanHtml(v) {
@@ -3864,7 +4186,7 @@ function humanHtml(v) {
   o.push('<div id="live">' + humanFragment(v) + "</div>");
   // Real-time: re-fetch the server-rendered fragment every 10s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
-  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
+  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item and filed as fleet work):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
   return o.join("");
 }
 // OWNER-RESPOND-1 (2026-10-01): respond to the fleet from the dashboard itself, and start/track server-side prompts.
@@ -3954,7 +4276,8 @@ async function activeSnoozes(env) {
 async function ownerPromptsView(env) {
   try {
     await ensureOwnerTables(env);
-    const rows = await d1all(env.AUDIT, "SELECT p.id, p.ts, p.mode, p.prompt, p.status, p.response, p.model, p.error, i.status AS intent_status, i.triage_decision FROM owner_prompts p LEFT JOIN intents i ON i.id = p.intent_id ORDER BY p.ts DESC LIMIT 6");
+    await ownerRequestColumns(env);
+    const rows = await d1all(env.AUDIT, "SELECT p.id, p.ts, p.mode, p.prompt, p.status, p.response, p.model, p.error, i.status AS intent_status, i.triage_decision, p.issue_id, a.status AS issue_status FROM owner_prompts p LEFT JOIN intents i ON i.id = p.intent_id LEFT JOIN agent_issues a ON a.id = p.issue_id ORDER BY p.ts DESC LIMIT 6");
     return rows;
   } catch (e) {
     return [];
@@ -4050,6 +4373,8 @@ async function ownerRoutes(request, env, ctx, path, owner) {
       if (!(r.meta && r.meta.changes)) return ownerJson({ error: "no open queue item " + slug }, 404);
     }
     await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, until) VALUES (?1,?2,?3,?4)").bind(key, kind, note || null, until).run();
+    if (kind === "note") await ownerNotesRoute(env).catch(function() {
+    });
     return ownerJson({ ok: true, key, kind, until });
   }
   if (path === "/api/owner/objective") {
@@ -4057,10 +4382,22 @@ async function ownerRoutes(request, env, ctx, path, owner) {
     const decision = String(b && b.decision || "");
     if (!Number.isInteger(id) || id < 1) return ownerJson({ error: "bad id" }, 400);
     if (decision !== "ratify" && decision !== "reject") return ownerJson({ error: "decision must be ratify|reject" }, 400);
-    const r = await env.AUDIT.prepare("UPDATE goals SET status=?1, updated_at=datetime('now') WHERE id=?2 AND goal_type='objective-revision' AND status='proposed'").bind(decision === "ratify" ? "ratified" : "rejected", id).run();
-    if (!(r.meta && r.meta.changes)) return ownerJson({ error: "no proposed objective revision " + id }, 404);
+    // OBJECTIVE-REVISION-APPLY-1: ratify only what can be applied (the card already says which), then apply it at once.
+    // Reject also clears a ratified revision that could not be applied.
+    if (decision === "ratify") {
+      const g = (await d1all(env.AUDIT, "SELECT statement FROM goals WHERE id = ? AND goal_type = 'objective-revision' AND status = 'proposed'", [id]))[0];
+      if (!g) return ownerJson({ error: "no proposed objective revision " + id }, 404);
+      const cx = await objRevContext(env);
+      const plan = objRevPlan(g.statement, cx.weights, cx.objective);
+      if (!plan.applicable) return ownerJson({ error: plan.text }, 409);
+    }
+    await env.AUDIT.prepare(OBJREV_DDL).run();
+    const r = await env.AUDIT.prepare(decision === "ratify" ? "UPDATE goals SET status='ratified', updated_at=datetime('now') WHERE id=?1 AND goal_type='objective-revision' AND status='proposed'" : "UPDATE goals SET status='rejected', updated_at=datetime('now') WHERE id=?1 AND goal_type='objective-revision' AND (status='proposed' OR (status='ratified' AND id IN (SELECT goal_id FROM objective_revision_applies WHERE outcome IN ('not-applicable','partial'))))").bind(id).run();
+    if (!(r.meta && r.meta.changes)) return ownerJson({ error: "no objective revision " + id + " open for that decision" }, 404);
     await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note) VALUES (?1,?2,?3)").bind("goals:objective-revision:" + id, decision, String(b && b.note || "").slice(0, 500) || null).run();
-    return ownerJson({ ok: true, id, status: decision === "ratify" ? "ratified" : "rejected" });
+    if (decision === "reject") return ownerJson({ ok: true, id, status: "rejected" });
+    const applied = await objectiveRevisionApply(env, id, "owner-route");
+    return ownerJson({ ok: applied.ok, id, status: "ratified", outcome: applied.outcome, detail: applied.detail || null, issue_id: applied.issue_id || null, error: applied.ok ? null : applied.detail || applied.error || null });
   }
   if (path === "/api/owner/prompt") {
     const text = String(b && b.text || "").trim();
@@ -4078,7 +4415,12 @@ async function ownerRoutes(request, env, ctx, path, owner) {
       const intentId = dup.length ? dup[0].id : iid;
       if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
       await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
-      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, duplicate: !!dup.length });
+      await ownerNotesRoute(env).catch(function() {
+      });
+      const filed = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE id = ?", [id]).catch(function() {
+        return [];
+      }))[0];
+      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, issue_id: filed && filed.issue_id || null, duplicate: !!dup.length });
     }
     await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status) VALUES (?1,'ask',?2,'running')").bind(id, text).run();
     const st = await currentState(env, ctx, 5 * 6e4);
@@ -4120,7 +4462,9 @@ var PORTFOLIO_OUTREACH_DAILY_MAX = 8;
 // Posts before this instant predate the q08 queue gate (q08-signal-engine 0.7.36) and the qnfo-social weekly cap; they
 // are history, not a live violation, so the guard ignores them (env PORTFOLIO_GUARD_SINCE overrides).
 var PORTFOLIO_GUARD_SINCE = "2026-10-01T05:00:00Z";
-var PORTFOLIO_STRATEGY_SOURCE = "claude-code-session:STRATEGY-1";
+// Open STRATEGY work: issues whose source or title names STRATEGY, whoever filed them (a worker, the owner or a session);
+// the KPI no longer depends on one session's source label (NO-CLAUDE-RUNTIME-DEPENDENCY-1).
+var PORTFOLIO_STRATEGY_WHERE = "status = 'open' AND (source LIKE '%STRATEGY%' OR title LIKE 'STRATEGY%')";
 var OWNER_GUARD_SOURCE = "qnfo-fleet-dashboard:portfolio-guard";
 var OWNER_GUARD_TAG = "OWNER-VOICE-GUARD-1";
 var PORTFOLIO_DDL = [
@@ -4363,7 +4707,7 @@ async function portfolioDailyRun(env, opts) {
   out.skipped.push("subscribers q08: no binding to D1 q08-signal from this worker");
   let strat = null;
   try {
-    const s = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM agent_issues WHERE source = ? AND status = 'open'", [PORTFOLIO_STRATEGY_SOURCE]);
+    const s = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM agent_issues WHERE " + PORTFOLIO_STRATEGY_WHERE);
     if (s.length && s[0].n != null) strat = Number(s[0].n);
   } catch (e) {
     out.skipped.push("strategy issues: " + reachErr(e));

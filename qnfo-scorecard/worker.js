@@ -6,7 +6,7 @@
 // Frameworks applied: SAE-J3016-adapted autonomy levels; NIST ALFUS (HI/MC/EC); Sheridan-Verplank LOA;
 // Viable System Model S1-S5; OODA loop closure; AF-1 autonomy ladder L0-L3; ALVE-1 aliveness metrics;
 // Watchmaker Index. Rubric bands: A>=90, B>=75, C>=60, D>=45, F<45. Top band A = human-level autonomy target (L5 SAE / L3 ladder / WI~0) - scored, not claimed.
-const VERSION = "qnfo-scorecard/1.0.0";
+var VERSION = "qnfo-scorecard/1.0.1";
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
@@ -137,7 +137,7 @@ async function compute(env) {
       watchmaker: "Watchmaker Index = share of recurring operations requiring human or ad-hoc agent intervention (target ~0)"
     },
     autonomy: {
-      sae_level: "L2+ (partial autonomy with receipts; publish/promotion loops run L3-grade unattended; strategic adaptation still needs ad-hoc agent sessions - the decide-loop gap)",
+      sae_level: "L2+ (partial autonomy with receipts; publish/promotion loops run L3-grade unattended; strategic adaptation: the fleet proposes objective revisions on cron, the owner ratifies them on fleet.qnfo.org and OBJECTIVE-REVISION-APPLY-1 applies them; agent sessions are optional contributors, never a dependency)",
       sheridan_loa: 8,
       ladder: { heal: "L2", improve: "L1->L2", audit: "L2", publish: "L2-gated", promote: "L1-warmup", govern: "L0" },
       alfus: { human_independence: 7, mission_complexity: 8, environmental_complexity: 8 },

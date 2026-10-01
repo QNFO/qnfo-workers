@@ -1,0 +1,5 @@
+qnfo-twin-maintain is FOLDED (2026-10-01, FOOTPRINT-MARKERS-1, charter decision rule 2). Do not redeploy this directory.
+
+Measured 2026-10-01T14:50Z: the Cloudflare account runs 44 workers (workers list) and this name is not one of them. Its duties live in personal-api: worker_removals records MERGE into personal-api (2026-09-13: it scanned 0 rows on every run).
+
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. This source is kept for reference only.

@@ -12,7 +12,7 @@
 // the row's evidence. The composite is mirrored into survival_state.sai so the survival panel is no longer NULL.
 // Every write is a bounded UPSERT of a known dimension plus an append to autonomy_score_history. If the fact query
 // fails, nothing is written (fail closed).
-var VERSION = "1.1.3-retired-gates";
+var VERSION = "1.1.4-capability-contract";
 var WORKER = "qnfo-autonomy-scorer";
 var DAY = 86400000;
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
@@ -212,7 +212,7 @@ export default {
   },
   async fetch(request, env) {
     var p = new URL(request.url).pathname;
-    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: new Date().toISOString() });
+    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: new Date().toISOString(), capabilities: ["autonomy-scoring", "score-preview", "score-history"], limitations: ["read-only over HTTP; scoring runs on the daily 05:17 cron", "recomputes only measurable dimensions; judgement dimensions are never touched"] });
     if (request.method !== "GET") return json({ error: "read-only; scoring runs on the daily cron" }, 405);
     if (p === "/preview") { try { return json(await run(env, false)); } catch (e) { return json({ error: String(e && e.message || e) }, 500); } }
     if (p === "/scores") { var r = await env.AUDIT.prepare("SELECT dimension, framework, score, scale, confidence, scored_at, next_score, gap FROM autonomy_scores ORDER BY dimension").all(); return json({ scores: (r && r.results) || [] }); }

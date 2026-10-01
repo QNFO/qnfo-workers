@@ -27,7 +27,7 @@ if (a < 0 || b < 0 || b < a) {
 }
 const sandbox = { VERSION: "0.0.0-test", timedFetch: null, b64encode: null, charterOne: null, charterRows: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H };", sandbox, { filename: "portfolio-block.js" });
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H, pfScrubProfile, PF_PROFILE_SCRUB, pfIsMetadata };", sandbox, { filename: "portfolio-block.js" });
 const P = sandbox.__export;
 const fx = JSON.parse(readFileSync(join(here, "portfolio.fixture.json"), "utf8"));
 const NOW = "2026-10-01T12:00:00.000Z";
@@ -107,6 +107,18 @@ ok(again.includes("2026-10-02") && again.split(P.PF_BEGIN).length === 2, "later 
 eq(P.pfSpliceOrBootstrap("no anchor here", rd), null, "no markers and no anchor refuses");
 eq(P.pfSplice("plain", doc), null, "splice refuses a doc without markers");
 
+// --- PROFILE-CLAIMS-SCRUB-1 ------------------------------------------------------
+const claims = P.PF_PROFILE_SCRUB.map((x) => x[0]);
+const dirty = "# QNFO\n\n" + claims.join("\n") + "\n" + boot;
+const clean = P.pfScrubProfile(dirty);
+eq(claims.filter((c) => clean.includes(c)).length, 0, "every retired claim is replaced");
+ok(clean.includes("independent research imprint") && clean.includes("$1.5M federal research"), "the replacements land");
+ok(!/co-directed the \$10M|foundational US patents|Publicis\n|501\(c\)\(3\)|\(92 records\)|867 records/.test(clean), "no retired claim survives");
+eq(P.pfScrubProfile(clean), clean, "scrub is idempotent");
+eq(P.pfScrubProfile(boot), boot, "a README without the claims is unchanged (managed block untouched)");
+ok(clean.indexOf(P.PF_BEGIN) > 0 && clean.split(P.PF_BEGIN).length === 2, "the managed block survives the scrub");
+eq(P.pfScrubProfile("x co-directed the $10M y"), "x co-directed the $10M y", "drifted text is left alone, not guessed at");
+
 if (process.argv.includes("--render")) console.log(doc);
 if (process.argv.includes("--public")) console.log(pub);
 
@@ -156,6 +168,47 @@ eq(P.pfNeedsSync({ ts: h(P.PF_STALE_H + 1), status: "ok", note: "kernel 1.0.0;" 
 eq(P.pfNeedsSync({ ts: h(0.5), status: "partial", note: "kernel 1.0.0;" }, "1.0.0", T0), null, "a partial run 30 minutes ago: hold");
 eq(P.pfNeedsSync({ ts: h(1), status: "partial", note: "kernel 1.0.0;" }, "1.0.0", T0), "last partial run is 1h old", "a partial run an hour ago: retry");
 eq(P.pfNeedsSync({ ts: "garbage", status: "ok", note: "kernel 1.0.0;" }, "1.0.0", T0) !== null, true, "an unreadable timestamp: sync");
+
+
+// --- HINT-LINK-1 ------------------------------------------------------------
+const hintRepos = [
+  { name: "paper-artifacts", description: "QNFO.TST.001: the paper's artifacts", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
+  { name: "unknown-code", description: "QNFO.ZZZ.999: a code nobody registered", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" }
+];
+const hintRows = [{ wbs_code: "QNFO.TST.001", level: "project", slug: "tst-paper", name: "t", status: "active", github_repo: "QNFO/other-repo" }];
+const evL = P.pfEvaluate(hintRepos, hintRows, NOW);
+eq(evL.rows.find((r) => r.name === "paper-artifacts").wbs.join(","), "QNFO.TST.001", "a description naming a registry code links the repository");
+eq(evL.rows.find((r) => r.name === "unknown-code").wbs.length, 0, "an unknown code does not link");
+eq(evL.unlinked_research.join(","), "unknown-code", "only the repository with no known code is unlinked");
+eq(P.pfHygienePlan(evL, hintRows).filter((a) => a.action === "wbs-link").length, 0, "a code already linked elsewhere is not re-linked");
+
+
+// --- DESCRIPTION-QUALITY-1 --------------------------------------------------
+eq(P.pfIsMetadata("Status: 20-chapter guide drafted | Phase: P3 (Review) | Started: 2026-05-26 | Updated: 2026-05-26"), true, "a labelled metadata line is not a description");
+eq(P.pfIsMetadata("Author: QNFO Research | Date: 2026-07-29 | Status: Phase 0 — Active"), true, "author/date/status line is metadata");
+eq(P.pfIsMetadata("A Unified Treatise on the Loop, the Tree, and the Constants of Self-Reference"), false, "a sentence is not metadata");
+eq(P.pfIsMetadata("Implements P0 (foundation) of QNFO.CODEPARSE.SCOPE.v1: every instruction, chat, prompt, skill"), false, "a colon inside prose is not a label");
+eq(P.pfDescriptionFromReadme("# Guide\n\n**Status:** drafted | **Phase:** P3 | **Updated:** 2026-05-26\n\n## Identity\n\nA revolutionary beginner's guide to quantum computing that starts with the why."), "A revolutionary beginner's guide to quantum computing that starts with the why.", "the metadata paragraph is skipped and the next real one taken");
+const evR = P.pfEvaluate([
+  { name: "loop-wrote", description: "Status: drafted | Phase: P3 | Updated: 2026-05-26", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
+  { name: "person-wrote", description: "Status: drafted | Phase: P3 | Updated: 2026-05-26", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" }
+], [], NOW);
+const planR = P.pfHygienePlan(evR, [], { "loop-wrote": "Status: drafted | Phase: P3 | Updated: 2026-05-26" });
+eq(planR.filter((a) => a.action === "description-revise").map((a) => a.repo).join(","), "loop-wrote", "only a description the loop wrote is revised");
+eq(P.pfHygienePlan(evR, [], { "loop-wrote": "something else the loop wrote earlier" }).filter((a) => a.action === "description-revise").length, 0, "a description changed by a person since is not touched");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; wbs:ok; dormant 1; unlinked 0; actions 12 (11 committed)" }, "1.0.0", T0), "last ok run is 1h old", "a run that took actions retries within the hour");
+eq(P.pfNeedsSync({ ts: h(0.5), status: "ok", note: "kernel 1.0.0; actions 12 (11 committed)" }, "1.0.0", T0), null, "but not within 50 minutes");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; actions 0 (0 committed)" }, "1.0.0", T0), null, "a run with nothing left to do holds for the day");
+
+
+// --- REVISE-OUTSIDE-CAP-1 ---------------------------------------------------
+const manyRepos = [];
+for (let i = 0; i < 20; i++) manyRepos.push({ name: "r" + String(i).padStart(2, "0"), description: "", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" });
+for (let i = 0; i < 4; i++) manyRepos.push({ name: "w" + i, description: "loop wrote this one " + i, visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" });
+const wrote = { w0: "loop wrote this one 0", w1: "loop wrote this one 1", w2: "loop wrote this one 2", w3: "loop wrote this one 3" };
+const planM = P.pfHygienePlan(P.pfEvaluate(manyRepos, [], NOW), [], wrote);
+eq(planM.filter((a) => a.action === "description-revise").length, 4, "every loop-written description is revised");
+eq(planM.filter((a) => a.action !== "description-revise").length, P.PF_HYGIENE_MAX, "and the write budget is still fully used");
 
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

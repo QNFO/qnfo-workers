@@ -217,13 +217,13 @@ def publish_one(task, repo_dir, base, pr):
         git(repo_dir, "commit", "-q", "-m", "code-task " + task["id"] + ": " + str(task.get("goal") or "")[:60])
         git(repo_dir, "push", "origin", "refs/heads/" + branch + ":refs/heads/" + branch)
         body = ("Opened by code-task-publish from verified code-task `" + task["id"] + "`.\n\nGoal: " + str(task.get("goal") or "")[:500] +
-                "\n\nThe patch passed the orchestrator's deterministic verifier. Review, then merge by hand; this workflow never merges.")
+                "\n\nThe patch passed the orchestrator's deterministic verifier. Review and merge it on GitHub (or close it); this workflow never merges.")
         try:
             url = pr.create(branch, base, "code-task: " + str(task.get("goal") or "")[:70], body)
         except RuntimeError as e:
             # Repo setting "Allow GitHub Actions to create pull requests" may be off. The branch is already
-            # pushed, so record it as branch_pushed with the compare URL instead of failing the task; any
-            # session or the next run with a PR-capable token can open the PR from that branch.
+            # pushed, so record it as branch_pushed with the compare URL instead of failing the task; the
+            # owner (from the compare URL) or the next run with a PR-capable token opens the PR from that branch.
             if "not permitted to create or approve pull requests" in str(e) or "createPullRequest" in str(e):
                 return "branch_pushed", "https://github.com/" + REPO_NAME_FULL + "/compare/" + base + "..." + branch + "?expand=1", None
             raise

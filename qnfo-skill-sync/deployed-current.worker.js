@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "1.1.2"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "1.1.3"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -80,8 +80,10 @@ var worker_default = {
     if (url.pathname === "/health") {
       return json({
         worker: "qnfo-skill-sync",
-        version: "1.1.2",
+        version: VERSION,
         status: "ok",
+        capabilities: ["skill-extraction", "skill-dedup", "stale-issue-close", "skill-source-issues"],
+        limitations: ["one sync per day (03:00)", "an async run handles at most 30 rows (20-minute lock TTL)", "skill-source issues need GITHUB_TOKEN"],
         changelog: ["W6 extractor v2 + normalized dedup", "W7 stale issue auto-close", "W8 skill-source issues", "error_sample persisted", "v1.1.1 lock TTL reclaim", "v1.1.2 TTL 20min + async cap 30 rows"],
         bindings: { d1: !!env.AUDIT_DB, r2: !!env.SKILLS_BUCKET, ai: !!env.AI, github_token: !!env.GITHUB_TOKEN },
         cron: "0 3 * * *"
