@@ -130,9 +130,33 @@ def find_scripts():
         return []
     out = []
     for n in sorted(os.listdir(SCRIPTS)):
-        if n.endswith(".py") and "patch" in n:
+        # The runner itself (apply-pending-patches.py) matches "*patch*" but is not an applier.
+        if n.endswith(".py") and "patch" in n and n != "apply-pending-patches.py":
             out.append(os.path.join("scripts", n))
     return out
+
+
+# APPLIER-DOCTOR-RETIRED-1 (2026-10-01, issues 1535/1673): the runner retires appliers listed in
+# RETIRED_APPLIERS (scripts/apply-pending-patches.py) once their (file, token) evidence is in the tree,
+# but this doctor re-ran them and filed them stale-anchor/error/undetermined, so retired appliers kept
+# reading as rot (#1535 was reopened on exactly that). Read the same list; an applier whose evidence is
+# present is filed superseded without being executed, with the evidence and reason recorded.
+def retired_appliers():
+    try:
+        import ast
+        src = _read_file("scripts/apply-pending-patches.py") or ""
+        for node in ast.parse(src).body:
+            if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "RETIRED_APPLIERS":
+                out = {}
+                for e in ast.literal_eval(node.value):
+                    f, tok = e["evidence"]
+                    txt = _read_file(f) or ""
+                    if tok and tok in txt:
+                        out[e["script"]] = {"evidence": [f, tok], "reason": e.get("reason", "")}
+                return out
+    except Exception as e:
+        print("WARN: RETIRED_APPLIERS unreadable: %s" % str(e)[:160])
+    return {}
 
 
 def _read_file(rel):
@@ -328,7 +352,11 @@ def failing_anchor(text):
     return None
 
 
-def run_one(rel):
+def run_one(rel, retired=None):
+    ret = (retired or {}).get(os.path.basename(rel))
+    if ret:
+        return {"script": rel, "rc": None, "verdict": "superseded", "changed_files": [], "tail": [],
+                "outcome_present_in": [ret["evidence"][0]], "retired": ret}
     reset()
     before, _ = tree_state()
     before = before or []
@@ -391,8 +419,10 @@ def main():
     scripts = find_scripts()
     print("APPLIER-DOCTOR-2 scanning %d patch script(s) under %s" % (len(scripts), SCRIPTS))
     recs = []
+    retired = retired_appliers()
+    print("APPLIER-DOCTOR-RETIRED-1: %d retired applier(s) with evidence present" % len(retired))
     for rel in scripts:
-        r = run_one(rel)
+        r = run_one(rel, retired)
         recs.append(r)
         print("  %-52s rc=%-3s %s%s" % (
             os.path.basename(rel), r["rc"], r["verdict"],
