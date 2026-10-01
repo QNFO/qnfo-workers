@@ -1,10 +1,18 @@
 {
-  "audited_at": "2026-09-30 23:48:45",
+  "audited_at": "2026-09-30 23:59:54",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-containers-pilot/deployed-current.worker.js",
+        "dir": "qnfo-containers-pilot",
+        "live": "1.0.7-do-dispatch-guard",
+        "repo": "1.0.8-public-exec-closed",
+        "worker": "qnfo-containers-pilot"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -26,7 +34,14 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-containers-pilot",
+        "live": "1.0.7-do-dispatch-guard",
+        "repo": "1.0.8-public-exec-closed",
+        "worker": "qnfo-containers-pilot"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -404,7 +419,7 @@
       }
     ],
     "scope": "all",
-    "sync": 37,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -418,12 +433,12 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.0.9-toolinv-shape-v2",
+        "version": "1.2.0-ideation-loop",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.1.14-singlemodel",
+        "version": "4.1.15-aig-caller-meta",
         "worker": "personal-api"
       },
       {
@@ -433,7 +448,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.7.32-titlepromote",
+        "version": "0.7.33-run-lifecycle",
         "worker": "q08-signal-engine"
       },
       {
@@ -443,7 +458,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.5-anthropic-relay",
+        "version": "5.29.6-aig-caller-meta",
         "worker": "qnfo-ai"
       },
       {
@@ -463,7 +478,7 @@
       },
       {
         "dir": "qnfo-autonomy-scorer",
-        "version": "1.0.0-measured",
+        "version": "1.1.1-vsm-ooda-measured",
         "worker": "qnfo-autonomy-scorer"
       },
       {
@@ -475,11 +490,6 @@
         "dir": "qnfo-cloud-ops",
         "version": "1.15.5-outreach-cap-status-1",
         "worker": "qnfo-cloud-ops"
-      },
-      {
-        "dir": "qnfo-containers-pilot",
-        "version": "1.0.7-do-dispatch-guard",
-        "worker": "qnfo-containers-pilot"
       },
       {
         "dir": "qnfo-deploy-guard",
@@ -498,7 +508,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.41-errors-since-deploy",
+        "version": "1.7.42-autonomy-stale-flag",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -543,7 +553,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.15-audit-trail-writer",
+        "version": "2.38.16-aig-caller-meta",
         "worker": "qnfo-ops"
       },
       {
@@ -684,9 +694,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.0.9-toolinv-shape-v2",
+      "before": "1.2.0-ideation-loop",
       "http": 200,
-      "live": "1.0.9-toolinv-shape-v2",
+      "live": "1.2.0-ideation-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -796,9 +806,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.1.14-singlemodel",
+      "before": "4.1.15-aig-caller-meta",
       "http": 200,
-      "live": "4.1.14-singlemodel",
+      "live": "4.1.15-aig-caller-meta",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -844,9 +854,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.32-titlepromote",
+      "before": "0.7.33-run-lifecycle",
       "http": 200,
-      "live": "0.7.32-titlepromote",
+      "live": "0.7.33-run-lifecycle",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -876,9 +886,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.5-anthropic-relay",
+      "before": "5.29.6-aig-caller-meta",
       "http": 200,
-      "live": "5.29.5-anthropic-relay",
+      "live": "5.29.6-aig-caller-meta",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -948,9 +958,9 @@
       "worker": "qnfo-auditor"
     },
     "qnfo-autonomy-scorer": {
-      "before": "1.0.0-measured",
+      "before": "1.1.1-vsm-ooda-measured",
       "http": 200,
-      "live": "1.0.0-measured",
+      "live": "1.1.1-vsm-ooda-measured",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-autonomy-scorer"
@@ -1036,11 +1046,11 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.7-do-dispatch-guard",
+      "before": "1.0.8-public-exec-closed",
       "http": 200,
       "live": "1.0.7-do-dispatch-guard",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-containers-pilot"
     },
     "qnfo-ddocs-indexer": {
@@ -1148,9 +1158,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.41-errors-since-deploy",
+      "before": "1.7.42-autonomy-stale-flag",
       "http": 200,
-      "live": "1.7.41-errors-since-deploy",
+      "live": "1.7.42-autonomy-stale-flag",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1276,9 +1286,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.15-audit-trail-writer",
+      "before": "2.38.16-aig-caller-meta",
       "http": 200,
-      "live": "2.38.15-audit-trail-writer",
+      "live": "2.38.16-aig-caller-meta",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
