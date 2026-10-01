@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.56-worker-census";
+var VERSION = "0.4.57-census-self-schedule";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2949,7 +2949,6 @@ var worker_default2 = {
       ctx.waitUntil(disposeRetired(env));
       ctx.waitUntil(costImpactGuard(env).catch((e) => console.error("costImpactGuard error:", e && e.message || e)));
       ctx.waitUntil(activitySnapshotDaily(env).catch((e) => console.error("activitySnapshotDaily error:", e && e.message || e)));
-      ctx.waitUntil(workerCensus(env).catch((e) => console.error("workerCensus error:", e && e.message || e)));
       return calibratorMod.default.scheduled(event, env, ctx);
     }
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
@@ -2960,6 +2959,7 @@ var worker_default2 = {
     ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
     ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
     ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));
+    ctx.waitUntil(workerCensusIfStale(env).catch((e) => console.error("workerCensus error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3523,6 +3523,18 @@ async function workerCensus(env) {
   return out;
 }
 __name(workerCensus, "workerCensus");
+// WORKER-CENSUS-SELF-SCHEDULE-1 (2026-10-01): the census runs from the hourly branch once its newest row is 23h old. A
+// missed daily run, or a fresh deploy over stale rows, is then recovered at the next hour instead of a day later.
+async function workerCensusIfStale(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  if (!db) return { ran: false, error: "no AUDIT binding" };
+  var r = null;
+  try { r = await db.prepare("SELECT MAX(ts) AS newest FROM fleet_worker_census").first(); } catch (e) {}
+  var newest = r && r.newest ? Date.parse(r.newest) : 0;
+  if (newest && Date.now() - newest < 23 * 36e5) return { ran: false, newest: r.newest };
+  return Object.assign({ ran: true }, await workerCensus(env));
+}
+__name(workerCensusIfStale, "workerCensusIfStale");
 async function reassertObservability(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
