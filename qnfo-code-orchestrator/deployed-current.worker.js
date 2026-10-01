@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.2.0";
+var VERSION = "0.2.1";
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -291,6 +291,19 @@ function promptFor(task, base, lastError) {
   if (lastError) user += "\nYour previous attempt FAILED verification: " + lastError + "\nFix that and return the complete file again.";
   return [{ role: "system", content: sys }, { role: "user", content: user }];
 }
+// Whole-file unified diff (delete every base line, add every proposed line). It applies with `git apply` only while the file on the
+// target branch still equals the base the model saw, which is exactly the staleness check wanted for pull-based publishing.
+function wholeFilePatch(path, base, next) {
+  const lines = function (t) { if (t === "") return []; const a = t.split("\n"); if (a[a.length - 1] === "") a.pop(); return a; };
+  const nl = function (t) { return t === "" || t.charAt(t.length - 1) === "\n"; };
+  const a = lines(base), b = lines(next);
+  let o = "diff --git a/" + path + " b/" + path + "\n--- a/" + path + "\n+++ b/" + path + "\n@@ -" + (a.length ? "1," + a.length : "0,0") + " +" + (b.length ? "1," + b.length : "0,0") + " @@\n";
+  a.forEach(function (l) { o += "-" + l + "\n"; });
+  if (a.length && !nl(base)) o += "\\ No newline at end of file\n";
+  b.forEach(function (l) { o += "+" + l + "\n"; });
+  if (b.length && !nl(next)) o += "\\ No newline at end of file\n";
+  return o;
+}
 // ONE bounded step. Returns the task's new state; never throws (a throw becomes a recorded failed attempt).
 async function stepTask(env, task) {
   const ctx = getCtx(task);
@@ -331,6 +344,14 @@ async function stepTask(env, task) {
     if (task.step === "commit") {
       const branch = task.branch || ("codeagent-" + task.id.slice(3, 15));
       if (branch === "main" || branch === "master") return await fail("refusing to commit to " + branch, true);
+      if (String(env.PR_PUBLISH_MODE || "") === "pull") {
+        // PULL-BASED PUBLISHING: this worker holds no GitHub PR-write credential. Park the verified patch in D1; the
+        // code-task-publish GitHub Actions workflow pulls it and opens the PR with its own GITHUB_TOKEN.
+        ctx.patch = wholeFilePatch(task.path, ctx.base || "", ctx.proposal || "");
+        await save(env, task.id, { ctx: JSON.stringify(ctx), status: "ready_to_publish", step: "done", branch: branch, lease_until: null, last_error: null });
+        await audit(env, "code-task.ready", task.id + " ready_to_publish on " + branch, { id: task.id }, "ok");
+        return { ok: true, step: "done", status: "ready_to_publish" };
+      }
       const r = await codeAgent(env, "/v1/repo/edit", { repo: task.repo, path: task.path, content: ctx.proposal, branch: branch,
         base_branch: "main", create_pr: true, commit_message: "qnfo-code-orchestrator: " + task.goal.slice(0, 60) });
       if (!r || r.ok !== true) return await fail("commit failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);

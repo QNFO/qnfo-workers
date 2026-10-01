@@ -1,0 +1,56 @@
+name: code-task-publish
+
+# CODE-TASK-PUBLISH-1: PULL-BASED PR publishing for the qnfo-code-orchestrator loop.
+#
+# The orchestrator holds no GitHub PR-write credential and a session cannot mint one. The Actions GITHUB_TOKEN
+# already can (permissions below), so the worker parks each verified patch in D1 (code_tasks.status =
+# 'ready_to_publish') and this workflow PULLS them, applies each patch on a new branch, opens a PR, and records
+# status 'published' + pr_url back in D1. A patch that does not apply becomes 'publish_failed' with a reason and
+# turns this run red (never silent). It NEVER merges.
+#
+# TRIGGERS: the GitHub `schedule` event has never fired on this repository, so there is deliberately NO cron.
+# It hangs off workflow_run of mirror-sync (runs on every push to main) and fleet-autodeploy, plus workflow_dispatch.
+# This workflow pushes only codeagent-* branches, never main, so the chain is acyclic.
+#
+# SECRETS: reuses CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID exactly as fleet-autodeploy does; nothing new.
+# NOTE: PRs opened with GITHUB_TOKEN do not themselves trigger pull_request workflows; a human (or a push by a
+# different actor) starts CI on them. That is the accepted cost of using no new credential.
+
+on:
+  workflow_run:
+    workflows: ["mirror-sync", "fleet-autodeploy"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: code-task-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # A workflow_run checks out the trigger's SHA, which can be stale; patches are applied to the CURRENT main.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: publisher self-test (offline)
+        run: python scripts/code-task-publish.py --selftest
+
+      - name: publish ready_to_publish code tasks as PRs (never merges)
+        run: python scripts/code-task-publish.py --repo-dir . --base main
