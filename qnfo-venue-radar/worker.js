@@ -11,7 +11,7 @@
 //   >=6h run backoff; per-venue audit rows; self-doc /health; manual trigger /?run=1.
 // DEPLOY: cd qnfo-workers/qnfo-venue-radar && wrangler d1 execute qnfo-audit --remote --file=migrations/001_venue_radar.sql && wrangler deploy
 // CANONICAL SOURCE: github.com/QNFO/qnfo-workers -> qnfo-workers/qnfo-venue-radar/worker.js
-const VERSION = "1.0.3";
+var VERSION = "1.0.4";
 const WORKER = "qnfo-venue-radar";
 
 // QNFO research keyword buckets (extends LESSWRONG-INTEGRATION.md section 6 + events-radar DOMAINS)
@@ -117,6 +117,10 @@ function parseHn(json, query, bucket) {
   return rows;
 }
 
+// Yield assertion: fetched=0 is "empty" (source returned nothing / parser mismatch); fetched>0 with kept=0 is "dup-only" (all rows already stored, legitimate but visible).
+function runStatus(err, fetched, kept) { return err ? "error" : fetched === 0 ? "empty" : kept === 0 ? "dup-only" : "ok"; }
+function yieldNote(fetched, kept) { return fetched === 0 ? "fetched=0" : kept === 0 ? "fetched>0 kept=0 (all duplicates)" : ""; }
+
 // ---- Radar run --------------------------------------------------------------------
 async function run(env, forced) {
   const t0 = nowIso();
@@ -127,7 +131,17 @@ async function run(env, forced) {
   const setCfg = (key, value) => env.RADAR_DB.prepare("INSERT OR REPLACE INTO venue_radar_config (key, value, updated_at) VALUES (?, ?, ?)").bind(key, value, t0).run();
 
   const enabled = await cfg("venue_radar_enabled");
-  if (enabled !== "1") return { ok: true, worker: WORKER, version: VERSION, skipped: "disabled", ts: t0 };
+  if (enabled !== "1") {
+    // VENUE-RADAR-DORMANT-1: a disabled kill switch used to skip silently, so the radar looked dormant with no trace. Record it (at most one row per 6h).
+    try {
+      const lastSkip = await env.RADAR_DB.prepare("SELECT run_at FROM venue_radar_runs WHERE status = 'skipped' ORDER BY id DESC LIMIT 1").first();
+      if (!lastSkip || Date.now() - Date.parse(lastSkip.run_at) > 6 * 3600 * 1000) {
+        await env.RADAR_DB.prepare("INSERT INTO venue_radar_runs (venue, kind, run_at, status, fetched, kept, detail) VALUES (?,?,?,?,?,?,?)")
+          .bind("all", "kill-switch", t0, "skipped", 0, 0, "venue_radar_enabled=" + enabled).run();
+      }
+    } catch (e) { /* audit row is best-effort */ }
+    return { ok: true, worker: WORKER, version: VERSION, skipped: "disabled", ts: t0 };
+  }
 
   {
     const last = await cfg("last_run_utc");
@@ -156,7 +170,7 @@ async function run(env, forced) {
     }
     summary.push({ venue: "lesswrong", bucket: b.code, fetched: rows.length, kept, err });
     await env.RADAR_DB.prepare("INSERT INTO venue_radar_runs (venue, kind, run_at, status, fetched, kept, detail) VALUES (?,?,?,?,?,?,?)")
-      .bind("lesswrong", b.code, t0, err ? "error" : "ok", rows.length, kept, err || "").run();
+      .bind("lesswrong", b.code, t0, runStatus(err, rows.length, kept), rows.length, kept, err || yieldNote(rows.length, kept)).run();
   }
 
   // EA Forum RSS sweep: keep only bucket-relevant rows
@@ -175,7 +189,7 @@ async function run(env, forced) {
     }
     summary.push({ venue: "eaforum", bucket: "RSS", fetched: rows.length, kept, err });
     await env.RADAR_DB.prepare("INSERT INTO venue_radar_runs (venue, kind, run_at, status, fetched, kept, detail) VALUES (?,?,?,?,?,?,?)")
-      .bind("eaforum", "rss", t0, err ? "error" : "ok", rows.length, kept, err || "").run();
+      .bind("eaforum", "rss", t0, runStatus(err, rows.length, kept), rows.length, kept, err || yieldNote(rows.length, kept)).run();
   }
 
   // Hacker News: Algolia per bucket
@@ -193,7 +207,7 @@ async function run(env, forced) {
     }
     summary.push({ venue: "hackernews", bucket: b.code, fetched: rows.length, kept, err });
     await env.RADAR_DB.prepare("INSERT INTO venue_radar_runs (venue, kind, run_at, status, fetched, kept, detail) VALUES (?,?,?,?,?,?,?)")
-      .bind("hackernews", b.code, t0, err ? "error" : "ok", rows.length, kept, err || "").run();
+      .bind("hackernews", b.code, t0, runStatus(err, rows.length, kept), rows.length, kept, err || yieldNote(rows.length, kept)).run();
   }
 
   await setCfg("last_run_utc", t0);
