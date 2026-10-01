@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-archive/fabric-20260910";
-const VERSION = "1.2.0";
+var VERSION = "1.2.2-internal-search";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -45,9 +45,16 @@ var worker_default = {
       }
     }
   },
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     var u = new URL(request.url);
     var p = u.pathname;
+    // ARCHIVE-INTERNAL-1 (2026-10-01, charter H0): /handoff/search returned the qnfo-handoffs index metadata to anyone,
+    // including mem:* memory-fact summaries that qnfo-memory-mcp serves only behind its bearer (MCP-AUTH-1), and a plain
+    // GET /seed-kg rewrote 809 knowledge-graph nodes per call. No worker consumes these routes (qnfo-ops binds this
+    // worker only for /health), so they now require an internal caller authenticated by service-binding props
+    // (ctx.props.caller, which only a deployer of the caller can set). A public /seed-kg stays available as a dry run;
+    // the 04:00 cron still performs the real seed.
+    var internalCaller = !!(ctx && ctx.props && typeof ctx.props.caller === "string" && /^qnfo-[a-z0-9-]{1,60}$/.test(ctx.props.caller));
     var origin = request.headers.get("Origin") || "https://archive.qnfo.org";
     var h = corsHeaders(origin);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
@@ -56,6 +63,7 @@ var worker_default = {
       worker: "qnfo-archive",
       version: VERSION,
       capabilities: ["queue-consumer", "archival", "paper-pipeline", "kg-auto-seed", "handoff-search", "task-search"],
+      limitations: ["handoff and task search only for internal service-binding callers (props)", "public /seed-kg is a dry run; the real seed runs on the 04:00 cron", "the paper list at / returns the 50 newest papers"],
       bindings: { d1: ["living-paper", "qnfo-audit", "portfolio-state"], r2: "qnfo", vz: ["qnfo-handoffs", "qnfo-tasks"], ai: true }
     }), { headers: h });
     if (p === "/" || p === "") {
@@ -70,18 +78,16 @@ var worker_default = {
     }
     if (p === "/seed-kg") {
       try {
-        var dryRun = u.searchParams.get("dry") === "true" || u.searchParams.get("dry") === "1";
+        var dryRun = !internalCaller || u.searchParams.get("dry") === "true" || u.searchParams.get("dry") === "1";
         var result = await seedKGFromD1(env, dryRun);
         return new Response(JSON.stringify(result), { headers: h });
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message, status: "kg-seed-failed" }), { status: 500, headers: h });
       }
     }
-    if (p === "/handoff/search") {
-      return handleVzSearch(request, env, "HANDOFFS_VZ", "qnfo-handoffs", origin);
-    }
-    if (p === "/task/search") {
-      return handleVzSearch(request, env, "TASKS_VZ", "qnfo-tasks", origin);
+    if (p === "/handoff/search" || p === "/task/search") {
+      if (!internalCaller) return new Response(JSON.stringify({ error: "forbidden: search is available only to internal service-binding callers (ARCHIVE-INTERNAL-1)" }), { status: 403, headers: h });
+      return p === "/handoff/search" ? handleVzSearch(request, env, "HANDOFFS_VZ", "qnfo-handoffs", origin) : handleVzSearch(request, env, "TASKS_VZ", "qnfo-tasks", origin);
     }
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: h });
   },
