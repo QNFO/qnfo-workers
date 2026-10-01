@@ -1,0 +1,7 @@
+personal-events-radar is FOLDED (2026-10-01, RADAR-HUB-REDEPLOY-1, issue 1653). Do not redeploy this directory.
+
+The worker vanished unrecorded from the account (no worker_removals row; worker_live_audit NOT_DEPLOYED). Its code is embedded as the
+`perMod` module of radar-hub, and radar-hub's default export routes the same crons (`30 5 * * 2`, `0 6 * * *`) to it, writing the same
+personal_radar table. radar-hub is the single deployed radar worker.
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.

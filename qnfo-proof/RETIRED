@@ -1,0 +1,8 @@
+qnfo-proof is RETIRED (2026-10-01, RADAR-HUB-REDEPLOY-1, issue 1644). Do not redeploy this directory.
+
+The worker vanished unrecorded from the account (last proof event 2026-09-04). It is a mutation-gated ledger service (PROOF_TOKEN, REGISTRY_TOKEN),
+not a producer, and nothing in the fleet calls it, so there is nothing for a redeploy to resume. The 15 proofs, 116 nodes, 201 hash-chained
+events and 17 challenges remain readable in qnfo-audit (proofs, proof_nodes, proof_events, proof_challenges). The adversarial
+proof-verification capability is a dropped capability, not a folded one.
+
+canonical-deploy.yml skips any directory containing a RETIRED file. This source is kept for reference only.
