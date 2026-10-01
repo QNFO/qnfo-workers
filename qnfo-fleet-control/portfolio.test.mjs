@@ -25,9 +25,9 @@ if (a < 0 || b < 0 || b < a) {
   console.log("1 failed");
   process.exit(1);
 }
-const sandbox = { timedFetch: null, b64encode: null, charterOne: null, charterRows: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, atob, __export: null };
+const sandbox = { VERSION: "0.0.0-test", timedFetch: null, b64encode: null, charterOne: null, charterRows: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX };", sandbox, { filename: "portfolio-block.js" });
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H };", sandbox, { filename: "portfolio-block.js" });
 const P = sandbox.__export;
 const fx = JSON.parse(readFileSync(join(here, "portfolio.fixture.json"), "utf8"));
 const NOW = "2026-10-01T12:00:00.000Z";
@@ -143,6 +143,19 @@ eq(P.pfHygienePlan({ rows: [] }, wbsAll).length, 0, "an empty register plans not
 const evA = Object.assign({}, evH, { actions: [{ repo: "x", action: "license", status: "committed", note: "abc" }] });
 ok(P.pfRenderDocBlock(evA).includes("Hygiene actions the loop took") && P.pfRenderDocBlock(evA).includes("- x: license committed (abc)"), "actions taken are rendered");
 ok(!P.pfRenderDocBlock(evH).includes("Hygiene actions the loop took"), "no actions, no section");
+
+
+// --- DEPLOY-SYNC-1 ----------------------------------------------------------
+const T0 = Date.parse(NOW);
+const h = (n) => new Date(T0 - n * 3600000).toISOString();
+eq(P.pfNeedsSync(null, "1.0.0", T0), "no successful run yet", "no run: sync");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; wbs:ok" }, "1.0.0", T0), null, "a fresh ok run by this kernel: hold");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 0.9.9; wbs:ok" }, "1.0.0", T0), "kernel 1.0.0 has not synced yet", "a new kernel syncs on its first tick");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "wbs:ok; dormant 1" }, "1.0.0", T0), "kernel 1.0.0 has not synced yet", "a run from before DEPLOY-SYNC-1 counts as another kernel");
+eq(P.pfNeedsSync({ ts: h(P.PF_STALE_H + 1), status: "ok", note: "kernel 1.0.0;" }, "1.0.0", T0), "last ok run is " + (P.PF_STALE_H + 1) + "h old", "an ok run older than the hold: sync");
+eq(P.pfNeedsSync({ ts: h(0.5), status: "partial", note: "kernel 1.0.0;" }, "1.0.0", T0), null, "a partial run 30 minutes ago: hold");
+eq(P.pfNeedsSync({ ts: h(1), status: "partial", note: "kernel 1.0.0;" }, "1.0.0", T0), "last partial run is 1h old", "a partial run an hour ago: retry");
+eq(P.pfNeedsSync({ ts: "garbage", status: "ok", note: "kernel 1.0.0;" }, "1.0.0", T0) !== null, true, "an unreadable timestamp: sync");
 
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
