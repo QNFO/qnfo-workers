@@ -1,0 +1,5 @@
+-- VENUE-RADAR-CONTRACT-1 (2026-10-01): qnfo-venue-radar was redeployed at 08:11Z next to radar-hub
+-- (RADAR-HUB-REDEPLOY-1, PR 221) but had no output contract, so the worker census listed it as an
+-- uncontracted scheduled worker (UNMEASURED). Class detector with an output probe on kept items, so a
+-- run that fetches but keeps 0 shows as FIRING-NO-OUTPUT (yield assertion, #1642). Applied live.
+INSERT OR IGNORE INTO worker_output_contracts (worker, workflow, output, verify, state, updated_at, output_sql, worker_class, class_disposition) VALUES ('qnfo-venue-radar', 'daily venue scan (45 6 * * *): radar_sources fetched, kept items scored into venue_signal; each run logged in venue_radar_runs', 'venue_signal rows (kept items)', 'SELECT MAX(created_at) FROM venue_signal', 'ACTIVE', datetime('now'), 'SELECT COUNT(*) AS n FROM venue_signal WHERE created_at >= :since_iso', 'detector', 'keep: redeployed 2026-10-01 08:11Z alongside radar-hub (RADAR-HUB-REDEPLOY-1, PR 221); output is kept venue items, so a run that fetches but keeps 0 shows as FIRING-NO-OUTPUT in the census (yield assertion, #1642)');

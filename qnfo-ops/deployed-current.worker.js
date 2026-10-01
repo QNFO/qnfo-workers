@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.24-publication-preflight-gate";
+var VERSION = "2.38.25-binding-props-apply";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -2608,7 +2608,22 @@ async function installDeclaredBindings(env, worker) {
       else if (s.name === "r2_buckets" && k.bucket_name) decl.push({ type: "r2_bucket", name: nm, bucket_name: k.bucket_name });
       else if (s.name === "kv_namespaces" && k.id) decl.push({ type: "kv_namespace", name: nm, namespace_id: k.id });
       else if (s.name === "ai") decl.push({ type: "ai", name: nm });
-      else if (s.name === "services" && k.service) decl.push({ type: "service", name: nm, service: k.service, environment: k.environment || "production" });
+      else if (s.name === "services" && k.service) {
+        /* BINDING-PROPS-APPLY-1 (2026-10-01, agent_issues #1703): a service binding may declare
+           props = { caller = "qnfo-..." } (inline table, string values only). The callee reads it as
+           ctx.props; qnfo-ai INTERNAL-CALLER-PROPS-1 authenticates on it, so internal callers stop
+           depending on stale copies of the router key. */
+        const _sb = { type: "service", name: nm, service: k.service, environment: k.environment || "production" };
+        const _pm = k.props && String(k.props).match(/^\{(.*)\}$/);
+        if (_pm) {
+          const _props = {};
+          let _pp;
+          const _re = /([A-Za-z0-9_]+)\s*=\s*"([^"]*)"/g;
+          while ((_pp = _re.exec(_pm[1])) !== null) _props[_pp[1]] = _pp[2];
+          if (Object.keys(_props).length) _sb.props = _props;
+        }
+        decl.push(_sb);
+      }
       else if (s.name === "vectorize" && k.index_name) decl.push({ type: "vectorize", name: nm, index_name: k.index_name });
       else if (s.name === "durable_objects.bindings" && k.class_name) decl.push({ type: "durable_object_namespace", name: nm, class_name: k.class_name });
       else if (s.name === "queues" && k.queue_name) decl.push({ type: "queue", name: nm, queue_name: k.queue_name });
@@ -2731,6 +2746,7 @@ async function cfWorkerDeploy(env, args) {
     return c;
   });
   let bindingsInstalled = 0;
+  let bindingPropsApplied = 0;
   let bindingInstallNote = null;
   let _declFlags = [];
   // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
@@ -2753,7 +2769,18 @@ async function cfWorkerDeploy(env, args) {
       const _seen = new Set(bindingsOut.map(function(b) { return b.type + ":" + b.name; }));
       for (const _b of _decl) {
         const _k = _b.type + ":" + _b.name;
-        if (_seen.has(_k)) continue;
+        if (_seen.has(_k)) {
+          // BINDING-PROPS-APPLY-1: live wins on (type,name) for everything EXCEPT declared props on a
+          // service binding, which are applied on every deploy (idempotent; nothing else is touched).
+          if (_b.type === "service" && _b.props) {
+            const _live = bindingsOut.find(function(x) { return x && x.type === "service" && x.name === _b.name; });
+            if (_live && JSON.stringify(_live.props || null) !== JSON.stringify(_b.props)) {
+              _live.props = _b.props;
+              bindingPropsApplied++;
+            }
+          }
+          continue;
+        }
         bindingsOut.push(_b);
         _seen.add(_k);
         bindingsInstalled++;
@@ -2860,7 +2887,7 @@ async function cfWorkerDeploy(env, args) {
       return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
     }
     const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
