@@ -57,8 +57,9 @@ third parties, off-pillar topics, follow/like/repost automation and paid promoti
 - Bluesky (owner's personal account; research only, at most 1/day): qnfo-social /compose (AI draft, fact-checker validates claims vs title+abstract) → /approve → cron 14:30 posts. social_promote from publish stage queues directly.
 - q08 essays are a separate publication and are **not** posted to the owner's channels (Q08-PERSONAL-CHANNEL-HOLD-1, kill
   switch `Q08_SOCIAL_QUEUE`, off by default); q08 keeps its own RSS/digest only.
-- Multi-channel via Buffer: LinkedIn (personal profile, primary professional channel, 2-3 posts/week), X (low-priority
-  mirror of LinkedIn posts), Mastodon (mirror of Bluesky). STRATEGY.md section 6.1 records the Buffer API token as present;
+- Multi-channel via Buffer: LinkedIn (personal profile, primary professional channel, 2-3 posts/week; drafted automatically,
+  published only after the owner's one-tap approval because LinkedIn API Terms 3.1 forbid automated posting), X (low-priority
+  mirror, at most 2/week), Mastodon and Threads (mirrors of Bluesky, automatic). STRATEGY.md section 6.1 records the Buffer API token as present;
   the channels are pending the owner connecting LinkedIn (and optionally X/Mastodon) in Buffer once. Until then Bluesky is
   the live social channel. (Changed 2026-10-01; v1.0 listed this as P2 pending BUFFER_TOKEN provisioning.)
 - Hacker News, LessWrong, Reddit: manual only (their norms penalise automated posting).

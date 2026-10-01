@@ -35,8 +35,9 @@ Otherwise the fleet shrinks to the selected-works core and the personal layer. *
 automatically**; deletion needs the owner's explicit email confirmation. The +30% pageview test is retired: it measured
 traffic volume, which is the wrong objective, and its implementation reported a false pass.
 
-The `shutdown_manifest` rows below were armed under the old rule. They must be changed to match this gate (the phase-1 date
-and test, and the phase-2 data drop removed); this document does not record that change as done.
+The `shutdown_manifest` rows were updated on 2026-10-01 (verified in D1): row 1 (phase 1) is now this review gate, due
+2026-12-31, action "shrink, no deletion"; row 2 (phase 2, data drop) is `OWNER-CONFIRM-REQUIRED`. Rows 3-4 are unchanged.
+No code executes the manifest; only qnfo-fleet-dashboard reads it.
 
 Record as of 2026-09-26 (superseded): the fleet encoded a self-destruct, `shutdown_manifest` with 4 ARMED rows.
 - phase-1 (2026-10-25): retire all research/self-monitor workers unless `full_reports_live_30d >= 2` AND `impressions_growth >= +30%`.

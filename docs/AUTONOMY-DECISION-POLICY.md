@@ -25,6 +25,8 @@ gated T1 (next section). Every other Never item is unchanged.
 ## Owner-voice publishing (gated T1)
 Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
 gates and records each act.
+- **Platform rule first:** LinkedIn's API Terms (3.1) forbid automated posting, so LinkedIn posts are drafted automatically
+  and published only after the owner's one-tap approval in Buffer. Bluesky, Mastodon and Threads allow automatic posting.
 - **Automatic (inside the gates):** posts that summarise or announce the owner's own published works (selected works first);
   the scheduled cadence in STRATEGY.md section 4; first-contact research emails and one follow-up under the consent rules;
   the subscriber digest / research note.

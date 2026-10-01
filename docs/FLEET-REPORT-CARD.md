@@ -24,9 +24,10 @@ Tie monthly AI spend to measurable return. Return gates: full_reports_live_30d >
 > scorecard (search impressions, engaged human sessions, social reach and engagement rate, confirmed subscribers, warm
 > conversations, credibility events, cost per engaged human), and the research layer is judged at the section 9 review gate
 > on 2026-12-31: it continues if (credibility events at least 2 OR confirmed subscribers at least 50 OR funding secured) AND
-> AI spend is inside the cap. The paragraph above is the D1 row as reproduced on 2026-09-26. The qnfo-audit `objectives`
-> rows (return-on-spend, and cost-ceiling for the $60/30d target) must be updated to match; this file does not record that
-> update as done.
+> AI spend is inside the cap. The paragraph above is the D1 row as reproduced on 2026-09-26. Updated 2026-10-01: the
+> qnfo-audit `objectives` row `return-on-spend` (id 330) is now version 3 with this definition, ratified by the agent under
+> the owner's 2026-10-01 delegation. `cost-ceiling` (id 329) is unchanged; the $60/30d gateway target lives in STRATEGY.md
+> section 8.
 
 ## Open objective-revision proposals (pending human ratification)
 See goals table (goal_type='objective-revision', status='proposed', owner='human-ratify') in qnfo-audit D1. Terminal objectives are immutable by the agent; revisions route to human ratification.
