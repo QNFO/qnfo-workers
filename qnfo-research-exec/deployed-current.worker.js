@@ -78,6 +78,21 @@ var ROUTER_HOSTS = [
 var _routerBindingWarned = false;
 // GW-FALLBACK-BODY-1: record which router host produced the response we return.
 var _lastRouterHost = "";
+// GW-PROPS-AUTH-1 (2026-10-01, #1703 follow-through): qnfo-ai authenticates this worker by the QNFO_AI binding's
+// ctx.props.caller (INTERNAL-CALLER-PROPS-1), so the per-worker ROUTER_TOKEN copy is no longer required, and per CLAUDE.md
+// none may be created. gatewayPaper and gwCall still returned "" whenever ROUTER_TOKEN was absent, BEFORE any call and
+// without an event: on 2026-10-01 the reconcile stage got 0 chars twice (row 5099abb8, 14:51Z, degraded to the best leg)
+// and every review parsed as the default "unparseable" HARD finding, while no gw-* event was written after 12:08Z.
+// The gateway is usable when the binding exists OR a token exists; the bearer header is sent only when a token exists.
+function routerUsable(env) {
+  return !!(env && (env.QNFO_AI && typeof env.QNFO_AI.fetch === "function" || env.ROUTER_TOKEN));
+}
+function routerHeaders(env, json) {
+  var h = {};
+  if (json) h["Content-Type"] = "application/json";
+  if (env && env.ROUTER_TOKEN) h["Authorization"] = "Bearer " + env.ROUTER_TOKEN;
+  return h;
+}
 async function routerFetch(env, url, opts) {
   if (env && env.QNFO_AI && typeof env.QNFO_AI.fetch === "function") {
     return env.QNFO_AI.fetch(url, opts);
@@ -186,8 +201,8 @@ __name222(runModel, "runModel");
 __name2222(runModel, "runModel");
 __name22222(runModel, "runModel");
 async function gatewayPaper(env, prompt) {
-  if (!env.ROUTER_TOKEN) {
-    await logEvent(env, "ai-error", "gateway: no ROUTER_TOKEN");
+  if (!routerUsable(env)) {
+    await logEvent(env, "ai-error", "gateway: neither the QNFO_AI binding nor ROUTER_TOKEN is available");
     return "";
   }
   const ctrl = new AbortController();
@@ -195,7 +210,7 @@ async function gatewayPaper(env, prompt) {
     ctrl.abort();
   }, 12e4);
   try {
-    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     if (!r.ok) {
       await logEvent(env, "ai-error", "gateway " + r.status);
       return "";
@@ -1617,6 +1632,7 @@ var GW_BREAKER_PROBE_MS = 3 * 60 * 60 * 1e3;
 var GW_BREAKER_KINDS = ["gw-canned", "gw-error", "gw-fallback", "gw-ok"];
 var _authDriftLogged = false;
 var _gwBreaker = null;
+var _gwUnusableLogged = false;
 var _gwBreakerLoad = null;
 async function gwBreakerOpen(env) {
   if (_gwBreaker === null) {
@@ -1642,14 +1658,20 @@ function gwBreakerTrip(ok) {
 }
 __name(gwBreakerTrip, "gwBreakerTrip");
 async function gwCall(env, prompt, maxTokens) {
-  if (!env.ROUTER_TOKEN) return "";
-  if (await gwBreakerOpen(env)) return await aiText(env, MODELS[0], prompt, maxTokens);
+  if (!routerUsable(env)) {
+    if (!_gwUnusableLogged) {
+      _gwUnusableLogged = true;
+      await logEvent(env, "gw-unusable", "gwCall: neither the QNFO_AI binding nor ROUTER_TOKEN is available; using Workers AI", "warn");
+    }
+    return await aiText(env, MODELS[0], prompt, maxTokens, "low");
+  }
+  if (await gwBreakerOpen(env)) return await aiText(env, MODELS[0], prompt, maxTokens, "low");
   const ctrl = new AbortController();
   const t = setTimeout(function() {
     ctrl.abort();
   }, 24e4);
   try {
-    const r = await routerFetch(env, ROUTER, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_TOKEN }, body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) {
       var _eb = "";
@@ -1667,7 +1689,7 @@ async function gwCall(env, prompt, maxTokens) {
         await logEvent(env, "gw-auth-drift", "qnfo-ai rejected ROUTER_TOKEN (HTTP " + r.status + "); caller key is stale vs qnfo-ai ROUTER_AUTH_KEY; degraded to Workers AI", "warn");
       }
       await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + " host=" + _lastRouterHost + " body=" + _eb + "; falling back to Workers AI", "warn");
-      return await aiText(env, MODELS[0], prompt, maxTokens);
+      return await aiText(env, MODELS[0], prompt, maxTokens, "low");
     }
     const j = await r.json();
     const c = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
@@ -1683,12 +1705,12 @@ async function gwCall(env, prompt, maxTokens) {
     }
     gwBreakerTrip(false);
     await logEvent(env, _canned ? "gw-canned" : "gw-fallback", _canned ? "gateway returned canned FALLBACK_TEXT (len=" + String(c).trim().length + "); falling back to Workers AI" : "gateway empty content; falling back to Workers AI", "warn");
-    return await aiText(env, MODELS[0], prompt, maxTokens);
+    return await aiText(env, MODELS[0], prompt, maxTokens, "low");
   } catch (e) {
     clearTimeout(t);
     gwBreakerTrip(false);
     await logEvent(env, "gw-error", "gwCall failed: " + String(e && e.message || e).slice(0, 150), "warn");
-    return await aiText(env, MODELS[0], prompt, maxTokens);
+    return await aiText(env, MODELS[0], prompt, maxTokens, "low");
   }
 }
 __name(gwCall, "gwCall");
@@ -1959,7 +1981,7 @@ async function stageGround(env, row) {
   }
   let corpus = "";
   try {
-    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent((parentTitle + " " + q).trim().slice(0, 200)) + "&k=8", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
+    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent((parentTitle + " " + q).trim().slice(0, 200)) + "&k=8", { headers: routerHeaders(env, false) });
     if (r.ok) {
       const j = await r.json();
       const slugs = [];
