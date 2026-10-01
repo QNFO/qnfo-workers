@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.20-selffetch-inproc";
+var VERSION = "2.38.21-research-intake-truth";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1545,8 +1545,36 @@ async function researchQueue(env, args) {
     } catch (e) {
       expressed = { ok: false, error: String(e && e.message || e).slice(0, 200) };
     }
+    // RESEARCH-INTAKE-TRUTH-1 (2026-10-01, #1189): the orchestrator classifies with an LLM before it inserts
+    // the intent, so the 20 s client abort sometimes fired after the row was written and sometimes before.
+    // Either way this returned top-level ok:true. After a failure, read the row back (the orchestrator dedupes
+    // on identical desire text, so one longer retry cannot create a duplicate) and report persistence explicitly.
+    if (!expressed.ok) {
+      const desire = idea.slice(0, 4e3);
+      const findRow = async function() {
+        try { return env.QNFO_AUDIT ? await env.QNFO_AUDIT.prepare("SELECT id, status, created_at FROM intents WHERE desire = ?1 ORDER BY created_at DESC LIMIT 1").bind(desire).first() : null; } catch (e) { return null; }
+      };
+      let row = await findRow();
+      if (!row) {
+        try {
+          const ctrl2 = new AbortController();
+          const t2 = setTimeout(function() { ctrl2.abort(); }, 45e3);
+          const resp2 = await env.QNFO_INTENT.fetch("https://qnfo-intent-orchestrator.internal/intent", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.INTENT_TOKEN }, body: JSON.stringify({ desire: idea, source: "qnfo-ops-research-feed", device: "chatbox" }), signal: ctrl2.signal });
+          clearTimeout(t2);
+          let j2 = null;
+          try { j2 = await resp2.json(); } catch (e) { j2 = null; }
+          expressed = { ok: resp2.ok, http: resp2.status, intent: j2, retried: true, first_error: expressed.error || ("HTTP " + expressed.http) };
+        } catch (e) {
+          expressed.retry_error = String(e && e.message || e).slice(0, 200);
+        }
+        if (!expressed.ok) row = await findRow();
+      }
+      if (row) { expressed.persisted = true; expressed.intent_id = row.id; expressed.intent_status = row.status; }
+    }
   }
-  return { ok: true, idea: idea.slice(0, 400), relatedPapers: related, expressed };
+  const persisted = !!(expressed && (expressed.ok || expressed.persisted));
+  const ok = !express || persisted;
+  return { ok, persisted: express ? persisted : null, idea: idea.slice(0, 400), relatedPapers: related, expressed, ...(ok ? {} : { error: "research idea was NOT queued: " + String(expressed && (expressed.error || expressed.retry_error || expressed.reason || ("HTTP " + expressed.http)) || "unknown").slice(0, 200) }) };
 }
 __name(researchQueue, "researchQueue");
 __name2(researchQueue, "researchQueue");
