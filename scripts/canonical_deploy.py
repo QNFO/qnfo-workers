@@ -146,6 +146,18 @@ def lock_contended(res: dict) -> bool:
     return "lock not acquired" in json.dumps(res)[:4000]
 
 
+def _is_resurrection_refusal(res: dict) -> bool:
+    """True only when the route refused with WORKER-RESURRECTION-GUARD-1 (rejected, nothing deployed)."""
+    try:
+        body = json.loads(res["error"]) if isinstance(res.get("error"), str) else res
+    except Exception:
+        body = res
+    if not isinstance(body, dict):
+        return False
+    text = str(body.get("error") or "")
+    return bool(body.get("rejected")) and "WORKER-RESURRECTION-GUARD-1" in text
+
+
 def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False) -> dict:
     """DEPLOY-LOCK-CONTENTION-1 (2026-09-30). One push to main can start TWO deployers for the same worker
     (deploy-qnfo-ops.yml -> raw_put.py and this workflow -> /ops/deploy; or a fleet-control heal), and the
@@ -238,6 +250,19 @@ def main(argv: list[str] | None = None) -> int:
         res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create)
         dt = time.time() - t0
         ok = bool(res.get("ok"))
+        # ABSENT-WORKER-REFUSAL-NOT-RED-1 (#1681): WORKER-RESURRECTION-GUARD-1 refuses to create a worker that is absent
+        # from the account unless the caller passes --allow-create (a worker.js ADDED in the push, or an explicitly named
+        # dispatch). A push that merely edits the source of an absent worker (run 36846350557: jnl-pipeline, one of five
+        # never-deployed jnl-* workers) is therefore refused every time, and that refusal turned the whole run red and
+        # filed a watchdog issue for a worker that is intentionally absent. A refusal is reported as a loud warning and
+        # does not fail the run; every other failure, and any --allow-create deploy, stays red.
+        if not ok and not args.allow_create and _is_resurrection_refusal(res):
+            print(f"::warning::{worker} is absent from the account, so the canonical deploy refused to create it "
+                  f"(WORKER-RESURRECTION-GUARD-1). Nothing was deployed. To create it on purpose, dispatch canonical-deploy "
+                  f"with workers={worker}; to retire it, add a RETIRED or FOLDED marker to its directory.")
+            results.append((worker, True, res))
+            print(f"    SKIPPED-ABSENT in {dt:.1f}s  status={res.get('status')}")
+            continue
         results.append((worker, ok, res))
         verdict = "OK" if ok else "FAIL"
         print(f"    {verdict} in {dt:.1f}s  status={res.get('status')}")
