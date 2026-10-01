@@ -1,125 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@ca4d846bf45b",
- "due": 14,
- "pass": 6,
- "fail": 8,
+ "verifier": "remediation-consumer@30a3bae529f6",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-1633",
-   "issue_id": 1633,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1637",
-   "issue_id": 1637,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1641",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1642",
-   "issue_id": 1642,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1643",
-   "issue_id": 1643,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1644",
-   "issue_id": 1644,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1645",
-   "issue_id": 1645,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1647",
-   "issue_id": 1647,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1648",
-   "issue_id": 1648,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1651",
-   "issue_id": 1651,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1652",
-   "issue_id": 1652,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1655",
-   "issue_id": 1655,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1658",
-   "issue_id": 1658,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1674",
-   "issue_id": 1674,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -135,7 +22,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 40851,
- "head": "ca4d846bf45b1a2d1eecf87158521f4cad2f56e7",
+ "spent_ms": 6543,
+ "head": "30a3bae529f66bb4a0b35ea1a6609b44445c3fdd",
  "job_status": "success"
 }
