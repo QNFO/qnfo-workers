@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 04:27:24",
+  "audited_at": "2026-10-01 04:31:19",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -425,7 +425,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.3.0-think-loop",
+        "version": "1.3.1-reentry-rescore",
         "worker": "idea-hub"
       },
       {
@@ -686,9 +686,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.3.0-think-loop",
+      "before": "1.3.1-reentry-rescore",
       "http": 200,
-      "live": "1.3.0-think-loop",
+      "live": "1.3.1-reentry-rescore",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
