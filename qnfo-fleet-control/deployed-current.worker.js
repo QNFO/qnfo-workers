@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.67-ops-watch-ai-coverage";
+var VERSION = "0.4.68-remediation-tick";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2973,6 +2973,7 @@ var worker_default2 = {
     ctx.waitUntil(usageSnapshotIfStale(env).catch((e) => console.error("usageSnapshot error:", e && e.message || e)));
     ctx.waitUntil(opsAgentWatchMetrics(env).catch((e) => console.error("opsAgentWatch error:", e && e.message || e)));
     ctx.waitUntil(aiAttributionCoverage(env).catch((e) => console.error("aiAttributionCoverage error:", e && e.message || e)));
+    ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3133,6 +3134,52 @@ async function aiAttributionCoverage(env) {
   return { ok: true, attributed: attributed, total: total, pct: pct };
 }
 __name(aiAttributionCoverage, "aiAttributionCoverage");
+// REMEDIATION-TICK-1 (2026-10-01): remediation_contracts close issues on evidence. A d1-query probe that returns
+// expected == observed writes remediation_verifications pass=1, and the remediation_verification_autoclose triggers close
+// the agent_issue with that evidence. The only runner was scripts/remediation_consumer.py, which GitHub runs after
+// pushes; its schedule trigger never fires on this repository, so a contract whose evidence lands overnight (tomorrow's
+// cron run of a producer) waited for the next unrelated push. This hourly tick runs the same contract with the same
+// guarantees: literal read-only SELECT only, expected and observed both taken from the probe (never invented), pass only
+// when both are non-empty and equal, and trusted transport d1-query only.
+var __RT_WRITE_KW = ["insert ", "update ", "delete ", "drop ", "alter ", "create ", "attach ", "detach ", "pragma ", "replace ", "vacuum", "reindex"];
+async function remediationContractsTick(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  if (!db) return { ok: false };
+  var out = { ok: true, due: 0, pass: 0, fail: 0, skipped: 0 };
+  var rs = await db.prepare("SELECT class, issue_id, verify_probe, verify_transport, expected_cadence_h FROM remediation_contracts WHERE status = 'active' AND verify_transport = 'd1-query' AND (next_due_at IS NULL OR datetime(next_due_at) <= datetime('now')) ORDER BY COALESCE(next_due_at, ts) LIMIT 15").all().catch(function () { return { results: [] }; });
+  var rows = rs.results || [];
+  out.due = rows.length;
+  for (var i = 0; i < rows.length; i++) {
+    var c = rows[i], verdict = null;
+    try {
+      var q = String(c.verify_probe || "").trim();
+      var ql = " " + q.toLowerCase().replace(/\s+/g, " ") + " ";
+      var literal = /^(select|with) /.test(q.toLowerCase()) && q.indexOf(";") === -1 && !__RT_WRITE_KW.some(function (k) { return ql.indexOf(" " + k) !== -1; });
+      if (!literal) { verdict = "probe-not-machine-executable"; out.skipped++; }
+      else {
+        var r = await db.prepare(q).first();
+        var keys = r ? Object.keys(r) : [];
+        var exp = r ? (r.expected !== undefined ? r.expected : r[keys[0]]) : null;
+        var obs = r ? (r.observed !== undefined ? r.observed : r[keys[1]]) : null;
+        var es = exp == null ? "" : String(exp).trim(), os = obs == null ? "" : String(obs).trim();
+        if (!es || !os) { verdict = "vacuous-probe-result"; out.skipped++; }
+        else {
+          var passed = es === os ? 1 : 0;
+          await db.prepare("INSERT INTO remediation_verifications (issue_id, class, probe_url, transport, expected, observed, pass, verifier) VALUES (?1, ?2, ?3, 'd1-query', ?4, ?5, ?6, ?7)").bind(c.issue_id, c.class, "d1:remediation_contracts/" + c.class, es, os, passed, "qnfo-fleet-control/remediation-tick@" + VERSION).run();
+          verdict = passed ? "pass" : "fail";
+          if (passed) out.pass++; else out.fail++;
+        }
+      }
+    } catch (e) {
+      verdict = "probe-error"; out.skipped++;
+    }
+    try {
+      await db.prepare("UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, last_attempt_at = datetime('now'), last_verdict = ?1, next_due_at = datetime('now', ?2), status = CASE WHEN ?1 = 'pass' THEN 'closed' ELSE status END WHERE class = ?3").bind(verdict, "+" + Math.max(1, Number(c.expected_cadence_h) || 1) + " hours", c.class).run();
+    } catch (e2) {}
+  }
+  return out;
+}
+__name(remediationContractsTick, "remediationContractsTick");
 async function scriptUsage7d(env, name) {
   var db = env.AUDIT_DB || env.AUDIT;
   try {
