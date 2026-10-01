@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 06:06:12",
+  "audited_at": "2026-10-01 06:24:41",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -415,7 +415,7 @@
       },
       {
         "dir": "errata-hub",
-        "version": "1.1.2",
+        "version": "1.1.3",
         "worker": "errata-hub"
       },
       {
@@ -495,7 +495,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.1.8-owner-dmarc-gate",
+        "version": "2.1.9-personal-verified",
         "worker": "qnfo-email"
       },
       {
@@ -545,7 +545,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.17-empty-final-guard",
+        "version": "2.38.18-budget-auto-promote",
         "worker": "qnfo-ops"
       },
       {
@@ -570,7 +570,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.26-dlf-hold",
+        "version": "0.9.27-gw-breaker",
         "worker": "qnfo-research-exec"
       },
       {
@@ -580,7 +580,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.16-dissem-reply-arity",
+        "version": "0.7.17-distribution-reconcile",
         "worker": "qnfo-social"
       },
       {
@@ -654,9 +654,9 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.1.2",
+      "before": "1.1.3",
       "http": 200,
-      "live": "1.1.2",
+      "live": "1.1.3",
       "match": 1,
       "note": "SYNC",
       "worker": "errata-hub"
@@ -1062,9 +1062,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.1.8-owner-dmarc-gate",
+      "before": "2.1.9-personal-verified",
       "http": 200,
-      "live": "2.1.8-owner-dmarc-gate",
+      "live": "2.1.9-personal-verified",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1278,9 +1278,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.17-empty-final-guard",
+      "before": "2.38.18-budget-auto-promote",
       "http": 200,
-      "live": "2.38.17-empty-final-guard",
+      "live": "2.38.18-budget-auto-promote",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1358,9 +1358,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.26-dlf-hold",
+      "before": "0.9.27-gw-breaker",
       "http": 200,
-      "live": "0.9.26-dlf-hold",
+      "live": "0.9.27-gw-breaker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1414,9 +1414,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.16-dissem-reply-arity",
+      "before": "0.7.17-distribution-reconcile",
       "http": 200,
-      "live": "0.7.16-dissem-reply-arity",
+      "live": "0.7.17-distribution-reconcile",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
