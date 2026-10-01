@@ -12,7 +12,7 @@
 // the row's evidence. The composite is mirrored into survival_state.sai so the survival panel is no longer NULL.
 // Every write is a bounded UPSERT of a known dimension plus an append to autonomy_score_history. If the fact query
 // fails, nothing is written (fail closed).
-var VERSION = "1.1.1-vsm-ooda-measured";
+var VERSION = "1.1.2-alert-undigested";
 var WORKER = "qnfo-autonomy-scorer";
 var DAY = 86400000;
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
@@ -206,7 +206,7 @@ async function run(env, write) {
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(run(env, true).catch(async function (e) {
-      try { await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES (?1,'warn',?2,1)").bind(WORKER, "autonomy scoring failed, nothing written: " + String(e && e.message || e).slice(0, 300)).run(); } catch (e2) {}
+      try { await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?1,'warn',?2)").bind(WORKER, "autonomy scoring failed, nothing written: " + String(e && e.message || e).slice(0, 300)).run(); } catch (e2) {}
     }));
   },
   async fetch(request, env) {
