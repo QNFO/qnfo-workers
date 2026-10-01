@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 01:38:28",
+  "audited_at": "2026-10-01 01:42:48",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -418,7 +418,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.2.0-ideation-loop",
+        "version": "1.2.1-errata-gate",
         "worker": "idea-hub"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.2.0-ideation-loop",
+      "before": "1.2.1-errata-gate",
       "http": 200,
-      "live": "1.2.0-ideation-loop",
+      "live": "1.2.1-errata-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
