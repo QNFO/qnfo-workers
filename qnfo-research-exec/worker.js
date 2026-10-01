@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.24-single-flight-lease";
+var VERSION = "0.9.25-evolve-c115";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -465,6 +465,11 @@ async function publishStage(env, row) {
   if (_bodyStripped.length < 40 && String(paper.abstract || "").trim().length < 40) {
     await markError(env, row, "NO-BLANK-PUBLISH-1: body and abstract both empty for slug " + slug);
     return { ok: false, stage: "publish" };
+  }
+  // DLF-ZENODO-PUBLISH-BLOCKED-1: do not publish qnf-DLF-001 until a direct safe Zenodo deposit path is exposed and the Zenodo v2 deposit contamination in #979 is fixed.
+  if (slug === 'qnf-DLF-001') {
+    await markError(env, row, 'DLF-ZENODO-PUBLISH-BLOCKED-1: publish blocked pending safe Zenodo path and #979 fix');
+    return { ok: false, stage: 'publish' };
   }
   const pub = await publishToZenodo(env, paper.title, paper.abstract, paper.body_md, slug);
   if (!pub.ok) {
