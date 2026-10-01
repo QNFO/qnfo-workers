@@ -12,7 +12,13 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.24-social-gates";
+var VERSION = "0.7.25-linkedin-delegated";
+// 0.7.25 (2026-10-01, #1713): LINKEDIN-OWNER-DELEGATED-1 and BUFFER-CHANNEL-AUDIT-1. The owner directed (2026-10-01 21:35Z,
+// in addition to OWNER-DELEGATION-SOCIAL-1) that LinkedIn be managed without any manual step. LinkedIn is connected in
+// Buffer (engagement run 2026-09-20: channels linkedin, twitter, mastodon). The fleet never calls LinkedIn's API; Buffer,
+// the account holder's authorised publishing app, publishes from its queue. pipeline_flags.linkedin_mode selects
+// 'publish' (Buffer queue, default per the owner's direction) or 'draft' (one-tap approval); the weekly cap, pause flag
+// and content gate apply unchanged. A daily channel audit records every Buffer channel in social_channels.
 // 0.7.21 (2026-10-01, #1712 POST-ID-UTM-1, #1647 SOCIAL-ENGAGEMENT-COLLECTION-STOPPED-1, #1713): measured at 14:11 UTC,
 // social_threads had 141 posted rows and 0 with post_uri. Every one of them was posted before 0.7.19 went live
 // (first deploy 11:22 UTC; newest post 04:30 UTC), and since then the queue was empty and the weekly cap (96 Bluesky
@@ -25,6 +31,7 @@ var VERSION = "0.7.24-social-gates";
 // (saveToDraft: true) that the owner approves with one tap in Buffer; Mastodon and X keep posting automatically inside
 // the cadence caps. The draft id is recorded as buffer-draft:<id> in social_threads.post_uri so the daily sent-as-you
 // digest (qnfo-cloud-ops) can list what is waiting for approval.
+// Superseded 2026-10-01 by LINKEDIN-OWNER-DELEGATED-1 (0.7.25): draft is now the opt-in mode (pipeline_flags.linkedin_mode='draft').
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -184,7 +191,7 @@ function postUriValue(bskyUri, bufferResult) {
   const res = (bufferResult && bufferResult.results) || [];
   for (const r of res) {
     if (!r || !r.post_id) continue;
-    if (r.status === 'ok') ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer:' + r.post_id;
+    if (r.status === 'ok' || r.status === 'queued') ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer:' + r.post_id;
     else if (r.status === 'draft') ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer-draft:' + r.post_id; // LINKEDIN-BUFFER-DRAFTS-1
   }
   const keys = Object.keys(ids);
@@ -629,26 +636,59 @@ async function bufferPost(env, text, campaign) {
     const orgId = orgs[0].id;
     const chRes = await bufferGql(env, "{ channels(input: { organizationId: \"" + orgId + "\" }) { id service isDisconnected } }");
     const channels = (chRes && chRes.data && chRes.data.channels) || [];
+    const liMode = await linkedinMode(env);
     for (const svc of ["mastodon", "linkedin", "twitter"]) {
       const ch = channels.find((c) => c.service === svc && !c.isDisconnected);
       if (!ch) { results.push({ platform: svc, status: "no-channel" }); continue; }
       try {
         const svcText = utmTagText(text, BUFFER_UTM_SOURCE[svc] || svc, campaign);
         // LINKEDIN-BUFFER-DRAFTS-1 (#1713): LinkedIn is draft-only (owner approves in Buffer); the rest share now.
-        const draft = svc === "linkedin";
-        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: " + (draft ? "addToQueue, saveToDraft: true" : "shareNow") + " }) { ... on PostActionSuccess { post { id status } } ... on MutationError { message } } }";
+        const draft = svc === "linkedin" && liMode === "draft";
+        const queued = svc === "linkedin" && !draft;
+        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: " + (draft ? "addToQueue, saveToDraft: true" : queued ? "addToQueue" : "shareNow") + " }) { ... on PostActionSuccess { post { id status } } ... on MutationError { message } } }";
         const r = await bufferGql(env, mutation);
         const cp = r && r.data && r.data.createPost;
         // 0.7.21: read back the status Buffer gave the LinkedIn post; anything but 'draft' is an alert (ToS 3.1).
         if (cp && cp.post && draft && cp.post.status && String(cp.post.status).toLowerCase() !== "draft") {
           await logAlert(env, "linkedin-draft", "error", "LINKEDIN-BUFFER-DRAFTS-1: Buffer post " + cp.post.id + " came back with status " + cp.post.status + ", not draft");
           results.push({ platform: svc, status: "error", post_id: cp.post.id, error: "not-draft:" + cp.post.status });
-        } else if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : "ok", post_id: cp.post.id });
+        } else if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : queued ? "queued" : "ok", post_id: cp.post.id });
         else results.push({ platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) });
       } catch (e) { results.push({ platform: svc, status: "error", error: String(e && e.message || e) }); }
     }
   } catch (e) { results.push({ status: "error", error: String(e && e.message || e) }); }
   return { results };
+}
+
+// LINKEDIN-OWNER-DELEGATED-1: 'publish' unless pipeline_flags.linkedin_mode is exactly 'draft'.
+async function linkedinMode(env) {
+  try {
+    const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='linkedin_mode'").first();
+    return f && String(f.value) === "draft" ? "draft" : "publish";
+  } catch (e) { return "publish"; }
+}
+// BUFFER-CHANNEL-AUDIT-1: once per UTC day (first */2h tick), record every Buffer channel and its connection state, so
+// "is LinkedIn connected" is a D1 fact (social_channels) instead of a question for the owner. A failed read is logged,
+// never written as "disconnected".
+async function bufferChannelAudit(env, nowMs) {
+  if (!env.BUFFER_TOKEN) return { skipped: "no BUFFER_TOKEN" };
+  const day = new Date(nowMs || Date.now()).toISOString().slice(0, 10);
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT)").run();
+  const done = await env.DB.prepare("SELECT 1 AS x FROM social_channels WHERE checked_day=?1 LIMIT 1").bind(day).first();
+  if (done) return { throttled: day };
+  const orgRes = await bufferGql(env, "{ account { organizations { id } } }");
+  const orgs = (orgRes && orgRes.data && orgRes.data.account && orgRes.data.account.organizations) || [];
+  if (!orgs.length) { await logAlert(env, "buffer-channels", "error", "BUFFER-CHANNEL-AUDIT-1: no Buffer organization (token rejected or empty)"); return { error: "no org" }; }
+  const chRes = await bufferGql(env, "{ channels(input: { organizationId: \"" + orgs[0].id + "\" }) { id service name isDisconnected } }");
+  const channels = (chRes && chRes.data && chRes.data.channels) || [];
+  const iso = new Date(nowMs || Date.now()).toISOString();
+  const st = channels.map(function(c) {
+    return env.DB.prepare("INSERT INTO social_channels (channel_id, service, name, connected, checked_at, checked_day) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(channel_id) DO UPDATE SET service=excluded.service, name=excluded.name, connected=excluded.connected, checked_at=excluded.checked_at, checked_day=excluded.checked_day").bind(String(c.id), String(c.service || ""), String(c.name || ""), c.isDisconnected ? 0 : 1, iso, day);
+  });
+  if (st.length) await env.DB.batch(st);
+  const li = channels.filter(function(c) { return c.service === "linkedin"; });
+  if (!li.some(function(c) { return !c.isDisconnected; })) await logAlert(env, "buffer-channels", "error", "BUFFER-CHANNEL-AUDIT-1: no connected LinkedIn channel in Buffer (" + channels.length + " channels)");
+  return { day: day, channels: channels.map(function(c) { return c.service + (c.isDisconnected ? ":disconnected" : ":connected"); }) };
 }
 
 // Re-run the fact-checker on drafts held only because the checker was unavailable.
@@ -1036,6 +1076,7 @@ export default {
       try { await collectEngagement(env); } catch (e) { await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
       return;
     }
+    try { await bufferChannelAudit(env); } catch (e) { await logAlert(env, 'buffer-channels', 'error', 'BUFFER-CHANNEL-AUDIT-1 ' + String(e).slice(0, 300)); }
     try {
       const ps = await syncProfile(env);
       if (ps && (ps.updated || ps.error || ps.held)) console.log('[qnfo-social] profile-sync', JSON.stringify(ps));
@@ -1257,4 +1298,4 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION };
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode };
