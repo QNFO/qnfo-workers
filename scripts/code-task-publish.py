@@ -29,6 +29,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 
@@ -37,6 +38,8 @@ REPO_NAME = "qnfo-workers"
 REPO_NAME_FULL = "QNFO/qnfo-workers"
 MAX_PATCH = 200_000
 STALE_PUBLISHING_MIN = 30
+D1_TIMEOUT_S = 45
+D1_READ_ATTEMPTS = 3
 # Mirror of the worker's DENY_PATH: the loop must never publish edits to workflows, wrangler config, deploy targets, env files.
 DENY_PATH = re.compile(r"^(\.github/|\.git/)|(^|/)(wrangler\.toml|deploy-targets\.txt|\.env[^/]*)$", re.I)
 BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,100}$")
@@ -68,9 +71,21 @@ class D1Store:
         req = urllib.request.Request(url, data=json.dumps({"sql": sql, "params": params}).encode(), method="POST",
                                      headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
                                               "User-Agent": "qnfo-code-task-publish/1"})
+        # D1-READ-RETRY-1 (#337): the REST read occasionally stalls (TimeoutError: The read operation timed out) and the
+        # next run succeeds, so a SELECT is retried with backoff. Writes are not: a timed-out UPDATE may have landed,
+        # and the claim is a compare-and-set whose retry would misread "already claimed" as "lost the race".
+        attempts = D1_READ_ATTEMPTS if sql.lstrip().upper().startswith("SELECT") else 1
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                d = json.load(r)
+            for i in range(attempts):
+                try:
+                    with urllib.request.urlopen(req, timeout=D1_TIMEOUT_S) as r:
+                        d = json.load(r)
+                    break
+                except (TimeoutError, urllib.error.URLError) as e:
+                    if isinstance(e, urllib.error.HTTPError) or i + 1 >= attempts:
+                        raise
+                    print(f"[publish] D1 read attempt {i + 1}/{attempts} failed ({type(e).__name__}); retrying", flush=True)
+                    time.sleep(2 ** i)
         except urllib.error.HTTPError as e:
             msg = ""
             try:  # Cloudflare error bodies carry {"errors":[{"message":...}]}; no secrets in them
