@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.0, 2026-10-01. **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.1, 2026-10-01 (1.1: owner delegation of social accounts, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -122,7 +122,7 @@ the funding strategy's own "volume trap" warning applies.
 | X | low priority mirror | Rowan | at most 2/week | via Buffer; X API is pay-per-use ($0.20 per post with a link) | not connected |
 | Cold email | warm conversations with researchers and journalists | Rowan | at most 8/day across both engines | qnfo-outreach + qnfo-cloud-ops | **paused** until OUTREACH-CONSENT-1 deploys, then resumed |
 | Facebook | personal | Rowan | none | none: one Intro line and one link to qnfo.org, set by the owner | personal; no automation |
-| Funders, employers, applications | career and funding | Rowan | as leads arise | drafted by the fleet in the Identity doc; **the owner sends or submits** (forms with CAPTCHA, signatures) | weekly review (Mondays) |
+| Funders, employers, applications | career and funding | Rowan | as leads arise | drafted by the fleet in the Identity doc; **the owner sends or submits** (forms with CAPTCHA, signatures). The fleet never drafts for a recipient that asks for the applicant's own writing (FRI's form: "using only your own writing, without the use of AI tools or outside assistance") | weekly review (Mondays) |
 | arXiv | prestige and discoverability for works 1, 2, 4 | Rowan | as ready | submitted by hand; since 2026-01-21 a new author needs a **personal endorsement from an established arXiv author in the field**, so ask one warm contact individually (never a mass request) | prepare packages |
 | Conferences / workshops | credibility events | Rowan | per deadline | owner submits; fleet tracks deadlines (radar-hub) | track |
 | Hacker News, LessWrong, Reddit | high-reach communities | Rowan | occasional | **manual only**: their norms penalise automated posting | owner posts when a work fits |
@@ -159,8 +159,18 @@ The 2026-10-01 directive authorises the system to publish and send **as the owne
 drafted automatically and published only after the owner's one-tap approval in Buffer. Bluesky (bots and scheduled posts are
 welcome if interactions stay opt-in), Mastodon and Threads allow automatic posting inside the gates below.
 
+**Owner delegation of social accounts (2026-10-01, OWNER-DELEGATION-SOCIAL-1):** the owner directed "automatically manage
+all my social media accounts, including LinkedIn ... I will not provide any manual action or intervention". Inside the
+platform rules above that means: the Bluesky bio follows the approved short bio automatically (qnfo-social PROFILE-SYNC-1;
+a later hand edit the fleet does not list as superseded is still left alone), and Bluesky posting runs inside the cadence
+gates. It does not override a third party's rules: LinkedIn posts stay one-tap drafts (API Terms 3.1(26)), LinkedIn,
+X, Mastodon and Threads stay unconnected until the account holder signs in to Buffer once, Facebook has no API for a
+personal profile, and an application that asks for the applicant's own writing is not drafted. Those items stay in the
+owner queue with the default in effect stated, and are not re-asked.
+
 **Never automatic (draft only, or not at all):**
-- any change to the owner's name, bio, CV or public profiles; any application; any email to a funder, hiring manager or
+- any change to the owner's name, CV or public profiles (exception below: bios on accounts the fleet holds credentials for);
+  any application; any email to a funder, hiring manager or
   other named person outside the research-outreach campaign; anything that commits money or the owner's time; anything on
   Facebook (Identity doc "Rules I would work under");
 - replies, comments or DMs to individuals on social platforms;
