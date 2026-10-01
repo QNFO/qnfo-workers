@@ -24,6 +24,10 @@ jobs:
       # (mirror-autosync.yml performs exactly that repair on a 6-hourly schedule).
       - name: repo-internal mirror parity (fail-closed)
         run: python scripts/mirror-guard.py
+      # MODULE-SCOPE-DEPTH-1: the version-resolution scanner is exercised offline first (strings, comments, regex literals,
+      # templates, IIFE-embedded sub-workers), so a regression in it cannot manufacture or hide DRIFT.
+      - name: drift guard self-test (offline)
+        run: python scripts/deploy-drift-guard-selftest.py
       - name: repo <-> live VERSION drift (narrative surfaces)
         run: python scripts/deploy-drift-guard.py
       - name: repo <-> live VERSION drift (all live workers, report only)

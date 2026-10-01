@@ -275,6 +275,111 @@ def deployed_workers(acct, token):
     return out
 
 
+# MODULE-SCOPE-DEPTH-1 (2026-10-01): which `VERSION` does /health serve? The one at MODULE scope, i.e. brace/paren/bracket
+# depth 0. A bundler (esbuild) inlines each embedded sub-worker inside an IIFE WITHOUT re-indenting it, so an embedded
+# worker's `var VERSION` is at column 0 too and column/last-wins heuristics pick the wrong one: radar-hub declares 1.0.9 (its
+# own, depth 0), 1.0.8 / 1.0.1+fabric (embedded IIFEs) and 1.2.4 (the LAST embedded worker), and was reported as DRIFT
+# against a correct live 1.0.9 on every audit. This is a small JS scanner that skips strings, comments, template literals
+# (including `${...}`) and regex literals so braces inside them cannot corrupt the depth. If it cannot find a depth-0
+# declaration the caller falls back to the older heuristics, so a scanner confusion degrades to the previous behaviour.
+_RE_PREV = set("(,=:[!&|?{};+-*%<>~^")
+_RE_WORDS = {"return", "typeof", "case", "in", "of", "delete", "void", "throw", "new", "else", "do", "yield", "await"}
+
+
+def _js_template(text, i, starts, hits):
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "`":
+            return i + 1
+        if c == "$" and text[i + 1:i + 2] == "{":
+            i = _js_scan(text, i + 2, starts, hits, True)
+            continue
+        i += 1
+    return i
+
+
+def _js_scan(text, i, starts, hits, expr_mode):
+    n = len(text)
+    depth = 0
+    prev = ""
+    word = ""
+    while i < n:
+        c = text[i]
+        if not expr_mode and depth == 0 and i in starts:
+            hits.append(starts[i].group(2))
+        if c in " \t\r\n":
+            i += 1
+            continue
+        if c == "/" and text[i + 1:i + 2] == "/":
+            j = text.find("\n", i)
+            i = n if j < 0 else j + 1
+            continue
+        if c == "/" and text[i + 1:i + 2] == "*":
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        if c in "\"'":
+            i += 1
+            while i < n and text[i] != c and text[i] != "\n":
+                i += 2 if text[i] == "\\" else 1
+            i += 1
+            prev, word = "a", ""
+            continue
+        if c == "`":
+            i = _js_template(text, i + 1, starts, hits)
+            prev, word = "a", ""
+            continue
+        if c == "/" and (prev == "" or prev in _RE_PREV or word in _RE_WORDS):
+            i += 1
+            in_class = False
+            while i < n and text[i] != "\n":
+                ch = text[i]
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == "[":
+                    in_class = True
+                elif ch == "]":
+                    in_class = False
+                elif ch == "/" and not in_class:
+                    break
+                i += 1
+            i += 1
+            while i < n and text[i].isalpha():
+                i += 1
+            prev, word = "a", ""
+            continue
+        if c.isalnum() or c in "_$":
+            j = i
+            while j < n and (text[j].isalnum() or text[j] in "_$"):
+                j += 1
+            word, prev = text[i:j], "a"
+            i = j
+            continue
+        word, prev = "", c
+        if c in "{([":
+            depth += 1
+        elif c in "})]":
+            if expr_mode and c == "}" and depth == 0:
+                return i + 1
+            depth -= 1
+        i += 1
+    return i
+
+
+def _module_scope_versions(text):
+    """Plain (non-QNFO_) VERSION values declared at module scope (depth 0), in file order."""
+    starts = {m.start(): m for m in CONST.finditer(text) if not m.group(1)}
+    hits = []
+    if starts:
+        _js_scan(text, 0, starts, hits, False)
+    return hits
+
+
 def _repo_version(text):
     """VERSION-PRECEDENCE-1: prefer the plain `VERSION` constant over `QNFO_VERSION`.
 
@@ -285,6 +390,10 @@ def _repo_version(text):
     and a corrupted numeric direction comparison for --ahead. The plain constant wins;
     QNFO_VERSION remains a fallback so no worker becomes invisible to the drift check.
     """
+    # MODULE-SCOPE-DEPTH-1: a real scope check beats any column heuristic (see _module_scope_versions).
+    d0 = _module_scope_versions(text)
+    if d0:
+        return d0[-1]
     top_plain = [val for prefix, val in CONST_TOP.findall(text) if not prefix]
     if top_plain:
         return top_plain[-1]
