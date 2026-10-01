@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.57-census-self-schedule";
+var VERSION = "0.4.58-census-dod-upsert";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3516,7 +3516,7 @@ async function workerCensus(env) {
     var nowIso = new Date(now).toISOString();
     try {
       await db.prepare("INSERT INTO fleet_worker_census (worker, req24, measured, last_seen, verdict, reason, ts) VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6) ON CONFLICT(worker) DO UPDATE SET req24=excluded.req24, measured=1, last_seen=excluded.last_seen, verdict=excluded.verdict, reason=excluded.reason, ts=excluded.ts").bind(w, req[w] != null ? req[w] : null, nowIso, verdict, reasonFull.slice(0, 400), nowIso).run();
-      await db.prepare("UPDATE worker_dod SET verdict=?1, req24=?2, evidence=?3, updated_at=?4 WHERE worker=?5").bind(verdict, req[w] != null ? req[w] : null, ("WORKER-CENSUS-DISCRIMINATING-1: " + reasonFull).slice(0, 400), nowIso, w).run();
+      await db.prepare("INSERT INTO worker_dod (worker, req24, measured, verdict, evidence, updated_at) VALUES (?5, ?2, 1, ?1, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET verdict=excluded.verdict, req24=excluded.req24, measured=1, evidence=excluded.evidence, updated_at=excluded.updated_at").bind(verdict, req[w] != null ? req[w] : null, ("WORKER-CENSUS-DISCRIMINATING-1: " + reasonFull).slice(0, 400), nowIso, w).run();
     } catch (e) {}
   }
   try { await db.prepare("DELETE FROM fleet_worker_census WHERE worker NOT IN (SELECT worker FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE')").run(); } catch (e) {}
