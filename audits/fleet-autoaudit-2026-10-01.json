@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 17:10:21",
+  "audited_at": "2026-10-01 21:06:22",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.4",
+        "version": "0.2.5",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.4",
+      "before": "0.2.5",
       "http": 200,
-      "live": "0.2.4",
+      "live": "0.2.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
