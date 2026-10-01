@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.8.0-human-only";
+var VERSION = "1.9.0-invest-decision";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2039,8 +2039,9 @@ var ERR_ACTIVE_MS = 3 * 36e5;
 // bound, and the Workers Observability API recorded "Worker invocation ended with
 // exceededWallTime" (15 internalError/24h). Every phase now runs against one deadline.
 var SCHEDULED_BUDGET_MS = 10 * 60 * 1e3;
-// Cached state for the human page: never blocks on a rebuild unless nothing is cached yet.
-async function currentState(env, ctx) {
+// Cached state for the human page: never blocks on a rebuild unless nothing is cached yet. maxAgeMs lets the
+// 10s page poll avoid triggering the heavy probe fan-out more than once per 5 min.
+async function currentState(env, ctx, maxAgeMs) {
   const rec = await loadState(env);
   if (!rec) {
     try {
@@ -2049,7 +2050,7 @@ async function currentState(env, ctx) {
       return null;
     }
   }
-  if (Date.now() - new Date(rec.updatedAt).getTime() > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
+  if (Date.now() - new Date(rec.updatedAt).getTime() > (maxAgeMs || STALE_MS)) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
   }));
   return rec.state;
 }
@@ -2120,17 +2121,49 @@ async function handleRequest(request, env, ctx) {
     return json(st.integration || { error: "no integration data" });
   }
   if (path === "/" || path === "") {
-    const st = await currentState(env, ctx);
+    const st = await currentState(env, ctx, 5 * 6e4);
     const v = await humanView(env, st, ctx);
-    return new Response(humanHtml(v), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    const body = url.searchParams.get("frag") === "1" ? humanFragment(v) : humanHtml(v);
+    return new Response(body, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
   // HUMAN-DASHBOARD-1: /ops and /roi were folded into the one human page; old bookmarks land there.
   if (path === "/roi" || path === "/api/roi" || path === "/ops") {
     return new Response(null, { status: 301, headers: { Location: "/", "Cache-Control": "no-store" } });
   }
   if (path === "/api/human" && request.method === "GET") {
-    const st = await currentState(env, ctx);
+    const st = await currentState(env, ctx, 5 * 6e4);
     return json(await humanView(env, st, ctx));
+  }
+  // The investment verdict + the business-case inputs behind it. ?refresh=1 (used by the fleet-exec heartbeat task)
+  // re-measures (throttled to one run / 2 min) and republishes to the ops/fleet feeds.
+  if (path === "/api/decision" && request.method === "GET") {
+    const st = await currentState(env, ctx, 5 * 6e4);
+    if (url.searchParams.get("refresh") === "1") ctx.waitUntil(govClaim(env, 12e4).then(async function(ok) {
+      if (!ok) return;
+      await governanceSnapshot(env, st);
+      await publishFeeds(env, await humanView(env, st, null));
+    }).catch(function() {
+    }));
+    const v = await humanView(env, st, ctx);
+    return json({ schema_version: "fleet-decision/v1", worker: NAME, version: VERSION, generated_at: v.generated_at, verdict: v.decision.verdict, risk: v.decision.risk, level: v.decision.level, basis: v.decision.basis, headline: v.decision.headline, reasons: v.decision.reasons, flips: v.decision.flips, levers: v.decision.levers, gate: v.decision.gate, inputs: v.decision.inputs, business: v.business, feeds: v.feeds, advisory: true });
+  }
+  // Attest evidence the machines cannot measure (credibility events, funding, revenue). Evidence is mandatory.
+  //   {"key":"credibility_events","value":2,"evidence":"<url or description>"}
+  if (path === "/api/decision/fact" && request.method === "POST") {
+    const tok = request.headers.get("x-loop-token") || "";
+    if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
+    let b = null;
+    try {
+      b = await request.json();
+    } catch (e) {
+    }
+    if (!b || !INVEST_FACT_KEYS[b.key]) return json({ error: "key must be one of " + Object.keys(INVEST_FACT_KEYS).join(", ") }, 400);
+    if (!String(b.evidence || "").trim()) return json({ error: "evidence required" }, 400);
+    const val = INVEST_FACT_KEYS[b.key] === "boolean" ? (b.value === true || b.value === "true" ? "true" : b.value === false || b.value === "false" ? "false" : null) : isFinite(Number(b.value)) && b.value !== "" && b.value !== null ? String(Number(b.value)) : null;
+    if (val == null) return json({ error: "value must be " + INVEST_FACT_KEYS[b.key] }, 400);
+    await ensureInvestTables(env);
+    await env.AUDIT.prepare("INSERT INTO invest_facts (key, value, evidence, updated_at) VALUES (?1,?2,?3,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, evidence=excluded.evidence, updated_at=excluded.updated_at").bind(b.key, val, String(b.evidence).slice(0, 500)).run();
+    return json({ ok: true, key: b.key, value: val });
   }
   // Any worker or session files / clears a human action here (same token as the loop endpoints).
   //   {"op":"add","slug":"...","title":"...","why":"...","default":"...","action":"...","url":"https://...","sev":"urgent|normal","due":"YYYY-MM-DD"}
@@ -2364,7 +2397,9 @@ var worker_default = {
       })));
       ctx.waitUntil(within(refreshRegistryMetrics(env).catch(function() {
       })));
-      ctx.waitUntil(within(governanceSnapshot(env, st).catch(function() {
+      ctx.waitUntil(within(governanceSnapshot(env, st).then(async function() {
+        await publishFeeds(env, await humanView(env, st, null));
+      }).catch(function() {
       })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
@@ -2548,13 +2583,15 @@ __name2(roiGf, "roiGf");
 //   - code_tasks          status=needs_human (code loop could not verify a change / has no PR credential)
 //   - v_email_human_pending_v2 inbound mail from real people (not bounces, bots, our own domains)
 //   - shutdown_manifest   owner-confirm gates once phase 1 has fired, and gates due within 45 days
+// REAL-TIME: the queue is read live from D1 on every request and the page re-fetches itself every 10s; money/return
+// inputs are re-measured on demand (>5 min old) and by the */15 cron + the 10-min fleet-exec heartbeat.
 // FAIL-CLOSED: a source that cannot be read is listed under `blind` and the verdict becomes UNCONFIRMED;
 // the page never claims "nothing needs you" while it could not look.
 // PRIVACY: this page is public and unauthenticated, so third-party mail is shown as domain + count + age
 // only (never an address or subject).
 var SPEND_CAP_USD = 150;
 var REVIEW_GATE_DATE = "2026-12-31";
-var HUMAN_SNAPSHOT_MAX_AGE_MS = 3 * 36e5;
+var HUMAN_SNAPSHOT_MAX_AGE_MS = 5 * 6e4;
 async function ensureHumanTable(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT)").run();
 }
@@ -2645,7 +2682,141 @@ async function collectHumanActions(env) {
   });
   return { items, blind };
 }
+// INVEST-DECISION-1 (2026-10-01): the page also answers "do I keep putting my time and money into this
+// fleet, scale it back, or stop?" It applies the owner-ratified rule from impact_thresholds
+// review_gate_2026_12_31 (continue iff credibility_events>=2 OR confirmed_subscribers>=50 OR funding_secured,
+// AND ai_spend_30d within cap) to measured inputs, shows the trajectory toward it, and publishes the result to
+// the feeds ops / fleet-exec / fleet-control already read (metric_registry, analytics_metric_triggers,
+// agent_issues, fleet_tasks, invest_decision_log).
+//
+// Rules of the road:
+//  - ADVISORY. Nothing here retires a worker, deletes data or raises a cap (AUTONOMY-DECISION-POLICY.md "Never").
+//    shutdown_manifest and its owner-confirm gate remain the only retirement path.
+//  - COST BASIS. #1699: the gateway-metered figure is an ESTIMATED LIST cost over all providers, not cash. The
+//    cap meters unified billing, so the verdict uses the billing-API gross usage ("cash"). If cash is unreadable
+//    the verdict can never be SCALE_BACK or KILL off the metered estimate alone.
+//  - EVIDENCE. credibility_events and funding_secured are not machine-measurable; they are attested through
+//    POST /api/decision/fact with evidence, and shown as "unattested" until then. At the gate date with nothing
+//    ever attested the verdict is UNKNOWN (a human decision), never KILL by omission.
+var CASH_BASIS = "AI Gateway invoice draft, gross usage (unified billing), current period";
+var INVEST_FACT_KEYS = { credibility_events: "number", funding_secured: "boolean", revenue_30d_usd: "number" };
+var INVEST_LEVEL = { CONTINUE: 0, AT_RISK: 1, SCALE_BACK: 2, KILL: 3, UNKNOWN: -1 };
+var INVEST_SUBS_TARGET = 50;
+var INVEST_CRED_TARGET = 2;
+var SCALE_BACK_LEAD_DAYS = 45;
+async function ensureInvestTables(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS invest_facts (key TEXT PRIMARY KEY, value TEXT, evidence TEXT, updated_at TEXT DEFAULT (datetime('now')))").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS invest_decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), verdict TEXT, risk TEXT, basis TEXT, cash30 REAL, metered30 REAL, subs INTEGER, gate_return_met INTEGER, days_to_gate INTEGER, reasons_json TEXT)").run();
+}
+async function readInvestFacts(env) {
+  const out = {};
+  try {
+    await ensureInvestTables(env);
+    const rows = await d1all(env.AUDIT, "SELECT key, value, evidence, updated_at FROM invest_facts");
+    for (const r of rows) out[r.key] = { value: INVEST_FACT_KEYS[r.key] === "boolean" ? r.value === "true" || r.value === "1" : Number(r.value), evidence: r.evidence, at: r.updated_at };
+  } catch (e) {
+  }
+  return out;
+}
+// Pure function: inputs in, verdict out. Same inputs always give the same answer.
+function decideInvestment(f) {
+  const reasons = [];
+  const flips = [];
+  const cashKnown = f.cash30 != null;
+  const costOk = cashKnown ? f.cash30 <= f.cap : null;
+  const returnMet = f.credibility >= INVEST_CRED_TARGET || f.subs >= INVEST_SUBS_TARGET || f.funding === true;
+  const out = { verdict: "UNKNOWN", risk: null, basis: cashKnown ? "cash" : f.metered30 != null ? "metered-estimate" : "none", headline: "", reasons, flips, levers: [], gate: { return_met: returnMet, cost_ok: costOk, due: f.gate_date, days: f.days } };
+  if (cashKnown) reasons.push("Cash spend this billing period $" + f.cash30.toFixed(0) + " vs your $" + f.cap + " cap (" + (costOk ? "within" : "OVER") + ").");
+  else if (f.metered30 != null) reasons.push("Cash spend unreadable. Metered list-cost estimate is $" + f.metered30.toFixed(0) + "/30d, which is not cash and cannot trigger a scale-back (#1699).");
+  else reasons.push("No spend reading at all.");
+  reasons.push("Return so far: " + f.subs + "/" + INVEST_SUBS_TARGET + " confirmed subscribers, " + (f.credibility == null ? "credibility events unattested" : f.credibility + "/" + INVEST_CRED_TARGET + " credibility events") + ", funding " + (f.funding === true ? "secured" : "none attested") + ", revenue $" + (f.revenue30 != null ? f.revenue30.toFixed(0) : "0 (none recorded)") + ".");
+  if (/FIRED|EXECUTED/i.test(f.early || "")) {
+    out.verdict = "KILL";
+    out.risk = "early_trigger";
+    out.headline = "The armed early-trigger (spend over the cap with no publications) has fired.";
+    reasons.push("shutdown_manifest EARLY-TRIGGER state is " + f.early + ".");
+    return out;
+  }
+  if (!cashKnown && f.metered30 == null) {
+    out.headline = "Cannot judge: no spend measurement is readable.";
+    return out;
+  }
+  if (f.days <= 0) {
+    if (!f.attested) {
+      out.headline = "The review gate is due and no return evidence has been attested. This needs your call, not a default.";
+      out.risk = "gate_due";
+      flips.push("Attest credibility_events / funding_secured with evidence (POST /api/decision/fact), or decide.");
+    } else if (costOk === null) {
+      out.headline = "The review gate is due but cash spend is unreadable, so the cost half of the rule cannot be evaluated.";
+    } else if (returnMet && costOk) {
+      out.verdict = "CONTINUE";
+      out.risk = "on_track";
+      out.headline = "The review gate passes: return evidence met and spend within the cap.";
+    } else if (returnMet && !costOk) {
+      out.verdict = "SCALE_BACK";
+      out.risk = "cost";
+      out.headline = "Return evidence met but spend is over the cap. Scale spend down to the cap.";
+    } else {
+      out.verdict = "KILL";
+      out.risk = "gate_failed";
+      out.headline = "The review gate failed: none of the return conditions is met. The ratified rule is to stop.";
+      flips.push("Attest a qualifying credibility event or funding with evidence before the retirement gate runs.");
+    }
+    return out;
+  }
+  if (costOk === false) {
+    out.verdict = "SCALE_BACK";
+    out.risk = "cost";
+    out.headline = "Spend is over the cap you set ($" + f.cash30.toFixed(0) + " vs $" + f.cap + "). Scale spend back before judging return.";
+    flips.push("Cash spend back to $" + f.cap + " or less.");
+    return out;
+  }
+  const proj = f.subs + (f.subsNew30 || 0) * (f.days / 30);
+  const atRisk = !returnMet && proj < INVEST_SUBS_TARGET && !(f.credibility >= 1);
+  reasons.push("At the current pace (" + (f.subsNew30 || 0) + " new/30d) that is about " + Math.round(proj) + " confirmed subscribers by " + f.gate_date + " (" + f.days + " days).");
+  if (returnMet) {
+    out.verdict = "CONTINUE";
+    out.risk = "on_track";
+    out.headline = "Return condition already met and spend within the cap. Keep going.";
+  } else if (atRisk && f.days <= SCALE_BACK_LEAD_DAYS) {
+    out.verdict = "SCALE_BACK";
+    out.risk = "at_risk";
+    out.headline = f.days + " days to the review gate and nothing is on pace to meet it. Start scaling back now to keep the option to stop cheaply.";
+  } else if (atRisk) {
+    out.verdict = "CONTINUE";
+    out.risk = "at_risk";
+    out.headline = "Continue, but AT RISK: on the current pace the review gate fails. The window to change that closes in " + Math.max(0, f.days - SCALE_BACK_LEAD_DAYS) + " days, when this flips to scale back.";
+  } else {
+    out.verdict = "CONTINUE";
+    out.risk = "on_track";
+    out.headline = "Continue: a return condition is within reach of the gate.";
+  }
+  if (!returnMet) {
+    flips.push((INVEST_SUBS_TARGET - f.subs) + " more confirmed subscribers (or 1 attested credibility event, or funding) turns AT RISK into on track.");
+    if (costOk === null) flips.push("Cash spend is unreadable; fixing the billing read lets this judge cost too.");
+  }
+  if (cashKnown) flips.push("Cash spend above $" + f.cap + " flips this to scale back immediately.");
+  return out;
+}
+var govInflight = null;
 async function governanceSnapshot(env, st) {
+  if (govInflight) return govInflight;
+  govInflight = governanceSnapshotRun(env, st).finally(function() {
+    govInflight = null;
+  });
+  return govInflight;
+}
+// Cross-isolate throttle for on-demand refreshes (page polls must not stampede the CF APIs).
+async function govClaim(env, minGapMs) {
+  try {
+    const now = Date.now();
+    const r = await env.AUDIT.prepare("INSERT INTO fleet_loop_meta (k,v) VALUES ('human_gov_claim', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v WHERE CAST(fleet_loop_meta.v AS INTEGER) < ?").bind(String(now), now - minGapMs).run();
+    return !!(r && r.meta && Number(r.meta.changes) === 1);
+  } catch (e) {
+    return false;
+  }
+}
+async function governanceSnapshotRun(env, st) {
   const now = Date.now();
   const iso = function(h) {
     return new Date(now - h * 36e5).toISOString();
@@ -2669,9 +2840,18 @@ async function governanceSnapshot(env, st) {
     }
   };
   const num = function(r, k) {
-    return r && r[k] != null ? Number(r[k]) : null;
+    return r && r[k] != null && r[k] !== "" && isFinite(Number(r[k])) ? Number(r[k]) : null;
   };
-  let rumTotal = null, rumPrior = null, trueMoM = null, gwSpend30 = null, aiN = null, gwLimit = null;
+  const billing = async function(path) {
+    try {
+      const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/" + path, { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
+      const j = await r.json();
+      return j && j.success !== false ? j.result || null : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  let rumTotal = null, rumPrior = null, trueMoM = null, metered30 = null, aiN = null, gwLimit = null, topModels = [];
   try {
     rumTotal = await rumCount(720, 0);
     rumPrior = await rumCount(1440, 720);
@@ -2687,50 +2867,84 @@ async function governanceSnapshot(env, st) {
     if (!(aiN > 0)) aiN = null;
   } catch (e) {
   }
-  // GATEWAY-METERED-SPEND-1: governance spend is the gateway-metered 30d cost of every request.
+  // Metered = ESTIMATED LIST cost over every gateway request (incl. BYOK). Context only; never the cash basis.
   try {
-    const gg = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + iso(720) + '", datetime_leq: "' + iso(0) + '" }) { sum { cost } } } } }');
+    const gg = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + iso(720) + '", datetime_leq: "' + iso(0) + '" }) { sum { cost } dimensions { model } } } } }');
     const rows = acct(gg, "aiGatewayRequestsAdaptiveGroups");
-    if (rows && rows.length) gwSpend30 = rows.reduce(function(a, x) {
-      return a + (x.sum && Number(x.sum.cost) || 0);
-    }, 0);
+    if (rows && rows.length) {
+      const by = {};
+      metered30 = 0;
+      for (const x of rows) {
+        const c = x.sum && Number(x.sum.cost) || 0;
+        metered30 += c;
+        const m = x.dimensions && x.dimensions.model || "unknown";
+        by[m] = (by[m] || 0) + c;
+      }
+      topModels = Object.keys(by).map(function(m) {
+        return { model: m, usd: Math.round(by[m] * 100) / 100 };
+      }).sort(function(a, b) {
+        return b.usd - a.usd;
+      }).slice(0, 3);
+    }
   } catch (e) {
   }
+  const inv = await billing("billing/invoice-preview");
+  const bal = await billing("billing/credit-balance");
+  const gw = await billing("gateways/default");
   try {
-    const rgl = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
-    const jgl = await rgl.json();
-    const rules = jgl && jgl.result && jgl.result.spend_limits && jgl.result.spend_limits.rules ? jgl.result.spend_limits.rules : [];
+    const rules = gw && gw.spend_limits && gw.spend_limits.rules ? gw.spend_limits.rules : [];
     if (rules.length && rules[0].limit != null) gwLimit = Number(rules[0].limit);
   } catch (e) {
   }
+  // Billing amounts are USD CENTS (AI-GW-COST-UNIT-CENTS-1); gross, never the credit-netted amount_due.
+  const cash30 = inv && Array.isArray(inv.invoice_lines) ? inv.invoice_lines.reduce(function(a, L) {
+    return a + (Number(L.amount) > 0 ? Number(L.amount) : 0);
+  }, 0) / 100 : null;
   const rep30 = num(await one("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day')", env.LIVING), "n");
   const new30 = num(await one("SELECT COUNT(*) AS n FROM subscribers WHERE status='subscribed' AND created_at >= datetime('now','-30 day')"), "n");
   const subsTotal = num(await one("SELECT COALESCE(SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END),0) AS n FROM subscribers"), "n");
+  const subsConfirmed = num(await one("SELECT COUNT(*) AS n FROM subscribers WHERE status='subscribed' AND confirmed_at IS NOT NULL"), "n");
   const pubEvents = num(await one("SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND datetime(updated_at) >= datetime('now','-30 days')"), "n");
   const wcLive = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='worker_count'"), "n");
   const waiLive = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='workers_ai_cost_30d_usd'"), "n");
-  // GATE-STATE-LIVE-1: a governance gate is evaluated from its source at evaluation time; the stored label
-  // is used only when no live measurement exists, and a changed verdict is written back.
+  const totalCostEst = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='cost_usd_30d'"), "n");
+  const impactPerUsd = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='external_impact_per_dollar'"), "n");
+  const zViews = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='zenodo_views_total'"), "n");
+  const zDl = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='zenodo_downloads_total'"), "n");
+  const autoOverall = num(await one("SELECT score AS n FROM autonomy_scores WHERE dimension='overall'"), "n");
+  const selfHeal = num(await one("SELECT score AS n FROM autonomy_scores WHERE dimension='self_heal'"), "n");
+  const early = await one("SELECT state FROM shutdown_manifest WHERE component='EARLY-TRIGGER'");
+  // 30-day trend from the daily snapshots (nearest snapshot at or before 28 days ago, else the oldest).
+  let trend = null;
+  try {
+    const now0 = await one("SELECT d, papers, subscribers, pageviews FROM roi_daily_snapshots ORDER BY d DESC LIMIT 1");
+    const then = await one("SELECT d, papers, subscribers, pageviews FROM roi_daily_snapshots WHERE d <= date('now','-28 day') ORDER BY d DESC LIMIT 1") || await one("SELECT d, papers, subscribers, pageviews FROM roi_daily_snapshots ORDER BY d ASC LIMIT 1");
+    if (now0 && then && now0.d !== then.d) trend = { from: then.d, to: now0.d, pageviews: [then.pageviews, now0.pageviews], subscribers: [then.subscribers, now0.subscribers], papers: [then.papers, now0.papers] };
+  } catch (e) {
+  }
+  // GATE-STATE-LIVE-1: a governance gate is evaluated from its source; the stored label is used only when no live
+  // measurement exists. A gate whose target is RETIRED by the owner is never written back.
   const liveGate = {
     full_reports_live_30d: rep30 != null ? rep30 >= 2 ? "MET" : "OPEN" : null,
     impressions_growth_30d: trueMoM != null ? trueMoM >= 30 ? "MET" : "OPEN" : null,
     subscribers_growth_monthly: new30 != null ? new30 >= 10 ? "MET" : "OPEN" : null,
-    worker_count: wcLive != null && isFinite(wcLive) ? wcLive <= 28 ? "MET" : "OPEN" : null,
-    workers_ai_cost_30d_usd: waiLive != null && isFinite(waiLive) ? waiLive <= 7.5 ? "MET" : "OPEN" : null
+    worker_count: wcLive != null ? wcLive <= 28 ? "MET" : "OPEN" : null,
+    workers_ai_cost_30d_usd: waiLive != null ? waiLive <= 7.5 ? "MET" : "OPEN" : null
   };
   let gatesMet = 0, gatesTotal = 0;
   try {
-    const th = await d1all(env.AUDIT, "SELECT metric, state FROM impact_thresholds");
+    const th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds");
     for (const t of th) {
-      const stv = liveGate[t.metric] || t.state;
+      const retired = /^RETIRED/i.test(String(t.target || ""));
+      const lg = retired ? null : liveGate[t.metric] || null;
+      const stv = lg || t.state;
       gatesTotal++;
       if (stv === "MET") gatesMet++;
-      if (liveGate[t.metric] && liveGate[t.metric] !== t.state) await env.AUDIT.prepare("UPDATE impact_thresholds SET state=?1 WHERE metric=?2").bind(liveGate[t.metric], t.metric).run();
+      if (lg && lg !== t.state) await env.AUDIT.prepare("UPDATE impact_thresholds SET state=?1 WHERE metric=?2").bind(lg, t.metric).run();
     }
   } catch (e) {
   }
-  // Survival headroom -> survival_state (consumed by the SAI external_impact term). STALE-GATE-FAILCLOSED-1
-  // (#1301): a metric past its refresh cadence is UNKNOWN and scored worst-case, never dropped.
+  // Survival headroom -> survival_state (feeds the SAI external_impact term). STALE-GATE-FAILCLOSED-1 (#1301).
   let surv = null;
   try {
     const mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, last_value, last_refreshed, refresh_cadence FROM metric_registry");
@@ -2794,20 +3008,53 @@ async function governanceSnapshot(env, st) {
     await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2); FAIL-CLOSED #1301 null_gates=" + nullGates).run();
   } catch (e) {
   }
-  const snap = { at: new Date(now).toISOString(), spend30: gwSpend30, spend_cap: gwLimit != null ? gwLimit : SPEND_CAP_USD, pageviews30: rumTotal, pageviews_mom: trueMoM, reports30: rep30, subscribers: subsTotal, subscribers_new30: new30, publish_events30: pubEvents, gates_met: gatesMet, gates_total: gatesTotal, survival: surv };
+  const snap = {
+    at: new Date(now).toISOString(),
+    cost: { cash30, cash_basis: CASH_BASIS, metered30, metered_top: topModels, cap: gwLimit != null ? gwLimit : SPEND_CAP_USD, balance: bal && bal.balance != null ? Number(bal.balance) / 100 : null, total_est30: totalCostEst, workers_ai30: waiLive, neurons30: aiN },
+    ret: { subs_confirmed: subsConfirmed, subs_total: subsTotal, subs_new30: new30, pageviews30: rumTotal, pageviews_mom: trueMoM, reports30: rep30, publish_events30: pubEvents, zenodo_views: zViews, zenodo_downloads: zDl, impact_per_usd: impactPerUsd },
+    autonomy: { overall: autoOverall, self_heal: selfHeal },
+    fleet: { workers: wcLive },
+    early_trigger: early ? early.state : null,
+    trend,
+    gates_met: gatesMet,
+    gates_total: gatesTotal,
+    survival: surv
+  };
   await loopMetaSet(env, "human_gov_snapshot", JSON.stringify(snap));
   return snap;
 }
+function investInputs(snap, facts) {
+  const c = snap && snap.cost || {};
+  const r = snap && snap.ret || {};
+  const gateDays = Math.ceil((Date.parse(REVIEW_GATE_DATE + "T00:00:00Z") - Date.now()) / DAY_MS);
+  const cred = facts.credibility_events ? facts.credibility_events.value : null;
+  const fund = facts.funding_secured ? facts.funding_secured.value : null;
+  return { cash30: c.cash30 != null ? c.cash30 : null, metered30: c.metered30 != null ? c.metered30 : null, cap: c.cap != null ? c.cap : SPEND_CAP_USD, subs: r.subs_confirmed != null ? r.subs_confirmed : 0, subsNew30: r.subs_new30 != null ? r.subs_new30 : 0, credibility: cred, funding: fund, revenue30: facts.revenue_30d_usd ? facts.revenue_30d_usd.value : null, attested: !!(facts.credibility_events || facts.funding_secured), early: snap ? snap.early_trigger : null, days: gateDays, gate_date: REVIEW_GATE_DATE };
+}
 async function humanView(env, st, ctx) {
-  const [h, meta] = await Promise.all([collectHumanActions(env), loopMetaGet(env)]);
+  const [h, meta, facts] = await Promise.all([collectHumanActions(env), loopMetaGet(env), readInvestFacts(env)]);
   let gov = null;
   try {
     gov = meta.human_gov_snapshot ? JSON.parse(meta.human_gov_snapshot) : null;
   } catch (e) {
   }
   const govAge = gov ? Date.now() - Date.parse(gov.at) : null;
-  if ((!gov || govAge > HUMAN_SNAPSHOT_MAX_AGE_MS) && ctx && ctx.waitUntil) ctx.waitUntil(governanceSnapshot(env, st).catch(function() {
+  // Real-time: money/return inputs are re-measured on demand when older than 5 min (throttled to one run / 2 min).
+  if ((!gov || govAge > HUMAN_SNAPSHOT_MAX_AGE_MS) && ctx && ctx.waitUntil) ctx.waitUntil(govClaim(env, 12e4).then(function(ok) {
+    return ok ? governanceSnapshot(env, st) : null;
+  }).catch(function() {
   }));
+  const inp = gov ? investInputs(gov, facts) : null;
+  const decision = inp ? decideInvestment(inp) : { verdict: "UNKNOWN", risk: null, basis: "none", headline: "Money and return figures are being measured for the first time.", reasons: [], flips: [], levers: [], gate: { due: REVIEW_GATE_DATE } };
+  if (gov) {
+    const lv = decision.levers;
+    const c = gov.cost || {};
+    if (c.metered_top && c.metered_top.length) lv.push("Biggest estimated-cost models (30d): " + c.metered_top.map(function(m) {
+      return m.model + " $" + m.usd.toFixed(0);
+    }).join(", ") + ".");
+    if (c.workers_ai30 != null && c.workers_ai30 > 7.5) lv.push("Workers AI is $" + c.workers_ai30.toFixed(0) + "/30d against the $7.50 gate.");
+    if (gov.fleet && gov.fleet.workers != null && gov.fleet.workers > 30) lv.push(gov.fleet.workers + " workers live against the 24-30 solo-manageable band (FLEET-BUDGET.md consolidation waves).");
+  }
   const stateAgeMin = st && st.generated_at ? (Date.now() - Date.parse(st.generated_at)) / 6e4 : null;
   const issues = st && st.issues || [];
   const errs = issues.filter(function(i) {
@@ -2819,25 +3066,40 @@ async function humanView(env, st, ctx) {
   });
   const probes = st && st.probes || [];
   const drift = st && st.integration && st.integration.drift;
-  const daysToGate = Math.ceil((Date.parse(REVIEW_GATE_DATE + "T00:00:00Z") - Date.now()) / DAY_MS);
-  const dataStale = stateAgeMin == null || stateAgeMin > 60;
+  const items = h.items.slice();
+  const gateDue = decision.gate && decision.gate.days != null && decision.gate.days <= 0;
+  if (decision.verdict === "KILL" || decision.verdict === "SCALE_BACK" || gateDue && decision.verdict === "UNKNOWN") items.unshift({ key: "decision", source: "decision", sev: decision.verdict === "SCALE_BACK" ? "normal" : "urgent", title: decision.verdict === "KILL" ? "Decide: stop the fleet?" : decision.verdict === "SCALE_BACK" ? "Decide: scale the fleet back" : "Decide: continue or stop (review gate due)", why: decision.headline, fallback: "Nothing is retired, deleted or re-capped until you act. The armed shutdown_manifest rows still apply on their own dates.", action: "Read the decision below. Email 'shutdown' to qnfo@qnfo.org to stop, or attest evidence at /api/decision/fact.", url: "", due: decision.verdict === "SCALE_BACK" && decision.risk === "cost" ? "" : REVIEW_GATE_DATE, age: null });
+  const stale = stateAgeMin == null || stateAgeMin > 60;
+  const moneyStale = !gov || govAge > 6 * 36e5;
   let verdict = "CLEAR";
-  if (h.items.length) verdict = "ACTION";
-  else if (h.blind.length || dataStale) verdict = "UNCONFIRMED";
+  if (items.length) verdict = "ACTION";
+  else if (h.blind.length || stale) verdict = "UNCONFIRMED";
   return {
-    schema_version: "fleet-human/v1",
+    schema_version: "fleet-human/v2",
     worker: NAME,
     version: VERSION,
     generated_at: new Date().toISOString(),
     verdict,
-    count: h.items.length,
-    urgent: h.items.filter(function(i) {
+    count: items.length,
+    urgent: items.filter(function(i) {
       return i.sev === "urgent";
     }).length,
-    items: h.items,
+    items,
     blind: h.blind,
-    money: gov ? { spend30: gov.spend30, spend_cap: gov.spend_cap, pageviews30: gov.pageviews30, pageviews_mom: gov.pageviews_mom, subscribers: gov.subscribers, subscribers_new30: gov.subscribers_new30, reports30: gov.reports30, gates_met: gov.gates_met, gates_total: gov.gates_total, measured_at: gov.at } : null,
-    review_gate: { date: REVIEW_GATE_DATE, days: daysToGate },
+    decision: Object.assign({}, decision, { level: INVEST_LEVEL[decision.verdict === "CONTINUE" && decision.risk === "at_risk" ? "AT_RISK" : decision.verdict], inputs: inp }),
+    business: gov ? { measured_at: gov.at, money_stale: moneyStale, cost: gov.cost, ret: gov.ret, autonomy: gov.autonomy, trend: gov.trend, gates_met: gov.gates_met, gates_total: gov.gates_total, facts } : null,
+    feeds: (function() {
+      try {
+        return meta.invest_feed_status ? JSON.parse(meta.invest_feed_status) : null;
+      } catch (e) {
+        return null;
+      }
+    })(),
+    attention: { open: items.filter(function(i) {
+      return i.source !== "decision";
+    }).length, oldest_days: items.reduce(function(m, i) {
+      return i.age != null && i.age > m ? i.age : m;
+    }, 0) },
     system: {
       verdict: st && st.verdict || "UNKNOWN",
       state_age_min: stateAgeMin != null ? Math.round(stateAgeMin) : null,
@@ -2855,26 +3117,93 @@ async function humanView(env, st, ctx) {
     }
   };
 }
-function humanHtml(v) {
+// ---------- feeds: what ops / fleet-exec / fleet-control read ----------
+async function ensureFeedWiring(env) {
+  const A = env.AUDIT;
+  const errs = [];
+  const run = async function(name, q) {
+    try {
+      await q.run();
+    } catch (e) {
+      errs.push(name + ": " + squash(String(e && e.message || e)).slice(0, 90));
+    }
+  };
+  // metric_registry rows: picked up by qnfo-fleet-control evaluateMetricTriggers, the staleness/kill-band views and
+  // the autonomy scorer. Cadence */15 makes a silent publisher show up as a stale metric.
+  const reg = async function(metric, kind, target) {
+    await run("registry:" + metric, A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1,'system',?2,?3,'qnfo-fleet-dashboard','human','*/15 * * * *','MEASURED')").bind(metric, kind, target));
+  };
+  await reg("invest_decision_level", "lagging", "0 continue, 1 continue-at-risk, 2 scale back, 3 stop, -1 unknown (advisory; owner decides)");
+  await reg("human_actions_open", "leading", "0 (system resolves everything else)");
+  await reg("human_wait_oldest_days", "leading", "<= 3");
+  // Threshold triggers (INSERT OR IGNORE on the UNIQUE metric_key): fleet-control files the issue / digest alert hourly.
+  await run("trigger", A.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES ('invest_decision_level','Investment verdict is scale back or stop','meta','gte',2,9,'Read https://fleet.qnfo.org/api/decision. Advisory only: scale spend levers (T1) and put the keep/stop call to the owner; never retire or delete on this signal.','human','agent_issues',24,1,'INVEST-DECISION-1 qnfo-fleet-dashboard')"));
+  await run("trigger", A.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES ('human_wait_oldest_days','A human action has waited over 7 days','meta','gte',7,6,'Owner-held item has been waiting a week: https://fleet.qnfo.org/ shows it.','human','alerts',72,1,'INVEST-DECISION-1 qnfo-fleet-dashboard')"));
+  // fleet-exec heartbeat: every 10 min fleet-exec calls /api/decision?refresh=1, so the decision snapshot is
+  // re-measured server-side even when nobody has the page open, and fleet_runs keeps a trail of verdicts.
+  const def = JSON.stringify({ steps: [{ type: "http", url: "https://fleet.qnfo.org/api/decision?refresh=1", method: "GET" }] });
+  await run("fleet_task", A.prepare("INSERT OR IGNORE INTO fleet_tasks (id, name, type, definition, timeout_ms, retries, version, enabled, updated_at) VALUES ('invest-decision-heartbeat','INVEST-DECISION-1: refresh + record the continue/scale-back/stop verdict','workflow',?1,30000,1,1,1,datetime('now'))").bind(def));
+  await run("fleet_cron", A.prepare("INSERT INTO fleet_crons (name, cron_expr, task_id, enabled, timezone, updated_at) SELECT 'invest-decision-heartbeat-10m','*/10 * * * *','invest-decision-heartbeat',1,'UTC',datetime('now') WHERE NOT EXISTS (SELECT 1 FROM fleet_crons WHERE task_id='invest-decision-heartbeat')"));
+  return errs;
+}
+async function publishFeeds(env, v) {
+  const out = { registry: false, log: false, issue: null };
+  try {
+    await ensureInvestTables(env);
+    out.wiring_errors = await ensureFeedWiring(env);
+  } catch (e) {
+    out.wiring_errors = [String(e && e.message || e).slice(0, 120)];
+  }
+  const A = env.AUDIT;
+  const upd = async function(metric, val) {
+    await A.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2 WHERE metric=?3").bind(String(val), new Date().toISOString(), metric).run();
+  };
+  try {
+    await upd("invest_decision_level", v.decision.level);
+    await upd("human_actions_open", v.attention.open);
+    await upd("human_wait_oldest_days", Math.round(v.attention.oldest_days * 10) / 10);
+    out.registry = true;
+  } catch (e) {
+  }
+  const d = v.decision;
+  const key = d.verdict + "/" + (d.risk || "-") + "/" + d.basis;
+  try {
+    const meta = await loopMetaGet(env);
+    const lastAt = meta.invest_last_log_at ? Date.parse(meta.invest_last_log_at) : 0;
+    if (meta.invest_last_key !== key || Date.now() - lastAt > 24 * 36e5) {
+      const i = d.inputs || {};
+      await A.prepare("INSERT INTO invest_decision_log (verdict, risk, basis, cash30, metered30, subs, gate_return_met, days_to_gate, reasons_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(d.verdict, d.risk || null, d.basis, i.cash30 != null ? i.cash30 : null, i.metered30 != null ? i.metered30 : null, i.subs != null ? i.subs : null, d.gate && d.gate.return_met ? 1 : 0, d.gate && d.gate.days != null ? d.gate.days : null, JSON.stringify({ headline: d.headline, reasons: d.reasons, flips: d.flips, levers: d.levers })).run();
+      await loopMetaSet(env, "invest_last_key", key);
+      await loopMetaSet(env, "invest_last_log_at", new Date().toISOString());
+      out.log = true;
+      // Ops reads agent_issues (ops_issues_list): one deduped issue per recommendation that needs action.
+      if (d.verdict === "SCALE_BACK" || d.verdict === "KILL" || d.risk === "gate_due") {
+        const title = "INVEST-DECISION-" + d.verdict + (d.risk ? "-" + String(d.risk).toUpperCase() : "") + ": " + String(d.headline).slice(0, 110);
+        const open = await d1all(A, "SELECT id FROM agent_issues WHERE source='qnfo-fleet-dashboard' AND title LIKE 'INVEST-DECISION-%' AND status='open' LIMIT 1");
+        if (open.length) out.issue = "deduped:" + open[0].id;
+        else {
+          const nowMs = Date.now();
+          await A.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,'qnfo-fleet-dashboard','governance','high','open',?3,?3)").bind(title, "AUTO-FILED by INVEST-DECISION-1 (advisory). " + d.headline + " Reasons: " + d.reasons.join(" | ") + " Levers: " + d.levers.join(" | ") + " Flips: " + d.flips.join(" | ") + " Live: https://fleet.qnfo.org/api/decision. T1 levers (lowering spend, pausing the think-loop) may be applied; stopping or retiring is the owner's call (AUTONOMY-DECISION-POLICY.md).", nowMs).run();
+          out.issue = "filed";
+        }
+      }
+    }
+  } catch (e) {
+    out.log_error = String(e && e.message || e).slice(0, 120);
+  }
+  await loopMetaSet(env, "invest_feed_status", JSON.stringify({ at: new Date().toISOString(), registry: out.registry, logged: out.log, issue: out.issue, wiring_errors: out.wiring_errors || [], log_error: out.log_error || null }));
+  return out;
+}
+// ---------- page ----------
+function humanFragment(v) {
   const o = [];
   const e = esc;
-  const money = v.money;
-  const sysBad = v.system.stuck.length > 0;
-  const banner = v.verdict === "ACTION" ? { cls: "act", big: v.count + (v.count === 1 ? " thing needs" : " things need") + " you", sub: v.urgent ? v.urgent + " urgent" : "Nothing else. Everything else is handled." } : v.verdict === "CLEAR" ? { cls: "ok", big: "Nothing needs you", sub: "Every queue that can wait on a human is empty. The system is handling the rest." } : { cls: "unk", big: "Can't confirm", sub: v.blind.length ? "Could not read: " + v.blind.join("; ") : "System data is " + v.system.state_age_min + " min old, so an all-clear would be a guess." };
-  o.push('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="300"><title>Fleet: your queue</title><style>');
-  o.push(":root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#e2e5ea;--ok:#157f3b;--okbg:#e7f6ec;--act:#b42318;--actbg:#fdecea;--unk:#8a5a00;--unkbg:#fff4d6;--warn:#8a5a00;--link:#0b5cd5}");
-  o.push("@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8eaee;--mute:#9aa3b1;--line:#2a303a;--ok:#4cc17a;--okbg:#10241a;--act:#ff8a80;--actbg:#2d1513;--unk:#f0c05a;--unkbg:#2a2210;--warn:#f0c05a;--link:#7db1ff}}");
-  o.push("*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:720px;margin:0 auto;padding:20px 16px 48px}");
-  o.push(".top{display:flex;justify-content:space-between;align-items:baseline;color:var(--mute);font-size:13px;margin-bottom:12px}.top b{color:var(--ink);font-size:14px}");
-  o.push(".banner{border-radius:14px;padding:20px 18px;margin-bottom:18px}.banner.act{background:var(--actbg);border:1px solid var(--act)}.banner.ok{background:var(--okbg);border:1px solid var(--ok)}.banner.unk{background:var(--unkbg);border:1px solid var(--unk)}");
-  o.push(".banner h1{margin:0;font-size:30px;line-height:1.15}.banner.act h1{color:var(--act)}.banner.ok h1{color:var(--ok)}.banner.unk h1{color:var(--unk)}.banner p{margin:6px 0 0;color:var(--mute)}");
-  o.push(".card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}.card.urgent{border-left:5px solid var(--act)}.card h2{margin:0 0 4px;font-size:17px}");
-  o.push(".meta{font-size:13px;color:var(--mute)}.row{margin-top:8px;font-size:14px}.row b{display:inline-block;min-width:92px;color:var(--mute);font-weight:600}.do{display:inline-block;margin-top:10px;padding:8px 14px;border-radius:8px;background:var(--link);color:#fff;text-decoration:none;font-weight:600;font-size:14px}");
-  o.push(".tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--line);color:var(--mute);margin-right:6px}.tag.u{background:var(--act);color:#fff}");
-  o.push("h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:24px 0 8px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.stat .n{font-size:22px;font-weight:700}.stat .l{font-size:12px;color:var(--mute)}.bad{color:var(--act)}.good{color:var(--ok)}.amber{color:var(--warn)}");
-  o.push("details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:10px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
-  o.push("</style></head><body><main>");
-  o.push('<div class="top"><b>Fleet &middot; your queue</b><span>' + e(String(v.generated_at).slice(11, 16)) + " UTC</span></div>");
+  const d = v.decision;
+  const b = v.business;
+  const money = function(n) {
+    return n == null ? "n/a" : "$" + Number(n).toFixed(0);
+  };
+  const banner = v.verdict === "ACTION" ? { cls: "act", big: v.count + (v.count === 1 ? " thing needs" : " things need") + " you", sub: v.urgent ? v.urgent + " urgent" : "Everything else is handled." } : v.verdict === "CLEAR" ? { cls: "ok", big: "Nothing needs you", sub: "Every queue that can wait on a human is empty. The system is handling the rest." } : { cls: "unk", big: "Can't confirm", sub: v.blind.length ? "Could not read: " + v.blind.join("; ") : "System data is " + v.system.state_age_min + " min old, so an all-clear would be a guess." };
   o.push('<section class="banner ' + banner.cls + '"><h1>' + e(banner.big) + "</h1><p>" + e(banner.sub) + "</p></section>");
   if (v.verdict === "ACTION" && v.blind.length) o.push('<div class="card meta">Also could not read: ' + e(v.blind.join("; ")) + "</div>");
   for (const it of v.items) {
@@ -2886,27 +3215,68 @@ function humanHtml(v) {
     if (/^https:\/\//.test(it.url || "")) o.push('<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>');
     o.push("</article>");
   }
-  o.push("<h3>Money and clock</h3><div class=\"grid\">");
-  const sp = money && money.spend30 != null ? money.spend30 : null;
-  const cap = money ? money.spend_cap : SPEND_CAP_USD;
-  const spCls = sp == null ? "amber" : sp >= cap ? "bad" : sp >= cap * 0.75 ? "amber" : "good";
-  o.push('<div class="stat"><div class="n ' + spCls + '">' + (sp != null ? "$" + sp.toFixed(0) : "n/a") + '</div><div class="l">AI spend, 30d (cap $' + e(cap) + ")</div></div>");
-  o.push('<div class="stat"><div class="n">' + e(v.review_gate.days) + 'd</div><div class="l">to the ' + e(v.review_gate.date) + " review gate</div></div>");
-  const mom = money ? money.pageviews_mom : null;
-  o.push('<div class="stat"><div class="n ' + (mom == null ? "amber" : mom >= 30 ? "good" : "amber") + '">' + (mom != null ? (mom >= 0 ? "+" : "") + mom + "%" : "n/a") + '</div><div class="l">pageviews vs prior 30d (gate +30%)</div></div>');
-  o.push('<div class="stat"><div class="n">' + e(money && money.subscribers != null ? money.subscribers : "n/a") + '</div><div class="l">subscribers' + (money && money.subscribers_new30 != null ? " (+" + e(money.subscribers_new30) + " in 30d)" : "") + "</div></div>");
-  o.push("</div>");
-  if (!money) o.push('<div class="meta" style="margin-top:8px">Money figures are being measured; refresh in a minute.</div>');
+  const lbl = { CONTINUE: "CONTINUE", SCALE_BACK: "SCALE BACK", KILL: "STOP", UNKNOWN: "CAN'T JUDGE" }[d.verdict] || d.verdict;
+  const dcls = d.verdict === "CONTINUE" ? d.risk === "at_risk" ? "unk" : "ok" : d.verdict === "UNKNOWN" ? "unk" : "act";
+  o.push('<h3>Keep investing?</h3><section class="card verdict ' + dcls + '"><div class="vtop"><span class="chip ' + dcls + '">' + e(lbl) + "</span>" + (d.risk === "at_risk" ? '<span class="tag">at risk</span>' : "") + (d.basis === "metered-estimate" ? '<span class="tag">cost unverified</span>' : "") + '</div><p class="vhead">' + e(d.headline) + "</p>");
+  if (d.reasons.length) o.push('<ul class="why">' + d.reasons.map(function(r) {
+    return "<li>" + e(r) + "</li>";
+  }).join("") + "</ul>");
+  if (d.flips.length) o.push('<div class="row"><b>What changes it</b>' + e(d.flips.join(" ")) + "</div>");
+  if (d.levers.length && d.verdict !== "CONTINUE") o.push('<div class="row"><b>Levers</b>' + e(d.levers.join(" ")) + "</div>");
+  o.push('<div class="meta" style="margin-top:8px">Rule (you ratified it): continue only if credibility events &ge; ' + INVEST_CRED_TARGET + " OR confirmed subscribers &ge; " + INVEST_SUBS_TARGET + " OR funding, AND spend within the cap, judged at " + e(REVIEW_GATE_DATE) + " (" + e(d.gate.days) + " days). Advisory: the system never stops itself.</div></section>");
+  o.push("<h3>The business case</h3>");
+  if (!b) o.push('<div class="meta">Measuring for the first time, back in a moment.</div>');
+  else {
+    const c = b.cost, r = b.ret, a = b.autonomy, ex = b.facts || {};
+    const cashCls = c.cash30 == null ? "amber" : c.cash30 > c.cap ? "bad" : c.cash30 > c.cap * 0.75 ? "amber" : "good";
+    o.push('<div class="grid">');
+    o.push('<div class="stat"><div class="n ' + cashCls + '">' + money(c.cash30) + '</div><div class="l">cash spend this period (cap $' + e(c.cap) + ")" + (c.balance != null ? " &middot; credit left " + money(c.balance) : "") + "</div></div>");
+    o.push('<div class="stat"><div class="n">' + e(r.subs_confirmed != null ? r.subs_confirmed : "n/a") + '/50</div><div class="l">confirmed subscribers (+' + e(r.subs_new30 != null ? r.subs_new30 : 0) + " in 30d)</div></div>");
+    o.push('<div class="stat"><div class="n">' + (ex.revenue_30d_usd ? money(ex.revenue_30d_usd.value) : "$0") + '</div><div class="l">revenue 30d' + (ex.revenue_30d_usd ? "" : " (none recorded)") + "</div></div>");
+    o.push('<div class="stat"><div class="n">' + (ex.credibility_events ? e(ex.credibility_events.value) + "/2" : "?") + '</div><div class="l">credibility events' + (ex.credibility_events ? "" : " (unattested)") + "</div></div>");
+    const mom = r.pageviews_mom;
+    o.push('<div class="stat"><div class="n ' + (mom == null ? "amber" : mom >= 0 ? "good" : "bad") + '">' + (mom != null ? (mom >= 0 ? "+" : "") + mom + "%" : "n/a") + '</div><div class="l">pageviews vs prior 30d (' + e(r.pageviews30 != null ? r.pageviews30.toLocaleString() : "n/a") + ")</div></div>");
+    const perRep = c.cash30 != null && r.reports30 > 0 ? c.cash30 / r.reports30 : null;
+    o.push('<div class="stat"><div class="n">' + (perRep != null ? "$" + perRep.toFixed(0) : "n/a") + '</div><div class="l">cash per full report (' + e(r.reports30 != null ? r.reports30 : "?") + " in 30d)</div></div>");
+    o.push('<div class="stat"><div class="n">' + (a.overall != null ? e(a.overall) + "/5" : "n/a") + '</div><div class="l">autonomy' + (a.self_heal != null ? " &middot; self-heal " + e(a.self_heal) + "/5" : "") + "</div></div>");
+    o.push('<div class="stat"><div class="n ' + (v.attention.open ? "amber" : "good") + '">' + e(v.attention.open) + '</div><div class="l">of your time: open items' + (v.attention.oldest_days >= 1 ? " &middot; oldest " + Math.round(v.attention.oldest_days) + "d" : "") + "</div></div>");
+    o.push("</div>");
+    const t = b.trend;
+    o.push('<div class="meta" style="margin-top:8px">' + (t ? "Since " + e(t.from) + ": pageviews " + e(t.pageviews[0]) + " &rarr; " + e(t.pageviews[1]) + ", subscribers " + e(t.subscribers[0]) + " &rarr; " + e(t.subscribers[1]) + ", full reports " + e(t.papers[0]) + " &rarr; " + e(t.papers[1]) + ". " : "") + (c.metered30 != null ? "Estimated list cost across all providers: " + money(c.metered30) + "/30d (an estimate, not cash, #1699). " : "") + (c.total_est30 != null ? "Whole-fleet cost estimate: " + money(c.total_est30) + "/30d. " : "") + (r.zenodo_views != null ? "Zenodo views " + e(Number(r.zenodo_views).toLocaleString()) + ", downloads " + e(Number(r.zenodo_downloads || 0).toLocaleString()) + ". " : "") + "Measured " + e(agoText(ageDaysOf(b.measured_at))) + (b.money_stale ? " &mdash; <b class=\"amber\">stale</b>" : "") + ".</div>");
+  }
   const s = v.system;
-  o.push("<details" + (sysBad ? " open" : "") + "><summary>" + (sysBad ? "<b class=\"bad\">System has " + s.stuck.length + " error" + (s.stuck.length > 1 ? "s" : "") + " unresolved past its 2h SLA</b>" : "System is handling the rest") + " &middot; " + e(s.verdict) + " &middot; " + s.errors + " err / " + s.warnings + " warn &middot; " + s.probes_ok + "/" + s.probes_total + " probes ok</summary>");
+  const sysBad = s.stuck.length > 0;
+  o.push("<details" + (sysBad ? " open" : "") + "><summary>" + (sysBad ? '<b class="bad">System has ' + s.stuck.length + " error" + (s.stuck.length > 1 ? "s" : "") + " unresolved past its 2h SLA</b>" : "System is handling the rest") + " &middot; " + e(s.verdict) + " &middot; " + s.errors + " err / " + s.warnings + " warn &middot; " + s.probes_ok + "/" + s.probes_total + " probes ok</summary>");
   if (s.stuck.length) {
     o.push("<ul>");
     for (const i of s.stuck) o.push("<li>" + e(i.title) + (i.resource ? ' <span class="meta">(' + e(i.resource) + ")</span>" : "") + "</li>");
     o.push("</ul>");
   }
   o.push('<div class="meta" style="margin-top:8px">Red flags, drift, queues and retries are worked by the issue loop and qnfo-fleet-control and are not your job unless they appear above.' + (s.drift ? " Drift: " + e(s.drift) + "." : "") + "</div></details>");
-  o.push("<footer>v" + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">JSON</a></footer>');
-  o.push("</main></body></html>");
+  o.push('<footer>v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/decision">decision JSON</a></footer>');
+  return o.join("");
+}
+function humanHtml(v) {
+  const o = [];
+  o.push('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet: your queue</title><style>');
+  o.push(":root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#e2e5ea;--ok:#157f3b;--okbg:#e7f6ec;--act:#b42318;--actbg:#fdecea;--unk:#8a5a00;--unkbg:#fff4d6;--warn:#8a5a00;--link:#0b5cd5}");
+  o.push("@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8eaee;--mute:#9aa3b1;--line:#2a303a;--ok:#4cc17a;--okbg:#10241a;--act:#ff8a80;--actbg:#2d1513;--unk:#f0c05a;--unkbg:#2a2210;--warn:#f0c05a;--link:#7db1ff}}");
+  o.push("*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:720px;margin:0 auto;padding:20px 16px 48px}");
+  o.push(".top{display:flex;justify-content:space-between;align-items:center;color:var(--mute);font-size:13px;margin-bottom:12px}.top b{color:var(--ink);font-size:14px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--mute)}.dot.g{background:var(--ok)}.dot.a{background:var(--warn)}.dot.r{background:var(--act)}");
+  o.push(".banner{border-radius:14px;padding:20px 18px;margin-bottom:18px}.banner.act{background:var(--actbg);border:1px solid var(--act)}.banner.ok{background:var(--okbg);border:1px solid var(--ok)}.banner.unk{background:var(--unkbg);border:1px solid var(--unk)}");
+  o.push(".banner h1{margin:0;font-size:30px;line-height:1.15}.banner.act h1{color:var(--act)}.banner.ok h1{color:var(--ok)}.banner.unk h1{color:var(--unk)}.banner p{margin:6px 0 0;color:var(--mute)}");
+  o.push(".card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}.card.urgent{border-left:5px solid var(--act)}.card h2{margin:0 0 4px;font-size:17px}");
+  o.push(".meta{font-size:13px;color:var(--mute)}.row{margin-top:8px;font-size:14px}.row b{display:inline-block;min-width:112px;margin-right:6px;color:var(--mute);font-weight:600;vertical-align:top}.do{display:inline-block;margin-top:10px;padding:8px 14px;border-radius:8px;background:var(--link);color:#fff;text-decoration:none;font-weight:600;font-size:14px}");
+  o.push(".tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--line);color:var(--mute);margin-right:6px}.tag.u{background:var(--act);color:#fff}");
+  o.push(".verdict.ok{border-left:5px solid var(--ok)}.verdict.unk{border-left:5px solid var(--unk)}.verdict.act{border-left:5px solid var(--act)}.vtop{display:flex;gap:6px;align-items:center}.chip{font-weight:800;letter-spacing:.04em;padding:3px 10px;border-radius:8px;font-size:14px}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.unk{background:var(--unkbg);color:var(--unk)}.chip.act{background:var(--actbg);color:var(--act)}.vhead{margin:8px 0 4px;font-size:16px;font-weight:600}.why{margin:6px 0 0;padding-left:18px;font-size:14px;color:var(--mute)}");
+  o.push("h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:24px 0 8px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.stat .n{font-size:22px;font-weight:700}.stat .l{font-size:12px;color:var(--mute)}.bad{color:var(--act)}.good{color:var(--ok)}.amber{color:var(--warn)}");
+  o.push("details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:14px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
+  o.push("</style></head><body><main>");
+  o.push('<div class="top"><b>Fleet &middot; your queue</b><span><span id="dot" class="dot g"></span><span id="age">live</span></span></div>');
+  o.push('<div id="live">' + humanFragment(v) + "</div>");
+  // Real-time: re-fetch the server-rendered fragment every 10s (queue is read live from D1 on each call). The dot
+  // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
+  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(){if(document.hidden||busy)return;busy=true;var d=live.querySelector('details'),open=d&&d.open;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;var n=live.querySelector('details');if(n&&open)n.open=true;last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
   return o.join("");
 }
 export {

@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.3.4-ai-attribution";
+var VERSION = "0.3.5-invest-gate";
 var NAME = "qnfo-autopilot";
 var DASH = "https://fleet.qnfo.org/api/state";
 var UA = "qnfo-autopilot/" + VERSION;
@@ -415,7 +415,24 @@ async function autonomousApply(env) {
   return result;
 }
 __name(autonomousApply, "autonomousApply");
+// INVEST-DECISION-1: the hourly think-loop spends model tokens to generate new research questions. When the
+// investment verdict (qnfo-fleet-dashboard, metric_registry.invest_decision_level) is scale back (2) or stop (3) and
+// fresh (<3h), pause it: a reversible, spend-reducing T1 action. Unreadable or stale signals never pause anything.
+async function investPaused(env) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT last_value, last_refreshed FROM metric_registry WHERE metric = 'invest_decision_level'").first();
+    if (!r || r.last_value == null) return null;
+    const age = Date.now() - Date.parse(String(r.last_refreshed || ""));
+    const lvl = Number(r.last_value);
+    return isFinite(lvl) && lvl >= 2 && age < 3 * 36e5 ? lvl : null;
+  } catch (e) {
+    return null;
+  }
+}
+__name(investPaused, "investPaused");
 async function thinkLoop(env) {
+  const _paused = await investPaused(env);
+  if (_paused != null) return { ok: true, skipped: "invest-decision level " + _paused + " (scale back / stop): think-loop paused" };
   await ensureSchema(env);
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
   try {
