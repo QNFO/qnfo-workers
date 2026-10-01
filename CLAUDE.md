@@ -55,7 +55,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Do not make claude.ai a system of record, a link target in a worker or doc, or a recurring runner. Recurring work is a
   worker cron (using qnfo-ai and D1). A decision the owner must make is made in https://fleet.qnfo.org (queue cards,
   objective decisions, the prompt panel), never by "telling a session". The dashboard refuses claude.ai and anthropic.com
-  links in queue items, and `cloudflare-only-host-guard.py` (deploy-gate) fails CI on a claude.ai link in any tracked file.
+  links in queue items, a D1 trigger refuses any `human_actions` card whose text routes the owner's work to Claude
+  (migrations/2026-10-01-human-actions-no-claude.sql), and `cloudflare-only-host-guard.py` (deploy-gate) fails CI on a
+  claude.ai link in any tracked file. Tasks sent from ChatBox, DeepChat or the dashboard become `agent_issues` rows
+  (TASK-INTENT-INTAKE-1, OWNER-NOTES-ROUTE-1); an explicit `code-task: repo=<repo> path=<file>` line hands one to the code loop.
 - The watchmaker index (WATCHMAKER-INDEX-1, `GET https://fleet.qnfo.org/api/watchmaker`, metric `watchmaker_index`, target 0)
   counts recurring operations that still need a person or a session, or whose Cloudflare runner is stalled. A PR that adds
   a recurring operation adds it to `WATCHMAKER_OPS` in qnfo-fleet-dashboard/worker.js with the D1 query that proves it ran.

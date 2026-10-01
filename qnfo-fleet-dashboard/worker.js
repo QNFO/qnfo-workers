@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.14.0-watchmaker"; /* WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.14.1-intent-intake"; /* TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -3262,6 +3262,26 @@ async function ownerNotesRoute(env) {
       out.tasks++;
     }
   }
+  // TASK-INTENT-INTAKE-1 (1.14.1, agent_issues 1733): no triage reads type='task' intents (qnfo-intent-orchestrator and
+  // qnfo-idea-triage take 'research', qnfo-kaizen 'meta'), so a task sent from ChatBox, DeepChat or the qnfo-ops feeds waited
+  // forever. Each pending task intent becomes one agent_issues row (INTENT-TASK-<id>, its text verbatim, so an explicit
+  // 'code-task: repo=... path=...' line reaches the code loop's ISSUE-INTAKE-1) and the intent is marked promoted with the issue
+  // id. A dashboard "Queue as task" intent is linked to the issue its owner_prompts row already filed, never filed twice.
+  const intents = await d1all(env.AUDIT, "SELECT id, desire, summary, source, device FROM intents WHERE status = 'pending' AND type = 'task' ORDER BY created_at LIMIT 20");
+  out.intents = 0;
+  for (const r of intents) {
+    let id = null;
+    if (r.device === "owner-dashboard") {
+      const p = (await d1all(env.AUDIT, "SELECT issue_id FROM owner_prompts WHERE intent_id = ? AND issue_id IS NOT NULL LIMIT 1", [r.id]))[0];
+      if (!p) continue;
+      id = Number(p.issue_id);
+    } else {
+      id = await ownerRequestIssue(env, ("INTENT-TASK-" + r.id + ": " + String(r.summary || r.desire || "").replace(/\s+/g, " ")).slice(0, 180), "A task intent from " + String(r.source || "?") + " (" + String(r.device || "?") + ", intents " + r.id + ") that no triage reads (type 'task'). Text: " + String(r.desire || "").slice(0, 1800) + dod);
+    }
+    if (!id) continue;
+    await env.AUDIT.prepare("UPDATE intents SET status = 'promoted', triage_decision = 'TO-AGENT-ISSUE', triage_rationale = ?1, triaged_at = ?2, processed_at = ?2 WHERE id = ?3 AND status = 'pending'").bind("filed as agent_issues " + id + " (TASK-INTENT-INTAKE-1, qnfo-fleet-dashboard)", new Date().toISOString(), r.id).run();
+    out.intents++;
+  }
   return out;
 }
 // Cron: apply any revision ratified outside the dashboard route (or before 1.13.0). Bounded: a handful per tick.
@@ -3290,7 +3310,7 @@ var WATCHMAKER_OPS = [
   { key: "backlog-drain", what: "Backlog drain: close or reopen issues with evidence", runner: "cron:qnfo-backlog-exec", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jo-qnfo-backlog-exec-' AND id < 'jo-qnfo-backlog-exec.'" },
   { key: "time-gated-verification", what: "Time-gated issue verification (remediation_contracts)", runner: "workflow:remediation-consumer", cadence_h: 6, sql: "SELECT MAX(last_attempt_at) AS last FROM remediation_contracts", replaces: "13 one-shot claude.ai session check-ins" },
   { key: "research-intent-triage", what: "Research intent triage (qnfo-intent-orchestrator 06:30Z)", runner: "cron:qnfo-intent-orchestrator", cadence_h: 24, stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'research' AND created_at < ?1", stuck_note: "pending research intents older than 48h" },
-  { key: "task-intent-intake", what: "Task intents from ChatBox, DeepChat and qnfo-ops feeds (no triage reads type 'task')", runner: "none", stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'task' AND created_at < ?1", stuck_note: "pending task intents older than 48h with no consumer" },
+  { key: "task-intent-intake", what: "Task intents from ChatBox, DeepChat and qnfo-ops feeds, filed as agent_issues (TASK-INTENT-INTAKE-1)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'task' AND created_at < ?1", stuck_note: "pending task intents older than 48h with no consumer" },
   { key: "code-task-merge", what: "Merging code-loop PRs (code-task-publish never merges)", runner: "owner", live_sql: "SELECT COUNT(*) AS n FROM code_tasks WHERE status IN ('published', 'branch_pushed', 'needs_human') AND updated_at > ?1", live_note: "code tasks waiting on a person in the last 30 days" },
   { key: "linkedin-draft-approval", what: "Approving each LinkedIn draft in Buffer (LinkedIn API Terms 3.1; STRATEGY gate 7)", runner: "owner-by-policy" },
   { key: "objective-ratification", what: "Ratifying objective revisions (QUNIVERSE-CHARTER s7)", runner: "owner-by-policy" }
