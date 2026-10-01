@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.5-purge-orphan-sweep";
+var VERSION = "3.0.6-zenodo-versions";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -98,13 +98,18 @@ async function runImpact(env, commit, limit) {
         }
       }
       if (views || downloads) entry.sources.zenodo = { views, downloads };
+      // ZENODO-VERSION-COUNT-1 (2026-10-01, #1621): record the Zenodo version count (relations.version index + 1, exact
+      // when is_last). zenodo_versions_per_flagship read a stale 1 because nothing measured versions, while the top
+      // papers carry 5 to 9.
+      const rv = rec.metadata && rec.metadata.relations && rec.metadata.relations.version && rec.metadata.relations.version[0];
+      if (rv && typeof rv.index === "number") entry.sources.zenodoVersions = rv.index + 1;
     }
     const cited = (entry.sources.openalex || 0) + (entry.sources.crossref || 0);
     const dls = entry.sources.zenodo && entry.sources.zenodo.downloads || 0;
     const vws = entry.sources.zenodo && entry.sources.zenodo.views || 0;
     const score = Math.round((cited + dls / 50 + vws / 500) * 1e3) / 1e3;
     try {
-      for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex], ["zenodo", "views", entry.sources.zenodo && entry.sources.zenodo.views], ["zenodo", "downloads", entry.sources.zenodo && entry.sources.zenodo.downloads]]) {
+      for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex], ["zenodo", "versions", entry.sources.zenodoVersions], ["zenodo", "views", entry.sources.zenodo && entry.sources.zenodo.views], ["zenodo", "downloads", entry.sources.zenodo && entry.sources.zenodo.downloads]]) {
         if (value !== void 0 && value !== null) {
           await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO citation_stats (id, doi, source, metric, value, collected_at) VALUES (?1,?2,?3,?4,?5,?6)").bind(crypto.randomUUID(), doi, src, metric, value, now).run();
         }

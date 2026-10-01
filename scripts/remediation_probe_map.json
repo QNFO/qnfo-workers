@@ -42,6 +42,7 @@
     "1223": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN COUNT(DISTINCT script_name) >= 39 THEN 1 ELSE 0 END AS TEXT) AS observed FROM worker_logs WHERE julianday('now')-julianday(replace(substr(ingested_at,1,19),'T',' ')) <= 1", "transport": "d1-query", "claim": "worker log ingestion covers every worker in the last 24h"},
     "1615": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM v_metric_staleness", "transport": "d1-query", "claim": "no registered metric is stale"},
     "1293": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM router_calibration WHERE task_class='agent' AND COALESCE(successes,0) = 0", "transport": "d1-query", "claim": "the agent task class records successes, not a permanent zero"},
-    "1164": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN COUNT(*) >= 1 THEN 1 ELSE 0 END AS TEXT) AS observed FROM errata_queue WHERE email_id IS NULL", "transport": "d1-query", "claim": "an internal errata path exists that does not require an inbound email"}
+    "1164": {"probe": "SELECT '1' AS expected, CAST(CASE WHEN COUNT(*) >= 1 THEN 1 ELSE 0 END AS TEXT) AS observed FROM errata_queue WHERE email_id IS NULL", "transport": "d1-query", "claim": "an internal errata path exists that does not require an inbound email"},
+    "1700": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM research_queue WHERE status='queued' AND julianday('now') - julianday(created_at) > 10", "transport": "d1-query", "claim": "no research_queue row has waited more than 10 days in status=queued (QUEUE-ANTISTARVATION-1: rows older than 72h are claimed first)"}
   }
 }

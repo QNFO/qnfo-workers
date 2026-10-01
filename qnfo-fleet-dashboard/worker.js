@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.43-scheduled-no-run-handler";
+var VERSION = "1.7.45-device-staleness";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -500,7 +500,12 @@ async function liveDevice(env) {
       if (r.plane === "windows") win.push(it);
       else loc.push(it);
     }
-    return { captured_at: cap, note: "live from device_tasks (D1), " + rows.length + " rows", windows_tasks: win, local_crons: loc };
+    // DEVICE-PLANE-STALENESS-1 (2026-10-01, #1637): device_tasks is written only by the owner's local device reporter,
+    // last on 2026-09-12. It was labelled "live" regardless of age. Past 48h it is now marked stale and unverifiable,
+    // so client-side task state cannot pass for current fleet state.
+    const ageH = cap ? (Date.now() - Date.parse(String(cap).replace(" ", "T") + (/Z|[+-]\d\d:?\d\d$/.test(String(cap)) ? "" : "Z"))) / 36e5 : null;
+    const stale = ageH == null || !isFinite(ageH) || ageH > 48;
+    return { captured_at: cap, stale, age_hours: ageH == null || !isFinite(ageH) ? null : Math.round(ageH), note: stale ? "STALE: device last self-reported " + cap + " (" + (ageH == null || !isFinite(ageH) ? "unknown age" : Math.round(ageH / 24) + "d ago") + "); device task state is unverifiable until the local reporter runs again" : "live from device_tasks (D1), " + rows.length + " rows", windows_tasks: win, local_crons: loc };
   } catch (e) {
     return { captured_at: null, note: "device_tasks unavailable: " + String(e && e.message || e).slice(0, 80), windows_tasks: [], local_crons: [] };
   }
@@ -1502,9 +1507,14 @@ async function buildState(env, ctx) {
     push({ key: "ai_queries", label: "AI queries (24h)", state: "info", detail: r.c + " queries", ts: r.latest });
   });
   await safeAudit("living_paper", "Living paper store", async function() {
-    const g = await d1all(env.LIVING, "SELECT (SELECT COUNT(*) FROM papers) AS papers, (SELECT COUNT(*) FROM paper_versions) AS versions, (SELECT COUNT(*) FROM citations) AS citations");
-    const r = g && g.length ? g[0] : {};
-    push({ key: "living_paper", label: "Living paper store", state: "info", detail: "papers=" + r.papers + " versions=" + r.versions + " citations=" + r.citations, ts: null });
+    // LINEAGE-TRUTH-1 (2026-10-01, #1651): living-paper paper_versions (1 row) and citations (0 rows) have no writer, so
+    // "versions=1 citations=0" understated lineage. Revisions come from paper_revision_log; Zenodo version counts and
+    // OpenAlex citations come from citation_stats (qnfo-paper-indexer, daily).
+    const g = await d1all(env.LIVING, "SELECT COUNT(*) AS papers FROM papers");
+    const since = new Date(Date.now() - 3 * 864e5).toISOString();
+    const a = await d1all(env.AUDIT, "SELECT (SELECT COUNT(DISTINCT slug) FROM paper_revision_log WHERE status='published' AND new_doi IS NOT NULL) AS revised, (SELECT COUNT(*) FROM (SELECT doi FROM citation_stats WHERE source='zenodo' AND metric='versions' AND collected_at >= ?1 GROUP BY doi HAVING MAX(value) >= 2)) AS multi_version, (SELECT COALESCE(SUM(v),0) FROM (SELECT MAX(value) AS v FROM citation_stats WHERE source='openalex' AND metric='cited_by_count' AND collected_at >= ?1 GROUP BY doi)) AS citations", [since]);
+    const r = g && g.length ? g[0] : {}, q = a && a.length ? a[0] : {};
+    push({ key: "living_paper", label: "Living paper store", state: "info", detail: "papers=" + r.papers + " revised(published new version)=" + q.revised + " multi-version(Zenodo)=" + q.multi_version + " citations(OpenAlex)=" + q.citations, ts: null });
   });
   await safeAudit("outreach_state", "Outreach pipeline state", async function() {
     const rows = await d1all(env.OUTREACH, "SELECT * FROM pipeline_state LIMIT 8");

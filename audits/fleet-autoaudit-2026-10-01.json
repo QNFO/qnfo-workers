@@ -1,27 +1,10 @@
 {
-  "audited_at": "2026-10-01 08:24:13",
+  "audited_at": "2026-10-01 08:50:59",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "radar-hub"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "errata-hub"
-      ]
-    },
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/errata-hub/deployed-current.worker.js",
-        "dir": "errata-hub",
-        "live": "1.1.3",
-        "repo": "1.1.4-republish-verify",
-        "worker": "errata-hub"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -50,14 +33,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "errata-hub",
-        "live": "1.1.3",
-        "repo": "1.1.4-republish-verify",
-        "worker": "errata-hub"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -415,12 +391,17 @@
       }
     ],
     "scope": "all",
-    "sync": 39,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
         "version": "0.4.0-notes-intake",
         "worker": "calendar-api"
+      },
+      {
+        "dir": "errata-hub",
+        "version": "1.1.4-republish-verify",
+        "worker": "errata-hub"
       },
       {
         "dir": "fleet-exec",
@@ -459,7 +440,7 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.2.5-degradereconcile",
+        "version": "1.2.6-authblind",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -504,12 +485,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.59-census-uncontracted",
+        "version": "0.4.60-budget-units",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.43-scheduled-no-run-handler",
+        "version": "1.7.45-device-staleness",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -554,7 +535,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.23-fleet-1042-unknown",
+        "version": "2.38.24-publication-preflight-gate",
         "worker": "qnfo-ops"
       },
       {
@@ -564,7 +545,7 @@
       },
       {
         "dir": "qnfo-paper-indexer",
-        "version": "3.0.5-purge-orphan-sweep",
+        "version": "3.0.6-zenodo-versions",
         "worker": "qnfo-paper-indexer"
       },
       {
@@ -675,9 +656,9 @@
     "errata-hub": {
       "before": "1.1.4-republish-verify",
       "http": 200,
-      "live": "1.1.3",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "1.1.4-republish-verify",
+      "match": 1,
+      "note": "SYNC",
       "worker": "errata-hub"
     },
     "events-radar": {
@@ -905,9 +886,9 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.2.5-degradereconcile",
+      "before": "1.2.6-authblind",
       "http": 200,
-      "live": "1.2.5-degradereconcile",
+      "live": "1.2.6-authblind",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1161,17 +1142,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.59-census-uncontracted",
+      "before": "0.4.60-budget-units",
       "http": 200,
-      "live": "0.4.59-census-uncontracted",
+      "live": "0.4.60-budget-units",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.43-scheduled-no-run-handler",
+      "before": "1.7.45-device-staleness",
       "http": 200,
-      "live": "1.7.43-scheduled-no-run-handler",
+      "live": "1.7.45-device-staleness",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1297,9 +1278,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.23-fleet-1042-unknown",
+      "before": "2.38.24-publication-preflight-gate",
       "http": 200,
-      "live": "2.38.23-fleet-1042-unknown",
+      "live": "2.38.24-publication-preflight-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1321,9 +1302,9 @@
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
-      "before": "3.0.5-purge-orphan-sweep",
+      "before": "3.0.6-zenodo-versions",
       "http": 200,
-      "live": "3.0.5-purge-orphan-sweep",
+      "live": "3.0.6-zenodo-versions",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-indexer"
