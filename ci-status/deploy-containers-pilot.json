@@ -4,10 +4,10 @@
   "wrangler_outcome": "success",
   "nomig_outcome": "skipped",
   "restore_outcome": "skipped",
-  "verify_rc": "skipped-no-token",
+  "verify_rc": "",
   "health_http": "200",
-  "head": "ae6f9772b3f9791547925dff5b0a8f0ca124e499",
-  "ts": "2026-10-01T00:08:55Z",
-  "wrangler_tail": "\n \u26c5\ufe0f wrangler 4.145.0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nTotal Upload: 17.15 KiB / gzip: 4.38 KiB\nWorker Startup Time: 2 ms\nYour Worker has access to the following bindings:\nBinding                                   Resource            \nenv.SHELL_CONTAINER (ShellContainer)      Durable Object      \nenv.AUDIT (qnfo-audit)                    D1 Database         \n\nThe following containers are available:\n- qnfo-containers-pilot-shellcontainer (docker.io/nikolaik/python-nodejs:python3.12-nodejs22)\n\nUploaded qnfo-containers-pilot (1.10 sec)\n\u256d Deploy a container application deploy changes to your application\n\u2502\n\u2502 Container application changes\n\u2502\n\u251c\u200ano changes qnfo-containers-pilot-shellcontainer\n\u2502\n\u2570 No changes to be made \n\nDeployed qnfo-containers-pilot triggers (0.39 sec)\n  https://qnfo-containers-pilot.q08.workers.dev\nCurrent Version ID: c575de5a-1d98-4bbd-8fd5-d297d09e0653\n",
+  "head": "731a94d59e20949606f9272e9b47266f93f7105d",
+  "ts": "2026-10-01T14:55:19Z",
+  "wrangler_tail": "\n \u26c5\ufe0f wrangler 4.145.0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u001b[33m\u25b2 \u001b[43;33m[\u001b[43;30mWARNING\u001b[43;33m]\u001b[0m \u001b[1mYou are about to upload a Worker that was last updated via the script API.\u001b[0m\n\n  Edits that have been made via the script API will be overridden by your local code and config.\n\n\nTotal Upload: 20.18 KiB / gzip: 5.39 KiB\nWorker Startup Time: 2 ms\nYour Worker has access to the following bindings:\nBinding                                   Resource            \nenv.SHELL_CONTAINER (ShellContainer)      Durable Object      \nenv.AUDIT (qnfo-audit)                    D1 Database         \n\nThe following containers are available:\n- qnfo-containers-pilot-shellcontainer (docker.io/nikolaik/python-nodejs:python3.12-nodejs22)\n\nUploaded qnfo-containers-pilot (1.23 sec)\n\u256d Deploy a container application deploy changes to your application\n\u2502\n\u2502 Container application changes\n\u2502\n\u251c\u200ano changes qnfo-containers-pilot-shellcontainer\n\u2502\n\u2570 No changes to be made \n\nDeployed qnfo-containers-pilot triggers (0.43 sec)\n  https://qnfo-containers-pilot.q08.workers.dev\nCurrent Version ID: 0b9e9e1b-7c49-418e-b2bb-32aa323e4380\n",
   "nomig_tail": ""
 }
