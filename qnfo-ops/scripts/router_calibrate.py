@@ -64,7 +64,10 @@ REBUILD = [
     "INSERT OR IGNORE INTO router_obs (ts, source_table, source_id, task_class, strategy, model, "
     "tier, domain, complexity, tokens_in, tokens_out, cache_read_tokens, cost_usd, latency_ms, "
     "n_tool_calls, tool_ok, success, outcome_source, upstream_model, job_id) "
-    "SELECT ts, 'ops_ai_log', id, COALESCE(strategy, domain, 'other'), strategy, model, "
+    # ROUTER-CALIB-AGENT-CLASS-1 (#1293): strategy='agent' is written only by the qnfo-ops exception
+    # path ("ops agent error: ..."), so it is not a task class; scoring it separately produced a
+    # phantom class with 0 successes. Those rows are failed agent-tools tasks and count against it.
+    "SELECT ts, 'ops_ai_log', id, CASE WHEN strategy = 'agent' THEN 'agent-tools' ELSE COALESCE(strategy, domain, 'other') END, strategy, model, "
     "CASE model WHEN 'ops' THEN 2 WHEN 'ops-exec' THEN 2 WHEN 'ops-frontier' THEN 2 "
     "WHEN 'ops-frontier-mini' THEN 2 WHEN 'ops-frontier-reason' THEN 3 "
     "WHEN 'deepseek-v4-flash' THEN 2 WHEN 'gpt-5' THEN 3 WHEN 'gpt-5-mini' THEN 2 "
