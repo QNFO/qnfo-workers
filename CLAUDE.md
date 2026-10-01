@@ -43,7 +43,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - `docs/PORTFOLIO.md` is the portfolio of every QNFO GitHub repository (tiers, pillars, WBS links, hygiene). Its live
   block, `QNFO/.github/PORTFOLIO.md` and the index in the organisation profile README are regenerated daily by
   qnfo-fleet-control (PORTFOLIO-LOOP-1); never edit them by hand. A new repository names its tier and, for research, a
-  WBS code in `portfolio-state.program_registry`; private repositories are counted and never named.
+  WBS code in `portfolio-state.program_registry`; private repositories are counted and never named. The loop also
+  repairs hygiene itself (PORTFOLIO-HYGIENE-1: the QNFO-ULA LICENSE file, a README-derived description, tier topics,
+  registry links; `portfolio_actions` is the ledger), so do not hand-fix those on QNFO repositories; fix the README
+  or the registry row and let the next sync take it.
 
 ## No Claude dependency at runtime (NO-CLAUDE-RUNTIME-DEPENDENCY-1, CLOUD-ONLY-VERIFICATION-1)
 - Owner directive 2026-10-01: the fleet and its dashboard must not depend on continued Claude usage, and all data is hosted

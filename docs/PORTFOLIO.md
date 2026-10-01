@@ -68,8 +68,10 @@ than 120 days). The hygiene score is the share of graded repositories with none 
    licence is the QNFO Unified License Agreement v2.0 (`QNFO/license`, SPDX `LicenseRef-QNFO-ULA-2.0`), which applies
    by its own scope to every repository of the organisation, code included; GitHub reports it as `NOASSERTION`, which
    counts as licensed. The loop repairs the gaps itself, at most 12 actions per sync: a missing LICENSE file is created
-   from `QNFO/license` (never replaced), an empty description is taken from the README's first paragraph, missing
-   topics are the tier baseline plus the slugs of the programs served. Every action is a `portfolio_actions` row
+   from `QNFO/license` (never replaced), an empty description is taken from the README's first real paragraph (a
+   line of labelled fields such as "Status: ... | Phase: ..." is never used), missing topics are the tier baseline plus
+   the slugs of the programs served. A description the loop wrote is re-derived every sync and corrected or cleared
+   when the README changes; a description a person wrote is never touched. Every action is a `portfolio_actions` row
    (`GET /portfolio` lists the last forty) and the next sync measures it; `portfolio_hygiene` is graded in the charter
    under the autonomy pillar (target >= 0.9).
 3. **Archive, do not delete.** A research repository that is dormant for 120+ days and has no WBS code is an archive
@@ -83,8 +85,9 @@ than 120 days). The hygiene score is the share of graded repositories with none 
    from the inventory; the fleet's own sites (qnfo.org, papers.qnfo.org, fleet.qnfo.org) are linked from the mirror.
 
 How it runs: `portfolioSyncIfStale` on the kernel's hourly cron (syncs when the last successful run is older than
-20 hours, within 50 minutes after a partial run, and on the first tick after every kernel deploy, so a change to the
-loop verifies itself within the hour; DEPLOY-SYNC-1), `POST /portfolio/sync` with the admin token on demand. A failed
+20 hours, within 50 minutes after a partial run or after a run that took hygiene actions, and on the first tick after
+every kernel deploy, so a change to the loop verifies itself within the hour and a backlog of flagged repositories
+clears at twelve an hour; DEPLOY-SYNC-1), `POST /portfolio/sync` with the admin token on demand. A failed
 organisation fetch writes nothing. Every run is a `portfolio_sync_runs` row with the per-surface commit status.
 `charter-guard` fails CI if this document loses its markers; `portfolio.test.mjs` replays the organisation fixture
 through the classifier and the three renderers on every pull request that touches the kernel.
