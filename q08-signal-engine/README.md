@@ -1,6 +1,16 @@
 # q08-signal-engine
 
+> Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
+
 Autonomous signal engine serving https://q08.org — systems-level critiques of technical-industry friction, generated from HN/GitHub/arXiv signals and published as timeless long-form essays.
+
+## Distribution (Q08-PERSONAL-CHANNEL-HOLD-1, 2026-10-01)
+- q08 is a separate publication (docs/STRATEGY.md section 2.1). It is **not** distributed through the owner's personal
+  accounts; it reaches readers through its own RSS feed and subscriber digest only.
+- The social queue (`social_threads`, drained by qnfo-social onto the owner's personal Bluesky account) is held by the
+  plain var `Q08_SOCIAL_QUEUE`: off unless set to `"1"`. It is the q08 kill switch in the owner-voice gates (STRATEGY
+  section 5) and stays off until q08 has its own channel.
+- Review 2026-10-31 on bot-filtered human reads; q08 is retired if it is under 50 human reads/week (STRATEGY section 7).
 
 ## Runtime
 - Worker: `q08-signal-engine` (Cloudflare Workers ES module, entry `worker.js`)

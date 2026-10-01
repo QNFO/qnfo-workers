@@ -9,7 +9,11 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.46-obs-lastobserved";
+var VERSION = "1.7.47-noindex-review-gate";
+// REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
+// reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
+// owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
+var REVIEW_GATE_DATE = "2026-12-31";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -2580,13 +2584,33 @@ __name2(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name22(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name222(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name2222(persistWeeklyReportCard, "persistWeeklyReportCard");
+// DASHBOARD-NOINDEX-1 (2026-10-01): fleet.qnfo.org is an internal dashboard (revenue, AI spend)
+// that search engines could index. robots.txt is answered before any routing, and every response
+// leaves through this one exit, so no route can forget the header. Falls back to a copy when a
+// response's headers are immutable.
+function noIndex(res) {
+  try {
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return res;
+  } catch (e) {
+  }
+  const r = new Response(res.body, res);
+  r.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return r;
+}
+__name(noIndex, "noIndex");
 var worker_default = {
   async fetch(request, env, ctx) {
-    try {
-      return await handleRequest(request, env, ctx);
-    } catch (e) {
-      return json({ ok: false, error: String(e.message || e) }, 500);
+    if (new URL(request.url).pathname === "/robots.txt") {
+      return noIndex(new Response("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
     }
+    let res;
+    try {
+      res = await handleRequest(request, env, ctx);
+    } catch (e) {
+      res = json({ ok: false, error: String(e.message || e) }, 500);
+    }
+    return noIndex(res);
   },
   async scheduled(controller, env, ctx) {
     const deadline = Date.now() + SCHEDULED_BUDGET_MS;
@@ -2780,7 +2804,7 @@ __name2(roiGf, "roiGf");
 async function redHtml(env) {
   const H = [];
   const now = Date.now();
-  const dead = (/* @__PURE__ */ new Date("2026-10-25T00:00:00Z")).getTime();
+  const dead = (/* @__PURE__ */ new Date(REVIEW_GATE_DATE + "T00:00:00Z")).getTime();
   const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
   const usd = /* @__PURE__ */ __name2(function(centsV) {
     const n = Number(centsV);
@@ -2809,7 +2833,7 @@ async function redHtml(env) {
   H.push("body{font-family:system-ui,Segoe UI,monospace;background:#0b0e14;color:#e6e6e6;margin:0;padding:24px}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:18px 0 6px;color:#f6a5a5}table{border-collapse:collapse;width:100%;max-width:1150px}td,th{border:1px solid #2a2f3a;padding:3px 7px;font-size:12px;text-align:left;vertical-align:top}th{background:#141a24;color:#f6a5a5}tr:hover td{background:#161b24}.ok{color:#6f6}.warn{color:#fa3}.bad{color:#f66}.sub{color:#9aa;font-size:11px}.panel{background:#11151d;border:1px solid #3a2326;border-radius:8px;padding:12px 14px;margin:10px 0;max-width:1180px}a{color:#9af}.collapsed{color:#3fb950;font-size:12px}");
   H.push("</style></head><body>");
   H.push("<h1>QUNIVERSE FAILURE INVENTORY</h1>");
-  H.push('<div class="sub">failures, flags, open issues and unremediated items only &mdash; greens are collapsed to one line at the bottom. <a href="/roi">cost/output ROI</a> &middot; <a href="/ops">operational drill-down</a> &middot; <a href="/api/state">machine state</a> &middot; generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' &middot; <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days to shutdown-gate deadline 2026-10-25</b></div>");
+  H.push('<div class="sub">failures, flags, open issues and unremediated items only &mdash; greens are collapsed to one line at the bottom. <a href="/roi">cost/output ROI</a> &middot; <a href="/ops">operational drill-down</a> &middot; <a href="/api/state">machine state</a> &middot; generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' &middot; <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days to the review gate " + REVIEW_GATE_DATE + "</b></div>");
   if (st.error) H.push('<div class="panel"><h2>STATE ERROR</h2><div class="bad">' + esc(st.error) + "</div></div>");
   let sh = [];
   try {
@@ -2828,7 +2852,7 @@ async function redHtml(env) {
   };
   H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + _armedN + " ARMED of " + sh.length + " kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>");
   for (const r of sh) H.push('<tr><td class="' + _shCls(r.state) + '"><b>' + esc(r.id) + "</b></td><td>" + esc(r.phase) + '</td><td class="' + _shCls(r.state) + '">' + esc(r.component) + "</td><td>" + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + "</td><td>" + esc(r.due_date) + '</td><td class="' + _shCls(r.state) + '">' + esc(r.state) + "</td></tr>");
-  H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory. EARLY-TRIGGER is evaluated in the COST TRUTH panel below.</div></div>');
+  H.push('</table><div class="sub">review gate ' + REVIEW_GATE_DATE + ' (docs/STRATEGY.md s9): the research layer continues if credibility events &ge; 2 OR confirmed subscribers &ge; 50 OR funding is secured, with AI spend inside the cap; otherwise it shrinks to the selected-works core. Research data is never deleted automatically (phase 2 needs the owner&#39;s email confirmation). EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. EARLY-TRIGGER is evaluated in the COST TRUTH panel below.</div></div>');
   let th = [];
   try {
     th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric");
@@ -2896,9 +2920,12 @@ async function redHtml(env) {
   };
   H.push('<div class="panel"><h2>2 &middot; SURVIVAL GATES vs measured</h2><table><tr><th>gate</th><th>target</th><th>measured</th><th>state</th></tr>');
   for (const t of th) {
-    const lg = _liveGate[t.metric] || null;
+    // REVIEW-GATE-1: a row whose target starts with RETIRED is history, not a gate. Show the live value for context,
+    // never let the measurement flip it back to MET/OPEN (impressions_growth_30d read a false +394% MET).
+    const retired = /^RETIRED\b/.test(String(t.target || ""));
+    const lg = retired ? (_liveGate[t.metric] ? { st: "RETIRED", v: _liveGate[t.metric].v } : { st: "RETIRED", v: "n/a" }) : (_liveGate[t.metric] || null);
     const stv = lg ? lg.st : t.state;
-    const cls = stv === "MET" ? "ok" : stv === "MEASURED" ? "warn" : "bad";
+    const cls = stv === "MET" ? "ok" : stv === "MEASURED" || stv === "RETIRED" ? "warn" : "bad";
     H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + "</td><td>" + (lg ? esc(lg.v) : '<span class="sub">stored</span>') + '</td><td class="' + cls + '">' + esc(stv) + "</td></tr>");
     if (lg && lg.st !== t.state) {
       try {
@@ -3237,7 +3264,7 @@ async function redHtml(env) {
     verdict = "PARTIAL \u2014 reports gate met, impressions gate " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "% of +30% prior-window MoM" : "unmeasured");
     vcls = "warn";
   }
-  H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + "/mo) and zero revenue, the 2026-10-25 phase-1 retirement fires unless the +30% impressions gate passes or the gates are revised by owner.</span></div>");
+  H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + "/mo) and zero revenue, the research layer is reviewed on " + REVIEW_GATE_DATE + " against the reach scorecard (docs/STRATEGY.md s9).</span></div>");
   H.push("</div>");
   const probes = st.probes || [];
   const probeOk = probes.filter(function(p) {
@@ -3339,12 +3366,12 @@ async function roiHtml(env) {
   const since = /* @__PURE__ */ __name2(function(h) {
     return new Date(now - h * 36e5).toISOString();
   }, "since");
-  const dead = (/* @__PURE__ */ new Date("2026-10-25T00:00:00Z")).getTime();
+  const dead = (/* @__PURE__ */ new Date(REVIEW_GATE_DATE + "T00:00:00Z")).getTime();
   const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
   H.push('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QUNIVERSE ROI</title><style>body{font-family:system-ui;background:#0b0e14;color:#e6e6e6;margin:0;padding:24px}h1{font-size:22px}h2{font-size:16px;margin:18px 0 6px;color:#9fc}table{border-collapse:collapse;width:100%;max-width:900px}td,th{border:1px solid #2a2f3a;padding:4px 8px;font-size:13px;text-align:right}th{background:#141a24;color:#9fb}td:first-child,th:first-child{text-align:left}.ok{color:#6f6}.warn{color:#fa3}.bad{color:#f66}.sub{color:#9aa;font-size:12px}.panel{background:#11151d;border:1px solid #2a2f3a;border-radius:8px;padding:14px;margin:10px 0;max-width:940px}</style></head><body>');
   H.push("<h1>QUNIVERSE ROI \u2014 cost vs output</h1>");
   H.push('<div class="sub"><a href="/ops" style="color:#9af">operational detail (uptime/errors) \u2192 /ops</a></div>');
-  H.push('<div class="sub">generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' \xB7 deadline 2026-10-25 \xB7 <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days left</b></div>");
+  H.push('<div class="sub">generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' \xB7 review gate ' + REVIEW_GATE_DATE + ' \xB7 <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days left</b></div>");
   let opsN = null;
   try {
     const or_ = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool' AND ts >= ?", [since(720)]);
@@ -3498,7 +3525,7 @@ async function roiHtml(env) {
     const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
     H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
   }
-  H.push('</table><div class="sub">4 armed shutdown rows \xB7 17 open work-queue rows \xB7 self-destruct is mechanical if gates fail by 2026-10-25</div></div>');
+  H.push('</table><div class="sub">review gate ' + REVIEW_GATE_DATE + ' \xB7 no automatic data deletion (docs/STRATEGY.md s9)</div></div>');
   let verdict = "NO JUSTIFICATION YET", vcls = "bad";
   if (rum && rum.total != null && rum.total >= 7293 && d30n >= 2) {
     verdict = "GATES ON TRACK";

@@ -1,8 +1,19 @@
-# QNFO × QWAV — Funding Applications Tracker (2026-08-13)
+# QNFO — Funding Applications Tracker (2026-08-13, aligned 2026-10-01)
+
+> Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
 
 **Campaign:** Wide-net autonomous application run. Policy: programmatic/email channels only (no manual web forms); alignment-first (skip funders whose window is closed or whose requirements the project does not meet); every submission carries same-turn evidence.
 
-**Pitch v2 (2026-08-16):** Rapid research iteration — research is bottlenecked by process, not intelligence; LLMs with research-designed protocols/guardrails compress the cycle; the API-accessible QNFO knowledge graph (RAG + database + graph in one queryable layer) is the key asset; anyone can tap the corpus or run the pipeline. Explicitly NOT a business — knowledge as public infrastructure. Location: Amsterdam, Netherlands.
+**Identity (2026-10-01, STRATEGY section 2.1):** applicant Rowan Brad Quni-Gudzinas; imprint `QNFO`, written with no
+organisation suffix. QWAV is a parked commercial label and is not used in applications (the title read "QNFO × QWAV" before
+2026-10-01). Message IDs on the qwav.tech domain below are records of what was sent.
+
+**Positioning (STRATEGY section 2.2):** Rowan Brad Quni-Gudzinas builds honest yardsticks for computation: what a correct
+answer costs in energy, what an AI-assisted claim is worth, and what autonomous AI research actually delivers. Pillars, in
+lead order: energy-honest computing (JPCUB); epistemics of AI-assisted science; autonomous research operations; ultrametric
+programme (theory, not led with).
+
+**Pitch v2 (2026-08-16):** Rapid research iteration — research is bottlenecked by process, not intelligence; LLMs with research-designed protocols/guardrails compress the cycle; the API-accessible QNFO knowledge graph (RAG + database + graph in one queryable layer) is the key asset; anyone can tap the corpus or run the pipeline. Open, public-interest research with a funding target (STRATEGY section 8): grants first, paid assessments second; knowledge as public infrastructure (changed 2026-10-01, STRATEGY-1; v2 said "Explicitly NOT a business"). Location: Amsterdam, Netherlands.
 
 ## Submitted — live
 
@@ -21,12 +32,12 @@
 | **Emergent Ventures web form** | Closed — reCAPTCHA Enterprise blocks autonomous submit (verified 2026-08-16); form 100% filled; **refined application email sent instead** | msg `<GPZBK0MMVJRC1KPILdTaaSf1RSqlYmyUYGFy@qwav.tech>` (2026-08-16) |
 | **Foresight Institute** | Closed — 2026 AI for Science & Safety Nodes window closed; open form is physical-hub-only (misaligned) | Watch foresight.org/engage/grants/ (month-end deadlines) |
 | **Filecoin ProPGF** | Closed — all rounds closed (Batch 3 closed Jun 17, 2026) | Watch app.filpgf.io |
-| **Ethereum ESP** | Closed (window) — no active wishlists, no active grant rounds (verified live 2026-08-16); **ETH wallet now generated** (`0x193C43F2Df997811B6D680093D9B196B984Bbe21`, stored `C:\Users\LENOVO\tokens\eth-wallet.json`) so application is executable the moment a wishlist/round opens | Watch esp.ethereum.foundation/applicants/wishlist + /open-rounds |
+| **Ethereum ESP** | Closed (window) — no active wishlists, no active grant rounds (verified live 2026-08-16); **ETH wallet now generated** (`0x193C43F2Df997811B6D680093D9B196B984Bbe21`, stored (local path removed 2026-10-01)) so application is executable the moment a wishlist/round opens | Watch esp.ethereum.foundation/applicants/wishlist + /open-rounds |
 | **Gitcoin GG24** | Closed (not autonomously executable) — applications open but require interactive wallet-connect (MetaMask/WalletConnect QR) + Gitcoin Passport social-account stamps; wallet asset now ready but the flow is not programmatically completable in this environment | Wallet `0x193C43F2...` ready; GG24 donations window Oct 14–28 2026 if an executable path appears |
-| **NLnet NGI Zero** | **SCHEDULED** — autonomous submission cronjob `ad94a001` fires **Sep 3 2026 09:00 UTC** (calls open Sep 3, deadline Nov 3 12:00 CEST); bundle ready | Bundle: `NLNET_PROPOSAL.md` (€40k, milestones, libre-license) |
+| **NLnet NGI Zero** | **SCHEDULED** — autonomous submission cronjob `ad94a001` fires **Sep 3 2026 09:00 UTC** (calls open Sep 3, deadline Nov 3 12:00 CEST); bundle ready. Dated: STRATEGY.md section 9 counts 0 grant applications submitted since August (2026-10-01), so no NLnet submission is on record; NLnet is now the priority (Next actions) | Bundle: `NLNET_PROPOSAL.md` (€40k, milestones, libre-license) |
 | **Sovereign Tech Fellowship** | Closed (window) — 2026 window closed Apr 6; next expected ~spring 2027 | Watch sovereign.tech/programs/fellowship |
 | **Templeton / Sloan** | Closed (not executable) — institutional funders; legal-entity registration is a legal/administrative act outside agent scope; per user mandate 2026-08-16 no manual user actions will be provided, so these are permanently closed rather than deferred | Re-entry only if a fiscal sponsor / entity path becomes executable |
-| **Wallet decision (ESP/Gitcoin)** | **RESOLVED 2026-08-16** — ETH wallet generated autonomously: `0x193C43F2Df997811B6D680093D9B196B984Bbe21` (private key in `C:\Users\LENOVO\tokens\eth-wallet.json`, key-derive verified) | No further action |
+| **Wallet decision (ESP/Gitcoin)** | **RESOLVED 2026-08-16** — ETH wallet generated autonomously: `0x193C43F2Df997811B6D680093D9B196B984Bbe21` (private key stored (local path removed 2026-10-01), key-derive verified) | No further action |
 | **Entity decision (Templeton/Sloan)** | Closed (see Templeton/Sloan row) | — |
 | **Weekly application-response check** | **OPERATIONAL** — qnfo-email-inbox-check cronjob `3851f539` runs every 6h (proactive outreach since 2026-08-15, Monday shortlist, Friday report + follow-up eligibility 14–21d once-only) | No manual check needed |
 | **Follow-up waves 08-20/08-24/08-26/08-28/08-29** | **OPERATIONAL** — handled by cronjob `3851f539` follow-up eligibility engine (14–21d, once per recipient, never twice, never 4th contact) | — |
@@ -41,7 +52,11 @@
 
 ## Next actions
 
-1. **NLnet bundle** (`NLNET_PROPOSAL.md`) — submission-ready before Sep 3 (see file)
+0. **NLnet NGI Zero: the priority (2026-10-01, STRATEGY sections 7 and 9).** Submit `NLNET_PROPOSAL.md` by the
+   **2026-11-03** deadline (12:00 CEST), reframed per STRATEGY section 8 (open research with a funding target) and led by
+   the JPCUB pillar and the selected works rather than a corpus count. Then Emergent Ventures, Foresight and LTFF
+   follow-ups, and 2 more applications by 2026-12-31 (STRATEGY section 9).
+1. **NLnet bundle** (`NLNET_PROPOSAL.md`) — submission-ready before Sep 3 (see file) (dated; superseded by item 0)
 2. **Wallet decision** (user) — unlocks ESP + Gitcoin
 3. **Entity decision** (user) — unlocks Templeton/Sloan; strengthens SFF
 4. **Follow-up cadence** — check emails/issue comments weekly; add JPCUB-DOI comment already posted on #2170

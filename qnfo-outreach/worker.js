@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.2";
+var VERSION = "0.3.3-reply-stop";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -156,7 +156,7 @@ async function scanReplies(env) {
   const stripQuoted = function (s) {
     let t = String(s || "");
     t = t.split(/\r?\n/).filter(function (l) { return !/^\s*>/.test(l); }).join("\n");
-    t = t.split(/\r?\n\s*(?:On .{0,120}?wrote:|Am .{0,120}?schrieb|Le .{0,120}?écrit|From: .{0,120})\s*:?/i)[0];
+    t = t.split(/\r?\n\s*(?:On .{0,120}?wrote:|Am .{0,120}?schrieb|Le .{0,120}?\u00e9crit|From: .{0,120})\s*:?/i)[0];
     t = t.replace(/https?:\/\/\S*unsubscribe\S*/gi, " ");
     t = t.replace(/This was sent once, to one person[\s\S]*$/i, " ");
     return t;
@@ -169,7 +169,11 @@ async function scanReplies(env) {
     const m = from.match(/[^@\s<>]+@[^@\s<>]+/);
     const addr = m ? m[0].replace(/[>,]+$/, "") : "";
     if (!addr || !EMAIL_RE.test(addr)) continue;
-    if (STOP.test(String(row.subject || "") + " " + stripQuoted(row.body))) {
+    // OUTREACH-CONSENT-1 (2026-10-01): the cold-email opt-out line now says reply "stop", so a reply whose subject or
+    // first written line is just "stop" counts too. Only the first line is tested, so "I can't stop reading" is not a STOP.
+    const firstLine = (stripQuoted(row.body).split(/\r?\n/).find(function (l) { return l.trim(); }) || "").trim();
+    const bareStop = /^\W*(please\s+)?stop\W*$/i.test(firstLine) || /^(re:\s*)*\W*stop\W*$/i.test(String(row.subject || "").trim());
+    if (bareStop || STOP.test(String(row.subject || "") + " " + stripQuoted(row.body))) {
       try {
         await env.QNFO_AUDIT.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1,'reply-stop','reply-scan') ON CONFLICT(email) DO UPDATE SET reason='reply-stop', source='reply-scan', created_at=datetime('now')").bind(addr).run();
         await env.OUTREACH_D1.prepare("UPDATE contacts SET suppress=1, suppress_reason=?1 WHERE lower(email)=?2").bind("reply-stop " + utcDay(), addr).run();

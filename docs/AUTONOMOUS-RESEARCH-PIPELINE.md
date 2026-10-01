@@ -4,6 +4,8 @@
 > Claim: QNFO converts user-submitted ideas into citable publications fully autonomously (cloud-only, no human in the loop), with amplified dissemination and self-improvement.
 > Evidence: live worker fleet + D1 audit DB census 2026-09-01 (this document's audit) · Confidence: 0.9 · Status: verified-at-audit, evolving
 
+> Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
+
 ## 1. Purpose
 
 The user submits thoughts/ideas to the QNFO API endpoint (ChatBox/Android → qnfo-ai, or ideas.qnfo.org). Ideas with high technical merit AND high exposure/impact potential are automatically processed through the research, publication, and dissemination pipelines. Outputs must match or exceed current QNFO papers in quality and receive MORE impressions/citations than current papers. The system also updates its own instructions from received meta-knowledge, autonomously.
@@ -44,9 +46,29 @@ Audit trail (2026-10-01, #1622):
 
 ## 4. Dissemination policy (L3)
 
-- Bluesky: qnfo-social /compose (AI draft, fact-checker validates claims vs title+abstract) → /approve → cron 14:30 posts. social_promote from publish stage queues directly.
-- Multi-channel (LinkedIn/X/Mastodon via Buffer GraphQL): P2 — BUFFER_TOKEN must be provisioned as a worker secret; until then Bluesky is the live channel.
-- Outreach: qnfo-outreach claims outreach_queue; personalization REQUIRED (cite-their-work / same-subfield / recent-paper signal from contact_ledger + KG); cap 15/day; honor opt-out; test target alerts@qnfo.org (TEST-SEND-TARGET-1); never a personal inbox (DIGEST-TO-PERSONAL-1).
+Channels, cadence and owner-voice rules are set by docs/STRATEGY.md sections 4 and 5 (aligned 2026-10-01, STRATEGY-1).
+Posts and emails go out in the owner's voice as **gated T1** (docs/AUTONOMY-DECISION-POLICY.md): each item passes the
+section 5 gates (fact check, identity lexicon, encoding check, link liveness + UTM tag, cadence caps + 30-day duplicate
+check, a kill switch per stream, a daily "sent as you" digest). Replies, comments and DMs to individuals, critical naming of
+third parties, off-pillar topics, follow/like/repost automation and paid promotion are never automatic.
+
+- Home of record: qnfo.org + papers.qnfo.org; every post links there with one UTM-tagged link. Posting rules on every
+  social channel: native text first, one link, no hashtag walls, no engagement bait, no following/liking automation.
+- Bluesky (owner's personal account; research only, at most 1/day): qnfo-social /compose (AI draft, fact-checker validates claims vs title+abstract) → /approve → cron 14:30 posts. social_promote from publish stage queues directly.
+- q08 essays are a separate publication and are **not** posted to the owner's channels (Q08-PERSONAL-CHANNEL-HOLD-1, kill
+  switch `Q08_SOCIAL_QUEUE`, off by default); q08 keeps its own RSS/digest only.
+- Multi-channel via Buffer: LinkedIn (personal profile, primary professional channel, 2-3 posts/week; drafted automatically,
+  published only after the owner's one-tap approval because LinkedIn API Terms 3.1 forbid automated posting), X (low-priority
+  mirror, at most 2/week), Mastodon and Threads (mirrors of Bluesky, automatic). STRATEGY.md section 6.1 records the Buffer API token as present;
+  Threads can also post through the free Threads API. The channels are pending the owner connecting LinkedIn (and
+  optionally Mastodon, Threads, X) in Buffer once. Until then Bluesky is
+  the live social channel. (Changed 2026-10-01; v1.0 listed this as P2 pending BUFFER_TOKEN provisioning.)
+- Hacker News, LessWrong, Reddit: manual only (their norms penalise automated posting).
+- Outreach: qnfo-outreach claims outreach_queue; personalization REQUIRED (cite-their-work / same-subfield / recent-paper signal from contact_ledger + KG); at most 8/day in total across both engines (qnfo-outreach + qnfo-cloud-ops) and 3/day per domain (changed 2026-10-01, STRATEGY-1; v1.0 said 15/day); test target alerts@qnfo.org (TEST-SEND-TARGET-1); never a personal inbox (DIGEST-TO-PERSONAL-1).
+  Consent rules (OUTREACH-CONSENT-1): a real reason tied to the recipient's own work; an opt-out line in every message;
+  suppression list honoured by both engines; one honest follow-up (`Following up:`, never a fake `Re:`); no repeat contact
+  after an opt-out, bounce or reply. Kill switch `pipeline_state.external_sends_enabled`: paused 2026-10-01, resumes after
+  OUTREACH-CONSENT-1 deploys.
 - Search indexing: papers.qnfo.org sitemap.xml already live; IndexNow ping on every new publication (key fea6716717dc42059213070adcdf0e53; key file must be served at a QNFO host path); Schema.org ScholarlyArticle JSON-LD on paper pages (T6).
 
 ## 5. Impact loop (L4)
@@ -61,7 +83,7 @@ Boundaries: NO new skills (NO-MORE-SKILLS-1); updates are additive gate-sections
 
 ## 7. Cost & budget guardrails
 
-AI Gateway $90/30d spend limit (sliding) is the backstop; per-paper cost = sum of stage model calls, recorded in pipeline_tasks; if 30-day spend > $70, pause auto-dispatch until window rolls (env guard in triage v1.1.0).
+AI Gateway $150/30d spend limit (sliding) is the live backstop; target at most $60/30d by 2026-10-31 (docs/STRATEGY.md section 8; changed 2026-10-01, STRATEGY-1; v1.0 said $90/30d). The cap covers gateway-metered AI only: BYOK direct-provider keys bypass it and get per-provider throttles and one unified monthly cost figure instead (RM-COST-UNIFIED-SPEND-1, #1683; the owner's standing directive is throttling, not a hard cap). Per-paper cost = sum of stage model calls, recorded in pipeline_tasks. The v1.0 design also paused auto-dispatch above $70/30d (env guard in triage v1.1.0); no such guard is present in qnfo-idea-triage/worker.js as read on 2026-10-01.
 
 ## 8. Testing protocol (Phase 3)
 
@@ -85,3 +107,4 @@ AI Gateway $90/30d spend limit (sliding) is the backstop; per-paper cost = sum o
 
 - 2026-09-01: v1.0 initial — audit complete, design locked, implementation begins (T1..T6).
 - 2026-10-01: audit trail clarified: research_queue state plus cloud_ops_events transitions; legacy research_plans dropped (#1622).
+- 2026-10-01: section 4 (channels, cadence, owner-voice gates, outreach caps 8/day total and 3/day per domain, consent rules, q08 off the owner's channels, Buffer pending LinkedIn) and section 7 (live $150/30d cap, $60/30d target) aligned to docs/STRATEGY.md (STRATEGY-1).

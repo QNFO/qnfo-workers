@@ -12,7 +12,7 @@
 // the row's evidence. The composite is mirrored into survival_state.sai so the survival panel is no longer NULL.
 // Every write is a bounded UPSERT of a known dimension plus an append to autonomy_score_history. If the fact query
 // fails, nothing is written (fail closed).
-var VERSION = "1.1.2-alert-undigested";
+var VERSION = "1.1.3-retired-gates";
 var WORKER = "qnfo-autonomy-scorer";
 var DAY = 86400000;
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
@@ -164,7 +164,8 @@ var FACT_SQL2 = "SELECT " +
 var FACT_SQL3 = "SELECT " +
   "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status!='expired') AS sig30," +
   "(SELECT count(*) FROM signals WHERE COALESCE(created_at,ts) > datetime('now','-30 day') AND status NOT IN ('new','expired')) AS sig30_done," +
-  "(SELECT count(*) FROM impact_thresholds) AS gates_n," +
+  // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): a RETIRED threshold is history, not a gate; it counts in neither term.
+  "(SELECT count(*) FROM impact_thresholds WHERE state != 'RETIRED') AS gates_n," +
   "(SELECT count(*) FROM impact_thresholds WHERE state='MET') AS gates_met," +
   "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open') AS triaged," +
   "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND replace(t.sla_due_at,'T',' ') < datetime('now')) AS breached";

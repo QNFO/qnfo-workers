@@ -1,0 +1,328 @@
+# QNFO unified strategy (STRATEGY-1)
+
+Version 1.0, 2026-10-01. **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
+conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
+automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
+
+---
+
+## 1. Where we are (measured 2026-10-01)
+
+| Signal | Value | Source |
+|---|---|---|
+| Pageviews, 30d | 5,930; but 40-180/day for the last 10 days vs 400-630/day peaks mid-September (run rate about 3,000/30d) | CF Web Analytics RUM via fleet.qnfo.org/roi |
+| Impressions gate | registry says `+394% MET`; growth vs the 5,610 baseline is **+5.7%** (gate +30%). The +394% compares against a prior window that appears incomplete | `metric_registry.impressions_growth_30d` vs the dashboard ROI view |
+| Bluesky (owner's personal account) | 42 followers, 1,403 posts; last 10 posts 0 likes, 1 repost; 7 of 10 carried a mis-encoded dash; most were off-topic q08 essays | public AppView API |
+| Cold email | 318 sent, 13 replies (4.1%); one fixed subject, no opt-out, fake `Re:` follow-up | `outreach_log`, `qnfo-cloud-ops` |
+| External citations | 2 (OpenAlex, 63 DOIs) | `citation_stats` |
+| Zenodo | 8,178 downloads vs 2,871 views on tracked DOIs; downloads run about 7x views on top papers, which indicates automated downloads | `citation_stats` |
+| Subscribers | 1 confirmed, 2 unconfirmed | `subscribers` |
+| Revenue and cost | $0 revenue. Gateway-metered AI about $173/7d against the $150/30d unified-billing cap (#1683; BYOK providers bypass it). Total fleet cost about $725/month on 2026-09-26: Cloudflare plan about $200, direct DeepSeek/Anthropic keys about $400-500 with no limit or visibility, AI Gateway about $110-170 | business plan, backlog, `objectives.cost-ceiling` |
+| Analytics | GA4 `G-LV7RHRVW6R` collected, never read; engagement stored but never acted on; posts not joinable to their results | outreach/analytics audit |
+
+**Diagnosis.** Output is high and attention is low because the system optimised *volume* (papers, posts, emails), which reads
+as noise, under an identity that changes from page to page. Reputation is the asset; volume without a clear, credible identity
+spends it. The strategy below trades volume for **a few strong works, one identity, honest distribution, and a closed
+measurement loop**.
+
+---
+
+## 2. Unified identity
+
+### 2.1 Architecture
+| Layer | Name | Role | Rule |
+|---|---|---|---|
+| Person (the face) | **Rowan Brad Quni-Gudzinas** | author of record on every work, voice of LinkedIn/Bluesky/email | citation form `Quni-Gudzinas, R. B.`; ORCID `0009-0002-4317-5604` on every page and record |
+| Imprint (publisher) | **QNFO** | the independent research imprint that publishes the work (qnfo.org, papers.qnfo.org) | written `QNFO`. Never "Research Foundation", "Quniverse Research Foundation", "Research Collective", "Research Program" or "QNFO/QWAV open research group": there is no legal entity and the work is one researcher with an AI-assisted pipeline, so those labels overclaim |
+| System | **Quniverse** | the name of the autonomous cloud research system (the worker fleet) | used only when talking *about the system* (e.g. the fleet-lessons paper); never an organisation name |
+| Parked commercial label | **QWAV** | reserved for a future product or service | not used in bios, outreach or paper metadata until a product exists; QWAV sites keep their design (owner decision 2026-08-31) but do not carry the outreach |
+| Separate publication | **q08** | long-form essays on technical-industry friction at q08.org | **not** distributed through the owner's personal accounts; its own RSS/digest only (section 7.3) |
+| Tool | **ipatent** (ipatent.qnfo.org) | free experimental patent-drafting assistant | not promoted; `ipatent.me` has no DNS and is not cited |
+
+### 2.2 Positioning
+**Canonical profile copy lives in the owner's Identity doc**, not here:
+[Rowan Brad Quni-Gudzinas: Identity, Brand and Opportunities](https://claude.ai/code/artifact/553e4316-5725-4601-bf41-e5fd7102c96b)
+(sections "Your brand", "Profile copy, ready to paste", "Updated CV"). It is the owner's approval surface (tracker item 1,
+due 2026-10-07) and the owner's edits win. This file keeps only what the fleet needs, and must not drift from it.
+
+**Person-level identity (from the Identity doc, pending owner approval):** a builder of trustworthy research systems:
+15+ years turning national data into public decisions (U.S. Federal Highway Administration; AARP Public Policy Institute,
+Livability Index), now building open, auditable AI-assisted research at QNFO. That verifiable career record is the
+credibility anchor; the research sits under it, not on top.
+> Headline: Research systems builder · Founder, QNFO: open, auditable AI-assisted research · 15 years of national data and policy research (FHWA, AARP Livability Index)
+
+**Research line (what the work asks):** what computation really costs and delivers: energy per correct answer (JPCUB),
+what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers.
+
+**Names:** one name everywhere, Rowan Brad Quni-Gudzinas; earlier work appears as Brad Gudzinas / Bradley Gudzinas and
+some profiles as Rowan Quni, so those go in "also known as" fields wherever a platform allows (that is what links the FHWA
+and AARP record to the same person). Affiliation string everywhere: `QNFO (independent research)`.
+
+**Claims we never make** (a background check fails on them; Identity doc "What to stop signalling"): patents without
+application numbers, "clearance-eligible", unlinked media features, shifting publication counts, physics headlines such as
+"thermodynamic dead end". Fleet size is stated as deployed workers (44 on 2026-10-01), never the repo directory count.
+
+### 2.3 Research pillars, in the order we lead with them
+1. **Energy-honest computing (JPCUB)**: the lead. Concrete, falsifiable and relevant to industry and academia.
+2. **Epistemics of AI-assisted science**: ignorance audits and epistemic legibility.
+3. **Autonomous research operations**: what a 40-worker autonomous research system delivers, at what cost, with a failure ledger.
+4. **Ultrametric programme (theory)**: stays published and indexed, but is **not** used in outreach or headlines until a
+   falsifiable test result exists. Speculative unification claims led with in public cost credibility with physicists.
+
+### 2.4 Selected works (the only papers outreach and headlines lead with)
+| # | Work | DOI | Why it leads |
+|---|---|---|---|
+| 1 | The Joules-per-Solution Metric: Definition, Measurement Protocol, and Anti-Gaming Provisions | 10.5281/zenodo.21637028 | the standard itself |
+| 2 | Error Correction Is a Landauer Machine: The Thermodynamic Floor of QEC Overhead | 10.5281/zenodo.22261547 | most-viewed of the top papers; crisp claim |
+| 3 | JPCUB Competitive Landscape v2.0 (17 platforms) | 10.5281/zenodo.21821767 | the comparison people share |
+| 4 | Joules-per-Solution for Stochastic and Agentic Inference (LLMs) | 10.5281/zenodo.21945415 | bridges quantum and AI audiences |
+| 5 | The Universal Ignorance Audit | 10.5281/zenodo.21901984 | method others can use |
+| 6 | Epistemic Legibility in AI-Assisted Science | 10.5281/zenodo.22026592 | governance angle for the AI-for-science audience |
+| 7 | Operating the Quniverse Fleet: Objectives, Successes, Failures, Roadmap | 10.5281/zenodo.23079905 | the practice story; honest failure ledger |
+
+The full corpus stays in the library (papers.qnfo.org) for search. Counts are never the headline ("1,000+ publications" goes);
+the funding strategy's own "volume trap" warning applies.
+
+### 2.5 Visual and editorial
+- Design system: `qnfo-web-unified/README.md` (paper-and-ink palette, accent `#24315e`, Fraunces + Public Sans, Q tile).
+- Every public page: title, description, canonical, viewport, OpenGraph + Twitter card, JSON-LD (Person with ORCID `sameAs`
+  on profile pages, ScholarlyArticle with author ORCID on paper pages), GA4 and the Cloudflare beacon, subscribe CTA.
+- No internal jargon on public pages (worker counts, guard names, ticket tags).
+- AI disclosure on every work: *Prepared with an AI-assisted research pipeline; the author is responsible for the content.*
+- Every paper and every post about it carries three lines: the **claim**, the **test**, and the **status** (hypothesis,
+  tested, estimate or retracted) (Identity doc, "How people should read the research").
+- Text sent outside the system uses ASCII-safe escapes for typographic characters (the `â` defect).
+
+---
+
+## 3. Audiences and what each should do
+| Audience | Where they are | What we want them to do | Lead content |
+|---|---|---|---|
+| Quantum-computing researchers and engineers | arXiv, LinkedIn, Bluesky, conferences | cite JPCUB, contribute measurements, invite a talk | works 1-3 |
+| AI-for-science / metascience researchers | Bluesky, LinkedIn, LessWrong, workshops | use the ignorance audit, cite, collaborate | works 5-6 |
+| Engineering leaders and practitioners | LinkedIn, Hacker News | follow, subscribe, commission an assessment | works 4 and 7 |
+| Funders (NLnet, Emergent Ventures, Foresight, LTFF) | applications, referrals | fund | the dossier, works 1 and 7 |
+| Science and tech journalists | email, LinkedIn | quote, cover | JPCUB landscape, LLM energy |
+
+---
+
+## 4. Channels
+
+| Channel | Role | Voice | Cadence | Integration path | Status |
+|---|---|---|---|---|---|
+| qnfo.org + papers.qnfo.org | home of record; every post links here | QNFO | continuous | owned (qnfo-gateway) | live; SEO fixes in PAPER-PAGE-SEO-1 |
+| Email digest | the owned audience | Rowan | monthly research note (replaces weekly auto-digest once 10+ subscribers) | qnfo-subscribers | live, 1 subscriber |
+| LinkedIn (personal profile) | primary professional channel | Rowan | 2-3 posts/week; flagship document posts | the fleet writes each post into Buffer as a draft; **the owner approves it with one tap** (LinkedIn API Terms 3.1 forbid using the APIs "to automate posting") | not connected |
+| Bluesky | research community | Rowan | 1-2 curated posts/week (Identity doc tracker item 10), research only | direct AT Protocol, automatic once the owner approves the voice | live; q08 removed from it |
+| Mastodon | academic mirror | Rowan | mirror of Bluesky | via Buffer, automatic | not connected |
+| Threads | general-audience mirror | Rowan | mirror of Bluesky | Threads API (free; per-post views) or Buffer, automatic | not connected |
+| X | low priority mirror | Rowan | at most 2/week | via Buffer; X API is pay-per-use ($0.20 per post with a link) | not connected |
+| Cold email | warm conversations with researchers and journalists | Rowan | at most 8/day across both engines | qnfo-outreach + qnfo-cloud-ops | **paused** until OUTREACH-CONSENT-1 deploys, then resumed |
+| Facebook | personal | Rowan | none | none: one Intro line and one link to qnfo.org, set by the owner | personal; no automation |
+| Funders, employers, applications | career and funding | Rowan | as leads arise | drafted by the fleet in the Identity doc; **the owner sends or submits** (forms with CAPTCHA, signatures) | weekly review (Mondays) |
+| arXiv | prestige and discoverability for works 1, 2, 4 | Rowan | as ready | submitted by hand; since 2026-01-21 a new author needs a **personal endorsement from an established arXiv author in the field**, so ask one warm contact individually (never a mass request) | prepare packages |
+| Conferences / workshops | credibility events | Rowan | per deadline | owner submits; fleet tracks deadlines (radar-hub) | track |
+| Hacker News, LessWrong, Reddit | high-reach communities | Rowan | occasional | **manual only**: their norms penalise automated posting | owner posts when a work fits |
+| Google Scholar | where citations are counted | Rowan | continuous | **Zenodo is not indexed by Scholar**; papers.qnfo.org paper pages are the way in. They need `citation_title`, one `citation_author` per author, `citation_publication_date`, and an absolute `citation_pdf_url` in the same directory (searchable PDF, 5 MB max), reachable within 10 links of the home page, not blocked by robots or bot challenges | citation tags present; `citation_pdf_url` missing |
+| ORCID | scholarly identity | Rowan | on change | owner adds the selected works with ORCID "Search & link" (DataCite). DataCite auto-update is **not** enabled: it would add every DOI and repeat the volume problem | owner action |
+
+Posting rules that apply to every social channel: native text first, one link (UTM-tagged), no hashtag walls, no engagement
+bait, no following/liking automation, and never more than the cadence above.
+
+Channel facts verified 2026-10-01 (re-check before relying on them): LinkedIn API Terms 3.1
+(linkedin.com/legal/l/api-terms-of-use); LinkedIn member post statistics and Community Management access
+(learn.microsoft.com/en-us/linkedin/marketing/community-management/members/post-statistics); "Share on LinkedIn" tokens last
+60 days with no self-serve refresh; Buffer API and limits (developers.buffer.com/guides/api-limits.md, post-metrics.md);
+Bluesky bot guidance (docs.bsky.app/docs/starter-templates/bots); X pricing (docs.x.com/x-api/getting-started/pricing);
+Threads insights (developers.facebook.com/docs/threads/insights); Zenodo not in Google Scholar
+(support.zenodo.org, "Is Zenodo indexed by Google Scholar"); Scholar inclusion (scholar.google.com/intl/en/scholar/inclusion.html);
+arXiv endorsement policy (blog.arxiv.org/2026/01/21/attention-authors-updated-endorsement-policy/). Substack and Medium have
+no usable posting API.
+
+---
+
+## 5. Owner-voice governance (amends AUTONOMY-DECISION-POLICY)
+
+The 2026-10-01 directive authorises the system to publish and send **as the owner**. That moves owner-voice publishing from
+"Never" to **gated T1**: the system decides and executes inside these gates, and records each act.
+
+**Automatic (inside the gates):**
+- posts that summarise or announce the owner's own published works (section 2.4 first);
+- the scheduled cadence in section 4;
+- first-contact research emails and one follow-up under the consent rules below;
+- the subscriber digest/research note.
+
+**Platform rule that overrides this section:** LinkedIn's API Terms (3.1) forbid automated posting, so LinkedIn posts are
+drafted automatically and published only after the owner's one-tap approval in Buffer. Bluesky (bots and scheduled posts are
+welcome if interactions stay opt-in), Mastodon and Threads allow automatic posting inside the gates below.
+
+**Never automatic (draft only, or not at all):**
+- any change to the owner's name, bio, CV or public profiles; any application; any email to a funder, hiring manager or
+  other named person outside the research-outreach campaign; anything that commits money or the owner's time; anything on
+  Facebook (Identity doc "Rules I would work under");
+- replies, comments or DMs to individuals on social platforms;
+- anything that names a third party (person or company) critically, or makes a claim not present in the source work;
+- topics outside the four pillars (politics, news commentary);
+- follows, likes or reposts at scale;
+- paid promotion; raising any spend cap; credentials; deleting data (unchanged "Never" items).
+
+**Gates every owner-voice item passes:**
+1. Fact check against the source title and abstract (qnfo-social composer already does this).
+2. Identity lexicon (section 2.1 names only; no banned labels).
+3. Encoding check: no mojibake sequences (`Ã`, `â€`, `â\x80`) in the outgoing text.
+4. Link liveness and a UTM tag on every link.
+5. Cadence caps per channel; duplicate check against the last 30 days.
+6. One kill switch per stream (`pipeline_state.external_sends_enabled` for email; `Q08_SOCIAL_QUEUE` for q08; a social
+   pause flag to add in qnfo-social).
+7. A daily "sent as you" digest to the owner's alerts channel listing every item, with the one-line stop command.
+
+**Cold email consent rules (OUTREACH-CONSENT-1):** a real reason tied to the recipient's own work; an opt-out line in every
+message; suppression list honoured by both engines; one honest follow-up (`Following up:`, never a fake `Re:`); at most
+8/day in total and 3/day per domain; no repeat contact after an opt-out, bounce or reply.
+
+---
+
+## 6. Signals: one measurement loop
+
+### 6.1 Sources
+| Source | What it tells us | Access | State |
+|---|---|---|---|
+| Cloudflare Web Analytics (RUM) | pageviews by path, referrer, country, device | CF GraphQL (have) | totals only; **add path and referrer dimensions** |
+| Cloudflare zone analytics | requests, bot share | CF GraphQL (have) | read weekly by qnfo-cloud-ops |
+| Google Analytics 4 | engaged sessions, engagement time, source/medium/UTM campaign, subscribe conversions | GA4 Data API, service account | **owner grants Viewer** |
+| Google Search Console | search impressions, clicks, CTR, position per page and query: the real "impressions" | Search Console API, service account | **owner verifies domain and adds the account** |
+| LinkedIn / X / Mastodon via Buffer | post reach and engagement | Buffer API, personal key (token present); Buffer marks its metrics "experimental" and gives only basic LinkedIn-profile metrics. LinkedIn's own member post analytics (`r_member_postAnalytics`) are limited to registered organisations, so **UTM clicks into GA4 are the reliable LinkedIn signal** | channels not connected |
+| Threads | views, likes, replies, reposts, quotes per post | Threads insights API (free) | not connected |
+| Bluesky | likes, reposts, replies, quotes (no views); mentions via `searchPosts` | AT Protocol (have) | last 30 posts only; extend and add mention search |
+| Zenodo | views, downloads (bot-skewed) | public API (have) | use views; flag download/view ratio over 3 |
+| OpenAlex / Crossref / DataCite | citations | public APIs (have) | 50 newest DOIs only; cover the selected works always |
+| Email | replies, opt-outs, bounces, positive replies | qnfo-email inbound (have) | bounces and replies not written to `funnel_daily` |
+| Subscribers | confirmations and unsubscribes | D1 (have) | two lists (QNFO, q08); count both, report separately |
+| Mentions | external discussion of the work | venue-radar SELF bucket, Bluesky search | collected, no reader |
+
+### 6.2 One schema
+- `reach_signals(date, source, channel, entity_type, entity_id, metric, value, quality)` where `entity_type` is
+  paper | page | post | campaign | email and `quality` is human | bot | unknown.
+- `entity_map(slug, doi, page_url, post_uri, buffer_id, utm_campaign)`: every post stores its platform ID when it is made,
+  and every link carries `utm_source/utm_medium/utm_campaign=<slug>`, so a post joins to the visits and subscriptions it caused.
+
+### 6.3 Scorecard (replaces the single pageview gate)
+| KPI | Definition | Why |
+|---|---|---|
+| Search impressions (28d) | GSC impressions, qnfo.org properties | the honest "impressions" |
+| Engaged human sessions (28d) | GA4 engaged sessions, bot-filtered | attention, not hits |
+| Social reach and engagement rate | impressions and (reactions + comments + reposts) / impressions, per channel | channel quality |
+| Confirmed subscribers (net new, 30d) | both lists, reported separately | owned audience |
+| Warm conversations | positive replies + inbound contacts | relationships |
+| **Credibility events** | external citation, invited talk/review, accepted poster or paper, press mention, arXiv listing, a third party using JPCUB | prestige; weighted highest |
+| Cost per engaged human | 30d AI spend / engaged sessions | ROI |
+
+Baselines are set from the first full week of ingested data; targets are in section 9.
+
+### 6.4 Loops that act on the signals
+- **Distribution allocation (weekly):** a Thompson-sampling bandit over topic x format x time slot, rewarded by engaged
+  sessions and subscriptions attributed through UTM. It decides next week's schedule inside the cadence caps.
+- **Search loop (weekly):** pages with high search impressions and low CTR get a rewritten title and description; pages ranked
+  8-20 get internal links and a short FAQ; each change is logged and compared over 28 days.
+- **Content loop (monthly):** topics that combine search demand and engagement choose the next explainer for a selected work.
+- **Outreach loop (weekly):** reply rate by segment and template moves the daily cap toward the segments that answer; any
+  segment under 1% after 50 sends stops.
+- **Integrity:** bot-quality flags exclude automated traffic from every KPI; no metric is ever optimised by buying
+  attention or by volume.
+
+---
+
+## 7. Portfolio decisions
+| Item | Decision | Reason |
+|---|---|---|
+| JPCUB energy standard | **invest**: lead pillar, arXiv package, open measurement call, leaderboard page | most credible, most relevant |
+| Epistemics (ignorance audit) | **invest** | distinctive method, AI-for-science audience |
+| Fleet lessons (autonomous ops) | **invest** as the practice story | timely, honest, shareable |
+| Ultrametric programme | **maintain**, no outreach until a test result | credibility |
+| q08 | **reposition**: off the owner's channels now; review 2026-10-31 on bot-filtered human reads; retire if under 50 human reads/week | cost with no reputational return through personal channels |
+| ipatent | **maintain** as a free experiment; stop citing ipatent.me | no DNS, no data (#1648) |
+| QWAV label | **park** | no product yet |
+| Premium digest ($10/mo) | **defer** until 200+ confirmed subscribers | 1 subscriber; no payment rail (#1616) |
+| Assessment / advisory offer (JPCUB measurement for a platform or data centre) | **open** via warm replies | first revenue line that matches the lead pillar |
+| Grants | **priority**: NLnet Restack Fund (deadline 2026-11-03), pitched as provenance and verification tooling, not AI (Restack excludes AI projects under 1M users); then Foresight AI for Science Nodes and the Corrigibility Fund (both 2026-10-31), Emergent Ventures (web form) | highest expected value per hour; Identity doc tracker items 4, 7, 8 |
+| Career track | **open**: Forecasting Research Institute (two remote roles, $80k-$130k, rolling), METR, and research-management roles that fit the FHWA/AARP record; leads, deadlines and drafted answers live in the Identity doc's Opportunities section | the fastest route to income; the owner submits forms |
+| Personal utility layer | unchanged, outside the research P&L | owner infrastructure |
+| AI-reviewed journal overlay (jnl-*) | dormant | not deployed; not a priority |
+
+---
+
+## 8. Business model and money
+- **Framing that resolves the conflict:** QNFO is open, public-interest research (that is what funders back), funded by
+  grants first and by paid assessments second. Paid products follow audience, not the other way round. "Not a business"
+  (funding dossier) and "must earn revenue" (business plan) both become: *open research with a funding target*.
+- **Cost:** the biggest ROI lever is cost, because total spend (about $725/month) dwarfs any near-term income. Gateway AI
+  stays under the $150/30d cap and targets at most $60/30d by 2026-10-31 (Phase A continues: ops-frontier traffic moved off
+  gpt-5.5 in qnfo-ops 2.38.31). The direct-provider keys (about $400-500/month, unmetered) get per-provider throttles and one
+  unified monthly cost figure (RM-COST-UNIFIED-SPEND-1, #1683); the owner's standing directive is throttling, not a hard
+  cap. No paid advertising.
+- **Funding target:** grant or engagement income at least equal to the AI burn by 2027-03-31, then to total fleet cost.
+
+---
+
+## 9. Targets (by 2026-12-31) and the review gate
+| KPI | Now | Target |
+|---|---|---|
+| Confirmed subscribers | 1 | 50 |
+| Credibility events | none recorded | 3 |
+| External citations (OpenAlex) | 2 | 10 |
+| Warm conversations | 13 replies to date | 10 new |
+| Search impressions, engaged sessions, LinkedIn reach | not measured | baseline in week 1, then x2 |
+| AI spend | about $173/7d | at most $60/30d by 2026-10-31 |
+| Grant applications submitted | 0 since August | NLnet by 2026-11-03, plus 2 more |
+
+**Review gate (replaces the 2026-10-25 impressions gate):** on 2026-12-31 the research layer continues if
+(credibility events at least 2 OR confirmed subscribers at least 50 OR funding secured) AND AI spend is inside the cap.
+Otherwise the fleet shrinks to the selected-works core and the personal layer. **No research data is ever deleted
+automatically**; deletion needs the owner's explicit email confirmation. The +30% pageview test is retired because it measured
+traffic volume, which is the wrong objective, and its implementation reported a false pass.
+
+---
+
+## 10. Plan
+**Week 1 (to 2026-10-08):** streams paused (done 2026-10-01); code fixes (Q08-PERSONAL-CHANNEL-HOLD-1, OUTREACH-CONSENT-1,
+PAPER-PAGE-SEO-1, DASHBOARD-NOINDEX-1) deployed; outreach resumed under consent rules; identity lexicon applied to qnfo.org,
+about, profile and paper pages; selected-works section on qnfo.org; owner connects LinkedIn in Buffer and grants GA4 and
+Search Console; post IDs and UTM tags recorded on every post.
+**Weeks 2-4:** `reach_signals` ingestion and the daily scorecard on the dashboard; LinkedIn cadence live with a flagship
+document-post series (works 1, 2, 4); arXiv package for work 1; NLnet submission; impressions metric fixed.
+**Weeks 5-12:** bandit allocation, search loop, monthly research note, assessment offer to warm contacts, review gate on 12-31.
+
+**Owner-only actions (everything else is automatic):** connect LinkedIn (and optionally Mastodon, Threads, X) in Buffer
+once; approve each LinkedIn draft with one tap; add the service account to GA4 (Viewer) and Search Console (Full user);
+ask one established arXiv author for a personal endorsement; add the selected works to ORCID; paste the headline and bio
+(section 2.2) into LinkedIn, which cannot be edited by API. Google Scholar intake also needs `citation_pdf_url` on paper
+pages (fleet work, weeks 2-4).
+
+---
+
+## 11. Conflicts resolved
+| Conflict | Resolution |
+|---|---|
+| "No social media; own pages only" (business plan) vs Bluesky/Buffer distribution (pipeline doc) | social is in, under section 4 cadence and section 5 gates; own pages remain the home of record |
+| "Never send mail or posts as the owner" (autonomy policy) vs live outreach and posting as the owner | owner-voice publishing is gated T1 (section 5) |
+| "Explicitly not a business" (funding docs) vs revenue gates (business plan) | open research with a funding target (section 8) |
+| Impressions +0.89% / +5.7% / +394% / +431% | the pageview gate is retired; the scorecard (6.3) replaces it; the registry metric is fixed to compare complete windows |
+| Five organisation names | `QNFO` only (2.1) |
+| QWAV "commercial arm" vs "research platform" vs "companion programme" | parked commercial label (2.1) |
+| Corpus size ~1,000 / 900+ / 451 / 444 / 219 / 217 | never headlined; quote "selected works" plus the library link |
+| Outreach caps 15 / 8 / 5 / 3-5 | 8/day total, 3/day per domain (5) |
+| AI cap $90 vs $150; spend $400-600 vs $188 | the live $150/30d gateway cap stands; target $60/30d (8) |
+| "No traditional-journal submissions" vs poster package and journal overlay | arXiv and selected venues for works 1, 2, 4 (4); no journal-chasing for the rest |
+| q08 on the owner's Bluesky | removed (2.1, 7) |
+| `ipatent.me` sold in the business plan | not cited; ipatent.qnfo.org is the tool (2.1) |
+| Shutdown on 2026-10-25 with data deletion on 2026-11-01 | review gate 2026-12-31; no automatic deletion (9) |
+| Two identity workstreams: this file vs the Identity doc (other session, 2026-10-01) | the Identity doc holds the canonical profile copy, CV, opportunities and the owner's approvals; this file holds fleet strategy and points to it (2.2) |
+| Bluesky up to 1/day (this file) vs 1-2 curated posts/week (Identity doc) | 1-2/week |
+| Messages to named people: automatic (this file) vs always ask (Identity doc) | research-author outreach automatic under consent rules; funders, employers and applications drafted for the owner (5) |
+| "94 Cloudflare Workers" (Identity doc, repo directory count) | 44 deployed workers on 2026-10-01 |
+
+Documents aligned to this strategy on 2026-10-01: `docs/BUSINESS-PLAN.md`, `docs/AUTONOMY-DECISION-POLICY.md`,
+`docs/AUTONOMOUS-RESEARCH-PIPELINE.md`, `docs/AUTONOMOUS-USE-CASES.md`, `docs/FLEET-REPORT-CARD.md`, `funding/DOSSIER.md`,
+`funding/APPLICATIONS.md`, `qnfo-outreach/README.md`, `qnfo-cloud-ops/README.md`, `q08-signal-engine/README.md`,
+`qnfo-email-orchestrator/MANIFEST.md`, `qnfo-ai/system-prompt-qnfo.md`.
