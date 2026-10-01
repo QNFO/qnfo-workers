@@ -10,7 +10,7 @@ silently break the research/social/intent pipelines (CHANGE-AUDIT-FIRST-1).
 | credential | secret holders | non-worker consumers |
 |---|---|---|
 | OPS_ROUTER_AUTH_KEY (48c) | qnfo-ops | ~/.env; scripts/{ops_deploy,ci_watchdog,fleet-autoaudit,run-gate-internal-patch,canonical_deploy,deploy_guard}.py; DeepChat agent.db; ChatBox config.json |
-| ROUTER_AUTH_KEY / _2 | qnfo-ai | every worker that calls qnfo-ai with a router bearer (research-exec `ROUTER_TOKEN`, qnfo-intent-orchestrator, qnfo-social, qnfo-ai-calibration, …); clients |
+| ROUTER_AUTH_KEY / _2 | qnfo-ai | every worker that calls qnfo-ai with a router bearer (research-exec `ROUTER_TOKEN`, qnfo-intent-orchestrator, qnfo-social, qnfo-ai-calibration, …); clients. Exact stale-copy holders found 2026-10-01 (#1703, set them in the same atomic step): qnfo-research-exec `ROUTER_TOKEN`, qnfo-ai-calibration `QNFO_ROUTER_KEY`, qnfo-chat-canary `ROUTER_AUTH_KEY`, qnfo-agent-ws `ROUTER_AUTH_KEY`, qnfo-cloud-ops (`qnfo-ai-chat` probe). Check after the step: no `gw-auth-drift` events from qnfo-research-exec (0.9.29+) for 24 h. |
 | API_KEY (personal) | personal-api | personal clients; personal-api's own /mcp + /v1 routes |
 | CLOUDFLARE_API_TOKEN | qnfo-ops (as CF_API_TOKEN) | 35 workflows/scripts; ~/.env; local deploy tooling |
 
