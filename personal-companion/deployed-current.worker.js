@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.7.2-vault-indexer-fold";
+var VERSION = "1.7.3-ai-attribution";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -506,7 +506,7 @@ __name(wordCount, "wordCount");
 __name2(wordCount, "wordCount");
 __name22(wordCount, "wordCount");
 async function embed(env, texts) {
-  var resp = await env.AI.run(EMBED_MODEL, { text: texts }, { signal: AbortSignal.timeout(EMBED_TIMEOUT_MS) });
+  var resp = await aiRunAttr(env, "personal-companion", "embed", EMBED_MODEL, { text: texts }, { signal: AbortSignal.timeout(EMBED_TIMEOUT_MS) });
   var vecs = resp && resp.data || [];
   var out = [];
   for (var i = 0; i < vecs.length; i++) {
@@ -1636,7 +1636,7 @@ var worker_default = {
       for (var pi = 0; pi < MODELS.length; pi++) {
         var t0p = Date.now();
         try {
-          var rp = await env.AI.run(MODELS[pi], { messages: [{ role: "user", content: "Reply with the single word: ready" }], max_tokens: 16 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(3e4) });
+          var rp = await aiRunAttr(env, "personal-companion", "probe-ping", MODELS[pi], { messages: [{ role: "user", content: "Reply with the single word: ready" }], max_tokens: 16 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(3e4) });
           ping[MODELS[pi]] = { ms: Date.now() - t0p, resp: String(rp && rp.response || JSON.stringify(rp)).slice(0, 160) };
         } catch (e) {
           ping[MODELS[pi]] = { ms: Date.now() - t0p, err: String(e && e.message || e).slice(0, 200) };
@@ -1656,7 +1656,7 @@ var worker_default = {
         var tt = Date.now();
         try {
           var opts2 = useGw ? { gateway: { id: "default" } } : {};
-          var rq = await env.AI.run(cand[ci], {
+          var rq = await aiRunAttr(env, "personal-companion", "probe-gen", cand[ci], {
             messages: [
               { role: "system", content: "Write plain scholarly prose. No filler, no emojis, no meta-commentary." },
               { role: "user", content: "Write three short paragraphs, about 250 words total, on why the arithmetic of p-adic numbers resembles musical tuning systems. Be concrete." }
@@ -1692,7 +1692,7 @@ var worker_default = {
       var cUser = [anchorsBlock(cTopic, cAnchors, "(life context omitted for this comparison run)", "(taste context omitted for this comparison run)"), "", "Length: 900 to 1100 words. This is a requirement."].join(NL);
       var c0 = Date.now();
       try {
-        var cr = await env.AI.run(cm, { messages: [{ role: "system", content: cSys }, { role: "user", content: cUser }], max_tokens: cmt, temperature: 0.7 });
+        var cr = await aiRunAttr(env, "personal-companion", "compose", cm, { messages: [{ role: "system", content: cSys }, { role: "user", content: cUser }], max_tokens: cmt, temperature: 0.7 });
         var cc = "";
         var crc = "";
         if (cr && typeof cr.response === "string" && cr.response.length) cc = cr.response;
@@ -2033,7 +2033,7 @@ var VaultIndexer = (function() {
         if (chs.length === 0) { prepared[idx] = { skip: true, w: w }; return; }
         var resp = null, lastErr = "";
         for (var attempt = 0; attempt < 3 && !resp; attempt++) {
-          try { resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
+          try { resp = await aiRunAttr(env, "personal-companion", "embed-index", "@cf/baai/bge-base-en-v1.5", { text: chs }, { gateway: { id: "default" } }); }
           catch (e) {
             lastErr = String((e && e.message) || e);
             var rt = /429|1010|rate.?limit|throttl|overload|503|502|504|busy|timeout/i.test(lastErr) && !/spend limit|2045|budget|quota/i.test(lastErr);
@@ -2211,6 +2211,32 @@ var GenerationFlow = class extends WorkflowEntrypoint {
     return out;
   }
 };
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
+// per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
+// Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
+// Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
+var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = null;
+      for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        var ms = Date.now() - t0;
+        var wr = (async function() {
+          await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
+        })();
+        wr.catch(function() {});
+      }
+    } catch (e3) {}
+  }
+}
+// end aiRunAttr
 export {
   GenerationFlow,
   worker_default as default
