@@ -42,7 +42,7 @@ queued --read--> propose --> verify --(fail, attempts<3)--> propose  (NEXT model
 | /v1/probe/dynamic-cpu | POST | ORCH_TOKEN | measure whether the platform enforces `limits.cpuMs` (gate for `JS_VERIFY=dynamic`) |
 
 ### Status (what is and is not true)
-- **Verified offline** (`node --no-warnings qnfo-code-orchestrator/test-loop.mjs`, 41 assertions, also run in CI as `code-loop-test`):
+- **Verified offline** (`node --no-warnings qnfo-code-orchestrator/test-loop.mjs`, 35 assertions, also run in CI as `code-loop-test`):
   the whole state machine against real SQL and real `python3`, model escalation with error feedback, lease resume + FIFO, policy
   refusals, cron path, prompt-injection delimiting, `wrangler deploy --dry-run` accepts the config and bindings.
 - **Dynamic Workers behaviour** was measured on the real `workerd` (wrangler 4.145): JS syntax errors fail the start as
