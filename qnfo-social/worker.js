@@ -12,7 +12,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.20-linkedin-draft";
+var VERSION = "0.7.21-profile-sync";
 // LINKEDIN-BUFFER-DRAFTS-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s4-s5): LinkedIn's API Terms 3.1 forbid
 // automated posting, so the LinkedIn channel never receives a shareNow post. bufferPost saves it as a Buffer DRAFT
 // (saveToDraft: true) that the owner approves with one tap in Buffer; Mastodon and X keep posting automatically inside
@@ -236,6 +236,32 @@ async function session(env) {
   });
   if (!r.ok) throw new Error('session ' + r.status);
   return r.json();
+}
+
+// PROFILE-SYNC-1 (2026-10-01): the account bio follows the owner's approved short bio (Identity doc, owner_docs
+// identity, "Short bio"; owner delegation 2026-10-01). The bio read "Philosopher-scientist, AI-focused tech entrepreneur
+// inventing nature-inspired quantum computers". Each run reads the public profile first and signs in only when the bio
+// differs; it then rewrites only `description`, keeping displayName, avatar, banner and every other field, with
+// swapRecord so a concurrent edit is never overwritten.
+var PROFILE_DESCRIPTION = "I build open, auditable AI-assisted research (QNFO). Asking what a correct computation costs in energy. Formerly FHWA and AARP. Some posts are drafted by my research pipeline. qnfo.org";
+async function syncProfile(env) {
+  if (!env.BSKY_HANDLE || !env.BSKY_APP_PASS) return { skipped: 'no credentials' };
+  const pub = await fetch('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=' + encodeURIComponent(env.BSKY_HANDLE), { headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' } });
+  if (pub.ok) {
+    const pj = await pub.json().catch(() => null);
+    if (pj && pj.description === PROFILE_DESCRIPTION) return { unchanged: true };
+  }
+  const s = await session(env);
+  const H = { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (qnfo-social)', 'Authorization': 'Bearer ' + s.accessJwt };
+  const g = await fetch(BSKY + '/com.atproto.repo.getRecord?repo=' + encodeURIComponent(s.did) + '&collection=app.bsky.actor.profile&rkey=self', { headers: H });
+  if (!g.ok) return { error: 'getRecord ' + g.status };
+  const cur = await g.json();
+  const value = (cur && cur.value) || {};
+  if (value.description === PROFILE_DESCRIPTION) return { unchanged: true };
+  const record = Object.assign({}, value, { $type: 'app.bsky.actor.profile', description: PROFILE_DESCRIPTION });
+  const p = await fetch(BSKY + '/com.atproto.repo.putRecord', { method: 'POST', headers: H, body: JSON.stringify({ repo: s.did, collection: 'app.bsky.actor.profile', rkey: 'self', record: record, swapRecord: cur.cid }) });
+  if (!p.ok) return { error: 'putRecord ' + p.status };
+  return { updated: true, previous: String(value.description || '').slice(0, 160) };
 }
 
 async function postText(s, text, reply, opts) {
@@ -843,6 +869,10 @@ export default {
   async scheduled(event, env) {
     if (event.cron === '0 6 * * *') { await autoScan(env); return; }
     if (event.cron === '0 7 * * *') { await alertDigest(env); return; }
+    try {
+      const ps = await syncProfile(env);
+      if (ps && (ps.updated || ps.error)) console.log('[qnfo-social] profile-sync', JSON.stringify(ps));
+    } catch (e) { console.log('[qnfo-social] profile-sync threw', String(e && e.message || e).slice(0, 200)); }
     await recheckDrafts(env);
     await drainQueue(env);
     await drainDissemination(env);
@@ -1037,4 +1067,4 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination };
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, syncProfile, PROFILE_DESCRIPTION };

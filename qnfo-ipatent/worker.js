@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.4.2"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.4.3"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -960,7 +960,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       </nav>
       <div class="f-legal">
         iPatent is a free experimental drafting assistant. Outputs are machine-generated drafts \u2014 not legal advice, and not filed applications.
-        No USPTO filing date is established by generation. \xA9 2026 QNFO Research Foundation.
+        No USPTO filing date is established by generation. \xA9 2026 QNFO.
       </div>
     </div>
   </footer>

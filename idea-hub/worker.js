@@ -68,7 +68,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.3.1-reentry-rescore";
+var VERSION = "1.3.2-identity-lexicon";
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -279,7 +279,7 @@ async function thinkLoop(env) {
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) return { ok: true, skipped: "backpressure" };
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
   var ai = await env.AI.run(THINK_MODEL, { messages: [
-    { role: "system", content: 'You are the QNFO research collective. Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
+    { role: "system", content: 'You are the research planner for QNFO, an independent research imprint (one researcher with an AI-assisted pipeline). Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
     { role: "user", content: "Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus." }
   ], max_tokens: 1024 });
   var text = tExtract(ai).trim();
