@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 00:12:48",
+  "audited_at": "2026-10-01 01:42:48",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -418,7 +418,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.2.0-ideation-loop",
+        "version": "1.2.1-errata-gate",
         "worker": "idea-hub"
       },
       {
@@ -493,7 +493,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.45-wai-cost-writer",
+        "version": "0.4.46-crons-quoted-parse",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.2.0-ideation-loop",
+      "before": "1.2.1-errata-gate",
       "http": 200,
-      "live": "1.2.0-ideation-loop",
+      "live": "1.2.1-errata-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.45-wai-cost-writer",
+      "before": "0.4.46-crons-quoted-parse",
       "http": 200,
-      "live": "0.4.45-wai-cost-writer",
+      "live": "0.4.46-crons-quoted-parse",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
