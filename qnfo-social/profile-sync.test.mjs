@@ -21,11 +21,12 @@ reset(); publicDesc = PROFILE_DESCRIPTION;
 assert.deepEqual(await syncProfile(env), { unchanged: true });
 assert.equal(calls.length, 1);
 
-// 2. Drift: signs in, rewrites only description, keeps every other field, uses swapRecord.
-reset(); publicDesc = "Philosopher-scientist";
-recordValue = { $type: "app.bsky.actor.profile", displayName: "Rowan Brad Quni-Gudzinas", description: "Philosopher-scientist", avatar: { ref: "a" }, banner: { ref: "b" } };
+// 2. A superseded bio: signs in, rewrites only description, keeps every other field, uses swapRecord.
+const OLD = "Philosopher-scientist, AI-focused tech entrepreneur inventing nature-inspired quantum computers";
+reset(); publicDesc = OLD;
+recordValue = { $type: "app.bsky.actor.profile", displayName: "Rowan Brad Quni-Gudzinas", description: OLD, avatar: { ref: "a" }, banner: { ref: "b" } };
 const r = await syncProfile(env);
-assert.equal(r.updated, true); assert.equal(r.previous, "Philosopher-scientist");
+assert.equal(r.updated, true); assert.equal(r.previous, OLD);
 assert.equal(putBody.record.description, PROFILE_DESCRIPTION);
 assert.deepEqual(putBody.record.avatar, { ref: "a" }); assert.deepEqual(putBody.record.banner, { ref: "b" });
 assert.equal(putBody.record.displayName, "Rowan Brad Quni-Gudzinas");
@@ -34,6 +35,25 @@ assert.equal(putBody.swapRecord, "cid1"); assert.equal(putBody.rkey, "self"); as
 // 3. A failed write is reported, not thrown.
 reset(); putStatus = 400;
 assert.deepEqual(await syncProfile(env), { error: "putRecord 400" });
+
+// 3a. PROFILE-SYNC-OWNER-WINS-1: a bio the fleet does not recognise is the owner's edit. One public read, no sign-in,
+// no write.
+const MINE = "Founder of QNFO: independent open-science research. qnfo.org";
+reset(); publicDesc = MINE;
+assert.deepEqual(await syncProfile(env), { held: "owner-edited", current: MINE });
+assert.equal(calls.length, 1); assert.equal(putBody, null);
+
+// 3b. Same when the public read is unavailable: the record itself is checked before any write.
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => String(url).includes("public.api.bsky.app") ? new Response("", { status: 503 }) : realFetch(url, init);
+reset(); recordValue = { $type: "app.bsky.actor.profile", description: MINE };
+assert.deepEqual(await syncProfile(env), { held: "owner-edited", current: MINE });
+assert.equal(putBody, null);
+globalThis.fetch = realFetch;
+
+// 3c. An empty bio is filled.
+reset(); publicDesc = ""; recordValue = { $type: "app.bsky.actor.profile", displayName: "Rowan Brad Quni-Gudzinas" };
+assert.equal((await syncProfile(env)).updated, true); assert.equal(putBody.record.description, PROFILE_DESCRIPTION);
 
 // 4. No credentials: nothing is called.
 reset();
