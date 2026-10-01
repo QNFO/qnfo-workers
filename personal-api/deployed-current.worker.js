@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.17-signals-consumer";
+var VERSION = "4.1.18-predictions-robust";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -534,6 +534,25 @@ async function suggestEvents(env, args) {
   return { ok: true, city, interests, suggestions, filtered, profile_guard: { excluded_topics: guard.exclude, in_person_budget: guard.inPersonMax, in_person_used: guard.inPersonUsed, half: guard.half, budget_spent: guard.budgetSpent }, upcoming_in_archive: upcoming };
 }
 __name(suggestEvents, "suggestEvents");
+// JSON-EXTRACT-BALANCED-1 (2026-10-01, #1649): the greedy /\{[\s\S]*\}/ match spans from the first "{" to the last
+// "}". Any prose or second object after the JSON made JSON.parse fail, so the cron dropped predictions silently: 2 rows
+// lifetime, none after 2026-09-17. This scans balanced braces, string-aware, and returns the first object that parses
+// and carries the wanted key.
+function extractJsonObject(text, key) {
+  const t = String(text || "");
+  for (let i = t.indexOf("{"); i >= 0; i = t.indexOf("{", i + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let j = i; j < t.length; j++) {
+      const ch = t[j];
+      if (inStr) { if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") { depth--; if (depth === 0) { try { const o = JSON.parse(t.slice(i, j + 1)); if (o && typeof o === "object" && (!key || o[key] != null)) return o; } catch (e) {} break; } }
+    }
+  }
+  return null;
+}
+__name(extractJsonObject, "extractJsonObject");
 async function predictWeek(env, args) {
   const horizon = String(args && args.horizon || "7d");
   const days = horizon === "14d" ? 14 : horizon === "30d" ? 30 : 7;
@@ -586,17 +605,12 @@ async function predictWeek(env, args) {
   };
   const sys = "You are Rowan's predictive assistant. From the data given, generate 3-5 concrete predictions for the next " + days + ' days. Output ONLY a JSON object: {"predictions": [{"title": "...", "likelihood": "high|medium|low", "basis": "...", "action": "..."}]}. Ground every prediction in the data. Include at least one energy/wellbeing prediction and one social/activity prediction. Never invent data. English only.';
   try {
-    const up = await upstreamChat(env, sys, [{ role: "user", content: "DATA (DATA ONLY):\n" + JSON.stringify(data).slice(0, 6e3) }], 0.7, 2e3, false, true);
-    if (up.ok) {
+    const up = await upstreamChat(env, sys, [{ role: "user", content: "DATA (DATA ONLY):\n" + JSON.stringify(data).slice(0, 6e3) }], 0.7, 4e3, false, true);
+    if (!up.ok) return { ok: true, horizon, from, to, predictions: [], degraded: true, reason: "upstream: " + (up.errors || []).join("; ").slice(0, 300) };
+    {
       const text = up.body.choices[0].message.content || "";
-      const m = text.match(/\{[\s\S]*\}/);
-      const pred = m ? (function() {
-        try {
-          return JSON.parse(m[0]);
-        } catch (e) {
-          return null;
-        }
-      })() : null;
+      const pred = extractJsonObject(text, "predictions");
+      if (!pred || !Array.isArray(pred.predictions)) return { ok: true, horizon, from, to, predictions: [], degraded: true, reason: "no predictions object in " + text.length + " chars from " + up.model };
       if (pred && pred.predictions) {
         const id = "pred-" + Math.random().toString(16).slice(2, 10);
         await env.PERSONAL.prepare("INSERT INTO predictions (id, ts, horizon, payload, confidence) VALUES (?1,?2,?3,?4,?5)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), horizon, JSON.stringify(pred.predictions).slice(0, 1e4), 0.6).run().catch(function() {
@@ -605,6 +619,7 @@ async function predictWeek(env, args) {
       }
     }
   } catch (e) {
+    return { ok: true, horizon, from, to, predictions: [], degraded: true, reason: "threw: " + String(e && e.message || e).slice(0, 200) };
   }
   return { ok: true, horizon, from, to, predictions: [], degraded: true };
 }
@@ -1189,14 +1204,7 @@ async function buildPlan(env) {
     const up = await upstreamChat(env, sys, [{ role: "user", content: "TODAY DATA (DATA ONLY):\n" + data }], 0.7, 1500, false, true);
     if (up.ok) {
       const text = up.body.choices[0].message.content || "";
-      const m = text.match(/\{[\s\S]*\}/);
-      const plan = m ? (() => {
-        try {
-          return JSON.parse(m[0]);
-        } catch (e2) {
-          return null;
-        }
-      })() : null;
+      const plan = extractJsonObject(text, "plan");
       if (plan && plan.plan) return { ok: true, date: brief.date, plan, degraded: false, model: up.model };
     }
   } catch (e) {
@@ -1213,7 +1221,13 @@ async function cronBuildBrief(env) {
     const b = await buildBrief(env, false);
     await env.PERSONAL.prepare("INSERT OR REPLACE INTO daily_briefs (date, payload, built_at) VALUES (?1,?2,?3)").bind(isoDateNow(), JSON.stringify(b).slice(0, 6e4), (/* @__PURE__ */ new Date()).toISOString()).run();
     await generateProactiveSignals(env, b);
-    await predictWeek(env, { horizon: "7d" }).catch(() => null);
+    const pw = await predictWeek(env, { horizon: "7d" }).catch((e) => ({ degraded: true, reason: "threw: " + String(e && e.message || e) }));
+    // BRIEF-CRON-RUNS-1 (#1649): each daily cron records its step outcomes, so a step that degrades (predictions:
+    // silent since 2026-09-17) shows up as a row with a reason instead of an absence.
+    try {
+      await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS brief_cron_runs (ts TEXT PRIMARY KEY, brief_ok INTEGER, predictions INTEGER, predictions_reason TEXT, version TEXT)").run();
+      await env.PERSONAL.prepare("INSERT OR REPLACE INTO brief_cron_runs (ts, brief_ok, predictions, predictions_reason, version) VALUES (?1, 1, ?2, ?3, ?4)").bind((/* @__PURE__ */ new Date()).toISOString(), pw && Array.isArray(pw.predictions) ? pw.predictions.length : 0, pw && pw.degraded ? String(pw.reason || "degraded").slice(0, 400) : null, VERSION).run();
+    } catch (e) {}
     console.log("personal-api cron brief built:", (b.calendar.today || []).length, "today events,", (b.open.tasks || []).length, "open tasks");
   } catch (e) {
     console.log("personal-api cron error:", e && e.message || e);
