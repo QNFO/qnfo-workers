@@ -1,25 +1,8 @@
 {
-  "audited_at": "2026-10-01 10:09:04",
+  "audited_at": "2026-10-01 10:13:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-ops"
-      ],
-      "waited_for": [
-        "qnfo-ops"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-ops"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-ops"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -405,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -553,6 +536,11 @@
         "worker": "qnfo-observability"
       },
       {
+        "dir": "qnfo-ops",
+        "version": "2.38.31-phase-a-frontier-routing",
+        "worker": "qnfo-ops"
+      },
+      {
         "dir": "qnfo-outreach",
         "version": "0.3.2",
         "worker": "qnfo-outreach"
@@ -606,10 +594,6 @@
         "dir": "radar-hub",
         "version": "1.0.9",
         "worker": "radar-hub"
-      },
-      {
-        "version": "2.38.31-phase-a-frontier-routing",
-        "worker": "qnfo-ops"
       }
     ]
   },
