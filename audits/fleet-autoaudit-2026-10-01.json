@@ -1,40 +1,8 @@
 {
-  "audited_at": "2026-10-01 10:20:41",
+  "audited_at": "2026-10-01 10:29:07",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "q08-signal-engine",
-        "qnfo-ai",
-        "qnfo-code-orchestrator",
-        "qnfo-fleet-control",
-        "qnfo-ops",
-        "qnfo-research-exec"
-      ],
-      "waited_for": [
-        "q08-signal-engine",
-        "qnfo-ai",
-        "qnfo-code-orchestrator",
-        "qnfo-fleet-control",
-        "qnfo-ops",
-        "qnfo-research-exec"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-code-orchestrator"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "q08-signal-engine",
-        "qnfo-ai",
-        "qnfo-code-orchestrator",
-        "qnfo-fleet-control",
-        "qnfo-ops",
-        "qnfo-research-exec"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -420,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 35,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -453,9 +421,19 @@
         "worker": "personal-companion"
       },
       {
+        "dir": "q08-signal-engine",
+        "version": "0.7.35-ai-attr",
+        "worker": "q08-signal-engine"
+      },
+      {
         "dir": "qnfo-agent-orchestrator",
         "version": "1.1.0",
         "worker": "qnfo-agent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ai",
+        "version": "5.29.11-ai-attr",
+        "worker": "qnfo-ai"
       },
       {
         "dir": "qnfo-ai-calibration",
@@ -488,6 +466,11 @@
         "worker": "qnfo-cloud-ops"
       },
       {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.2.2",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.8-public-exec-closed",
         "worker": "qnfo-containers-pilot"
@@ -501,6 +484,11 @@
         "dir": "qnfo-email",
         "version": "2.2.0-handoff-notify",
         "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.68-remediation-tick",
+        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -548,6 +536,11 @@
         "worker": "qnfo-observability"
       },
       {
+        "dir": "qnfo-ops",
+        "version": "2.38.32-ai-attr",
+        "worker": "qnfo-ops"
+      },
+      {
         "dir": "qnfo-outreach",
         "version": "0.3.2",
         "worker": "qnfo-outreach"
@@ -566,6 +559,11 @@
         "dir": "qnfo-pdf",
         "version": "1.0.0",
         "worker": "qnfo-pdf"
+      },
+      {
+        "dir": "qnfo-research-exec",
+        "version": "0.9.32-ai-attr",
+        "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-skill-sync",
@@ -596,30 +594,6 @@
         "dir": "radar-hub",
         "version": "1.0.9",
         "worker": "radar-hub"
-      },
-      {
-        "version": "0.2.2",
-        "worker": "qnfo-code-orchestrator"
-      },
-      {
-        "version": "0.7.35-ai-attr",
-        "worker": "q08-signal-engine"
-      },
-      {
-        "version": "5.29.11-ai-attr",
-        "worker": "qnfo-ai"
-      },
-      {
-        "version": "0.4.67-ops-watch-ai-coverage",
-        "worker": "qnfo-fleet-control"
-      },
-      {
-        "version": "2.38.32-ai-attr",
-        "worker": "qnfo-ops"
-      },
-      {
-        "version": "0.9.32-ai-attr",
-        "worker": "qnfo-research-exec"
       }
     ]
   },
@@ -1170,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.67-ops-watch-ai-coverage",
+      "before": "0.4.68-remediation-tick",
       "http": 200,
-      "live": "0.4.67-ops-watch-ai-coverage",
+      "live": "0.4.68-remediation-tick",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
