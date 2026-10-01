@@ -183,30 +183,41 @@ jobs:
 
       - name: publish outcome artifact (with failure text)
         if: always()
+        # PILOT-ARTIFACT-HEREDOC-1 (2026-10-01): the artifact used an unquoted heredoc, so backticks in the embedded
+        # wrangler log (e.g. ```[[migrations]]```) were executed as command substitutions and the JSON broke (run
+        # 36794286262: "artifact is not valid JSON" after a successful deploy). Build it in Python from env instead.
         run: |
           set -uo pipefail
           mkdir -p ci-status
-          wtail="$(tail -c 6000 /tmp/wrangler.log 2>/dev/null | tr -d '\r' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' || echo '""')"
-          ntail="$(tail -c 6000 /tmp/wrangler_nomig.log 2>/dev/null | tr -d '\r' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' || echo '""')"
-          hcode="$(curl -s -o /dev/null -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/health || true)"
-          cat > ci-status/deploy-containers-pilot.json <<JSON
-          {
-            "workflow": "deploy-containers-pilot",
-            "issue": 1485,
-            "wrangler_outcome": "${{ steps.wrangler.outcome }}",
-            "nomig_outcome": "${{ steps.nomig.outcome }}",
-            "verify_rc": "${{ steps.verify.outputs.rc }}",
-            "health_http": "$hcode",
-            "head": "$GITHUB_SHA",
-            "ts": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "wrangler_tail": $wtail,
-            "nomig_tail": $ntail
+          export HEALTH_HTTP="$(curl -s -o /dev/null -w '%{http_code}' https://qnfo-containers-pilot.q08.workers.dev/health || true)"
+          python3 - <<'PY'
+          import json, os, time
+          def tail(p):
+              try:
+                  return open(p, errors="replace").read()[-6000:].replace("\r", "")
+              except OSError:
+                  return ""
+          out = {
+              "workflow": "deploy-containers-pilot",
+              "issue": 1485,
+              "wrangler_outcome": os.environ.get("W_OUT", ""),
+              "nomig_outcome": os.environ.get("N_OUT", ""),
+              "restore_outcome": os.environ.get("R_OUT", ""),
+              "verify_rc": os.environ.get("V_RC", ""),
+              "health_http": os.environ.get("HEALTH_HTTP", ""),
+              "head": os.environ.get("GITHUB_SHA", ""),
+              "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "wrangler_tail": tail("/tmp/wrangler.log"),
+              "nomig_tail": tail("/tmp/wrangler_nomig.log"),
           }
-          JSON
-          python3 -c "import json;json.load(open('ci-status/deploy-containers-pilot.json'))" \
-            && echo "artifact is valid JSON" \
-            || { echo "::error::artifact is not valid JSON"; exit 1; }
-          cat ci-status/deploy-containers-pilot.json
+          json.dump(out, open("ci-status/deploy-containers-pilot.json", "w"), indent=2)
+          print("artifact is valid JSON")
+          PY
+        env:
+          W_OUT: ${{ steps.wrangler.outcome }}
+          N_OUT: ${{ steps.nomig.outcome }}
+          R_OUT: ${{ steps.restore.outcome }}
+          V_RC: ${{ steps.verify.outputs.rc }}
 
       - name: commit outcome artifact
         if: always()
