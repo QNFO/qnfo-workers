@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           f=qnfo-code-orchestrator/wrangler.toml
-          for key in '^\[ai\]' '^\[\[containers\]\]' 'class_name = "PyContainer"' '^\[\[migrations\]\]' '^\[\[d1_databases\]\]' 'binding = "AUDIT_DB"' '^\[\[worker_loaders\]\]' '^crons = '; do
+          for key in '^\[ai\]' '^\[\[containers\]\]' 'class_name = "PyContainer"' '^\[exports\.PyContainer\]' '^\[\[d1_databases\]\]' 'binding = "AUDIT_DB"' '^\[\[worker_loaders\]\]' '^crons = '; do
             grep -Eq "$key" "$f" || { echo "::error::wrangler.toml missing $key"; exit 1; }
           done
 
