@@ -1,6 +1,6 @@
 {
  "counts": {
-  "already-applied": 76,
+  "already-applied": 75,
   "error": 8,
   "stale-anchor": 12,
   "undetermined": 9
@@ -779,15 +779,6 @@
   {
    "changed_files": [],
    "rc": 0,
-   "script": "scripts/patch-version-precedence-2.py",
-   "tail": [
-    "ALREADY APPLIED: VERSION-PRECEDENCE-2 present; idempotent no-op"
-   ],
-   "verdict": "already-applied"
-  },
-  {
-   "changed_files": [],
-   "rc": 0,
    "script": "scripts/patch-version-quote-1.py",
    "tail": [
     "VERSION-QUOTE-1 already applied - no-op"
@@ -1123,8 +1114,8 @@
   "scripts/run-gate-internal-patch.py"
  ],
  "superseded": [],
- "total": 105,
- "ts": "2026-10-01T07:20:21.989Z",
+ "total": 104,
+ "ts": "2026-10-01T07:32:06.036Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
