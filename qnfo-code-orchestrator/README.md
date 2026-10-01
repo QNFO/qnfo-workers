@@ -96,3 +96,11 @@ reaching a model. `readRepoFile` now uses the code-agent only when that key exis
 raw endpoint (`raw.githubusercontent.com/QNFO/<repo>/main/<path>`). The owner is pinned to `QNFO`, the repo name and path are
 validated (no traversal, no absolute paths, no query strings) before any request, and the size cap is unchanged. With the pull-based
 publisher, the loop now needs no GitHub credential at all, in either direction.
+
+## Issue intake (0.2.4)
+
+The Cloudflare equivalent of the Stop-hook re-prompt. Each cron tick scans open `agent_issues` rows whose description carries an explicit opt-in line:
+
+    code-task: repo=qnfo-workers path=docs/some-file.md
+
+Each such issue becomes one queued code task (goal = `[issue #N] <title>` plus the description). It is deduped by the `[issue #N]` prefix, at most two are created per tick, and a refused marker (protected path, bad repo) is logged once per isolate. Nothing is inferred from prose, and the PR is still opened by `code-task-publish` and never merged by this worker.
