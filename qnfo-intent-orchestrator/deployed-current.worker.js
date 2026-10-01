@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.6";
+var VERSION = "1.3.7-intake-bounded-classify";
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -143,7 +143,14 @@ async function handleIntent(env, body, source, device) {
   if (isNoise(desire) || /^(name|title|summarize|summarise)\s+(this|the)\s+(conversation|chat)/i.test(desire)) {
     return { silent: true, reason: "meta", type: "unknown", status: "silenced" };
   }
-  const ai = await classifyAI(env, desire);
+  // INTAKE-PERSIST-BUDGET-1 (2026-10-01, #1189): classifyAI runs before the INSERT and may try two models at 25 s each
+  // (50 s worst case), but qnfo-ops researchQueue aborts its binding call at 20 s. The callee is then cancelled before
+  // the row is written. A live probe reproduced it: "research idea was NOT queued: The operation was aborted", 65.7 s,
+  // no intent row. The whole AI classification is now bounded at 8 s; on timeout the deterministic classifyRules result
+  // is used, so the intent always persists inside the caller's budget. The AI still classifies whenever it is fast enough.
+  const ai = await withTimeout(classifyAI(env, desire), 8e3, "classify-total").catch(function() {
+    return null;
+  });
   const cls = ai || classifyRules(desire);
   if (!cls.summary) {
     cls.summary = clamp(desire.replace(/^calendar event:\s*/i, "").trim(), 120);
