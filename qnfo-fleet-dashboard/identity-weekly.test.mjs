@@ -25,7 +25,8 @@ const DOC = [
   "| 1 | [Rolling role](https://example.org/a), Org A | $1 | Rolling | apply |",
   "| 2 | [Soon grant](https://example.org/b), Org B | $2 | Oct 5, 2026 | draft |",
   "| 3 | [Gone call](https://example.org/gone), Org C | $3 | 2026-12-01 | check |",
-  "| 4 | [Past call](https://example.org/d), Org D | $4 | 3 Sep 2026 | close |", "",
+  "| 4 | [Past call](https://example.org/d), Org D | $4 | 3 Sep 2026 | close |",
+  "| 5 | [Decided call](https://example.org/e), Org E | $5 | Not pursued (was 2026-10-03) | none |", "",
   "## Weekly log", ""
 ].join("\n");
 
@@ -72,7 +73,8 @@ let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log("FAIL " + msg); } };
 
 const opps = m.idwOpportunities(DOC, NOW);
-ok(opps.length === 4, "4 opportunity rows");
+ok(opps.length === 4, "4 opportunity rows (the Not pursued lead is skipped)");
+ok(!opps.some((o) => o.n === 5), "IDENTITY-WEEKLY-DELEGATED-1: a decided lead gets no deadline, probe or card");
 ok(opps[0].deadline.date === null, "Rolling has no date");
 ok(opps[1].deadline.date === "2026-10-05" && opps[1].deadline.days_left === 3, "Mon D, YYYY deadline and days left");
 ok(opps[2].deadline.date === "2026-12-01", "ISO deadline");
@@ -107,6 +109,14 @@ ok(card && card.args[0] === "identity-weekly-2026-10-01" && /urgent/.test(card.s
 ok(writes.filter((w) => /INSERT INTO human_actions/.test(w.sql)).length === 1, "exactly one card per run");
 ok(out.status === "ok" && out.notes.owner_items >= 5, "job status ok");
 ok(!writes.some((w) => /owner_docs/.test(w.sql) && /UPDATE|INSERT|DELETE/i.test(w.sql)), "never writes the owner's doc");
+
+// IDENTITY-WEEKLY-DELEGATED-1: under the owner's queue delegation the findings are still recorded, but no card is filed.
+const flagged = { prepare(sql) { const q = D1.prepare(sql); if (/FROM pipeline_flags/.test(sql)) q.first = async () => ({ value: "1" }); return q; } };
+const cardsBefore = writes.filter((w) => /INSERT INTO human_actions/.test(w.sql)).length;
+const runsBeforeD = writes.filter((w) => /INSERT INTO portfolio_runs/.test(w.sql)).length;
+const dOut = await m.jobIdentityWeekly({ AUDIT: flagged, IDENTITY: flagged, GITHUB_TOKEN: "" });
+ok(writes.filter((w) => /INSERT INTO human_actions/.test(w.sql)).length === cardsBefore, "delegated: no owner queue card");
+ok(writes.filter((w) => /INSERT INTO portfolio_runs/.test(w.sql)).length === runsBeforeD + 1 && dOut.notes.urgent > 0 && /^delegated: /.test(dOut.notes.card), "delegated: findings still recorded, card note says why");
 
 // Scheduling: Mondays after 06:00Z, once per day (cloud_ops_events throttle), never on other days.
 const thu = await m.identityWeeklyRun({ AUDIT: D1, IDENTITY: D1 }, { nowMs: Date.UTC(2026, 9, 1, 12) });
