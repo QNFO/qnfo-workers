@@ -1,0 +1,13 @@
+vault-indexer is FOLDED (2026-10-01, VAULT-INDEXER-FOLD-1, issue 1512). Do not redeploy this directory.
+
+The worker vanished unrecorded around 2026-09-25 (last vault_indexer_runs row 2026-09-25T11:00Z, worker_live_audit
+404, no worker_removals row), so the Obsidian vault stopped being indexed into the personal-life Vectorize index.
+Its indexer (list obsidian-vault -> changed docs -> chunk -> bge-base embed -> Vectorize + personal-life files/chunks,
+overlap lock, stale reconcile, embed_failures backoff, vault_indexer_runs log, _meta/vault-indexer.status.json) now
+runs inside personal-companion's hourly cron, with the obsidian-vault bucket bound as VAULT. The unauthenticated
+/run and /drain routes and the deploy-guard self-report were not carried over.
+
+The 56,096 errors in vault_indexer_runs were 2026-09-21..23 embed calls refused by the AI Gateway spend wall
+("2045: Spend limit exceeded: rule 'monthly-150'"); errors were 0 from 2026-09-24 until the script disappeared.
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.
