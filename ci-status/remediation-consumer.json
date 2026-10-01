@@ -1,25 +1,25 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1250308c5066",
+ "verifier": "remediation-consumer@6c2efcd67396",
  "due": 2,
- "pass": 1,
- "fail": 1,
+ "pass": 0,
+ "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "EVID-1504-REVISE",
-   "issue_id": 1504,
-   "verdict": "pass",
-   "expected": "revise-ok",
-   "observed": "revise-ok",
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "pending",
    "written": true
   },
   {
-   "class": "EVID-1649-BRIEF",
-   "issue_id": 1649,
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
    "verdict": "fail",
-   "expected": "recorded",
+   "expected": "seven-days",
    "observed": "pending",
    "written": true
   }
@@ -40,7 +40,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 7545,
- "head": "1250308c50664e395edd2922c2cf889a8bb104f0",
+ "spent_ms": 6398,
+ "head": "6c2efcd673963837f356ee74c237de32ad8d75e1",
  "job_status": "success"
 }
