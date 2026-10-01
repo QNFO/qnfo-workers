@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-01 09:57:36",
+  "audited_at": "2026-10-01 10:02:20",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-control"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -49,7 +42,32 @@
       }
     ],
     "cron_only_count": 4,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "personal-companion",
+        "live": "1.7.3-ai-attribution",
+        "repo": "1.7.2-vault-indexer-fold",
+        "worker": "personal-companion"
+      },
+      {
+        "dir": "qnfo-ai",
+        "live": "5.29.10-ensemble-stage-share-ai-attribution",
+        "repo": "5.29.9-ensemble-stage-share",
+        "worker": "qnfo-ai"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.65-retired-present",
+        "repo": "0.4.64-resurrection-signal",
+        "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-social",
+        "live": "0.7.18-ai-attribution",
+        "repo": "0.7.17-distribution-reconcile",
+        "worker": "qnfo-social"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -397,7 +415,7 @@
       }
     ],
     "scope": "all",
-    "sync": 41,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -425,11 +443,6 @@
         "worker": "personal-api"
       },
       {
-        "dir": "personal-companion",
-        "version": "1.7.2-vault-indexer-fold",
-        "worker": "personal-companion"
-      },
-      {
         "dir": "q08-signal-engine",
         "version": "0.7.34-alert-undigested",
         "worker": "q08-signal-engine"
@@ -438,11 +451,6 @@
         "dir": "qnfo-agent-orchestrator",
         "version": "1.1.0",
         "worker": "qnfo-agent-orchestrator"
-      },
-      {
-        "dir": "qnfo-ai",
-        "version": "5.29.9-ensemble-stage-share",
-        "worker": "qnfo-ai"
       },
       {
         "dir": "qnfo-ai-calibration",
@@ -493,11 +501,6 @@
         "dir": "qnfo-email",
         "version": "2.2.0-handoff-notify",
         "worker": "qnfo-email"
-      },
-      {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.64-resurrection-signal",
-        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -578,11 +581,6 @@
         "dir": "qnfo-skill-sync",
         "version": "1.1.2",
         "worker": "qnfo-skill-sync"
-      },
-      {
-        "dir": "qnfo-social",
-        "version": "0.7.17-distribution-reconcile",
-        "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
@@ -819,9 +817,9 @@
     "personal-companion": {
       "before": "1.7.2-vault-indexer-fold",
       "http": 200,
-      "live": "1.7.2-vault-indexer-fold",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.7.3-ai-attribution",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "personal-companion"
     },
     "personal-events-radar": {
@@ -891,9 +889,9 @@
     "qnfo-ai": {
       "before": "5.29.9-ensemble-stage-share",
       "http": 200,
-      "live": "5.29.9-ensemble-stage-share",
-      "match": 1,
-      "note": "SYNC",
+      "live": "5.29.10-ensemble-stage-share-ai-attribution",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
@@ -1155,9 +1153,9 @@
     "qnfo-fleet-control": {
       "before": "0.4.64-resurrection-signal",
       "http": 200,
-      "live": "0.4.64-resurrection-signal",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.4.65-retired-present",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
@@ -1427,9 +1425,9 @@
     "qnfo-social": {
       "before": "0.7.17-distribution-reconcile",
       "http": 200,
-      "live": "0.7.17-distribution-reconcile",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.7.18-ai-attribution",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
