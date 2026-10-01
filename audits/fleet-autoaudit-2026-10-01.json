@@ -1,10 +1,27 @@
 {
-  "audited_at": "2026-10-01 08:18:58",
+  "audited_at": "2026-10-01 08:24:13",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "radar-hub"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "errata-hub"
+      ]
+    },
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/errata-hub/deployed-current.worker.js",
+        "dir": "errata-hub",
+        "live": "1.1.3",
+        "repo": "1.1.4-republish-verify",
+        "worker": "errata-hub"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -35,24 +52,15 @@
     "cron_only_count": 3,
     "drift": [
       {
-        "dir": "radar-hub",
-        "live": "1.0.9",
-        "repo": "1.2.4",
-        "worker": "radar-hub"
+        "dir": "errata-hub",
+        "live": "1.1.3",
+        "repo": "1.1.4-republish-verify",
+        "worker": "errata-hub"
       }
     ],
     "live_err": [],
-    "multi_version": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/radar-hub/deployed-current.worker.js",
-        "declarations": "1.0.1+fabric.20260910,1.0.8,1.0.9,1.2.4",
-        "dir": "radar-hub",
-        "live": "1.0.9",
-        "repo": "1.2.4",
-        "worker": "radar-hub"
-      }
-    ],
-    "multi_version_count": 1,
+    "multi_version": [],
+    "multi_version_count": 0,
     "name_resolution": true,
     "no_health_route": [],
     "no_live_version": [],
@@ -415,11 +423,6 @@
         "worker": "calendar-api"
       },
       {
-        "dir": "errata-hub",
-        "version": "1.1.3",
-        "worker": "errata-hub"
-      },
-      {
         "dir": "fleet-exec",
         "version": "1.0.2",
         "worker": "fleet-exec"
@@ -431,7 +434,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.1.17-signals-consumer",
+        "version": "4.1.18-predictions-robust",
         "worker": "personal-api"
       },
       {
@@ -501,7 +504,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.58-census-dod-upsert",
+        "version": "0.4.59-census-uncontracted",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -603,6 +606,11 @@
         "dir": "qnfo-venue-radar",
         "version": "1.0.3",
         "worker": "qnfo-venue-radar"
+      },
+      {
+        "dir": "radar-hub",
+        "version": "1.0.9",
+        "worker": "radar-hub"
       }
     ]
   },
@@ -665,11 +673,11 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.1.3",
+      "before": "1.1.4-republish-verify",
       "http": 200,
       "live": "1.1.3",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "errata-hub"
     },
     "events-radar": {
@@ -809,9 +817,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.1.17-signals-consumer",
+      "before": "4.1.18-predictions-robust",
       "http": 200,
-      "live": "4.1.17-signals-consumer",
+      "live": "4.1.18-predictions-robust",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1153,9 +1161,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.58-census-dod-upsert",
+      "before": "0.4.59-census-uncontracted",
       "http": 200,
-      "live": "0.4.58-census-dod-upsert",
+      "live": "0.4.59-census-uncontracted",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1481,11 +1489,11 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.2.4",
+      "before": "1.0.9",
       "http": 200,
       "live": "1.0.9",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "radar-hub"
     },
     "research-daily-brief": {
