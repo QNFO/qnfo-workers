@@ -60,6 +60,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: canonical-deploy-main
@@ -86,6 +87,7 @@ jobs:
           IN_DRY: ${{ github.event.inputs.dry_run }}
           EV_BEFORE: ${{ github.event.before }}
           EV_AFTER: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           : > /tmp/targets.txt
@@ -107,10 +109,22 @@ jobs:
             if [ -z "${EV_BEFORE:-}" ] || [ "$EV_BEFORE" = "0000000000000000000000000000000000000000" ]; then
               echo "no usable push base commit, nothing to resolve"
             else
-              git diff --name-only "$EV_BEFORE" "$EV_AFTER" > /tmp/changed.txt || true
+              # DEPLOY-BASE-LAST-SUCCESS-1 (2026-10-01): GitHub keeps one PENDING run per concurrency group, so a burst of
+              # merges cancels the middle run (cancel-in-progress false only protects the RUNNING one). The next run then
+              # diffed only its own push and the middle commit's workers never deployed (run 36854646057, PR 305: dashboard,
+              # social, gateway stayed on the old versions). The base is the head of the last successful push-mode run when
+              # that commit is an ancestor of this push's base, so the set only ever widens and a cancelled or skipped
+              # commit rides the next run.
+              BASE="$EV_BEFORE"
+              LAST_OK=$(gh run list -R "$GITHUB_REPOSITORY" --workflow canonical-deploy.yml --branch main --event push --status success --limit 1 --json headSha --jq '.[0].headSha' 2>/dev/null || true)
+              if [ -n "$LAST_OK" ] && [ "$LAST_OK" != "null" ] && git merge-base --is-ancestor "$LAST_OK" "$EV_BEFORE" 2>/dev/null; then
+                BASE="$LAST_OK"
+              fi
+              echo "diff base $BASE (push before $EV_BEFORE, last successful push deploy ${LAST_OK:-none})"
+              git diff --name-only "$BASE" "$EV_AFTER" > /tmp/changed.txt || true
               # WORKER-RESURRECTION-GUARD-1 (2026-10-01): only a worker.js ADDED in this push may CREATE a worker. Touching an
               # existing directory must never resurrect a retired worker (qnfo-agent-ws was recreated by a wrangler-only push).
-              git diff --name-only --diff-filter=A "$EV_BEFORE" "$EV_AFTER" > /tmp/added.txt || true
+              git diff --name-only --diff-filter=A "$BASE" "$EV_AFTER" > /tmp/added.txt || true
               awk -F/ '/\/worker\.js$/ || /\/wrangler\.toml$/ {print $1}' /tmp/changed.txt | sort -u > /tmp/dirs.txt
               while read -r d; do
                 [ -z "$d" ] && continue
