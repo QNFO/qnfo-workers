@@ -18,7 +18,7 @@ The queue is read live from D1 on every request and the page re-fetches `/?frag=
 `decideInvestment` applies the rule in `impact_thresholds.review_gate_2026_12_31` (continue iff credibility_events>=2 OR confirmed_subscribers>=50 OR funding_secured, AND spend within the cap, judged 2026-12-31) to measured inputs and shows the trajectory:
 CONTINUE (on track / at risk) | SCALE_BACK (cash over the cap; or at risk <=45 days out) | KILL (gate failed, or the shutdown_manifest early trigger fired) | UNKNOWN.
 - ADVISORY: nothing here retires a worker, deletes data or raises a cap (AUTONOMY-DECISION-POLICY.md). `shutdown_manifest` stays the only retirement path.
-- Cost basis is billing-API gross usage ("cash"). The gateway-metered figure is an estimated list cost (#1699) and can never trigger SCALE_BACK/KILL on its own.
+- Cost basis is `fleet_budget ai_spend:total` (qnfo-fleet-control): the 30-day unified-billing spend, which is what the cap meters (#1699, BYOK-BILLING-SPLIT-1). It must be <6h old. The billing API's current-period-to-date is shown as context only (it reads ~$0 early in a month), and the all-provider list-cost estimate can never trigger SCALE_BACK/KILL on its own.
 - Facts no machine can measure are attested with evidence: `POST /api/decision/fact {"key":"credibility_events|funding_secured|revenue_30d_usd","value":..,"evidence":".."}` (x-loop-token). At the gate date with nothing ever attested the verdict is UNKNOWN (a human call), never KILL by omission.
 - `GET /api/decision` (`fleet-decision/v1`) returns verdict, reasons, what flips it, levers, inputs and feed status.
 
