@@ -1,12 +1,29 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@442a97dde88c",
- "due": 0,
- "pass": 0,
+ "verifier": "remediation-consumer@ff5f8725d1a6",
+ "due": 2,
+ "pass": 2,
  "fail": 0,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "EVID-1642-VENUE",
+   "issue_id": 1642,
+   "verdict": "pass",
+   "expected": "ran",
+   "observed": "ran",
+   "written": true
+  },
+  {
+   "class": "EVID-1653-RADAR",
+   "issue_id": 1653,
+   "verdict": "pass",
+   "expected": "both",
+   "observed": "both",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -22,7 +39,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2314,
- "head": "442a97dde88ca1e429b4ba488747a3f65cc0d673",
+ "spent_ms": 7563,
+ "head": "ff5f8725d1a693052a48fa59ff217b1f81689c7e",
  "job_status": "success"
 }
