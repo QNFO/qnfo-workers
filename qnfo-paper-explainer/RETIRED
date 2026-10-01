@@ -1,0 +1,8 @@
+qnfo-paper-explainer is RETIRED (2026-10-01, RADAR-HUB-REDEPLOY-1, issue 1643). Do not redeploy this directory.
+
+The worker vanished unrecorded from the account (last paper_explain_log row 2026-09-11). It cannot run without third-party credentials that
+a redeploy does not restore and that cannot be regenerated autonomously: BSKY_APP_PASS and BSKY_HANDLE (Bluesky), BUFFER_TOKEN (Mastodon,
+LinkedIn and X via Buffer), EXPLAIN_TOKEN. Daily Bluesky dissemination of QNFO's own papers continues in qnfo-social. The plain-English
+explainer of third-party arXiv papers is a dropped capability, not a folded one. History stays in paper_explain_log / paper_explain_state.
+
+canonical-deploy.yml skips any directory containing a RETIRED file. This source is kept for reference only.

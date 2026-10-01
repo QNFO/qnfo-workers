@@ -1,0 +1,7 @@
+events-radar is FOLDED (2026-10-01, RADAR-HUB-REDEPLOY-1, issues 1653 and 1642 family). Do not redeploy this directory.
+
+The worker vanished unrecorded from the account (no worker_removals row; worker_live_audit NOT_DEPLOYED). Its code is embedded
+verbatim as the `eventsMod` module of radar-hub (events-radar 1.0.8), and radar-hub's default export routes the same weekly cron
+(`0 5 * * 1`) to it, writing the same events_radar table in qnfo-audit. radar-hub is the single deployed radar worker.
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.

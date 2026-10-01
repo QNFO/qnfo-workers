@@ -27,10 +27,9 @@ environment = "production"
 # workflow binding: JOB_MARKET_WATCH -> class JobMarketWatchWorkflow
 # Set via CF dashboard or wrangler.toml [[workflows]] block when class is defined in main
 
-[[services]]
-binding = "OBSIDIAN_WRITER"
-service = "obsidian-writer"
-environment = "production"
+# OBSIDIAN_WRITER service binding removed 2026-10-01 (RADAR-HUB-REDEPLOY-1): its target worker obsidian-writer is no longer in the
+# account, and Cloudflare rejects an upload that binds a missing worker (error 10144). worker.js guards every use with
+# `if (env.OBSIDIAN_WRITER)`, so the vault-note step is skipped and the D1 writes (the actual output) are unaffected.
 
 [[d1_databases]]
 binding = "PERSONAL_DB"
@@ -51,3 +50,10 @@ bucket_name = "obsidian-vault"
 binding = "JOB_MARKET_WATCH"
 name = "job-market-watch"
 class_name = "JobMarketWatchWorkflow"
+
+# RADAR-HUB-REDEPLOY-1 (2026-10-01): the worker vanished unrecorded around 2026-09-25 and a deleted worker loses its schedules,
+# so they are declared here (the canonical deploy applies them). They are exactly the cron strings the default export routes:
+# events 0 5 * * 1 | arxiv 30 8 * * * | research 0 6 1 * *, 0 8 * * 7, 0 9 * * 7 | citation 0 11 1,15 * * |
+# job-market 0 7 * * 2 | personal 30 5 * * 2, 0 6 * * *
+[triggers]
+crons = ["0 5 * * 1", "30 8 * * *", "0 6 1 * *", "0 8 * * 7", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"]
