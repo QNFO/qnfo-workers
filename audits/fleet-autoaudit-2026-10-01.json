@@ -1,15 +1,25 @@
 {
-  "audited_at": "2026-10-01 12:28:46",
+  "audited_at": "2026-10-01 12:41:54",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_deploy_settle": {
+      "settled": [
+        "qnfo-fleet-control"
+      ],
+      "waited_for": [
+        "qnfo-fleet-control"
+      ]
+    },
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-cloud-ops",
-        "qnfo-fleet-dashboard"
+        "qnfo-fleet-control",
+        "qnfo-research-exec"
       ],
       "refreshed": true,
-      "second_pass": []
+      "second_pass": [
+        "qnfo-fleet-control"
+      ]
     },
     "_guard_rc": 0,
     "ahead": [],
@@ -396,7 +406,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -494,11 +504,6 @@
         "worker": "qnfo-email"
       },
       {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.70-portfolio-loop",
-        "worker": "qnfo-fleet-control"
-      },
-      {
         "dir": "qnfo-fleet-dashboard",
         "version": "1.11.1-owner-edit",
         "worker": "qnfo-fleet-dashboard"
@@ -570,7 +575,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.38-reasoning-effort-low",
+        "version": "0.9.39-revise-wall",
         "worker": "qnfo-research-exec"
       },
       {
@@ -602,6 +607,10 @@
         "dir": "radar-hub",
         "version": "1.0.9",
         "worker": "radar-hub"
+      },
+      {
+        "version": "0.4.74-loop-watch",
+        "worker": "qnfo-fleet-control"
       }
     ]
   },
@@ -1152,9 +1161,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.70-portfolio-loop",
+      "before": "0.4.74-loop-watch",
       "http": 200,
-      "live": "0.4.70-portfolio-loop",
+      "live": "0.4.74-loop-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1368,9 +1377,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.38-reasoning-effort-low",
+      "before": "0.9.39-revise-wall",
       "http": 200,
-      "live": "0.9.38-reasoning-effort-low",
+      "live": "0.9.39-revise-wall",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
