@@ -200,5 +200,15 @@ eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; wbs:ok; dormant 
 eq(P.pfNeedsSync({ ts: h(0.5), status: "ok", note: "kernel 1.0.0; actions 12 (11 committed)" }, "1.0.0", T0), null, "but not within 50 minutes");
 eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; actions 0 (0 committed)" }, "1.0.0", T0), null, "a run with nothing left to do holds for the day");
 
+
+// --- REVISE-OUTSIDE-CAP-1 ---------------------------------------------------
+const manyRepos = [];
+for (let i = 0; i < 20; i++) manyRepos.push({ name: "r" + String(i).padStart(2, "0"), description: "", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" });
+for (let i = 0; i < 4; i++) manyRepos.push({ name: "w" + i, description: "loop wrote this one " + i, visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" });
+const wrote = { w0: "loop wrote this one 0", w1: "loop wrote this one 1", w2: "loop wrote this one 2", w3: "loop wrote this one 3" };
+const planM = P.pfHygienePlan(P.pfEvaluate(manyRepos, [], NOW), [], wrote);
+eq(planM.filter((a) => a.action === "description-revise").length, 4, "every loop-written description is revised");
+eq(planM.filter((a) => a.action !== "description-revise").length, P.PF_HYGIENE_MAX, "and the write budget is still fully used");
+
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

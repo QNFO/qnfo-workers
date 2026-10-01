@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.80-description-quality";
+var VERSION = "0.4.81-revise-outside-cap";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3846,7 +3846,10 @@ function pfHygienePlan(ev, wbsRows, written) {
   // registry links first (one D1 write each), then the cheapest GitHub writes; the rest waits for the next sync
   var order = { "wbs-link": 0, "description-revise": 1, topics: 2, description: 3, license: 4 };
   acts.sort(function(a, b) { return order[a.action] - order[b.action] || String(a.repo).localeCompare(String(b.repo)); });
-  return acts.slice(0, PF_HYGIENE_MAX);
+  // a revise is a read that usually ends "unchanged" (16:00Z run: 3 of 5), so it does not consume the write budget
+  var revise = acts.filter(function(a) { return a.action === "description-revise"; });
+  var rest = acts.filter(function(a) { return a.action !== "description-revise"; });
+  return revise.concat(rest.slice(0, PF_HYGIENE_MAX));
 }
 async function pfGhJson(env, method, url, body, timeoutMs) {
   var opt = { method: method, headers: pfGh(env) };
