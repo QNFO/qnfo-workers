@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.13.1-owner-requests"; /* OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.14.0-watchmaker"; /* WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2168,6 +2168,22 @@ async function handleRequest(request, env, ctx) {
     if (owner.authed || machine) v.responses = await recentResponses(env);
     return json(v);
   }
+  // WATCHMAKER-INDEX-1: the latest daily count of recurring operations that still need a person or a session, with the
+  // list behind it. Locked pages show the number only.
+  if (path === "/api/watchmaker" && request.method === "GET") {
+    const last = (await d1all(env.AUDIT, "SELECT day, index_value, json FROM watchmaker_runs ORDER BY day DESC LIMIT 1").catch(function() {
+      return [];
+    }))[0];
+    if (!last) return json({ schema_version: "watchmaker/v1", index: null, note: "not measured yet (daily after 07:00Z)" });
+    if (privateView) return json({ schema_version: "watchmaker/v1", locked: true, day: last.day, index: last.index_value, target: 0 });
+    let body = {};
+    try {
+      body = JSON.parse(last.json || "{}");
+    } catch (e) {
+      body = {};
+    }
+    return json(Object.assign({ schema_version: "watchmaker/v1", day: last.day }, body));
+  }
   // The investment verdict + the business-case inputs behind it. ?refresh=1 (used by the fleet-exec heartbeat task)
   // re-measures (throttled to one run / 2 min) and republishes to the ops/fleet feeds.
   if (path === "/api/decision" && request.method === "GET") {
@@ -2472,7 +2488,10 @@ var worker_default = {
       // OBJECTIVE-REVISION-APPLY-1: apply any objective revision ratified outside the dashboard route (at most 5 a tick).
       ctx.waitUntil(within(objectiveRevisionSweep(env).catch(function() {
       })));
-      // OWNER-NOTES-ROUTE-1: card notes the request path could not route become intents.
+      // WATCHMAKER-INDEX-1: once per UTC day after 07:00Z, the count of recurring operations that still need a person.
+      ctx.waitUntil(within(watchmakerDaily(env).catch(function() {
+      })));
+      // OWNER-NOTES-ROUTE-1: owner notes and queued tasks the request path could not file become agent_issues rows.
       ctx.waitUntil(within(ownerNotesRoute(env).catch(function() {
       })));
       // IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops with IDENTITY-STORE-1): Mondays after 06:00Z, throttled inside on the
@@ -3253,6 +3272,104 @@ async function objectiveRevisionSweep(env) {
   for (const r of rows) out.push(await objectiveRevisionApply(env, Number(r.id), "cron"));
   return out;
 }
+// WATCHMAKER-INDEX-1 (1.14.0, roadmap RM-WATCHMAKER-INDEX-1, agent_issues 1726): the fleet's own daily count of recurring
+// operations that still need a person or a Claude session, target 0. Every recurring operation is listed below with who
+// runs it and how its last run is measured from D1. It counts when (a) a person or a session runs it, (b) its Cloudflare
+// runner has not run within twice its cadence (someone has to restart it), or (c) its freshness cannot be read (unproven
+// is not unattended). Approvals the owner keeps by policy (LinkedIn drafts, objective ratification) are listed and not
+// counted; retired claude.ai Routines are listed with what replaced them. Once per UTC day after 07:00Z: one
+// watchmaker_runs row, metric_registry 'watchmaker_index', and GET /api/watchmaker.
+var WATCHMAKER_AFTER_UTC_HOUR = 7;
+var WATCHMAKER_OPS = [
+  { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
+  { key: "identity-weekly", what: "Identity weekly review (IDENTITY-WEEKLY-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 168, first_due: "2026-10-05T06:00:00Z", sql: "SELECT MAX(created_at) AS last FROM portfolio_runs WHERE kind = 'identity-weekly'", replaces: "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check'" },
+  { key: "reach-ingest", what: "Reach signals ingest (REACH-SIGNALS-INGEST-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'reach-ingest-' AND id < 'reach-ingest.'" },
+  { key: "charter-loop", what: "Charter live block and snapshot (CHARTER-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-02T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM charter_snapshots" },
+  { key: "portfolio-sync", what: "Repository portfolio sync and hygiene (PORTFOLIO-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM portfolio_sync_runs WHERE status = 'ok'" },
+  { key: "fleet-defects", what: "Fleet defects to anchored PRs (evolveTick)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM evolve_candidates", replaces: "claude.ai Routine 'Daily fleet issue sweep'" },
+  { key: "backlog-drain", what: "Backlog drain: close or reopen issues with evidence", runner: "cron:qnfo-backlog-exec", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jo-qnfo-backlog-exec-' AND id < 'jo-qnfo-backlog-exec.'" },
+  { key: "time-gated-verification", what: "Time-gated issue verification (remediation_contracts)", runner: "workflow:remediation-consumer", cadence_h: 6, sql: "SELECT MAX(last_attempt_at) AS last FROM remediation_contracts", replaces: "13 one-shot claude.ai session check-ins" },
+  { key: "research-intent-triage", what: "Research intent triage (qnfo-intent-orchestrator 06:30Z)", runner: "cron:qnfo-intent-orchestrator", cadence_h: 24, stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'research' AND created_at < ?1", stuck_note: "pending research intents older than 48h" },
+  { key: "task-intent-intake", what: "Task intents from ChatBox, DeepChat and qnfo-ops feeds (no triage reads type 'task')", runner: "none", stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'task' AND created_at < ?1", stuck_note: "pending task intents older than 48h with no consumer" },
+  { key: "code-task-merge", what: "Merging code-loop PRs (code-task-publish never merges)", runner: "owner", live_sql: "SELECT COUNT(*) AS n FROM code_tasks WHERE status IN ('published', 'branch_pushed', 'needs_human') AND updated_at > ?1", live_note: "code tasks waiting on a person in the last 30 days" },
+  { key: "linkedin-draft-approval", what: "Approving each LinkedIn draft in Buffer (LinkedIn API Terms 3.1; STRATEGY gate 7)", runner: "owner-by-policy" },
+  { key: "objective-ratification", what: "Ratifying objective revisions (QUNIVERSE-CHARTER s7)", runner: "owner-by-policy" }
+];
+function wmIso(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return new Date(v < 1e11 ? v * 1e3 : v).toISOString();
+  let s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) s = s.replace(" ", "T") + "Z";
+  const t = Date.parse(s);
+  return isNaN(t) ? null : new Date(t).toISOString();
+}
+async function watchmakerMeasure(env, nowMs) {
+  const now = nowMs || Date.now();
+  const rows = [];
+  for (const op of WATCHMAKER_OPS) {
+    const r = { key: op.key, what: op.what, runner: op.runner, counted: false, state: "", replaces: op.replaces || null };
+    try {
+      if (op.runner === "owner-by-policy") {
+        r.state = "owner approval by policy (not counted)";
+      } else if (op.runner === "owner" || op.runner === "session") {
+        if (op.live_sql) {
+          const x = (await d1all(env.AUDIT, op.live_sql, [new Date(now - 30 * DAY_MS).toISOString()]))[0];
+          const n = x ? Number(x.n) : null;
+          r.counted = !(n === 0);
+          r.state = n == null ? "unmeasured" : n + " " + op.live_note;
+        } else {
+          r.counted = true;
+          r.state = "run by a " + (op.runner === "owner" ? "person" : "session");
+        }
+      } else if (op.stuck_sql) {
+        const x = (await d1all(env.AUDIT, op.stuck_sql, [new Date(now - 48 * 36e5).toISOString()]))[0];
+        const n = x ? Number(x.stuck) : null;
+        r.counted = !(n === 0);
+        r.state = n == null ? "unmeasured" : n ? n + " " + op.stuck_note : "no backlog";
+      } else {
+        const x = (await d1all(env.AUDIT, op.sql))[0];
+        const last = x ? wmIso(x.last) : null;
+        r.last = last;
+        const firstDue = op.first_due ? Date.parse(op.first_due) : null;
+        if (!last && firstDue && now < firstDue) r.state = "first run due " + op.first_due;
+        else if (!last) {
+          r.counted = true;
+          r.state = "never ran";
+        } else {
+          const age = (now - Date.parse(last)) / 36e5;
+          r.age_h = Math.round(age * 10) / 10;
+          r.counted = age > 2 * op.cadence_h;
+          r.state = r.counted ? "stalled: last run " + r.age_h + "h ago, cadence " + op.cadence_h + "h" : "ok, last run " + r.age_h + "h ago";
+        }
+      }
+    } catch (e) {
+      r.counted = true;
+      r.state = "unmeasured: " + squash(String(e && e.message || e)).slice(0, 100);
+    }
+    rows.push(r);
+  }
+  const counted = rows.filter(function(r) {
+    return r.counted;
+  });
+  return { schema: "watchmaker/v1", version: VERSION, at: new Date(now).toISOString(), index: counted.length, target: 0, counted: counted.map(function(r) {
+    return r.key;
+  }), ops: rows, retired: ["claude.ai Routine 'QNFO portfolio management' -> portfolio-daily", "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check' -> identity-weekly", "claude.ai Routine 'Daily fleet issue sweep' -> fleet-defects + backlog-drain", "13 one-shot claude.ai check-ins -> time-gated-verification"] };
+}
+async function watchmakerDaily(env, opts) {
+  const now = opts && opts.now || Date.now();
+  const d = new Date(now);
+  if (!(opts && opts.force) && d.getUTCHours() < WATCHMAKER_AFTER_UTC_HOUR) return { skipped: "before " + WATCHMAKER_AFTER_UTC_HOUR + ":00Z" };
+  const A = env.AUDIT;
+  await A.prepare("CREATE TABLE IF NOT EXISTS watchmaker_runs (day TEXT PRIMARY KEY, index_value INTEGER, counted TEXT, json TEXT, created_at TEXT DEFAULT (datetime('now')))").run();
+  const day = d.toISOString().slice(0, 10);
+  const have = (await d1all(A, "SELECT day FROM watchmaker_runs WHERE day = ?", [day]))[0];
+  if (have && !(opts && opts.force)) return { skipped: "already measured " + day };
+  const m = await watchmakerMeasure(env, now);
+  await A.prepare("INSERT OR REPLACE INTO watchmaker_runs (day, index_value, counted, json) VALUES (?1, ?2, ?3, ?4)").bind(day, m.index, m.counted.join(","), JSON.stringify(m)).run();
+  await A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES ('watchmaker_index', 'system', 'leading', 'count of recurring operations that need a person or a session, or whose Cloudflare runner is stalled or unmeasured (WATCHMAKER-INDEX-1)', 'https://fleet.qnfo.org/api/watchmaker (qnfo-fleet-dashboard, watchmaker_runs)', '0', 'qnfo-fleet-dashboard', 'fleet', 'daily', 'MEASURED')").run();
+  await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'watchmaker_index'").bind(String(m.index), new Date(now).toISOString()).run();
+  return m;
+}
 // NO-CLAUDE-RUNTIME-DEPENDENCY-1: the owner's data and workflow live on Cloudflare. A dashboard item never links to
 // claude.ai or anthropic.com, and only https links are rendered.
 function safeLink(u) {
@@ -4026,7 +4143,7 @@ function humanFragment(v) {
     o.push("</ul>");
   }
   o.push('<div class="meta" style="margin-top:8px">Red flags, drift, queues and retries are worked by the issue loop and qnfo-fleet-control and are not your job unless they appear above.' + (s.drift ? " Drift: " + e(s.drift) + "." : "") + "</div></details>");
-  o.push('<footer>v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/decision">decision JSON</a></footer>');
+  o.push('<footer>v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/decision">decision JSON</a> &middot; <a href="/api/watchmaker">watchmaker index</a></footer>');
   return o.join("");
 }
 function humanHtml(v) {

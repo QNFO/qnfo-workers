@@ -84,3 +84,14 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 - `/owner/edit/<key>` (OWNER-EDIT-1): the owner edits an owner document; optimistic saves, each replaced version kept as `<key>--v<ts>`, archives read-only. Opens with the owner cookie (OWNER_TOKEN) plus a same-origin check, or LOOP_TOKEN typed into the form.
 - Owner documents live in the private D1 `qnfo-identity` (binding `IDENTITY`, bound only to this worker; IDENTITY-STORE-1). On first use the worker copies every `qnfo-audit.owner_docs` row across, byte-checked, and records it in `store_meta` (an interrupted or failed copy records nothing and is redone); without the binding it falls back to `qnfo-audit`. The move copies and never deletes: the shared copy stays until the owner removes it, is no longer read, and any later write to it is synced across by the */15 cron and on each /owner visit (newer `updated_at` becomes current, the other version is kept as a `--v<stamp>` history row; `store_meta` `audit_seen`, `last_sync`). Owner documents never render links to claude.ai or anthropic.com.
 - IDENTITY-WEEKLY-1: the weekly identity review runs from the `*/15` cron on Mondays after 06:00Z (once, throttled on `cloud_ops_events` `identity-weekly-<day>`), writes a `portfolio_runs` row and, when something is urgent, one owner queue card.
+
+## Watchmaker index (WATCHMAKER-INDEX-1)
+The fleet's own daily count of recurring operations that still need a person or a Claude session (roadmap
+RM-WATCHMAKER-INDEX-1, agent_issues 1726; target 0). `WATCHMAKER_OPS` in worker.js lists every recurring operation with its
+runner and how its last run is read from D1. An operation counts when a person or a session runs it, when its Cloudflare
+runner has been silent for more than twice its cadence, or when its freshness cannot be read (unproven is not unattended).
+Approvals the owner keeps by policy (each LinkedIn draft, objective ratification) are listed and not counted; the retired
+claude.ai Routines are listed with what replaced them. Once per UTC day after 07:00Z on the */15 cron: one `watchmaker_runs`
+row, `metric_registry.watchmaker_index` (daily, target 0; the charter's live block reads it), and `GET /api/watchmaker`
+(number only on a locked page). A new recurring operation is added to `WATCHMAKER_OPS` in the same PR that creates it.
+Offline suite: `watchmaker.test.mjs` (deploy-gate).
