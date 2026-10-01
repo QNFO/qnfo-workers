@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-01 12:28:46",
+  "audited_at": "2026-10-01 13:01:11",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-cloud-ops",
-        "qnfo-fleet-dashboard"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -470,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.0-identity-weekly",
+        "version": "1.16.2-register-relabel",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -495,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.70-portfolio-loop",
+        "version": "0.4.74-loop-watch",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -570,7 +562,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.38-reasoning-effort-low",
+        "version": "0.9.39-revise-wall",
         "worker": "qnfo-research-exec"
       },
       {
@@ -580,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.19-post-id-utm",
+        "version": "0.7.20-linkedin-draft",
         "worker": "qnfo-social"
       },
       {
@@ -1024,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.0-identity-weekly",
+      "before": "1.16.2-register-relabel",
       "http": 200,
-      "live": "1.16.0-identity-weekly",
+      "live": "1.16.2-register-relabel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1152,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.70-portfolio-loop",
+      "before": "0.4.74-loop-watch",
       "http": 200,
-      "live": "0.4.70-portfolio-loop",
+      "live": "0.4.74-loop-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1368,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.38-reasoning-effort-low",
+      "before": "0.9.39-revise-wall",
       "http": 200,
-      "live": "0.9.38-reasoning-effort-low",
+      "live": "0.9.39-revise-wall",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1424,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.19-post-id-utm",
+      "before": "0.7.20-linkedin-draft",
       "http": 200,
-      "live": "0.7.19-post-id-utm",
+      "live": "0.7.20-linkedin-draft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

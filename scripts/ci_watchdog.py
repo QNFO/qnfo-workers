@@ -318,6 +318,61 @@ def file_or_refresh(klass: str, subject: str, body: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# SUPERSEDED-FAILURE-SKIP-1 (2026-10-01, issues #332/#333)
+# --------------------------------------------------------------------------
+# A failed run whose workflow has a NEWER successful run on the same branch is
+# already fixed. Filing it again re-opens exactly what ci_watchdog_resolve.py
+# just closed on that same green evidence, and the two scripts then ping-pong on
+# every push to main: observed live, #332 (run 36860029746, version-bump-guard on
+# claude/ecstatic-davinci-dnfa45) was closed 12:13:03Z on green run 36860215928
+# and #333 was filed for the SAME failed run at 12:13:14Z. Two cheap rules stop
+# it: (1) skip a failure superseded by a later green run of the same workflow on
+# the same branch; (2) skip a run id that a CLOSED ci-watchdog issue inside the
+# window already cites (covers failures the resolver closed as "retired").
+def superseded_by_green(run: dict, pool: list[dict]) -> dict | None:
+    """Newest-first `pool` is the run list already in hand; pure, no API call."""
+    key = run.get("workflow_id") or run.get("name")
+    branch = run.get("head_branch")
+    created = run.get("created_at") or ""
+    best = None
+    for o in pool:
+        if o is run or o.get("id") == run.get("id"):
+            continue
+        if (o.get("workflow_id") or o.get("name")) != key:
+            continue
+        if o.get("head_branch") != branch or o.get("conclusion") != "success":
+            continue
+        if (o.get("created_at") or "") > created and (best is None or (o.get("created_at") or "") > (best.get("created_at") or "")):
+            best = o
+    return best
+
+
+def branch_runs(workflow_id, branch: str, per_page: int = 10) -> list[dict]:
+    """The newest runs of one workflow on one branch (one call; only when the 60-run pool had no verdict)."""
+    if not workflow_id or not branch:
+        return []
+    import urllib.parse as _up
+    st, d = gh(f"/repos/{REPO}/actions/workflows/{workflow_id}/runs?branch={_up.quote(branch, safe='')}&per_page={per_page}")
+    return d.get("workflow_runs", []) if st == 200 and isinstance(d, dict) else []
+
+
+def run_ids_in_bodies(issues: list[dict]) -> dict[int, int]:
+    """run id -> issue number for every `run=<id>` a finding body cites. Pure."""
+    import re as _re
+    out: dict[int, int] = {}
+    for it in issues or []:
+        for m in _re.finditer(r"\brun=(\d+)\b", str(it.get("body") or "")):
+            out.setdefault(int(m.group(1)), int(it.get("number") or 0))
+    return out
+
+
+def closed_finding_runs(since_iso: str) -> dict[int, int]:
+    """Run ids already closed by a ci-watchdog finding updated since `since_iso`."""
+    st, d = gh(f"/repos/{REPO}/issues?state=closed&labels={LABEL}&since={since_iso}&per_page=100")
+    return run_ids_in_bodies(d if st == 200 and isinstance(d, list) else [])
+
+
+# --------------------------------------------------------------------------
 # MAIN
 # --------------------------------------------------------------------------
 def main() -> int:
@@ -395,14 +450,27 @@ def main() -> int:
     MAX_LOG_FETCHES = int(os.environ.get("CI_WD_MAX_LOG_FETCHES", "3"))
     cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=WINDOW_HOURS)).isoformat().replace("+00:00", "Z")
     log_fetches = 0
+    superseded: list[tuple[str, str]] = []
     if WINDOW_HOURS > 0:
-        for r in runs(per_page=60):
+        pool = runs(per_page=60)
+        closed_runs = closed_finding_runs(cutoff)
+        for r in pool:
             if r.get("conclusion") != "failure":
                 continue
             if (r.get("created_at") or "") < cutoff:
                 continue
             name = r.get("name") or ""
             if name in SELF_WORKFLOWS:
+                continue
+            # SUPERSEDED-FAILURE-SKIP-1: a later green run on the same branch, or a finding the
+            # resolver already closed for this run id, means there is nothing left to file.
+            _ev = f"{r['created_at'][:19]} {name} [{r.get('event')}/{r.get('head_branch')}] run={r['id']}"
+            if r.get("id") in closed_runs:
+                superseded.append((f"- `superseded` **{name}** — {_ev}", f"already closed as #{closed_runs[r['id']]}"))
+                continue
+            g = superseded_by_green(r, pool) or superseded_by_green(r, branch_runs(r.get("workflow_id"), r.get("head_branch") or ""))
+            if g:
+                superseded.append((f"- `superseded` **{name}** — {_ev}", f"superseded by green run {g.get('id')} ({(g.get('created_at') or '')[:19]})"))
                 continue
             path = (r.get("path") or "")
             st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={r.get('head_branch') or 'main'}")
@@ -473,11 +541,14 @@ def main() -> int:
         print("TRACK " + line + "  -> " + how)
     for line, how in unactionable:
         print("OPEN  " + line + "  -> " + how)
+    for line, how in superseded:
+        print("SKIP  " + line + "  -> " + how)
     summary = {"repo": REPO, "when": __import__("datetime").datetime.utcnow().isoformat() + "Z",
                "inventory": inventory, "findings": findings,
                "acted": [a[0] for a in acted],
                "tracked": [t[0] for t in tracked],
-               "unactionable": [u[0] for u in unactionable]}
+               "unactionable": [u[0] for u in unactionable],
+               "superseded": [s[0] + "  -> " + s[1] for s in superseded]}
     with open("ci-watchdog-summary.json", "w", encoding="utf-8") as fh:
         json.dump(summary, fh, indent=2)
     print("\nwrote ci-watchdog-summary.json")
