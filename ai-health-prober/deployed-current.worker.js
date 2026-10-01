@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.7-probe-cost-tier";
+var VERSION = "2.3.8-probe-1tok";
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
 // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
 // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -39,7 +39,7 @@ function canonicalId(m) {
 }
 __name(canonicalId, "canonicalId");
 async function probeOne(env, m) {
-  const bodies = m.kind === "embed" ? [{ text: ["ping"] }] : [{ prompt: "ping", max_tokens: 8 }, { messages: [{ role: "user", content: "ping" }], max_tokens: 8 }];
+  const bodies = m.kind === "embed" ? [{ text: ["ping"] }] : [{ prompt: "ping", max_tokens: 1 }, { messages: [{ role: "user", content: "ping" }], max_tokens: 1 }];
   let lastErr = null;
   for (let i = 0; i < bodies.length; i++) {
     try {

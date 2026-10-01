@@ -69,7 +69,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: assert the containers block is present in wrangler.toml
         run: |
@@ -113,9 +113,39 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: "false"
 
+      # PILOT-DEPLOY-FAIL-OPEN-1 (2026-10-01): run 36793748019 (merge 5593747) reported SUCCESS while both wrangler
+      # attempts failed with [container_class_not_durable_object] / [provisioned_class_missing_from_config] (code
+      # 100402): wrangler 4.86 drops the top-level `exports` table ("Unexpected fields found in top-level field"), so
+      # the upload never declares ShellContainer, and continue-on-error hid it - live stayed 1.0.7 while main carried
+      # 1.0.8. Fall back to scripts/restore_container_config.py (the /content path that sends `exports` and explicit
+      # bindings and is proven to return 200), then gate the job on /health reporting the repo VERSION.
+      - name: fallback - deploy via /content metadata (sends exports + explicit bindings)
+        id: restore
+        if: ${{ github.event.inputs.verify_only != 'true' && steps.wrangler.outcome != 'success' && steps.nomig.outcome != 'success' }}
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/restore_container_config.py 2>&1 | tee /tmp/restore.log
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER: qnfo-containers-pilot
+
       - name: wait for propagation
         if: ${{ github.event.inputs.verify_only != 'true' }}
         run: sleep 20
+
+      - name: gate - live VERSION must equal the repo VERSION (fail closed)
+        if: ${{ github.event.inputs.verify_only != 'true' }}
+        run: |
+          set -uo pipefail
+          want="$(grep -m1 -oE '^var VERSION = "[^"]+"' qnfo-containers-pilot/worker.js | sed -E 's/.*"([^"]+)"/\1/')"
+          got="$(curl -s --max-time 30 https://qnfo-containers-pilot.q08.workers.dev/health | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)"
+          echo "repo VERSION=$want live VERSION=$got (wrangler=${{ steps.wrangler.outcome }} nomig=${{ steps.nomig.outcome }} restore=${{ steps.restore.outcome }})"
+          if [ -z "$want" ] || [ "$want" != "$got" ]; then
+            echo "::error::qnfo-containers-pilot live VERSION '$got' != repo '$want' - no deploy path succeeded"
+            exit 1
+          fi
 
       - name: verify container config is live (closes #1485)
         id: verify

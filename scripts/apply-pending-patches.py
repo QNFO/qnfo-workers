@@ -222,6 +222,33 @@ RETIRED_APPLIERS = [
             "it now aborts with 'anchor drift ... expected (1,1,1,1), got (1,0,0,0)'"
         ),
     },
+    # APPLIER-RETIRE-3 (2026-10-01, issue 1673): each entry below was verified against the tree by
+    # reading the applier's own MARK/TARGET and finding its outcome in that target file.
+    {
+        "script": "panel6-mediated-count-patch.py",
+        "evidence": ("qnfo-fleet-dashboard/worker.js", "PANEL6-MEDIATED-COUNT-1"),
+        "reason": "landed: the applier's own MARK is present in its TARGET; it fails only on a moved anchor",
+    },
+    {
+        "script": "run-gate-internal-patch.py",
+        "evidence": ("qnfo-backlog-exec/worker.js", "INTERNAL-SERVICE-BINDING-AUTH-1"),
+        "reason": "landed: marker present in qnfo-backlog-exec; it pins pre-patch VERSION 1.6.4-run-gate",
+    },
+    {
+        "script": "raw-put-schedules-patch.py",
+        "evidence": ("scripts/raw_put.py", "SCHEDULES-API-SHAPE-1"),
+        "reason": "superseded: raw_put.py applies schedules (schedules_get/put/apply) under SCHEDULES-API-SHAPE-1",
+    },
+    {
+        "script": "patch-schedules-body-1498.py",
+        "evidence": ("scripts/raw_put.py", "SCHEDULES-API-SHAPE-1"),
+        "reason": "superseded: the 1498 PUT body shape fix landed in raw_put.py as SCHEDULES-API-SHAPE-1",
+    },
+    {
+        "script": "container-start-race-patch.py",
+        "evidence": ("qnfo-containers-pilot/worker.js", "this._starting = this._doStart()"),
+        "reason": "superseded: ensureStarted() carries the in-flight start promise (the START-RACE-1 fix) without its marker",
+    },
 ]
 
 
