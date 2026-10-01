@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.44-gw-props-auth";
+var VERSION = "0.9.45-refs-render";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2245,12 +2245,46 @@ __name2(stageRevise, "stageRevise");
 __name22(stageRevise, "stageRevise");
 __name222(stageRevise, "stageRevise");
 __name2222(stageRevise, "stageRevise");
+// REFS-RENDER-1 (2026-10-01): the References section was left to the writer and the revise model, and the gate accepted
+// only an unnumbered or "7." heading, so a paper whose list sat under "## 8. References", or used "1." instead of "[1]",
+// failed gate-refs/gate-refcount and went terminal after one revision (row 5099abb8, 15:21Z). The list is mechanical:
+// the grounding bibliography is numbered and the body cites [n]. Render it from the entries the body actually cites,
+// in bibliography numbering; anything not in the bibliography is dropped (the writers may cite only these).
+var REFS_HEAD_RE = /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?(?:References|Bibliography)\b.*$/im;
+function renderReferences(paper, grounding) {
+  const bibTxt = String(grounding || "").split("## Bibliography")[1] || "";
+  const entries = {};
+  for (const line of bibTxt.split("\n")) {
+    const m = line.match(/^\[(\d+)\]\s+(.+)$/);
+    if (m) entries[m[1]] = m[2].trim();
+  }
+  const body = String(paper).split(REFS_HEAD_RE)[0].replace(/\s+$/, "");
+  const cited = new Set();
+  const re = /\[(\d+(?:\s*[,\u2013-]\s*\d+)*)\]/g;
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    for (const part of m[1].split(",")) {
+      const rg = part.trim().split(/\s*[\u2013-]\s*/);
+      const a = parseInt(rg[0], 10), b = rg.length > 1 ? parseInt(rg[1], 10) : a;
+      if (Number.isFinite(a) && Number.isFinite(b) && b >= a && b - a < 50) for (let k = a; k <= b; k++) cited.add(String(k));
+    }
+  }
+  const nums = Array.from(cited).filter(function(n) { return entries[n]; }).sort(function(x, y) { return x - y; });
+  if (!nums.length) return { paper: String(paper), cited: 0 };
+  const lines = nums.map(function(n) {
+    const e = entries[n], bar = e.indexOf(" | ");
+    const id = bar > 0 ? e.slice(0, bar).trim() : "", title = bar > 0 ? e.slice(bar + 3).trim() : e;
+    const link = /^arXiv:/i.test(id) ? " https://arxiv.org/abs/" + id.slice(6) : /^doi:/i.test(id) ? " https://doi.org/" + id.slice(4) : "";
+    return "[" + n + "] " + title + (id ? ". " + id + "." : "") + link;
+  });
+  return { paper: body + "\n\n## References\n\n" + lines.join("\n") + "\n", cited: nums.length };
+}
 function finalGates(paper) {
   const fixes = [];
   if (String(paper).length < MIN_PAPER_CHARS) fixes.push({ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length " + String(paper).length + " < " + MIN_PAPER_CHARS, fix: "Expand with literature review, explicit derivations, and discussion to 15000+ characters." });
-  if (!/##\s*(7\.\s*)?References/i.test(paper)) fixes.push({ id: "gate-refs", severity: "HARD", claim: "no References section", reason: "missing References heading", fix: "Add a References section listing only bibliography entries." });
+  if (!REFS_HEAD_RE.test(paper)) fixes.push({ id: "gate-refs", severity: "HARD", claim: "no References section", reason: "missing References heading", fix: "Add a References section listing only bibliography entries." });
   if (/\[to verify\]/i.test(paper)) fixes.push({ id: "gate-toverify", severity: "HARD", claim: "[to verify] markers present", reason: "unverified quantitative claim markers in body", fix: "Replace every marked claim with a computed value or move it to Discussion as an explicitly-labeled hypothesis." });
-  const refsPart = String(paper).split(/##\s*(7\.\s*)?References/i)[1] || "";
+  const refsPart = String(paper).split(REFS_HEAD_RE)[1] || "";
   const refCount = (refsPart.match(/\[\d+\]/g) || []).length;
   if (refCount < MIN_REFS) fixes.push({ id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references " + refCount + " < " + MIN_REFS, fix: "Ground claims in at least 8 cited works from the bibliography with substantive context." });
   if (/(Let me|The user|I'll|I need to|Okay,|Alright,|Here's what)/i.test(String(paper).slice(0, 500))) fixes.push({ id: "gate-preamble", severity: "HARD", claim: "reasoning preamble", reason: "meta text at body start", fix: "Remove all thinking/planning text; output only the paper." });
@@ -2264,7 +2298,16 @@ __name22(finalGates, "finalGates");
 __name222(finalGates, "finalGates");
 __name2222(finalGates, "finalGates");
 async function stageVerify(env, row) {
-  const paper = await r2Get(env, String(row.id) + "/reconciled.md");
+  let paper = await r2Get(env, String(row.id) + "/reconciled.md");
+  try {
+    const _rr = renderReferences(paper, await r2Get(env, String(row.id) + "/grounding.md"));
+    if (_rr.cited && _rr.paper !== paper) {
+      paper = _rr.paper;
+      await r2Put(env, String(row.id) + "/reconciled.md", paper);
+      await logEvent(env, "refs-render", "row=" + row.id + " cited=" + _rr.cited, "ok");
+    }
+  } catch (eRR) {
+  }
   let ctx = {};
   try {
     ctx = JSON.parse(row.context || "{}");
@@ -2310,9 +2353,19 @@ async function stageVerify(env, row) {
   await r2Put(env, String(row.id) + "/verification.py", code);
   let out = "";
   try {
-    const r = await fetch(PILOT + "/exec", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.PILOT_TOKEN }, body: JSON.stringify({ code }) });
-    const j = await r.json();
-    out = String(j && (j.stdout || j.output || j.error) || "no output").slice(0, 2e4);
+    // PILOT-PROPS-CALLER-1 (2026-10-01): the public pilot hostname answers 403 to every command path since
+    // PILOT-PUBLIC-EXEC-CLOSED-1, so the verification script never ran. Call the pilot through its service binding
+    // (props-authenticated); send a bearer only if this worker holds one. The pilot answers
+    // {ok, result: {exitCode, stdout, stderr}}; reading only j.stdout recorded "no output" for every run.
+    const _ph = { "Content-Type": "application/json" };
+    if (env.PILOT_TOKEN) _ph["Authorization"] = "Bearer " + env.PILOT_TOKEN;
+    const _pinit = { method: "POST", headers: _ph, body: JSON.stringify({ code }) };
+    const r = env.CONTAINERS_PILOT && typeof env.CONTAINERS_PILOT.fetch === "function" ? await env.CONTAINERS_PILOT.fetch("https://containers-pilot.internal/exec", _pinit) : await fetch(PILOT + "/exec", _pinit);
+    const j = await r.json().catch(function() { return {}; });
+    const res = j && j.result && typeof j.result === "object" ? j.result : null;
+    out = res ? String(res.stdout || "") + (res.stderr ? "\n[stderr]\n" + String(res.stderr) : "") + "\n[exit " + res.exitCode + "]" : String(j && (j.stdout || j.output || j.error) || "no output (HTTP " + r.status + ")");
+    out = out.slice(0, 2e4);
+    if (!r.ok) await logEvent(env, "verify-exec-error", "pilot HTTP " + r.status + ": " + String(j && j.error || "").slice(0, 200), "warn");
   } catch (e) {
     out = "EXEC ERROR: " + String(e && e.message || e).slice(0, 200);
   }
