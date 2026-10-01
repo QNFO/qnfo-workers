@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-01 11:47:27",
+  "audited_at": "2026-10-01 11:52:31",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-gateway"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -497,7 +504,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.18-org-label",
+        "version": "3.7.20-scholar-pdf-ua",
         "worker": "qnfo-gateway"
       },
       {
@@ -1176,9 +1183,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.18-org-label",
+      "before": "3.7.20-scholar-pdf-ua",
       "http": 200,
-      "live": "3.7.18-org-label",
+      "live": "3.7.20-scholar-pdf-ua",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
