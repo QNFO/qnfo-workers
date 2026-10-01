@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.18-predictions-robust";
+var VERSION = "4.1.19-capability-contract";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -2539,7 +2539,7 @@ var api_default = {
       }
     }
     if (path === "/health") {
-      return json({ ok: true, worker: "personal-api", version: VERSION });
+      return json({ ok: true, worker: "personal-api", version: VERSION, capabilities: ["personal-twin-chat", "journal", "habits", "plan", "daily-brief", "location", "media", "web-search", "embeddings"], limitations: ["every /v1 route needs the personal API key (bearer)", "the daily brief is built on the 05:05 cron and cached in D1; /v1/plan is uncached (one or two model calls)", "calendar reads and writes go through calendar-api with its own CAL_TOKEN"] });
     }
     if (path === "/" && request.method === "GET") {
       return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "your personal API key (Bearer)").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });

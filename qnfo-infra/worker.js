@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.2.9";
+var VERSION = "1.2.10-capability-contract";
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -425,7 +425,9 @@ __name(renderContext, "renderContext");
 __name2(renderContext, "renderContext");
 var worker_default = {
   async scheduled(event, env) {
-    if (event.cron === "30 6 * * *" || event.cron === "6 18 * * *" || event.cron === "0 * * * *") {
+    // INFRA-CRON-MATCH-1 (2026-10-01): wrangler declares "0 18 * * *" but this matched only "6 18 * * *", so the evening
+    // refresh never ran. Both spellings are accepted.
+    if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "6 18 * * *" || event.cron === "0 * * * *") {
       const s = await collectState(env);
       await store(env, "snapshot", s);
       const a = await collectAnalytics(env);
@@ -441,7 +443,7 @@ var worker_default = {
     const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" };
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (path === "/health" && method === "GET") {
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics"], limitations: ["every route except /health needs a bearer token", "state refreshes on the 06:30 and 18:00 crons"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });

@@ -3,7 +3,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.9-probe-6h";
+var VERSION = "2.3.10-capability-self-report";
+var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
+var LIMS = ["cron-only: no public route; runs every 20 minutes", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
 // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
 // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -216,10 +218,19 @@ async function checkHealthCoverage(env, now) {
   return { signal: "amh_coverage", total, stale, neverProbed, threshold_hours: THRESHOLD_H, status };
 }
 __name(checkHealthCoverage, "checkHealthCoverage");
+// CAPABILITY-SELF-REPORT-1 (2026-10-01, #1735): this worker has no public route (CRON_ONLY, #1402), so the deploy-guard
+// capability snapshot cannot probe its /health. Each cron run upserts its own capability_audit_snapshot row instead.
+async function capSelfReport(db, name) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts").bind(name, VERSION, JSON.stringify(CAPS), JSON.stringify(LIMS), new Date().toISOString()).run();
+  } catch (e) {
+  }
+}
 var worker_default = {
   async fetch(request, env, ctx) {
     const u = new URL(request.url);
-    if (u.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, models: MODELS.length, signals: SIGNALS.length });
+    if (u.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: CAPS, limitations: LIMS, models: MODELS.length, signals: SIGNALS.length });
     if (u.pathname === "/run") {
       const p = await runProbe(env, u.searchParams.get("force") === "1");
       const f = await checkFreshness(env);
@@ -244,6 +255,7 @@ var worker_default = {
       } catch (e) {
         ok = 0;
       }
+      await capSelfReport(env.QNFO_AUDIT, WORKER);
       /* CRON-ONLY-HEARTBEAT-1 (2026-09-30): this worker has no workers.dev route (CRON_ONLY class, #1402), so no
          HTTP census can ever see it; the fleet read it as permanently down/unknown. Each cron run now upserts
          fleet_heartbeat, which qnfo-fleet-control /state reads as this worker's liveness. */
