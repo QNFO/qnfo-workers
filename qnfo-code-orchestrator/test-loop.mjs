@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.4 + task-loop + the ladder + js_verify off by default", h.version === "0.2.4" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.2.5 + task-loop + the ladder + js_verify off by default", h.version === "0.2.5" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -337,6 +337,12 @@ function fakeLoader(spinMs) {
   const row = await env.AUDIT_DB.prepare("SELECT status, ctx FROM code_tasks WHERE id=?").bind(enq.body.id).first();
   const prop = row && row.ctx ? JSON.parse(row.ctx).proposal : null;
   check("newline preserved: proposal ends with the base file's newline", row.status === "ready_to_publish" && prop === "hello\nworld\nmore\n", { st: row.status, prop });
+}
+// ---- CLAIM-FAIRNESS-1: the shipped claim query puts fewest failed attempts first, so a failing task cannot starve a fresh one ----
+{
+  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const m = /async function claim\(env\) \{[\s\S]*?\n\}/.exec(src);
+  check("claim order (source check): ORDER BY attempts ASC, created_at ASC in claim()", !!m && /ORDER BY attempts ASC, created_at ASC/.test(m[0]), m && m[0].slice(0, 300));
 }
 // ---- ISSUE-INTAKE-1: an opted-in open issue becomes exactly one queued task ----
 {

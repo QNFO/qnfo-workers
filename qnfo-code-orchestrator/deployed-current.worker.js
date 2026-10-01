@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.2.4";
+var VERSION = "0.2.5";
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -187,12 +187,13 @@ async function enqueue(env, b) {
   await audit(env, "code-task.enqueue", id + " " + b.repo + "/" + b.path, { id: id }, "ok");
   return { ok: true, status: 202, id: id };
 }
-// FIFO claim with a lease: a crashed isolate's lease simply expires and the task is picked up again.
+// CLAIM-FAIRNESS-1: fewest failed attempts first, then oldest, so a task that keeps failing verification cannot starve fresh ones.
+// Claim with a lease: a crashed isolate's lease simply expires and the task is picked up again.
 async function claim(env) {
   const now = iso();
   const until = new Date(Date.now() + LEASE_MS).toISOString();
   return await env.AUDIT_DB.prepare(
-    "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT id FROM code_tasks WHERE status='queued' AND (lease_until IS NULL OR lease_until < ?) ORDER BY created_at ASC LIMIT 1) RETURNING *"
+    "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT id FROM code_tasks WHERE status='queued' AND (lease_until IS NULL OR lease_until < ?) ORDER BY attempts ASC, created_at ASC LIMIT 1) RETURNING *"
   ).bind(until, now, now).first();
 }
 function extractFile(text) {
