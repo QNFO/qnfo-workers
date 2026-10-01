@@ -1,0 +1,9 @@
+qnfo-register-guard is FOLDED (2026-10-01, REGISTER-RELABEL-1). Do not redeploy this directory.
+
+The directory was added by an automated remediation-bridge commit ([skip ci]) and the worker was never created in the
+account (fleet-autoaudit LIVE_ERR, workers.dev error 1042). Its only new behaviour, relabeling open task_dod_register rows
+owned by 'scheduled-runner'/'fleet' that cite no executor and no run trigger to owner='agent', now runs inside
+qnfo-cloud-ops's existing daily overdue-guard job (05:10Z), which already detected the same rows with the same predicate.
+Its overdue count was already reported there. Folding instead of adding a worker follows the charter's net-zero rule.
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.

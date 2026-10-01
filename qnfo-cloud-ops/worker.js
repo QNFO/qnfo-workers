@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.16.1-sent-as-you"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, IDENTITY-WEEKLY-1, SENT-AS-YOU-DIGEST-1 */
+var VERSION = "1.16.2-register-relabel"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, IDENTITY-WEEKLY-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2282,8 +2282,23 @@ async function jobGtdOverdueGuard(env) {
   } catch (e) {
     return { status: "error", error: String(e).slice(0, 300) };
   }
-  const alert = out.overdue.length > 0 || out.no_executor.length > 0;
-  const summary = "register guard: overdue=" + out.overdue.length + " scheduled_no_executor=" + out.no_executor.length + " agent_uncited=" + out.agent_uncited.length;
+  // REGISTER-RELABEL-1 (folded from qnfo-register-guard 1.0.0, never deployed): a scheduled-runner/fleet row that cites
+  // no executor and no run trigger has no scheduled executor, so it is relabeled owner='agent' (the interactive agent
+  // executes it) instead of being re-reported every day. The row stays open; only the false owner claim is corrected.
+  let relabeled = 0;
+  if (out.no_executor.length) {
+    const tag = " [relabeled agent " + today + ": no executor+run citation]";
+    try {
+      const stmts = out.no_executor.slice(0, 100).map(function(x) {
+        return env.AUDIT.prepare("UPDATE task_dod_register SET owner='agent', evidence_pointer=COALESCE(evidence_pointer,'') || ?1, updated_at=datetime('now') WHERE id=?2 AND status='open' AND owner IN ('scheduled-runner','fleet')").bind(tag, x.id);
+      });
+      const res = await env.AUDIT.batch(stmts);
+      for (const r of res || []) relabeled += r && r.meta && r.meta.changes || 0;
+    } catch (e) {
+    }
+  }
+  const alert = out.overdue.length > 0 || out.no_executor.length > relabeled;
+  const summary = "register guard: overdue=" + out.overdue.length + " scheduled_no_executor=" + out.no_executor.length + " relabeled_agent=" + relabeled + " agent_uncited=" + out.agent_uncited.length;
   let mail = null;
   if (alert) {
     const text = "QNFO task_dod_register guard " + today + NL + "OVERDUE (" + out.overdue.length + "): " + out.overdue.map(function(x) {
@@ -2294,7 +2309,7 @@ async function jobGtdOverdueGuard(env) {
     mail = await sendDigest(env, "QNFO register guard: " + out.overdue.length + " overdue / " + out.no_executor.length + " no-executor", text);
   }
   await recordEvent(env, "gtd-overdue-guard", "gog-" + Date.now().toString(36), summary + " " + JSON.stringify(out).slice(0, 1200), { job: "overdue-guard", status: alert ? "alerted" : "clean", mail: mail || {} });
-  return { status: "ok", today, overdue: out.overdue, no_executor: out.no_executor, agent_uncited: out.agent_uncited, alerted: alert, mail };
+  return { status: "ok", today, overdue: out.overdue, no_executor: out.no_executor, relabeled, agent_uncited: out.agent_uncited, alerted: alert, mail };
 }
 __name(jobGtdOverdueGuard, "jobGtdOverdueGuard");
 // IDENTITY-WEEKLY-1 (2026-10-01, owner directive CLOUDFLARE-ONLY-HOST-1: "all data, dashboards and UI hosted by
