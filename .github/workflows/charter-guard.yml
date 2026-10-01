@@ -1,0 +1,89 @@
+name: charter-guard
+
+# QUNIVERSE-CHARTER-1 (2026-10-01).
+#
+# docs/QUNIVERSE-CHARTER.md is the system's charter. Its generated half is written daily by
+# qnfo-fleet-control (CHARTER-LOOP-1) between two markers; its hand-written half carries the
+# identity, objectives, SWOT, MVP, blue-sky footprint, roadmap and decision rules. This gate
+# keeps the two halves and the code that grades them in agreement:
+#   * charter.test.mjs replays the live-register fixture through the pure half of the loop
+#     (target parsing, pillar health, MVP status, SWOT, horizons, render, splice);
+#   * scripts/charter-guard.py checks the document shape, the pillar parity between the
+#     document and CHARTER_PILLARS in the worker, and that every NEW worker directory names
+#     the charter pillar it serves (a worker that cannot is parked, not built).
+# No cron (SCHEDULE-EVENT-NEVER-FIRES-1). No unquoted colon in a step name (WORKFLOW-YAML-LINT-1).
+# Writes no ci-status artifact, so no commit-back step is needed (ARTIFACT-STAGING-1).
+
+on:
+  pull_request:
+    paths:
+      - 'docs/QUNIVERSE-CHARTER.md'
+      - 'qnfo-fleet-control/**'
+      - 'scripts/charter-guard.py'
+      - '*/wrangler.toml'
+      - '.github/workflows/charter-guard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/QUNIVERSE-CHARTER.md'
+      - 'qnfo-fleet-control/**'
+      - 'scripts/charter-guard.py'
+      - '*/wrangler.toml'
+      - '.github/workflows/charter-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: charter-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  charter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax check the governance kernel
+        run: node --check qnfo-fleet-control/worker.js
+
+      - name: Replay the charter loop offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/charter.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::charter loop suite reported failures"; exit 1; }
+
+      - name: Resolve the diff range
+        id: range
+        run: |
+          set -euo pipefail
+          HEAD_SHA='${{ github.sha }}'
+          BASE_REF='${{ github.base_ref }}'
+          BASE_REF="${BASE_REF:-main}"
+          BASE=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA" 2>/dev/null || true)
+          if [ -z "$BASE" ] || [ "$BASE" = "$(git rev-parse "$HEAD_SHA")" ]; then
+            BASE=$(git rev-parse "$HEAD_SHA~1" 2>/dev/null || git rev-parse "$HEAD_SHA")
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "range $BASE..$HEAD_SHA"
+
+      - name: Charter shape, pillar parity and new-worker pillar declarations
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/charter-guard.py
+          python3 scripts/charter-guard.py "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"

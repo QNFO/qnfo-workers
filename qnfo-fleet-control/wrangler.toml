@@ -5,6 +5,7 @@
 # wipes. The operative deploy path remains scripts/raw_put.py (binding-preserving).
 
 name = "qnfo-fleet-control"
+# charter-pillar: autonomy   (QUNIVERSE-CHARTER-1: the governance kernel; see docs/QUNIVERSE-CHARTER.md)
 main = "worker.js"
 compatibility_date = "2026-09-08"
 # FLEET-PROBE-1042-1 (2026-09-30): without global_fetch_strictly_public a subrequest from this worker
