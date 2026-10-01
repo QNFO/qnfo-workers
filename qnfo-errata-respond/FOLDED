@@ -1,0 +1,5 @@
+qnfo-errata-respond is FOLDED (2026-10-01, FOOTPRINT-MARKERS-1, charter decision rule 2). Do not redeploy this directory.
+
+Measured 2026-10-01T14:50Z: the Cloudflare account runs 44 workers (workers list) and this name is not one of them. Its duties live in errata-hub: its code is embedded as errata-hub's respond member (RESPOND_VERSION), one of the three folded errata members.
+
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. This source is kept for reference only.

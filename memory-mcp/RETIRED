@@ -1,0 +1,5 @@
+qnfo-memory-mcp-legacy-dup is RETIRED (2026-10-01, FOOTPRINT-MARKERS-1, charter decision rule 2): legacy duplicate directory (wrangler name qnfo-memory-mcp-legacy-dup, issue 1384); the live qnfo-memory-mcp deploys from qnfo-memory-mcp/.
+
+Measured 2026-10-01T14:50Z: the Cloudflare account runs 44 workers (workers list) and this name is not one of them. Any crons declared in its wrangler.toml were inert (RM-GATE-C5). Bringing it back is a charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy through.
+
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. This source is kept for reference only.
