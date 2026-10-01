@@ -1,18 +1,10 @@
 {
-  "audited_at": "2026-10-01 06:49:27",
+  "audited_at": "2026-10-01 06:53:32",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-email/deployed-current.worker.js",
-        "dir": "qnfo-email",
-        "live": "2.1.9-personal-verified",
-        "repo": "2.2.0-handoff-notify",
-        "worker": "qnfo-email"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -35,12 +27,6 @@
     ],
     "cron_only_count": 2,
     "drift": [
-      {
-        "dir": "qnfo-email",
-        "live": "2.1.9-personal-verified",
-        "repo": "2.2.0-handoff-notify",
-        "worker": "qnfo-email"
-      },
       {
         "dir": "qnfo-fleet-control",
         "live": "0.4.51-unified-ai-spend",
@@ -420,7 +406,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -506,6 +492,11 @@
         "dir": "qnfo-deploy-guard",
         "version": "1.3.17-settings-ledger-autoresolve",
         "worker": "qnfo-deploy-guard"
+      },
+      {
+        "dir": "qnfo-email",
+        "version": "2.2.0-handoff-notify",
+        "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -1073,9 +1064,9 @@
     "qnfo-email": {
       "before": "2.2.0-handoff-notify",
       "http": 200,
-      "live": "2.1.9-personal-verified",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "2.2.0-handoff-notify",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-email"
     },
     "qnfo-email-orchestrator": {
