@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.61-budget-billing-split-ai-attrib";
+var VERSION = "0.4.62-usage-snapshot-hourly";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2960,6 +2960,7 @@ var worker_default2 = {
     ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
     ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));
     ctx.waitUntil(workerCensusIfStale(env).catch((e) => console.error("workerCensus error:", e && e.message || e)));
+    ctx.waitUntil(usageSnapshotIfStale(env).catch((e) => console.error("usageSnapshot error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3058,6 +3059,22 @@ async function refreshScriptUsage(env) {
   return { ok: true, scripts: names.length, day: day };
 }
 __name(refreshScriptUsage, "refreshScriptUsage");
+// USAGE-SNAPSHOT-HOURLY-1 (2026-10-01, #1688): refreshScriptUsage ran only inside disposeRetired at 03:00Z, so after
+// PR 183 the first snapshot (and therefore every usage-gated retirement, e.g. the #1704 cleanup) waited up to ~23h,
+// and a single failed 03:00Z GraphQL call cost another day. The hourly branch now takes the snapshot whenever today's
+// is missing; once present it is a single cheap COUNT per hour.
+async function usageSnapshotIfStale(env) {
+  var db = env.AUDIT_DB || env.AUDIT;
+  if (!db || !env.CF_API_TOKEN) return { ok: false, why: "no db or token" };
+  var day = new Date().toISOString().slice(0, 10);
+  try {
+    var have = await db.prepare("SELECT COUNT(*) n FROM worker_usage_daily WHERE day = ?1").bind(day).first();
+    if (have && Number(have.n) >= 10) return { ok: true, skipped: "fresh", day: day };
+  } catch (e) {
+  }
+  return await refreshScriptUsage(env);
+}
+__name(usageSnapshotIfStale, "usageSnapshotIfStale");
 async function scriptUsage7d(env, name) {
   var db = env.AUDIT_DB || env.AUDIT;
   try {
