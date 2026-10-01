@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.39-revise-wall";
+var VERSION = "0.9.40-grounding-bib";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1785,6 +1785,58 @@ var VERIFY_GEN_PROMPT = [
   "Output the script inside a single python fenced block, nothing else.",
   "CLAIMS (JSON):"
 ].join("\n");
+var GROUND_STOP = new Set("a an and are as at be by can could do does for from has have how in into is it its of on or that the their these this those to via what when where which while who why will with within without would we our us you your re entry reentry address addresses addressing question questions two three work paper papers study studies approach approaches framework frameworks model models theory theories result results show shows new novel use using used possible all any each every cannot uniquely unique determine determines determined classify classifies classification general generally specific based toward towards between among more most less such other also only whether".split(" "));
+// Phrases are runs of adjacent content words (2-3 words; longer runs give sliding pairs); words are the content words.
+function groundRuns(text) {
+  const t = String(text || "").replace(/^\s*re-?entry from[^:]*:\s*/i, " ").replace(/10\.\d{4,9}\/[^\s:]+/g, " | ").replace(/\$[^$]*\$/g, " | ").replace(/\([ivx]+\)/gi, " | ").replace(/[,;:.?!()\[\]{}"]+/g, " | ");
+  const runs = [];
+  let cur = [];
+  for (const raw of t.split(/\s+/)) {
+    const w = raw.replace(/[^A-Za-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+    if (!w || w.length < 3 || /^\d+$/.test(w) || GROUND_STOP.has(w.toLowerCase()) || raw === "|") {
+      if (cur.length) runs.push(cur);
+      cur = [];
+      continue;
+    }
+    cur.push(w);
+  }
+  if (cur.length) runs.push(cur);
+  return runs;
+}
+function groundQueries(idea, parentTitle) {
+  const phr = function(text) {
+    const out = [];
+    for (const r of groundRuns(text)) {
+      if (r.length >= 2 && r.length <= 3) out.push(r.join(" "));
+      else if (r.length > 3) for (let i = 0; i + 1 < r.length; i++) out.push(r[i] + " " + r[i + 1]);
+    }
+    return out;
+  };
+  const words = function(text) {
+    const out = [];
+    for (const r of groundRuns(text)) for (const w of r) if (out.map(function(x) {
+      return x.toLowerCase();
+    }).indexOf(w.toLowerCase()) < 0) out.push(w);
+    return out;
+  };
+  const ip = phr(idea), pp = parentTitle ? phr(parentTitle) : [];
+  const qs = [];
+  const qp = function(a) {
+    return 'all:"' + a + '"';
+  };
+  if (ip.length) for (const p of pp.slice(0, 4)) if (p.toLowerCase() !== ip[0].toLowerCase()) qs.push(qp(ip[0]) + " AND " + qp(p));
+  if (ip.length >= 2) qs.push(qp(ip[0]) + " AND " + qp(ip[1]));
+  if (pp.length >= 2) qs.push(qp(pp[0]) + " AND " + qp(pp[1]));
+  const ws = words(idea).concat(words(parentTitle)).filter(function(w, i, a) {
+    return a.map(function(x) {
+      return x.toLowerCase();
+    }).indexOf(w.toLowerCase()) === i;
+  }).slice(0, 8);
+  if (ws.length) qs.push(ws.map(function(w) {
+    return "all:" + w;
+  }).join(" OR "));
+  return qs.slice(0, 6);
+}
 async function stageGround(env, row) {
   const idea = row.idea || row.summary || "";
   const rid = String(row.id);
@@ -1808,41 +1860,70 @@ async function stageGround(env, row) {
   const q = idea.replace(/\b\d{4}\.\d{4,5}(v\d+)?\b/g, " ").replace(/\s+/g, " ").trim().slice(0, 150);
   const bib = [];
   if (srcText && ax) bib.push({ n: bib.length + 1, id: "arXiv:" + ax[1], text: srcText.slice(0, 1200) });
+  // GROUNDING-BIB-1 (2026-10-01, #1620): since 2026-09-13 grounding produced 0 or 1 bibliography entries (6 before), so
+  // no paper could pass gate-refcount (MIN_REFS 8) and nothing published for 22 days. Two causes, measured live:
+  // (a) arXiv was searched for the idea's first 150 characters as ONE exact quoted phrase, which returns 0 entries
+  //     (row 567: 0, while all:"fusion rules" AND all:Majorana returns 8 on-topic papers);
+  // (b) qnfo-ai /v1/search returns {index, id, score, metadata:{slug,...}} and this code read x.text / x.path, which do
+  //     not exist, so every corpus hit was skipped.
+  // Now: a phrase ladder over the idea and, for a re-entry idea, the parent paper's title, ending in a relevance-sorted OR
+  // that always returns topical work; corpus hits are cited only from PAPER_VZ, resolved to title and DOI in living-paper.
   let arxivHits = "";
-  try {
-    const r = await fetch("https://export.arxiv.org/api/query?search_query=all:" + encodeURIComponent('"' + q + '"') + "&start=0&max_results=6&sortBy=relevance", { headers: { "User-Agent": "QNFO-research-exec/0.6" } });
-    const t = await r.text();
-    const entries = t.split("<entry>").slice(1);
-    for (const e of entries) {
-      const idM = e.match(/<id>([\s\S]*?)<\/id>/);
-      const tiM = e.match(/<title>([\s\S]*?)<\/title>/);
-      const suM = e.match(/<summary>([\s\S]*?)<\/summary>/);
-      if (idM && tiM) {
+  let parentTitle = "";
+  const _doiM = idea.match(/10\.5281\/zenodo\.\d+/);
+  if (_doiM && env.LIVING_PAPER) {
+    try {
+      const _pp = await env.LIVING_PAPER.prepare("SELECT title FROM papers WHERE doi = ?1 LIMIT 1").bind(_doiM[0]).first();
+      if (_pp && _pp.title) parentTitle = String(_pp.title);
+    } catch (e) {
+    }
+  }
+  const _queries = groundQueries(idea, parentTitle);
+  for (let qi = 0; qi < _queries.length && bib.length < 11; qi++) {
+    if (qi > 0) await new Promise(function(res) {
+      setTimeout(res, 1200);
+    });
+    try {
+      const r = await fetch("https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(_queries[qi]).replace(/%3A/g, ":") + "&start=0&max_results=8&sortBy=relevance", { headers: { "User-Agent": "QNFO-research-exec/0.9" } });
+      const t = await r.text();
+      const entries = t.split("<entry>").slice(1);
+      for (const e of entries) {
+        const idM = e.match(/<id>([\s\S]*?)<\/id>/);
+        const tiM = e.match(/<title>([\s\S]*?)<\/title>/);
+        const suM = e.match(/<summary>([\s\S]*?)<\/summary>/);
+        if (!idM || !tiM) continue;
         const aid = String(idM[1].trim()).split("/abs/").pop();
         if (ax && aid === ax[1]) continue;
         if (bib.some(function(b) {
           return b.id === "arXiv:" + aid;
         })) continue;
-        const entry = "arXiv:" + aid + " | " + tiM[1].trim() + "\n  " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 400) : "");
+        const entry = "arXiv:" + aid + " | " + tiM[1].replace(/\s+/g, " ").trim() + "\n  " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 400) : "");
         bib.push({ n: bib.length + 1, id: "arXiv:" + aid, text: entry });
         arxivHits += (arxivHits ? "\n" : "") + entry;
+        if (bib.length >= 11) break;
       }
-      if (bib.length >= 14) break;
+    } catch (e) {
     }
-  } catch (e) {
   }
   let corpus = "";
   try {
-    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent(q.slice(0, 200)) + "&k=6", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
+    const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent((parentTitle + " " + q).trim().slice(0, 200)) + "&k=8", { headers: { "Authorization": "Bearer " + env.ROUTER_TOKEN } });
     if (r.ok) {
       const j = await r.json();
-      const hits = (j.results || []).slice(0, 6);
-      for (const x of hits) {
-        const text = String(x.text || "").replace(/\s+/g, " ").trim().slice(0, 300);
-        if (!text) continue;
-        const entry = "QNFO-corpus: " + (x.path || "(unnamed)") + " :: " + text;
+      const slugs = [];
+      for (const x of j.results || []) {
+        const sl = x && x.index === "PAPER_VZ" && x.metadata && x.metadata.slug ? String(x.metadata.slug) : "";
+        if (sl && slugs.indexOf(sl) < 0) slugs.push(sl);
+        if (slugs.length >= 4) break;
+      }
+      for (const sl of slugs) {
         if (bib.length >= 14) break;
-        bib.push({ n: bib.length + 1, id: "QNFO-corpus", text: entry });
+        const pp = await env.LIVING_PAPER.prepare("SELECT title, doi, abstract FROM papers WHERE slug = ?1 AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1").bind(sl).first().catch(function() {
+          return null;
+        });
+        if (!pp || !pp.title) continue;
+        const entry = "QNFO: " + String(pp.title).replace(/\s+/g, " ").trim() + (pp.doi ? " | DOI " + pp.doi : "") + "\n  " + String(pp.abstract || "").replace(/\s+/g, " ").trim().slice(0, 300);
+        bib.push({ n: bib.length + 1, id: pp.doi ? "doi:" + pp.doi : "qnfo:" + sl, text: entry });
         corpus += (corpus ? "\n" : "") + entry;
       }
     }
@@ -2011,11 +2092,11 @@ async function stageReview(env, row) {
   });
   if (hard.length && cycle < MAX_REVIEW_CYCLES) {
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(hard));
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length }).slice(0, 6e3), row.id).run();
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "review->revise", hard: hard.length, cycle };
   }
   await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify({ hard, soft: findings.soft }));
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='verify', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardLeft: hard.length, verdict: findings.verdict || "?" }).slice(0, 6e3), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='verify', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardLeft: hard.length, verdict: findings.verdict || "?", verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "review->verify", hardLeft: hard.length, cycle };
 }
 __name(stageReview, "stageReview");
@@ -2042,7 +2123,7 @@ async function stageRevise(env, row) {
     if (_p.applied > 0 && _p.text.length >= 1e4) {
       await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
       const _c2 = (ctx.cycles || 0) + 1;
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied }).slice(0, 6e3), row.id).run();
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
       return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
     }
     // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
@@ -2072,7 +2153,7 @@ async function stageRevise(env, row) {
   }
   await r2Put(env, String(row.id) + "/reconciled.md", revised);
   const c2 = (ctx.cycles || 0) + 1;
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: c2 }).slice(0, 6e3), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: c2, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "revise->review", cycle: c2 };
 }
 __name(stageRevise, "stageRevise");
@@ -2118,6 +2199,14 @@ async function stageVerify(env, row) {
   if (!claims.length) {
     await r2Put(env, String(row.id) + "/verification.md", "# Verification\n\nNo quantitative claims were found; the paper is qualitative. Results are framed as qualitative analysis with explicit limitations.\n\nExtraction output:\n" + String(exRaw).slice(0, 3e3));
     const gates2 = finalGates(paper);
+    // VERIFY-LOOP-BOUND-1 (2026-10-01): this qualitative branch sent the row back to revise on every failing gate with no
+    // verifyPass check, and review/revise dropped verifyPass from the context, so row 567 cycled verify -> revise ->
+    // review -> verify every 15 minutes (13:21Z to 14:07Z) on gate-refcount. A second failing pass is terminal here, as
+    // in the claims branch below; the recover loop re-arms the row from ground.
+    if (!gates2.ok && ctx.verifyPass) {
+      await markError(env, row, "verify: unresolved after revision - gates=" + gates2.reason);
+      return { ok: false, stage: "verify", gate: gates2.reason };
+    }
     if (!gates2.ok) {
       await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(gates2.fixes));
       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, verifyPass: 1 }).slice(0, 6e3), row.id).run();
