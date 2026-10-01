@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.8-probe-1tok";
+var VERSION = "2.3.9-probe-6h";
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
 // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
 // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -105,7 +105,8 @@ __name(reconcileHealth, "reconcileHealth");
 // is detected at the same 20-min resolution. Entries sharing an @cf id (deepseek-v4-pro and
 // deepseek-v4-pro-wa) are probed once per run and the result written to both keys. ?force=1 on /run
 // probes everything.
-var PROBE_OK_INTERVAL_MS = 2 * 36e5;
+// PROBE-COST-TIER-2 (2026-10-01, issue 1682): OK interval 2h -> 6h (coverage gate is 26h; degraded/failing/unknown still probed every 20-min run).
+var PROBE_OK_INTERVAL_MS = 6 * 36e5;
 async function runProbe(env, force) {
   const now = Date.now();
   const results = [];
