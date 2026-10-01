@@ -28,7 +28,7 @@ CREATE TABLE human_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT
 CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT,
   sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT, updated_at TEXT, resolved_at TEXT, resolution TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, desire TEXT, source TEXT, device TEXT, type TEXT, domain TEXT, priority TEXT, summary TEXT, due TEXT, status TEXT,
-  wbs_code TEXT, created_at TEXT, processed_at TEXT, triage_decision TEXT);`);
+  wbs_code TEXT, created_at TEXT, processed_at TEXT, triage_decision TEXT, triage_rationale TEXT, triaged_at TEXT);`);
 const W = { w_autonomy: 0.2, w_thinking: 0.15, w_decision: 0.15, w_self_improv: 0.15, w_reliability: 0.1, w_integration: 0.1, w_external_impact: 0.1, w_governance: 0.05 };
 for (const k of Object.keys(W)) db.prepare("INSERT INTO sai_config (k, v, source) VALUES (?, ?, 'seed')").run(k, W[k]);
 db.prepare("INSERT INTO sai_config (k, v, source) VALUES ('uf_step', 0.15, 'seed')").run();
@@ -150,6 +150,20 @@ ok(r.status === 200 && j.ok && taskIssue && j.issue_id === taskIssue.id && taskI
 ok(db.prepare("SELECT COUNT(*) n FROM intents WHERE device = 'owner-dashboard'").get().n === 1, "the task is still recorded as an intent (daily digest)");
 await api.ownerNotesRoute({ AUDIT });
 ok(ownerIssues().length === 3, "a task is filed once");
+
+// 10. TASK-INTENT-INTAKE-1: a type='task' intent nobody triages becomes one fleet issue; a dashboard task is never filed twice
+db.prepare("INSERT INTO intents (id, desire, source, device, type, status, created_at, summary) VALUES ('int-feed-1', 'Mirror qnfo-skills-mcp into the repo.\ncode-task: repo=QNFO/qnfo-workers path=docs/x.md', 'deepchat-skills-mcp', 'unknown', 'task', 'pending', '2026-09-26T12:28:44Z', 'REPO-MIRROR-1')").run();
+db.prepare("INSERT INTO intents (id, desire, source, device, type, status, created_at) VALUES ('int-res-1', 'A research question', 'feed', 'chatbox', 'research', 'pending', '2026-09-26T12:00:00Z')").run();
+const ri = await api.ownerNotesRoute({ AUDIT });
+const feedIssue = ownerIssues().find((x) => x.title.startsWith("INTENT-TASK-int-feed-1: REPO-MIRROR-1"));
+ok(ri.intents === 1 && feedIssue && /code-task: repo=QNFO\/qnfo-workers path=docs\/x\.md/.test(feedIssue.description), "a feed task intent is filed as one issue carrying its code-task line verbatim");
+const fi = db.prepare("SELECT status, triage_decision, triage_rationale FROM intents WHERE id = 'int-feed-1'").get();
+ok(fi.status === "promoted" && fi.triage_decision === "TO-AGENT-ISSUE" && fi.triage_rationale.includes("agent_issues " + feedIssue.id), "the intent is marked promoted with the issue id");
+const di = db.prepare("SELECT status, triage_rationale FROM intents WHERE device = 'owner-dashboard'").get();
+ok(di.status === "promoted" && di.triage_rationale.includes("agent_issues " + taskIssue.id) && ownerIssues().length === 4, "a dashboard task intent is linked to its OWNER-TASK issue when the task is queued, never filed twice");
+ok(db.prepare("SELECT status FROM intents WHERE id = 'int-res-1'").get().status === "pending", "research intents are left to the research triage");
+await api.ownerNotesRoute({ AUDIT });
+ok(ownerIssues().length === 4, "intake is idempotent");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
