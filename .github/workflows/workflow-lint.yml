@@ -17,9 +17,13 @@ on:
     paths:
       - '.github/workflows/**'
       - 'scripts/workflow-lint.py'
+      - 'scripts/status_unchanged.py'
+      - 'scripts/status_unchanged_test.py'
   pull_request:
     paths:
       - '.github/workflows/**'
+      - 'scripts/status_unchanged.py'
+      - 'scripts/status_unchanged_test.py'
   workflow_dispatch:
 
 permissions:
@@ -40,3 +44,6 @@ jobs:
 
       - name: Lint every workflow file (fail closed)
         run: python3 scripts/workflow-lint.py
+
+      - name: STATUS-NOOP-SKIP-1 self-test (skip stamp-only status commits, never an outcome change)
+        run: python3 scripts/status_unchanged_test.py

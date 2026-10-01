@@ -113,7 +113,13 @@ jobs:
           git config user.name  "qnfo-fleet-bot"
           git config user.email "fleet-bot@qnfo.org"
           git add -- '*/worker.js' || true
-          git add -- ci-status/unmangle-worker-js.json || true
+          # STATUS-NOOP-SKIP-1: stage the status file only when an outcome changed, not just actor/head/ts.
+          git fetch -q origin main || true
+          if python3 scripts/status_unchanged.py ci-status/unmangle-worker-js.json --ignore actor,head,ts --ref origin/main; then
+            git checkout -- ci-status/unmangle-worker-js.json 2>/dev/null || true
+          else
+            git add -- ci-status/unmangle-worker-js.json || true
+          fi
           if git diff --cached --quiet; then
             echo "no mangled sources and no status change to commit"
             exit 0

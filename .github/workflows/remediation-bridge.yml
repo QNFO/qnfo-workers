@@ -132,6 +132,14 @@ jobs:
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
+          # STATUS-NOOP-SKIP-1: a status file that differs only in run stamps (head, spent_ms, verifier) carries no
+          # information; committing it only multiplies main pushes and CodeQL runs. Outcomes always still commit.
+          git fetch -q origin main || true
+          if python3 scripts/status_unchanged.py ci-status/remediation-bridge.json --ref origin/main; then
+            git checkout -- ci-status/remediation-bridge.json 2>/dev/null || true
+            echo "status unchanged apart from run stamps - not committing"
+            exit 0
+          fi
           git add ci-status/remediation-bridge.json
           if git diff --cached --quiet; then echo "no status change"; exit 0; fi
           git commit -m "ci(status): remediation-bridge [skip ci]"
