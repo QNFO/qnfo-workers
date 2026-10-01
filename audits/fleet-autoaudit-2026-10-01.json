@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 08:39:47",
+  "audited_at": "2026-10-01 08:43:43",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -490,7 +490,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.44-lineage-truth",
+        "version": "1.7.45-device-staleness",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -535,7 +535,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.23-fleet-1042-unknown",
+        "version": "2.38.24-publication-preflight-gate",
         "worker": "qnfo-ops"
       },
       {
@@ -1150,9 +1150,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.44-lineage-truth",
+      "before": "1.7.45-device-staleness",
       "http": 200,
-      "live": "1.7.44-lineage-truth",
+      "live": "1.7.45-device-staleness",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1278,9 +1278,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.23-fleet-1042-unknown",
+      "before": "2.38.24-publication-preflight-gate",
       "http": 200,
-      "live": "2.38.23-fleet-1042-unknown",
+      "live": "2.38.24-publication-preflight-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
