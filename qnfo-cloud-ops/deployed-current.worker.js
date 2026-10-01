@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.6-engagement-daily"; /* OUTREACH-ATTEMPT-CAP-1 */
+var VERSION = "1.15.7-radar-truthful"; /* OUTREACH-ATTEMPT-CAP-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2124,34 +2124,75 @@ function dispatchMap(offset) {
   return map;
 }
 __name(dispatchMap, "dispatchMap");
+// RADAR-TRUTHFUL-1 (2026-10-01, #1641 EXTERNAL-MENTION-MONITOR-EMPTY-1): the radar reported scanned=0 every day and
+// external_mentions was never written. Three of its causes were defects, not an absence of mentions:
+//   - HN used tags=comment,story. Algolia treats a comma as AND, so it asked for items that are both a comment and a
+//     story, which can never match. It now uses tags=(story,comment), plus a url search for qnfo.org.
+//   - lobste.rs /search.json returns 400 "Unpermitted query or form parameter". The radar now reads the domain feed
+//     /domains/qnfo.org.rss, where 404 means the domain was never submitted and counts as 0, not as an error.
+//   - Every fetch error was swallowed, so a dead source looked like "no mentions".
+// The fix:
+//   - Each source's outcome is reported in notes.sources as ok:<n>, http:<status> or error:<msg>.
+//   - Algolia is typo-tolerant and matches inside tokens (a YouTube id "QnfOOoTOrDE" was a hit), so only hits with "qnfo"
+//     as a whole word are kept.
+//   - First citations (OpenAlex cited_by_count > 0 in citation_stats, written by qnfo-paper-indexer) are recorded as
+//     source=openalex-citation, so being cited reaches the mention plane.
 async function jobRadar(env) {
-  const mentions = [];
+  const mentions = [], sources = {};
   const ua = { headers: { "User-Agent": "QNFO-radar/1.0" } };
+  const lit = (s) => /\bqnfo\b/i.test(String(s || ""));
+  const err = (e) => "error:" + String(e && e.message || e).slice(0, 80);
   try {
-    const r = await fetch("https://hn.algolia.com/api/v1/search?query=%22qnfo%22&hitsPerPage=30&tags=comment,story", ua);
-    const j = await r.json();
-    for (const h of j.hits || []) {
-      mentions.push({ source: "hn", title: String(h.title || h.story_title || "comment").slice(0, 180), url: h.story_url || h.url || "https://news.ycombinator.com/item?id=" + h.objectID, author: h.author || "", score: h.points || 0, created: h.created_at || "" });
+    let n = 0;
+    for (const q of [
+      "https://hn.algolia.com/api/v1/search?query=qnfo&tags=(story,comment)&hitsPerPage=50&typoTolerance=false",
+      "https://hn.algolia.com/api/v1/search?query=qnfo.org&restrictSearchableAttributes=url&hitsPerPage=50&typoTolerance=false"
+    ]) {
+      const r = await fetch(q, ua);
+      if (!r.ok) throw new Error("http " + r.status);
+      const j = await r.json();
+      for (const h of j.hits || []) {
+        const url = h.story_url || h.url || "https://news.ycombinator.com/item?id=" + h.objectID;
+        if (!lit(h.title) && !lit(h.story_title) && !lit(url) && !lit(h.comment_text) && !lit(h.story_text)) continue;
+        mentions.push({ source: "hn", title: String(h.title || h.story_title || "comment").slice(0, 180), url: h.comment_text ? "https://news.ycombinator.com/item?id=" + h.objectID : url, author: h.author || "", score: h.points || 0, created: h.created_at || "" });
+        n++;
+      }
     }
-  } catch (e) {
-  }
+    sources.hn = "ok:" + n;
+  } catch (e) { sources.hn = err(e); }
   try {
-    const r = await fetch("https://lobste.rs/search.json?q=qnfo", ua);
-    const j = await r.json();
-    const arr = Array.isArray(j) ? j : j && Array.isArray(j.stories) ? j.stories : [];
-    for (const s of arr) {
-      mentions.push({ source: "lobsters", title: String(s.title || "").slice(0, 180), url: s.url || "https://lobste.rs/s/" + (s.short_id || ""), author: s.submitter_user && s.submitter_user.username || "", score: s.score || 0, created: s.created_at || "" });
+    const r = await fetch("https://lobste.rs/domains/qnfo.org.rss", ua);
+    if (r.status === 404) sources.lobsters = "ok:0";
+    else if (!r.ok) sources.lobsters = "http:" + r.status;
+    else {
+      const xml = await r.text();
+      const items = xml.split("<item>").slice(1);
+      for (const it of items) {
+        const tag = (t) => { const m = new RegExp("<" + t + ">([\\s\\S]*?)</" + t + ">").exec(it); return m ? m[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim() : ""; };
+        mentions.push({ source: "lobsters", title: tag("title").slice(0, 180), url: tag("link"), author: tag("author"), score: 0, created: tag("pubDate") });
+      }
+      sources.lobsters = "ok:" + items.length;
     }
-  } catch (e) {
-  }
+  } catch (e) { sources.lobsters = err(e); }
   try {
     const r = await fetch("https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=activity&q=qnfo&site=stackoverflow&pagesize=20", ua);
-    const j = await r.json();
-    for (const it of j.items || []) {
-      mentions.push({ source: "stackexchange", title: String(it.title || "").slice(0, 180), url: it.link || "", author: it.owner && it.owner.display_name || "", score: it.score || 0, created: it.creation_date ? new Date(it.creation_date * 1e3).toISOString() : "" });
+    if (!r.ok) sources.stackexchange = "http:" + r.status;
+    else {
+      const j = await r.json();
+      let n = 0;
+      for (const it of j.items || []) {
+        mentions.push({ source: "stackexchange", title: String(it.title || "").slice(0, 180), url: it.link || "", author: it.owner && it.owner.display_name || "", score: it.score || 0, created: it.creation_date ? new Date(it.creation_date * 1e3).toISOString() : "" });
+        n++;
+      }
+      sources.stackexchange = "ok:" + n;
     }
-  } catch (e) {
-  }
+  } catch (e) { sources.stackexchange = err(e); }
+  try {
+    const cr = await env.AUDIT.prepare("SELECT doi, MAX(value) AS cites, MAX(collected_at) AS at FROM citation_stats WHERE source = 'openalex' AND metric = 'cited_by_count' AND collected_at >= ?1 GROUP BY doi HAVING MAX(value) > 0").bind(new Date(Date.now() - 3 * 864e5).toISOString()).all();
+    const rows = cr.results || [];
+    for (const c of rows) mentions.push({ source: "openalex-citation", title: "cited_by_count=" + c.cites + " for " + c.doi, url: "https://doi.org/" + c.doi, author: "", score: Number(c.cites) || 0, created: c.at || "" });
+    sources.citations = "ok:" + rows.length;
+  } catch (e) { sources.citations = err(e); }
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS external_mentions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, title TEXT, url TEXT, author TEXT, score INTEGER, created TEXT, first_seen TEXT, UNIQUE(source, url))").run();
   let added = 0;
   for (const m of mentions) {
@@ -2161,7 +2202,8 @@ async function jobRadar(env) {
     } catch (e) {
     }
   }
-  return { status: "ok", notes: { scanned: mentions.length, new_mentions: added } };
+  const vals = Object.values(sources), healthy = vals.filter((v) => v.indexOf("ok:") === 0).length;
+  return { status: healthy === 0 ? "error" : healthy < vals.length ? "degraded" : "ok", notes: { scanned: mentions.length, new_mentions: added, sources } };
 }
 __name(jobRadar, "jobRadar");
 var CORS = {
