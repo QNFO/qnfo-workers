@@ -52,6 +52,11 @@ def ago(minutes: int) -> str:
 
 
 # ------------------------------------------------------------------ stores
+class MissingTable(RuntimeError):
+    """D1 said 'no such table'. For code_tasks that means the orchestrator has not run yet (it creates the table lazily),
+    i.e. there is nothing to publish; every other D1 failure stays a hard error."""
+
+
 class D1Store:
     """Cloudflare D1 over the REST API, same secrets the fleet workflows use (CF_ACCOUNT_ID, CLOUDFLARE_API_TOKEN)."""
 
@@ -67,7 +72,14 @@ class D1Store:
             with urllib.request.urlopen(req, timeout=30) as r:
                 d = json.load(r)
         except urllib.error.HTTPError as e:
-            raise RuntimeError(f"D1 HTTP {e.code}") from None
+            msg = ""
+            try:  # Cloudflare error bodies carry {"errors":[{"message":...}]}; no secrets in them
+                msg = "; ".join(str(x.get("message", "")) for x in (json.load(e).get("errors") or []))[:200]
+            except Exception:
+                pass
+            if e.code == 400 and "no such table" in msg.lower():
+                raise MissingTable(f"D1 HTTP 400: {msg}") from None
+            raise RuntimeError(f"D1 HTTP {e.code}" + (f": {msg}" if msg else "")) from None
         if not d.get("success", d.get("ok", False)):
             raise RuntimeError("D1 query rejected")
         return d["result"][0]
@@ -96,9 +108,15 @@ class SqliteStore:
 
 
 def list_ready(store):
-    return store.rows(
-        "SELECT * FROM code_tasks WHERE status='ready_to_publish' OR (status='publishing' AND updated_at < ?) ORDER BY created_at ASC LIMIT 20",
-        [ago(STALE_PUBLISHING_MIN)])
+    try:
+        return store.rows(
+            "SELECT * FROM code_tasks WHERE status='ready_to_publish' OR (status='publishing' AND updated_at < ?) ORDER BY created_at ASC LIMIT 20",
+            [ago(STALE_PUBLISHING_MIN)])
+    except MissingTable as e:
+        # CODE-TASK-PUBLISH-NOTABLE-1 (watchdog issue 248): the table does not exist until qnfo-code-orchestrator first
+        # runs, so every main push turned this workflow red with a bare 'D1 HTTP 400'. No table = nothing to publish.
+        print("code_tasks does not exist yet (%s): nothing to publish" % e)
+        return []
 
 
 def claim(store, task):
@@ -363,6 +381,27 @@ def selftest():
           t["status"] == "branch_pushed" and "/compare/main...codeagent-nopr00000001" in (t["pr_url"] or "") and r["failed"] == 0, t)
     shown = subprocess.run(["git", "--git-dir", remote, "show", "codeagent-nopr00000001:scripts/x.py"], capture_output=True, text=True)
     check("PR creation refused: the branch still carries the change", shown.stdout == "def f():\n    return 2\n", shown.stderr)
+
+    # 6. CODE-TASK-PUBLISH-NOTABLE-1: a missing code_tasks table is an empty queue; any other D1 error is still a hard failure
+    class NoTable:
+        def rows(self, sql, params=()):
+            raise MissingTable("D1 HTTP 400: no such table: code_tasks at offset 14: SQLITE_ERROR")
+        changes = rows
+
+    class BrokenD1:
+        def rows(self, sql, params=()):
+            raise RuntimeError("D1 HTTP 500")
+        changes = rows
+
+    check("no code_tasks table: list_ready returns [] (nothing to publish)", list_ready(NoTable()) == [])
+    remote, work, _ = fixture()
+    r = publish_all(NoTable(), work, "main", FakePR(), quiet)
+    check("no code_tasks table: publish_all is a clean no-op", r["published"] == 0 and r["failed"] == 0, r)
+    try:
+        list_ready(BrokenD1())
+        check("a real D1 failure still raises", False)
+    except RuntimeError as e:
+        check("a real D1 failure still raises", "500" in str(e) and not isinstance(e, MissingTable), e)
 
     print(f"\nselftest: {len(fails)} failure(s)")
     return 1 if fails else 0
