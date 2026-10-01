@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.73-loop-watch";
+var VERSION = "0.4.74-loop-watch";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2924,7 +2924,11 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 //              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
 //              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
 // The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
-var CHARTER_VERSION = "1.0.0";
+var CHARTER_VERSION = "1.0.3";
+// CHARTER-ON-CLOUDFLARE-1 (#1727, owner directive 2026-10-01: all data on Cloudflare): every tick also writes the
+// whole charter (hand-written sections + the live block) to R2 qnfo-canonical under this key, so the document is
+// readable from Cloudflare storage (GET /charter/full.md) when GitHub or any agent session is not.
+var CHARTER_MIRROR_KEY = "docs/QUNIVERSE-CHARTER.md";
 var CHARTER_REPO = "QNFO/qnfo-workers";
 var CHARTER_DOC_PATH = "docs/QUNIVERSE-CHARTER.md";
 var CHARTER_BEGIN = "<!-- CHARTER-LIVE:BEGIN -->";
@@ -3269,12 +3273,34 @@ async function charterCommit(env, block, day, force) {
   try { doc = new TextDecoder().decode(Uint8Array.from(atob(String(gj.content).replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); } catch (e) { return { status: "read-failed", note: "base64 decode failed" }; }
   var next = charterSplice(doc, block);
   if (next === null) return { status: "markers-missing", note: "doc lacks CHARTER-LIVE markers; refusing to write" };
-  if (next === doc) return { status: "unchanged", note: "rendered block identical to main" };
+  if (next === doc) return { status: "unchanged", note: "rendered block identical to main", doc: next };
   var body = { message: "chore(charter): CHARTER-LOOP-1 refresh " + day + " [skip ci]", content: b64encode(next), sha: gj.sha, branch: "main" };
   var pr = await timedFetch("https://api.github.com/repos/" + CHARTER_REPO + "/contents/" + CHARTER_DOC_PATH, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
   if (!pj || !pj.commit || !pj.commit.sha) return { status: "write-failed", note: "PUT contents HTTP " + pr.status };
-  return { status: "committed", sha: pj.commit.sha, note: "docs/QUNIVERSE-CHARTER.md refreshed on main" };
+  return { status: "committed", sha: pj.commit.sha, note: "docs/QUNIVERSE-CHARTER.md refreshed on main", doc: next };
+}
+// The full document for the mirror: the one charterCommit just read or wrote; otherwise (no token, already committed
+// today, GitHub API failure) the public raw file with today's block spliced in. Returns null when neither is readable.
+async function charterFullDoc(commit, block) {
+  if (commit && commit.doc) return commit.doc;
+  try {
+    var r = await timedFetch("https://raw.githubusercontent.com/" + CHARTER_REPO + "/main/" + CHARTER_DOC_PATH + "?cb=" + Math.floor(Date.now() / 3e5), { headers: { "User-Agent": "qnfo-fleet-control/charter" } }, 12e3);
+    if (!r.ok) return null;
+    var t = await r.text();
+    return charterSplice(t, block);
+  } catch (e) { return null; }
+}
+async function charterMirror(env, doc, ev, sha) {
+  if (!env.CANONICAL) return { status: "no-binding", note: "CANONICAL R2 binding missing" };
+  if (!doc) return { status: "no-doc", note: "full charter unreadable this tick; previous mirror kept" };
+  if (doc.indexOf(CHARTER_BEGIN) < 0 || doc.indexOf(CHARTER_END) < 0) return { status: "markers-missing", note: "refusing to mirror a document without CHARTER-LIVE markers" };
+  try {
+    await env.CANONICAL.put(CHARTER_MIRROR_KEY, doc, { httpMetadata: { contentType: "text/markdown; charset=utf-8" }, customMetadata: { ts: ev.ts, charter_version: CHARTER_VERSION, worker_version: VERSION, rendered_sha: sha } });
+    var back = await env.CANONICAL.head(CHARTER_MIRROR_KEY);
+    if (!back || back.size < 1) return { status: "write-unverified", note: "put returned but head found no object" };
+    return { status: "mirrored", bytes: back.size, key: "r2:qnfo-canonical/" + CHARTER_MIRROR_KEY };
+  } catch (e) { return { status: "write-failed", note: String(e && e.message || e).slice(0, 120) }; }
 }
 async function charterTick(env, force) {
   var t0 = Date.now();
@@ -3287,12 +3313,14 @@ async function charterTick(env, force) {
   var day = ev.ts.slice(0, 10);
   var commit;
   try { commit = await charterCommit(env, block, day, !!force); } catch (e) { commit = { status: "write-failed", note: String(e && e.message || e).slice(0, 120) }; }
+  var mirror = await charterMirror(env, await charterFullDoc(commit, block), ev, sha);
+  delete commit.doc;
   try {
     await env.AUDIT.prepare("INSERT INTO charter_snapshots (ts, charter_version, worker_version, health, mvp_up, breaches, state_json, rendered_sha, commit_sha, commit_note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
-      .bind(ev.ts, CHARTER_VERSION, VERSION, ev.health, ev.mvp_up, ev.breaches.length, JSON.stringify(ev).slice(0, 180000), sha, commit.sha || null, (commit.status + ": " + commit.note).slice(0, 200)).run();
+      .bind(ev.ts, CHARTER_VERSION, VERSION, ev.health, ev.mvp_up, ev.breaches.length, JSON.stringify(ev).slice(0, 180000), sha, commit.sha || null, (commit.status + ": " + commit.note + "; mirror " + mirror.status).slice(0, 200)).run();
     await env.AUDIT.prepare("DELETE FROM charter_snapshots WHERE id NOT IN (SELECT id FROM charter_snapshots ORDER BY id DESC LIMIT 400)").run();
   } catch (e) {}
-  return { ok: true, ts: ev.ts, health: ev.health, mvp_up: ev.mvp_up + "/" + ev.mvp.length, breaches: ev.breaches.length, issues: br, commit: commit, rendered_sha: sha, ms: Date.now() - t0 };
+  return { ok: true, ts: ev.ts, health: ev.health, mvp_up: ev.mvp_up + "/" + ev.mvp.length, breaches: ev.breaches.length, issues: br, commit: commit, mirror: mirror, rendered_sha: sha, ms: Date.now() - t0 };
 }
 async function charterLatest(env) {
   await charterSchema(env);
@@ -3756,6 +3784,12 @@ var worker_default2 = {
     if (p === "/charter.md" && request.method === "GET") {
       var cf2 = await charterFacts(env);
       return new Response(charterRender(charterEvaluate(cf2, new Date().toISOString())), { status: 200, headers: { "Content-Type": "text/markdown; charset=utf-8" } });
+    }
+    if (p === "/charter/full.md" && request.method === "GET") {
+      var cm = env.CANONICAL ? await env.CANONICAL.get(CHARTER_MIRROR_KEY) : null;
+      if (!cm) return json({ error: "charter mirror not written yet; the daily 0 3 * * * tick writes it", source: "https://github.com/" + CHARTER_REPO + "/blob/main/" + CHARTER_DOC_PATH }, 404);
+      var cmd = cm.customMetadata || {};
+      return new Response(await cm.text(), { status: 200, headers: { "Content-Type": "text/markdown; charset=utf-8", "X-Charter-Version": String(cmd.charter_version || ""), "X-Charter-Mirrored-At": String(cmd.ts || "") } });
     }
     if (p === "/charter/tick" && request.method === "POST") {
       var chh = request.headers.get("Authorization") || "";

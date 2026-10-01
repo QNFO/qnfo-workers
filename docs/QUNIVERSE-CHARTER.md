@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.2, written 2026-10-01 (1.0.1 portfolio loop; 1.0.2 cloud-only verification, same day). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.3, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification, same day). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -329,7 +329,9 @@ close-evidence trigger) and stated here for the rest.
   `charter_snapshots` row, files or closes `CHARTER-MVP-DOWN-1` issues, and commits the block to main through the
   GitHub Contents API when it changed (at most once per UTC day). A document without both markers is never written.
 - **Readers.** `GET https://qnfo-fleet-control.q08.workers.dev/charter` returns the latest snapshot (`?live=1`
-  recomputes; `&facts=1` includes the raw registers), `GET /charter.md` returns the block. The dashboard and any session
+  recomputes; `&facts=1` includes the raw registers), `GET /charter.md` returns the block, and `GET /charter/full.md`
+  returns this whole document from Cloudflare R2 (`qnfo-canonical/docs/QUNIVERSE-CHARTER.md`, rewritten on every tick, so
+  the charter is readable when GitHub or an agent session is not). The dashboard and any session
   read the same JSON.
 - **Gates.** `charter-guard.yml` runs `qnfo-fleet-control/charter.test.mjs` (the pure half of the loop, replayed on the
   fixture `charter.fixture.json`) and `scripts/charter-guard.py` (document shape, pillar parity, new-worker pillar

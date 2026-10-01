@@ -1,10 +1,11 @@
 {
-  "audited_at": "2026-10-01 12:24:44",
+  "audited_at": "2026-10-01 12:28:46",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
+        "qnfo-cloud-ops",
         "qnfo-fleet-dashboard"
       ],
       "refreshed": true,
@@ -469,7 +470,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.15.9-outreach-shared-cap",
+        "version": "1.16.0-identity-weekly",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -499,7 +500,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.10.3-feed-integrity",
+        "version": "1.11.1-owner-edit",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1023,9 +1024,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.15.9-outreach-shared-cap",
+      "before": "1.16.0-identity-weekly",
       "http": 200,
-      "live": "1.15.9-outreach-shared-cap",
+      "live": "1.16.0-identity-weekly",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1159,9 +1160,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.10.3-feed-integrity",
+      "before": "1.11.1-owner-edit",
       "http": 200,
-      "live": "1.10.3-feed-integrity",
+      "live": "1.11.1-owner-edit",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
