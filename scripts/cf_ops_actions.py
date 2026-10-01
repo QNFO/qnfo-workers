@@ -107,7 +107,10 @@ def delete_worker(name: str, acct: str, token: str) -> int:
 
 
 def gateway_logs(acct: str, token: str, gateway: str, model: str | None, pages: int) -> int:
-    keys = ("model", "provider", "status_code", "success", "path", "metadata", "request_type", "cached")
+    # Non-content fields only: this repository is public, so job logs are public. Never print prompts,
+    # responses or locations here; user_agent and the auth/byok flags identify a caller class safely.
+    keys = ("model", "provider", "status_code", "success", "path", "metadata", "request_type", "cached",
+            "user_agent", "authentication", "byok", "step")
     agg: dict[str, collections.Counter] = {k: collections.Counter() for k in keys}
     combo: collections.Counter = collections.Counter()
     seen = 0
@@ -128,7 +131,8 @@ def gateway_logs(acct: str, token: str, gateway: str, model: str | None, pages: 
             for k in keys:
                 v = r.get(k)
                 agg[k][json.dumps(v)[:120] if isinstance(v, (dict, list)) else str(v)[:120]] += 1
-            combo[(str(r.get("model"))[:40], str(r.get("provider"))[:20], json.dumps(r.get("metadata"))[:100])] += 1
+            combo[(str(r.get("model"))[:40], json.dumps(r.get("metadata"))[:80], str(r.get("user_agent"))[:80],
+                   str(r.get("byok")), str(r.get("authentication")))] += 1
         if len(rows) < 50:
             break
     emit({"action": "gateway-logs", "ok": True, "gateway": gateway, "model_filter": model, "rows": seen,
