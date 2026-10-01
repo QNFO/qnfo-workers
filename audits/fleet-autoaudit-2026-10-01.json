@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 11:26:42",
+  "audited_at": "2026-10-01 11:33:44",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -492,7 +492,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.48-reach-signals-prior-window",
+        "version": "1.9.0-invest-decision",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1152,9 +1152,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.48-reach-signals-prior-window",
+      "before": "1.9.0-invest-decision",
       "http": 200,
-      "live": "1.7.48-reach-signals-prior-window",
+      "live": "1.9.0-invest-decision",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
