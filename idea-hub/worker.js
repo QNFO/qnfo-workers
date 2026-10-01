@@ -68,7 +68,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.3.0-think-loop";
+var VERSION = "1.3.1-reentry-rescore";
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -194,6 +194,11 @@ async function triageProposals(env) {
 
 // ---- L8 re-entry loop (ported from qnfo-signal-loop 1.1.2, bounded) ----
 var REENTRY_BATCH = 20, CONSUME_SIGNALS = 2, CONSUME_QUESTIONS = 3, PROPOSAL_BACKPRESSURE = 30;
+// REENTRY-RESCORE-1 (1.3.1): the 1.2.0 port dropped qnfo-signal-loop's re-score leg, so a signal emitted with no
+// detectable open questions (evidential_weight 0) could never be consumed even after its paper gained a body. Each run
+// re-checks RESCORE_BATCH weight-0 signals, oldest-checked first (ts rotates); a signal whose paper is no longer in
+// living-paper is expired with that reason instead of being re-checked forever.
+var RESCORE_BATCH = 10;
 function extractOpenQuestions(bodyMd) {
   if (!bodyMd) return [];
   var text = String(bodyMd), out = [], seen = new Set();
@@ -226,6 +231,18 @@ async function runReentry(env) {
       await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
         .bind("artifact_reentry:" + String(p.doi).replace(/[^a-z0-9]+/gi, "-").slice(0, 80), now, "artifact_reentry", p.doi, String(p.title || "").slice(0, 500), JSON.stringify(oq), oq.length ? 0.9 : 0, "research", "new", now).run();
       out.emitted++;
+    } catch (e) { out.errors++; }
+  }
+  out.rescored = 0; out.expired = 0;
+  var zero = (await env.QNFO_AUDIT.prepare("SELECT id, source_ref FROM signals WHERE source='artifact_reentry' AND status='new' AND COALESCE(evidential_weight,0)=0 ORDER BY ts ASC LIMIT ?1").bind(RESCORE_BATCH).all()).results || [];
+  for (var z = 0; z < zero.length; z++) {
+    var sg = zero[z], nowZ = new Date().toISOString();
+    try {
+      var pz = await env.LIVING_PAPER.prepare("SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE doi = ? LIMIT 1").bind(sg.source_ref).first();
+      if (!pz) { await env.QNFO_AUDIT.prepare("UPDATE signals SET status='expired', decision=?, ts=? WHERE id=?").bind("idea-hub " + VERSION + ": paper " + String(sg.source_ref).slice(0, 80) + " not in living-paper", nowZ, sg.id).run(); out.expired++; continue; }
+      var oqz = extractOpenQuestions(pz.b || "");
+      if (oqz.length) { await env.QNFO_AUDIT.prepare("UPDATE signals SET open_questions=?, evidential_weight=0.9, ts=? WHERE id=?").bind(JSON.stringify(oqz), nowZ, sg.id).run(); out.rescored++; }
+      else await env.QNFO_AUDIT.prepare("UPDATE signals SET ts=? WHERE id=?").bind(nowZ, sg.id).run();
     } catch (e) { out.errors++; }
   }
   return out;
