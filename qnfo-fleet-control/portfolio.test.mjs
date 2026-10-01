@@ -210,5 +210,18 @@ const planM = P.pfHygienePlan(P.pfEvaluate(manyRepos, [], NOW), [], wrote);
 eq(planM.filter((a) => a.action === "description-revise").length, 4, "every loop-written description is revised");
 eq(planM.filter((a) => a.action !== "description-revise").length, P.PF_HYGIENE_MAX, "and the write budget is still fully used");
 
+
+// --- HYGIENE-SCOPE-1 ----------------------------------------------------------
+const scopeRepos = [
+  { name: "pub-clean", description: "d", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
+  { name: "priv-dirty", description: "", visibility: "private", private: true, archived: false, fork: false, pushed_at: "2025-01-01T00:00:00Z", topics: [], license: null }
+];
+const evS = P.pfEvaluate(scopeRepos, [], NOW);
+eq(evS.hygiene_score, 1, "a flagged private repository does not lower the score");
+eq(evS.graded, 1, "only public repositories are graded");
+eq(evS.dormant.length, 0, "a dormant private repository is never named");
+eq(evS.unlinked_research.length, 0, "an unlinked private research repository is never named");
+eq(evS.private_count, 1, "but it is counted");
+
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

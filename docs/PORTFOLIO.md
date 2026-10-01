@@ -56,7 +56,8 @@ short on purpose, so a new platform or governance repository is a one-line chang
 | research | everything else | research | yes |
 
 Hygiene flags on graded repositories: `no-description`, `no-license`, `no-topics`, `dormant-<n>d` (no push for more
-than 120 days). The hygiene score is the share of graded repositories with none of the first three flags.
+than 120 days). The hygiene score is the share of graded public repositories with none of the first three flags;
+private repositories are counted, never named and never repaired, so they do not enter the score (HYGIENE-SCOPE-1).
 
 ## 4. Portfolio rules (binding on every session and worker)
 
