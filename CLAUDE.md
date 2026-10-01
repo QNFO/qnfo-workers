@@ -50,6 +50,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   document, artifact or routine. A session that needs a durable record writes a D1 row or a repository file.
 - Recurring verification belongs to worker crons (LOOP-WATCH-1 in qnfo-fleet-control, `GET /loops`), not to session
   check-ins or routines. A session may arm a short-lived reminder for its own in-flight PR, and deletes it when done.
+- Owner documents (identity, brand, CV, opportunities) live in D1 `personal-life.owner_documents` (private plane); the
+  Claude Doc that held them was exported there on 2026-10-01 and retired. Never recreate one on claude.ai.
 
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`

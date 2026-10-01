@@ -3548,10 +3548,24 @@ async function pfUpsert(env, ev) {
   for (var i = 0; i < stmts.length; i += 40) await env.AUDIT.batch(stmts.slice(i, i + 40));
   await env.AUDIT.prepare("UPDATE portfolio_repos SET seen=0 WHERE synced_at IS NULL OR synced_at <> ?1").bind(now).run();
 }
+// DEFAULT-BRANCH-1 (first live sync, 2026-10-01 12:00Z): QNFO/.github's default branch is `master`, not `main`. Writing
+// to a hard-coded `main` landed the mirror on a stale side branch and read a profile README without the anchor
+// ("anchor-missing"), so the organisation landing page never changed. Resolve each repository's default branch once
+// per sync and write there; the organisation profile is rendered from the default branch only.
+var pfBranchCache = {};
+async function pfDefaultBranch(env, repo) {
+  if (pfBranchCache[repo]) return pfBranchCache[repo];
+  var r = await timedFetch("https://api.github.com/repos/" + repo, { headers: pfGh(env) }, 12e3);
+  var j = r.status === 200 ? await r.json().catch(function() { return null; }) : null;
+  var b = j && j.default_branch ? String(j.default_branch) : "main";
+  pfBranchCache[repo] = b;
+  return b;
+}
 async function pfCommit(env, repo, path, content, message, mode) {
   var hdr = pfGh(env);
   var enc = path.split("/").map(encodeURIComponent).join("/");
-  var gr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc + "?ref=main", { headers: hdr }, 12e3);
+  var branch = await pfDefaultBranch(env, repo);
+  var gr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc + "?ref=" + encodeURIComponent(branch), { headers: hdr }, 12e3);
   var sha = null, cur = "";
   if (gr.status === 200) {
     var gj = await gr.json().catch(function() { return null; });
@@ -3563,17 +3577,18 @@ async function pfCommit(env, repo, path, content, message, mode) {
   else if (mode === "bootstrap") { next = pfSpliceOrBootstrap(cur, content); if (next === null) return { path: repo + "/" + path, status: "anchor-missing" }; }
   else next = content;
   if (next === cur) return { path: repo + "/" + path, status: "unchanged" };
-  var body = { message: message, content: b64encode(next), branch: "main" };
+  var body = { message: message, content: b64encode(next), branch: branch };
   if (sha) body.sha = sha;
   var pr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
-  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status };
-  return { path: repo + "/" + path, status: "committed", sha: pj.commit.sha };
+  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch };
+  return { path: repo + "/" + path, status: "committed", sha: pj.commit.sha, branch: branch };
 }
 async function portfolioSync(env, force) {
   var t0 = Date.now();
   await pfSchema(env);
   if (!env.GITHUB_TOKEN) return { ok: false, status: "no-token" };
+  pfBranchCache = {};
   var org = await pfFetchOrg(env);
   if (!org.ok) {
     try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, NULL, 'fetch-failed', ?3, '[]')").bind(new Date().toISOString(), org.repos.length, org.note).run(); } catch (e) {}
