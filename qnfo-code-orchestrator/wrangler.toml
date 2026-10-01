@@ -23,9 +23,15 @@ max_instances = 2
 name = "PY_CONTAINER"
 class_name = "PyContainer"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["PyContainer"]
+# DO-EXPORTS-1 (#286, run 36847868908): wrangler 4.145 reconciles Durable Object `exports` and rejected the legacy
+# migrations array: "[provisioned_class_missing_from_config] class 'PyContainer' has a provisioned Durable Object
+# namespace but is not declared in `exports`". Per Cloudflare's "Migrate from the legacy migrations flow", an existing
+# worker moves to `exports` with no data migration: the provisioned namespace stays, only the config shape changes.
+# The class was created by `new_sqlite_classes`, so its storage is sqlite. `exports` and `migrations` are mutually
+# exclusive and the change is one-way, so there is deliberately no [[migrations]] block.
+[exports.PyContainer]
+type = "durable-object"
+storage = "sqlite"
 
 [[d1_databases]]
 binding = "AUDIT_DB"

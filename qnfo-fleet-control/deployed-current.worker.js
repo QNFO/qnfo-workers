@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.65-retired-present";
+var VERSION = "0.4.68-remediation-tick";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2971,6 +2971,9 @@ var worker_default2 = {
     ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));
     ctx.waitUntil(workerCensusIfStale(env).catch((e) => console.error("workerCensus error:", e && e.message || e)));
     ctx.waitUntil(usageSnapshotIfStale(env).catch((e) => console.error("usageSnapshot error:", e && e.message || e)));
+    ctx.waitUntil(opsAgentWatchMetrics(env).catch((e) => console.error("opsAgentWatch error:", e && e.message || e)));
+    ctx.waitUntil(aiAttributionCoverage(env).catch((e) => console.error("aiAttributionCoverage error:", e && e.message || e)));
+    ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3085,6 +3088,98 @@ async function usageSnapshotIfStale(env) {
   return await refreshScriptUsage(env);
 }
 __name(usageSnapshotIfStale, "usageSnapshotIfStale");
+// OPS-AGENT-WATCH-1 (2026-10-01, #1680 #1696): both issues closed on a 7-day acceptance window. That window is a
+// standing regression watch, not a one-off wait, so it runs hourly from here: the trailing INCOMPLETE share of owner
+// turns and the count of empty or failed agent-tools answers go to metric_registry, and analytics_metric_triggers files
+// a deduped agent_issue on breach (>= 5% INCOMPLETE, >= 1 empty). The window starts at the fixes' go-live
+// (2026-10-01T04:35Z, qnfo-ops 2.38.17 empty-final-guard and the durable-workflow budget promotion) and grows to 7 days.
+async function opsAgentWatchMetrics(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  if (!db) return { ok: false };
+  var since = new Date(Math.max(Date.now() - 7 * 864e5, Date.parse("2026-10-01T04:35:00Z"))).toISOString();
+  var r = await db.prepare("SELECT COUNT(*) n, SUM(CASE WHEN substr(coalesce(response,''),1,400) LIKE '%INCOMPLETE:%' THEN 1 ELSE 0 END) inc, SUM(CASE WHEN strategy = 'agent-tools' AND (trim(coalesce(response,'')) = '' OR ok = 0) THEN 1 ELSE 0 END) emp FROM ops_ai_log WHERE ts >= ?1 AND strategy IN ('agent-tools','job-workflow','chat')").bind(since).first();
+  var n = r ? Number(r.n || 0) : 0, inc = r ? Number(r.inc || 0) : 0, emp = r ? Number(r.emp || 0) : 0;
+  var nowIso = new Date().toISOString();
+  var pct = n > 0 ? Math.round(inc / n * 1000) / 10 : 0;
+  await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='ops_owner_turn_incomplete_pct_7d'").bind(String(pct), nowIso).run();
+  await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='ops_agent_empty_answers_7d'").bind(String(emp), nowIso).run();
+  return { ok: true, since: since, turns: n, incomplete: inc, empty: emp, pct: pct };
+}
+__name(opsAgentWatchMetrics, "opsAgentWatchMetrics");
+// WORKERS-AI-ATTRIBUTION-1 coverage (2026-10-01, #1681): the share of Workers AI neurons that the per-worker counters
+// (ai_call_counters purpose='binding', written by __aiAttrEnv in the AI-heavy workers) account for. Each hourly run
+// stores today's cumulative attributed neurons, and the delta since the previous run is compared with GraphQL
+// aiInferenceAdaptiveGroups over the same interval. A day rollover resets the cumulative value.
+async function aiAttributionCoverage(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT, token = env.CF_API_TOKEN, acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+  if (!db || !token) return { ok: false };
+  var now = new Date(), nowIso = now.toISOString(), day = nowIso.slice(0, 10);
+  var cur = await db.prepare("SELECT COALESCE(SUM(neurons),0) s FROM ai_call_counters WHERE day=?1").bind(day).first();
+  var cum = cur ? Number(cur.s || 0) : 0;
+  var prev = await db.prepare("SELECT value FROM analytics_dash_meta WHERE key='ai_attr_cum'").first().catch(function () { return null; });
+  var pv = null;
+  try { pv = prev && prev.value ? JSON.parse(prev.value) : null; } catch (e) { pv = null; }
+  await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES ('ai_attr_cum', ?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify({ day: day, cum: cum, ts: nowIso })).run();
+  if (!pv || pv.day !== day || !pv.ts) return { ok: true, primed: true, cum: cum };
+  var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + pv.ts.replace(/\.\d+Z$/, "Z") + '", datetime_leq: "' + nowIso.replace(/\.\d+Z$/, "Z") + '" }) { sum { totalNeurons } } } } }';
+  var r = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+  var j = await r.json().catch(function () { return null; });
+  var rows = j && j.data && j.data.viewer && j.data.viewer.accounts && j.data.viewer.accounts[0] ? j.data.viewer.accounts[0].aiInferenceAdaptiveGroups || [] : null;
+  if (!rows) return { ok: false, error: "graphql" };
+  var total = rows.reduce(function (a, x) { return a + (x.sum && x.sum.totalNeurons || 0); }, 0);
+  var attributed = Math.max(0, cum - Number(pv.cum || 0));
+  if (total <= 0) return { ok: true, idle: true };
+  var pct = Math.round(Math.min(100, attributed / total * 100) * 10) / 10;
+  await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='workers_ai_attribution_coverage_pct'").bind(String(pct), nowIso).run();
+  return { ok: true, attributed: attributed, total: total, pct: pct };
+}
+__name(aiAttributionCoverage, "aiAttributionCoverage");
+// REMEDIATION-TICK-1 (2026-10-01): remediation_contracts close issues on evidence. A d1-query probe that returns
+// expected == observed writes remediation_verifications pass=1, and the remediation_verification_autoclose triggers close
+// the agent_issue with that evidence. The only runner was scripts/remediation_consumer.py, which GitHub runs after
+// pushes; its schedule trigger never fires on this repository, so a contract whose evidence lands overnight (tomorrow's
+// cron run of a producer) waited for the next unrelated push. This hourly tick runs the same contract with the same
+// guarantees: literal read-only SELECT only, expected and observed both taken from the probe (never invented), pass only
+// when both are non-empty and equal, and trusted transport d1-query only.
+var __RT_WRITE_KW = ["insert ", "update ", "delete ", "drop ", "alter ", "create ", "attach ", "detach ", "pragma ", "replace ", "vacuum", "reindex"];
+async function remediationContractsTick(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  if (!db) return { ok: false };
+  var out = { ok: true, due: 0, pass: 0, fail: 0, skipped: 0 };
+  var rs = await db.prepare("SELECT class, issue_id, verify_probe, verify_transport, expected_cadence_h FROM remediation_contracts WHERE status = 'active' AND verify_transport = 'd1-query' AND (next_due_at IS NULL OR datetime(next_due_at) <= datetime('now')) ORDER BY COALESCE(next_due_at, ts) LIMIT 15").all().catch(function () { return { results: [] }; });
+  var rows = rs.results || [];
+  out.due = rows.length;
+  for (var i = 0; i < rows.length; i++) {
+    var c = rows[i], verdict = null;
+    try {
+      var q = String(c.verify_probe || "").trim();
+      var ql = " " + q.toLowerCase().replace(/\s+/g, " ") + " ";
+      var literal = /^(select|with) /.test(q.toLowerCase()) && q.indexOf(";") === -1 && !__RT_WRITE_KW.some(function (k) { return ql.indexOf(" " + k) !== -1; });
+      if (!literal) { verdict = "probe-not-machine-executable"; out.skipped++; }
+      else {
+        var r = await db.prepare(q).first();
+        var keys = r ? Object.keys(r) : [];
+        var exp = r ? (r.expected !== undefined ? r.expected : r[keys[0]]) : null;
+        var obs = r ? (r.observed !== undefined ? r.observed : r[keys[1]]) : null;
+        var es = exp == null ? "" : String(exp).trim(), os = obs == null ? "" : String(obs).trim();
+        if (!es || !os) { verdict = "vacuous-probe-result"; out.skipped++; }
+        else {
+          var passed = es === os ? 1 : 0;
+          await db.prepare("INSERT INTO remediation_verifications (issue_id, class, probe_url, transport, expected, observed, pass, verifier) VALUES (?1, ?2, ?3, 'd1-query', ?4, ?5, ?6, ?7)").bind(c.issue_id, c.class, "d1:remediation_contracts/" + c.class, es, os, passed, "qnfo-fleet-control/remediation-tick@" + VERSION).run();
+          verdict = passed ? "pass" : "fail";
+          if (passed) out.pass++; else out.fail++;
+        }
+      }
+    } catch (e) {
+      verdict = "probe-error"; out.skipped++;
+    }
+    try {
+      await db.prepare("UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, last_attempt_at = datetime('now'), last_verdict = ?1, next_due_at = datetime('now', ?2), status = CASE WHEN ?1 = 'pass' THEN 'closed' ELSE status END WHERE class = ?3").bind(verdict, "+" + Math.max(1, Number(c.expected_cadence_h) || 1) + " hours", c.class).run();
+    } catch (e2) {}
+  }
+  return out;
+}
+__name(remediationContractsTick, "remediationContractsTick");
 async function scriptUsage7d(env, name) {
   var db = env.AUDIT_DB || env.AUDIT;
   try {
@@ -3342,7 +3437,7 @@ async function refreshOwnedMetrics(env) {
       var parts = Object.keys(byProv).sort(function (a, b) { return byProv[b] - byProv[a]; }).map(function (k) { return k + " $" + byProv[k].toFixed(2); }).join(", ");
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "LIST-COST ESTIMATE (not billed): unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
       out.written.push("cost_usd_30d=" + total.toFixed(2) + " (" + parts.slice(0, 160) + ")");
-      var byBill = aiSpendByBilling(grows);
+      var byBill = aiSpendByBilling(grows, env);
       out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, byBilling: byBill, alerts: await aiSpendCaps(db, byProv, total, byBill) };
       // METRIC-TRIGGER-LOOP-1 (#1634): the analytics trigger inputs had no writer since a one-off audit on
       // 2026-09-26. Keep the cost keys fresh from the same measurement.
@@ -3382,18 +3477,26 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 __name(aiRunAttr, "aiRunAttr");
-// BUDGET-OVER-METRIC-DEFINITION-1 (#1699): billing-mode split. Unified-billing traffic arrives as provider
-// compat/unknown/universal (real provider = model prefix); every other named provider row is BYOK (billed by the provider,
-// not against the gateway credit). Workers AI is neuron-billed and excluded. The monthly cap meters unified only.
-function aiSpendByBilling(rows) {
+// BUDGET-OVER-METRIC-DEFINITION-1 (#1699): billing-mode split. Workers AI is neuron-billed and excluded; the monthly
+// gateway cap meters unified billing only.
+// BYOK-BILLING-SPLIT-1 (2026-10-01): the first version classified unified billing as provider compat/unknown/universal,
+// which measurement falsified: GraphQL reports compat-endpoint traffic under its REAL provider, so ai_spend:total read
+// $0 while openai/gpt-5.5 (called through /compat with cf-aig-authorization and no stored OpenAI key) was billed
+// against the gateway credit. The per-request byok flag in the gateway logs is the ground truth (cf-ops-actions
+// gateway-logs 2026-10-01: deepseek rows byok="default", openai/gpt-5.5 rows byok=None). Providers with a stored
+// gateway key are therefore BYOK and everything else is unified. The set is env-overridable (AIG_BYOK_PROVIDERS,
+// comma list) for when a key is added or removed.
+function aiSpendByBilling(rows, env) {
   var o = { unified: 0, byok: 0 };
+  var byokSet = {};
+  String(env && env.AIG_BYOK_PROVIDERS || "deepseek").split(",").forEach(function (p) { p = p.trim().toLowerCase(); if (p) byokSet[p] = 1; });
   (rows || []).forEach(function (r) {
     var d = r && r.dimensions || {};
     var prov = String(d.provider || "unknown").toLowerCase();
     if (prov === "workers-ai" || prov === "workers_ai") return;
     var c = r && r.sum && Number(r.sum.cost) || 0;
     if (!(c > 0)) return;
-    if (prov === "compat" || prov === "unknown" || prov === "universal") o.unified += c; else o.byok += c;
+    if (byokSet[prov]) o.byok += c; else o.unified += c;
   });
   return o;
 }

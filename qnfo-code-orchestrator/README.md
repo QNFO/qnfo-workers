@@ -88,3 +88,11 @@ Only a real run verifies: D1 REST access from Actions, `gh pr create` with `GITH
 
 ## Deploy
 First and subsequent deploys use `.github/workflows/deploy-code-orchestrator.yml` (wrangler 4, this worker only), on push to main touching `qnfo-code-orchestrator/**` or via workflow_dispatch. The canonical `/content` route cannot create bindings, containers or DO classes. The job runs `node --check`, `test-loop.mjs` and `scripts/mirror-guard.py`, deploys, polls `/health` until VERSION equals worker.js, and writes a `deploy.wrangler` row to `cloud_ops_events` through the D1 REST API. It uses the existing `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets and sets none. `ORCH_TOKEN` stays unset (fail-closed). The cron runs every 10 minutes (144 per day).
+
+## Keyless read (0.2.2, KEYLESS-READ-1)
+
+The loop's read step used to call `qnfo-code-agent` with `CODE_AGENT_KEY`, which is deliberately unset, so every task failed before
+reaching a model. `readRepoFile` now uses the code-agent only when that key exists and otherwise reads the file from GitHub's public
+raw endpoint (`raw.githubusercontent.com/QNFO/<repo>/main/<path>`). The owner is pinned to `QNFO`, the repo name and path are
+validated (no traversal, no absolute paths, no query strings) before any request, and the size cap is unchanged. With the pull-based
+publisher, the loop now needs no GitHub credential at all, in either direction.

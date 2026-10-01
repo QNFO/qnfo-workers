@@ -59,3 +59,6 @@ jobs:
 
       - name: SECRET-LOCK-ENFORCE-1 offline tests
         run: python3 scripts/secret-mutation-guard_test.py
+
+      - name: CANONICAL-DEPLOY-SKIP-1 offline tests (a refused creation of an absent worker is a skip, any other failure still fails)
+        run: python3 scripts/canonical_deploy_skip_test.py
