@@ -1,12 +1,37 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7d64f9e5ff25",
- "due": 0,
+ "verifier": "remediation-consumer@5616f86a3f61",
+ "due": 3,
  "pass": 0,
- "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "fail": 2,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "issue-1726",
+   "issue_id": 1726,
+   "verdict": "vacuous-probe-result",
+   "expected": "0",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-1727",
+   "issue_id": 1727,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-1649-BRIEF",
+   "issue_id": 1649,
+   "verdict": "fail",
+   "expected": "recorded",
+   "observed": "pending",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,7 +48,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2044,
- "head": "7d64f9e5ff25dde039c95acec2bc759870a77284",
+ "spent_ms": 10659,
+ "head": "5616f86a3f617dcccabba46a8f128953d015ddfa",
  "job_status": "success"
 }
