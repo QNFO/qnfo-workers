@@ -157,5 +157,18 @@ eq(P.pfNeedsSync({ ts: h(0.5), status: "partial", note: "kernel 1.0.0;" }, "1.0.
 eq(P.pfNeedsSync({ ts: h(1), status: "partial", note: "kernel 1.0.0;" }, "1.0.0", T0), "last partial run is 1h old", "a partial run an hour ago: retry");
 eq(P.pfNeedsSync({ ts: "garbage", status: "ok", note: "kernel 1.0.0;" }, "1.0.0", T0) !== null, true, "an unreadable timestamp: sync");
 
+
+// --- HINT-LINK-1 ------------------------------------------------------------
+const hintRepos = [
+  { name: "paper-artifacts", description: "QNFO.TST.001: the paper's artifacts", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
+  { name: "unknown-code", description: "QNFO.ZZZ.999: a code nobody registered", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" }
+];
+const hintRows = [{ wbs_code: "QNFO.TST.001", level: "project", slug: "tst-paper", name: "t", status: "active", github_repo: "QNFO/other-repo" }];
+const evL = P.pfEvaluate(hintRepos, hintRows, NOW);
+eq(evL.rows.find((r) => r.name === "paper-artifacts").wbs.join(","), "QNFO.TST.001", "a description naming a registry code links the repository");
+eq(evL.rows.find((r) => r.name === "unknown-code").wbs.length, 0, "an unknown code does not link");
+eq(evL.unlinked_research.join(","), "unknown-code", "only the repository with no known code is unlinked");
+eq(P.pfHygienePlan(evL, hintRows).filter((a) => a.action === "wbs-link").length, 0, "a code already linked elsewhere is not re-linked");
+
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
